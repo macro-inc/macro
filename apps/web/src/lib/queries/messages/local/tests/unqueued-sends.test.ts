@@ -280,3 +280,18 @@ it('leaves alone a change the queue stored, and one its page saw stored', async 
   expect(resend).not.toHaveBeenCalled();
   expect(storage.length).toBe(0);
 });
+
+it('does not make again a change older than minutes, which could undo a later one', async () => {
+  const { storage, deps, host, resend, change, handlers } = world(['new-page']);
+  const anHourBefore = new Date(Date.parse(CREATED_AT) - 60 * 60_000);
+  noteUnqueuedChange(edit('u1'), anHourBefore.toISOString(), deps('old-page'));
+  // A send of the same age is still sent: the server answers it as stored.
+  noteUnqueuedSend(send('m1'), anHourBefore.toISOString(), deps('old-page'));
+
+  expect(
+    await resendUnqueuedSends(host, SENDER, handlers, deps('new-page'))
+  ).toBe(1);
+  expect(change).not.toHaveBeenCalled();
+  expect(resend).toHaveBeenCalledOnce();
+  expect(storage.length).toBe(1);
+});

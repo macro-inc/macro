@@ -16,6 +16,13 @@ import { z } from 'zod';
 const KEY_PREFIX = 'channel-send-awaiting-queue:v1:';
 /** A send older than this is no longer what the person meant to say now. */
 const MAX_AGE_MS = 24 * 60 * 60_000;
+/**
+ * A change is made again only for minutes: the server takes an edit or a
+ * reaction as the latest word, so one made again much later could undo what
+ * the person has since done from elsewhere. A send keeps its id and is
+ * answered as already stored, so it can wait a day.
+ */
+const CHANGE_MAX_AGE_MS = 10 * 60_000;
 
 const mentionSchema = z.object({
   entity_type: z.string(),
@@ -305,7 +312,9 @@ export async function resendUnqueuedSends(
     );
     for (const { key, entry } of readEntries(storage, senderId)) {
       // A time that does not parse is neither young nor sortable.
-      if (!entry || !(now - Date.parse(entry.createdAt) <= MAX_AGE_MS)) {
+      const maxAge =
+        entry && 'change' in entry ? CHANGE_MAX_AGE_MS : MAX_AGE_MS;
+      if (!entry || !(now - Date.parse(entry.createdAt) <= maxAge)) {
         storage.removeItem(key);
         continue;
       }

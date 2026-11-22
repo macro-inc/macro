@@ -2,6 +2,7 @@ import { ThrownResultError } from '@core/util/result';
 import { describe, expect, it, vi } from 'vitest';
 import {
   changeLeftBehindOverRest,
+  oneAfterAnother,
   queueIfAnswering,
   sendLeftBehindOverRest,
 } from '../left-behind-sends';
@@ -208,5 +209,30 @@ describe('a change left behind', () => {
       })
     ).rejects.toBeInstanceOf(ThrownResultError);
     expect(forget).toHaveBeenCalledOnce();
+  });
+});
+
+describe('oneAfterAnother', () => {
+  it('starts each write only once the one before it has ended, failed or not', async () => {
+    const inOrder = oneAfterAnother();
+    const order: string[] = [];
+    let endFirst = () => {};
+    const first = inOrder(async () => {
+      order.push('post starts');
+      await new Promise<void>((resolve) => {
+        endFirst = resolve;
+      });
+      order.push('post ends');
+      throw new Error('failed');
+    });
+    const second = inOrder(async () => {
+      order.push('removal starts');
+    });
+    await vi.waitFor(() => expect(order).toEqual(['post starts']));
+
+    endFirst();
+    await expect(first).rejects.toThrow('failed');
+    await second;
+    expect(order).toEqual(['post starts', 'post ends', 'removal starts']);
   });
 });

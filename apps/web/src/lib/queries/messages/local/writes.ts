@@ -111,6 +111,8 @@ export interface QueuedChannelEdit {
   nonce: string;
   /** The write's identity in the queue; given when a left-behind change is made again. */
   uuid?: string;
+  /** Who made it, when a left-behind change is made again. */
+  senderId?: string;
 }
 
 export interface QueuedChannelDelete {
@@ -119,6 +121,8 @@ export interface QueuedChannelDelete {
   nonce: string;
   /** The write's identity in the queue; given when a left-behind change is made again. */
   uuid?: string;
+  /** Who made it, when a left-behind change is made again. */
+  senderId?: string;
 }
 
 export interface QueuedChannelReaction {
@@ -131,6 +135,8 @@ export interface QueuedChannelReaction {
   nonce: string;
   /** The write's identity in the queue; given when a left-behind change is made again. */
   uuid?: string;
+  /** Who made it, when a left-behind change is made again. */
+  senderId?: string;
 }
 
 const mentionInput = (mention: Mention) => ({
@@ -466,9 +472,10 @@ const NOT_NOTED: UnqueuedSendNote = { stored: () => {}, ended: () => {} };
  */
 function noteChange(
   change: (senderId: string) => UnqueuedChange,
-  madeAt: string
+  madeAt: string,
+  /** The person a change made again was noted for. */
+  senderId: string | undefined = queueOwner()
 ): UnqueuedSendNote {
-  const senderId = queueOwner();
   return senderId ? noteUnqueuedChange(change(senderId), madeAt) : NOT_NOTED;
 }
 
@@ -505,7 +512,8 @@ export function editChannelMessage(
       removeAttachmentIds: [...edit.removeAttachmentIds],
       addAttachments: [...edit.addAttachments],
     }),
-    editedAt
+    editedAt,
+    edit.senderId
   );
   return queuedWrite(host, deps, {
     operation: 'channel.write.edit',
@@ -563,7 +571,8 @@ export function deleteChannelMessage(
       id: deletion.id,
       nonce: deletion.nonce,
     }),
-    deletedAt
+    deletedAt,
+    deletion.senderId
   );
   return queuedWrite(host, deps, {
     operation: 'channel.write.delete',
@@ -615,7 +624,8 @@ export function reactToChannelMessage(
       emoji: reaction.emoji,
       add: reaction.add,
     }),
-    (deps.now?.() ?? new Date()).toISOString()
+    (deps.now?.() ?? new Date()).toISOString(),
+    reaction.senderId
   );
   return queuedWrite(host, deps, {
     operation: 'channel.write.react',

@@ -24,6 +24,7 @@ import {
 import { channelCacheHost } from './flag';
 import {
   changeLeftBehindOverRest,
+  oneAfterAnother,
   queueIfAnswering,
   sendLeftBehindOverRest,
 } from './left-behind-sends';
@@ -189,12 +190,19 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
     // Other pages starting now leave to this one what it takes over.
     holdUnqueuedSendsPage();
     const queue = queueIfAnswering(untrack(getGraphqlSoupCacheHost));
+    const inOrder = oneAfterAnother();
     fireAndForget(
       resendUnqueuedSends(queue, sender, {
         send: (send) =>
-          fireAndForget(sendLeftBehindOverRest(send), 'channel-local-sync'),
+          fireAndForget(
+            inOrder(() => sendLeftBehindOverRest(send)),
+            'channel-local-sync'
+          ),
         change: (change) =>
-          fireAndForget(changeLeftBehindOverRest(change), 'channel-local-sync'),
+          fireAndForget(
+            inOrder(() => changeLeftBehindOverRest(change)),
+            'channel-local-sync'
+          ),
       }),
       'channel-local-sync'
     );

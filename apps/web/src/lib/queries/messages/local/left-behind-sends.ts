@@ -88,8 +88,10 @@ const REFUSALS = ['NOT_FOUND', 'FORBIDDEN', 'CONFLICT'];
 /**
  * Makes over REST an edit, a removal or a reaction an earlier page noted for
  * the device queue and never saw stored, for a page where channels no longer
- * go through the queue. It keeps its nonce, so a change the queue did deliver
- * after all is applied once. A change the server refuses is forgotten, since
+ * go through the queue. A removal is taken once; an edit or a reaction the
+ * queue did deliver after all is applied again with the same result, and an
+ * edit that adds an attachment may add it twice, since REST has no once-only
+ * way to add one. Changes are made again for minutes only (`unqueued-sends`). A change the server refuses is forgotten, since
  * no later start would fare better; any other failure leaves it noted for the
  * next start.
  */
@@ -135,4 +137,25 @@ export async function changeLeftBehindOverRest(
   }
   (deps.forget ?? forgetUnqueuedSend)(change.senderId, change.uuid);
   (deps.refresh ?? refreshChannelViews)(change.channelId);
+}
+
+/**
+ * Runs each piece of work once the one before it has ended, however it ended.
+ * Left-behind writes go to the server in the order written: a removal sent
+ * beside the post of its message could arrive first and be refused, and the
+ * message would stay.
+ */
+export function oneAfterAnother(): (
+  work: () => Promise<void>
+) => Promise<void> {
+  let last: Promise<unknown> = Promise.resolve();
+  return (work) => {
+    const before = last;
+    const run = (async () => {
+      await Promise.allSettled([before]);
+      await work();
+    })();
+    last = run;
+    return run;
+  };
 }

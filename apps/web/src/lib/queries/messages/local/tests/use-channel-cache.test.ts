@@ -59,6 +59,7 @@ vi.mock('../writes', () => ({
 }));
 vi.mock('../left-behind-sends', () => ({
   queueIfAnswering: (host: unknown) => ({ answering: host }),
+  oneAfterAnother: () => (work: () => Promise<void>) => work(),
   sendLeftBehindOverRest: mocks.sendLeftBehindOverRest,
   changeLeftBehindOverRest: mocks.changeLeftBehindOverRest,
 }));
