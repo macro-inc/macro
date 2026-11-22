@@ -60,6 +60,8 @@ check	code_check_cloud_storage.yml	graphql-schema-compat	graphql-schema-compat
 check	code_check_conventions.yml	ast-grep	ast-grep Conventions
 check	code_check_infra.yml	biome-check	Biome Check
 check	code_check_infra.yml	check	check
+check	connectors_e2e.yml	suite	Connectors end-to-end
+check	connectors_e2e.yml	email-e2e-alert	Tell the connectors channel
 check	deploy-analytics-proxy-dev.yml	deploy	deploy
 check	deploy-observability.yml	deploy	Deploy observability
 check	deploy-pulumi-stack.yml	setup	Check whether ${{ inputs.pulumi-service-name }} ships service code

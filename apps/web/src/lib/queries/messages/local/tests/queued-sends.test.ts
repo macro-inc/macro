@@ -2,11 +2,8 @@ import type { MutationInspection } from '@graphql-cache/protocol';
 import type { MessageTimelinePage } from '@service-storage/messages';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mapChannelTimelineEntry } from '../map';
-import {
-  pageLacksQueuedSends,
-  setQueuedSendsOwner,
-  withQueuedSends,
-} from '../queued-sends';
+import { setQueueOwner } from '../queue-owner';
+import { pageLacksQueuedSends, withQueuedSends } from '../queued-sends';
 import { CHANNEL_ID, graphqlMessage } from './fixtures';
 
 type Row = ReturnType<typeof graphqlMessage>;
@@ -65,8 +62,8 @@ const queuedDelete = (id: string): MutationInspection => ({
 });
 
 describe('withQueuedSends', () => {
-  beforeEach(() => setQueuedSendsOwner(SENDER));
-  afterEach(() => setQueuedSendsOwner(undefined));
+  beforeEach(() => setQueueOwner(SENDER));
+  afterEach(() => setQueueOwner(undefined));
 
   const placed = graphqlMessage(1);
   const first = graphqlMessage(2);
@@ -104,7 +101,7 @@ describe('withQueuedSends', () => {
   });
 
   it('shows nothing while no one is signed in', async () => {
-    setQueuedSendsOwner(undefined);
+    setQueueOwner(undefined);
     const host = hostWith([queuedSend(first)]);
     const page = pageOf([placed]);
     expect(await withQueuedSends(host, CHANNEL_ID, page)).toBe(page);

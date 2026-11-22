@@ -29,11 +29,19 @@ import type {
   OperationResult,
 } from '@urql/core';
 import { ResultAsync } from 'neverthrow';
+import { match } from 'ts-pattern';
 import { mapChannelMessage } from './map';
+import { queueOwner } from './queue-owner';
 import { forgetSendInHand, noteSendInHand } from './sends-in-hand';
 import { CHANNEL_MESSAGE_TYPENAME, unplacedSortKey } from './sort-key';
 import { loadChannelMessage } from './thread';
-import { noteUnqueuedSend, pageIsLeaving } from './unqueued-sends';
+import {
+  noteUnqueuedChange,
+  noteUnqueuedSend,
+  pageIsLeaving,
+  type UnqueuedChange,
+  type UnqueuedSendNote,
+} from './unqueued-sends';
 import {
   forgetOwnReply,
   noteOwnReply,
@@ -101,12 +109,20 @@ export interface QueuedChannelEdit {
   removeAttachmentIds: readonly string[];
   addAttachments: readonly Attachment[];
   nonce: string;
+  /** The write's identity in the queue; given when a left-behind change is made again. */
+  uuid?: string;
+  /** Who made it, when a left-behind change is made again. */
+  senderId?: string;
 }
 
 export interface QueuedChannelDelete {
   channelId: string;
   id: string;
   nonce: string;
+  /** The write's identity in the queue; given when a left-behind change is made again. */
+  uuid?: string;
+  /** Who made it, when a left-behind change is made again. */
+  senderId?: string;
 }
 
 export interface QueuedChannelReaction {
@@ -117,6 +133,10 @@ export interface QueuedChannelReaction {
   /** The message's reactions with this change applied, when the caller knows them. */
   reactions?: readonly Reaction[];
   nonce: string;
+  /** The write's identity in the queue; given when a left-behind change is made again. */
+  uuid?: string;
+  /** Who made it, when a left-behind change is made again. */
+  senderId?: string;
 }
 
 const mentionInput = (mention: Mention) => ({
@@ -410,6 +430,28 @@ async function settledSend(
   }
 }
 
+/** Makes again a change a page that is gone noted and never saw stored. */
+export function makeChannelChange(
+  host: ChannelWriteHost,
+  change: UnqueuedChange,
+  deps: ChannelWriteDeps = {}
+): Promise<Message> {
+  return (
+    match(change)
+      .with({ kind: 'edit' }, (edit) => editChannelMessage(host, edit, deps))
+      .with({ kind: 'delete' }, (deletion) =>
+        deleteChannelMessage(host, deletion, deps)
+      )
+      .with({ kind: 'react' }, (reaction) =>
+        reactToChannelMessage(host, reaction, deps)
+      )
+      // Noted by a build that knows a kind this one does not: not made again.
+      .exhaustive(() =>
+        Promise.reject(new Error('unknown kind of left-behind change'))
+      )
+  );
+}
+
 /**
  * A send that fails because its page is being left stays pending: the next
  * page sends what was noted, so failing here would take the message off the
@@ -427,6 +469,33 @@ async function unlessPageLeft(write: Promise<Message>): Promise<Message> {
   }
 }
 
+const NOT_NOTED: UnqueuedSendNote = { stored: () => {}, ended: () => {} };
+
+/**
+ * Notes a change until the queue holds it: the queue can take seconds to
+ * store a write, and a reload inside them would lose a change already shown.
+ */
+function noteChange(
+  change: (senderId: string) => UnqueuedChange,
+  madeAt: string,
+  /** The person a change made again was noted for. */
+  senderId: string | undefined = queueOwner()
+): UnqueuedSendNote {
+  return senderId ? noteUnqueuedChange(change(senderId), madeAt) : NOT_NOTED;
+}
+
+/** Runs a noted change's request to the queue and says when the request ended. */
+async function noted<T>(
+  note: UnqueuedSendNote,
+  request: Promise<T>
+): Promise<T> {
+  try {
+    return await request;
+  } finally {
+    note.ended();
+  }
+}
+
 /** Edits a message's body, mentions and attachments through the queue. */
 export function editChannelMessage(
   host: ChannelWriteHost,
@@ -434,38 +503,58 @@ export function editChannelMessage(
   deps: ChannelWriteDeps = {}
 ): Promise<Message> {
   const editedAt = (deps.now?.() ?? new Date()).toISOString();
+  const uuid = edit.uuid ?? crypto.randomUUID();
+  const note = noteChange(
+    (senderId) => ({
+      kind: 'edit',
+      uuid,
+      senderId,
+      channelId: edit.channelId,
+      id: edit.id,
+      nonce: edit.nonce,
+      content: edit.content,
+      mentions: [...edit.mentions],
+      removeAttachmentIds: [...edit.removeAttachmentIds],
+      addAttachments: [...edit.addAttachments],
+    }),
+    editedAt,
+    edit.senderId
+  );
   return queuedWrite(host, deps, {
     operation: 'channel.write.edit',
     channelId: edit.channelId,
     messageId: edit.id,
     run: (client) =>
-      executeOptimisticMutation(
-        client,
-        EditChannelMessageDocument,
-        {
-          input: {
-            channelId: edit.channelId,
-            id: edit.id,
-            content: edit.content,
-            mentions: edit.mentions.map(mentionInput),
-            removeAttachmentIds: [...edit.removeAttachmentIds],
-            addAttachments: edit.addAttachments.map(attachmentInput),
-            nonce: edit.nonce,
+      noted(
+        note,
+        executeOptimisticMutation(
+          client,
+          EditChannelMessageDocument,
+          {
+            input: {
+              channelId: edit.channelId,
+              id: edit.id,
+              content: edit.content,
+              mentions: edit.mentions.map(mentionInput),
+              removeAttachmentIds: [...edit.removeAttachmentIds],
+              addAttachments: edit.addAttachments.map(attachmentInput),
+              nonce: edit.nonce,
+            },
           },
-        },
-        // Attachments change only once the server answers with their ids.
-        {
-          editChannelMessage: {
-            __typename: CHANNEL_MESSAGE_TYPENAME,
-            id: edit.id,
-            content: edit.content,
-            mentions: edit.mentions.map(mentionInput),
-            editedAt,
-            updatedAt: editedAt,
-          },
-        } as OptimisticResponse<EditChannelMessageMutation>,
-        { uuid: crypto.randomUUID() }
-      ).toPromise(),
+          // Attachments change only once the server answers with their ids.
+          {
+            editChannelMessage: {
+              __typename: CHANNEL_MESSAGE_TYPENAME,
+              id: edit.id,
+              content: edit.content,
+              mentions: edit.mentions.map(mentionInput),
+              editedAt,
+              updatedAt: editedAt,
+            },
+          } as OptimisticResponse<EditChannelMessageMutation>,
+          { uuid, onEnqueued: note.stored }
+        ).toPromise()
+      ),
     written: (data) => data.editChannelMessage,
   });
 }
@@ -477,31 +566,47 @@ export function deleteChannelMessage(
   deps: ChannelWriteDeps = {}
 ): Promise<Message> {
   const deletedAt = (deps.now?.() ?? new Date()).toISOString();
+  const uuid = deletion.uuid ?? crypto.randomUUID();
+  const note = noteChange(
+    (senderId) => ({
+      kind: 'delete',
+      uuid,
+      senderId,
+      channelId: deletion.channelId,
+      id: deletion.id,
+      nonce: deletion.nonce,
+    }),
+    deletedAt,
+    deletion.senderId
+  );
   return queuedWrite(host, deps, {
     operation: 'channel.write.delete',
     channelId: deletion.channelId,
     messageId: deletion.id,
     run: (client) =>
-      executeOptimisticMutation(
-        client,
-        DeleteChannelMessageDocument,
-        {
-          input: {
-            channelId: deletion.channelId,
-            id: deletion.id,
-            nonce: deletion.nonce,
+      noted(
+        note,
+        executeOptimisticMutation(
+          client,
+          DeleteChannelMessageDocument,
+          {
+            input: {
+              channelId: deletion.channelId,
+              id: deletion.id,
+              nonce: deletion.nonce,
+            },
           },
-        },
-        {
-          deleteChannelMessage: {
-            __typename: CHANNEL_MESSAGE_TYPENAME,
-            id: deletion.id,
-            deletedAt,
-            updatedAt: deletedAt,
-          },
-        } as OptimisticResponse<DeleteChannelMessageMutation>,
-        { uuid: crypto.randomUUID() }
-      ).toPromise(),
+          {
+            deleteChannelMessage: {
+              __typename: CHANNEL_MESSAGE_TYPENAME,
+              id: deletion.id,
+              deletedAt,
+              updatedAt: deletedAt,
+            },
+          } as OptimisticResponse<DeleteChannelMessageMutation>,
+          { uuid, onEnqueued: note.stored }
+        ).toPromise()
+      ),
     written: (data) => data.deleteChannelMessage,
   });
 }
@@ -512,37 +617,55 @@ export function reactToChannelMessage(
   reaction: QueuedChannelReaction,
   deps: ChannelWriteDeps = {}
 ): Promise<Message> {
+  const uuid = reaction.uuid ?? crypto.randomUUID();
+  const note = noteChange(
+    (senderId) => ({
+      kind: 'react',
+      uuid,
+      senderId,
+      channelId: reaction.channelId,
+      id: reaction.id,
+      nonce: reaction.nonce,
+      emoji: reaction.emoji,
+      add: reaction.add,
+    }),
+    (deps.now?.() ?? new Date()).toISOString(),
+    reaction.senderId
+  );
   return queuedWrite(host, deps, {
     operation: 'channel.write.react',
     channelId: reaction.channelId,
     messageId: reaction.id,
     run: (client) =>
-      executeOptimisticMutation(
-        client,
-        ReactToChannelMessageDocument,
-        {
-          input: {
-            channelId: reaction.channelId,
-            id: reaction.id,
-            emoji: reaction.emoji,
-            add: reaction.add,
-            nonce: reaction.nonce,
+      noted(
+        note,
+        executeOptimisticMutation(
+          client,
+          ReactToChannelMessageDocument,
+          {
+            input: {
+              channelId: reaction.channelId,
+              id: reaction.id,
+              emoji: reaction.emoji,
+              add: reaction.add,
+              nonce: reaction.nonce,
+            },
           },
-        },
-        {
-          reactToChannelMessage: {
-            __typename: CHANNEL_MESSAGE_TYPENAME,
-            id: reaction.id,
-            ...(reaction.reactions && {
-              reactions: reaction.reactions.map(({ emoji, users }) => ({
-                emoji,
-                users: [...users],
-              })),
-            }),
-          },
-        } as OptimisticResponse<ReactToChannelMessageMutation>,
-        { uuid: crypto.randomUUID() }
-      ).toPromise(),
+          {
+            reactToChannelMessage: {
+              __typename: CHANNEL_MESSAGE_TYPENAME,
+              id: reaction.id,
+              ...(reaction.reactions && {
+                reactions: reaction.reactions.map(({ emoji, users }) => ({
+                  emoji,
+                  users: [...users],
+                })),
+              }),
+            },
+          } as OptimisticResponse<ReactToChannelMessageMutation>,
+          { uuid, onEnqueued: note.stored }
+        ).toPromise()
+      ),
     written: (data) => data.reactToChannelMessage,
   });
 }

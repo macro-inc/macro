@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
   holdUnqueuedSendsPage: vi.fn(),
   resendUnqueuedSends: vi.fn(async (..._args: unknown[]) => 0),
   sendChannelMessage: vi.fn(async () => ({})),
+  makeChannelChange: vi.fn(async () => ({})),
   sendLeftBehindOverRest: vi.fn(async () => {}),
+  changeLeftBehindOverRest: vi.fn(async () => {}),
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -51,10 +53,15 @@ vi.mock('../unqueued-sends', () => ({
   holdUnqueuedSendsPage: mocks.holdUnqueuedSendsPage,
   resendUnqueuedSends: mocks.resendUnqueuedSends,
 }));
-vi.mock('../writes', () => ({ sendChannelMessage: mocks.sendChannelMessage }));
+vi.mock('../writes', () => ({
+  sendChannelMessage: mocks.sendChannelMessage,
+  makeChannelChange: mocks.makeChannelChange,
+}));
 vi.mock('../left-behind-sends', () => ({
   queueIfAnswering: (host: unknown) => ({ answering: host }),
+  oneAfterAnother: () => (work: () => Promise<void>) => work(),
   sendLeftBehindOverRest: mocks.sendLeftBehindOverRest,
+  changeLeftBehindOverRest: mocks.changeLeftBehindOverRest,
 }));
 
 const send = {
@@ -63,6 +70,20 @@ const send = {
   senderId: 'sender-1',
   message: { content: 'left behind' },
 };
+
+const change = {
+  kind: 'delete',
+  uuid: 'change-1',
+  senderId: 'sender-1',
+  channelId: 'channel-1',
+  id: 'message-1',
+  nonce: 'nonce-1',
+};
+
+interface Handlers {
+  send: (send: unknown, at: string) => void;
+  change: (change: unknown, at: string) => void;
+}
 
 function hostWithGenerations() {
   const listeners: ((change: CacheGenerationChange) => void)[] = [];
@@ -112,15 +133,22 @@ describe('useChannelCache', () => {
     expect(mocks.storeUnstoredPushes).toHaveBeenCalledWith(host);
     expect(mocks.holdUnheldReads).toHaveBeenCalledWith(host);
     const [resendHost, sender, resend] = mocks.resendUnqueuedSends.mock
-      .calls[0] as [unknown, string, (send: unknown, at: string) => void];
+      .calls[0] as [unknown, string, Handlers];
     expect([resendHost, sender]).toEqual([host, 'sender-1']);
-    resend(send, '2026-01-01T00:00:00.000Z');
+    resend.send(send, '2026-01-01T00:00:00.000Z');
+    resend.change(change, '2026-01-01T00:00:01.000Z');
     expect(mocks.sendChannelMessage).toHaveBeenCalledWith(
       host,
       send,
       expect.anything()
     );
+    expect(mocks.makeChannelChange).toHaveBeenCalledWith(
+      host,
+      change,
+      expect.anything()
+    );
     expect(mocks.sendLeftBehindOverRest).not.toHaveBeenCalled();
+    expect(mocks.changeLeftBehindOverRest).not.toHaveBeenCalled();
 
     emit({ storage: 'preserved' });
     expect(mocks.rereadChannelsAfterStorageReset).not.toHaveBeenCalled();
@@ -149,12 +177,17 @@ describe('useChannelCache', () => {
     expect(mocks.holdUnheldReads).not.toHaveBeenCalled();
     expect(mocks.resendUnqueuedSends).toHaveBeenCalledOnce();
     const [resendHost, sender, resend] = mocks.resendUnqueuedSends.mock
-      .calls[0] as [unknown, string, (send: unknown, at: string) => void];
+      .calls[0] as [unknown, string, Handlers];
     // The queue is still asked what it holds, without waiting on it.
     expect([resendHost, sender]).toEqual([{ answering: host }, 'sender-1']);
-    resend(send, '2026-01-01T00:00:00.000Z');
+    resend.send(send, '2026-01-01T00:00:00.000Z');
+    resend.change(change, '2026-01-01T00:00:01.000Z');
     expect(mocks.sendLeftBehindOverRest).toHaveBeenCalledExactlyOnceWith(send);
+    expect(mocks.changeLeftBehindOverRest).toHaveBeenCalledExactlyOnceWith(
+      change
+    );
     expect(mocks.sendChannelMessage).not.toHaveBeenCalled();
+    expect(mocks.makeChannelChange).not.toHaveBeenCalled();
   });
 
   it('does nothing while the flag has not been answered', async () => {

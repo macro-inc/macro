@@ -3,23 +3,35 @@ import type { CacheHost } from '@graphql-cache/index';
 import { z } from 'zod';
 
 /**
- * Sends the device queue has been handed but has not stored yet.
+ * Writes the device queue has been handed but has not stored yet.
  *
  * The queue stores a write in a worker, which answers some milliseconds later
- * and up to a few hundred while a channel is opening. The message is on screen
- * for that time, so a reload inside it would lose a message the person saw
- * sent. Each send is therefore noted here first, synchronously, and forgotten
- * once the queue holds it; the next page to start sends what a page that is
- * gone left behind.
+ * and, on a device with much to do, seconds later. The message, edit, removal
+ * or reaction is on screen for that time, so a reload inside it would lose a
+ * write the person saw made. Each write is therefore noted here first,
+ * synchronously, and forgotten once the queue holds it; the next page to
+ * start makes again what a page that is gone left behind.
  */
 
 const KEY_PREFIX = 'channel-send-awaiting-queue:v1:';
 /** A send older than this is no longer what the person meant to say now. */
 const MAX_AGE_MS = 24 * 60 * 60_000;
+/**
+ * A change is made again only for minutes: the server takes an edit or a
+ * reaction as the latest word, so one made again much later could undo what
+ * the person has since done from elsewhere. A send keeps its id and is
+ * answered as already stored, so it can wait a day.
+ */
+const CHANGE_MAX_AGE_MS = 10 * 60_000;
 
 const mentionSchema = z.object({
   entity_type: z.string(),
   entity_id: z.string(),
+});
+
+const attachmentSchema = mentionSchema.extend({
+  width: z.number().nullish(),
+  height: z.number().nullish(),
 });
 
 const sendSchema = z.object({
@@ -30,26 +42,67 @@ const sendSchema = z.object({
     content: z.string(),
     thread_id: z.string().nullish(),
     mentions: z.array(mentionSchema).optional(),
-    attachments: z
-      .array(
-        mentionSchema.extend({
-          width: z.number().nullish(),
-          height: z.number().nullish(),
-        })
-      )
-      .optional(),
+    attachments: z.array(attachmentSchema).optional(),
   }),
 });
 
-const entrySchema = z.object({
-  /** The page that noted the send; its lock tells whether it still runs. */
+const changeTarget = {
+  /** The write's identity in the queue, kept when it is made again. */
+  uuid: z.string(),
+  senderId: z.string(),
+  channelId: z.string(),
+  /** The message changed. */
+  id: z.string(),
+  /** What the server knows the change by, so it is applied once. */
+  nonce: z.string(),
+};
+
+/** A change to a message that exists: an edit, a removal or a reaction. */
+const changeSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('edit'),
+    ...changeTarget,
+    content: z.string(),
+    mentions: z.array(mentionSchema),
+    removeAttachmentIds: z.array(z.string()),
+    addAttachments: z.array(attachmentSchema),
+  }),
+  z.object({ kind: z.literal('delete'), ...changeTarget }),
+  z.object({
+    kind: z.literal('react'),
+    ...changeTarget,
+    emoji: z.string(),
+    add: z.boolean(),
+  }),
+]);
+
+const entryPage = {
+  /** The page that noted the write; its lock tells whether it still runs. */
   pageId: z.string(),
   createdAt: z.string(),
-  send: sendSchema,
-});
+};
+
+const entrySchema = z.union([
+  z.object({ ...entryPage, send: sendSchema }),
+  z.object({ ...entryPage, change: changeSchema }),
+]);
 
 export type UnqueuedSend = z.infer<typeof sendSchema>;
+export type UnqueuedChange = z.infer<typeof changeSchema>;
 type Entry = z.infer<typeof entrySchema>;
+type NotedWrite = { send: UnqueuedSend } | { change: UnqueuedChange };
+
+/** What a page that is gone left behind, handed on in the order written. */
+export interface UnqueuedWriteHandlers {
+  send: (send: UnqueuedSend, createdAt: string) => void;
+  change: (change: UnqueuedChange, createdAt: string) => void;
+}
+
+/** The write's id in the queue: a send's is its message's. */
+const queueIdOf = (write: NotedWrite): string =>
+  'send' in write ? write.send.id : write.change.uuid;
+const senderOf = (write: NotedWrite): string =>
+  'send' in write ? write.send.senderId : write.change.senderId;
 
 export type UnqueuedSendsHost = Pick<CacheHost, 'inspectMutations'>;
 
@@ -70,9 +123,10 @@ const pageLockName = (pageId: string) => `${KEY_PREFIX}page:${pageId}`;
 const entryKey = (senderId: string, messageId: string) =>
   `${KEY_PREFIX}${senderId}:${messageId}`;
 
-/** Forgets a noted send that reached the server some other way. */
+/** Forgets a noted write that reached the server some other way. */
 export function forgetUnqueuedSend(
   senderId: string,
+  /** A send's message id, or a change's `uuid`. */
   messageId: string,
   deps: Pick<UnqueuedSendsDeps, 'storage'> = {}
 ): void {
@@ -144,11 +198,11 @@ function writeEntry(
 ): void {
   try {
     storage.setItem(
-      entryKey(entry.send.senderId, entry.send.id),
+      entryKey(senderOf(entry), queueIdOf(entry)),
       JSON.stringify(entry)
     );
   } catch {
-    // A full or refused storage leaves this send without the safety net.
+    // A full or refused storage leaves this write without the safety net.
   }
 }
 
@@ -174,11 +228,28 @@ export function noteUnqueuedSend(
   createdAt: string,
   deps: UnqueuedSendsDeps = {}
 ): UnqueuedSendNote {
+  return noteUnqueuedWrite({ send }, createdAt, deps);
+}
+
+/** Notes an edit, a removal or a reaction before the queue is asked to store it. */
+export function noteUnqueuedChange(
+  change: UnqueuedChange,
+  createdAt: string,
+  deps: UnqueuedSendsDeps = {}
+): UnqueuedSendNote {
+  return noteUnqueuedWrite({ change }, createdAt, deps);
+}
+
+function noteUnqueuedWrite(
+  write: NotedWrite,
+  createdAt: string,
+  deps: UnqueuedSendsDeps
+): UnqueuedSendNote {
   const storage = deps.storage ?? browserStorage();
   if (!storage) return NO_NOTE;
   holdUnqueuedSendsPage(deps.locks);
-  writeEntry(storage, { pageId: deps.pageId ?? PAGE_ID, createdAt, send });
-  const key = entryKey(send.senderId, send.id);
+  writeEntry(storage, { pageId: deps.pageId ?? PAGE_ID, createdAt, ...write });
+  const key = entryKey(senderOf(write), queueIdOf(write));
   const stored = () => {
     try {
       storage.removeItem(key);
@@ -213,15 +284,15 @@ function readEntries(
 }
 
 /**
- * Sends again what pages that are gone noted for `senderId` and never saw
- * stored. Each such send is taken over by this page first, under a lock, so
- * two pages starting together do not both send it. Resolves with the number
- * handed to `resend`, which reports its own failures.
+ * Makes again what pages that are gone noted for `senderId` and never saw
+ * stored. Each such write is taken over by this page first, under a lock, so
+ * two pages starting together do not both make it. Resolves with the number
+ * handed to `resend`, whose handlers report their own failures.
  */
 export async function resendUnqueuedSends(
   host: UnqueuedSendsHost,
   senderId: string,
-  resend: (send: UnqueuedSend, createdAt: string) => void,
+  resend: UnqueuedWriteHandlers,
   deps: UnqueuedSendsDeps = {}
 ): Promise<number> {
   const storage = deps.storage ?? browserStorage();
@@ -241,7 +312,9 @@ export async function resendUnqueuedSends(
     );
     for (const { key, entry } of readEntries(storage, senderId)) {
       // A time that does not parse is neither young nor sortable.
-      if (!entry || !(now - Date.parse(entry.createdAt) <= MAX_AGE_MS)) {
+      const maxAge =
+        entry && 'change' in entry ? CHANGE_MAX_AGE_MS : MAX_AGE_MS;
+      if (!entry || !(now - Date.parse(entry.createdAt) <= maxAge)) {
         storage.removeItem(key);
         continue;
       }
@@ -254,26 +327,27 @@ export async function resendUnqueuedSends(
     }
   });
   if (adopted.length === 0) return 0;
-  // Storage lists its keys in no order a person would know; the sends go
-  // out as they were written.
+  // Storage lists its keys in no order a person would know; the writes go
+  // out as they were made, so an edit follows the message it changes.
   adopted.sort(
     (a, b) =>
       Date.parse(a.createdAt) - Date.parse(b.createdAt) ||
-      (a.send.id < b.send.id ? -1 : 1)
+      (queueIdOf(a) < queueIdOf(b) ? -1 : 1)
   );
 
-  // A send the queue stored just before its page went is already on its way.
+  // A write the queue stored just before its page went is already on its way.
   const queued = new Set(
     ((await host.inspectMutations?.()) ?? []).map((mutation) => mutation.uuid)
   );
   let resent = 0;
-  for (const { send, createdAt } of adopted) {
-    if (queued.has(send.id)) {
-      storage.removeItem(entryKey(send.senderId, send.id));
+  for (const entry of adopted) {
+    if (queued.has(queueIdOf(entry))) {
+      storage.removeItem(entryKey(senderOf(entry), queueIdOf(entry)));
       continue;
     }
     resent += 1;
-    resend(send, createdAt);
+    if ('send' in entry) resend.send(entry.send, entry.createdAt);
+    else resend.change(entry.change, entry.createdAt);
   }
   return resent;
 }

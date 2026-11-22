@@ -1,9 +1,11 @@
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { sleep } from '@core/util/sleep';
 import { entityMessagesClient } from '@service-storage/messages';
+import { match } from 'ts-pattern';
 import { refreshChannelViews } from './catch-up';
 import {
   forgetUnqueuedSend,
+  type UnqueuedChange,
   type UnqueuedSend,
   type UnqueuedSendsHost,
 } from './unqueued-sends';
@@ -18,6 +20,7 @@ type QueuedMutations = Awaited<
 
 export interface LeftBehindSendDeps {
   post?: typeof entityMessagesClient.post;
+  client?: Pick<typeof entityMessagesClient, 'patch' | 'delete' | 'react'>;
   online?: () => Promise<void>;
   forget?: typeof forgetUnqueuedSend;
   refresh?: typeof refreshChannelViews;
@@ -77,4 +80,85 @@ export async function sendLeftBehindOverRest(
   }
   (deps.forget ?? forgetUnqueuedSend)(send.senderId, send.id);
   (deps.refresh ?? refreshChannelViews)(send.channelId);
+}
+
+/** Answers that say the message is gone, not the person's, or already changed. */
+const REFUSALS = ['NOT_FOUND', 'FORBIDDEN', 'CONFLICT'];
+
+/**
+ * Makes over REST an edit, a removal or a reaction an earlier page noted for
+ * the device queue and never saw stored, for a page where channels no longer
+ * go through the queue. A removal is taken once; an edit or a reaction the
+ * queue did deliver after all is applied again with the same result, and an
+ * edit that adds an attachment may add it twice, since REST has no once-only
+ * way to add one. Changes are made again for minutes only (`unqueued-sends`). A change the server refuses is forgotten, since
+ * no later start would fare better; any other failure leaves it noted for the
+ * next start.
+ */
+export async function changeLeftBehindOverRest(
+  change: UnqueuedChange,
+  deps: LeftBehindSendDeps = {}
+): Promise<void> {
+  await (deps.online ?? whenOnline)();
+  const client = deps.client ?? entityMessagesClient;
+  const parent = { type: 'channel' as const, id: change.channelId };
+  try {
+    await match(change)
+      .with({ kind: 'edit' }, (edit) =>
+        client.patch(parent, edit.id, {
+          content: edit.content,
+          mentions: edit.mentions,
+          attachments: {
+            type: 'delta',
+            value: {
+              remove: edit.removeAttachmentIds,
+              add: edit.addAttachments,
+            },
+          },
+          nonce: edit.nonce,
+        })
+      )
+      .with({ kind: 'delete' }, (deletion) =>
+        client.delete(parent, deletion.id, deletion.nonce)
+      )
+      .with({ kind: 'react' }, (reaction) =>
+        client.react(
+          parent,
+          reaction.id,
+          reaction.emoji,
+          reaction.add,
+          reaction.nonce
+        )
+      )
+      // Noted by a build that knows a kind this one does not: left noted.
+      .exhaustive(() =>
+        Promise.reject(new Error('unknown kind of left-behind change'))
+      );
+  } catch (error) {
+    if (!REFUSALS.some((code) => thrownResultErrorHasCode(error, code)))
+      throw error;
+  }
+  (deps.forget ?? forgetUnqueuedSend)(change.senderId, change.uuid);
+  (deps.refresh ?? refreshChannelViews)(change.channelId);
+}
+
+/**
+ * Runs each piece of work once the one before it has ended, however it ended.
+ * Left-behind writes go to the server in the order written: a removal sent
+ * beside the post of its message could arrive first and be refused, and the
+ * message would stay.
+ */
+export function oneAfterAnother(): (
+  work: () => Promise<void>
+) => Promise<void> {
+  let last: Promise<unknown> = Promise.resolve();
+  return (work) => {
+    const before = last;
+    const run = (async () => {
+      await Promise.allSettled([before]);
+      await work();
+    })();
+    last = run;
+    return run;
+  };
 }

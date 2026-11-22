@@ -120,7 +120,7 @@ async function fetchServerThread(
   channelId: string,
   rootId: string,
   fetchPage: FetchChannelThreadPage
-): Promise<MessageThread | undefined> {
+): Promise<{ thread: MessageThread; seq: string } | undefined> {
   // A reload before the commit below leaves the thread to the next page.
   noteUnheldRead({ channelId, rootId });
   const generation = cacheSessionGeneration.capture();
@@ -171,8 +171,14 @@ async function fetchServerThread(
   const ordered = [...replies.keys()]
     .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
     .flatMap((key) => replies.get(key) ?? []);
-  return threadOf(first.root, ordered);
+  const thread = threadOf(first.root, ordered);
+  return thread && { thread, seq };
 }
+
+export type LoadedChannelThread =
+  | { thread: MessageThread; source: 'device' }
+  /** `seq` is the channel sequence the server answered at. */
+  | { thread: MessageThread; source: 'server'; seq: string };
 
 /**
  * A channel thread with all its replies: from the device when it holds the
@@ -184,7 +190,7 @@ export async function loadChannelThread(
   channelId: string,
   rootId: string,
   fetchPage: FetchChannelThreadPage = fetchChannelThreadPage
-): Promise<{ thread: MessageThread; source: 'device' | 'server' } | undefined> {
+): Promise<LoadedChannelThread | undefined> {
   return Telemetry.span('channel.thread_load', async (span) => {
     span.setAttr('channel.id', channelId);
     span.setAttr('thread.root_id', rootId);
@@ -200,11 +206,11 @@ export async function loadChannelThread(
       span.setAttr('thread.replies', device.replies.length);
       return { thread: device, source: 'device' as const };
     }
-    const thread = await fetchServerThread(host, channelId, rootId, fetchPage);
-    span.setAttr('thread.source', thread ? 'server' : 'too-long');
-    if (!thread) return undefined;
-    span.setAttr('thread.replies', thread.replies.length);
-    return { thread, source: 'server' as const };
+    const fetched = await fetchServerThread(host, channelId, rootId, fetchPage);
+    span.setAttr('thread.source', fetched ? 'server' : 'too-long');
+    if (!fetched) return undefined;
+    span.setAttr('thread.replies', fetched.thread.replies.length);
+    return { ...fetched, source: 'server' as const };
   });
 }
 
