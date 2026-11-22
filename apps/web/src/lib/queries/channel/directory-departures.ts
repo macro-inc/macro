@@ -168,10 +168,13 @@ export function createDepartureRecheck(
   let scope = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let running = false;
-  // The generation the last observed states were of.
+  // The generation the departures held are of.
+  let followed: string | undefined;
+  // The generation of the last observed state: the first state of a
+  // generation is a baseline, not a change.
   let observed: string | undefined;
 
-  const reset = () => {
+  const clear = () => {
     scope.abort();
     scope = new AbortController();
     departures.clear();
@@ -181,7 +184,27 @@ export function createDepartureRecheck(
     timer = undefined;
     running = false;
   };
+  const reset = () => {
+    clear();
+    followed = undefined;
+    observed = undefined;
+  };
   deps.signal.addEventListener('abort', reset, { once: true });
+
+  /** The directory's generation, once the departures held are of it; a
+   * leave seen before the directory has published a state of that storage
+   * counts as much as one seen after. Undefined while the directory reads no
+   * storage of this viewer's. */
+  const follow = (): string | undefined => {
+    const generation = deps.generation();
+    if (deps.signal.aborted || generation === undefined) return undefined;
+    if (generation !== followed) {
+      // What was held was of other storage.
+      clear();
+      followed = generation;
+    }
+    return generation;
+  };
 
   const schedule = () => {
     if (timer !== undefined) clearTimeout(timer);
@@ -329,7 +352,7 @@ export function createDepartureRecheck(
   const run = () => {
     timer = undefined;
     const generation = deps.generation();
-    if (generation === undefined) {
+    if (generation === undefined || generation !== followed) {
       reset();
       return;
     }
@@ -471,11 +494,11 @@ export function createDepartureRecheck(
     next: ChannelDirectoryState,
     unconfirmed: Readonly<Record<string, true>>
   ) => {
-    const generation = deps.generation();
-    if (deps.signal.aborted || generation === undefined) return;
-    // A state of other storage says nothing about what the viewer left.
+    const generation = follow();
+    if (generation === undefined) return;
+    // The state before it may be of other storage: it says nothing about
+    // what the viewer left.
     if (generation !== observed) {
-      reset();
       observed = generation;
       return;
     }
@@ -499,22 +522,16 @@ export function createDepartureRecheck(
     schedule();
   };
 
-  /** Whether live updates are for the storage the directory reads. */
-  const following = () =>
-    !deps.signal.aborted &&
-    observed !== undefined &&
-    deps.generation() === observed;
-
   return {
     observe,
     depart(id) {
-      if (!following()) return;
+      if (follow() === undefined) return;
       undecided.delete(id);
       depart(id);
       schedule();
     },
     rejoin(id) {
-      if (!following()) return;
+      if (follow() === undefined) return;
       const flight = flights.get(id);
       if (flight) flight.rejoined = true;
       undecided.delete(id);

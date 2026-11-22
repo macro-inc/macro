@@ -261,11 +261,36 @@ describe('checking a channel the viewer left again', () => {
     expect(h.removeUnreadable).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores live updates before it has seen a state of this storage', async () => {
+  it('follows a live leave delivered before the directory showed a state of this storage', async () => {
     const h = setup();
+    // An empty, incomplete first scan publishes nothing new, so the
+    // directory may show no state of its storage before the leave arrives.
     h.recheck.depart(channelUuid('gone'));
+    // An older page then lands the channel joined, as its first state.
+    h.show(complete(channel('kept'), channel('gone')));
+
+    await vi.advanceTimersByTimeAsync(RECHECKS[0]);
+    expect(h.readIds()).toEqual(['gone']);
+    expect(h.removeUnreadable).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores live updates while the directory reads no storage of the viewer', async () => {
+    const h = setup();
+    h.setGeneration(undefined);
+    h.recheck.depart(channelUuid('gone'));
+    h.setGeneration('g1');
     h.show(complete(channel('kept')));
     comeBack(h);
+
+    await vi.advanceTimersByTimeAsync(RECHECKS[1] + 1_000);
+    expect(h.readFromPrimary).not.toHaveBeenCalled();
+  });
+
+  it('drops a live leave of other storage when the directory moves on', async () => {
+    const h = setup();
+    h.recheck.depart(channelUuid('gone'));
+    h.setGeneration('g2');
+    h.show(complete(channel('kept'), channel('gone')));
 
     await vi.advanceTimersByTimeAsync(RECHECKS[1] + 1_000);
     expect(h.readFromPrimary).not.toHaveBeenCalled();

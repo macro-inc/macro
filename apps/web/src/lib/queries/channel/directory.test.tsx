@@ -3435,6 +3435,33 @@ describe('cached channel directory', () => {
       expect(goneReads(mounted.readFromPrimary)).toBe(1);
     });
 
+    it('checks a channel the viewer left live before the directory showed any state of its storage', async () => {
+      const feed = membershipFeed();
+      const mounted = mountCachedDirectory([], {
+        departureRechecksMs: RECHECKS,
+        subscribeMembership: feed.subscribe,
+        readFromPrimary: async () => ({ kind: 'read', channel: null }),
+      });
+      // An empty, unfinished first scan publishes nothing new.
+      await vi.waitFor(() => expect(mounted.host.search).toHaveBeenCalled());
+      expect(mounted.directory.complete()).toBe(false);
+      feed.emit('gone', false);
+      // A read sent before the leave lands the channel as joined, and that
+      // is the first state the directory shows.
+      mounted.cache.put(channelRecord('gone'), { sourceHash: 'gone-stale' });
+      completeLane('g1');
+      mounted.reopen();
+
+      await vi.waitFor(() =>
+        expect(mounted.removeUnreadable).toHaveBeenCalledWith(
+          [channelUuid('gone')],
+          'g1',
+          expect.any(AbortSignal)
+        )
+      );
+      expect(goneReads(mounted.readFromPrimary)).toBe(1);
+    });
+
     it('reads nothing for a live leave the viewer takes back before a stale read lands', async () => {
       const mounted = await listedKept();
       mounted.feed.emit('gone', false);
