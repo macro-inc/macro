@@ -1,0 +1,14 @@
+crates/macro_db_client/migrations/20261122220100_agent_permission_policies.sql
+  h_659b58cf3b37bf 72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f109836778f35b6420e4e554a6bedba6830872dc",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
