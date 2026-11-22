@@ -49,6 +49,13 @@ Input for adding an option to a select definition or tag set.
 """
 input AddPropertyOptionInput {
 	"""
+	Id for the new option, minted by the client. A retry with the same id
+	answers with the option the first attempt created instead of adding
+	another; an id another option holds is refused. The server mints one
+	when it is absent.
+	"""
+	id: ID
+	"""
 	Definition receiving the option.
 	"""
 	propertyDefinitionId: ID!
@@ -362,7 +369,8 @@ type CompleteMutationRoot {
 	"""
 	deletePropertyDefinition(propertyDefinitionId: ID!): GraphqlCacheDeletion!
 	"""
-	Add a selectable option to a definition or tag set.
+	Add a selectable option to a definition or tag set. With a client id,
+	a retried add answers with the option it created the first time.
 	"""
 	addPropertyOption(input: AddPropertyOptionInput!): GraphqlPropertyOption!
 	"""

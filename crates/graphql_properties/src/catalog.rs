@@ -3,24 +3,22 @@
 //! service call, with the same team receipt and managed-definition guard, as
 //! its REST route.
 
-use std::marker::PhantomData;
+use std::{collections::HashMap, marker::PhantomData};
 
 use async_graphql::{
-    Context, Enum, ErrorExtensions, ID, InputObject, Object, OneofObject, SimpleObject, Union,
+    Context, Enum, ErrorExtensions, ID, InputObject, Name, Object, OneofObject, Positioned,
+    SimpleObject, Union,
+    parser::types::{FragmentDefinition, Selection, SelectionSet},
 };
 use entity_access::domain::ports::EntityAccessService;
-use graphql_common::{GraphqlCacheDeletion, GraphqlPropertyEntityType, parse_id};
+use graphql_common::{GraphqlCacheDeletion, GraphqlPropertyEntityType};
 use models_properties::{
-    DataType,
     api::requests::{
         AddNumberOptionRequest, AddPropertyOptionRequest, AddStringOptionRequest,
         CreatePropertyDefinitionRequest, CreatePropertyScope, PropertyDataType, SelectNumberOption,
         SelectStringOption, UpdatePropertyOptionRequest,
     },
-    service::{
-        property_definition_with_options::PropertyDefinitionWithOptions,
-        property_option::PropertyOption,
-    },
+    service::{property_definition::PropertyDefinition, property_option::PropertyOption},
 };
 use properties::{
     PropertiesErr, PropertiesService,
@@ -48,7 +46,7 @@ pub trait PropertyCatalogWriter: Send + Sync + 'static {
     fn create_property_definition(
         &self,
         _request: CreatePropertyDefinitionRequest,
-    ) -> impl Future<Output = Result<PropertyDefinitionWithOptions, PropertiesErr>> + Send {
+    ) -> impl Future<Output = Result<PropertyDefinition, PropertiesErr>> + Send {
         async { Err(not_configured()) }
     }
 
@@ -60,10 +58,12 @@ pub trait PropertyCatalogWriter: Send + Sync + 'static {
         async { Err(not_configured()) }
     }
 
-    /// Add a selectable option to a definition the caller owns.
+    /// Add a selectable option to a definition the caller owns, under the
+    /// client's id when it sent one.
     fn add_property_option(
         &self,
         _property_definition_id: Uuid,
+        _option_id: Option<Uuid>,
         _request: AddPropertyOptionRequest,
     ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send {
         async { Err(not_configured()) }
@@ -156,28 +156,16 @@ where
     async fn create_property_definition(
         &self,
         request: CreatePropertyDefinitionRequest,
-    ) -> Result<PropertyDefinitionWithOptions, PropertiesErr> {
+    ) -> Result<PropertyDefinition, PropertiesErr> {
         self.managed_team_definitions
             .reject_create(request.scope, &request.display_name)?;
         let team = self.team().await?;
-        let definition = self
-            .properties_service
+        // The definition is committed when this returns. Its options load
+        // only if the selection asks for them, so a failed read cannot turn a
+        // committed create into a reported failure.
+        self.properties_service
             .create_property_definition(&self.user_id, team.as_ref(), &request)
-            .await?;
-        // The service creates select options with the definition but answers
-        // with the definition alone; read them so the response is complete.
-        let property_options = match definition.data_type {
-            DataType::SelectString | DataType::SelectNumber => {
-                self.properties_service
-                    .get_property_options(definition.id, &self.user_id, team.as_ref())
-                    .await?
-            }
-            _ => Vec::new(),
-        };
-        Ok(PropertyDefinitionWithOptions {
-            definition,
-            property_options,
-        })
+            .await
     }
 
     async fn delete_property_definition(
@@ -195,19 +183,35 @@ where
     async fn add_property_option(
         &self,
         property_definition_id: Uuid,
+        option_id: Option<Uuid>,
         request: AddPropertyOptionRequest,
     ) -> Result<PropertyOption, PropertiesErr> {
         let team = self.team().await?;
         self.reject_managed(property_definition_id, team.as_ref())
             .await?;
-        self.properties_service
-            .add_property_option(
-                &self.user_id,
-                team.as_ref(),
-                property_definition_id,
-                &request,
-            )
-            .await
+        match option_id {
+            Some(option_id) => {
+                self.properties_service
+                    .add_property_option_with_id(
+                        &self.user_id,
+                        team.as_ref(),
+                        property_definition_id,
+                        option_id,
+                        &request,
+                    )
+                    .await
+            }
+            None => {
+                self.properties_service
+                    .add_property_option(
+                        &self.user_id,
+                        team.as_ref(),
+                        property_definition_id,
+                        &request,
+                    )
+                    .await
+            }
+        }
     }
 
     async fn update_property_option(
@@ -304,6 +308,74 @@ fn catalog_error(err: PropertiesErr) -> async_graphql::Error {
 fn bad_request(message: impl Into<String>) -> async_graphql::Error {
     async_graphql::Error::new(message.into())
         .extend_with(|_, extensions| extensions.set("code", "BAD_REQUEST"))
+}
+
+/// Parse a catalog id argument. The refusal names the argument, never the
+/// value, which may be anything a client sent.
+fn catalog_id(id: &ID, field: &str) -> async_graphql::Result<Uuid> {
+    Uuid::parse_str(id.as_str()).map_err(|_| bad_request(format!("`{field}` is not a valid id")))
+}
+
+/// The id a deletion marker names: the form the deleted object's own `id`
+/// field takes, so the client drops the record it holds.
+fn canonical_id(id: Uuid) -> ID {
+    ID(id.to_string())
+}
+
+/// Root fields that write the property catalog.
+const CATALOG_WRITES: [&str; 8] = [
+    "createPropertyDefinition",
+    "deletePropertyDefinition",
+    "addPropertyOption",
+    "updatePropertyOption",
+    "deletePropertyOption",
+    "ensureTagSet",
+    "promoteTag",
+    "mergeTag",
+];
+
+/// Refuse an operation that names more than one catalog write, before any of
+/// them runs. Deleting a definition or option, and sharing or replacing a
+/// tag, rewrite every value that uses it, so one request runs at most one
+/// such write, as one REST request does.
+fn one_catalog_write(ctx: &Context<'_>) -> async_graphql::Result<()> {
+    let env = ctx.query_env;
+    let writes = count_catalog_writes(&env.operation.node.selection_set.node, &env.fragments, 0);
+    if writes > 1 {
+        return Err(bad_request(
+            "send each property catalog write in its own request",
+        ));
+    }
+    Ok(())
+}
+
+/// Count catalog write fields at the root of an operation, through fragments.
+fn count_catalog_writes(
+    selection_set: &SelectionSet,
+    fragments: &HashMap<Name, Positioned<FragmentDefinition>>,
+    depth: usize,
+) -> usize {
+    // Validation has already refused fragment cycles; the bound is a backstop.
+    if depth > 16 {
+        return 0;
+    }
+    selection_set
+        .items
+        .iter()
+        .map(|item| match &item.node {
+            Selection::Field(field) => {
+                usize::from(CATALOG_WRITES.contains(&field.node.name.node.as_str()))
+            }
+            Selection::FragmentSpread(spread) => fragments
+                .get(&spread.node.fragment_name.node)
+                .map_or(0, |fragment| {
+                    count_catalog_writes(&fragment.node.selection_set.node, fragments, depth + 1)
+                }),
+            Selection::InlineFragment(inline) => {
+                count_catalog_writes(&inline.node.selection_set.node, fragments, depth + 1)
+            }
+        })
+        .sum()
 }
 
 /// Who owns a new property definition.
@@ -475,6 +547,11 @@ impl CreatePropertyDefinitionInput {
 /// Input for adding an option to a select definition or tag set.
 #[derive(InputObject)]
 pub struct AddPropertyOptionInput {
+    /// Id for the new option, minted by the client. A retry with the same id
+    /// answers with the option the first attempt created instead of adding
+    /// another; an id another option holds is refused. The server mints one
+    /// when it is absent.
+    id: Option<ID>,
     /// Definition receiving the option.
     property_definition_id: ID,
     /// Ordering within the definition's options.
@@ -486,9 +563,17 @@ pub struct AddPropertyOptionInput {
 }
 
 impl AddPropertyOptionInput {
-    /// Convert into the definition id and the request the REST route accepts.
-    fn try_into_request(self) -> async_graphql::Result<(Uuid, AddPropertyOptionRequest)> {
-        let definition_id = parse_id(self.property_definition_id, "propertyDefinitionId")?;
+    /// Convert into the definition id, the client's option id, and the
+    /// request the REST route accepts.
+    fn try_into_request(
+        self,
+    ) -> async_graphql::Result<(Uuid, Option<Uuid>, AddPropertyOptionRequest)> {
+        let definition_id = catalog_id(&self.property_definition_id, "propertyDefinitionId")?;
+        let option_id = self
+            .id
+            .as_ref()
+            .map(|id| catalog_id(id, "id"))
+            .transpose()?;
         let request = match self.value {
             GraphqlPropertyOptionValueInput::String(value) => {
                 AddPropertyOptionRequest::SelectString {
@@ -511,7 +596,7 @@ impl AddPropertyOptionInput {
                 }
             }
         };
-        Ok((definition_id, request))
+        Ok((definition_id, option_id, request))
     }
 }
 
@@ -582,6 +667,7 @@ impl<W, R> PropertyCatalogMutationRoot<W, R> {
 }
 
 /// Writes to property definitions, their options, and the viewer's tag sets.
+/// An operation carries at most one of them.
 #[Object]
 impl<W, R> PropertyCatalogMutationRoot<W, R>
 where
@@ -599,6 +685,7 @@ where
         ctx: &Context<'_>,
         input: CreatePropertyDefinitionInput,
     ) -> async_graphql::Result<GraphqlPropertyDefinition<R>> {
+        one_catalog_write(ctx)?;
         let writer = ctx.data::<W>()?;
         let request = input.try_into_request()?;
         let created = writer
@@ -607,51 +694,67 @@ where
             .map_err(catalog_error)?;
         tracing::Span::current().record(
             "property_definition_id",
-            tracing::field::display(created.definition.id),
+            tracing::field::display(created.id),
         );
-        Ok(created.into())
+        Ok(GraphqlPropertyDefinition::new(created))
     }
 
     /// Delete a property definition and identify its normalized cache record.
     #[tracing::instrument(
         skip_all,
         err(Debug),
-        fields(property_definition_id = %property_definition_id.as_str())
+        fields(property_definition_id = tracing::field::Empty)
     )]
     async fn delete_property_definition(
         &self,
         ctx: &Context<'_>,
         property_definition_id: ID,
     ) -> async_graphql::Result<GraphqlCacheDeletion> {
+        one_catalog_write(ctx)?;
         let writer = ctx.data::<W>()?;
-        let definition_id = parse_id(property_definition_id.clone(), "propertyDefinitionId")?;
+        let definition_id = catalog_id(&property_definition_id, "propertyDefinitionId")?;
+        tracing::Span::current().record(
+            "property_definition_id",
+            tracing::field::display(definition_id),
+        );
         writer
             .delete_property_definition(definition_id)
             .await
             .map_err(catalog_error)?;
         Ok(GraphqlCacheDeletion::new(
             "GraphqlPropertyDefinition",
-            property_definition_id,
+            canonical_id(definition_id),
         ))
     }
 
-    /// Add a selectable option to a definition or tag set.
+    /// Add a selectable option to a definition or tag set. With a client id,
+    /// a retried add answers with the option it created the first time.
     #[tracing::instrument(
         skip_all,
         err(Debug),
-        fields(property_definition_id = %input.property_definition_id.as_str())
+        fields(
+            property_definition_id = tracing::field::Empty,
+            option_id = tracing::field::Empty
+        )
     )]
     async fn add_property_option(
         &self,
         ctx: &Context<'_>,
         input: AddPropertyOptionInput,
     ) -> async_graphql::Result<GraphqlPropertyOption> {
+        one_catalog_write(ctx)?;
         let writer = ctx.data::<W>()?;
-        let (definition_id, request) = input.try_into_request()?;
+        let (definition_id, option_id, request) = input.try_into_request()?;
+        let span = tracing::Span::current();
+        span.record(
+            "property_definition_id",
+            tracing::field::display(definition_id),
+        );
         let option = writer
-            .add_property_option(definition_id, request)
+            .add_property_option(definition_id, option_id, request)
             .await
             .map_err(catalog_error)?;
+        span.record("option_id", tracing::field::display(option.id));
         Ok(option.into())
     }
 
@@ -660,8 +763,8 @@ where
         skip_all,
         err(Debug),
         fields(
-            property_definition_id = %input.property_definition_id.as_str(),
-            option_id = %input.option_id.as_str()
+            property_definition_id = tracing::field::Empty,
+            option_id = tracing::field::Empty
         )
     )]
     async fn update_property_option(
@@ -669,9 +772,16 @@ where
         ctx: &Context<'_>,
         input: UpdatePropertyOptionInput,
     ) -> async_graphql::Result<GraphqlPropertyOption> {
+        one_catalog_write(ctx)?;
         let writer = ctx.data::<W>()?;
-        let definition_id = parse_id(input.property_definition_id, "propertyDefinitionId")?;
-        let option_id = parse_id(input.option_id, "optionId")?;
+        let definition_id = catalog_id(&input.property_definition_id, "propertyDefinitionId")?;
+        let option_id = catalog_id(&input.option_id, "optionId")?;
+        let span = tracing::Span::current();
+        span.record(
+            "property_definition_id",
+            tracing::field::display(definition_id),
+        );
+        span.record("option_id", tracing::field::display(option_id));
         let option = writer
             .update_property_option(
                 definition_id,
@@ -692,8 +802,8 @@ where
         skip_all,
         err(Debug),
         fields(
-            property_definition_id = %property_definition_id.as_str(),
-            option_id = %option_id.as_str()
+            property_definition_id = tracing::field::Empty,
+            option_id = tracing::field::Empty
         )
     )]
     async fn delete_property_option(
@@ -702,16 +812,23 @@ where
         property_definition_id: ID,
         option_id: ID,
     ) -> async_graphql::Result<GraphqlCacheDeletion> {
+        one_catalog_write(ctx)?;
         let writer = ctx.data::<W>()?;
-        let definition_id = parse_id(property_definition_id, "propertyDefinitionId")?;
-        let option_uuid = parse_id(option_id.clone(), "optionId")?;
+        let definition_id = catalog_id(&property_definition_id, "propertyDefinitionId")?;
+        let option_uuid = catalog_id(&option_id, "optionId")?;
+        let span = tracing::Span::current();
+        span.record(
+            "property_definition_id",
+            tracing::field::display(definition_id),
+        );
+        span.record("option_id", tracing::field::display(option_uuid));
         writer
             .delete_property_option(definition_id, option_uuid)
             .await
             .map_err(catalog_error)?;
         Ok(GraphqlCacheDeletion::new(
             "GraphqlPropertyOption",
-            option_id,
+            canonical_id(option_uuid),
         ))
     }
 
@@ -722,6 +839,7 @@ where
         ctx: &Context<'_>,
         scope: GraphqlTagScope,
     ) -> async_graphql::Result<GraphqlTagSet<R>> {
+        one_catalog_write(ctx)?;
         let writer = ctx.data::<W>()?;
         let set = writer
             .ensure_tag_set(match scope {
@@ -735,14 +853,16 @@ where
 
     /// Share one of the viewer's personal labels with their team. A label the
     /// team already has by name answers with the conflict, not an error.
-    #[tracing::instrument(skip_all, err(Debug), fields(option_id = %option_id.as_str()))]
+    #[tracing::instrument(skip_all, err(Debug), fields(option_id = tracing::field::Empty))]
     async fn promote_tag(
         &self,
         ctx: &Context<'_>,
         option_id: ID,
     ) -> async_graphql::Result<GraphqlTagPromotion> {
+        one_catalog_write(ctx)?;
         let writer = ctx.data::<W>()?;
-        let option_uuid = parse_id(option_id, "optionId")?;
+        let option_uuid = catalog_id(&option_id, "optionId")?;
+        tracing::Span::current().record("option_id", tracing::field::display(option_uuid));
         let err = match writer.promote_tag_option(option_uuid).await {
             Ok(option) => {
                 return Ok(GraphqlTagPromotion::Promoted(GraphqlPromotedTag {
@@ -767,7 +887,10 @@ where
     #[tracing::instrument(
         skip_all,
         err(Debug),
-        fields(option_id = %option_id.as_str(), target_option_id = %target_option_id.as_str())
+        fields(
+            option_id = tracing::field::Empty,
+            target_option_id = tracing::field::Empty
+        )
     )]
     async fn merge_tag(
         &self,
@@ -775,16 +898,23 @@ where
         option_id: ID,
         target_option_id: ID,
     ) -> async_graphql::Result<GraphqlTagMerge> {
+        one_catalog_write(ctx)?;
         let writer = ctx.data::<W>()?;
-        let option_uuid = parse_id(option_id.clone(), "optionId")?;
-        let target_uuid = parse_id(target_option_id, "targetOptionId")?;
+        let option_uuid = catalog_id(&option_id, "optionId")?;
+        let target_uuid = catalog_id(&target_option_id, "targetOptionId")?;
+        let span = tracing::Span::current();
+        span.record("option_id", tracing::field::display(option_uuid));
+        span.record("target_option_id", tracing::field::display(target_uuid));
         let option = writer
             .merge_tag_option(option_uuid, target_uuid)
             .await
             .map_err(catalog_error)?;
         Ok(GraphqlTagMerge {
             option: option.into(),
-            removed_option: GraphqlCacheDeletion::new("GraphqlPropertyOption", option_id),
+            removed_option: GraphqlCacheDeletion::new(
+                "GraphqlPropertyOption",
+                canonical_id(option_uuid),
+            ),
         })
     }
 }
