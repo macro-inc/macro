@@ -24,7 +24,8 @@ purpose (it says what).
   window has to extend past the rows it rejects. It invalidates nothing, since any incomplete
   document in a query's partitions answers it as incomplete before a window runs.
   Mail filters often use the app's mail tabs (`assets/mail-tabs.json`), and some of those
-  with the tab's tree reshaped: `not(not(tree))`, or joined to a random tree by `or` or `and`.
+  with the tab's tree reshaped: `not(not(tree))`, or joined by `or` or `and` to a random tree or,
+  half the time, to one literal the cache compiles (read, inbox visibility, thread, owner).
 - `src/exec.rs` runs a case. `src/normalize.rs` replaces the ids the engine mints
   (`#1`, `#2`, …) and keeps every id that appears in the case. `src/dump.rs`
   writes the tables after a final reopen, each value tagged with its type.

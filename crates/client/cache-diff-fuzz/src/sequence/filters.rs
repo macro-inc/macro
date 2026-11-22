@@ -158,8 +158,21 @@ impl Gen<'_> {
             if self.rng.chance(0.3) {
                 // The tab's tree in another shape: the same rows, or more or fewer.
                 let tree = filters["emailFilter"]["tree"].take();
-                self.filter_budget = 40;
-                let other = self.input_named("GraphqlEmailExpr", "tree", 2);
+                // Half the time a literal the cache compiles, so the tree keeps a cached
+                // window that has to reach rows the tab's own window skips.
+                let other = if self.rng.chance(0.5) {
+                    match self.rng.below(4) {
+                        0 => json!({ "literal": { "read": self.rng.chance(0.5) } }),
+                        1 => json!({ "literal": { "inboxVisible": self.rng.chance(0.5) } }),
+                        2 => {
+                            json!({ "literal": { "threadId": self.entity_id("GraphqlSoupEmailThread") } })
+                        }
+                        _ => json!({ "literal": { "owner": self.links[0].clone() } }),
+                    }
+                } else {
+                    self.filter_budget = 40;
+                    self.input_named("GraphqlEmailExpr", "tree", 2)
+                };
                 filters["emailFilter"]["tree"] = match self.rng.below(4) {
                     0 => json!({ "not": { "not": tree } }),
                     1 => json!({ "or": { "left": tree, "right": other } }),
