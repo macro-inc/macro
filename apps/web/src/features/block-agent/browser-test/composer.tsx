@@ -2,6 +2,8 @@ import '@app/index.css';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import { toast } from '@core/component/Toast/Toast';
+import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
@@ -11,6 +13,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntityProvider } from '@entity';
 import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { onMount } from 'solid-js';
 import { render } from 'solid-js/web';
 import { AgentInput } from '../ui/AgentInput';
 
@@ -33,13 +36,27 @@ const QUICK_ACCESS: QuickAccessContextValue = {
   interactionForUser: () => undefined,
 };
 
-/** The composer an agent session block mounts. */
+/**
+ * The composer an agent session block mounts, docked at the bottom of the
+ * page like a session pane's. `?toast` raises a failure toast over it, as the
+ * app does when an answer can't be sent; each send is counted on <body>.
+ */
 function Fixture() {
+  onMount(() => {
+    if (new URLSearchParams(location.search).has('toast')) {
+      toast.failure("Couldn't send your answer");
+    }
+  });
+
   return (
     <main class="flex min-h-screen flex-col justify-end bg-page p-4 text-ink">
+      <ToastRegion />
       <div class="mx-auto w-full max-w-2xl">
         <AgentInput
-          onSend={() => {}}
+          onSend={() => {
+            const sent = Number(document.body.dataset.sent ?? 0);
+            document.body.dataset.sent = String(sent + 1);
+          }}
           onAttachFiles={() => {}}
           commands={() => []}
         />
