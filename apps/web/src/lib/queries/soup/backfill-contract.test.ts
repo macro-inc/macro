@@ -1,3 +1,8 @@
+import {
+  SoupBackfillDocument,
+  SoupMailBackfillDocument,
+  SoupSharedMailBackfillDocument,
+} from '@service-storage/graphql/generated/graphql';
 import fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -107,6 +112,22 @@ describe('soup backfill lane contracts', () => {
     );
   });
 
+  it('restarts a content lane switched to the metadata operation', () => {
+    const metadataOnly = {
+      ...SIGNAL_EMAIL_SOUP_BACKFILL_LANE,
+      operation: SoupMailBackfillDocument,
+    };
+    expect(soupBackfillCheckpointKey('user-1', metadataOnly)).not.toBe(
+      soupBackfillCheckpointKey('user-1', SIGNAL_EMAIL_SOUP_BACKFILL_LANE)
+    );
+  });
+
+  it('treats no recency windows and an empty list alike, as the runner does', () => {
+    expect(
+      soupBackfillLaneContract({ ...CORE_SOUP_BACKFILL_LANE, emailRecency: [] })
+    ).toBe(soupBackfillLaneContract(CORE_SOUP_BACKFILL_LANE));
+  });
+
   it('ignores what changes only how a lane pages', () => {
     const contract = soupBackfillLaneContract(CORE_SOUP_BACKFILL_LANE);
     const paging: SoupBackfillParams[] = [
@@ -136,6 +157,7 @@ describe('soup backfill lane contracts', () => {
     const contract = soupBackfillLaneContract(lane);
     const changes: SoupBackfillParams[] = [
       { ...lane, contractVersion: 1 },
+      { ...lane, operation: SoupMailBackfillDocument },
       { ...lane, emailRecency: [{ signal: true, days: 91 }] },
       { ...lane, emailRecency: undefined },
       { ...lane, refreshAll: true },
@@ -156,8 +178,14 @@ describe('soup backfill lane contracts', () => {
     const filters = fc.dictionary(fc.string({ maxLength: 8 }), json, {
       maxKeys: 6,
     });
+    const operations = [
+      SoupBackfillDocument,
+      SoupMailBackfillDocument,
+      SoupSharedMailBackfillDocument,
+    ] as const;
     const laneArb = fc.record({
       checkpointId: fc.string({ minLength: 1, maxLength: 12 }),
+      operation: fc.constantFrom(...operations),
       input: fc.record({
         limit: fc.integer({ min: 1, max: 500 }),
         expand: fc.boolean(),
@@ -193,6 +221,11 @@ describe('soup backfill lane contracts', () => {
         expect(soupBackfillLaneContract(withExtraFilter(lane))).not.toBe(
           contract
         );
+        const otherOperation =
+          operations[(operations.indexOf(lane.operation) + 1) % 3];
+        expect(
+          soupBackfillLaneContract({ ...lane, operation: otherOperation })
+        ).not.toBe(contract);
       }),
       { numRuns: 500 }
     );

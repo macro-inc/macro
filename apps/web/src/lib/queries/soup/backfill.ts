@@ -6,6 +6,7 @@ import {
   type GraphqlEmailExpr,
   SoupBackfillDocument,
   SoupMailBackfillDocument,
+  SoupSharedMailBackfillDocument,
 } from '@service-storage/graphql/generated/graphql';
 import {
   type FetchGraphqlSoupOptions,
@@ -55,19 +56,30 @@ type SoupBackfillFetchPage = (
   options?: FetchGraphqlSoupOptions
 ) => Promise<GraphqlSoupHydrationPage>;
 
-const fetchSoupPage: SoupBackfillFetchPage = (input, options) =>
-  hydrateGraphqlSoup(SoupBackfillDocument, { input }, options);
+/** The Soup operations a backfill lane can page through. */
+export type SoupBackfillOperation =
+  | typeof SoupBackfillDocument
+  | typeof SoupMailBackfillDocument
+  | typeof SoupSharedMailBackfillDocument;
 
-const fetchEmailContentPage: SoupBackfillFetchPage = (input, options) =>
-  hydrateGraphqlSoup(SoupBackfillDocument, { input }, options);
+const fetchOperation =
+  (operation: SoupBackfillOperation): SoupBackfillFetchPage =>
+  (input, options) =>
+    hydrateGraphqlSoup(operation, { input }, options);
 
 export type SoupBackfillParams = {
-  /** Stable checkpoint namespace. Change it when the input changes. */
+  /** Stable checkpoint namespace; the lane's contract keys its progress. */
   checkpointId: string;
-  /** Optional network fetcher; defaults to the standard Soup operation. */
+  /** The operation every page sends. Part of the lane's contract. */
+  operation: SoupBackfillOperation;
+  /** Replaces the network call for `operation`, as tests do. */
   fetchPage?: SoupBackfillFetchPage;
-  /** Allocate per-scan membership evidence (never shared across users or retries). */
-  createFetchPage?: (userId: string) => Promise<SoupBackfillFetchPage>;
+  /** Wraps the operation's fetch with per-scan membership evidence (never
+   * shared across users or retries). */
+  createFetchPage?: (
+    userId: string,
+    fetch: SoupBackfillFetchPage
+  ) => Promise<SoupBackfillFetchPage>;
   /** Access-scope reconciliation requires a fresh full scan after interruption. */
   restartOnRun?: boolean;
   /** Soup input shared by every page. The backfill manages the cursor. */
@@ -82,9 +94,10 @@ export type SoupBackfillParams = {
   /** Email threads matching any window. The cutoff is fixed when a pass starts;
    * resumed cursors keep the cutoff they were issued with. */
   emailRecency?: readonly EmailRecencyWindow[];
-  /** Bump when what this lane must refetch changes in a way its input and
-   * flags do not show, such as a different operation or a new completion
-   * guarantee: only this lane restarts. See `soupBackfillLaneContract`. */
+  /** Bump when what this lane must refetch changes in a way its operation,
+   * input and flags do not show, such as a projection needing fields the cache
+   * lacks or a new completion guarantee: only this lane restarts. See
+   * `soupBackfillLaneContract`. */
   contractVersion?: number;
 };
 
@@ -95,6 +108,7 @@ export type SoupBackfillParams = {
  */
 export const CHANNEL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'channels',
+  operation: SoupBackfillDocument,
   // One request per 100 channels: 2 s spacing takes minutes on a large account.
   pageDelayMs: 250,
   input: {
@@ -119,6 +133,7 @@ export const CHANNEL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 /** Backfills documents, chats, and folders for Quick Access and primary views. */
 export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'core-entities',
+  operation: SoupBackfillDocument,
   // Quick Access waits on this lane, and every other lane waits behind it.
   pageDelayMs: 250,
   input: {
@@ -142,6 +157,7 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
  * so Quick Access can search them from the cache. */
 export const INITIATIVE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'initiatives',
+  operation: SoupBackfillDocument,
   input: {
     limit: PAGE_LIMIT,
     expand: true,
@@ -188,7 +204,7 @@ const EMAIL_THREAD_PAGES_INPUT: GraphqlSoupInitialInput = {
 };
 
 const EMAIL_THREAD_PAGES_LANE = {
-  fetchPage: fetchEmailContentPage,
+  operation: SoupBackfillDocument,
   // A long full scan can skip threads that receive messages after its cursor
   // has passed them. Consume the recorded watermark before reporting the lane
   // complete.
@@ -211,8 +227,7 @@ export const NOISE_EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 /** Filter/row metadata is synchronized before the independently bounded body cache.
  * ALL covers the first Mail slice across every readable owned/delegated inbox. */
 const EMAIL_FILTER_LANE = {
-  fetchPage: (input, options) =>
-    hydrateGraphqlSoup(SoupMailBackfillDocument, { input }, options),
+  operation: SoupMailBackfillDocument,
   refreshAll: true,
   input: { ...EMAIL_THREAD_PAGES_INPUT, limit: PAGE_LIMIT },
 } satisfies Omit<SoupBackfillParams, 'checkpointId'>;
@@ -235,7 +250,9 @@ export const NOISE_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
  * Shared thread it did not return, including threads outside the windows. */
 export const SHARED_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'shared-email-filter-metadata',
-  createFetchPage: createSharedMailBackfillFetcher,
+  operation: SoupSharedMailBackfillDocument,
+  createFetchPage: (userId, fetch) =>
+    createSharedMailBackfillFetcher(userId, undefined, fetch),
   refreshAll: true,
   restartOnRun: true,
   emailRecency: [SIGNAL_EMAIL_WINDOW, NOISE_EMAIL_WINDOW],
@@ -251,6 +268,7 @@ export const SHARED_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
 /** Backfills CRM companies, contacts, and foreign entities. */
 export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'auxiliary-entities',
+  operation: SoupBackfillDocument,
   input: {
     limit: PAGE_LIMIT,
     expand: true,
@@ -553,10 +571,11 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
     checkpoint = initialCheckpoint(userId, generation);
     startPass();
   };
+  const fetchLanePage = params.fetchPage ?? fetchOperation(params.operation);
   const createPageFetcher = () =>
     params.createFetchPage
-      ? Effect.tryPromise(() => params.createFetchPage!(userId))
-      : Effect.succeed(params.fetchPage ?? fetchSoupPage);
+      ? Effect.tryPromise(() => params.createFetchPage!(userId, fetchLanePage))
+      : Effect.succeed(fetchLanePage);
 
   // `completed` marks the end of one pass. Start a fresh pass from its stored
   // watermark, while an unfinished checkpoint keeps its cursor.

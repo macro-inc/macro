@@ -1333,11 +1333,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   feature-specific query orchestration with its owning feature.
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill.
 - Soup backfill checkpoints are keyed by each lane's contract
-  (`queries/soup/backfill-contract.ts`): changing a lane's input or pass flags
-  restarts that lane alone. Bump the lane's `contractVersion` when it must
-  refetch for a reason its input does not show (a new operation, a projection
-  that needs fields the cache lacks); bump `BACKFILL_VERSION` only for a runner
-  change every lane shares. Never edit `V19_CONTRACTS`.
+  (`queries/soup/backfill-contract.ts`): changing a lane's operation, input or
+  pass flags restarts that lane alone. Bump the lane's `contractVersion` when
+  it must refetch for a reason those do not show (a projection that needs
+  fields the cache lacks, a page size that must reach scans in flight); bump
+  `BACKFILL_VERSION` only for a runner change every lane shares. Never edit
+  `V19_CONTRACTS`.
 - Refresh the channel list's bounded unread and mention edges when opening a
   conversation, including an empty unread result after a read on another
   device. Include off-page favorites in unread presence without adding them to

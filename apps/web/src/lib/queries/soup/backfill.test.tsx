@@ -1,4 +1,5 @@
 import type { CacheGenerationChange } from '@graphql-cache/host/types';
+import { SoupBackfillDocument } from '@service-storage/graphql/generated/graphql';
 import { render } from '@solidjs/testing-library';
 import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
@@ -20,6 +21,7 @@ import {
   useSoupBackfills,
 } from './backfill';
 import { soupBackfillCheckpointKey } from './backfill-contract';
+
 
 type FetchInput = Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0];
 
@@ -73,9 +75,20 @@ vi.mock('@macro-inc/observability', () => ({
   Telemetry: { anonymousSpan: telemetryMocks.anonymousSpan },
 }));
 
-vi.mock('@service-storage/graphql/generated/graphql', () => ({
-  SoupBackfillDocument: {},
-}));
+vi.mock('@service-storage/graphql/generated/graphql', () => {
+  // Lane contracts read only the operation's name.
+  const operation = (name: string) => ({
+    kind: 'Document',
+    definitions: [
+      { kind: 'OperationDefinition', name: { kind: 'Name', value: name } },
+    ],
+  });
+  return {
+    SoupBackfillDocument: operation('SoupBackfill'),
+    SoupMailBackfillDocument: operation('SoupMailBackfill'),
+    SoupSharedMailBackfillDocument: operation('SoupSharedMailBackfill'),
+  };
+});
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: graphqlMocks.getGraphqlSoupCacheHost,
@@ -87,6 +100,7 @@ const lane = (
   fetchPage: NonNullable<SoupBackfillParams['fetchPage']>
 ): SoupBackfillParams => ({
   checkpointId,
+  operation: SoupBackfillDocument,
   fetchPage,
   input: {
     limit: 1,
@@ -788,7 +802,8 @@ describe('runSoupBackfills', () => {
     vi.useFakeTimers();
     let cacheHost: typeof mockCacheHost | undefined;
     graphqlMocks.getGraphqlSoupCacheHost.mockImplementation(() => cacheHost);
-    graphqlMocks.hydrateGraphqlSoup.mockResolvedValue({ nextCursor: null });
+    // The first page stays in flight, so no later lane looks the host up.
+    graphqlMocks.hydrateGraphqlSoup.mockReturnValue(new Promise(() => {}));
 
     const rendered = render(() => <BackfillRunner userId="user-1" />);
     expect(graphqlMocks.getGraphqlSoupCacheHost).toHaveBeenCalledOnce();
@@ -1072,7 +1087,6 @@ describe('runSoupBackfills', () => {
     expect(fetchSignals[1]?.aborted).toBe(true);
   });
 });
-
 it('warms sender metadata before paged backfill and pauses it without identity or leadership', () => {
   const [user, setUser] = createSignal<string>();
   const [leader, setLeader] = createSignal(true);

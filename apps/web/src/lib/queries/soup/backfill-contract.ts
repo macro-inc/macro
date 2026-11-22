@@ -19,15 +19,15 @@ const KEY_PREFIX = 'graphql-soup-backfill';
  * changes stops matching and moves to a key of its own.
  */
 const V19_CONTRACTS: Readonly<Record<string, string>> = {
-  channels: 'ouijna0ack',
-  'core-entities': '1dkbadioqn1',
-  initiatives: '1yavu2judk4',
-  'email-signal-filter-metadata': '1591v03c580',
-  'email-noise-filter-metadata': 'hjeqddfwn6',
-  'shared-email-filter-metadata': '1rrv8ank2u0',
-  'email-signal-thread-pages': '1ho3hb9ig6l',
-  'email-noise-thread-pages': 'bgykg0i1du',
-  'auxiliary-entities': 'j6hhxuqymn',
+  channels: '7887o0msvo',
+  'core-entities': 'kl0z6mxe5w',
+  initiatives: 'gukroj7s83',
+  'email-signal-filter-metadata': '2c6hk4hanqi',
+  'email-noise-filter-metadata': 'xu27pg13gj',
+  'shared-email-filter-metadata': '24qwui3uxb0',
+  'email-signal-thread-pages': '1fqyeg189id',
+  'email-noise-thread-pages': '1qkeyz8tp4j',
+  'auxiliary-entities': 'oullg8aikh',
 };
 
 /** JSON with object keys sorted, so equal values always serialize the same. */
@@ -62,13 +62,23 @@ function hashString(text: string): string {
   return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 
+/** The name of the operation a lane sends, such as `SoupMailBackfill`. */
+function operationName(lane: SoupBackfillParams): string | null {
+  for (const definition of lane.operation.definitions) {
+    if (definition.kind === 'OperationDefinition') {
+      return definition.name?.value ?? null;
+    }
+  }
+  return null;
+}
+
 /**
  * What a lane's saved progress vouches for: the runner version, and the lane's
- * input, recency windows, pass flags and own version. Page size, page spacing
- * and the fetch function are not part of it: they change how a lane pages, not
- * what a finished pass has stored. Neither is the operation's selection: a
- * field added to it reaches records as they are next fetched, as before
- * contracts.
+ * operation, input, recency windows, pass flags and own version. Page size and
+ * spacing are not part of it: they change how a lane pages, not what a
+ * finished pass has stored, and a resumed cursor keeps the page size it was
+ * issued with. Neither is the operation's selection: a field added to it
+ * reaches records as they are next fetched, as before contracts.
  */
 export function soupBackfillLaneContract(lane: SoupBackfillParams): string {
   const { limit: _pageSize, ...input } = lane.input;
@@ -76,8 +86,10 @@ export function soupBackfillLaneContract(lane: SoupBackfillParams): string {
     stableJson({
       runner: BACKFILL_VERSION,
       version: lane.contractVersion ?? 0,
+      operation: operationName(lane),
       input,
-      emailRecency: lane.emailRecency ?? null,
+      // No windows and an empty list both leave email unfiltered.
+      emailRecency: lane.emailRecency?.length ? lane.emailRecency : null,
       refreshAll: lane.refreshAll === true,
       restartOnRun: lane.restartOnRun === true,
       catchUpAfterInitialPass: lane.catchUpAfterInitialPass === true,
