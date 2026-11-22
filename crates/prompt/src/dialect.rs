@@ -58,8 +58,9 @@ creates the event. A program cannot send email or create an event any other way:
 `macro.email.send`, thread replies and `macro.calendar.createEvent` are refused.
 Do not explain these internal surface distinctions to the user. The confirmed
 methods are not appropriate for drafts presented in the session view.",
-        "`tools.cognition.send_confirmed_email` sends an email or
-a reply (its body is the SendEmail arguments plus `userConfirmation`),
+        "`tools.cognition.send_confirmed_email` sends an email,
+a reply or a forward written as an email draft (its body is the SendEmail
+arguments plus `userConfirmation`),
 `tools.cognition.create_confirmed_calendar_event` creates the event (the
 CreateCalendarEvent arguments plus `userConfirmation`), and
 `tools.email.upsert_scheduled_message` sends or schedules a saved draft (with
