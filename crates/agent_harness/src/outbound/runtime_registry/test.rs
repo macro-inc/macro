@@ -960,3 +960,47 @@ async fn a_runtime_that_hosts_no_teammates_is_never_sent_one() {
             .any(|message| matches!(message, ToRuntimeMessage::StopTeammate { .. }))
     );
 }
+
+#[tokio::test]
+async fn a_recheck_goes_only_to_a_runtime_that_listed_it() {
+    let registry = RuntimeRegistry::new();
+    let listing = ContainerMock::default();
+    registry.attach_accepting(
+        HarnessId::TEST_A,
+        listing.clone(),
+        RuntimeAccepts {
+            recheck_teammate_host: true,
+            ..RuntimeAccepts::default()
+        },
+    );
+    let older = ContainerMock::default();
+    registry.attach_accepting(
+        HarnessId::TEST_B,
+        older.clone(),
+        RuntimeAccepts {
+            teammate_container: true,
+            ..RuntimeAccepts::default()
+        },
+    );
+
+    assert!(registry.recheck_teammate_host(HarnessId::TEST_A).await);
+    assert!(!registry.recheck_teammate_host(HarnessId::TEST_B).await);
+    assert!(
+        !registry
+            .recheck_teammate_host(HarnessId::new_from_uuid(uuid::Uuid::now_v7()))
+            .await
+    );
+
+    assert!(matches!(
+        listing.sent().as_slice(),
+        [ToRuntimeMessage::RecheckTeammateHost]
+    ));
+    assert!(
+        !older
+            .sent()
+            .iter()
+            .any(|message| matches!(message, ToRuntimeMessage::RecheckTeammateHost)),
+        "{:?}",
+        older.sent()
+    );
+}

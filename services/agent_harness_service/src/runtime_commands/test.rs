@@ -517,3 +517,22 @@ async fn a_hand_off_on_a_new_dial_issues_again() {
     assert_eq!(agents.issued.lock().unwrap().len(), 2);
     assert_eq!(sent.lock().unwrap().len(), 2);
 }
+
+/// A recheck on the bus names only its machine, and is told apart from a
+/// teammate change.
+#[test]
+fn a_recheck_on_the_bus_reads_back_as_one() {
+    let recheck = crate::teammates::TeammateHostRecheck::new(AGENT_HARNESS);
+    let wire = serde_json::to_value(&recheck).unwrap();
+    let mut keys: Vec<&str> = wire
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(keys, ["recheck_teammate_host", "trace_context"]);
+
+    let read: RuntimeBusEvent = serde_json::from_value(wire).unwrap();
+    assert!(matches!(read, RuntimeBusEvent::TeammateHostRecheck(read) if read == recheck));
+}

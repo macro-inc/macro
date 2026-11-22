@@ -175,6 +175,10 @@ pub struct RuntimeAccepts {
     /// `ToRuntimeMessage::RunTeammate` and `StopTeammate`: the runtime hosts
     /// agent teammates in containers on its owner's own machine.
     pub teammate_container: bool,
+    /// `ToRuntimeMessage::RecheckTeammateHost`: the runtime is set up to
+    /// host teammates and checks again when asked, even on a dial whose
+    /// engine didn't answer (without `teammate_container`).
+    pub recheck_teammate_host: bool,
 }
 
 /// A runtime's report about hosting agent teammates (`TeammateHost` or

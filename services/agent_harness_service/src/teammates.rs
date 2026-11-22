@@ -203,6 +203,10 @@ pub(crate) trait TeammateSockets: Send + Sync + 'static {
         install: TeammateInstall,
         traceparent: Option<String>,
     ) -> BoxFuture<'_, bool>;
+
+    /// Send `RecheckTeammateHost` to `harness`'s runtime, if it is connected
+    /// here and listed it; whether it was sent.
+    fn recheck(&self, harness: HarnessId) -> BoxFuture<'_, bool>;
 }
 
 impl<Sender> TeammateSockets for agent_harness::outbound::runtime_registry::RuntimeRegistry<Sender>
@@ -242,6 +246,10 @@ where
         traceparent: Option<String>,
     ) -> BoxFuture<'_, bool> {
         Box::pin(self.stop_teammate(harness, connection, install, traceparent))
+    }
+
+    fn recheck(&self, harness: HarnessId) -> BoxFuture<'_, bool> {
+        Box::pin(self.recheck_teammate_host(harness))
     }
 }
 
@@ -527,6 +535,13 @@ impl TeammateDelivery {
         }
     }
 
+    /// Someone asked to check the machine's hosting again: ask its runtime,
+    /// if this replica holds its socket. It answers with a fresh report.
+    pub(crate) async fn recheck_host(&self, harness: HarnessId) {
+        let sent = self.sockets.recheck(harness).await;
+        tracing::Span::current().record("sent", sent);
+    }
+
     async fn finish_checkpoint(&self, install_id: Uuid) {
         if let Err(error) = self.issuer.checkpointed(install_id).await {
             tracing::warn!(error = %error, %install_id, "could not finish an install's checkpoint; it finishes at the next try");
@@ -804,6 +819,36 @@ impl TeammatesChanged {
     }
 }
 
+/// Ask whichever replica holds `harness`'s socket to have its runtime check
+/// its teammate hosting again.
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct TeammateHostRecheck {
+    pub(crate) recheck_teammate_host: HarnessId,
+    /// W3C context of the request, so the recheck joins its trace.
+    pub(crate) trace_context: HashMap<String, String>,
+}
+
+impl TeammateHostRecheck {
+    pub(crate) fn new(harness: HarnessId) -> Self {
+        Self {
+            recheck_teammate_host: harness,
+            trace_context: agent_harness::outbound::forward::current_trace_context(),
+        }
+    }
+
+    pub(crate) fn span(&self) -> tracing::Span {
+        let span = tracing::info_span!(
+            "teammate.recheck_host",
+            otel.kind = "consumer",
+            messaging.system = "redis",
+            harness_id = %self.recheck_teammate_host,
+            sent = tracing::field::Empty,
+        );
+        agent_harness::outbound::forward::adopt_trace_context(&span, &self.trace_context);
+        span
+    }
+}
+
 struct ChangedState<Auth> {
     redis: redis::Client,
     authorization_state: MacroAuthorizationState<Auth>,
@@ -824,9 +869,12 @@ impl<Auth> FromRef<ChangedState<Auth>> for MacroAuthorizationState<Auth> {
     }
 }
 
-/// Internal-only: `POST /internal/teammates/{harness_id}/changed`, which the
-/// authentication service calls after an invite, move or removal on an own
-/// machine. It broadcasts [`TeammatesChanged`] on the runtime bus.
+/// Internal-only, called by the authentication service:
+/// `POST /internal/teammates/{harness_id}/changed` after an invite, move or
+/// removal on an own machine, which broadcasts [`TeammatesChanged`] on the
+/// runtime bus; `POST /internal/teammates/{harness_id}/recheck` when its
+/// owner asks to check the machine again, which broadcasts
+/// [`TeammateHostRecheck`].
 pub(crate) fn router<Auth: MacroAuthorizationService>(
     redis: redis::Client,
     authorization_state: MacroAuthorizationState<Auth>,
@@ -835,6 +883,10 @@ pub(crate) fn router<Auth: MacroAuthorizationService>(
         .route(
             "/internal/teammates/{harness_id}/changed",
             post(installs_changed::<Auth>),
+        )
+        .route(
+            "/internal/teammates/{harness_id}/recheck",
+            post(recheck_host::<Auth>),
         )
         .with_state(ChangedState {
             redis,
@@ -853,6 +905,22 @@ async fn installs_changed<Auth: MacroAuthorizationService>(
         Ok(()) => StatusCode::NO_CONTENT,
         Err(error) => {
             tracing::error!(error = ?error, "could not broadcast a teammate change");
+            StatusCode::SERVICE_UNAVAILABLE
+        }
+    }
+}
+
+#[tracing::instrument(skip_all, fields(%harness_id))]
+async fn recheck_host<Auth: MacroAuthorizationService>(
+    State(state): State<ChangedState<Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(harness_id): Path<Uuid>,
+) -> StatusCode {
+    let recheck = TeammateHostRecheck::new(HarnessId::new_from_uuid(harness_id));
+    match crate::runtime_commands::publish(&state.redis, &recheck).await {
+        Ok(()) => StatusCode::NO_CONTENT,
+        Err(error) => {
+            tracing::error!(error = ?error, "could not broadcast a teammate host recheck");
             StatusCode::SERVICE_UNAVAILABLE
         }
     }

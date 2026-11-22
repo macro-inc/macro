@@ -416,6 +416,14 @@ where
         self.outbound.send(ToRuntimeMessage::AgentsChanged).await
     }
 
+    /// Ask the runtime to check its teammate hosting again now and send a
+    /// fresh report.
+    pub async fn recheck_teammate_host(&self) -> std::result::Result<(), TransportError> {
+        self.outbound
+            .send(ToRuntimeMessage::RecheckTeammateHost)
+            .await
+    }
+
     /// Hand the runtime an agent teammate's environment to run. Nothing
     /// answers; the agent's own online report confirms it.
     pub async fn apply_agent(

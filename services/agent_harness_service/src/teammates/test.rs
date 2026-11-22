@@ -189,6 +189,7 @@ impl InstallIssuer for FakeIssuer {
 enum Sent {
     Run(TeammateInstall),
     Stop(TeammateInstall),
+    Recheck,
 }
 
 struct FakeSockets {
@@ -245,6 +246,14 @@ impl TeammateSockets for FakeSockets {
     ) -> BoxFuture<'_, bool> {
         self.sent.lock().unwrap().push(Sent::Stop(install));
         Box::pin(async { true })
+    }
+
+    fn recheck(&self, _: HarnessId) -> BoxFuture<'_, bool> {
+        let connected = self.dial.lock().unwrap().is_some();
+        if connected {
+            self.sent.lock().unwrap().push(Sent::Recheck);
+        }
+        Box::pin(async move { connected })
     }
 }
 
@@ -681,4 +690,14 @@ async fn redeliveries_older_than_the_window_are_forgotten() {
     let redelivered = machine.delivery.redelivered.lock().unwrap();
     assert_eq!(redelivered.len(), 1);
     assert!(redelivered.contains_key(&second));
+}
+
+#[tokio::test]
+async fn a_recheck_asks_the_machine_this_replica_holds() {
+    // Its engine didn't answer: the dial hosts no teammates now.
+    let machine = machine(vec![], false);
+
+    machine.delivery.recheck_host(LAPTOP).await;
+
+    assert_eq!(machine.sockets.sent(), [Sent::Recheck]);
 }

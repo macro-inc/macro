@@ -113,7 +113,11 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   another machine's install, limits body, spans and requests per machine,
   and forwards over OTLP/gRPC to `macro_entrypoint::otel_endpoint()`.
   `POST /internal/teammates/{harness}/changed`
-  broadcasts `TeammatesChanged` on the runtime bus. Spans `teammate.deliver`
+  broadcasts `TeammatesChanged` on the runtime bus, and
+  `POST /internal/teammates/{harness}/recheck` (its owner pressed Check
+  again) broadcasts `TeammateHostRecheck`, which the replica holding the
+  socket turns into `ToRuntimeMessage::RecheckTeammateHost` (span
+  `teammate.recheck_host`, `sent`). Spans `teammate.deliver`
   and `teammate.status` carry the install id and generation, never the
   agent's account.
 - `src/computers/agent_enrollment.rs`: the operator's `AgentEnrollmentSource`;

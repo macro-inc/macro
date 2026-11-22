@@ -217,13 +217,14 @@ impl IssuedAgents {
     }
 }
 
-// Untagged: an agent hand-off's and a teammate change's required fields
-// appear in no other event, so they are tried first.
+// Untagged: an agent hand-off's, a teammate change's and a host recheck's
+// required fields appear in no other event, so they are tried first.
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum RuntimeBusEvent {
     DeliverAgent(DeliverAgent),
     TeammatesChanged(crate::teammates::TeammatesChanged),
+    TeammateHostRecheck(crate::teammates::TeammateHostRecheck),
     Models(ModelProbeEvent),
     Command(Box<RuntimeCommandRequest>),
 }
@@ -295,6 +296,19 @@ where
                             teammates
                                 .installs_changed(changed.teammates_changed_harness)
                                 .await;
+                        }
+                        .instrument(span),
+                    );
+                }
+                continue;
+            }
+            RuntimeBusEvent::TeammateHostRecheck(recheck) => {
+                // Only the replica holding the machine's socket sends it.
+                if let Some(teammates) = teammates.clone() {
+                    let span = recheck.span();
+                    probes.spawn(
+                        async move {
+                            teammates.recheck_host(recheck.recheck_teammate_host).await;
                         }
                         .instrument(span),
                     );
