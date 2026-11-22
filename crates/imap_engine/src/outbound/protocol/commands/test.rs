@@ -60,6 +60,7 @@ async fn peer_with_source(source: Vec<u8>) -> Peer {
             peers.spawn(async move {
                 let mut socket = tokio_rustls::TlsAcceptor::from(tls).accept(socket).await.unwrap();
                 socket.write_all(b"* OK synthetic IMAP\r\n").await.unwrap();
+                socket.flush().await.unwrap();
                 let mut socket = BufReader::new(socket);
                 loop {
                     let mut request = String::new();
@@ -72,6 +73,7 @@ async fn peer_with_source(source: Vec<u8>) -> Peer {
                     let (tag, command) = request.trim_end().split_once(' ').unwrap();
                     if command == "IDLE" {
                         socket.get_mut().write_all(b"+ idling\r\n").await.unwrap();
+                        socket.get_mut().flush().await.unwrap();
                         let _ = idling.send(());
                         let mut done = String::new();
                         let Ok(received) = socket.read_line(&mut done).await else {
@@ -105,6 +107,9 @@ async fn peer_with_source(source: Vec<u8>) -> Peer {
                         socket.get_mut().write_all(b")\r\n").await.unwrap();
                     }
                     socket.get_mut().write_all(format!("{tag} OK complete\r\n").as_bytes()).await.unwrap();
+                    // TLS write_all can leave ciphertext buffered under
+                    // backpressure. Deliver the reply before awaiting input.
+                    socket.get_mut().flush().await.unwrap();
                 }
                 active.fetch_sub(1, Ordering::SeqCst);
             });

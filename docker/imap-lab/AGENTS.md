@@ -8,12 +8,18 @@ All published ports bind loopback. Each username gets its own Dovecot mail home.
 - `bash docker/imap-lab/prepare.sh`
 - `docker compose -p macro-imap-lab -f docker/imap-lab/compose.yaml config --quiet`
 - Exercise implicit TLS and STARTTLS with the generated CA; never disable certificate verification.
+- `IMAP_LAB_REQUIRED=true python3 -m unittest discover -s docker/imap-lab -p test_control.py`
+  checks the oracle, including two real TLS clients moving a UID between SEARCH
+  and FETCH. Start the owned Dovecot lab first.
 
 ## Gotchas
 
 - Generated keys are local disposable test fixtures and stay ignored.
 - Only stop the Compose project started for this task; other stacks are shared.
 - Dovecot's rootless internal listeners use 31143, 31993, 31587 and 31465.
+- The independent oracle confirms a missing UID with SEARCH and restarts its
+  entire scan, bounded by one ten-second deadline. It never publishes a partial
+  scan; the API scenario still requires the message exactly once in Archive.
 
 ## Second server
 

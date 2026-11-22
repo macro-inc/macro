@@ -185,7 +185,8 @@ async fn imap_connect_receive_isolate_and_send() -> Result<(), Report> {
     );
     assert!(
         lab.messages(bob.email())
-            .await?
+            .await
+            .context("independent isolation read before any mailbox mutation")?
             .as_array()
             .is_some_and(Vec::is_empty)
     );
@@ -207,7 +208,10 @@ async fn imap_connect_receive_isolate_and_send() -> Result<(), Report> {
         "Macro's read state at the real provider",
         DEFAULT_TIMEOUT,
         async || {
-            let messages = lab.messages(alice.email()).await?;
+            let messages = lab
+                .messages(alice.email())
+                .await
+                .context("independent read-state check before the scenario requests Archive")?;
             Ok(messages
                 .as_array()
                 .into_iter()
@@ -220,7 +224,8 @@ async fn imap_connect_receive_isolate_and_send() -> Result<(), Report> {
     )
     .await?;
     lab.set_read(alice.email(), provider_message_id, false)
-        .await?;
+        .await
+        .context("independent unread write before the scenario requests Archive")?;
     eventually(
         "another client's unread change in Macro",
         DEFAULT_TIMEOUT,
@@ -251,7 +256,10 @@ async fn imap_connect_receive_isolate_and_send() -> Result<(), Report> {
         "Macro's archive at the real provider",
         DEFAULT_TIMEOUT,
         async || {
-            let messages = lab.messages(alice.email()).await?;
+            let messages = lab
+                .messages(alice.email())
+                .await
+                .context("independent Archive check after the scenario requested archived=true")?;
             let matches: Vec<_> = messages
                 .as_array()
                 .into_iter()

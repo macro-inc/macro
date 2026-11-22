@@ -12,6 +12,7 @@ import ssl
 import subprocess
 import tempfile
 import sys
+import time
 import uuid
 
 
@@ -33,6 +34,73 @@ def submission_mime(subject):
                 if str(mail.get("Subject", "")) == subject:
                     return {"mimeBase64": base64.b64encode(body).decode(), "headerNames": list(mail.keys())}
     return None
+
+
+def read_snapshot(server, request, timeout=10):
+    """Publish one complete scan; a concurrent MOVE restarts it, never hides mail."""
+    deadline = time.monotonic() + timeout
+    original_timeout = server.socket().gettimeout()
+
+    def budget():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError("Independent IMAP snapshot did not stabilize before its deadline")
+        server.socket().settimeout(remaining)
+
+    try:
+        while True:
+            messages = []
+            restart = False
+            for folder in ("INBOX", "Sent", "Archive", "Junk", "Trash"):
+                budget()
+                if server.select(folder)[0] != "OK":
+                    raise RuntimeError("Independent IMAP SELECT was rejected")
+                budget()
+                status, result = server.uid("SEARCH", None, "ALL")
+                if status != "OK":
+                    raise RuntimeError("Independent IMAP SEARCH was rejected")
+                for uid in result[0].split():
+                    budget()
+                    status, parts = server.uid("FETCH", uid, "(BODY.PEEK[] FLAGS)")
+                    if status != "OK":
+                        raise RuntimeError("Independent IMAP FETCH was rejected")
+                    source = next((part[1] for part in parts if isinstance(part, tuple)), None)
+                    if source is None:
+                        # UID FETCH legitimately returns no literal after a
+                        # concurrent MOVE/EXPUNGE. Confirm that UID is gone,
+                        # then rescan all folders so the destination is read.
+                        budget()
+                        status, present = server.uid("SEARCH", None, "UID", uid)
+                        if status != "OK" or not present or not isinstance(present[0], bytes):
+                            raise RuntimeError("Independent IMAP UID recheck was rejected")
+                        if uid in present[0].split():
+                            raise RuntimeError("Independent IMAP FETCH omitted a body for an existing UID")
+                        restart = True
+                        break
+                    mail = message_from_bytes(source, policy=policy.default)
+                    mid = str(mail.get("Message-ID", ""))
+                    if request["operation"] == "setRead" and mid == request["messageId"]:
+                        mode = "+FLAGS.SILENT" if request["read"] else "-FLAGS.SILENT"
+                        budget()
+                        if server.uid("STORE", uid, mode, "(\\Seen)")[0] != "OK":
+                            raise RuntimeError("Independent IMAP STORE was rejected")
+                    metadata = b" ".join(part[0] if isinstance(part, tuple) else part for part in parts if part)
+                    messages.append({
+                        "messageId": mid,
+                        "folder": folder,
+                        "uid": uid.decode(),
+                        "subject": str(mail.get("Subject", "")),
+                        "read": b"\\Seen" in metadata,
+                        "mimeBase64": base64.b64encode(source).decode(),
+                    })
+                if restart:
+                    break
+            if not restart:
+                return messages
+    except TimeoutError as error:
+        raise RuntimeError("Independent IMAP snapshot did not stabilize before its deadline") from error
+    finally:
+        server.socket().settimeout(original_timeout)
 
 
 def main():
@@ -68,27 +136,7 @@ def main():
                 raise RuntimeError("Independent IMAP APPEND was rejected")
             print(json.dumps({"messageId": str(mail["Message-ID"]), "subject": request["subject"]}))
             return
-        messages = []
-        for folder in ("INBOX", "Sent", "Archive", "Junk", "Trash"):
-            status, _ = server.select(folder)
-            if status != "OK":
-                raise RuntimeError("Independent IMAP SELECT was rejected")
-            status, result = server.uid("SEARCH", None, "ALL")
-            if status != "OK":
-                raise RuntimeError("Independent IMAP SEARCH was rejected")
-            for uid in result[0].split():
-                status, parts = server.uid("FETCH", uid, "(BODY.PEEK[] FLAGS)")
-                if status != "OK":
-                    raise RuntimeError("Independent IMAP FETCH was rejected")
-                source = next(part[1] for part in parts if isinstance(part, tuple))
-                mail = message_from_bytes(source, policy=policy.default)
-                mid = str(mail.get("Message-ID", ""))
-                if operation == "setRead" and mid == request["messageId"]:
-                    mode = "+FLAGS.SILENT" if request["read"] else "-FLAGS.SILENT"
-                    if server.uid("STORE", uid, mode, "(\\Seen)")[0] != "OK":
-                        raise RuntimeError("Independent IMAP STORE was rejected")
-                metadata = b" ".join(part[0] if isinstance(part, tuple) else part for part in parts if part)
-                messages.append({"messageId": mid, "folder": folder, "uid": uid.decode(), "subject": str(mail.get("Subject", "")), "read": b"\\Seen" in metadata, "mimeBase64": base64.b64encode(source).decode()})
+        messages = read_snapshot(server, request)
         if operation not in ("messages", "setRead"):
             raise ValueError("Unknown IMAP oracle operation")
         print(json.dumps(messages))
