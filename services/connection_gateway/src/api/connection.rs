@@ -116,13 +116,13 @@ async fn handle_websocket_connection(
     );
     let receiver_task =
         handle_websocket_stream(connection_context, stream, sender.clone(), grants).fuse();
+    // Marked here, before the `select!` below can end on a socket that is
+    // already closed; the future marks again every hour while it stays open.
+    let marking = seen.then(|| ctx.seen_recorder.mark_while_open(macro_user_id.clone()));
     let mark_seen = async {
-        if seen {
-            ctx.seen_recorder
-                .mark_while_open(macro_user_id.clone())
-                .await;
-        } else {
-            std::future::pending::<()>().await;
+        match marking {
+            Some(marking) => marking.await,
+            None => std::future::pending::<()>().await,
         }
     };
 
