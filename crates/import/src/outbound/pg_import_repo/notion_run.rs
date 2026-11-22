@@ -799,15 +799,12 @@ SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
             "#,
             user.as_ref(), source.as_str(), database,
         ).fetch_optional(&self.pool).await?;
-        table
-            .map(|row| {
-                Ok(crate::domain::ports::RecordedDatabaseMapping {
-                    table: models_databases::TableId::from_uuid(row.macro_id),
-                    warnings: serde_json::from_value(row.warnings)
-                        .map_err(|error| ImportError::Other(error.into()))?,
-                })
-            })
-            .transpose()
+        Ok(
+            table.map(|row| crate::domain::ports::RecordedDatabaseMapping {
+                table: models_databases::TableId::from_uuid(row.macro_id),
+                warnings: crate::domain::models::FidelityWarning::decode_entries(&row.warnings),
+            }),
+        )
     }
 
     #[tracing::instrument(skip_all, fields(import_id = %import_id, warnings = warnings.len() as i64), err)]

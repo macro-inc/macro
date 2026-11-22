@@ -587,3 +587,63 @@ fn typed_people_counts_from_identically_named_sources_stay_distinct() {
         ]
     );
 }
+
+#[test]
+fn unknown_warning_entries_do_not_hide_known_report_losses() {
+    let mut source = row(
+        "Work",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    source.metadata["warnings"] = serde_json::json!([
+        "A saved sort was omitted",
+        {"future_warning_kind": "not understood"},
+        {"another_future_kind": true}
+    ]);
+    let report = report(None, &[source]);
+    assert_eq!(report.warnings.len(), 2);
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|line| line == "A saved sort was omitted")
+    );
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|line| line.contains("2 unsupported warning entries"))
+    );
+}
+
+#[test]
+fn identical_missing_container_notices_are_reported_once() {
+    use crate::domain::models::{FidelityWarning, ImportNotice, ImportNoticeKind};
+    use import_notion::domain::model::NotionId;
+    let mut source = row(
+        "Work",
+        ImportKind::Page,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    let object = NotionId::parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+    source.metadata["warnings"] = serde_json::json!([
+        FidelityWarning::Notice {
+            notice: ImportNotice::new(&object, "First", ImportNoticeKind::MissingContainerIdentity)
+        },
+        FidelityWarning::Notice {
+            notice: ImportNotice::new(
+                &object,
+                "Second",
+                ImportNoticeKind::MissingContainerIdentity
+            )
+        }
+    ]);
+    let report = report(None, &[source]);
+    assert_eq!(report.warnings.len(), 1);
+}

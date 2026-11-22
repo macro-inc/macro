@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// A counted semantic loss from one imported saved view.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ViewWarning {
     /// Source identity, never printed.
     pub source_id: NotionId,

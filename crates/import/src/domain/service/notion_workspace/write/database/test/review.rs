@@ -332,7 +332,7 @@ async fn resumed_selects_keep_reserved_option_ids_and_report_omissions() {
     assert!(
         losses
             .iter()
-            .any(|loss| loss.contains("names or options changed"))
+            .any(|loss| loss.contains("property names or choices changed"))
     );
 }
 

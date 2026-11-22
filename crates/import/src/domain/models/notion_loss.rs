@@ -94,7 +94,7 @@ impl std::error::Error for SourceStopReason {}
 
 /// Private metadata accepts existing text notes and cumulative typed counts.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(untagged, deny_unknown_fields)]
 pub enum FidelityWarning {
     /// A source stopped without changing incompatible columns or exposing rows.
     SourceStopped {
@@ -162,6 +162,11 @@ pub enum FidelityWarning {
         /// Source's unsupported property type, such as button.
         notion_type: String,
     },
+    /// Future or malformed warning entries that this reader cannot display.
+    UnsupportedEntries {
+        /// Number of unsupported entries in this source's metadata.
+        unsupported_entries: u32,
+    },
     /// A typed source/body/planning notice.
     Notice {
         /// Semantic notice and object identity.
@@ -183,8 +188,38 @@ impl From<&str> for FidelityWarning {
 }
 
 impl FidelityWarning {
-    /// Merge repeated cumulative snapshots, not their counts, across resumed phases.
+    /// Decode each stored entry independently, preserving readable warnings.
+    pub fn decode_entries(value: &serde_json::Value) -> Vec<Self> {
+        let Some(entries) = value.as_array() else {
+            tracing::warn!(
+                unsupported_entries = 1,
+                "Unsupported import warning metadata"
+            );
+            return vec![Self::UnsupportedEntries {
+                unsupported_entries: 1,
+            }];
+        };
+        let mut warnings = Vec::with_capacity(entries.len());
+        let mut unsupported_entries = 0u32;
+        for entry in entries {
+            match serde_json::from_value(entry.clone()) {
+                Ok(warning) => warnings.push(warning),
+                Err(_) => unsupported_entries = unsupported_entries.saturating_add(1),
+            }
+        }
+        if unsupported_entries > 0 {
+            tracing::warn!(unsupported_entries, "Unsupported import warning entries");
+            warnings.push(Self::UnsupportedEntries {
+                unsupported_entries,
+            });
+        }
+        warnings
+    }
+
+    /// Merge cumulative snapshots within one source, taking maximum counts across retries.
+    /// Reports call this separately for each source; counts never merge across sources.
     pub fn merge(warnings: impl IntoIterator<Item = Self>) -> Vec<Self> {
+        let mut unsupported = 0;
         let mut text = BTreeSet::new();
         let mut stopped = BTreeSet::new();
         let mut references: BTreeMap<_, u32> = BTreeMap::new();
@@ -194,6 +229,11 @@ impl FidelityWarning {
         let mut structured = BTreeSet::new();
         for warning in warnings {
             match warning {
+                Self::UnsupportedEntries {
+                    unsupported_entries,
+                } => {
+                    unsupported = unsupported.max(unsupported_entries);
+                }
                 Self::ViewLoss(mut loss) => {
                     let count = loss.count;
                     loss.count = 0;
@@ -277,12 +317,27 @@ impl FidelityWarning {
                 Self::ViewLoss(loss)
             }))
             .chain(structured)
+            .chain((unsupported > 0).then_some(Self::UnsupportedEntries {
+                unsupported_entries: unsupported,
+            }))
             .collect()
     }
 
     /// A warning suitable for users, never a serialized enum or raw object id.
     pub fn render(&self) -> String {
         match self {
+            Self::UnsupportedEntries {
+                unsupported_entries,
+            } => {
+                let entries = if *unsupported_entries == 1 {
+                    "entry"
+                } else {
+                    "entries"
+                };
+                format!(
+                    "{unsupported_entries} unsupported warning {entries} could not be displayed; use an updated importer to read them."
+                )
+            }
             Self::ViewLoss(loss) => loss.render(),
             Self::PropertySnapshot {
                 source,
@@ -555,5 +610,92 @@ impl SourceLossFact {
                     .map(|notice| FidelityWarning::Notice { notice }),
             )
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod warning_decode_tests {
+    use super::*;
+    use import_notion::domain::views::{ViewLossKind, ViewSetting, ViewType};
+
+    #[test]
+    fn new_fidelity_variants_round_trip_without_untagged_collisions() {
+        let id = NotionId::parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+        let warnings = [
+            FidelityWarning::Text("Legacy warning".into()),
+            FidelityWarning::SourceStopped {
+                title: "Work".into(),
+                reason: SourceStopReason::SchemaChanged,
+            },
+            FidelityWarning::References {
+                reason: ReferenceLossReason::NotImported,
+                title: "Work".into(),
+                count: 2,
+            },
+            FidelityWarning::OmittedOptions {
+                property: "Status".into(),
+                option: "New".into(),
+                matched_by: OptionMatch::Id,
+                count: 2,
+            },
+            FidelityWarning::UnmappedPeople {
+                source: "Work".into(),
+                property: "Owner".into(),
+                count: 2,
+            },
+            FidelityWarning::UnsupportedEntries {
+                unsupported_entries: 2,
+            },
+            FidelityWarning::ViewLoss(ViewWarning {
+                source_id: id.clone(),
+                view_id: id.clone(),
+                source: "Work".into(),
+                view: "Board".into(),
+                kind: ViewLossKind::Setting,
+                setting: ViewSetting::ColumnVisibility,
+                layout: ViewType::Table,
+                properties: vec!["Owner".into()],
+                count: 2,
+            }),
+            FidelityWarning::PropertySnapshot {
+                source_id: id.clone(),
+                property_id: "formula".into(),
+                source: "Work".into(),
+                property: "Total".into(),
+                kind: PropertySnapshotKind::Formula,
+            },
+            FidelityWarning::PropertySnapshot {
+                source_id: id.clone(),
+                property_id: "rollup".into(),
+                source: "Work".into(),
+                property: "Sum".into(),
+                kind: PropertySnapshotKind::Rollup,
+            },
+            FidelityWarning::PropertyOmitted {
+                source_id: id.clone(),
+                property_id: "button".into(),
+                source: "Work".into(),
+                property: "Run".into(),
+                notion_type: "button".into(),
+            },
+            FidelityWarning::Notice {
+                notice: ImportNotice::new(&id, "Work", ImportNoticeKind::SchemaMetadataDrift),
+            },
+        ];
+        for original in warnings {
+            let stored = serde_json::to_value(&original).unwrap();
+            let decoded: FidelityWarning = serde_json::from_value(stored.clone()).unwrap();
+            assert_eq!(decoded, original);
+            if let serde_json::Value::Object(mut future) = stored {
+                future.insert("future_kind".into(), serde_json::json!(true));
+                assert_eq!(
+                    FidelityWarning::decode_entries(&serde_json::json!([future])),
+                    vec![FidelityWarning::UnsupportedEntries {
+                        unsupported_entries: 1,
+                    }],
+                    "a future superset must not silently decode as {original:?}"
+                );
+            }
+        }
     }
 }

@@ -101,65 +101,67 @@ impl ImportNotice {
             kind,
         }
     }
-    /// Preserve the existing report wording without parsing diagnostic text.
+    /// Explain the notice without exposing importer terminology or diagnostic keys.
     pub fn render(&self) -> String {
         let source = &self.source;
         match &self.kind {
             ImportNoticeKind::SchemaMetadataDrift => format!(
-                "Database {source}: property names or options changed; preserving the reserved schema and matching values by option id when available, otherwise by name"
+                "Database “{source}”: property names or choices changed after planning. The imported columns keep their planned definitions; choices are matched by their Notion identity when available, otherwise by name."
             ),
             ImportNoticeKind::DateScanIncomplete => {
-                format!("Database {source}: Notion returned an incomplete date-range scan")
+                format!(
+                    "Database “{source}”: Notion did not return all rows while checking date ranges."
+                )
             }
             ImportNoticeKind::WriteScanIncomplete => {
-                format!("Database {source}: Notion returned an incomplete write-time row query")
+                format!("Database “{source}”: Notion did not return all rows during import.")
             }
             ImportNoticeKind::SavedViewsUnavailable { reason } => {
-                format!("Database {source}: saved views unavailable ({reason})")
+                format!("Database “{source}”: saved views could not be read ({reason}).")
             }
             ImportNoticeKind::ContainerViewsUnavailable { reason } => {
-                format!("Database {source}: views unavailable ({reason})")
+                format!("Database “{source}”: views could not be read ({reason}).")
             }
             ImportNoticeKind::TabUnavailable { tab, reason } => {
-                format!("Database {source}, saved tab {tab}: {reason}")
+                format!("Database “{source}”, saved tab {tab}: {reason}.")
             }
             ImportNoticeKind::ViewSourceMismatch => {
-                format!("View {source}: source identity mismatch")
+                format!("View “{source}” belongs to a different database and was skipped.")
             }
             ImportNoticeKind::ViewContainerMismatch => {
-                format!("View {source}: container identity mismatch")
+                format!("View “{source}” belongs to a different database location and was skipped.")
             }
             ImportNoticeKind::DatabaseViewAccessUnavailable => format!(
-                "Database {source}: database view access unavailable; occurrences retain Notion links"
+                "Database “{source}” could not be opened; its references were kept as Notion links."
             ),
             ImportNoticeKind::RowsOnlyPlacement { sources } => format!(
-                "Database {source}: filed at the Notion folder because it is only referenced from rows of {}",
+                "Database “{source}” was filed in the Notion folder because it is only linked from rows of {}.",
                 sources.join(", ")
             ),
             ImportNoticeKind::PropertyChanged { property } => format!(
-                "Database {source}: property {property} changed after planning; only values fitting the planned schema are written"
+                "Database “{source}”: property “{property}” changed after planning. Only values that fit the planned column could be imported."
             ),
             ImportNoticeKind::PropertyAdded { property } => format!(
-                "Database {source}: property {property} added after planning; values are omitted from the reserved schema"
+                "Database “{source}”: property “{property}” was added after planning and was not imported."
             ),
             ImportNoticeKind::DateEndDrift { property } => format!(
-                "Database {source}: property {property} acquired an end date after planning; only its start date fits the reserved Date column"
+                "Database “{source}”: property “{property}” gained an end date after planning. Only the start date could be imported into its planned date column."
             ),
             ImportNoticeKind::RowBodyUnavailable => {
-                format!("Page {source}: content could not be read; its database row was kept")
+                format!("Page “{source}”: content could not be read; its database row was kept.")
             }
-            ImportNoticeKind::DatabaseOccurrence { loss } => format!("Database {source}: {loss}"),
+            ImportNoticeKind::DatabaseOccurrence { loss } => format!("Database “{source}”: {loss}"),
             ImportNoticeKind::PageDatabaseOccurrence { database, loss } => {
-                format!("Page \"{source}\", database \"{database}\": {loss}.")
+                format!("Page “{source}”, database “{database}”: {loss}.")
             }
             ImportNoticeKind::MissingContainerIdentity => {
-                "Database occurrence has no container identity; retained Notion link".into()
+                "A database reference could not be identified and was kept as a Notion link.".into()
             }
             ImportNoticeKind::ReferencesUnavailable { reason } => format!(
-                "Page \"{source}\": database references could not be checked because {reason}. The page remains in the plan."
+                "Page “{source}”: database references could not be checked because {reason}. The page remains in the plan."
             ),
             ImportNoticeKind::DependencyRowsUnknown => format!(
-                "Database \"{source}\": rows will be read when imported; no row count was available from this scan."
+                "Database “{source}”: rows will be read during import; the row count is not yet available."
             ),
         }
     }

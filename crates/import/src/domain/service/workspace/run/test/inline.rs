@@ -803,7 +803,7 @@ async fn a_revoked_database_grant_prevents_holder_lookup_and_keeps_no_access_lin
             .unwrap()
             .warnings
             .iter()
-            .any(|warning| warning.contains("view access unavailable"))
+            .any(|warning| warning.contains("could not be opened"))
     );
 }
 

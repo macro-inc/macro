@@ -43,38 +43,41 @@ pub(in crate::domain::service) fn report(
     };
     let mut importers: HashMap<&str, u32> = HashMap::new();
     for (row, meta) in &current {
-        if let Some(warnings) = row
-            .metadata
-            .get("warnings")
-            .and_then(serde_json::Value::as_array)
-        {
-            let typed = warnings
-                .iter()
-                .cloned()
-                .map(serde_json::from_value::<crate::domain::models::FidelityWarning>)
-                .collect::<std::result::Result<Vec<_>, _>>()?;
+        if let Some(warnings) = row.metadata.get("warnings") {
+            let typed = crate::domain::models::FidelityWarning::decode_entries(warnings);
             for warning in crate::domain::models::FidelityWarning::merge(typed) {
-                let (counted, legacy_text) = match &warning {
+                let (counted, deduplicate) = match &warning {
                     crate::domain::models::FidelityWarning::References { .. }
                     | crate::domain::models::FidelityWarning::OmittedOptions { .. } => {
                         (true, false)
                     }
-                    crate::domain::models::FidelityWarning::Text(_) => (false, true),
+                    crate::domain::models::FidelityWarning::Text(_)
+                    | crate::domain::models::FidelityWarning::Notice {
+                        notice:
+                            crate::domain::models::ImportNotice {
+                                kind:
+                                    crate::domain::models::ImportNoticeKind::MissingContainerIdentity,
+                                ..
+                            },
+                    } => (false, true),
                     crate::domain::models::FidelityWarning::SourceStopped { .. }
                     | crate::domain::models::FidelityWarning::UnmappedPeople { .. }
                     | crate::domain::models::FidelityWarning::ViewLoss(_)
                     | crate::domain::models::FidelityWarning::PropertySnapshot { .. }
                     | crate::domain::models::FidelityWarning::PropertyOmitted { .. }
-                    | crate::domain::models::FidelityWarning::Notice { .. } => (false, false),
+                    | crate::domain::models::FidelityWarning::Notice { .. }
+                    | crate::domain::models::FidelityWarning::UnsupportedEntries { .. } => {
+                        (false, false)
+                    }
                 };
                 let rendered = if counted {
                     format!("{}: {}", meta.title, warning.render())
                 } else {
                     warning.render()
                 };
-                // Counts belong to distinct source rows; identical titles or
-                // totals must not hide a second source's losses.
-                if !legacy_text || !report.warnings.contains(&rendered) {
+                // Counts belong to distinct source rows; only legacy prose and
+                // the generic malformed-reference notice deduplicate across them.
+                if !deduplicate || !report.warnings.contains(&rendered) {
                     report.warnings.push(rendered);
                 }
             }

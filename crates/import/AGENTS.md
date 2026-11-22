@@ -414,7 +414,11 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   Flush counted, human-readable warnings at most twice per source attempt
   (reservation and after writing, including failures), before marking it imported.
   Store new view/property/drift/body/placement warnings as typed metadata; keep
-  Text only for legacy reads. Render source/view/property titles at the report
+  Text only for legacy reads. Decode warning entries independently in reports and
+  shared-database mappings, preserving known entries and rendering a counted typed
+  notice for unsupported entries without logging payloads. Deduplicate generic
+  malformed-reference notices separately from source-scoped people counts.
+  Render source/view/property titles at the report
   boundary. Diagnostic paths may locate property context but never classify
   settings or supply user-visible labels; use the translator’s ViewSetting enum. Use a short “ ≈” saved-view suffix for filter approximation.
   Report unsupported property types, including buttons, in the plan and report.

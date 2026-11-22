@@ -352,7 +352,7 @@ async fn rows_are_read_again_after_reservation_and_schema_drift_is_reported() {
     assert!(
         losses
             .iter()
-            .any(|loss| loss.contains("property Dates") && loss.contains("changed"))
+            .any(|loss| loss.contains("property “Dates”") && loss.contains("changed"))
     );
     assert!(
         losses
