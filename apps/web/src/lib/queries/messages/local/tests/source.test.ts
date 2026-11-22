@@ -26,6 +26,11 @@ const mocks = vi.hoisted(() => ({
   withQueuedSends: vi.fn(),
   pageLacksQueuedSends: vi.fn(),
   refreshChannelViews: vi.fn(),
+  rereadAfterDeviceFault: vi.fn(),
+}));
+
+vi.mock('../rereads', () => ({
+  rereadAfterDeviceFault: mocks.rereadAfterDeviceFault,
 }));
 
 vi.mock('../flag', () => ({
@@ -195,6 +200,42 @@ describe('loadLocalChannelTimelinePage', () => {
     mocks.pushesStored.mockResolvedValue(true);
 
     expect(await loadLocalChannelTimelinePage(read)).toBeUndefined();
+    expect(mocks.rereadAfterDeviceFault).not.toHaveBeenCalled();
+  });
+
+  it('has the channel read again when the device read fails and REST answers', async () => {
+    mocks.loadChannelPage.mockRejectedValue(
+      new Error('cache worker timeout: channel-timeline')
+    );
+
+    expect(await loadLocalChannelTimelinePage(read)).toBeUndefined();
+    expect(mocks.rereadAfterDeviceFault).toHaveBeenCalledExactlyOnceWith(
+      CHANNEL_ID
+    );
+  });
+
+  it('does not read again a read that was cancelled', async () => {
+    const controller = new AbortController();
+    mocks.loadChannelPage.mockImplementation(async () => {
+      controller.abort();
+      throw new Error('aborted');
+    });
+
+    await expect(
+      loadLocalChannelTimelinePage({ ...read, signal: controller.signal })
+    ).rejects.toThrow();
+    expect(mocks.rereadAfterDeviceFault).not.toHaveBeenCalled();
+  });
+
+  it('has the channel read again when the device thread read fails', async () => {
+    mocks.loadChannelThread.mockRejectedValue(
+      new Error('cache worker timeout: read-records-by-keys')
+    );
+
+    expect(await loadLocalChannelThread(CHANNEL_ID, 'root')).toBeUndefined();
+    expect(mocks.rereadAfterDeviceFault).toHaveBeenCalledExactlyOnceWith(
+      CHANNEL_ID
+    );
   });
 });
 

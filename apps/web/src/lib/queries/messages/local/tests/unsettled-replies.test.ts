@@ -7,6 +7,7 @@ import {
   forgetOwnReply,
   noteOwnReply,
   ownReplyDelivered,
+  listQueuedReplies,
   pageHasQueuedReplies,
   resetUnsettledReplies,
   withUnsettledThreadReplies,
@@ -18,6 +19,11 @@ import {
   graphqlMessage,
   keyOf,
 } from './fixtures';
+
+const { rereadAfterDeviceFault } = vi.hoisted(() => ({
+  rereadAfterDeviceFault: vi.fn(),
+}));
+vi.mock('../rereads', () => ({ rereadAfterDeviceFault }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: vi.fn(),
@@ -294,6 +300,19 @@ describe('pageHasQueuedReplies', () => {
     expect(await pageHasQueuedReplies(fakeHost([]), CHANNEL_ID, page)).toBe(
       false
     );
+  });
+
+  it('has the channel read again when the queue cannot be listed', async () => {
+    rereadAfterDeviceFault.mockClear();
+    const failing = {
+      ...fakeHost([]),
+      inspectMutations: async () => {
+        throw new Error('cache worker timeout: inspect-mutations');
+      },
+    };
+
+    expect(await listQueuedReplies(failing, CHANNEL_ID)).toEqual(new Map());
+    expect(rereadAfterDeviceFault).toHaveBeenCalledExactlyOnceWith(CHANNEL_ID);
   });
 });
 

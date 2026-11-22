@@ -25,6 +25,7 @@ import {
   pageHasPendingWrites,
 } from './pages';
 import { PREWARM_PAGE_SIZE } from './prewarm';
+import { rereadAfterDeviceFault } from './rereads';
 import { pageLacksQueuedSends, withQueuedSends } from './queued-sends';
 import { sortKeyFromCursor } from './sort-key';
 import { loadChannelMessage, loadChannelThread } from './thread';
@@ -187,6 +188,8 @@ export async function loadLocalChannelTimelinePage(
       : loaded.page;
   } catch (error) {
     reportFallback(error, read.signal);
+    // REST answers this read and cannot carry a write waiting on the device.
+    rereadAfterDeviceFault(read.channelId);
     return undefined;
   }
 }
@@ -314,6 +317,8 @@ export async function loadLocalChannelThread(
     return overlaid.unwrapOr(thread);
   } catch (error) {
     reportDeviceFault(error);
+    // REST answers this read and cannot carry a reply waiting on the device.
+    rereadAfterDeviceFault(channelId);
     return undefined;
   }
 }
