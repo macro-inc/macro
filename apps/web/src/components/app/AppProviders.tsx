@@ -21,6 +21,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { useReactiveFavicon } from '@components/app/useReactiveFavicon';
 import { toast } from '@core/component/Toast/Toast';
+import { useChannelDirectory } from '@core/context/channels';
 import { TeamContextProvider } from '@core/context/team';
 import { useIsAuthenticated, useUserId, useUserInfo } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -128,7 +129,10 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
 export function AppProviders(props: ParentProps) {
   const userId = useUserId();
   useQuerySync(userId);
-  useSoupBackfills(userId);
+  const channelDirectory = useChannelDirectory();
+  useSoupBackfills(userId, () =>
+    channelDirectory.complete() ? channelDirectory.channels() : undefined
+  );
   useCalendarCache(() => userId() !== undefined);
   useChannelCache(() => userId() !== undefined);
   useWarmPromptDismissals(userId);
