@@ -2,7 +2,7 @@ import { DEFAULT_TASK_COMPOSER_PROPERTY_IDS } from '@app/features/task-composer/
 import { toast } from '@core/component/Toast/Toast';
 import { createTaskWithInitialSnapshot } from '@core/util/create';
 import { filterMap } from '@core/util/list';
-import type { Span } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   propertyApiValuesToNormalized,
   propertyValueToApi,
@@ -153,8 +153,13 @@ export async function createTaskWithProperties(
     pinnedPropertyDefinitionIds: options?.pinnedPropertyDefinitionIds,
   });
   // After the request starts: rendering what onMutate shows (a list row)
-  // would otherwise hold the request back.
-  options?.onMutate?.();
+  // would otherwise hold the request back. The request is already sent, so a
+  // failure there must not read as a failed create.
+  try {
+    options?.onMutate?.();
+  } catch (error) {
+    Telemetry.error(error, { surface: 'task-compose-on-mutate' });
+  }
   const createdTask = await request;
 
   if (!createdTask) {

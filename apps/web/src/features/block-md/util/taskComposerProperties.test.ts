@@ -139,6 +139,27 @@ it('sends the create request before showing the task being created', async () =>
   expect(order).toEqual(['request', 'mutate']);
 });
 
+it('still reports a sent create whose stand-in fails to show', async () => {
+  mock.create.mockResolvedValue({ documentId: 'task' });
+  const created = vi.fn();
+  const result = await createTaskWithProperties(
+    'Ship it',
+    '',
+    [],
+    new Map(),
+    vi.fn(),
+    {
+      onMutate: () => {
+        throw new Error('render failed');
+      },
+      onCreated: created,
+    }
+  );
+  expect(result).toEqual({ documentId: 'task' });
+  expect(created).toHaveBeenCalledOnce();
+  expect(mock.failure).not.toHaveBeenCalled();
+});
+
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import {
   taskComposerVisiblePropertyIds,

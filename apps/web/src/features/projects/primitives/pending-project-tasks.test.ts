@@ -105,7 +105,8 @@ it('reads the project once more, then drops a task the list never shows', async 
   // The read may list it, which releases it; it stays until the read ends.
   expect(shown(pending)).toEqual(['task']);
   answer();
-  await vi.waitFor(() => expect(shown(pending)).toEqual([]));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(shown(pending)).toEqual([]);
   dispose();
 });
 

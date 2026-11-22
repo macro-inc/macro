@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import {
   registerActivityRevalidator,
   revalidateActivityQueries,
@@ -50,7 +51,10 @@ export async function refreshProjectReads(projectId: string) {
         try {
           await reader.refresh();
         } catch (error) {
-          console.warn('Project read failed', error);
+          Telemetry.error(error, {
+            surface: 'project-read',
+            'project.id': projectId,
+          });
         }
       })
   );
@@ -59,9 +63,10 @@ export async function refreshProjectReads(projectId: string) {
 /**
  * Reads a mounted project again whenever the activity registry revalidates:
  * an activity push, the Soup websocket connecting or reconnecting, or one of
- * the app's own project writes (`refreshProjectQueries`). Nothing reads it on
- * a timer or on focus, so a share, unshare or membership change reaches an
- * open project only with one of those or a reopen.
+ * the app's own project writes (`refreshProjectQueries`), plus one read when
+ * a created task's stand-in expires unlisted (`refreshProjectReads`). Nothing
+ * reads it on a timer or on focus, so a share, unshare or membership change
+ * reaches an open project only with one of those or a reopen.
  */
 export function registerProjectRevalidation(
   client: () => Client,
