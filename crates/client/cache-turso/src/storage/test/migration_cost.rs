@@ -215,12 +215,19 @@ fn upgrade_cost_on_a_retained_cache() {
             .into_iter()
             .map(|(name, elapsed)| format!("{name} {:.1} ms", elapsed.as_secs_f64() * 1e3))
             .collect::<Vec<_>>();
-        eprintln!("run {run} step phases: {}", phases.join(", "));
+        eprintln!(
+            "run {run} step DDL and commit (without the version write and \
+             frozen-schema check the upgrade adds): {}",
+            phases.join(", ")
+        );
     }
 }
 
-/// Each statement of the 11 to 12 step, timed inside one write transaction as
-/// the runner runs it, then the commit.
+/// Each DDL statement of the 11 to 12 step, timed inside one write
+/// transaction as the runner runs it, then the commit. It leaves out what the
+/// runner adds before that commit, the `storage_schema_version` write and the
+/// frozen-schema check, so it splits up the DDL, not the whole upgrade, which
+/// `timed_open` times.
 fn step_phases(older: &Path, live: &Path) -> Vec<(String, Duration)> {
     copy_pair(older, live);
     let io: Arc<dyn IO> = Arc::new(PlatformIO::new().unwrap());

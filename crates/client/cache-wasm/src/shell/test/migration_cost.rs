@@ -10,25 +10,34 @@ use super::*;
 const BENCH_SCOPE: &str = "cache-bench";
 const RUNS: usize = 3;
 
-/// Writes the body at `url` into the OPFS file `file`, or leaves it empty when
-/// the server has none. Returns the bytes written.
-async fn load_opfs_file(url: &str, file: &str) -> f64 {
+/// Writes the body at `url` into the OPFS file `file` and returns the bytes
+/// written. A 404 leaves the file empty only when `optional`; any other
+/// failed response, and a write that stores less than it was given, fail the
+/// setup, so a cost is never timed on a different pair than the one served.
+async fn load_opfs_file(url: &str, file: &str, optional: bool) -> f64 {
     run_js(
         "return (async () => {
-          const [url, file] = JSON.parse(name);
+          const [url, file, optional] = JSON.parse(name);
+          const response = await fetch(url);
+          if (!response.ok && !(optional && response.status === 404)) {
+            throw new Error(`fixture ${url} answered ${response.status}`);
+          }
           const root = await navigator.storage.getDirectory();
           const handle = await root.getFileHandle(file, { create: true });
           const access = await handle.createSyncAccessHandle();
           try {
             access.truncate(0);
-            const response = await fetch(url);
             let at = 0;
             if (response.ok) {
               const reader = response.body.getReader();
               for (;;) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                at += access.write(value, { at });
+                const written = access.write(value, { at });
+                if (written !== value.byteLength) {
+                  throw new Error(`fixture ${file} stored ${written} of ${value.byteLength} bytes`);
+                }
+                at += written;
               }
             }
             access.flush();
@@ -37,7 +46,7 @@ async fn load_opfs_file(url: &str, file: &str) -> f64 {
             access.close();
           }
         })()",
-        &serde_json::json!([url, file]).to_string(),
+        &serde_json::json!([url, file, optional]).to_string(),
     )
     .await
     .as_f64()
@@ -45,8 +54,13 @@ async fn load_opfs_file(url: &str, file: &str) -> f64 {
 }
 
 async fn load_pair(base: &str, source: &str, identity: &str) -> f64 {
-    load_opfs_file(&format!("{base}/{source}"), identity).await
-        + load_opfs_file(&format!("{base}/{source}-wal"), &format!("{identity}-wal")).await
+    load_opfs_file(&format!("{base}/{source}"), identity, false).await
+        + load_opfs_file(
+            &format!("{base}/{source}-wal"),
+            &format!("{identity}-wal"),
+            true,
+        )
+        .await
 }
 
 async fn now_ms() -> f64 {
