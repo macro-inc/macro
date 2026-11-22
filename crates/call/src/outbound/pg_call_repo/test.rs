@@ -706,7 +706,7 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
     assert_eq!(archived.started_at, record.started_at);
     assert_eq!(archived.ended_at, record.ended_at);
     assert_eq!(archived.duration_ms, record.duration_ms);
-    assert!(archived.has_recording);
+    assert!(archived.egress_id.is_some());
     assert_eq!(archived.participants.len(), 2);
 
     assert_eq!(record.channel_id, archived.channel_id);
@@ -762,7 +762,7 @@ async fn archive_call_preserves_soft_deleted_participants(
     assert_eq!(archived.participants.len(), 2);
     assert!(archived.participants.contains(&USER_A.to_string()));
     assert!(archived.participants.contains(&USER_B.to_string()));
-    assert!(!archived.has_recording);
+    assert!(archived.egress_id.is_none());
 
     // call_record_participants should have both participants with left_at set.
     let rows = sqlx::query!(

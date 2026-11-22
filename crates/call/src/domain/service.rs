@@ -401,7 +401,7 @@ impl<
                 duration_ms: Some(archived.duration_ms),
                 participant_count: archived.participants.len(),
                 participants,
-                has_recording: archived.has_recording,
+                has_recording: archived.egress_id.is_some(),
                 archive_reason,
                 channel_thread: archived.channel_thread,
             },
@@ -409,7 +409,7 @@ impl<
         self.publish_call_notification(CallNotificationEvent::Ended(
             CallNotificationMetadata::new(archived.call_id, archived.channel_id),
         ));
-        if archived.has_recording {
+        if archived.egress_id.is_some() {
             self.publish_call_notification(CallNotificationEvent::RecordingReady(
                 CallNotificationMetadata::new(archived.call_id, None),
             ));
@@ -1669,9 +1669,22 @@ impl<
         })
     }
 
-    #[tracing::instrument(err, skip(self, body, auth_token))]
+    #[tracing::instrument(
+        err,
+        skip(self, body, auth_token),
+        fields(
+            webhook.event = tracing::field::Empty,
+            call.room = tracing::field::Empty,
+            call.id = tracing::field::Empty,
+        )
+    )]
     async fn process_webhook_event(&self, body: &str, auth_token: &str) -> Result<(), CallError> {
         let event = self.rtc_client.receive_webhook(body, auth_token)?;
+        let span = tracing::Span::current();
+        span.record("webhook.event", event.event.as_str());
+        if let Some(room_name) = &event.room_name {
+            span.record("call.room", room_name.as_str());
+        }
         if matches!(event.event.as_str(), "egress_started" | "egress_ended") {
             self.link_meeting_recording_webhook(
                 event.room_name.as_deref(),
@@ -1712,6 +1725,7 @@ impl<
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?
                 {
+                    record_webhook_call(&call);
                     tracing::info!(call_id = %call.id, room_name, "archiving call on room_finished");
                     let archived = self.repo.archive_call(&call.id, &call.room_name).await?;
                     self.publish_archived_call_event(&archived, CallArchiveReason::RoomFinished);
@@ -1758,6 +1772,7 @@ impl<
                         .map_err(|e| CallError::Internal(e.into()))?
                     {
                         Some(call) => {
+                            record_webhook_call(&call);
                             self.repo.reconcile_guest(&call.id, *identity, true).await?;
                             let mut metadata =
                                 CallNotificationMetadata::new(call.id, call.channel_id);
@@ -1799,6 +1814,7 @@ impl<
                         )
                         .await;
                 };
+                record_webhook_call(&call);
 
                 // Reconcile: idempotent upsert (handles reconnect/race conditions).
                 // UserAlreadyActive means our DB has the user active in
@@ -1864,6 +1880,7 @@ impl<
                     // Call already archived, nothing to do.
                     return Ok(());
                 };
+                record_webhook_call(&call);
 
                 if let Some(participant_identity) = &event.participant_identity {
                     self.repo
@@ -2807,6 +2824,11 @@ async fn enroll_stable_speaker_voices_for_call_record<R: CallRepository, Vr: Voi
         %call_record_id, linked, total,
         "stable speaker voice enrollment completed"
     );
+}
+
+/// Names the live call a webhook event acts on, on the event's span.
+fn record_webhook_call(call: &Call) {
+    tracing::Span::current().record("call.id", tracing::field::display(call.id));
 }
 
 /// Extract the recording key from a full S3 URL.

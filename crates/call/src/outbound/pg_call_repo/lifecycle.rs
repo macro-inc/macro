@@ -73,7 +73,6 @@ impl PgCallRepo {
             .signed_duration_since(call.created_at)
             .num_milliseconds()
             .max(0);
-        let has_recording = call.egress_id.is_some();
         let share_with_team = crate::domain::models::permitted_team_memory_intent(
             call.channel_id,
             call.share_with_team,
@@ -319,7 +318,7 @@ impl PgCallRepo {
             started_at,
             ended_at,
             duration_ms,
-            has_recording,
+            egress_id: call.egress_id,
             participants,
             channel_thread,
         };

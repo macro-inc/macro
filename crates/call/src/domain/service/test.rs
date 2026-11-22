@@ -1182,7 +1182,7 @@ fn archived_call_for_event(
         started_at: archived_event_started_at(),
         ended_at: archived_event_ended_at(),
         duration_ms: 183_000,
-        has_recording,
+        egress_id: has_recording.then(|| "archived-egress".to_string()),
         participants: participants.iter().map(ToString::to_string).collect(),
     }
 }

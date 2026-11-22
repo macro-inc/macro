@@ -652,7 +652,7 @@ impl<
         Ok(())
     }
 
-    #[tracing::instrument(err, skip_all)]
+    #[tracing::instrument(err, skip_all, fields(call.id = %call.id, call.room = %call.room_name))]
     pub(super) async fn finish_empty_call(&self, call: &Call) -> Result<bool, CallError> {
         let remaining = self
             .repo
@@ -679,7 +679,9 @@ impl<
         self.spawn_process_voices_for_call(archived.call_id);
         let rtc = self.rtc_client.clone();
         let room_name = call.room_name.clone();
-        let egress_id = call.egress_id.clone();
+        // The archive read the session's recorder under its lock; `call` may
+        // predate the recorder's attachment.
+        let egress_id = archived.egress_id.clone();
         tokio::spawn(
             async move {
                 if let Some(egress_id) = egress_id {
@@ -693,7 +695,11 @@ impl<
                     .inspect_err(|error| tracing::error!(error=?error, "failed to delete RTC room"))
                     .ok();
             }
-            .instrument(tracing::info_span!("finish_meeting_media", call_id = %call.id)),
+            .instrument(tracing::info_span!(
+                "finish_meeting_media",
+                call_id = %call.id,
+                call.room = %call.room_name
+            )),
         );
         self.send_call_event(
             &archived.channel_id,

@@ -84,8 +84,10 @@ pub struct ArchivedCall {
     pub ended_at: DateTime<Utc>,
     /// Call duration in milliseconds.
     pub duration_ms: i64,
-    /// Whether a recording egress was started before the call was archived.
-    pub has_recording: bool,
+    /// The archived session's recorder, if one was attached before it was
+    /// archived. Teardown stops this one: a recorder attached later finds the
+    /// session ended and stops itself.
+    pub egress_id: Option<String>,
     /// Macro accounts that joined the call over its lifetime, once each.
     pub participants: Vec<String>,
     /// Whether the call's discussion is a thread in its channel.
