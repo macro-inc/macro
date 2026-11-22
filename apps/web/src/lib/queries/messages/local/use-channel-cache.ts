@@ -22,16 +22,20 @@ import {
   storeUnstoredPushes,
 } from './catch-up';
 import { channelCacheHost } from './flag';
-import { queueIfAnswering, sendLeftBehindOverRest } from './left-behind-sends';
+import {
+  changeLeftBehindOverRest,
+  queueIfAnswering,
+  sendLeftBehindOverRest,
+} from './left-behind-sends';
 import { resetPendingChannelPages } from './pages';
 import { evictIdleChannels, runChannelPrewarmPass } from './prewarm';
 import { loadPrewarmChannelIds } from './prewarm-list';
-import { setQueuedSendsOwner } from './queued-sends';
+import { setQueueOwner } from './queue-owner';
 import { resetSendsInHand } from './sends-in-hand';
 import { holdUnheldReads } from './source';
 import { holdUnqueuedSendsPage, resendUnqueuedSends } from './unqueued-sends';
 import { resetUnsettledReplies } from './unsettled-replies';
-import { sendChannelMessage } from './writes';
+import { makeChannelChange, sendChannelMessage } from './writes';
 
 /** Leaves startup and the first screen alone. */
 const START_DELAY_MS = 5_000;
@@ -145,8 +149,8 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
 
   createEffect(() => {
     // The device queue is this person's: its waiting messages are theirs.
-    setQueuedSendsOwner(userId());
-    onCleanup(() => setQueuedSendsOwner(undefined));
+    setQueueOwner(userId());
+    onCleanup(() => setQueueOwner(undefined));
   });
 
   createEffect(() => {
@@ -155,14 +159,22 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
     if (!cacheHost || !sender) return;
     holdUnqueuedSendsPage();
     fireAndForget(
-      resendUnqueuedSends(cacheHost, sender, (send, createdAt) =>
-        fireAndForget(
-          sendChannelMessage(cacheHost, send, {
-            now: () => new Date(createdAt),
-          }),
-          'channel-local-sync'
-        )
-      ),
+      resendUnqueuedSends(cacheHost, sender, {
+        send: (send, createdAt) =>
+          fireAndForget(
+            sendChannelMessage(cacheHost, send, {
+              now: () => new Date(createdAt),
+            }),
+            'channel-local-sync'
+          ),
+        change: (change, createdAt) =>
+          fireAndForget(
+            makeChannelChange(cacheHost, change, {
+              now: () => new Date(createdAt),
+            }),
+            'channel-local-sync'
+          ),
+      }),
       'channel-local-sync'
     );
   });
@@ -178,9 +190,12 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
     holdUnqueuedSendsPage();
     const queue = queueIfAnswering(untrack(getGraphqlSoupCacheHost));
     fireAndForget(
-      resendUnqueuedSends(queue, sender, (send) =>
-        fireAndForget(sendLeftBehindOverRest(send), 'channel-local-sync')
-      ),
+      resendUnqueuedSends(queue, sender, {
+        send: (send) =>
+          fireAndForget(sendLeftBehindOverRest(send), 'channel-local-sync'),
+        change: (change) =>
+          fireAndForget(changeLeftBehindOverRest(change), 'channel-local-sync'),
+      }),
       'channel-local-sync'
     );
   });

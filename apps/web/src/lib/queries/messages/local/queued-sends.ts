@@ -4,6 +4,7 @@ import type { MessageTimelinePage } from '@service-storage/messages';
 import { ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 import { mapChannelTimelineEntry } from './map';
+import { queueOwner } from './queue-owner';
 import { predictedMessage } from './writes';
 
 /**
@@ -52,14 +53,6 @@ const queuedDeleteSchema = z.object({
   variables: z.object({ input: z.object({ id: z.string() }) }),
 });
 
-/** Whose queue it is: the person every waiting message was written by. */
-let queueOwner: string | undefined;
-
-/** Names the signed-in person, or no one once they are gone. */
-export function setQueuedSendsOwner(userId: string | undefined): void {
-  queueOwner = userId;
-}
-
 const messageIdsOf = (page: MessageTimelinePage): Set<string> =>
   new Set(
     page.entries.flatMap((entry) =>
@@ -82,7 +75,7 @@ async function queuedSends(
   channelId: string,
   page: MessageTimelinePage
 ): Promise<QueuedSend[]> {
-  const senderId = queueOwner;
+  const senderId = queueOwner();
   if (!senderId || !host.inspectMutations || page.previous_cursor != null) {
     return [];
   }

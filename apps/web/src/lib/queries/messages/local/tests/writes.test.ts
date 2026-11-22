@@ -17,6 +17,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mapChannelMessage } from '../map';
 import { readDeviceChannelPage } from '../pages';
+import { setQueueOwner } from '../queue-owner';
 import { resetSendsInHand, withSendsInHand } from '../sends-in-hand';
 import { unplacedSortKey } from '../sort-key';
 import { resetUnsettledReplies } from '../unsettled-replies';
@@ -24,6 +25,7 @@ import {
   type ChannelWriteHost,
   deleteChannelMessage,
   editChannelMessage,
+  makeChannelChange,
   reactToChannelMessage,
   sendChannelMessage,
   WAITING_ANNOUNCE_MS,
@@ -48,6 +50,8 @@ const { announceWaitingWrite } = vi.hoisted(() => ({
 }));
 vi.mock('../waiting-writes', () => ({ announceWaitingWrite }));
 afterEach(() => {
+  setQueueOwner(undefined);
+  vi.unstubAllGlobals();
   pageIsLeaving.mockReturnValue(false);
   announceWaitingWrite.mockClear();
 });
@@ -572,6 +576,97 @@ describe('queued channel writes', () => {
       nonce: 'e',
     });
     expect(new Set(calls.map((call) => call.context.uuid)).size).toBe(3);
+  });
+
+  it('notes an edit, a delete and a reaction for the next page before the queue is asked, and makes them again as they were', async () => {
+    const items = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      get length() {
+        return items.size;
+      },
+      key: (index: number) => [...items.keys()][index] ?? null,
+      getItem: (key: string) => items.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        items.set(key, value);
+      },
+      removeItem: (key: string) => {
+        items.delete(key);
+      },
+    });
+    setQueueOwner(SENDER);
+    const stored = graphqlMessage(7);
+    const notedWhenAsked: number[] = [];
+    const { client, calls } = fakeClient((variables) => {
+      notedWhenAsked.push(items.size);
+      const { input } = variables as { input: Record<string, unknown> };
+      const field =
+        'emoji' in input
+          ? 'reactToChannelMessage'
+          : 'content' in input
+            ? 'editChannelMessage'
+            : 'deleteChannelMessage';
+      return { data: { [field]: stored }, disposition: { kind: 'committed' } };
+    });
+    const { host } = writeHost();
+    const deps = { client, now: () => NOW };
+
+    await editChannelMessage(
+      host,
+      {
+        channelId: CHANNEL_ID,
+        id: stored.id,
+        content: 'edited',
+        mentions: [],
+        removeAttachmentIds: [],
+        addAttachments: [],
+        nonce: 'e',
+      },
+      deps
+    );
+    await deleteChannelMessage(
+      host,
+      { channelId: CHANNEL_ID, id: stored.id, nonce: 'd' },
+      deps
+    );
+    await reactToChannelMessage(
+      host,
+      {
+        channelId: CHANNEL_ID,
+        id: stored.id,
+        emoji: '👍',
+        add: true,
+        nonce: 'r',
+      },
+      deps
+    );
+
+    // Each was in storage by the time the queue was asked to hold it.
+    expect(notedWhenAsked).toEqual([1, 2, 3]);
+    const noted = [...items.values()].map(
+      (item) =>
+        JSON.parse(item).change as Parameters<typeof makeChannelChange>[1]
+    );
+    expect(
+      noted.map(({ kind, uuid, nonce, senderId }) => [
+        kind,
+        uuid,
+        nonce,
+        senderId,
+      ])
+    ).toEqual([
+      ['edit', calls[0].context.uuid, 'e', SENDER],
+      ['delete', calls[1].context.uuid, 'd', SENDER],
+      ['react', calls[2].context.uuid, 'r', SENDER],
+    ]);
+
+    // The next page makes them again under the same queue identity and nonce.
+    for (const change of noted) await makeChannelChange(host, change, deps);
+    expect(calls.slice(3).map((call) => call.context.uuid)).toEqual(
+      calls.slice(0, 3).map((call) => call.context.uuid)
+    );
+    expect(calls.slice(3).map((call) => call.variables.input)).toEqual(
+      calls.slice(0, 3).map((call) => call.variables.input)
+    );
   });
 });
 
