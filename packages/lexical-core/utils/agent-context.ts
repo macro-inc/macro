@@ -648,7 +648,11 @@ function anchorNode(anchor: AgentContextAnchor): FxpNode {
     .with({ type: 'spreadsheet' }, ({ sheetId, sheetName, range }) =>
       el(
         'anchor',
-        [note('Use ReadSpreadsheet to read the live cells in this range.')],
+        [
+          note(
+            'Read the live cells in this range: take the sheet named sheetName from macro.documents.spreadsheet(document).read(), then call read({ sheet, ranges: [range] }).'
+          ),
+        ],
         { type: 'spreadsheet', sheetId, sheetName, range }
       )
     )
@@ -878,7 +882,11 @@ function commentAnchorNode(anchor: CommentAnchor): FxpNode {
     .with({ type: 'spreadsheet' }, ({ sheet_id, sheet_name, range }) =>
       el(
         'anchor',
-        [note('Use ReadSpreadsheet to read the live cells in this range.')],
+        [
+          note(
+            'Read the live cells in this range: take the sheet named sheetName from macro.documents.spreadsheet(document).read(), then call read({ sheet, ranges: [range] }).'
+          ),
+        ],
         { type: 'spreadsheet', sheet_id, sheet_name, range }
       )
     )

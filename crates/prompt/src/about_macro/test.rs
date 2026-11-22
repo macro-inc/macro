@@ -1,4 +1,4 @@
-use super::ABOUT_MACRO;
+use super::DOCS_GUIDE as ABOUT_MACRO;
 
 /// A cached copy of an older docs page once taught the model a webhook
 /// design that no longer exists; the about page must give the current steps.

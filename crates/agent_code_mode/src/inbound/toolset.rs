@@ -266,6 +266,9 @@ pub enum CodeGuideTopic {
     Templates,
     /// Worked examples: check-then-create in one execution, email triage, extraction.
     Examples,
+    /// What Macro is and a map of the docs at macro.com/docs, for questions
+    /// about Macro itself.
+    AboutMacro,
 }
 
 impl CodeGuideTopic {
@@ -276,6 +279,7 @@ impl CodeGuideTopic {
             Self::Ai => include_str!("toolset/guides/ai.md"),
             Self::Templates => include_str!("toolset/guides/templates.md"),
             Self::Examples => include_str!("../../SKILL.md"),
+            Self::AboutMacro => prompt::about_macro::DOCS_GUIDE,
         }
     }
 }

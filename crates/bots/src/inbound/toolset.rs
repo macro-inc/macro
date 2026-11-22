@@ -25,7 +25,6 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use get_bot_webhooks::GetBotWebhooks;
-use issue_bot_credential::IssueBotCredential;
 use list_agents::ListAgents;
 use list_bots::ListBots;
 use manage_bot_channel_access::ManageBotChannelAccess;
@@ -33,6 +32,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 pub use configure_agent::{AgentHarnessOption, ConfigureAgentResponse};
+pub use issue_bot_credential::IssueBotCredential;
 pub use list_agents::ListAgentsResponse;
 pub use types::{
     AgentChannelScopeSummary, AgentMcpScopeSummary, AgentMcpServerSummary, AgentSummary,

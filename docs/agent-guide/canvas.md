@@ -138,8 +138,9 @@ item concurrently chooses one completed content string; characters do not merge.
 ## AI editing and visual reads
 
 Use **Ask Macro** to attach the live Canvas. Ask for a visual layout or diagram:
-Macro can call **RenderCanvas** for an immutable PNG with crop/revision/object
-mapping, then edit and visually review the result. Embedded content is explicitly
+Macro renders an immutable PNG with crop/revision/object mapping (in an agent
+session, a program returns `images: [await canvas.render()]`; Chat calls
+**RenderCanvas**), then edits and visually reviews the result. Embedded content is explicitly
 unavailable in scoped renders. A viewer can read/render but cannot edit.
 **ReadCanvas** also offers a compact approximate semantic overview with stable IDs.
 

@@ -7,7 +7,6 @@ use agent::ReasoningEffort;
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
 use agent_api_keys::domain::UsableAgentKey;
-use ai_tools::user_tool_review::UserToolReviewer;
 use bot_id::BotId;
 use mcp_toolset::RemoteMcpToolSet;
 use model_owner::Owner;
@@ -78,11 +77,6 @@ pub struct TurnRequest {
     /// User-input capability for model-callable tools. Absent when the ACP
     /// client did not advertise form elicitation.
     pub user_input: Option<SharedUserInputRequester>,
-    /// Puts a user tool's call (`SendEmail`, `CreateCalendarEvent`) to the
-    /// user for review mid-turn, so the tool is finished - run as edited, or
-    /// rejected - before the model reads its result. Absent for the same
-    /// reason as `user_input`; a pending call then stays pending.
-    pub reviewer: Option<Arc<dyn UserToolReviewer>>,
     /// The agent's own key the turn's model calls run on instead of Macro's,
     /// with their usage recorded against it rather than the owner's
     /// allowance. `None` runs on Macro.

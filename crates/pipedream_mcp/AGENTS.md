@@ -25,7 +25,8 @@ listings, and calls all go through Connect, with no Pipedream fallback.
   Connection reads skip overlaid slugs, and `complete_pipedream_connection`
   (also reached through `recover_pipedream_connection`)
   refuses them (409) and deletes the new Pipedream account.
-- `src/inbound/toolset.rs`: how connected apps surface as agent tools.
+- `src/inbound/toolset.rs`: the discovery context and response code mode's
+  `macro.connectedApps.discover` returns.
 - `src/outbound/connect.rs`: the Macro Connect adapter over
   `connect_client` (a pinned copy of Connect's client): tools through Connect's
   MCP gateway, app API calls with an exported access token, catalog apps
