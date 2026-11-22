@@ -2,7 +2,7 @@ import type { OptimisticTask } from '@app/features/tasks-view/core/optimistic-ta
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { TaskEntityWithProperties } from '@entity';
-import { Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { getOwner, onCleanup } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 
@@ -18,6 +18,8 @@ type PendingProjectTask = OptimisticTask & {
   key: string;
   projectId: string;
   confirmedAt?: number;
+  /** The create's trace, so its release or expiry joins it. */
+  trace?: TraceContext;
 };
 
 /** One task being created, from submit to the server's answer. */
@@ -74,12 +76,14 @@ export function createPendingProjectTasks({
   const expireTask = async (task: PendingProjectTask) => {
     // The list never showed it: a filter hides it, or the project read
     // missed its push.
-    Telemetry.warn('project.tasks.pending_expired', {
-      'project.id': task.projectId,
-      'document.id': task.entity.id,
-    });
     try {
-      await beforeExpire?.(task.projectId);
+      await inTrace(task, () => {
+        Telemetry.warn('project.tasks.pending_expired', {
+          'project.id': task.projectId,
+          'document.id': task.entity.id,
+        });
+        return beforeExpire?.(task.projectId);
+      });
     } finally {
       remove(new Set([task.key]));
     }
@@ -104,12 +108,13 @@ export function createPendingProjectTasks({
     },
     begin(
       projectId: string,
-      entity: TaskEntityWithProperties
+      entity: TaskEntityWithProperties,
+      trace?: TraceContext
     ): PendingProjectTaskHandle {
       const key = entity.id;
       setState('tasks', (tasks) => [
         ...tasks,
-        { key, projectId, entity, pending: true },
+        { key, projectId, entity, pending: true, trace },
       ]);
       let settled = false;
       return {
@@ -143,15 +148,22 @@ export function createPendingProjectTasks({
       const now = performance.now();
       for (const task of released) {
         // How long the list took to show a created task itself.
-        Telemetry.info('project.tasks.pending_released', {
-          'project.id': task.projectId,
-          'document.id': task.entity.id,
-          'pending.listed_after_ms': Math.round(
-            now - (task.confirmedAt ?? now)
-          ),
-        });
+        inTrace(task, () =>
+          Telemetry.info('project.tasks.pending_released', {
+            'project.id': task.projectId,
+            'document.id': task.entity.id,
+            'pending.listed_after_ms': Math.round(
+              now - (task.confirmedAt ?? now)
+            ),
+          })
+        );
       }
       remove(new Set(released.map((task) => task.key)));
     },
   };
+}
+
+/** Runs `operation` in the create's trace when there is one. */
+function inTrace<T>(task: PendingProjectTask, operation: () => T): T {
+  return task.trace ? task.trace.run(operation) : operation();
 }

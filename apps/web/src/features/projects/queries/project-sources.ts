@@ -189,7 +189,8 @@ export function createProjectSources(
                         properties: values,
                         definitions,
                         now: new Date(),
-                      })
+                      }),
+                      span
                     );
                     span.event('project.tasks.create.pending_added');
                   }

@@ -1,7 +1,28 @@
 import type { TaskEntityWithProperties } from '@entity';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
+const logs = vi.hoisted(() => ({ entries: [] as string[], trace: [''] }));
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: {
+    info: (message: string) => logs.entries.push(`${logs.trace[0]}:${message}`),
+    warn: (message: string) => logs.entries.push(`${logs.trace[0]}:${message}`),
+  },
+}));
+
 import { createPendingProjectTasks } from './pending-project-tasks';
+
+/** A create's trace: what runs in it is logged under its name. */
+const trace = (name: string) => ({
+  run<T>(operation: () => T): T {
+    logs.trace.unshift(name);
+    try {
+      return operation();
+    } finally {
+      logs.trace.shift();
+    }
+  },
+});
 
 const task = (id: string): TaskEntityWithProperties => ({
   type: 'document',
@@ -23,6 +44,7 @@ const shown = (
 
 beforeEach(() => {
   vi.useFakeTimers();
+  logs.entries = [];
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -110,4 +132,25 @@ it('clears its timers when its owner is disposed', () => {
     dispose();
     expect(vi.getTimerCount()).toBe(0);
   });
+});
+
+it("logs a task's release and expiry in the trace of its create", async () => {
+  const dispose = createRoot((dispose) => {
+    const pending = createPendingProjectTasks({ retentionMs: 1_000 });
+    pending
+      .begin('project', task('temp-1'), trace('create-1'))
+      .confirm('task-1');
+    pending
+      .begin('project', task('temp-2'), trace('create-2'))
+      .confirm('task-2');
+    pending.release(['task-1']);
+    return dispose;
+  });
+
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(logs.entries).toEqual([
+    'create-1:project.tasks.pending_released',
+    'create-2:project.tasks.pending_expired',
+  ]);
+  dispose();
 });
