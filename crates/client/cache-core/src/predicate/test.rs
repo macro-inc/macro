@@ -323,4 +323,44 @@ mod derived_sort_facts {
         assert!(!shadow.uncertainty.affects(&token(VIEW.target)));
         assert!(shadow.uncertainty.affects(&token("mail-read")));
     }
+
+    /// Every way a document is composed derives the copy again: an optimistic
+    /// or authoritative replacement holding a stale copy, a member edit that
+    /// moves the thread out of the Inbox, and a shadow started from an
+    /// authority whose copy is stale.
+    #[test]
+    fn every_composition_step_derives_the_view_fact() {
+        let stale = thread(true, 30, Some(10));
+        let base = thread(true, 30, Some(30));
+        let replaced = compose(
+            &base,
+            &[OptimisticProjectionMutation::Replace(stale.clone())],
+        );
+        assert_eq!(view_of(&replaced), Some(30));
+
+        let mut states = HashMap::new();
+        apply_authoritative_projection_mutations(
+            &mut states,
+            &[ProjectionMutation::Replace(stale.clone())],
+        );
+        let Some(ProjectionState::Complete(authoritative)) = states.get(&stale.record_key) else {
+            panic!("complete authority")
+        };
+        assert!(authoritative.sort_facts.contains(&sort(VIEW.target, 30)));
+
+        let archived = compose(
+            &base,
+            &[OptimisticProjectionMutation::PatchExact {
+                record_key: base.record_key.clone(),
+                profile: base.profile.clone(),
+                partition: base.partition.clone(),
+                remove: vec![flag("mail-inbox", true)],
+                insert: vec![flag("mail-inbox", false)],
+            }],
+        );
+        assert_eq!(view_of(&archived), None);
+
+        let from_stale_authority = compose(&stale, &[unknown(&stale, &["mail-read"])]);
+        assert_eq!(view_of(&from_stale_authority), Some(30));
+    }
 }
