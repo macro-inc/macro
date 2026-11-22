@@ -27,7 +27,9 @@ function Message(props: {
       </Show>
       <b class="text-sm font-semibold">{props.title}</b>
       <Show when={props.hint}>
-        <span class="max-w-80 text-xs text-ink-muted">{props.hint}</span>
+        <span class="max-w-80 text-balance text-xs text-ink-muted">
+          {props.hint}
+        </span>
       </Show>
       {props.children}
     </div>

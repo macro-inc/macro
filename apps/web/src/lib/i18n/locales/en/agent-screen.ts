@@ -9,6 +9,7 @@ export default {
   statusLive: 'Live',
   statusReconnecting: 'Reconnecting',
   statusWaking: 'Waking',
+  statusTurningOn: 'Turning on',
   statusAsleep: 'Asleep',
   statusEnded: 'Ended',
   youAreDriving: 'You’re driving',

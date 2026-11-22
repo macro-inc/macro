@@ -50,9 +50,12 @@ export function StatusPill(props: {
         label: t('agentScreen.statusReconnecting'),
         busy: true,
       }))
-      .with({ kind: 'waking' }, () => ({
+      .with({ kind: 'waking' }, (waking) => ({
         tone: 'muted' as const,
-        label: t('agentScreen.statusWaking'),
+        // One word for one state: the body says it's turning on, too.
+        label: waking.turningOn
+          ? t('agentScreen.statusTurningOn')
+          : t('agentScreen.statusWaking'),
         busy: true,
       }))
       .with({ kind: 'asleep' }, () => ({
