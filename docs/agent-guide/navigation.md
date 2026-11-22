@@ -1809,9 +1809,10 @@ Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.
 A failed local refresh keeps displayed rows and their continuation available for
-another pagination attempt. Quick Access merges the complete channel list with
-cached channels, so known channels remain searchable before cache hydration and
-outside its recent page. Cached metadata wins for duplicate channels while newer
+another pagination attempt. Quick Access merges the joined channels of the
+channel directory with cached channels, so known channels remain searchable
+outside its recent page; on a cold cache the directory fills as the channel
+backfill runs. Cached metadata wins for duplicate channels while newer
 viewed timestamps from either source are retained. Other uncached items should
 appear after hydration without retyping. Cmd+K's
 local search explicitly excludes email hits before limiting entity results;

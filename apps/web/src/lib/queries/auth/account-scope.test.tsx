@@ -1,11 +1,20 @@
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
 import { cleanup, render } from '@solidjs/testing-library';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/solid-query';
+import type { Client } from '@urql/core';
 import { type Ok, ok } from 'neverthrow';
 import { batch, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useListChannelsQuery } from '../channel/channels';
+import { fromPromise } from 'wonka';
+import { channelDirectoryPagesQueryOptions } from '../channel/directory';
 import { channelKeys } from '../channel/keys';
+import { ownChannelWrites } from '../channel/own-writes';
+import { channelName, channelUuid } from '../channel/tests/channel-uuid';
+import { channelRecord } from '../channel/tests/directory-fixtures';
 import { emailKeys } from '../email/keys';
 import {
   emailLinksQueryOptions,
@@ -22,7 +31,7 @@ import {
 
 const api = vi.hoisted(() => ({
   links: vi.fn(),
-  channels: vi.fn(),
+  channelPages: vi.fn(),
   patch: vi.fn(),
   remove: vi.fn(),
   refresh: vi.fn(),
@@ -51,12 +60,30 @@ vi.mock('@service-email/client', () => ({
   SIGNATURE_IMAGES_UNRESOLVED_CODE: 'SIGNATURE_IMAGES_UNRESOLVED',
 }));
 vi.mock('@service-storage/client', () => ({
-  storageServiceClient: { getChannels: api.channels },
+  storageServiceClient: {},
 }));
 vi.mock('../email/mail-accounts', () => ({ refreshMailAccounts: api.refresh }));
 vi.mock('./user-info', () => ({ invalidateUserInfo: vi.fn() }));
 vi.mock('../calendar/sync', () => ({ invalidateCalendarViews: vi.fn() }));
 vi.mock('../soup/normalized-cache', () => ({ invalidateAllSoup: vi.fn() }));
+
+/** The soup client the directory pages read through: each read answers
+ * with `api.channelPages`'s next result. */
+const soupClient = {
+  query: () => fromPromise(api.channelPages()),
+} as unknown as Pick<Client, 'query'>;
+
+/** One directory page holding `names`'s channels, with no page after it. */
+const channelPage = (...names: string[]) => ({
+  data: {
+    user: {
+      soup: {
+        items: names.map((name) => channelRecord(channelUuid(name))),
+        nextCursor: null,
+      },
+    },
+  },
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -79,36 +106,33 @@ afterEach(() => {
 it('switches mounted lists without exposing legacy or previous-account rows', async () => {
   const lateLinks =
     Promise.withResolvers<Ok<{ links: { id: string }[] }, unknown>>();
-  const lateChannels =
-    Promise.withResolvers<
-      Ok<{ items: { id: string }[]; next_cursor: null }, unknown>
-    >();
+  const lateChannels = Promise.withResolvers<ReturnType<typeof channelPage>>();
   api.links
     .mockResolvedValueOnce(ok({ links: [{ id: 'one-inbox' }] }))
     .mockReturnValueOnce(lateLinks.promise)
     .mockResolvedValueOnce(ok({ links: [{ id: 'two-inbox' }] }));
-  api.channels
-    .mockResolvedValueOnce(
-      ok({ items: [{ id: 'one-channel' }], next_cursor: null })
-    )
+  api.channelPages
+    .mockResolvedValueOnce(channelPage('one-channel'))
     .mockReturnValueOnce(lateChannels.promise)
-    .mockResolvedValueOnce(
-      ok({ items: [{ id: 'two-channel' }], next_cursor: null })
-    );
+    .mockResolvedValueOnce(channelPage('two-channel'));
   client.setQueryData(emailKeys.links._def, {
     links: [{ id: 'legacy-inbox' }],
   });
-  client.setQueryData(channelKeys.listChannels._def, [
-    { id: 'legacy-channel' },
+  client.setQueryData(channelKeys.directory._def, [
+    { id: channelUuid('legacy') },
   ]);
   function Lists() {
     const links = useEmailLinksQuery();
-    const channels = useListChannelsQuery();
+    const channels = useQuery(() =>
+      channelDirectoryPagesQueryOptions(viewer(), () => soupClient)
+    );
     return (
       <output>
         {JSON.stringify([
           links.isPending ? [] : links.data?.links.map((link) => link.id),
-          channels.isPending ? [] : channels.data?.map((channel) => channel.id),
+          channels.isPending
+            ? []
+            : channels.data?.map((channel) => channelName(channel.id)),
         ])}
       </output>
     );
@@ -120,7 +144,10 @@ it('switches mounted lists without exposing legacy or previous-account rows', as
   ));
   await view.findByText('[["one-inbox"],["one-channel"]]');
   const oldRefresh = client.refetchQueries();
-  await vi.waitFor(() => expect(api.channels).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => {
+    expect(api.links).toHaveBeenCalledTimes(2);
+    expect(api.channelPages).toHaveBeenCalledTimes(2);
+  });
   batch(() => {
     client.setQueryData(authKeys.userInfo.queryKey, {
       id: 'macro|two@example.com',
@@ -130,14 +157,17 @@ it('switches mounted lists without exposing legacy or previous-account rows', as
   });
   await view.findByText('[["two-inbox"],["two-channel"]]');
   lateLinks.resolve(ok({ links: [{ id: 'late-private-inbox' }] }));
-  lateChannels.resolve(
-    ok({ items: [{ id: 'late-private-channel' }], next_cursor: null })
-  );
+  lateChannels.resolve(channelPage('late-channel'));
   await oldRefresh;
   expect(view.container.textContent).toBe('[["two-inbox"],["two-channel"]]');
   expect(client.getQueryData(emailKeys.links(viewer()).queryKey)).toEqual({
     links: [{ id: 'two-inbox' }],
   });
+  expect(
+    client
+      .getQueryData<{ id: string }[]>(channelKeys.directory(viewer()).queryKey)
+      ?.map((channel) => channelName(channel.id))
+  ).toEqual(['two-channel']);
 });
 
 it('loads the approval link after sign-in is restored and fences a late result for another account', async () => {
@@ -396,4 +426,20 @@ it('loads chooser capabilities without coupling discovery to an OAuth callback o
     imap: true,
   });
   expect(api.providers).toHaveBeenCalledExactlyOnceWith(undefined);
+});
+
+// Directories ignore another sign-in's writes, but the store kept them, their
+// hold timers and the reads in flight until each hold ended.
+it('forgets the channel writes the previous sign-in made', async () => {
+  const own = ownChannelWrites(client);
+  const account = { userId: viewer(), session: 0 };
+  own.send(account, ['channel-1']).settle({ 'channel-1': null });
+  const late = own.send(account, ['channel-2']);
+  expect(Object.keys(own.writes())).toEqual(['channel-1']);
+
+  await resetQueryAccountSession();
+  late.settle({ 'channel-2': null });
+
+  expect(own.writes()).toEqual({});
+  expect(own.inFlight()).toEqual([]);
 });

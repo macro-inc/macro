@@ -32,7 +32,7 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { useAddInboxFlow } from '@core/email-link';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -120,11 +120,15 @@ export function HomeList(props: HomeListProps) {
   // A list reload may replace the empty state while its connect dialog is open.
   const connectInbox = useAddInboxFlow();
   const inlinePreviewLayout = useInlinePreviewLayout();
-  const channels = useChannelsContext();
-  const channelName = (entity: WithNotification<EntityData>) =>
-    entity.type === 'channel_thread'
-      ? getChannelThreadName(entity, channels.channelsById())
-      : undefined;
+  const directory = useChannelDirectory();
+  const channelName = (entity: WithNotification<EntityData>) => {
+    if (entity.type !== 'channel_thread') return undefined;
+    const current = loadedChannel(directory.lookup(entity.channelId));
+    return getChannelThreadName(
+      entity,
+      current ? { [current.id]: current } : {}
+    );
+  };
   const {
     state,
     composerFocusRequest,

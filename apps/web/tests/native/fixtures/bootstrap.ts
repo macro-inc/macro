@@ -75,8 +75,6 @@ export const bootstrapResponses = new Map<
   ['POST /email/email/links/health-check', { body: {} }],
   ['GET /calendar/calendars', { body: { calendars: [] } }],
   ['GET /contacts/contacts', { body: { contacts: [] } }],
-  ['GET /dss/comms/channels', { body: { items: [], next_cursor: null } }],
-  ['GET /dss/channels/activity', { body: [] }],
   ['GET /dss/bots', { body: [] }],
   ['GET /dss/agents', { body: [] }],
   ['GET /dss/harnesses', { body: [] }],
