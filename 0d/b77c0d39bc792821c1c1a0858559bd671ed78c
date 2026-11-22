@@ -1,0 +1,23 @@
+crates/scheduled_action/src/outbound/pg_scheduled_action_repo.rs
+  s_be0dcf8f48154b::t_73e229e6a2d672 215-245
+crates/scheduled_action/src/outbound/pg_scheduled_action_repo/test.rs
+  s_be0dcf8f48154b::t_e4f8d8ac243cff 225-267
+crates/scheduled_action/src/domain/ports.rs
+  s_be0dcf8f48154b::t_73e229e6a2d672 196-206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0db77c0d39bc792821c1c1a0858559bd671ed78c",
+  "prompts": {},
+  "sessions": {
+    "s_be0dcf8f48154b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84f26c56-f4ae-4114-a847-2d20de026f21",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
