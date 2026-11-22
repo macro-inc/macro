@@ -1,6 +1,6 @@
 -- The requested ids that are in the viewer's legacy directory, in request
--- order: self, a current teammate, or the other end of one of the viewer's
--- edges. $1 viewer, $2 canonical requested ids.
+-- order: self, a current teammate, someone the viewer's own inbox or invite
+-- names, or the other end of one of the viewer's edges. $1 viewer, $2 canonical requested ids.
 --
 -- Team joins no longer write edges, so teammates come from team_user, ids
 -- folded like the list-aware lookup; the roster is read once.
@@ -42,6 +42,19 @@ LEFT JOIN LATERAL (
 ) AS membership ON TRUE
 WHERE requested.contact = $1
    OR requested.contact COLLATE "C" IN (SELECT id FROM teammates)
+   -- The viewer's own inbox or invited row, so a contact the viewer really
+   -- has stays listed after a team removal deletes its edge.
+   OR EXISTS (
+       SELECT 1 FROM contact_inbox_members AS mine
+       WHERE mine.user_id = lower($1 COLLATE "C")
+         AND mine.contact_user_id = requested.contact
+   )
+   OR EXISTS (
+       SELECT 1 FROM contact_list_members AS mine
+       WHERE mine.user_id = lower($1 COLLATE "C")
+         AND mine.contact_user_id = requested.contact
+         AND mine.list_key = 'invited'
+   )
    -- An edge counts unless only the peer has the viewer, as in page.sql: the
    -- peer's inbox or invite names the viewer, and no list or inbox row of
    -- the viewer's names the peer. Ids in the lists are canonical, like

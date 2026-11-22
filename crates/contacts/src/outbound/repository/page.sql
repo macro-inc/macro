@@ -1,6 +1,6 @@
 -- One page of the viewer's legacy directory: both directions of their edges,
--- their current team, and self, in the default collation's order after the
--- cursor.
+-- their current team, their own inbox and invited rows, and self, in the
+-- default collation's order after the cursor.
 --
 -- Keep the viewer as a scalar initplan. With a high-degree viewer, substituting
 -- its literal into each branch can make Postgres scan a global ordering index
@@ -57,6 +57,30 @@ page AS MATERIALIZED (
             )
               AND teammate.user_id COLLATE "C" LIKE 'macro|%'
               AND lower(teammate.user_id COLLATE "C") COLLATE "default" > COALESCE($2::text, '')
+            ORDER BY 1
+            LIMIT $3
+        )
+        UNION ALL
+        (
+            -- The viewer's own inbox and invited rows: a contact the viewer
+            -- really has stays listed after a team removal deletes its edge.
+            -- The rows are C-collated and the page orders in the default
+            -- collation, so the viewer's rows after the cursor are sorted
+            -- here: a range read of the primary key, bounded by their count.
+            SELECT DISTINCT contact_user_id COLLATE "default", FALSE
+            FROM contact_inbox_members
+            WHERE user_id = lower($1 COLLATE "C")
+              AND contact_user_id COLLATE "default" > COALESCE($2::text, '')
+            ORDER BY 1
+            LIMIT $3
+        )
+        UNION ALL
+        (
+            SELECT contact_user_id COLLATE "default", FALSE
+            FROM contact_list_members
+            WHERE user_id = lower($1 COLLATE "C")
+              AND list_key = 'invited'
+              AND contact_user_id COLLATE "default" > COALESCE($2::text, '')
             ORDER BY 1
             LIMIT $3
         )

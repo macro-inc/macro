@@ -1,5 +1,5 @@
 -- The viewer's whole legacy directory, without self: the other end of each
--- edge and the current team. Team joins no longer write edges, so teammates
+-- edge, the current team, and the viewer's own inbox and invited rows. Team joins no longer write edges, so teammates
 -- come from team_user, folded like the list-aware directory.
 --
 -- A legacy edge says nothing about direction, so the directed lists decide,
@@ -57,3 +57,13 @@ WHERE own.user_id IN (
 )
   AND teammate.user_id COLLATE "C" LIKE 'macro|%'
   AND lower(teammate.user_id COLLATE "C") <> lower($1 COLLATE "C")
+UNION ALL
+-- The viewer's own inbox and invited rows, so a contact the viewer really has
+-- stays listed after a team removal deletes its edge.
+SELECT contact_user_id COLLATE "default"
+FROM contact_inbox_members
+WHERE user_id = lower($1 COLLATE "C")
+UNION ALL
+SELECT contact_user_id COLLATE "default"
+FROM contact_list_members
+WHERE user_id = lower($1 COLLATE "C") AND list_key = 'invited'

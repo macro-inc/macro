@@ -21,6 +21,16 @@ candidates AS MATERIALIZED (
         WHERE user2 = (SELECT id FROM viewer)
           AND user1 COLLATE "C" LIKE 'macro|%'
         UNION ALL
+        -- The viewer's own inbox and invited rows, so a contact the viewer
+        -- really has stays searchable after a team removal deletes its edge.
+        SELECT contact_user_id COLLATE "default", FALSE
+        FROM contact_inbox_members
+        WHERE user_id = lower((SELECT id FROM viewer) COLLATE "C")
+        UNION ALL
+        SELECT contact_user_id COLLATE "default", FALSE
+        FROM contact_list_members
+        WHERE user_id = lower((SELECT id FROM viewer) COLLATE "C") AND list_key = 'invited'
+        UNION ALL
         SELECT lower((SELECT id FROM viewer) COLLATE "C") COLLATE "default", FALSE
         UNION ALL
         -- A user has at most one team; its members include the viewer.
