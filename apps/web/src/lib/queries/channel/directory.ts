@@ -676,7 +676,7 @@ const readBackOutcome = (read: boolean | undefined) =>
     .with(true, () => 'read')
     .with(false, () => 'failed')
     .with(undefined, () => 'timed_out')
-    .exhaustive();
+    .exhaustive(() => 'timed_out');
 
 /** What `work` resolved to, if it settled within `timeoutMs`; undefined
  * once that passed, or at once when `signal` aborts. `work` must never
