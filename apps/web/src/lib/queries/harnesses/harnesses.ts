@@ -6,6 +6,8 @@ import {
 } from '@queries/access-requests/requests';
 import { invalidateAgents } from '@queries/agents/agents';
 import { queryClient } from '@queries/client';
+import { teammateHostKeys } from '@queries/team-agents/hosts-keys';
+import { teamAgentKeys } from '@queries/team-agents/keys';
 import {
   type Harness,
   type HarnessPairing,
@@ -278,6 +280,12 @@ export function useDeleteHarnessMutation() {
       // Agents bound to the removed harness now resolve to "Disconnected
       // harness"; refresh them so the agents surface reflects that.
       await invalidateAgents();
+      // Agent teammates it hosted are parked as it goes; show that now, and
+      // drop it from the machines an agent can be moved to.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: teamAgentKeys._def }),
+        queryClient.invalidateQueries({ queryKey: teammateHostKeys._def }),
+      ]);
     },
     onError: (error) => console.error('failed to delete harness', error),
   }));
