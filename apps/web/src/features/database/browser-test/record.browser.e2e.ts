@@ -133,6 +133,52 @@ for (const [name, viewport, touch] of [
         expect(new Set(arrows.map((arrow) => arrow.right)).size).toBe(1);
     });
 
+    test('ends short chips at the field’s edge on a phone', async ({
+      page,
+    }) => {
+      test.skip(name !== 'phone', 'Desktop chips keep their own width');
+      await open(page, 'tasks=one');
+      const edges = await page
+        .getByRole('dialog')
+        .locator('[data-record-field]', { hasText: 'Tasks' })
+        .evaluate((row) => {
+          const value = row
+            .querySelector('[data-record-field-value]')!
+            .getBoundingClientRect();
+          return [...row.querySelectorAll('[aria-label^="Open "]')].map(
+            (arrow) => value.right - arrow.getBoundingClientRect().right
+          );
+        });
+      expect(edges).toHaveLength(1);
+      // Each arrow sits within the cell's own padding of the field's edge.
+      for (const edge of edges) expect(edge).toBeLessThan(16);
+    });
+
+    test('Tabs through the chips and the more and less row on a phone', async ({
+      page,
+    }) => {
+      test.skip(name !== 'phone', 'Only a narrow panel has the row');
+      await open(page, 'tasks=many');
+      const focused = () =>
+        page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+      await page
+        .getByRole('button', { name: 'Open Brief the press list' })
+        .focus();
+      await page.keyboard.press('Tab');
+      await expect.poll(focused).toBe('+3 more Tasks');
+      await page.keyboard.press('Enter');
+      // The row stays focused as it turns into Show less.
+      await expect.poll(focused).toBe('Show less Tasks');
+      await page
+        .getByRole('button', { name: 'Open Hold the launch retro' })
+        .focus();
+      await page.keyboard.press('Tab');
+      await expect.poll(focused).toBe('Show less Tasks');
+      // From the row, Tab edits the next field.
+      await page.keyboard.press('Tab');
+      await expect.poll(focused).toBe('Edit Launch readiness (%)');
+    });
+
     test('shows many related records', async ({ page }) => {
       await open(page, 'tasks=many');
       const all = [
@@ -146,7 +192,7 @@ for (const [name, viewport, touch] of [
         'Hold the launch retro',
       ];
       const chips = () => clipped(page, '[data-relation-chip-name]');
-      const more = page.getByRole('button', { name: 'Show 3 more Tasks' });
+      const more = page.getByRole('button', { name: '+3 more Tasks' });
       if (name === 'phone') {
         // A phone shows five, then a row that opens the rest.
         await expect
@@ -161,7 +207,7 @@ for (const [name, viewport, touch] of [
           .poll(chips)
           .toEqual(all.map((text) => ({ text, cut: false })));
         // Show less puts it back to five.
-        await page.getByRole('button', { name: 'Show fewer Tasks' }).click();
+        await page.getByRole('button', { name: 'Show less Tasks' }).click();
         await expect
           .poll(chips)
           .toEqual(all.slice(0, 5).map((text) => ({ text, cut: false })));
@@ -169,7 +215,7 @@ for (const [name, viewport, touch] of [
       } else {
         await expect(more).toBeHidden();
         await expect(
-          page.getByRole('button', { name: 'Show fewer Tasks' })
+          page.getByRole('button', { name: 'Show less Tasks' })
         ).toBeHidden();
       }
       await expect

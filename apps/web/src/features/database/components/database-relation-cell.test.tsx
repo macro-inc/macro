@@ -399,19 +399,17 @@ describe('opening a related record from its chip', () => {
     expect(screen.getAllByRole('button', { name: /^Open / })).toHaveLength(20);
     expect(screen.getByText('+1')).toBeTruthy();
     // CSS keeps this to phones; it opens every chip.
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Show 16 more Customers' })
-    );
+    fireEvent.click(screen.getByRole('button', { name: '+16 more Customers' }));
     expect(screen.getAllByRole('button', { name: /^Open / })).toHaveLength(21);
     // A wide panel still caps at twenty: CSS hides the 21st and shows the count.
     expect(screen.getByText('+1')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /^Show \d+ more/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^\+\d+ more/ })).toBeNull();
     fireEvent.click(
-      screen.getByRole('button', { name: 'Show fewer Customers' })
+      screen.getByRole('button', { name: 'Show less Customers' })
     );
     expect(screen.getAllByRole('button', { name: /^Open / })).toHaveLength(20);
     expect(
-      screen.getByRole('button', { name: 'Show 16 more Customers' })
+      screen.getByRole('button', { name: '+16 more Customers' })
     ).toBeTruthy();
   });
 });

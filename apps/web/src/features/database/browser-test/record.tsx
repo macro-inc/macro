@@ -15,7 +15,7 @@ import type { DatabaseRow } from '../core/table';
  * The production record panel with the app's styles: an imported project
  * with long property names and several related tasks. `?tasks=many` relates
  * eight tasks, `?tasks=long` one with a long name and one with a long unbroken name, `?tasks=unavailable` one the
- * source cannot resolve; `?theme=dark` uses the dark theme.
+ * source cannot resolve, `?tasks=one` a single short one; `?theme=dark` uses the dark theme.
  */
 const params = new URLSearchParams(location.search);
 const name: DatabaseViewColumn = {
@@ -65,6 +65,7 @@ const RELATED = (() => {
   if (variant === 'many') return TASKS.slice(0, 8).map((task) => task.id);
   if (variant === 'long') return ['draft', 'long', 'token'];
   if (variant === 'unavailable') return ['draft', 'deleted-task'];
+  if (variant === 'one') return ['draft'];
   return ['draft', 'vendor', 'review'];
 })();
 const ROW: DatabaseRow = {
