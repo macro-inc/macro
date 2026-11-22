@@ -8,7 +8,7 @@
 
 use crate::domain::catalog::Overlays;
 use crate::domain::models::{
-    ApiRequest, ApiResponse, ConnectStep, ConnectorId, ConnectorKey, Surfaces, Upstream,
+    ApiRequest, ApiResponse, ConnectStep, ConnectorId, ConnectorKey, ServerUrl, Surfaces, Upstream,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_toolset::McpServer;
@@ -65,6 +65,30 @@ impl std::fmt::Debug for SourceConnection {
             .field("api", &self.api.is_some())
             .finish_non_exhaustive()
     }
+}
+
+/// Why a source refused an operation, carried as the context of the
+/// operation's report so the service answers with the matching
+/// [`ConnectorsError`](crate::domain::models::ConnectorsError) rather than an
+/// internal error.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum SourceRefusal {
+    /// The source holds no connection to this key for the user.
+    #[error("the source holds no connection to {0}")]
+    NotFound(ConnectorKey),
+    /// The connection's grant no longer works; only the user authorizing
+    /// again mends it.
+    #[error("the connection to {0} must be authorized again")]
+    NeedsReauth(ConnectorKey),
+    /// The source does not serve this key at all.
+    #[error("this source does not serve {0}")]
+    Unsupported(ConnectorKey),
+    /// An agent tried to add a server that is not public `https`.
+    #[error("`{0}` is not a public https URL")]
+    NonPublic(ServerUrl),
+    /// A server's display name is empty.
+    #[error("the name is empty")]
+    EmptyName,
 }
 
 /// One place a user's connections live.
@@ -135,10 +159,12 @@ pub(crate) trait Source: Send + Sync {
 pub(crate) trait McpConnection: Send + Sync {
     /// Open an MCP session in process, for chat and in-process agents.
     /// Credentials refreshed while connecting are persisted by the source.
+    /// A grant that no longer works fails with [`SourceRefusal::NeedsReauth`].
     async fn dial(&self) -> Result<McpServer, rootcause::Report>;
 
     /// The address and credential the egress proxy stamps onto a sandbox's
-    /// request, refreshed if it was about to expire.
+    /// request, refreshed if it was about to expire. A grant that no longer
+    /// works fails with [`SourceRefusal::NeedsReauth`].
     async fn upstream(&self) -> Result<Upstream, rootcause::Report>;
 }
 

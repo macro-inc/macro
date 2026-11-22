@@ -25,7 +25,7 @@ pub mod models;
     dead_code,
     reason = "the services in service.rs are implemented over these in the next step; remove this then"
 )]
-mod ports;
+pub(crate) mod ports;
 #[cfg_attr(
     not(test),
     expect(

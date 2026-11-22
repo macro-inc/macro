@@ -93,6 +93,20 @@ pub struct McpServerRecord {
     pub enabled: bool,
 }
 
+/// Open an MCP session to `url` with a fixed bearer token: a grant that
+/// lives elsewhere (the GitHub account link) and is never refreshed here.
+#[tracing::instrument(skip_all, err, fields(handshake = tracing::field::Empty))]
+pub(crate) async fn dial_with_bearer(
+    http: &impl McpServerHttp,
+    url: &url::Url,
+    bearer: &str,
+) -> anyhow::Result<McpServer> {
+    http.check_url(url)?;
+    let config = StreamableHttpClientTransportConfig::with_uri(url.as_str()).auth_header(bearer);
+    let transport = StreamableHttpClientTransport::with_client(http.transport(), config);
+    handshake(client_info().serve(transport)).await
+}
+
 impl McpConnector for McpServerRecord {
     #[tracing::instrument(skip_all, err, fields(handshake = tracing::field::Empty))]
     async fn connect<S: McpServerStore>(

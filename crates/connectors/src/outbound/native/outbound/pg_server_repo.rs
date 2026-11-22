@@ -187,3 +187,6 @@ impl PgServerRepo {
         })
     }
 }
+
+#[cfg(test)]
+mod test;

@@ -3,3 +3,13 @@ pub mod native;
 
 /// The hosted stack: apps users connect through Pipedream or Macro Connect.
 pub mod pipedream;
+
+/// GitHub, connected by the user's Macro account link.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "composition.rs wires the sources into the services in the next step; remove this then"
+    )
+)]
+pub(crate) mod github_link;

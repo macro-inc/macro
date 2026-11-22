@@ -29,6 +29,13 @@ and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
   (`server_directory.rs`), and `linked_github.rs`: `WithLinkedGithub`, which
   answers GitHub's server with the user's GitHub account link token. Hosts
   read the native store as `outbound::native::outbound::NativeServerStore`.
+- `src/outbound/native/source.rs`: `NativeSource`, the native rows behind
+  the `Source` port (every row is its `ServerUrl`; GitHub's row is skipped),
+  and `src/outbound/github_link.rs`: `GithubLinkSource`, GitHub as
+  `App(github)` from the account link (a refused token is held but not
+  authorized; removing it unlinks the account; its toggle stays in the
+  `mcp_servers` row at GitHub's address). Sources put a `SourceRefusal` in
+  their report so the service can answer with a typed error.
 - `src/outbound/native/domain/provider_registry.rs` (feature `providers`):
   pre-registered OAuth credentials for known MCP providers.
 - `src/outbound/pipedream/outbound/api.rs`: the Pipedream HTTP client and the
