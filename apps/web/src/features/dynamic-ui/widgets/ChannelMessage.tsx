@@ -100,7 +100,11 @@ export function ChannelMessage(props: ChannelMessageProps) {
               variant="ghost"
               size="sm"
               aria-label={t('agentCards.openInChannel')}
-              tooltip={t('agentCards.openInChannel')}
+              // Beside the button: below it, it covered the first message's time.
+              tooltip={{
+                content: t('agentCards.openInChannel'),
+                placement: 'left',
+              }}
               onClick={() => open(props.messageId)}
             >
               <ArrowSquareOutIcon class="size-4 sm:hidden" aria-hidden="true" />
