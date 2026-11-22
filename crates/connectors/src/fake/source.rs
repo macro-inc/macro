@@ -88,6 +88,8 @@ pub struct ApiCall {
 pub(crate) struct FakeStore {
     pub(crate) rows: Vec<FakeRow>,
     pub(crate) api_calls: Vec<ApiCall>,
+    /// Users whose connections no source can list, as when a store is down.
+    pub(crate) unreachable: Vec<MacroUserIdStr<'static>>,
 }
 
 /// The shared table.
@@ -183,6 +185,9 @@ impl Source for FakeSource {
         user: &MacroUserIdStr<'static>,
     ) -> Result<Vec<SourceConnection>, rootcause::Report> {
         let store = lock(&self.store);
+        if store.unreachable.contains(user) {
+            return Err(rootcause::report!("the store is down"));
+        }
 
         Ok(store
             .rows

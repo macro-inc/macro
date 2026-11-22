@@ -667,6 +667,56 @@ async fn holders_are_only_users_whose_counted_connection_gives_api() {
     assert_eq!(users, vec![user()]);
 }
 
+/// A background sync stops whoever `holders` leaves out, so a candidate
+/// it cannot resolve fails the call instead of being left out.
+#[tokio::test]
+async fn holders_fail_when_a_candidates_own_source_is_down() {
+    let world = World::new()
+        .holding(row(SourceKind::Pipedream, app_key("granola")))
+        .source_down(SourceKind::Pipedream);
+
+    assert!(world.connectors().holders(&app("granola")).await.is_err());
+}
+
+#[tokio::test]
+async fn holders_answer_without_a_source_that_holds_none_of_them() {
+    let world = World::new()
+        .holding(row(SourceKind::Pipedream, app_key("granola")))
+        .source_down(SourceKind::Connect)
+        .source_down(SourceKind::GithubLink)
+        .source_down(SourceKind::Native);
+
+    let holders = world.connectors().holders(&app("granola")).await.unwrap();
+
+    let users: Vec<_> = holders.iter().map(|handle| handle.user().clone()).collect();
+    assert_eq!(users, vec![user()]);
+}
+
+#[tokio::test]
+async fn holders_fail_when_a_candidates_flag_cannot_be_read() {
+    let world = World::new()
+        .flag_failing(&other_user())
+        .holding(row(SourceKind::Pipedream, app_key("granola")))
+        .holding(FakeRow::new(
+            other_user(),
+            SourceKind::Pipedream,
+            app_key("granola"),
+            true,
+        ));
+
+    assert!(world.connectors().holders(&app("granola")).await.is_err());
+}
+
+#[tokio::test]
+async fn holders_fail_when_connects_catalog_is_down_for_a_flagged_candidate() {
+    let world = World::new()
+        .flagged(&user())
+        .holding(row(SourceKind::Pipedream, app_key("granola")))
+        .catalog_down(SourceKind::Connect);
+
+    assert!(world.connectors().holders(&app("granola")).await.is_err());
+}
+
 // Managing connections.
 
 #[tokio::test]

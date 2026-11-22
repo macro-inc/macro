@@ -16,7 +16,7 @@ use crate::domain::ports::{
 use crate::domain::resolve::{self, Flag, Resolution};
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_toolset::{ConnectedServer, RemoteMcpToolSet};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -53,7 +53,11 @@ pub trait ApiConnectionsService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<ApiHandle>>> + Send;
 
     /// Every user with API access to an app. Granola's background sync uses
-    /// this.
+    /// this, and stops the sync of anyone left out, so the answer never
+    /// leaves out a user it could not resolve: the call fails instead, and
+    /// the caller retries. Only a source that lists the user as holding the
+    /// app (or the flag, or Connect's catalog) can fail it; any other source
+    /// being down does not.
     fn holders(&self, app: &ConnectorId) -> impl Future<Output = Result<Vec<ApiHandle>>> + Send;
 
     /// Call the app's API through a connection.
@@ -173,7 +177,7 @@ impl<O: OverlayCatalog> ReadOverlays for O {
 /// What to do when part of a user's answer cannot be read: one source's
 /// listing, or Connect's catalog.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum SourceOutage {
+enum SourceOutage<'a> {
     /// Answer without what is down. Safe for tool loading: leaving a source
     /// out only removes connections, and the rules never count a connection
     /// from a source other than the one they name. Connect's catalog being
@@ -184,6 +188,24 @@ enum SourceOutage {
     /// Fail the call: a listing or API lookup must not report "not
     /// connected" because a store was down.
     Fail,
+    /// Resolving a candidate from [`ApiConnectionsService::holders`], which
+    /// the named sources listed as holding the app: fail when one of them
+    /// cannot list, or when the flag or Connect's catalog cannot be read,
+    /// since any of those can change which connection counts. Answer
+    /// without any other source: by its own holder listing it holds no
+    /// enabled connection to the app, so leaving it out changes nothing.
+    Candidate(&'a [SourceKind]),
+}
+
+impl SourceOutage<'_> {
+    /// Whether the answer may go on without `kind`'s listing.
+    fn skips(self, kind: SourceKind) -> bool {
+        match self {
+            Self::Skip => true,
+            Self::Fail => false,
+            Self::Candidate(needed) => !needed.contains(&kind),
+        }
+    }
 }
 
 /// Everything the rules need for one user.
@@ -236,14 +258,17 @@ impl Connectors {
     async fn snapshot(
         &self,
         user: &MacroUserIdStr<'static>,
-        outage: SourceOutage,
+        outage: SourceOutage<'_>,
     ) -> Result<Snapshot> {
         let (flag, overlays, connections) = futures::join!(
             self.inner.flag.read(user),
             self.inner.overlays.read(),
             self.held(user, outage),
         );
-        let flag = Flag::from_read(flag);
+        let flag = match (flag, outage) {
+            (Err(error), SourceOutage::Candidate(_)) => return Err(error.into()),
+            (read, _) => Flag::from_read(read),
+        };
         let overlays = overlays?;
         let mut connections = connections?;
         let connect = match self.connect_support(flag, &overlays, &connections).await {
@@ -269,7 +294,7 @@ impl Connectors {
     async fn held(
         &self,
         user: &MacroUserIdStr<'static>,
-        outage: SourceOutage,
+        outage: SourceOutage<'_>,
     ) -> Result<Vec<SourceConnection>> {
         let listings = futures::future::join_all(
             self.inner
@@ -281,12 +306,12 @@ impl Connectors {
 
         let mut connections = Vec::new();
         for (kind, listing) in listings {
-            match (listing, outage) {
-                (Ok(held), _) => connections.extend(held),
-                (Err(error), SourceOutage::Skip) => {
+            match listing {
+                Ok(held) => connections.extend(held),
+                Err(error) if outage.skips(kind) => {
                     tracing::warn!(source = ?kind, error = ?error, "could not list a source's connections; answering without it");
                 }
-                (Err(error), SourceOutage::Fail) => return Err(error.into()),
+                Err(error) => return Err(error.into()),
             }
         }
 
@@ -411,6 +436,23 @@ impl Connectors {
         }
 
         Ok(holding)
+    }
+
+    /// The user's API access to `app`, as far as `outage` lets the answer
+    /// go without a source.
+    async fn api_handle(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        app: &ConnectorId,
+        outage: SourceOutage<'_>,
+    ) -> Result<Option<ApiHandle>> {
+        let snapshot = self.snapshot(user, outage).await?;
+
+        Ok(snapshot
+            .resolve(user)
+            .api
+            .into_iter()
+            .find(|handle| handle.app() == app))
     }
 
     /// The user's listing, as [`ConnectionManagementService::list`] answers.
@@ -541,54 +583,50 @@ impl ApiConnectionsService for Connectors {
         user: &MacroUserIdStr<'static>,
         app: &ConnectorId,
     ) -> Result<Option<ApiHandle>> {
-        let snapshot = self.snapshot(user, SourceOutage::Fail).await?;
-        let handle = snapshot
-            .resolve(user)
-            .api
-            .into_iter()
-            .find(|handle| handle.app() == app);
-
-        Ok(handle)
+        self.api_handle(user, app, SourceOutage::Fail).await
     }
 
-    #[tracing::instrument(name = "connectors.api_holders", skip(self), err, fields(holders = tracing::field::Empty, skipped = tracing::field::Empty))]
+    #[tracing::instrument(name = "connectors.api_holders", skip(self), err, fields(candidates = tracing::field::Empty, holders = tracing::field::Empty))]
     async fn holders(&self, app: &ConnectorId) -> Result<Vec<ApiHandle>> {
         // Every source's holders are only candidates: each user's own
         // resolution decides whether their counted connection gives API.
-        let listings =
-            futures::future::join_all(self.inner.sources.iter().map(|source| source.holders(app)))
-                .await;
-        let mut seen = HashSet::new();
-        let mut users = Vec::new();
-        for listing in listings {
+        let listings = futures::future::join_all(
+            self.inner
+                .sources
+                .iter()
+                .map(|source| async move { (source.kind(), source.holders(app).await) }),
+        )
+        .await;
+        // Each candidate once, with every source that listed them.
+        let mut candidates: Vec<(MacroUserIdStr<'static>, Vec<SourceKind>)> = Vec::new();
+        let mut index: HashMap<MacroUserIdStr<'static>, usize> = HashMap::new();
+        for (kind, listing) in listings {
             for user in listing? {
-                if seen.insert(user.clone()) {
-                    users.push(user);
+                if let Some((_, sources)) = index.get(&user).and_then(|&at| candidates.get_mut(at))
+                {
+                    sources.push(kind);
+                } else {
+                    index.insert(user.clone(), candidates.len());
+                    candidates.push((user, vec![kind]));
                 }
             }
         }
 
-        // A few users at a time; one user's failure skips that user, never
-        // the rest.
+        // A few users at a time. One user's failure fails the call: leaving
+        // them out would read as their connection being gone.
         let mut holders = Vec::new();
-        let mut skipped = 0_usize;
-        for batch in users.chunks(HOLDER_RESOLUTIONS_IN_FLIGHT) {
-            let answers =
-                futures::future::join_all(batch.iter().map(|user| self.connection(user, app)))
-                    .await;
+        for batch in candidates.chunks(HOLDER_RESOLUTIONS_IN_FLIGHT) {
+            let answers = futures::future::join_all(batch.iter().map(|(user, sources)| {
+                self.api_handle(user, app, SourceOutage::Candidate(sources))
+            }))
+            .await;
             for answer in answers {
-                match answer {
-                    Ok(handle) => holders.extend(handle),
-                    Err(error) => {
-                        skipped += 1;
-                        tracing::warn!(error = ?error, "could not resolve a holder's connection; skipping them");
-                    }
-                }
+                holders.extend(answer?);
             }
         }
         let span = tracing::Span::current();
+        span.record("candidates", candidates.len());
         span.record("holders", holders.len());
-        span.record("skipped", skipped);
 
         Ok(holders)
     }

@@ -112,6 +112,7 @@ pub struct FakeConnectors {
     overlays: Vec<(ConnectorId, ServerUrl)>,
     flags: HashMap<MacroUserIdStr<'static>, Result<bool, String>>,
     held: Vec<(MacroUserIdStr<'static>, FakeConnection)>,
+    unreachable: Vec<MacroUserIdStr<'static>>,
 }
 
 impl FakeConnectors {
@@ -152,6 +153,13 @@ impl FakeConnectors {
         self
     }
 
+    /// No source can list `user`'s connections, as when a store is down.
+    /// Every user it holds still counts as a candidate holder of their apps.
+    pub fn with_connections_unreachable(mut self, user: &MacroUserIdStr<'static>) -> Self {
+        self.unreachable.push(user.clone());
+        self
+    }
+
     /// `user` holds `connection`.
     pub fn with_connection(
         mut self,
@@ -179,6 +187,7 @@ impl FakeConnectors {
         *lock(&self.store) = FakeStore {
             rows,
             api_calls: Vec::new(),
+            unreachable: self.unreachable.clone(),
         };
 
         let source = |kind: SourceKind, supported: HashMap<ConnectorId, Surfaces>| FakeSource {
