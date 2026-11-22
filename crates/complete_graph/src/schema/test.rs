@@ -2407,6 +2407,70 @@ async fn soup_passes_team_receipt_to_raw_path() {
     );
 }
 
+/// Runs one Soup page with `PrimaryChannelSoup` in the request data and
+/// returns the response with the primary service's call count.
+async fn soup_page_with_primary_channel_soup(
+    harness: &TestHarness,
+    query: &str,
+) -> (async_graphql::Response, usize) {
+    let primary = CountingSoupService::default();
+    primary.set_raw_response(Vec::new());
+    let response = harness
+        .schema
+        .execute(
+            harness
+                .request(query, authenticated_parts())
+                .data(graphql_soup::PrimaryChannelSoup(Arc::new(primary.clone()))),
+        )
+        .await;
+    (response, primary.raw_calls.load(Ordering::SeqCst))
+}
+
+#[tokio::test]
+async fn soup_channel_reads_primary_runs_on_the_primary_channel_soup() {
+    let harness = harness();
+
+    let (response, primary_calls) = soup_page_with_primary_channel_soup(
+        &harness,
+        "{ user { soup(input: {initial: {channelReads: PRIMARY}}) { nextCursor } } }",
+    )
+    .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(primary_calls, 1);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn soup_channel_reads_default_and_replica_run_on_the_list_soup() {
+    for input in ["{}", "{channelReads: REPLICA}"] {
+        let harness = harness();
+
+        let (_response, primary_calls) = soup_page_with_primary_channel_soup(
+            &harness,
+            &format!("{{ user {{ soup(input: {{initial: {input}}}) {{ nextCursor }} }} }}"),
+        )
+        .await;
+
+        assert_eq!(primary_calls, 0, "{input}");
+        assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1, "{input}");
+    }
+}
+
+#[tokio::test]
+async fn soup_channel_reads_primary_errors_where_the_primary_channel_soup_is_missing() {
+    let harness = harness();
+
+    let response = harness
+        .execute("{ user { soup(input: {initial: {channelReads: PRIMARY}}) { nextCursor } } }")
+        .await;
+
+    assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+}
+
 #[tokio::test]
 async fn flat_soup_emits_server_fact_supplements_for_documents_and_mail() {
     let harness = harness();

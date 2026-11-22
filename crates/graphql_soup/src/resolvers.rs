@@ -25,7 +25,7 @@ use soup::domain::{
 use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
 
 use crate::{
-    inputs::{GroupedSoupInput, SoupInput},
+    inputs::{GroupedSoupInput, SoupChannelReads, SoupInput},
     loaders::{AgentSessionEntityLoader, PrimarySoupItemLoader, SoupItemDataLoader},
     objects::{
         GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup,
@@ -276,9 +276,28 @@ where
     }
 }
 
+/// The Soup service a page with `channelReads: PRIMARY` runs against: the
+/// same service as the ordinary one, except that its channel list reads the
+/// primary. The schema's context data carries it; a schema without it rejects
+/// such a page instead of quietly reading the replica.
+pub struct PrimaryChannelSoup<S>(pub Arc<S>);
+
+impl<S> Clone for PrimaryChannelSoup<S> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 /// Resolve a page of Soup items for the authenticated user: runs the lazy
 /// axum extractors against the request context, converts the GraphQL input
-/// into a Soup request, and executes it against the Soup service.
+/// into a Soup request, and executes it against the Soup service, or against
+/// [`PrimaryChannelSoup`] when the input asks for its channels from the
+/// primary.
+#[tracing::instrument(
+    name = "soup.page",
+    skip_all,
+    fields(channel_reads = tracing::field::Empty)
+)]
 pub async fn resolve_soup<S, E, EAS, Auth, St, Edges>(
     service: &S,
     ctx: &Context<'_>,
@@ -295,6 +314,22 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     Edges: SoupEntityEdges,
 {
+    let channel_reads = input.channel_reads();
+    tracing::Span::current().record(
+        "channel_reads",
+        match channel_reads {
+            SoupChannelReads::Replica => "replica",
+            SoupChannelReads::Primary => "primary",
+        },
+    );
+    let service: &S = match channel_reads {
+        SoupChannelReads::Replica => service,
+        SoupChannelReads::Primary => {
+            &ctx.data::<PrimaryChannelSoup<S>>()
+                .map_err(|_| async_graphql::Error::new("channelReads PRIMARY is not served here"))?
+                .0
+        }
+    };
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
     let Cached(MultiEmailLinkExtractor(links, _)) =
         extract_part::<Cached<MultiEmailLinkExtractor<E, Auth>>, St>(ctx).await?;
