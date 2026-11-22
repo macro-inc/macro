@@ -29,7 +29,6 @@ export function MessageFeedbackDrawerRows(props: { onDone: () => void }) {
           <MobileDrawer.Section class="flex flex-col shrink-0 mb-3">
             <MobileDrawer.Item
               aria-pressed={controller().rating() === 'up'}
-              disabled={controller().pending()}
               data-message-action="feedback-up"
               onClick={() => rate('up')}
             >
@@ -41,13 +40,10 @@ export function MessageFeedbackDrawerRows(props: { onDone: () => void }) {
                   <ThumbsUpFillIcon class="size-5" />
                 </Show>
               </span>
-              {controller().rating() === 'up'
-                ? t('agentFeedback.removeGood')
-                : t('agentFeedback.good')}
+              {t('agentFeedback.good')}
             </MobileDrawer.Item>
             <MobileDrawer.Item
               aria-pressed={controller().rating() === 'down'}
-              disabled={controller().pending()}
               data-message-action="feedback-down"
               onClick={() => rate('down')}
             >
@@ -59,9 +55,7 @@ export function MessageFeedbackDrawerRows(props: { onDone: () => void }) {
                   <ThumbsDownFillIcon class="size-5" />
                 </Show>
               </span>
-              {controller().rating() === 'down'
-                ? t('agentFeedback.removeBad')
-                : t('agentFeedback.bad')}
+              {t('agentFeedback.bad')}
             </MobileDrawer.Item>
             <Show when={controller().rating()}>
               <MobileDrawer.Item

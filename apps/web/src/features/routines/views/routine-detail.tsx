@@ -68,7 +68,6 @@ function lastRunTime(records: readonly HistoryRecord[]): string | undefined {
     : formatRelativeDate(latest);
 }
 
-/** Whether the routine's edits have reached the server, and if not, why. */
 /** A finished run, rated as the routine's response; undefined before it has ids. */
 function routineRunFeedbackSubject(
   routine: { id?: string | null } | undefined,
@@ -79,6 +78,7 @@ function routineRunFeedbackSubject(
   return { kind: 'routine_run', routineId, runId: record.id };
 }
 
+/** Whether the routine's edits have reached the server, and if not, why. */
 function SaveState(props: {
   saving: boolean;
   failed: boolean;
@@ -535,7 +535,7 @@ export function RoutineDetailView(props: {
                 onOpen={props.onOpenRun}
                 runActions={(record) => (
                   <ResponseFeedback
-                    subject={routineRunFeedbackSubject(schedule(), record)}
+                    subject={routineRunFeedbackSubject(schedule(), record())}
                     surface="routine_run"
                   />
                 )}

@@ -12,6 +12,10 @@ import {
   ResponseFeedbackProvider,
 } from '../context/response-feedback-context';
 
+function stopPropagation(event: Event) {
+  event.stopPropagation();
+}
+
 export function ResponseFeedbackScope(props: {
   controller: Accessor<ResponseFeedbackController | undefined>;
   children: JSX.Element;
@@ -21,19 +25,31 @@ export function ResponseFeedbackScope(props: {
       {props.children}
       <Show when={props.controller()}>
         {(controller) => (
-          <Show when={controller().noteDraft()}>
-            {(draft) => (
-              <FeedbackNoteDialog
-                open
-                rating={draft().rating}
-                initialNote={draft().note}
-                onSave={(note) =>
-                  fireAndForget(controller().saveNote(note), 'agent-feedback')
-                }
-                onSkip={() => controller().closeNote()}
-              />
-            )}
-          </Show>
+          // The dialog is portaled, but Solid still bubbles its events to the
+          // JSX parent: a click in it must not select the message row.
+          <div
+            class="contents"
+            onClick={stopPropagation}
+            onKeyDown={stopPropagation}
+            onPointerDown={stopPropagation}
+            onMouseDown={stopPropagation}
+            onFocusIn={stopPropagation}
+            onFocusOut={stopPropagation}
+          >
+            <Show when={controller().noteDraft()}>
+              {(draft) => (
+                <FeedbackNoteDialog
+                  open
+                  rating={draft().rating}
+                  initialNote={draft().note}
+                  onSave={(note) =>
+                    fireAndForget(controller().saveNote(note), 'agent-feedback')
+                  }
+                  onSkip={() => controller().closeNote()}
+                />
+              )}
+            </Show>
+          </div>
         )}
       </Show>
     </ResponseFeedbackProvider>

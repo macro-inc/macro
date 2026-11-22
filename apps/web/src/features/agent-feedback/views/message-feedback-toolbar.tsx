@@ -19,22 +19,13 @@ export function MessageFeedbackToolbar() {
   return (
     <Show when={feedback()?.ready() && feedback()}>
       {(controller) => {
-        const upLabel = () =>
-          controller().rating() === 'up'
-            ? t('agentFeedback.removeGood')
-            : t('agentFeedback.good');
-        const downLabel = () =>
-          controller().rating() === 'down'
-            ? t('agentFeedback.removeBad')
-            : t('agentFeedback.bad');
         return (
           <>
             <Toolbar.Group>
               <Toolbar.Button
-                aria-label={upLabel()}
+                aria-label={t('agentFeedback.good')}
                 aria-pressed={controller().rating() === 'up'}
-                tooltip={upLabel()}
-                disabled={controller().pending()}
+                tooltip={t('agentFeedback.good')}
                 data-message-action="feedback-up"
                 onClick={() =>
                   fireAndForget(controller().rate('up'), 'agent-feedback')
@@ -48,10 +39,9 @@ export function MessageFeedbackToolbar() {
                 </Show>
               </Toolbar.Button>
               <Toolbar.Button
-                aria-label={downLabel()}
+                aria-label={t('agentFeedback.bad')}
                 aria-pressed={controller().rating() === 'down'}
-                tooltip={downLabel()}
-                disabled={controller().pending()}
+                tooltip={t('agentFeedback.bad')}
                 data-message-action="feedback-down"
                 onClick={() =>
                   fireAndForget(controller().rate('down'), 'agent-feedback')

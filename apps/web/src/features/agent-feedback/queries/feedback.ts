@@ -5,7 +5,11 @@
  * responses in the same container are never undone with it.
  */
 
-import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
+import {
+  type ResultError,
+  thrownResultErrorHasCode,
+  throwOnErr,
+} from '@core/util/result';
 import { queryReadyGate } from '@queries/gate';
 import {
   type QueryClient,
@@ -43,17 +47,32 @@ type WriteVariables = {
 /** The response's rating before the write, to put back if it fails. */
 type WriteContext = { previous: MyFeedbackItem | undefined };
 
+function refusesFeedback(errors: ResultError<string>[]): boolean {
+  return errors.some(
+    (error) => error.code === 'NOT_FOUND' || error.code === 'FORBIDDEN'
+  );
+}
+
 function mineKey(container: FeedbackContainer) {
   return agentFeedbackKeys.mine(containerKey(container)).queryKey;
 }
 
+/**
+ * The container's ratings, or null when the person can't rate there: the
+ * server's flag is off for them (404) or they lost view access (403). Null is
+ * data, so a long transcript doesn't refetch a refusal per mounted reply.
+ */
 export function myFeedbackQueryOptions(
   client: AgentFeedbackClient,
   container: FeedbackContainer
 ) {
   return queryOptions({
     queryKey: mineKey(container),
-    queryFn: () => throwOnErr(() => client.mine(container)),
+    queryFn: async (): Promise<MyFeedbackItem[] | null> => {
+      const result = await client.mine(container);
+      if (result.isErr() && refusesFeedback(result.error)) return null;
+      return throwOnErr(async () => result);
+    },
   });
 }
 
@@ -64,7 +83,7 @@ function setItem(
   item: MyFeedbackItem | undefined
 ) {
   const key = responseKey(subject);
-  queryClient.setQueryData<MyFeedbackItem[]>(
+  queryClient.setQueryData<MyFeedbackItem[] | null>(
     mineKey(feedbackContainer(subject)),
     (items) => {
       if (!items) return items;
@@ -77,7 +96,7 @@ function setItem(
 function currentItem(queryClient: QueryClient, subject: FeedbackSubject) {
   const key = responseKey(subject);
   return queryClient
-    .getQueryData<MyFeedbackItem[]>(mineKey(feedbackContainer(subject)))
+    .getQueryData<MyFeedbackItem[] | null>(mineKey(feedbackContainer(subject)))
     ?.find((item) => item.key === key);
 }
 
@@ -170,10 +189,10 @@ export function createResponseFeedbackSource(
   );
 
   return {
-    ready: () => queryReadyGate(query),
+    ready: () => queryReadyGate(query) && query.data !== null,
     current: () => {
       if (!queryReadyGate(query)) return undefined;
-      return query.data.find((item) => item.key === key);
+      return query.data?.find((item) => item.key === key);
     },
     async write(id, write) {
       const result = await ResultAsync.fromPromise(

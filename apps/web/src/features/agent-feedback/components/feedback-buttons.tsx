@@ -1,6 +1,7 @@
 /**
  * Thumbs up and down for one agent response, and, once rated, a note button.
- * The pressed thumb is filled; pressing it again removes the rating.
+ * The pressed thumb is filled; pressing it again removes the rating. Clicks
+ * during a write are ignored by the caller, so focus never drops to the page.
  */
 import { t } from '@app/lib/i18n';
 import ThumbsDownFillIcon from '@icon/system/fill/thumbs-down-fill.svg';
@@ -15,19 +16,10 @@ import type { FeedbackRating } from '../core/subject';
 export function FeedbackButtons(props: {
   rating: FeedbackRating | undefined;
   hasNote: boolean;
-  pending: boolean;
   onRate: (rating: FeedbackRating) => void;
   onNote: () => void;
   class?: string;
 }) {
-  const upLabel = () =>
-    props.rating === 'up'
-      ? t('agentFeedback.removeGood')
-      : t('agentFeedback.good');
-  const downLabel = () =>
-    props.rating === 'down'
-      ? t('agentFeedback.removeBad')
-      : t('agentFeedback.bad');
   const noteLabel = () =>
     props.hasNote ? t('agentFeedback.editNote') : t('agentFeedback.addNote');
 
@@ -39,10 +31,9 @@ export function FeedbackButtons(props: {
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label={upLabel()}
+        aria-label={t('agentFeedback.good')}
         aria-pressed={props.rating === 'up'}
-        tooltip={upLabel()}
-        disabled={props.pending}
+        tooltip={t('agentFeedback.good')}
         onClick={() => props.onRate('up')}
       >
         <Show
@@ -55,10 +46,9 @@ export function FeedbackButtons(props: {
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label={downLabel()}
+        aria-label={t('agentFeedback.bad')}
         aria-pressed={props.rating === 'down'}
-        tooltip={downLabel()}
-        disabled={props.pending}
+        tooltip={t('agentFeedback.bad')}
         onClick={() => props.onRate('down')}
       >
         <Show

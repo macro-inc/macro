@@ -121,11 +121,13 @@ describe('ResponseFeedback', () => {
     mocks.fake?.release();
     expect(screen.queryByText('What was wrong with this response?')).toBeNull();
     expect(
-      (
-        await screen.findByRole('button', { name: 'Remove bad rating' })
-      ).getAttribute('aria-pressed')
+      (await screen.findByRole('button', { name: 'Edit note' })).isConnected
+    ).toBe(true);
+    expect(
+      screen
+        .getByRole('button', { name: 'Bad response' })
+        .getAttribute('aria-pressed')
     ).toBe('true');
-    expect(screen.getByRole('button', { name: 'Edit note' })).toBeTruthy();
   });
 });
 

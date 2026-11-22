@@ -17,8 +17,8 @@ export function MessageFeedbackIndicator() {
       {(controller) => {
         const label = () =>
           controller().rating() === 'up'
-            ? t('agentFeedback.ratedGood')
-            : t('agentFeedback.ratedBad');
+            ? t('agentFeedback.ratedGoodNote')
+            : t('agentFeedback.ratedBadNote');
         return (
           <div class="flex">
             <Button

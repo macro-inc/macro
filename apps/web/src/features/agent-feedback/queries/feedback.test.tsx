@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import type { ParentProps } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { FeedbackSubject } from '../core/subject';
-import { createFakeFeedbackClient } from '../tests/fake-client';
+import { createFakeFeedbackClient, httpFailure } from '../tests/fake-client';
 import { createResponseFeedbackSource } from './feedback';
 
 const SESSION = 'session-1';
@@ -100,6 +100,19 @@ describe('createResponseFeedbackSource', () => {
     expect(failed.isErr() && failed.error).toBe('forbidden');
     expect(sources.first.current()?.rating).toBe('down');
     expect(sources.second.current()?.rating).toBe('up');
+  });
+
+  it('reads a refusal once and offers nothing', async () => {
+    const fake = createFakeFeedbackClient();
+    fake.client.mine.mockResolvedValue(httpFailure('NOT_FOUND'));
+    const sources = setup(fake);
+
+    await vi.waitFor(() => expect(fake.client.mine).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+
+    expect(sources.first.ready()).toBe(false);
+    expect(sources.second.ready()).toBe(false);
+    expect(fake.client.mine).toHaveBeenCalledTimes(1);
   });
 
   it('removes a retracted rating, and restores it if the server refuses', async () => {

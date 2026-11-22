@@ -14,7 +14,6 @@ export function ResponseFeedbackButtons(props: { class?: string }) {
           class={props.class}
           rating={controller().rating()}
           hasNote={controller().note() !== null}
-          pending={controller().pending()}
           onRate={(rating) =>
             fireAndForget(controller().rate(rating), 'agent-feedback')
           }

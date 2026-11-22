@@ -101,7 +101,14 @@ export const agentFeedbackClient: AgentFeedbackClient = {
         `${host()}${containerPath(container)}/mine`,
         { method: 'GET', headers, trace: { parentSpan: span } }
       );
-      if (result.isErr()) span.error('Reading agent feedback failed');
+      // A 404 (flag off) or 403 is an answer, not a failure.
+      const refused =
+        result.isErr() &&
+        result.error.some(
+          (error) => error.code === 'NOT_FOUND' || error.code === 'FORBIDDEN'
+        );
+      if (result.isErr() && !refused)
+        span.error('Reading agent feedback failed');
       return result.map(({ items }) => {
         const rated = items.flatMap((item): MyFeedbackItem[] => {
           const key = itemKey(container, item);
