@@ -5,7 +5,9 @@
 //! `FinalizeImport`. The user comes from the request context, so the model
 //! can never stage on another user's behalf.
 
-use crate::domain::models::{ImportEntity, ImportSource, ImportStatus, Initiator, metadata_label};
+use crate::domain::models::{
+    ImportEntity, ImportSource, ImportStatus, Initiator, RunErrorKind, metadata_label,
+};
 use crate::domain::ports::{ImportError, ImportedDocumentProperties, ImportedDocumentProperty};
 use crate::domain::service::{
     DiscardOutcome, ImportFinalizer, ImportNotionPageOutcome, ImportStager, NotionPageImporter,
@@ -24,6 +26,37 @@ use uuid::Uuid;
 /// What the agent does after a workspace plan failed: tell the user once,
 /// instead of planning again, which fails the same way.
 const FAILED_NEXT: &str = "Tell the user in one sentence why it failed and what they can do about it. Do not plan again, check its status, or present a review until the user asks you to try again.";
+
+/// Why a workspace plan failed, for the agent, from its typed kind (never the
+/// raw error, which can carry provider detail).
+fn failure_reason(source: ImportSource, kind: Option<RunErrorKind>) -> String {
+    let name = source.label();
+    match kind {
+        Some(RunErrorKind::NotFound) => format!(
+            "{name} said something the import needs is missing or isn't shared with Macro's connection"
+        ),
+        Some(RunErrorKind::Forbidden) => {
+            format!("{name} doesn't let Macro's connection read part of the workspace")
+        }
+        Some(RunErrorKind::AccessLost) => format!(
+            "{name} no longer accepts Macro's connection (it was revoked or expired), so the user needs to reconnect {name}"
+        ),
+        Some(RunErrorKind::ConnectionUnavailable) => format!(
+            "Macro couldn't use the user's {name} connection, so the user needs to reconnect {name}"
+        ),
+        Some(RunErrorKind::NotConnected) => {
+            format!("{name} isn't connected, so the user needs to connect it")
+        }
+        Some(RunErrorKind::RateLimited) => {
+            format!("{name} kept rate limiting the import; it can be tried again later")
+        }
+        Some(RunErrorKind::Unreachable) => format!("{name} couldn't be reached"),
+        Some(RunErrorKind::UsageRefused) => {
+            "the AI work planning needs was refused (usage or billing)".to_string()
+        }
+        Some(RunErrorKind::Internal) | None => "something went wrong on Macro's side".to_string(),
+    }
+}
 
 mod import_from_notion;
 mod import_from_tracker;

@@ -108,6 +108,10 @@ pub struct CreateReview {
 /// Persisted review item state shared with typed system notifications.
 pub use agent_runtime_protocol::domain::notification::ItemStatus as ReviewItemStatus;
 
+/// Why a submit was refused before anything started.
+const NOT_APPROVABLE: &str =
+    "This review is not ready to approve yet. Check it again before approving.";
+
 /// Full UI record, fetched outside the model context.
 #[derive(Clone, Serialize, Deserialize, ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -494,7 +498,13 @@ impl ReviewService {
             .iter()
             .all(|item| item.status == ReviewItemStatus::Dismissed);
         if record.presented_at.is_none() && !never_shown {
-            record = self.present(record).await?;
+            let (session, id) = (record.session_id, record.id);
+            record = match self.present(record).await {
+                Ok(record) => record,
+                // Settled just now: a read returns it like any later read.
+                Err(CodeModeError::Unpresentable(_)) => self.store.get(session, id).await?,
+                Err(error) => return Err(error),
+            };
         }
         // A killed replica cannot leave a permanent spinner or permit a blind retry.
         if chrono::Utc::now().timestamp_millis() - record.updated_at > STALE_SUBMISSION_MS
@@ -620,18 +630,6 @@ impl ReviewService {
         {
             return Err(CodeModeError::Forbidden);
         }
-        if let ReviewDecision::Submit { .. } = decision {
-            let record = self.store.get(session, id).await?;
-            if self.record_actor(&record).await? != *actor {
-                return Err(CodeModeError::Forbidden);
-            }
-            if !self.actions.approvable(actor, &record).await? {
-                return Err(CodeModeError::Invalid(
-                    "This review is not ready to approve yet. Check it again before approving."
-                        .into(),
-                ));
-            }
-        }
         self.decide_owned(session, actor, id, decision, DecisionVia::Chat)
             .await
     }
@@ -702,6 +700,12 @@ impl ReviewService {
             .collect();
         if selected.is_empty() {
             return Ok(record);
+        }
+        // The card and the chat approve by the same rule: a kind whose
+        // action depends on other work (an import's ready plan) refuses
+        // until it can start.
+        if submit && !self.actions.approvable(actor, &record).await? {
+            return Err(CodeModeError::NotApprovable(NOT_APPROVABLE.into()));
         }
         if submit {
             for (position, (index, _)) in selected.iter().enumerate() {

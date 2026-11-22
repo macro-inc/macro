@@ -13,8 +13,8 @@ use uuid::Uuid;
 
 use super::{PgImportRepo, run_status_strings};
 use crate::domain::models::{
-    AdoptedRun, ImportSource, NotionJob, NotionSharing, ReviewedRun, RunReview, RunStatus,
-    WrittenKind, WrittenObject,
+    AdoptedRun, ImportSource, NotionJob, NotionSharing, ReviewedRun, RunErrorKind, RunReview,
+    RunStatus, WrittenKind, WrittenObject,
 };
 use crate::domain::ports::{ImportError, NotionRunRepo, Result, WrittenObjects};
 
@@ -225,6 +225,7 @@ impl NotionRunRepo for PgImportRepo {
         from: &[RunStatus],
         to: RunStatus,
         error: Option<&str>,
+        error_kind: Option<RunErrorKind>,
         event: Event,
     ) -> Result<Option<ReviewedRun>>
     where
@@ -238,6 +239,7 @@ impl NotionRunRepo for PgImportRepo {
             SET status = CASE WHEN status = 'dismissed' THEN status
                               ELSE $2::text::import_run_status END,
                 error = CASE WHEN status = 'dismissed' THEN error ELSE $3 END,
+                error_kind = CASE WHEN status = 'dismissed' THEN error_kind ELSE $6 END,
                 updated_at = NOW(), lease_owner = NULL, lease_expires_at = NULL
             WHERE user_id = $1 AND source = $5 AND status::text = ANY($4::text[])
             RETURNING status::text AS "status!", error, review_id, review_session_id
@@ -247,6 +249,7 @@ impl NotionRunRepo for PgImportRepo {
             error,
             &from,
             self.workspace_source.as_ref(),
+            error_kind.as_ref().map(|kind| kind.as_ref()),
         )
         .fetch_optional(&mut *transaction)
         .await?

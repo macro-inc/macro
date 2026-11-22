@@ -1296,3 +1296,249 @@ async fn a_review_is_refused_for_a_failed_or_missing_run_and_ties_nothing(pool: 
     assert_eq!(runs[0].status, RunStatus::Failed);
     assert_eq!(runs[0].review_id, None);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn only_the_ready_plan_a_review_holds_can_start_writing(pool: PgPool) {
+    let actor = ledger_actor(&pool, "fenced-write").await;
+    let repo = PgImportRepo::new(pool.clone());
+    let session = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO agent_session (id, owner_id, bot_id, harness, model, workspace, for_warming) VALUES ($1, $2, '00000000-0000-0000-0000-00000000a2a2', 'macro-inmem', 'test-model', '/workspace', false)"#,
+        session,
+        actor.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (first, second) = (Uuid::now_v7(), Uuid::now_v7());
+    for review in [first, second] {
+        sqlx::query!(
+            r#"INSERT INTO agent_session_review (id, agent_session_id, record) VALUES ($1, $2, '{}'::jsonb)"#,
+            review,
+            session,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let session = agent_session::domain::model::AgentSessionId::new_from_uuid(session);
+
+    // No run at all.
+    let missing = repo
+        .start_reviewed_write(&actor, ImportSource::Notion, first)
+        .await;
+    assert!(
+        matches!(
+            missing,
+            Err(ImportError::RunNotReviewable(UnreviewableRun::Missing))
+        ),
+        "{missing:?}"
+    );
+
+    // Presented while planning: it cannot be written until it is ready.
+    assert!(
+        repo.start_run(&actor, ImportSource::Notion, &[])
+            .await
+            .unwrap()
+    );
+    repo.replace_plan(
+        &actor,
+        ImportSource::Notion,
+        &[plan_row(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            None,
+            "Engineering",
+        )],
+    )
+    .await
+    .unwrap();
+    repo.attach_review(&actor, ImportSource::Notion, first, session)
+        .await
+        .unwrap();
+    let planning = repo
+        .start_reviewed_write(&actor, ImportSource::Notion, first)
+        .await;
+    assert!(
+        matches!(
+            planning,
+            Err(ImportError::RunNotReviewable(
+                UnreviewableRun::StillPlanning
+            ))
+        ),
+        "{planning:?}"
+    );
+
+    // Ready: a second review is refused, keeps the first review's hold, and
+    // cannot start the first review's write.
+    assert!(
+        repo.transition_run(
+            &actor,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Ready,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    let elsewhere = repo
+        .attach_review(&actor, ImportSource::Notion, second, session)
+        .await;
+    assert!(
+        matches!(
+            elsewhere,
+            Err(ImportError::RunNotReviewable(
+                UnreviewableRun::PresentedElsewhere
+            ))
+        ),
+        "{elsewhere:?}"
+    );
+    assert_eq!(
+        repo.list_runs(&actor).await.unwrap()[0].review_id,
+        Some(first)
+    );
+    let wrong_review = repo
+        .start_reviewed_write(&actor, ImportSource::Notion, second)
+        .await;
+    assert!(
+        matches!(
+            wrong_review,
+            Err(ImportError::RunNotReviewable(
+                UnreviewableRun::PresentedElsewhere
+            ))
+        ),
+        "{wrong_review:?}"
+    );
+
+    // The holding review starts the write, once.
+    repo.start_reviewed_write(&actor, ImportSource::Notion, first)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.list_runs(&actor).await.unwrap()[0].status,
+        RunStatus::Importing
+    );
+    let again = repo
+        .start_reviewed_write(&actor, ImportSource::Notion, first)
+        .await;
+    assert!(
+        matches!(
+            again,
+            Err(ImportError::RunNotReviewable(UnreviewableRun::Importing))
+        ),
+        "{again:?}"
+    );
+
+    // A replan that fails leaves the old review's card unable to write.
+    assert!(
+        repo.transition_run(
+            &actor,
+            ImportSource::Notion,
+            &[RunStatus::Importing],
+            RunStatus::Completed,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    assert!(
+        repo.start_run(&actor, ImportSource::Notion, &[RunStatus::Completed])
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.transition_run(
+            &actor,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Failed,
+            Some("Notion was unreachable"),
+        )
+        .await
+        .unwrap()
+    );
+    let failed = repo
+        .start_reviewed_write(&actor, ImportSource::Notion, first)
+        .await;
+    match failed {
+        Err(ImportError::RunNotReviewable(UnreviewableRun::Failed { error })) => {
+            assert_eq!(error.as_deref(), Some("Notion was unreachable"));
+        }
+        other => panic!("expected a failed-run refusal, got {other:?}"),
+    }
+    assert_eq!(
+        repo.list_runs(&actor).await.unwrap()[0].status,
+        RunStatus::Failed
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_plan_presented_while_ready_before_the_run_held_reviews_can_still_be_written(
+    pool: PgPool,
+) {
+    let actor = ledger_actor(&pool, "legacy-ready").await;
+    let repo = PgImportRepo::new(pool.clone());
+    let session = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO agent_session (id, owner_id, bot_id, harness, model, workspace, for_warming) VALUES ($1, $2, '00000000-0000-0000-0000-00000000a2a2', 'macro-inmem', 'test-model', '/workspace', false)"#,
+        session,
+        actor.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let review = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO agent_session_review (id, agent_session_id, record) VALUES ($1, $2, '{}'::jsonb)"#,
+        review,
+        session,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        repo.start_run(&actor, ImportSource::Notion, &[])
+            .await
+            .unwrap()
+    );
+    let staged = repo
+        .replace_plan(
+            &actor,
+            ImportSource::Notion,
+            &[plan_row(
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                None,
+                "Engineering",
+            )],
+        )
+        .await
+        .unwrap();
+    assert!(
+        repo.transition_run(
+            &actor,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Ready,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    // Tied the way older hosts did: the rows, not the run.
+    sqlx::query!(
+        "UPDATE import_entity SET review_id = $2 WHERE id = $1",
+        staged[0].id,
+        review,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    repo.start_reviewed_write(&actor, ImportSource::Notion, review)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.list_runs(&actor).await.unwrap()[0].status,
+        RunStatus::Importing
+    );
+}

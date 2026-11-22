@@ -20,7 +20,7 @@ use uuid::Uuid;
 use super::super::ImportServiceImpl;
 use super::super::notion_workspace::{notice_import_ids, report};
 use crate::domain::models::{
-    ImportSource, NotionImportReport, NotionReportItem, ReviewedRun, RunStatus,
+    ImportSource, NotionImportReport, NotionReportItem, ReviewedRun, RunErrorKind, RunStatus,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, NotionPlanRepo, NotionRunRepo, Result,
@@ -59,6 +59,7 @@ where
                 &[RunStatus::Importing, RunStatus::Dismissed],
                 to,
                 error,
+                None,
                 |run| {
                     let review = run.review?;
                     let settlement = settlement(source, &report, root_folder, run)?;
@@ -85,12 +86,13 @@ where
         user: &MacroUserIdStr<'static>,
         to: RunStatus,
         error: Option<&str>,
+        error_kind: Option<RunErrorKind>,
     ) -> Result<bool> {
         let report = self.current_report(user).await?;
         let source = self.workspace_source;
         let moved = self
             .repo
-            .transition_reviewed_run(user, &[RunStatus::Running], to, error, |run| {
+            .transition_reviewed_run(user, &[RunStatus::Running], to, error, error_kind, |run| {
                 let review = run.review?;
                 if run.status != RunStatus::Ready {
                     return None;

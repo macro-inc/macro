@@ -167,6 +167,7 @@ impl ImportRepo for Repo {
                 source,
                 status: RunStatus::Running,
                 error: None,
+                error_kind: None,
                 updated_at: chrono::Utc::now(),
                 scanned: None,
                 review_id: None,

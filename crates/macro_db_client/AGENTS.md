@@ -101,6 +101,10 @@ Task-template rows cascade with personal users or teams; nullable creator attrib
 team foreign key cascades, and the passwords repository includes it in retained
 data checks and explicit vault purge. It does not depend on a successful item.
 
+`import_run.error_kind` (migration `20261122042907`) is nullable TEXT checked
+against the import crate's `RunErrorKind`; NULL while a run has not failed and
+on runs that failed before it existed. Older binaries ignore it.
+
 `import_run.personal_root_folder_id` and `personal_folder_ids` are nullable,
 additive state owned by the import repository. Preserve both when a later run
 restarts, just like `root_folder_id`; they identify the user's persistent

@@ -30,7 +30,17 @@ take it too. Only a `running` or `ready` run takes a review: the harness checks
 the report before saving one, and `attach_review` refuses a run that is
 failed, being written, finished, cancelled or missing
 (`ImportError::RunNotReviewable`, a typed `UnreviewableRun` carrying the
-failure reason), so a failed plan never shows as an empty review.
+failure reason), so a failed plan never shows as an empty review. A ready
+run records the first review presenting it (`import_run.review_id`) and
+refuses any other (`PresentedElsewhere`). Writing starts only through
+`start_reviewed_write`: one statement moves the run from `ready` to
+`importing` while that review holds it (or, for plans presented before the
+run recorded reviews, its staged rows do), and otherwise refuses typed
+(`StillPlanning`, `PresentedElsewhere`, failed, finished). `SETTLED` only
+says which runs a new plan may replace. A failed plan records its
+`RunErrorKind` (`import_run.error_kind`, from `failure_kind`); the report
+and runs carry it, and the agent's message and the web copy are written
+from the kind, never from `error`.
 Planning stages the whole tree as soon as the inventory is read,
 each row without a `decision` yet, then writes each decision-model batch's
 verdicts onto its rows as it lands (`update_plan_rows`); the report counts
@@ -51,9 +61,9 @@ the decision model also answers `shared` per object), stored on the run so an
 adopted plan keeps it. A user on a team must choose it
 (`ImportError::NotionSharingRequired` tells the agent to ask); a user without
 one plans `personal` without being asked, and the report's `onTeam` says
-which. A failed plan's tool answer (`FAILED_NEXT` in `inbound/toolset.rs`)
-gives the run's reason and tells the agent to explain it once and not plan
-again until asked, since a replan fails the same way. Each
+which. A failed plan's tool answer (`failure_reason` and `FAILED_NEXT` in
+`inbound/toolset.rs`) explains the run's `error_kind` and tells the agent to
+say it once and not plan again until asked, since a replan fails the same way. Each
 plan item records `shared`, `sharedReason` and `shareable`
 (`notion_workspace/sharing.rs`). The owner can flip items on the review card;
 the draft's `shared`/`personal` lists are written onto the rows before the

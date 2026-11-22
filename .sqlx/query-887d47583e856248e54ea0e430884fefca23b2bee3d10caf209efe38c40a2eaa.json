@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT run.status::text AS \"status!\", run.error, run.review_id,\n                   EXISTS (\n                       SELECT 1 FROM import_entity AS entity\n                       WHERE entity.user_id = run.user_id AND entity.source = run.source\n                         AND entity.status = 'staged' AND entity.metadata->'plan' IS NOT NULL\n                         AND entity.review_id IS NOT NULL AND entity.review_id <> $3\n                   ) AS \"rows_presented_elsewhere!\"\n            FROM import_run AS run\n            WHERE run.user_id = $1 AND run.source = $2\n            FOR UPDATE OF run\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "review_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "rows_presented_elsewhere!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "887d47583e856248e54ea0e430884fefca23b2bee3d10caf209efe38c40a2eaa"
+}

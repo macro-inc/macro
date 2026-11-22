@@ -237,13 +237,20 @@ impl NotionPlanRepo for PgImportRepo {
         // so the card never shows a plan nobody can approve.
         let run = sqlx::query!(
             r#"
-            SELECT status::text AS "status!", error
-            FROM import_run
-            WHERE user_id = $1 AND source = $2
-            FOR UPDATE
+            SELECT run.status::text AS "status!", run.error, run.review_id,
+                   EXISTS (
+                       SELECT 1 FROM import_entity AS entity
+                       WHERE entity.user_id = run.user_id AND entity.source = run.source
+                         AND entity.status = 'staged' AND entity.metadata->'plan' IS NOT NULL
+                         AND entity.review_id IS NOT NULL AND entity.review_id <> $3
+                   ) AS "rows_presented_elsewhere!"
+            FROM import_run AS run
+            WHERE run.user_id = $1 AND run.source = $2
+            FOR UPDATE OF run
             "#,
             user.as_ref(),
             source.as_ref(),
+            review_id,
         )
         .fetch_optional(&mut *transaction)
         .await?
@@ -253,10 +260,20 @@ impl NotionPlanRepo for PgImportRepo {
         if let Some(refusal) = UnreviewableRun::of(status, run.error) {
             return Err(refusal.into());
         }
+        // A ready plan belongs to the review that presented it; another
+        // review would show it with none of its rows.
+        let held_elsewhere = match run.review_id {
+            Some(holder) => holder != review_id,
+            None => run.rows_presented_elsewhere,
+        };
+        if status == RunStatus::Ready && held_elsewhere {
+            return Err(UnreviewableRun::PresentedElsewhere.into());
+        }
         sqlx::query!(
             r#"
             UPDATE import_run
-            SET review_id = CASE WHEN status = 'running' THEN $3 ELSE review_id END,
+            SET review_id = CASE WHEN status = 'running' THEN $3
+                                 ELSE COALESCE(review_id, $3) END,
                 review_session_id = CASE WHEN status = 'running' THEN $4
                                          ELSE COALESCE(review_session_id, $4) END
             WHERE user_id = $1 AND source = $2 AND status IN ('running', 'ready')
@@ -286,6 +303,58 @@ impl NotionPlanRepo for PgImportRepo {
     }
 
     #[tracing::instrument(skip(self, user), err)]
+    async fn start_reviewed_write(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review_id: Uuid,
+    ) -> Result<()> {
+        let started = sqlx::query!(
+            r#"
+            UPDATE import_run AS run
+            SET status = 'importing', error = NULL, error_kind = NULL, updated_at = NOW(),
+                lease_owner = NULL, lease_expires_at = NULL
+            WHERE run.user_id = $1 AND run.source = $2 AND run.status = 'ready'
+              AND (run.review_id = $3
+                   OR (run.review_id IS NULL AND EXISTS (
+                       SELECT 1 FROM import_entity AS entity
+                       WHERE entity.review_id = $3 AND entity.user_id = $1
+                         AND entity.source = $2 AND entity.status = 'staged'
+                   )))
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+            review_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        if started.rows_affected() > 0 {
+            return Ok(());
+        }
+        // Nothing moved: say why, from the run as it is now.
+        let run = sqlx::query!(
+            r#"SELECT status::text AS "status!", error FROM import_run WHERE user_id = $1 AND source = $2"#,
+            user.as_ref(),
+            source.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(UnreviewableRun::Missing)?;
+        let status = RunStatus::from_str(&run.status)
+            .map_err(|_| anyhow::anyhow!("unknown run status: {}", run.status))?;
+        let refusal = match status {
+            RunStatus::Running => UnreviewableRun::StillPlanning,
+            RunStatus::Ready => UnreviewableRun::PresentedElsewhere,
+            RunStatus::Failed
+            | RunStatus::Importing
+            | RunStatus::Completed
+            | RunStatus::Dismissed => UnreviewableRun::of(status, run.error)
+                .ok_or_else(|| anyhow::anyhow!("a {} run refused a write", run.status))?,
+        };
+        Err(refusal.into())
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
     async fn transition_run(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -298,7 +367,8 @@ impl NotionPlanRepo for PgImportRepo {
         let result = sqlx::query!(
             r#"
             UPDATE import_run
-            SET status = $3::text::import_run_status, error = $4, updated_at = NOW(),
+            SET status = $3::text::import_run_status, error = $4, error_kind = NULL,
+                updated_at = NOW(),
                 lease_owner = NULL, lease_expires_at = NULL
             WHERE user_id = $1 AND source = $2 AND status::text = ANY($5::text[])
             "#,

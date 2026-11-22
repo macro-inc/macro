@@ -415,6 +415,7 @@ async fn a_reviewed_run_reports_its_review_and_a_cancel_survives_the_write_endin
             &[RunStatus::Running],
             RunStatus::Importing,
             None,
+            None,
             |_| None,
         )
         .await
@@ -445,6 +446,7 @@ async fn a_reviewed_run_reports_its_review_and_a_cancel_survives_the_write_endin
             &[RunStatus::Importing, RunStatus::Dismissed],
             RunStatus::Completed,
             None,
+            None,
             |run| {
                 seen = Some(run.status);
                 None
@@ -463,6 +465,7 @@ async fn a_reviewed_run_reports_its_review_and_a_cancel_survives_the_write_endin
             &[RunStatus::Importing],
             RunStatus::Completed,
             None,
+            None,
             |_| None
         )
         .await
@@ -480,6 +483,7 @@ async fn a_reviewed_run_reports_its_review_and_a_cancel_survives_the_write_endin
             &alice,
             &[RunStatus::Dismissed],
             RunStatus::Dismissed,
+            None,
             None,
             |_| None,
         )
@@ -880,5 +884,39 @@ async fn notice_markers_alone_do_not_retain_a_staged_generation(pool: PgPool) {
             .await
             .unwrap()
             .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_plan_keeps_its_error_kind_until_the_next_plan(pool: PgPool) {
+    let repo = PgImportRepo::new(pool.clone());
+    let alice = user("failed-kind");
+    repo.start_run(&alice, ImportSource::Notion, &[])
+        .await
+        .unwrap();
+
+    repo.transition_reviewed_run(
+        &alice,
+        &[RunStatus::Running],
+        RunStatus::Failed,
+        Some("Notion no longer accepts Macro's connection (it was revoked or expired); reconnect Notion"),
+        Some(RunErrorKind::AccessLost),
+        |_| None,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let runs = repo.list_runs(&alice).await.unwrap();
+    assert_eq!(runs[0].status, RunStatus::Failed);
+    assert_eq!(runs[0].error_kind, Some(RunErrorKind::AccessLost));
+
+    repo.start_run(&alice, ImportSource::Notion, &[RunStatus::Failed])
+        .await
+        .unwrap();
+    let runs = repo.list_runs(&alice).await.unwrap();
+    assert_eq!(runs[0].status, RunStatus::Running);
+    assert_eq!(
+        runs[0].error_kind, None,
+        "a new plan starts without the old failure"
     );
 }

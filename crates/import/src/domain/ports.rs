@@ -3,7 +3,7 @@
 use super::models::{
     AdoptedRun, ImportEntity, ImportKind, ImportRun, ImportSource, ImportSourceBinding,
     ImportStatus, ImportTargetKey, ImportTargetKind, ImportTargetReservation, Initiator, NotionJob,
-    ReviewedRun, RunStatus, ScanCounts, SlackConversationId, SlackConversationPage,
+    ReviewedRun, RunErrorKind, RunStatus, ScanCounts, SlackConversationId, SlackConversationPage,
     SlackMemberPage, SlackUserPage, SlackWorkspaceId, TeamClaim, WrittenObject,
 };
 use agent_session::domain::model::AgentSessionId;
@@ -98,6 +98,12 @@ pub enum UnreviewableRun {
     /// The import was cancelled; plan again to review a new plan.
     #[error("this import was cancelled; plan it again to review a new plan")]
     Dismissed,
+    /// The plan is still being made, so it cannot be written yet.
+    #[error("this import plan is still being made; it can be approved once it is ready")]
+    StillPlanning,
+    /// Another review presents this plan; only that review can approve it.
+    #[error("another review presents this import plan; approve that one instead")]
+    PresentedElsewhere,
 }
 
 impl UnreviewableRun {
@@ -1025,9 +1031,10 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
     /// staged rows, and the run while it is still planning (`running`), so
     /// rows staged later are tied too. The first review presenting a plan
     /// keeps its session, which hears when the plan is ready and when its
-    /// write ends. Returns how many rows it tied, or
-    /// [`ImportError::RunNotReviewable`] when the run is not planning or
-    /// ready (failed, finished, or missing), changing nothing.
+    /// write ends. A ready run takes the review too when it has none yet.
+    /// Returns how many rows it tied, or [`ImportError::RunNotReviewable`]
+    /// when the run is not planning or ready (failed, finished, or missing)
+    /// or another review already holds it, changing nothing.
     fn attach_review(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -1035,6 +1042,19 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
         review_id: Uuid,
         session_id: AgentSessionId,
     ) -> impl Future<Output = Result<u64>> + Send;
+
+    /// Start writing the plan `review_id` presents: move the run from
+    /// `ready` to `importing` in one statement, only while that review holds
+    /// it (`import_run.review_id`, or, for a plan presented before the run
+    /// recorded its review, staged rows tied to it). Otherwise change nothing
+    /// and refuse with [`ImportError::RunNotReviewable`]: still planning,
+    /// another review's plan, or a failed, finished, cancelled or missing run.
+    fn start_reviewed_write(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review_id: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Move `user`'s run for `source` to `to` when it is in one of `from`,
     /// dropping any lease on it. Returns whether the run moved.
@@ -1111,8 +1131,8 @@ pub trait NotionRunRepo: Send + Sync + 'static {
         limit: u16,
     ) -> impl Future<Output = Result<Vec<AdoptedRun>>> + Send;
 
-    /// Move the user's Notion run to `to` with `error` when it is in one of
-    /// `from`, dropping any lease on it; a run cancelled meanwhile stays
+    /// Move the user's Notion run to `to` with `error` and its `error_kind`
+    /// when it is in one of `from`, dropping any lease on it; a run cancelled meanwhile stays
     /// `dismissed` with its own error. In the same transaction, produce the
     /// system event `event` makes of the moved run, so the session presenting
     /// its review hears of the change exactly when it happens. Returns the
@@ -1123,6 +1143,7 @@ pub trait NotionRunRepo: Send + Sync + 'static {
         from: &[RunStatus],
         to: RunStatus,
         error: Option<&str>,
+        error_kind: Option<RunErrorKind>,
         event: Event,
     ) -> impl Future<Output = Result<Option<ReviewedRun>>> + Send
     where

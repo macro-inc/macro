@@ -1241,7 +1241,7 @@ async fn a_chat_submit_waits_until_the_review_is_approvable() {
         f.service
             .decide_for_session(f.session, &f.actions.owner, row.id, submit.clone())
             .await,
-        Err(CodeModeError::Invalid(_))
+        Err(CodeModeError::NotApprovable(_))
     ));
     let unsaved = f.store.get(f.session, row.id).await.unwrap();
     assert_eq!(unsaved.revision, row.revision);
@@ -1443,4 +1443,77 @@ async fn a_saved_review_that_can_never_be_presented_is_dismissed_and_not_retried
         1,
         "presented once"
     );
+}
+
+#[tokio::test]
+async fn the_card_cannot_approve_a_review_that_is_not_approvable() {
+    let f = Fixture::new();
+    let row = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await
+        .unwrap();
+    // The plan failed or was replaced after the card was shown.
+    f.actions.approvable.store(false, Ordering::SeqCst);
+
+    let refused = f
+        .service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            ReviewDecision::Submit {
+                revision: row.revision,
+                items: vec![],
+            },
+        )
+        .await;
+    match refused {
+        Err(CodeModeError::NotApprovable(_)) => {}
+        Err(error) => panic!("expected a typed refusal, got {error:?}"),
+        Ok(_) => panic!("the card approved a plan that cannot be written"),
+    }
+    let unsaved = f.store.get(f.session, row.id).await.unwrap();
+    assert_eq!(unsaved.revision, row.revision);
+    assert_eq!(unsaved.items.states()[0].status, ReviewItemStatus::Pending);
+    assert!(
+        f.actions.calls.lock().unwrap().is_empty(),
+        "no import started"
+    );
+}
+
+#[tokio::test]
+async fn a_read_that_finds_a_review_can_never_be_presented_returns_it_settled() {
+    let f = Fixture::new();
+    // Presentation fails once for a passing reason, so the review is saved
+    // unpresented; by the next read it can never be presented.
+    f.actions.fail_presentation.store(true, Ordering::SeqCst);
+    let saved = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await;
+    assert!(saved.is_err());
+    f.actions.fail_presentation.store(false, Ordering::SeqCst);
+    *f.actions.unpresentable.lock().unwrap() = Some("the import plan failed".into());
+
+    let listed = f.service.list(&f.view(), f.execution).await.unwrap();
+    let [record] = listed.as_slice() else {
+        panic!("expected the one saved review");
+    };
+    assert_eq!(record.presented_at, None);
+    assert_eq!(record.items.states()[0].status, ReviewItemStatus::Dismissed);
+    assert_eq!(
+        record.items.states()[0].error.as_deref(),
+        Some("the import plan failed")
+    );
+    let read = f.service.read(&f.view(), record.id).await.unwrap();
+    assert_eq!(read.items.states()[0].status, ReviewItemStatus::Dismissed);
 }

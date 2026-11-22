@@ -133,13 +133,15 @@ of the account that later sends the email or creates the event. Cards require
 direct user authentication; programs (`macro_authorization::is_program_run`:
 agent or routine attribution, or the execution header) cannot edit, submit, or dismiss through the HTTP decision endpoint,
 which refuses them before decoding the decision; `DecideReview` requires a real turn prompted by the
-review's acting account, and its Submit waits for `ReviewActions::approvable`
-(default: always), the hook a kind uses to refuse until it is ready. Creating a
+review's acting account. Every Submit, from the card or the chat, waits for
+`ReviewActions::approvable` (default: always), the hook a kind uses to refuse
+until it is ready, and is refused with `CodeModeError::NotApprovable` (409). Creating a
 review first asks `ReviewActions::presentable` (default: always), so a review
 that cannot be presented (an import whose plan failed) is refused and never
 saved. A saved, unpresented review is presented again on every read, unless
 presenting it failed with `CodeModeError::Unpresentable`: it is then dismissed
-with the reason and never presented. `GetReview`
+with the reason and never presented. Creating it reports that error once;
+reads and lists return the settled review. `GetReview`
 reads final
 drafts and outcomes. Legacy notificationId/notificationAttemptAt fields are no
 longer delivery state.

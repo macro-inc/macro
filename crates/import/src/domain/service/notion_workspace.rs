@@ -28,7 +28,7 @@ use uuid::Uuid;
 use super::{ImportServiceImpl, NOTION_IMPORT_MODEL, NotionWorkspaceImporter};
 use crate::domain::models::{
     ImportEntity, ImportKind, ImportSource, ImportStatus, NotionDecision, NotionImportReport,
-    NotionJob, NotionSharing, NotionWriteChoices, RunStatus, ScanCounts,
+    NotionJob, NotionSharing, NotionWriteChoices, RunErrorKind, RunStatus, ScanCounts,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility, NotionPlanRepo,
@@ -126,6 +126,8 @@ impl NotionApi for NoNotionApi {
 }
 
 /// Run states a new plan or write may start from.
+/// Runs a new plan may replace. Never a write's guard: writing starts only
+/// from the review's own ready plan (`start_reviewed_write`).
 const SETTLED: [RunStatus; 4] = [
     RunStatus::Ready,
     RunStatus::Completed,
@@ -282,21 +284,11 @@ where
             }
         }
         let team_id = self.repo.user_team_id(user).await?;
-        if !self
-            .repo
-            .transition_run(
-                user,
-                self.workspace_source,
-                &SETTLED,
-                RunStatus::Importing,
-                None,
-            )
-            .await?
-        {
-            return Err(ImportError::NotReady(
-                "A workspace import is already being planned or written.",
-            ));
-        }
+        // Only the ready plan this review presents is written: a failed,
+        // replaced or still-planning plan is refused here, whoever approved.
+        self.repo
+            .start_reviewed_write(user, self.workspace_source, review_id)
+            .await?;
         self.hold_new_run(user, RunStatus::Importing, &NotionJob::Write { review_id })
             .await?;
 
@@ -427,15 +419,16 @@ where
                 // Cancelled: the run is `dismissed` already.
                 None => Ok(()),
             };
-            let (to, error) = match &outcome {
-                Ok(()) => (RunStatus::Ready, None),
+            let (to, error, kind) = match &outcome {
+                Ok(()) => (RunStatus::Ready, None, None),
                 Err(error) => {
-                    tracing::warn!(error = ?error, "notion import planning failed");
-                    (RunStatus::Failed, Some(failure_text(error)))
+                    let kind = failure_kind(error);
+                    tracing::warn!(error = ?error, kind = kind.as_ref(), "notion import planning failed");
+                    (RunStatus::Failed, Some(failure_text(error)), Some(kind))
                 }
             };
             // A cancelled run is `dismissed` already, so this moves nothing.
-            if let Err(error) = self.end_plan(user, to, error.as_deref()).await {
+            if let Err(error) = self.end_plan(user, to, error.as_deref(), kind).await {
                 tracing::warn!(error = ?error, "could not record the notion planning outcome");
             }
             self.notify(user).await;
@@ -885,6 +878,50 @@ impl Place<'_> {
 }
 
 /// A failure as the user reads it on the run or the row.
+/// The kind of a planning failure, recorded on the run for what the user and
+/// the agent are told.
+pub(super) fn failure_kind(error: &ImportError) -> RunErrorKind {
+    use import_notion::domain::ports::NotionError;
+    use import_tracker::domain::model::TrackerError;
+    match error {
+        ImportError::Notion(error) => match error {
+            NotionError::NotFound => RunErrorKind::NotFound,
+            NotionError::Forbidden => RunErrorKind::Forbidden,
+            NotionError::AccessLost => RunErrorKind::AccessLost,
+            NotionError::ConnectionUnavailable => RunErrorKind::ConnectionUnavailable,
+            NotionError::RateLimited { .. } => RunErrorKind::RateLimited,
+            NotionError::Upstream { .. } | NotionError::Transport(_) => RunErrorKind::Unreachable,
+            NotionError::Decode(_) => RunErrorKind::Internal,
+        },
+        ImportError::Tracker(error) => match error {
+            TrackerError::NotConnected => RunErrorKind::NotConnected,
+            TrackerError::Forbidden(401) => RunErrorKind::AccessLost,
+            TrackerError::Forbidden(_) => RunErrorKind::Forbidden,
+            TrackerError::Upstream { status: 401, .. } => RunErrorKind::AccessLost,
+            TrackerError::Upstream { status: 404, .. } => RunErrorKind::NotFound,
+            TrackerError::Upstream { status: 429, .. } => RunErrorKind::RateLimited,
+            TrackerError::Upstream { .. } | TrackerError::Transport(_) => RunErrorKind::Unreachable,
+            TrackerError::Decode(_) => RunErrorKind::Internal,
+        },
+        ImportError::NotionNotConnected => RunErrorKind::NotConnected,
+        ImportError::Admission(_) => RunErrorKind::UsageRefused,
+        ImportError::UnsupportedDiscovery(_)
+        | ImportError::Db(_)
+        | ImportError::Metadata(_)
+        | ImportError::SourceConfirmationRequired
+        | ImportError::SourceMismatch
+        | ImportError::TargetConflict
+        | ImportError::TargetNotReserved
+        | ImportError::NotionSharingRequired
+        | ImportError::NotReady(_)
+        | ImportError::EntityNotAccessible(_)
+        | ImportError::ImportRunning
+        | ImportError::AccessCheck(_)
+        | ImportError::RunNotReviewable(_)
+        | ImportError::Other(_) => RunErrorKind::Internal,
+    }
+}
+
 fn failure_text(error: &ImportError) -> String {
     match error {
         ImportError::Other(error) => super::admission::failure_reason(error),

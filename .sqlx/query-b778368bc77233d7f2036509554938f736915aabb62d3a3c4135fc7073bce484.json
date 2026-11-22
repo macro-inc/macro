@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT status::text AS \"status!\", error\n            FROM import_run\n            WHERE user_id = $1 AND source = $2\n            FOR UPDATE\n            ",
+  "query": "SELECT status::text AS \"status!\", error FROM import_run WHERE user_id = $1 AND source = $2",
   "describe": {
     "columns": [
       {
@@ -25,5 +25,5 @@
       true
     ]
   },
-  "hash": "aa461bda15684bb685bd078cdc9888d8c22ee85eea2509184a7dd2f394a6e3fc"
+  "hash": "b778368bc77233d7f2036509554938f736915aabb62d3a3c4135fc7073bce484"
 }

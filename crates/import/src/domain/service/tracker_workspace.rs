@@ -193,21 +193,9 @@ where
             }
         }
         self.repo.set_plan_sharing(user, &shared, &personal).await?;
-        if !self
-            .repo
-            .transition_run(
-                user,
-                self.workspace_source,
-                &[RunStatus::Ready],
-                RunStatus::Importing,
-                None,
-            )
-            .await?
-        {
-            return Err(ImportError::NotReady(
-                "This import is already being written.",
-            ));
-        }
+        self.repo
+            .start_reviewed_write(user, self.workspace_source, review)
+            .await?;
         self.hold_new_run(
             user,
             RunStatus::Importing,

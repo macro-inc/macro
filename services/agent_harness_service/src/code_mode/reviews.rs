@@ -166,7 +166,12 @@ where
                 },
             )
             .await
-            .map_err(|error| CodeModeError::Invalid(error.to_string()))
+            .map_err(|error| match error {
+                import::domain::ports::ImportError::RunNotReviewable(refusal) => {
+                    CodeModeError::NotApprovable(format!("The import was not started: {refusal}."))
+                }
+                error => CodeModeError::Invalid(error.to_string()),
+            })
     }
     async fn present(
         &self,

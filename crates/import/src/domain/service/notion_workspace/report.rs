@@ -35,6 +35,7 @@ pub(in crate::domain::service) fn report(
     let mut report = NotionImportReport {
         status: run.map(|run| run.status),
         error: run.and_then(|run| run.error.clone()),
+        error_kind: run.and_then(|run| run.error_kind),
         scanned: run
             .filter(|run| run.status == RunStatus::Running)
             .and_then(|run| run.scanned),

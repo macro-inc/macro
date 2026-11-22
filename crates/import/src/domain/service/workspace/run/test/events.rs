@@ -68,13 +68,13 @@ async fn a_plan_presented_while_planning_tells_its_session_once_it_is_ready(pool
 
     assert!(
         service
-            .end_plan(&owner, RunStatus::Ready, None)
+            .end_plan(&owner, RunStatus::Ready, None, None)
             .await
             .unwrap()
     );
     assert!(
         !service
-            .end_plan(&owner, RunStatus::Ready, None)
+            .end_plan(&owner, RunStatus::Ready, None, None)
             .await
             .unwrap(),
         "a plan is ready once"
@@ -126,7 +126,7 @@ async fn a_linear_plan_tells_its_session_it_came_from_linear(pool: PgPool) {
 
     assert!(
         service
-            .end_plan(&owner, RunStatus::Ready, None)
+            .end_plan(&owner, RunStatus::Ready, None, None)
             .await
             .unwrap()
     );
@@ -155,7 +155,12 @@ async fn a_plan_that_fails_tells_no_session_it_is_ready(pool: PgPool) {
 
     assert!(
         service
-            .end_plan(&owner, RunStatus::Failed, Some("Notion was unreachable"))
+            .end_plan(
+                &owner,
+                RunStatus::Failed,
+                Some("Notion was unreachable"),
+                Some(RunErrorKind::Unreachable)
+            )
             .await
             .unwrap()
     );

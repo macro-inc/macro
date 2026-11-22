@@ -113,6 +113,7 @@ fn the_report_counts_the_current_plan_and_lists_what_needs_attention() {
         source: ImportSource::Notion,
         status: RunStatus::Importing,
         error: None,
+        error_kind: None,
         updated_at: Utc.with_ymd_and_hms(2026, 10, 19, 12, 0, 0).unwrap(),
         scanned: None,
         review_id: None,
@@ -165,6 +166,7 @@ fn while_planning_the_report_carries_what_notion_has_shown_so_far() {
         source: ImportSource::Notion,
         status: RunStatus::Running,
         error: None,
+        error_kind: None,
         updated_at: Utc.with_ymd_and_hms(2026, 10, 19, 12, 0, 0).unwrap(),
         scanned: Some(ScanCounts {
             pages: 40,
@@ -288,6 +290,7 @@ fn a_plan_presented_while_it_is_decided_counts_what_is_undecided_under_the_runs_
         source: ImportSource::Notion,
         status: RunStatus::Running,
         error: None,
+        error_kind: None,
         updated_at: Utc.with_ymd_and_hms(2026, 10, 19, 12, 0, 0).unwrap(),
         scanned: None,
         review_id: Some(review),
