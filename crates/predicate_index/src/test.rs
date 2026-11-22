@@ -236,6 +236,19 @@ fn rejects_empty_ranges_duplicate_partitions_and_duplicate_sort_facts() {
         value: 11,
     });
     assert_eq!(document.validate(), Err(ValidationError::DuplicateSortFact));
+
+    // Past sixteen sort facts the duplicate check takes its other path.
+    document.sort_facts.pop();
+    document.sort_facts.extend((0..20).map(|index| IntegerFact {
+        attribute: token(&format!("sort-{index}")),
+        value: index,
+    }));
+    assert_eq!(document.validate(), Ok(()));
+    document.sort_facts.push(IntegerFact {
+        attribute: token("sort-3"),
+        value: 0,
+    });
+    assert_eq!(document.validate(), Err(ValidationError::DuplicateSortFact));
 }
 
 #[test]
