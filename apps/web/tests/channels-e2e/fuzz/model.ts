@@ -3,9 +3,10 @@
  * model says what a build that keeps channels on the device should end with
  * (`on`: a write made while cut off waits and is delivered when the
  * connection returns), the other what a build that reads and writes over
- * REST should (`off`: such a write is lost). A difference between the two
- * builds that the two models also have is the intended one. `POLICY` holds
- * the one place they differ.
+ * REST should (`off`: a write made with no connection waits in the open
+ * page and is sent when the connection returns; one whose request fails is
+ * lost). A difference between the two builds that the two models also have
+ * is the intended one. `POLICY` holds the one place they differ.
  */
 import type { PersonKey } from '../harness/people';
 import type { Cut, Windowed } from './gen';
@@ -56,7 +57,10 @@ const POLICY: Record<Side, Record<Cut, Fate>> = {
   // With answers lost, the first write is carried out and never confirmed,
   // so the device goes on sending it and holds every later one behind it.
   on: { offline: 'queue', block: 'queue', lossy: 'first' },
-  off: { offline: 'drop', block: 'drop', lossy: 'apply' },
+  // A browser that knows it has no connection holds the request and sends
+  // it when the connection is back, for as long as the page stays open; a
+  // sequence never loads a page again while it is offline.
+  off: { offline: 'queue', block: 'drop', lossy: 'apply' },
 };
 
 /** How many of the newest messages a person acts on in a window. */

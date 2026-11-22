@@ -1,7 +1,7 @@
 import { ChannelView } from './harness/channel';
 import { leaveAlone } from './harness/device';
 import { expect, knownDefect, test } from './harness/fixtures';
-import { goOfflineAtOnce } from './harness/network';
+import { goOffline, goOfflineAtOnce } from './harness/network';
 
 // If this fails, someone whose connection dropped for a while comes back to
 // a channel that is missing what was said meanwhile, until they reload.
@@ -48,7 +48,9 @@ test('REC-02 a message sent with no connection is neither lost nor sent twice', 
   await view.open();
   await expect(view.message('before')).toBeVisible();
 
-  await context.setOffline(true);
+  // Once the page has its code: cut off before that, a page fails on the
+  // code it lacks (REC-04), which is not what this test is about.
+  await goOffline(context);
   await view.send('written offline');
   // What the app does with it now is its own business: it may keep the text
   // in the composer and say sending failed, or hold the message to send

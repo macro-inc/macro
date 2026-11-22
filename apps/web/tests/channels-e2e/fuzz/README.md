@@ -36,8 +36,11 @@ removed from it.
 
 `model.ts` works out, without a browser, what each build should end with.
 The two models differ only in what becomes of a write made on a device that
-is cut off: the build that keeps channels on the device holds it and
-delivers it when the connection is back; the other loses it. (With only the
+is cut off. With no connection both hold it and deliver it when the
+connection is back (the build without the flag only while the page stays
+open, and a sequence never loads a page again offline). With its requests
+failing, the build that keeps channels on the device holds it and
+delivers it when they stop failing; the other loses it. (With only the
 answers lost, the first write a device makes is carried out and every later
 one waits behind it; the other build carries them all out.) The runner
 (`run.ts`) checks a build against its own model as it goes and records every
@@ -57,7 +60,7 @@ disagreement as a finding; it never stops a sequence for one:
 
 `compare.ts` then puts the two builds side by side. A sequence whose builds
 ended differently, each as its model says, is an intended difference (the
-writes made while cut off). A finding one build has and the other does not
+writes made while requests failed). A finding one build has and the other does not
 is a difference in behaviour; one both have is not a difference between
 them. Findings are named by kind and shape (`window differs at the end: a
 reply missing`).
@@ -150,15 +153,3 @@ FUZZ_CASES=<work directory>/shrunk.json FUZZ_TRACE=1 \
   deleted; whether the services still list it was not checked.
 - `compare.ts` counts a finding as shared when both builds have one of the
   same kind and shape, whatever the step; the steps are in each result.
-
-## Known fault in the model
-
-The model of the build without the flag says a write made with no connection
-is lost. That was observed on a runner whose browser never learned it was
-offline. A browser that does learn it holds such a write while the page stays
-open and sends it when the connection is back, so on a correct runner that
-build's sequences with a cut end with messages its model does not have
-(`not delivered after reconnecting: a message the model does not have`), and
-the `intended` class no longer says what it was meant to. Until the model
-holds such a write for as long as the page lives, read that build's findings
-after a cut as the model's fault, not the app's.

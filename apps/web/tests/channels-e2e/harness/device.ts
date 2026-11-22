@@ -122,23 +122,6 @@ export function couldNotLoad(page: Page) {
 }
 
 /**
- * The channel just opened with no connection is not on the device. The app
- * should say it cannot load; on a build that keeps channels on the device it
- * goes on loading instead (OFF-02, a known defect), so a test about which
- * channels a device holds takes either, as long as it lasts: a held channel
- * shows at once.
- */
-export async function expectNotHeld(page: Page): Promise<void> {
-  const notShown = couldNotLoad(page).or(
-    page.getByRole('status', { name: 'Loading conversation' })
-  );
-  await expect(notShown).toBeVisible({ timeout: 20_000 });
-  await leaveAlone(page, 5);
-  await expect(notShown).toBeVisible();
-  await expect(page.locator('[data-message]')).toHaveCount(0);
-}
-
-/**
  * Reads the channel the way that leaves it on the device: opens it, looks at
  * another channel, and comes back to it, which is when a device brings what
  * it holds of a channel up to date.

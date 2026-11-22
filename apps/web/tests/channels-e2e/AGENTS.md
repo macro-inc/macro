@@ -136,7 +136,6 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   so on such a runner a mention never got its count (UNR-05 was listed as a
   known defect for that reason alone). Suspect the runner first when a defect
   shows on both builds and only here.
-- With no connection, a build that keeps channels on the device goes on
-  loading a channel it does not hold and never says it cannot load (OFF-02):
-  a test about which channels are held uses `expectNotHeld`, which takes
-  either.
+- The fuzzer's models are what a browser that knows its connection does: a
+  write made with no connection waits in the open page on both builds. Change
+  a model only from behaviour seen where `checkBrowserSeesConnection` passes.
