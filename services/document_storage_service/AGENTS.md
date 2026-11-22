@@ -153,8 +153,9 @@ threads, pins, recents, notifications, folders, activity.
   default one — see `crates/graphql_soup`.
 - A Soup page with `channelReads: PRIMARY` runs on `PrimaryChannelSoup`, the
   list Soup service built by `list_soup` with its channel list on the primary,
-  where REST `GET /comms/channels` reads it. Every other entity type stays on
-  the replica. Only channel directory pages are admitted; see
+  where REST `GET /comms/channels` reads it. Only the channel query moves;
+  other entity types and the shared frecency, favorite and CRM backends keep
+  their pools. Only channel directory pages are admitted; see
   `crates/graphql_soup`.
 - Pool limits live in `src/db_pools.rs`, per task, with the readonly pool set
   apart from the primary. Dev's readonly pool keeps 2–20 connections: three

@@ -328,3 +328,89 @@ fn channel_directory_pages_are_sorted_bounded_and_leave_channel_threads_out() {
         assert!(!page.is_channel_directory_page());
     }
 }
+
+fn directory_page_with_channels(
+    channels: Expr<ChannelLiteral>,
+    follow_up: bool,
+) -> SoupRequest<EntityFilterAst> {
+    let mut filter = filter_for(Leg::ChannelThread, &Expr::val(Uuid::nil()));
+    filter.channel_filter = Some(Arc::new(channels));
+    request(filter, follow_up)
+}
+
+fn named(ids: impl IntoIterator<Item = u128>) -> Expr<ChannelLiteral> {
+    ids.into_iter()
+        .map(|n| Expr::val(ChannelLiteral::ChannelId(id(n))))
+        .reduce(Expr::or)
+        .expect("at least one id")
+}
+
+fn either_participation() -> Expr<ChannelLiteral> {
+    Expr::or(
+        Expr::val(ChannelLiteral::IsParticipant(true)),
+        Expr::val(ChannelLiteral::IsParticipant(false)),
+    )
+}
+
+#[test]
+fn channel_directory_pages_read_newest_first() {
+    let no_threads = filter_for(Leg::ChannelThread, &Expr::val(Uuid::nil()));
+    for follow_up in [false, true] {
+        let mut ascending = request(no_threads.clone(), follow_up);
+        ascending.sort_direction = SoupSortDirection::Asc;
+        assert!(
+            !ascending.is_channel_directory_page(),
+            "follow_up={follow_up}"
+        );
+    }
+}
+
+#[test]
+fn channel_directory_pages_admit_only_channel_filters_the_request_bounds() {
+    let limit = u128::from(CHANNEL_DIRECTORY_PAGE_LIMIT);
+    let admitted = [
+        // The web's by-id read: named ids, whether joined or not.
+        Expr::and(named(1..=3), either_participation()),
+        Expr::and(named(1..=limit), either_participation()),
+        named(1..=3),
+        Expr::and(named([1]), Expr::val(ChannelLiteral::IsParticipant(true))),
+    ];
+    let refused = [
+        // Every channel of the user's teams, bounded by no id.
+        either_participation(),
+        Expr::val(ChannelLiteral::IsParticipant(false)),
+        Expr::and(named(1..=limit + 1), either_participation()),
+        Expr::and(
+            named(1..=3),
+            Expr::val(ChannelLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+        ),
+        Expr::val(ChannelLiteral::NotificationState(
+            item_filters::NotificationState::Unseen,
+        )),
+        Expr::and(named(1..=3), Expr::val(ChannelLiteral::Importance(true))),
+        Expr::or(named([1]), Expr::val(ChannelLiteral::TeamId(id(9)))),
+        // Either a named channel or any channel the user has not joined.
+        Expr::or(named([1]), Expr::val(ChannelLiteral::IsParticipant(false))),
+        Expr::is_not(named([1])),
+        Expr::and(Expr::is_not(named([1])), either_participation()),
+        Expr::val(ChannelLiteral::TeamId(id(9))),
+    ];
+    for follow_up in [false, true] {
+        for channels in admitted.clone() {
+            assert!(
+                directory_page_with_channels(channels.clone(), follow_up)
+                    .is_channel_directory_page(),
+                "{channels:?} (follow_up={follow_up})"
+            );
+        }
+        for channels in refused.clone() {
+            assert!(
+                !directory_page_with_channels(channels.clone(), follow_up)
+                    .is_channel_directory_page(),
+                "{channels:?} (follow_up={follow_up})"
+            );
+        }
+    }
+}

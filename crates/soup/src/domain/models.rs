@@ -6,6 +6,8 @@ pub mod sort;
 pub use sort::{DynamicSort, DynamicSortValue};
 
 #[cfg(feature = "ports")]
+mod channel_directory;
+#[cfg(feature = "ports")]
 pub(crate) mod exclusions;
 
 #[cfg(all(test, feature = "ports"))]
@@ -468,14 +470,22 @@ pub const CHANNEL_DIRECTORY_PAGE_LIMIT: u16 = 100;
 #[cfg(feature = "ports")]
 impl SoupRequest<EntityFilterAst> {
     /// Whether this is a channel directory page: an initial page or a
-    /// continuation of a timestamp-sorted Soup, at most
-    /// [`CHANNEL_DIRECTORY_PAGE_LIMIT`] items, with channel threads left out.
+    /// continuation of a timestamp-sorted Soup, newest first, at most
+    /// [`CHANNEL_DIRECTORY_PAGE_LIMIT`] items, with channel threads left out
+    /// and a channel filter the request bounds (`channel_directory::bounded`).
     /// Only such a page may read its channels from the primary database: it
     /// costs what one page of the REST channel list costs there.
+    ///
+    /// Newest first because the channel query fetches descending and an
+    /// ascending page reverses that slice, so its next page would read nearly
+    /// the same rows again.
     pub fn is_channel_directory_page(&self) -> bool {
+        let filter = self.cursor.filter();
         self.limit <= CHANNEL_DIRECTORY_PAGE_LIMIT
+            && self.sort_direction == SoupSortDirection::Desc
             && matches!(self.cursor, SoupQuery::Simple(_))
-            && exclusions::channel_thread(Some(self.cursor.filter()))
+            && exclusions::channel_thread(Some(filter))
+            && channel_directory::bounded(filter.channel_filter.as_deref())
     }
 }
 

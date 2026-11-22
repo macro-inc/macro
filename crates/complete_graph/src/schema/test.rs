@@ -31,7 +31,7 @@ use macro_user_id::{
 use model_entity::EntityType as ModelEntityType;
 use model_owner::Owner;
 use model_user::UserContext;
-use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
+use models_pagination::{PaginateOn, Paginated, PaginatedCursor, SimpleSortMethod};
 use models_soup::{
     chat::SoupChat,
     document::SoupDocument,
@@ -96,6 +96,9 @@ struct CountingSoupService {
     raw_team_receipts: Arc<AtomicUsize>,
     return_empty_raw: bool,
     raw_response: Arc<Mutex<Option<Vec<SoupItem<()>>>>>,
+    /// Page the raw response through the paginator Soup uses, so a full
+    /// page carries the cursor Soup would emit for the request.
+    paginate_raw: Arc<std::sync::atomic::AtomicBool>,
     frecency_calls: Arc<AtomicUsize>,
     frecency_team_receipts: Arc<AtomicUsize>,
     grouped_calls: Arc<AtomicUsize>,
@@ -197,6 +200,27 @@ fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesFi
     })
 }
 
+/// A Soup item identified by a string id, as Soup's own page candidates are.
+struct StringIdItem(SoupItem<()>);
+
+impl models_pagination::Identify for StringIdItem {
+    type Id = String;
+
+    fn id(&self) -> String {
+        models_pagination::Identify::id(&self.0).to_string()
+    }
+}
+
+impl models_pagination::SortOn<SimpleSortMethod> for StringIdItem {
+    fn sort_on(
+        sort: SimpleSortMethod,
+    ) -> impl FnMut(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
+        let mut inner =
+            <SoupItem<()> as models_pagination::SortOn<SimpleSortMethod>>::sort_on(sort);
+        move |item| inner(&item.0)
+    }
+}
+
 fn test_soup_err() -> soup::domain::models::SoupErr {
     soup::domain::models::SoupErr::SoupDbErr(anyhow::anyhow!("counting Soup service"))
 }
@@ -205,12 +229,20 @@ impl CountingSoupService {
     fn set_raw_response(&self, items: Vec<SoupItem<()>>) {
         *self.raw_response.lock().expect("raw response lock") = Some(items);
     }
+
+    /// Like [`Self::set_raw_response`], but each page is paginated as Soup
+    /// paginates a `CREATED_AT` page: newest first, with a next cursor over
+    /// the request's own filter when the page is full.
+    fn set_paged_raw_response(&self, items: Vec<SoupItem<()>>) {
+        self.paginate_raw.store(true, Ordering::SeqCst);
+        self.set_raw_response(items);
+    }
 }
 
 impl SoupService for CountingSoupService {
     async fn get_user_soup<T>(
         &self,
-        _req: soup::domain::models::SoupRequest<T>,
+        req: soup::domain::models::SoupRequest<T>,
         team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
     ) -> Result<soup::domain::ports::SoupOutput<T>, soup::domain::models::SoupErr>
     where
@@ -223,6 +255,18 @@ impl SoupService for CountingSoupService {
         }
         let raw_response = self.raw_response.lock().expect("raw response lock").clone();
         if self.return_empty_raw || raw_response.is_some() {
+            if self.paginate_raw.load(Ordering::SeqCst) {
+                let page = raw_response
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(StringIdItem)
+                    .paginate_on(usize::from(req.limit), SimpleSortMethod::CreatedAt)
+                    .filter_on(req.cursor.filter().clone())
+                    .sort_desc()
+                    .into_page()
+                    .map(|item| item.0);
+                return Ok(soup::domain::ports::SoupOutput::Simple(page));
+            }
             let page: PaginatedCursor<SoupItem<()>, String, SimpleSortMethod, T> =
                 Paginated::from_parts(raw_response.unwrap_or_default(), None);
             return Ok(soup::domain::ports::SoupOutput::Simple(page));
@@ -290,6 +334,20 @@ impl SoupService for CountingSoupService {
         self.frecency_calls.fetch_add(1, Ordering::SeqCst);
         if team_receipt.is_some() {
             self.frecency_team_receipts.fetch_add(1, Ordering::SeqCst);
+        }
+        if self
+            .raw_response
+            .lock()
+            .expect("raw response lock")
+            .is_some()
+        {
+            let page: PaginatedCursor<
+                soup::domain::models::EnrichedSoupItem,
+                String,
+                SimpleSortMethod,
+                T,
+            > = Paginated::from_parts(Vec::new(), None);
+            return Ok(soup::domain::ports::SoupOutput::Simple(page));
         }
         Err(test_soup_err())
     }
@@ -2412,12 +2470,35 @@ async fn soup_passes_team_receipt_to_raw_path() {
 
 /// The filters of a channel directory page: channel threads left out.
 const DIRECTORY_FILTERS: &str =
-    r#"{channelThreadFilter: {literal: {threadId: "00000000-0000-0000-0000-000000000000"}}}"#;
+    r#"channelThreadFilter: {literal: {threadId: "00000000-0000-0000-0000-000000000000"}}"#;
 
-/// An initial channel directory page with the given extra input fields.
-fn directory_page_query(extra: &str, selection: &str) -> String {
+/// A channel directory page, each input field given once: `fields` holds
+/// the initial input's fields after `filters`, `channel_filter` an extra
+/// `channelFilter` beside the directory's own filters.
+fn directory_page(fields: &str, channel_filter: &str, selection: &str) -> String {
+    let channel_filter = if channel_filter.is_empty() {
+        String::new()
+    } else {
+        format!(", channelFilter: {channel_filter}")
+    };
     format!(
-        "{{ user {{ soup(input: {{initial: {{limit: 100, sortMethod: CREATED_AT, filters: {DIRECTORY_FILTERS}{extra}}}}}) {{ {selection} }} }} }}"
+        "{{ user {{ soup(input: {{initial: {{filters: {{{DIRECTORY_FILTERS}{channel_filter}}}{fields}}}}}) {{ {selection} }} }} }}"
+    )
+}
+
+/// The ordinary directory page: 100 items by creation time.
+fn directory_page_query(extra: &str, selection: &str) -> String {
+    directory_page(
+        &format!(", limit: 100, sortMethod: CREATED_AT{extra}"),
+        "",
+        selection,
+    )
+}
+
+/// A continuation of `cursor` with the given extra input fields.
+fn continuation_query(cursor: &str, extra: &str) -> String {
+    format!(
+        r#"{{ user {{ soup(input: {{continuation: {{cursor: "{cursor}"{extra}}}}}) {{ nextCursor }} }} }}"#
     )
 }
 
@@ -2435,6 +2516,42 @@ fn simple_cursor(limit: usize, filter: item_filters::ast::EntityFilterAst) -> St
     .to_string()
 }
 
+/// The cursor a `NOTIFIED_AT` page emits.
+fn notified_cursor(filter: item_filters::ast::EntityFilterAst) -> String {
+    models_pagination::Base64Str::encode_json(models_pagination::CursorWithValAndFilter {
+        id: Uuid::from_u128(1).to_string(),
+        limit: 100,
+        val: models_pagination::CursorVal {
+            sort_type: models_pagination::NotifiedAt,
+            last_val: chrono::DateTime::<chrono::Utc>::default(),
+        },
+        filter,
+    })
+    .to_string()
+}
+
+/// The cursor a `PROPERTY` page emits.
+fn property_cursor(filter: item_filters::ast::EntityFilterAst) -> String {
+    use soup::domain::models::{DynamicSort, DynamicSortValue, SoupSortDirection};
+    models_pagination::Base64Str::encode_json(models_pagination::CursorWithValAndFilter {
+        id: Uuid::from_u128(1),
+        limit: 100,
+        val: models_pagination::CursorVal {
+            sort_type: DynamicSort::Property {
+                property_definition_id: Uuid::from_u128(7),
+                direction: SoupSortDirection::Desc,
+            },
+            last_val: DynamicSortValue::Property {
+                key: None,
+                timestamp: chrono::DateTime::default(),
+                direction: SoupSortDirection::Desc,
+            },
+        },
+        filter,
+    })
+    .to_string()
+}
+
 /// The directory's filter as the Soup domain holds it.
 fn directory_filter_ast() -> item_filters::ast::EntityFilterAst {
     item_filters::ast::EntityFilterAst {
@@ -2445,6 +2562,28 @@ fn directory_filter_ast() -> item_filters::ast::EntityFilterAst {
     }
 }
 
+/// A balanced OR of channel ids `from..=to`, as the web builds it.
+fn balanced_channel_ids(from: u128, to: u128) -> String {
+    if from == to {
+        return format!(r#"{{literal: {{channelId: "{}"}}}}"#, Uuid::from_u128(from));
+    }
+    let middle = from + (to - from) / 2;
+    format!(
+        "{{or: {{left: {}, right: {}}}}}",
+        balanced_channel_ids(from, middle),
+        balanced_channel_ids(middle + 1, to)
+    )
+}
+
+/// A channel filter naming `count` channel ids, joined or not, as the web's
+/// by-id read sends it.
+fn named_channels_filter(count: u128) -> String {
+    let named = balanced_channel_ids(1, count);
+    format!(
+        "{{and: {{left: {named}, right: {{or: {{left: {{literal: {{isParticipant: true}}}}, right: {{literal: {{isParticipant: false}}}}}}}}}}}}"
+    )
+}
+
 /// The primary channel Soup's call counts after one page.
 #[derive(Debug, PartialEq, Eq)]
 struct PrimaryCalls {
@@ -2452,22 +2591,31 @@ struct PrimaryCalls {
     frecency: usize,
 }
 
-/// Runs one Soup page with `PrimaryChannelSoup` in the request data, typed
-/// as DSS types it: by the schema's own Soup service.
-async fn soup_page_with_primary_channel_soup(
+/// Runs one Soup page with `primary` as `PrimaryChannelSoup` in the request
+/// data, typed as DSS types it: by the schema's own Soup service.
+async fn soup_page_on(
     harness: &TestHarness,
+    primary: &CountingSoupService,
     query: &str,
-) -> (async_graphql::Response, PrimaryCalls) {
-    let primary = CountingSoupService::default();
-    primary.set_raw_response(Vec::new());
-    let response = harness
+) -> async_graphql::Response {
+    harness
         .schema
         .execute(harness.request(query, authenticated_parts()).data(
             graphql_soup::PrimaryChannelSoup::<<TestSchema as crate::SoupSchemaService>::Service>(
                 primary.clone(),
             ),
         ))
-        .await;
+        .await
+}
+
+/// Runs one Soup page with an empty primary channel Soup.
+async fn soup_page_with_primary_channel_soup(
+    harness: &TestHarness,
+    query: &str,
+) -> (async_graphql::Response, PrimaryCalls) {
+    let primary = CountingSoupService::default();
+    primary.set_raw_response(Vec::new());
+    let response = soup_page_on(harness, &primary, query).await;
     let calls = PrimaryCalls {
         raw: primary.raw_calls.load(Ordering::SeqCst),
         frecency: primary.frecency_calls.load(Ordering::SeqCst),
@@ -2477,36 +2625,57 @@ async fn soup_page_with_primary_channel_soup(
 
 #[tokio::test]
 async fn soup_channel_reads_primary_runs_directory_pages_on_the_primary_channel_soup() {
-    let harness = harness();
+    for (name, query) in [
+        (
+            "lane",
+            directory_page_query(", channelReads: PRIMARY", "nextCursor"),
+        ),
+        (
+            "by id",
+            directory_page(
+                ", limit: 3, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                &named_channels_filter(3),
+                "nextCursor",
+            ),
+        ),
+        (
+            "100 ids",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                &named_channels_filter(100),
+                "nextCursor",
+            ),
+        ),
+    ] {
+        let harness = harness();
 
-    let (response, primary_calls) = soup_page_with_primary_channel_soup(
-        &harness,
-        &directory_page_query(", channelReads: PRIMARY", "nextCursor"),
-    )
-    .await;
+        let (response, primary_calls) = soup_page_with_primary_channel_soup(&harness, &query).await;
 
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(
-        primary_calls,
-        PrimaryCalls {
-            raw: 1,
-            frecency: 0
-        }
-    );
-    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
-    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 1);
+        assert!(response.errors.is_empty(), "{name}: {:?}", response.errors);
+        assert_eq!(
+            primary_calls,
+            PrimaryCalls {
+                raw: 1,
+                frecency: 0
+            },
+            "{name}"
+        );
+        assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0, "{name}");
+        assert_eq!(harness.team_calls.load(Ordering::SeqCst), 1, "{name}");
+    }
 }
 
 #[tokio::test]
 async fn soup_channel_reads_primary_runs_the_frecency_path_on_the_primary_channel_soup() {
     let harness = harness();
 
-    let (_response, primary_calls) = soup_page_with_primary_channel_soup(
+    let (response, primary_calls) = soup_page_with_primary_channel_soup(
         &harness,
         &directory_page_query(", channelReads: PRIMARY", "items { frecencyScore }"),
     )
     .await;
 
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         primary_calls,
         PrimaryCalls {
@@ -2544,30 +2713,47 @@ async fn soup_channel_reads_default_and_replica_run_on_the_list_soup() {
 }
 
 #[tokio::test]
-async fn soup_channel_reads_follow_each_continuation() {
-    let cursor = simple_cursor(100, directory_filter_ast());
+async fn soup_channel_reads_primary_continues_from_the_cursor_its_page_emits() {
+    let harness = harness();
+    let primary = CountingSoupService::default();
+    primary.set_paged_raw_response(
+        (1..=101)
+            .map(|n| soup_document(Uuid::from_u128(n)))
+            .collect(),
+    );
+
+    let first = soup_page_on(
+        &harness,
+        &primary,
+        &directory_page_query(", channelReads: PRIMARY", "nextCursor"),
+    )
+    .await;
+    assert!(first.errors.is_empty(), "{:?}", first.errors);
+    let data = first.data.into_json().expect("json data");
+    let cursor = data["user"]["soup"]["nextCursor"]
+        .as_str()
+        .expect("a full page emits a cursor");
+
     for (channel_reads, expected_primary, expected_replica) in [
-        (", channelReads: PRIMARY", 1, 0),
-        (", channelReads: REPLICA", 0, 1),
-        ("", 0, 1),
+        (", channelReads: PRIMARY", 2, 0),
+        (", channelReads: REPLICA", 2, 1),
+        ("", 2, 2),
     ] {
-        let harness = harness();
         harness.soup_service.set_raw_response(Vec::new());
 
-        let (response, primary_calls) = soup_page_with_primary_channel_soup(
+        let next = soup_page_on(
             &harness,
-            &format!(
-                r#"{{ user {{ soup(input: {{continuation: {{cursor: "{cursor}"{channel_reads}}}}}) {{ nextCursor }} }} }}"#
-            ),
+            &primary,
+            &continuation_query(cursor, channel_reads),
         )
         .await;
 
-        assert!(
-            response.errors.is_empty(),
-            "{channel_reads}: {:?}",
-            response.errors
+        assert!(next.errors.is_empty(), "{channel_reads}: {:?}", next.errors);
+        assert_eq!(
+            primary.raw_calls.load(Ordering::SeqCst),
+            expected_primary,
+            "{channel_reads}"
         );
-        assert_eq!(primary_calls.raw, expected_primary, "{channel_reads}");
         assert_eq!(
             harness.raw_soup_calls.load(Ordering::SeqCst),
             expected_replica,
@@ -2578,25 +2764,101 @@ async fn soup_channel_reads_follow_each_continuation() {
 
 #[tokio::test]
 async fn soup_channel_reads_primary_refuses_pages_that_are_not_directory_pages() {
-    let unfiltered_cursor = simple_cursor(100, item_filters::ast::EntityFilterAst::default());
-    let large_cursor = simple_cursor(101, directory_filter_ast());
+    let directory = directory_filter_ast();
+    let mut team_wide = directory_filter_ast();
+    team_wide.channel_filter = Some(Arc::new(filter_ast::Expr::val(
+        item_filters::ast::channel::ChannelLiteral::IsParticipant(false),
+    )));
+    let primary = ", channelReads: PRIMARY";
     let pages = [
-        // Channel threads included.
-        "{ user { soup(input: {initial: {limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY}}) { nextCursor } } }".to_string(),
-        // Larger than a directory page.
-        directory_page_query(", limit: 101, channelReads: PRIMARY", "nextCursor"),
-        // Not a timestamp sort.
-        directory_page_query(", sortMethod: NOTIFIED_AT, channelReads: PRIMARY", "nextCursor"),
-        directory_page_query(", sortMethod: NAME, channelReads: PRIMARY", "nextCursor"),
-        // Continuations of such pages.
-        format!(
-            r#"{{ user {{ soup(input: {{continuation: {{cursor: "{unfiltered_cursor}", channelReads: PRIMARY}}}}) {{ nextCursor }} }} }}"#
+        (
+            "channel threads included",
+            "{ user { soup(input: {initial: {limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY}}) { nextCursor } } }".to_string(),
         ),
-        format!(
-            r#"{{ user {{ soup(input: {{continuation: {{cursor: "{large_cursor}", channelReads: PRIMARY}}}}) {{ nextCursor }} }} }}"#
+        (
+            "larger than a page",
+            directory_page(", limit: 101, sortMethod: CREATED_AT, channelReads: PRIMARY", "", "nextCursor"),
+        ),
+        (
+            "notified at",
+            directory_page(", limit: 100, sortMethod: NOTIFIED_AT, channelReads: PRIMARY", "", "nextCursor"),
+        ),
+        (
+            "name",
+            directory_page(", limit: 100, sortMethod: NAME, channelReads: PRIMARY", "", "nextCursor"),
+        ),
+        (
+            "oldest first",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, sortDirection: ASC, channelReads: PRIMARY",
+                "",
+                "nextCursor",
+            ),
+        ),
+        (
+            "every team channel",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                "{or: {left: {literal: {isParticipant: true}}, right: {literal: {isParticipant: false}}}}",
+                "nextCursor",
+            ),
+        ),
+        (
+            "a notification state",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                "{literal: {notificationState: UNSEEN}}",
+                "nextCursor",
+            ),
+        ),
+        (
+            "ids and a notification state",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                r#"{and: {left: {literal: {channelId: "00000000-0000-0000-0000-000000000001"}}, right: {literal: {notificationState: UNSEEN}}}}"#,
+                "nextCursor",
+            ),
+        ),
+        (
+            "more ids than a page",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                &named_channels_filter(101),
+                "nextCursor",
+            ),
+        ),
+        (
+            "continuation without the thread exclusion",
+            continuation_query(
+                &simple_cursor(100, item_filters::ast::EntityFilterAst::default()),
+                primary,
+            ),
+        ),
+        (
+            "continuation larger than a page",
+            continuation_query(&simple_cursor(101, directory.clone()), primary),
+        ),
+        (
+            "continuation oldest first",
+            continuation_query(
+                &simple_cursor(100, directory.clone()),
+                ", sortDirection: ASC, channelReads: PRIMARY",
+            ),
+        ),
+        (
+            "continuation over every team channel",
+            continuation_query(&simple_cursor(100, team_wide), primary),
+        ),
+        (
+            "notified at continuation",
+            continuation_query(&notified_cursor(directory.clone()), primary),
+        ),
+        (
+            "property continuation",
+            continuation_query(&property_cursor(directory), primary),
         ),
     ];
-    for page in pages {
+    for (name, page) in pages {
         let harness = harness();
 
         let (response, primary_calls) = soup_page_with_primary_channel_soup(&harness, &page).await;
@@ -2605,7 +2867,7 @@ async fn soup_channel_reads_primary_refuses_pages_that_are_not_directory_pages()
         assert_eq!(
             messages,
             [graphql_soup::PRIMARY_CHANNEL_READS_REFUSED],
-            "{page}"
+            "{name}"
         );
         assert_eq!(
             primary_calls,
@@ -2613,10 +2875,10 @@ async fn soup_channel_reads_primary_refuses_pages_that_are_not_directory_pages()
                 raw: 0,
                 frecency: 0
             },
-            "{page}"
+            "{name}"
         );
-        assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0, "{page}");
-        assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0, "{page}");
+        assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0, "{name}");
+        assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0, "{name}");
     }
 }
 

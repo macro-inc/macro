@@ -68,15 +68,19 @@ pub struct SoupContinuationInput {
 /// Where a Soup page reads its channels.
 #[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Default, Debug)]
 pub enum SoupChannelReads {
-    /// The read replica, like every other Soup list.
+    /// The default: the channel query reads the read replica, as ordinary
+    /// Soup lists do.
     #[default]
     Replica,
-    /// The primary, where the REST channel list reads them, so the page's
-    /// channels reflect every committed membership change. Only the channels
-    /// move; every other entity type in the page still reads the replica.
+    /// The channel query reads the primary, where the REST channel list reads
+    /// it, so the page's channels, with their members and activity, reflect
+    /// every membership change committed before it ran. Nothing else moves:
+    /// other entity types and per-item lookups keep the database they read.
     /// Served only for channel directory pages: a timestamp sort (not NAME,
-    /// PROPERTY or NOTIFIED_AT), at most 100 items, with channel
-    /// threads excluded by a nil-id filter. Any other page is refused.
+    /// PROPERTY or NOTIFIED_AT), newest first, at most 100 items, channel
+    /// threads excluded by a nil-id filter, and either no channel filter or
+    /// one naming at most 100 channel ids beside isParticipant. Any other
+    /// page is refused.
     Primary,
 }
 
