@@ -311,13 +311,16 @@ async function settledDom(lane: Lane): Promise<DomRow[]> {
     log(`dom timeout: ${lane.side} ${detail}`);
     throw new DomTimeout(lane.side, detail);
   }
+  // Settled: three reads 1.5 s apart that agree.
   let previous = '';
+  let same = 0;
   let rows: DomRow[] = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     await lane.page.waitForTimeout(1500);
     rows = await readHomeDom(lane);
     const text = JSON.stringify(rows);
-    if (text === previous) return rows;
+    same = text === previous ? same + 1 : 0;
+    if (same >= 2) return rows;
     previous = text;
   }
   return rows;
@@ -630,8 +633,26 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
               await Promise.all(lanes.dom.map((lane) => reloadLane(lane)));
               const again = await Promise.allSettled(lanes.dom.map((lane) => settledDom(lane)));
               if (again.every((r) => r.status === 'fulfilled')) {
-                const reloaded = again.map((r) => (r as PromiseFulfilledResult<DomRow[]>).value);
-                const sides = (await compareHomeDom(stack, user, reloaded[0], reloaded[1], `seq home touch ${domTab} reload`)).map(classify);
+                let reloaded = again.map((r) => (r as PromiseFulfilledResult<DomRow[]>).value);
+                let sides = (await compareHomeDom(stack, user, reloaded[0], reloaded[1], `seq home touch ${domTab} reload`)).map(classify);
+                // A reloaded Home can read as settled while it still paints
+                // (under load, one source's rows land seconds after the rest):
+                // read both again, without reloading, while the sides differ,
+                // up to the live bound. Each read that changed a side is kept.
+                const rereads: { side: string; first: string[]; ms: number }[] = [];
+                const rereadDeadline = Date.now() + LIVE_BOUND_MS;
+                const rereadStart = Date.now();
+                while (!sides.every((d) => closureOf(d.cls)) && Date.now() < rereadDeadline) {
+                  const next = await Promise.allSettled(lanes.dom.map((lane) => settledDom(lane)));
+                  if (!next.every((r) => r.status === 'fulfilled')) break;
+                  const rows2 = next.map((r) => (r as PromiseFulfilledResult<DomRow[]>).value);
+                  for (const [i, side] of ['old', 'new'].entries()) {
+                    if (JSON.stringify(rows2[i]) !== JSON.stringify(reloaded[i])) rereads.push({ side, first: compactDom(reloaded[i]).slice(0, 40), ms: Date.now() - rereadStart });
+                  }
+                  reloaded = rows2;
+                  sides = (await compareHomeDom(stack, user, reloaded[0], reloaded[1], `seq home touch ${domTab} reload`)).map(classify);
+                }
+                if (rereads.length) checks.domRereads = rereads;
                 // The evidence for an open difference: each side's mounted and
                 // reloaded rows, as bucket/type:id "text" in screen order.
                 const domRows = { oldMounted: compactDom(rows[0]), newMounted: compactDom(rows[1]), oldReload: compactDom(reloaded[0]), newReload: compactDom(reloaded[1]) };
