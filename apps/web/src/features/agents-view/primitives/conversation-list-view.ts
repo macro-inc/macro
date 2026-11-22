@@ -23,11 +23,8 @@ const DEFAULT_VIEW: ConversationListViewState = {
 
 const SORTS: readonly ConversationSort[] = ['updated', 'created'];
 // Retained only for the old phone composition; the desktop ignores grouping.
-const LEGACY_GROUPINGS: readonly ConversationGrouping[] = [
-  'none',
-  'status',
-  'type',
-];
+// A saved grouping this build no longer offers (Type) falls back to the default.
+const LEGACY_GROUPINGS: readonly ConversationGrouping[] = ['none', 'status'];
 
 function stringsOf<Value extends string>(
   value: unknown,

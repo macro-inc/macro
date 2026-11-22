@@ -3,65 +3,39 @@ use crate::domain::{
     ports::{Accounts, Result},
 };
 use async_trait::async_trait;
+use connectors::{ApiConnectionsService, ConnectorId};
 use macro_user_id::user_id::MacroUserIdStr;
-use pipedream_mcp::domain::{
-    models::{ConnectionProvider, PipedreamConnection},
-    ports::{AppConnections, ConnectionStore},
-};
+use std::sync::Arc;
 
-/// Uses the Pipedream domain ports rather than reaching into its storage.
-pub struct ConnectedAccounts<S>(pub S);
+#[cfg(test)]
+mod test;
 
-/// Sync reads Granola's REST API, which takes Pipedream's API-key account.
-/// A Granola connection held by Macro Connect is an MCP grant, which that API
-/// does not accept, so it is not synced.
-fn syncable(connection: &PipedreamConnection) -> bool {
-    connection.enabled && connection.provider == ConnectionProvider::Pipedream
+/// Whose Granola sync may run, as the connectors services decide it.
+///
+/// Sync reads Granola's REST API, so it follows only connections that give
+/// API access. A Granola connection held through a source that provides
+/// tools only (Macro Connect, for a user on it) gives none, so it is not
+/// synced.
+pub struct ConnectedAccounts<S>(pub Arc<S>);
+
+/// Granola's catalog app.
+pub(crate) fn granola() -> Result<ConnectorId> {
+    Ok(ConnectorId::parse(GRANOLA_APP)?)
 }
 
 #[async_trait]
-impl<S: ConnectionStore + AppConnections> Accounts for ConnectedAccounts<S> {
-    async fn account(&self, user: &MacroUserIdStr<'static>) -> Result<Option<String>> {
-        Ok(self
-            .0
-            .load(user, GRANOLA_APP)
-            .await
-            .map_err(|error| rootcause::report!("Pipedream connection lookup failed: {error:?}"))?
-            .filter(syncable)
-            .map(|connection| connection.account_id))
+impl<S: ApiConnectionsService> Accounts for ConnectedAccounts<S> {
+    async fn connected(&self, user: &MacroUserIdStr<'static>) -> Result<bool> {
+        Ok(self.0.connection(user, &granola()?).await?.is_some())
     }
-    async fn connected(&self) -> Result<Vec<(MacroUserIdStr<'static>, String)>> {
+
+    async fn holders(&self) -> Result<Vec<MacroUserIdStr<'static>>> {
         Ok(self
             .0
-            .list_enabled_for_app(GRANOLA_APP)
-            .await
-            .map_err(|error| rootcause::report!("Pipedream connection listing failed: {error:?}"))?
+            .holders(&granola()?)
+            .await?
             .into_iter()
-            .filter(syncable)
-            .map(|connection| (connection.user_id, connection.account_id))
+            .map(|handle| handle.user().clone())
             .collect())
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    fn connection(provider: ConnectionProvider, enabled: bool) -> PipedreamConnection {
-        PipedreamConnection {
-            user_id: MacroUserIdStr::try_from_email("caller@example.com").unwrap(),
-            app_slug: GRANOLA_APP.into(),
-            server_name: "Granola".into(),
-            account_id: "apn_1".into(),
-            enabled,
-            provider,
-        }
-    }
-
-    #[test]
-    fn only_enabled_pipedream_accounts_sync() {
-        assert!(syncable(&connection(ConnectionProvider::Pipedream, true)));
-        assert!(!syncable(&connection(ConnectionProvider::Pipedream, false)));
-        assert!(!syncable(&connection(ConnectionProvider::Connect, true)));
     }
 }

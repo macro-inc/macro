@@ -112,7 +112,7 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
         name: 'GitHub',
         detail: 'Issues',
         icon: IconGithub as ImportIcon,
-        // Connects through the GitHub account link (an overlaid app).
+        // Connects through the Macro GitHub account link.
       },
       {
         appSlug: 'trello',
