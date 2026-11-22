@@ -1,4 +1,4 @@
-use super::ABOUT_MACRO;
+use agent_code_mode::domain::about_macro;
 
 /// A cached copy of an older docs page once taught the model a webhook
 /// design that no longer exists; the about page must give the current steps.
@@ -22,7 +22,10 @@ fn macrod_section_gives_the_current_setup_steps() {
         "On a cloud server",
         "https://macro.com/docs/AI/bring-your-own",
     ] {
-        assert!(ABOUT_MACRO.contains(step), "about page is missing {step:?}");
+        assert!(
+            about_macro().contains(step),
+            "about page is missing {step:?}"
+        );
     }
 }
 
@@ -41,7 +44,7 @@ fn about_page_never_teaches_the_retired_webhook_setup() {
         "trycloudflare",
     ] {
         assert!(
-            !ABOUT_MACRO.contains(retired),
+            !about_macro().contains(retired),
             "about page mentions retired setup detail {retired:?}"
         );
     }
@@ -49,7 +52,7 @@ fn about_page_never_teaches_the_retired_webhook_setup() {
 
 #[test]
 fn about_page_reads_docs_from_the_canonical_host() {
-    let stale_links: Vec<&str> = ABOUT_MACRO
+    let stale_links: Vec<&str> = about_macro()
         .split_whitespace()
         .filter(|word| word.contains("https://docs.macro.com"))
         .collect();

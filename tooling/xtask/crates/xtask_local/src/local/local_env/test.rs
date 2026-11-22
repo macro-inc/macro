@@ -74,6 +74,7 @@ fn emits_required_keys() {
     let env = local_env();
     for key in [
         "ENVIRONMENT",
+        "DENO_BINARY",
         "PORT",
         "FRONTEND_PORT",
         "FRONTEND_ORIGIN",

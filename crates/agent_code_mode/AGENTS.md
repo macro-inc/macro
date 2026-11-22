@@ -11,7 +11,7 @@ Saved execution retries must match both actor selection and original
 turn, so a later requester cannot inherit an earlier execution result.
 
 Owns session-authorized code executions, user-scoped executions for the public
-MCP, SDK documentation selection, saved execution records, and durable review
+MCP and the in-app chat, SDK documentation selection, saved execution records, and durable review
 stacks. Process isolation belongs to
 `crates/code_execution`; session presentation belongs to `crates/agent_session`.
 
@@ -36,6 +36,8 @@ stacks. Process isolation belongs to
   `agent_harness_service/src/code_mode/images.rs`.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
+  Its constructor requires `UserCodeModeHost`, recorded on execution spans to
+  distinguish chat from public MCP without credential or personal data.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.
   `src/domain/reviews/drafts.rs` holds the typed drafts and results: items
   keyed by kind, reusing `SendEmail`, `CreateCalendarEvent` and their
@@ -106,8 +108,10 @@ stacks. Process isolation belongs to
   (`compose_routines::DIRECT`). No byte budget counts the skill, so it never
   takes another entity's place. `mcp_guides` and `entity_guide` (no attached skill) serve
   hosts that carry areas whole. All of it is generated from the SDK; edit the TSDoc.
+  The one hand-written symbol is `AboutMacro` (`src/domain/about_macro.md`),
+  the about-page `SelfKnowledge` also returns.
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
-  public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
+  public MCP and the in-app chat. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared
   guidance once, there.
 

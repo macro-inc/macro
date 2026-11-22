@@ -981,6 +981,7 @@ mod code_mode {
         let app = app(Arc::new(agent_code_mode::domain::UserCodeModeService::new(
             Arc::new(runner),
             Arc::new(NoCredentials),
+            agent_code_mode::domain::UserCodeModeHost::PublicMcp,
         )));
 
         let succeeded = rpc(

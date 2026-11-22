@@ -1,4 +1,5 @@
-//! Authenticated MCP code execution, optionally attributed to a managed session.
+//! User-scoped code execution for the public MCP and the in-app chat,
+//! optionally attributed to a managed session.
 use super::{
     CodeModeError, ExecutionActivity, ExecutionStatus,
     service::{Reviews, settle, settle_unrun, validate_request},
@@ -58,10 +59,40 @@ pub trait UserCodeMode: Send + Sync + 'static {
     ) -> Result<UserExecutionReceipt, CodeModeError>;
 }
 
+/// Code mode where this process has no code runner: every execution fails
+/// with [`CodeModeError::Unavailable`]. Hosts that run chat's toolset are
+/// given a real runner at startup, so this answers only a host wired without
+/// one.
+pub struct UnconfiguredCodeMode;
+
+#[async_trait]
+impl UserCodeMode for UnconfiguredCodeMode {
+    async fn execute(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        _caller: &ToolCaller,
+        _session: Option<uuid::Uuid>,
+        _request: ExecuteRequest,
+        _cancel: CancellationToken,
+    ) -> Result<UserExecutionReceipt, CodeModeError> {
+        Err(CodeModeError::Unavailable)
+    }
+}
+
+/// The authenticated host whose admission budget runs a user program.
+#[derive(Debug, Clone, Copy)]
+pub enum UserCodeModeHost {
+    /// Legacy chat turns and tool-enabled structured completions.
+    Chat,
+    /// Calls from an external MCP client.
+    PublicMcp,
+}
+
 /// User-scoped code mode over an executor whose admission bounds its own traffic.
 pub struct UserCodeModeService {
     executor: Arc<dyn ProgramExecutor>,
     credentials: Arc<dyn UserExecutionCredentials>,
+    host: UserCodeModeHost,
 }
 
 impl UserCodeModeService {
@@ -69,10 +100,12 @@ impl UserCodeModeService {
     pub fn new(
         executor: Arc<dyn ProgramExecutor>,
         credentials: Arc<dyn UserExecutionCredentials>,
+        host: UserCodeModeHost,
     ) -> Self {
         Self {
             executor,
             credentials,
+            host,
         }
     }
 }
@@ -83,6 +116,7 @@ impl UserCodeMode for UserCodeModeService {
         name = "code_mode.user_execution",
         skip_all,
         fields(
+            host = ?self.host,
             source_bytes = request.source.len(),
             timeout_ms = request.timeout_ms,
             status = tracing::field::Empty,

@@ -53,9 +53,25 @@ pub(crate) fn config_values() -> serde_json::Value {
         "REPO_STORAGE_ROOT": "/data/agent-git",
         "MAX_REPO_SIZE_BYTES": 524288000,
         "PUSHES_PER_MINUTE": 30,
+        "DENO_BINARY": "/usr/local/bin/deno",
         "LIVEKIT_API_KEY": "livekit-key",
         "LIVEKIT_API_SECRET": "livekit-secret"
     })
+}
+
+#[test]
+fn code_execution_runtime_is_required_when_loading_config() {
+    let mut values = config_values();
+    values.as_object_mut().unwrap().remove("DENO_BINARY");
+    let error = serde_json::from_value::<Config>(values).err().unwrap();
+    assert!(error.to_string().contains("DENO_BINARY"));
+
+    let mut values = config_values();
+    values["DENO_BINARY"] = serde_json::Value::Null;
+    assert!(serde_json::from_value::<Config>(values).is_err());
+
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(config.deno_binary.as_ref(), "/usr/local/bin/deno");
 }
 
 #[test]
@@ -136,6 +152,7 @@ fn values() -> serde_json::Value {
         "REPO_STORAGE_ROOT": "/data/agent-git",
         "MAX_REPO_SIZE_BYTES": 524288000,
         "PUSHES_PER_MINUTE": 30,
+        "DENO_BINARY": "/usr/local/bin/deno",
         "LIVEKIT_API_KEY": "livekit-key",
         "LIVEKIT_API_SECRET": "livekit-secret"
     });

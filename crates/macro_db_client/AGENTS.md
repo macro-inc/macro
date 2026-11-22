@@ -108,6 +108,7 @@ owner-only Notion mirror. No existing folders or import rows are backfilled.
 
 ## Gotchas
 
+- Keep credential lookup arguments off spans: `get_user_macro_user_id_and_id_by_email` and `get_user_organization` accept email-bearing identifiers.
 - `document_email` has a statement-level `AFTER DELETE` trigger
   (`document_email_release`, migration `20261116200143`) that queues each
   document a statement unlinks in `released_email_attachment_documents`, even

@@ -1,3 +1,7 @@
+import {
+  deserializeToolCall,
+  deserializeToolResponse,
+} from '@service-cognition/generated/tools/tool';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { Component, JSX, ParentProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -71,4 +75,48 @@ it('reads a code run that ended in a call error as a failed step', () => {
   expect(codeRunLabel({ status: 'cancelled' }, undefined)).toBe(
     'Step interrupted'
   );
+});
+
+it('shows a chat code run as workspace work, without its program or result', () => {
+  const source = 'return await macro.search({ query: "launch plan" });';
+  const call = deserializeToolCall({
+    id: 'run',
+    name: 'ExecuteCode',
+    json: { source, timeout_ms: 30000 },
+  });
+  const response = deserializeToolResponse({
+    id: 'run',
+    name: 'ExecuteCode',
+    json: {
+      status: 'succeeded',
+      activity: [],
+      activityTruncated: false,
+      result: { documentId: 'doc-launch-plan' },
+    },
+  });
+  if (call.isErr() || response.isErr()) {
+    throw new Error('the chat ExecuteCode shapes did not parse');
+  }
+
+  const view = render(() => (
+    <Dynamic
+      component={
+        executeCodeHandler.render as Component<Record<string, unknown>>
+      }
+      tool={call.value}
+      response={response.value}
+      renderContext={{
+        isStreaming: false,
+        grouped: false,
+        followedBy: () => false,
+      }}
+    />
+  ));
+
+  const text = view.container.textContent ?? '';
+  expect(text).toContain('Finished a step');
+  expect(text.toLowerCase()).not.toContain('code');
+  expect(text).not.toContain('macro.search');
+  expect(text).not.toContain('doc-launch-plan');
+  expect(text).not.toMatch(/[{}]/);
 });
