@@ -122,15 +122,38 @@ async fn seed(pool: &PgPool) {
     .execute(pool)
     .await
     .unwrap();
-    // FREEZE, not a plain VACUUM: a plain one skips any page it cannot
-    // cleanup-lock and leaves it out of the visibility map, so index-only
-    // scans fetch heap tuples. Under parallel tests on Postgres 14, the
-    // checkpoint each CREATE DATABASE forces can hold such pins. FREEZE
-    // waits for the lock instead.
-    sqlx::query!("VACUUM (FREEZE, ANALYZE) contact_list_members, contact_inbox_members, team_user")
+    // The block budgets assume index-only scans that never visit the heap,
+    // so every seeded page must be in the visibility map. On a database
+    // shared with parallel tests a single VACUUM sometimes leaves pages out
+    // (seen in CI on Postgres 14, with no other transaction holding the
+    // horizon), so vacuum until none is left, a bounded number of times.
+    let mut unmarked = None;
+    for _ in 0..10 {
+        sqlx::query!(
+            "VACUUM (FREEZE, ANALYZE) contact_list_members, contact_inbox_members, team_user"
+        )
         .execute(pool)
         .await
         .unwrap();
+        let pages = sqlx::query_scalar!(
+            r#"SELECT coalesce(sum(relpages - relallvisible), 0)::bigint AS "pages!"
+               FROM pg_class
+               WHERE relname IN ('contact_list_members', 'contact_inbox_members', 'team_user')"#
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        unmarked = Some(pages);
+        if pages == 0 {
+            break;
+        }
+    }
+    assert_eq!(
+        unmarked,
+        Some(0),
+        "VACUUM left seeded pages out of the visibility map after 10 tries, so \
+         index-only scans would fetch heap tuples and overrun the block budgets"
+    );
 }
 
 async fn hosted_planner(connection: &mut PgConnection) {
