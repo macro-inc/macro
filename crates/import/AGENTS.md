@@ -26,7 +26,9 @@ has the agent submit it with `DecideReview`. `plan` returns after a short wait
 (`PLAN_WAIT`), usually while the run is still `running`, and the agent
 presents the review at once: the harness ties the staged rows and the
 `running` run (`import_run.review_id`) to the review, so rows staged later
-take it too. Planning stages the whole tree as soon as the inventory is read,
+take it too. `attach_review` refuses a run that is failed, finished, cancelled
+or missing (`ImportError::RunNotReviewable` with a typed `UnreviewableRun`
+carrying the failure reason), so a failed plan never shows as an empty review. Planning stages the whole tree as soon as the inventory is read,
 each row without a `decision` yet, then writes each decision-model batch's
 verdicts onto its rows as it lands (`update_plan_rows`); the report counts
 undecided rows as `deciding`, and the write cannot start until the run is

@@ -277,6 +277,8 @@ async fn approved_source(
     .execute(pool)
     .await
     .unwrap();
+    // A review is presented while its plan is being made.
+    repo.start_run(owner, source, &[]).await.unwrap();
     repo.attach_review(
         owner,
         source,

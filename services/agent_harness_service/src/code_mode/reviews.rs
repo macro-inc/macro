@@ -14,6 +14,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Serialize, de::DeserializeOwned};
 use std::sync::Arc;
 
+#[cfg(test)]
+mod test;
+
 /// The source of an import review's one draft, fixed at presentation.
 fn import_source(
     record: &ReviewRecord,
@@ -26,6 +29,26 @@ fn import_source(
         _ => Err(CodeModeError::Invalid(
             "This is not an import review.".into(),
         )),
+    }
+}
+
+/// What the agent hears when an import plan could not be tied to its review.
+/// A run that cannot take a review is refused with its reason, so the agent
+/// tells the user instead of presenting an empty plan.
+fn attach_error(review: uuid::Uuid, error: import::domain::ports::ImportError) -> CodeModeError {
+    match error {
+        import::domain::ports::ImportError::RunNotReviewable(refusal) => {
+            tracing::info!(refusal = ?refusal, %review, "import review refused");
+            CodeModeError::Invalid(format!(
+                "Review {review} was not presented: {refusal}. Tell the user why instead of presenting it again."
+            ))
+        }
+        error => {
+            tracing::warn!(error = ?error, %review, "could not tie the import plan to its review");
+            CodeModeError::Invalid(format!(
+                "Review {review} was saved, but its import plan could not be attached. Read this review to retry."
+            ))
+        }
     }
 }
 
@@ -126,15 +149,14 @@ where
             // The plan is tied to the review before the card appears, so the
             // card never shows a plan it cannot approve.
             self.import_service()?
-                .attach_workspace_review(owner, import_source(record)?, record.id.0, record.session_id)
+                .attach_workspace_review(
+                    owner,
+                    import_source(record)?,
+                    record.id.0,
+                    record.session_id,
+                )
                 .await
-                .map_err(|error| {
-                    tracing::warn!(error = ?error, review = %record.id.0, "could not tie the import plan to its review");
-                    CodeModeError::Invalid(format!(
-                        "Review {} was saved, but its import plan could not be attached. Read this review to retry.",
-                        record.id.0
-                    ))
-                })?;
+                .map_err(|error| attach_error(record.id.0, error))?;
         }
         self.harness.present_tool(
             record.session_id,

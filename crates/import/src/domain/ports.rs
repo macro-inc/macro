@@ -67,9 +67,50 @@ pub enum ImportError {
     /// The entity-access check itself failed, so access is unknown.
     #[error("could not check access to the entity")]
     AccessCheck(#[source] anyhow::Error),
+    /// A review was presented for a plan that cannot be approved: the run
+    /// failed, finished, or never started.
+    #[error(transparent)]
+    RunNotReviewable(#[from] UnreviewableRun),
     /// Anything else.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+}
+
+/// Why a workspace import run cannot take a review. Only a run that is
+/// planning or has a ready plan can.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum UnreviewableRun {
+    /// No plan was ever started for this source.
+    #[error("there is no import plan to review; plan the import first")]
+    Missing,
+    /// Planning failed; `error` says why (e.g. the grant lost access).
+    #[error("the import plan failed{}; nothing can be reviewed until it is planned again", .error.as_deref().map(|error| format!(": {error}")).unwrap_or_default())]
+    Failed {
+        /// The run's failure reason.
+        error: Option<String>,
+    },
+    /// The plan is already being written.
+    #[error("this import is already being written; there is no plan left to review")]
+    Importing,
+    /// The plan was written; plan again to import more.
+    #[error("this import already finished; plan it again to review a new plan")]
+    Completed,
+    /// The import was cancelled; plan again to review a new plan.
+    #[error("this import was cancelled; plan it again to review a new plan")]
+    Dismissed,
+}
+
+impl UnreviewableRun {
+    /// Why a run in `status` cannot take a review, or `None` when it can.
+    pub fn of(status: RunStatus, error: Option<String>) -> Option<Self> {
+        match status {
+            RunStatus::Running | RunStatus::Ready => None,
+            RunStatus::Failed => Some(Self::Failed { error }),
+            RunStatus::Importing => Some(Self::Importing),
+            RunStatus::Completed => Some(Self::Completed),
+            RunStatus::Dismissed => Some(Self::Dismissed),
+        }
+    }
 }
 
 /// Result alias for import operations.
@@ -984,7 +1025,9 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
     /// staged rows, and the run while it is still planning (`running`), so
     /// rows staged later are tied too. The first review presenting a plan
     /// keeps its session, which hears when the plan is ready and when its
-    /// write ends. Returns how many rows it tied.
+    /// write ends. Returns how many rows it tied, or
+    /// [`ImportError::RunNotReviewable`] when the run is not planning or
+    /// ready (failed, finished, or missing), changing nothing.
     fn attach_review(
         &self,
         user: &MacroUserIdStr<'static>,

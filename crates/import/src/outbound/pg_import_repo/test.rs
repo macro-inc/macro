@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::models::{
     ImportTargetKey, ImportTargetKind, SlackConversationId, SlackWorkspaceId,
 };
-use crate::domain::ports::{CanonicalImportRepo, NotionPlanRepo, PlanRow};
+use crate::domain::ports::{CanonicalImportRepo, NotionPlanRepo, PlanRow, UnreviewableRun};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 
@@ -1103,6 +1103,11 @@ async fn a_review_ties_only_the_staged_plan_and_runs_move_only_from_the_given_st
     .await
     .unwrap();
 
+    assert!(
+        repo.start_run(&actor, ImportSource::Notion, &[])
+            .await
+            .unwrap()
+    );
     assert_eq!(
         repo.attach_review(
             &actor,
@@ -1117,11 +1122,6 @@ async fn a_review_ties_only_the_staged_plan_and_runs_move_only_from_the_given_st
     let tied = repo.get(&actor, staged[0].id).await.unwrap().unwrap();
     assert_eq!(tied.review_id, Some(review));
 
-    assert!(
-        repo.start_run(&actor, ImportSource::Notion, &[])
-            .await
-            .unwrap()
-    );
     assert!(
         !repo
             .transition_run(
@@ -1221,4 +1221,78 @@ async fn scan_counts_show_only_while_the_run_is_running_and_reset_on_restart(poo
         .await
         .unwrap();
     assert_eq!(repo.list_runs(&actor).await.unwrap()[0].scanned, None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_review_is_refused_for_a_failed_or_missing_run_and_ties_nothing(pool: PgPool) {
+    let actor = ledger_actor(&pool, "refused-review").await;
+    let repo = PgImportRepo::new(pool.clone());
+    let session = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO agent_session (id, owner_id, bot_id, harness, model, workspace, for_warming) VALUES ($1, $2, '00000000-0000-0000-0000-00000000a2a2', 'macro-inmem', 'test-model', '/workspace', false)"#,
+        session,
+        actor.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let session = agent_session::domain::model::AgentSessionId::new_from_uuid(session);
+
+    let missing = repo
+        .attach_review(&actor, ImportSource::Notion, Uuid::now_v7(), session)
+        .await;
+    assert!(
+        matches!(
+            missing,
+            Err(ImportError::RunNotReviewable(UnreviewableRun::Missing))
+        ),
+        "{missing:?}"
+    );
+
+    // An older plan's staged row, left from before planning failed.
+    let staged = repo
+        .replace_plan(
+            &actor,
+            ImportSource::Notion,
+            &[plan_row(
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                None,
+                "Engineering",
+            )],
+        )
+        .await
+        .unwrap();
+    assert!(
+        repo.start_run(&actor, ImportSource::Notion, &[])
+            .await
+            .unwrap()
+    );
+    let reason = "Notion object not found or not shared with the connection";
+    assert!(
+        repo.transition_run(
+            &actor,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Failed,
+            Some(reason),
+        )
+        .await
+        .unwrap()
+    );
+
+    let review = Uuid::now_v7();
+    let failed = repo
+        .attach_review(&actor, ImportSource::Notion, review, session)
+        .await;
+    match failed {
+        Err(ImportError::RunNotReviewable(UnreviewableRun::Failed { error })) => {
+            assert_eq!(error.as_deref(), Some(reason));
+        }
+        other => panic!("expected a failed-run refusal, got {other:?}"),
+    }
+    let row = repo.get(&actor, staged[0].id).await.unwrap().unwrap();
+    assert_eq!(row.review_id, None, "a refused review ties no rows");
+    let runs = repo.list_runs(&actor).await.unwrap();
+    assert_eq!(runs[0].status, RunStatus::Failed);
+    assert_eq!(runs[0].review_id, None);
 }

@@ -9,7 +9,8 @@ use uuid::Uuid;
 
 use super::{ImportEntityDbRow, PgImportRepo, run_status_strings};
 use crate::domain::models::{ImportEntity, ImportSource, RunStatus, ScanCounts, TeamClaim};
-use crate::domain::ports::{NotionPlanRepo, PlanRow, Result};
+use crate::domain::ports::{NotionPlanRepo, PlanRow, Result, UnreviewableRun};
+use std::str::FromStr;
 
 #[cfg(test)]
 mod test;
@@ -231,7 +232,27 @@ impl NotionPlanRepo for PgImportRepo {
     ) -> Result<u64> {
         let mut transaction = self.pool.begin().await?;
         // First, so a plan being staged right now finishes before the rows
-        // are tied (it holds the run), or stages them with this review.
+        // are tied (it holds the run), or stages them with this review. Only a
+        // planning or ready run can take a review; anything else is refused
+        // so the card never shows a plan nobody can approve.
+        let run = sqlx::query!(
+            r#"
+            SELECT status::text AS "status!", error
+            FROM import_run
+            WHERE user_id = $1 AND source = $2
+            FOR UPDATE
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+        )
+        .fetch_optional(&mut *transaction)
+        .await?
+        .ok_or(UnreviewableRun::Missing)?;
+        let status = RunStatus::from_str(&run.status)
+            .map_err(|_| anyhow::anyhow!("unknown run status: {}", run.status))?;
+        if let Some(refusal) = UnreviewableRun::of(status, run.error) {
+            return Err(refusal.into());
+        }
         sqlx::query!(
             r#"
             UPDATE import_run
