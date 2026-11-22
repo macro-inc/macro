@@ -4,7 +4,6 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
-import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
 import { MonthPickerPopover } from '@app/features/calendar/components/month-picker/MonthPickerPopover';
 import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
 import { CalendarViewTabs } from '@app/features/calendar/components/view-tabs/CalendarViewTabs';
@@ -43,6 +42,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { CALENDAR_TOUR } from '../tour';
+import { MonthDrawer } from '../views/mobile/month-drawer';
 import {
   CalendarCreateBookingLinkItem,
   CalendarCreateCallItem,
@@ -304,7 +304,10 @@ export function Header(props: {
         <TouchHeader>
           <TouchHeaderLeft>
             <HeaderIsland class="min-w-0 shrink px-1">
-              <MonthDrawer month={currentDate()} />
+              <MonthDrawer
+                month={currentDate()}
+                showWeekends={calendarView.displaySettings.showWeekends}
+              />
             </HeaderIsland>
           </TouchHeaderLeft>
 

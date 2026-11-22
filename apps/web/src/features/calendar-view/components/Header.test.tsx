@@ -77,7 +77,7 @@ vi.mock('@solid-primitives/resize-observer', () => ({
     height: 60,
   }),
 }));
-vi.mock('@app/features/calendar/components/MonthDrawer', () => ({
+vi.mock('../views/mobile/month-drawer', () => ({
   MonthDrawer: () => <button>Choose month</button>,
 }));
 vi.mock(
