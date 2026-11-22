@@ -33,6 +33,29 @@ export async function refreshProjectQueries(
   ]);
 }
 
+type ProjectReader = {
+  projectId: () => string;
+  refresh: () => Promise<void>;
+};
+// Mounted project reads, so one project can be read again without the
+// activity readers and lists the app's own writes refresh.
+const projectReaders = new Set<ProjectReader>();
+
+/** Reads every mounted copy of one project again, and only that project. */
+export async function refreshProjectReads(projectId: string) {
+  await Promise.all(
+    [...projectReaders]
+      .filter((reader) => reader.projectId() === projectId)
+      .map(async (reader) => {
+        try {
+          await reader.refresh();
+        } catch (error) {
+          console.warn('Project read failed', error);
+        }
+      })
+  );
+}
+
 /**
  * Reads a mounted project again whenever the activity registry revalidates:
  * an activity push, the Soup websocket connecting or reconnecting, or one of
@@ -42,13 +65,17 @@ export async function refreshProjectQueries(
  */
 export function registerProjectRevalidation(
   client: () => Client,
+  projectId: () => string,
   enabled: () => boolean,
   refetch: () => Promise<unknown>
 ) {
   let disposed = false;
   const refresh = createTrailingRefetch(() => !disposed && enabled(), refetch);
+  const reader: ProjectReader = { projectId, refresh };
+  projectReaders.add(reader);
   onCleanup(registerActivityRevalidator({ client, refresh }));
   onCleanup(() => {
     disposed = true;
+    projectReaders.delete(reader);
   });
 }

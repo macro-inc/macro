@@ -25,7 +25,10 @@ vi.mock('@service-storage/graphql-soup', () => ({
   },
 }));
 
-import { registerProjectRevalidation } from './project-revalidation';
+import {
+  refreshProjectReads,
+  registerProjectRevalidation,
+} from './project-revalidation';
 
 let visibility: DocumentVisibilityState = 'visible';
 
@@ -48,7 +51,7 @@ function setVisibility(value: DocumentVisibilityState) {
 }
 
 /** A project read that stays in flight until the test answers it. */
-function register(enabled = () => true) {
+function register(enabled = () => true, projectId = 'project') {
   const answers: (() => void)[] = [];
   const read = vi.fn(
     () =>
@@ -57,7 +60,12 @@ function register(enabled = () => true) {
       })
   );
   const dispose = createRoot((dispose) => {
-    registerProjectRevalidation(() => ({}) as Client, enabled, read);
+    registerProjectRevalidation(
+      () => ({}) as Client,
+      () => projectId,
+      enabled,
+      read
+    );
     return dispose;
   });
   const answer = async () => {
@@ -146,4 +154,21 @@ it('drops a queued read when disposed during the one in flight', async () => {
   await answer();
   await Promise.all([first, queued]);
   expect(read).toHaveBeenCalledOnce();
+});
+
+it('reads only the named project again, and nothing once it unmounts', async () => {
+  const project = register(() => true, 'project');
+  const other = register(() => true, 'other');
+
+  const read = refreshProjectReads('project');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(project.read).toHaveBeenCalledOnce();
+  expect(other.read).not.toHaveBeenCalled();
+  await project.answer();
+  await read;
+
+  project.dispose();
+  await refreshProjectReads('project');
+  expect(project.read).toHaveBeenCalledOnce();
+  other.dispose();
 });

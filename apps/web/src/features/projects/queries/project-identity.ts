@@ -169,7 +169,7 @@ function createAuthorizedProjectQuery<
       ...options,
       context: { ...options.context, ...authorization().requestContext() },
     });
-  registerProjectRevalidation(client, active, () =>
+  registerProjectRevalidation(client, currentProject, active, () =>
     refetch({ requestPolicy: 'cache-and-network' })
   );
   let recoveredScope: ReturnType<typeof scope> | undefined;

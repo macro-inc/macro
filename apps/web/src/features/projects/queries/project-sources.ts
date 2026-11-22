@@ -28,7 +28,10 @@ import {
   createProjectIdentityQuery,
 } from './project-identity';
 import { projectDefinitionProperties } from './project-properties';
-import { refreshProjectQueries } from './project-revalidation';
+import {
+  refreshProjectQueries,
+  refreshProjectReads,
+} from './project-revalidation';
 import { createProjectSoupSource } from './project-soup';
 import { TASK_PROJECT_PROPERTY, taskProjectValue } from './task-project';
 
@@ -62,12 +65,10 @@ export function createProjectSources(
       cache,
       soup.cacheHost ?? (() => undefined)
     );
-  // Before an unlisted task goes, the project is read once more, in case
-  // its read missed the push that lists it.
+  // Before an unlisted task goes, its project alone is read once more, in
+  // case that read missed the push that lists it.
   const pendingTasks = createPendingProjectTasks({
-    beforeExpire: async () => {
-      await refresh();
-    },
+    beforeExpire: refreshProjectReads,
   });
   const context: ProjectsContext = {
     userId,
