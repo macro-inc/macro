@@ -292,7 +292,9 @@ tools — hexagonal, heavily feature-gated.
   `syncing_inboxes` inbox, so a person who joins is found without mail, and
   `backfill` fills one inbox several threads at a time. The sweep goes inbox by
   inbox (`inboxes_with_focus` plus those seen enrolled) and leaves an inbox being
-  backfilled to the backfill, so no thread is classified twice at once; `stale_threads` reads one
+  backfilled to the backfill, so no thread is classified twice at once. An inbox
+  whose threads can't be read counts in `inboxes_failed` and the sweep goes on
+  to the next, so one slow inbox can't stop the sweep for all. `stale_threads` reads one
   inbox through its latest-inbound and latest-outbound indexes; keep its
   `OFFSET 0` fence, or the per-thread calendar and contact checks run on every
   thread in the window. It reads the owner's recent contacts once, from their

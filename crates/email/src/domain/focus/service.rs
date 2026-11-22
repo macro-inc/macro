@@ -81,6 +81,10 @@ pub struct SweepReport {
     /// reads them changed since they were found in it; their other threads
     /// wait for a sweep or a backfill that finds them in again.
     pub inboxes_left: usize,
+    /// Inboxes whose stale threads could not be read, as when the read timed
+    /// out; the sweep goes on to the others and the next sweep tries them
+    /// again.
+    pub inboxes_failed: usize,
     /// Threads the sweep found stale.
     pub candidates: usize,
     /// Threads classified.
@@ -623,7 +627,9 @@ where
     /// Check up to `limit` stale threads from the last `window` in the inboxes
     /// in the rollout, each inbox newest first, and classify those that need
     /// it. Stops at the first sign the classifier is
-    /// unavailable, or after a run of rejections.
+    /// unavailable, or after a run of rejections. An inbox whose threads can't
+    /// be read is counted in [`SweepReport::inboxes_failed`] and the sweep goes
+    /// on to the next.
     ///
     /// The inboxes are every inbox holding Focus, so none is forgotten across a
     /// restart, and every inbox seen in the rollout since; an inbox that left the
@@ -674,9 +680,18 @@ where
                 }
             }
             progress.report.inboxes += 1;
-            if !self.sweep_inbox(link_id, &walk, &mut progress).await? {
-                saw_them_all = false;
-                break;
+            match self.sweep_inbox(link_id, &walk, &mut progress).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    saw_them_all = false;
+                    break;
+                }
+                // One inbox that can't be read leaves the others to sweep.
+                Err(error) => {
+                    tracing::error!(error = ?error, %link_id, "focus sweep left out an inbox: its threads could not be read");
+                    progress.report.inboxes_failed += 1;
+                    saw_them_all = false;
+                }
             }
         }
 

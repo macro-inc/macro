@@ -76,7 +76,8 @@ pub enum Metric {
     EventToClassifiedSeconds,
     /// How long one sweep took (sample).
     SweepSeconds,
-    /// Sweeps that failed.
+    /// Sweeps that failed, or left out an inbox whose threads could not be
+    /// read.
     SweepFailures,
     /// Sweeps the classifier stopped before they were done.
     SweepsStoppedEarly,
