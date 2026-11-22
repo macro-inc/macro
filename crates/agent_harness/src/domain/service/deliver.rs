@@ -360,22 +360,54 @@ where
             for context in &batch.producer_contexts {
                 genai_telemetry::propagation::link(&tracing::Span::current(), Some(context));
             }
+            let owner = self
+                .continuing_owner(session_id, &batch.notifications)
+                .await?;
             let entry = QueuedEntry {
                 action_id: batch.action_id,
                 action: AgentAction::notification(batch.notifications.clone()),
-                actor: None,
+                prompter: if owner.is_some() {
+                    agent_session::domain::model::PrompterKind::Program
+                } else {
+                    agent_session::domain::model::PrompterKind::User
+                },
+                actor: owner,
                 announce: None,
                 context: None,
                 announced: None,
                 created_at: chrono::Utc::now(),
                 client: None,
-                prompter: agent_session::domain::model::PrompterKind::User,
             };
             self.notification_batches.insert(session_id, batch);
             self.queues.requeue_front(session_id, entry);
             break;
         }
         Ok(())
+    }
+
+    /// The owner a waking batch acts for: only a batch that continues their
+    /// own work ([`continues_for_owner`](crate::domain::app_connections::continues_for_owner)), picking up after a turn that acted
+    /// for them. The owner connecting an app is not their word on what a bot
+    /// or someone else asked for, so a continuation of anyone else's turn
+    /// acts for nobody and its calls wait for the owner.
+    async fn continuing_owner(
+        &self,
+        session_id: AgentSessionId,
+        notifications: &[agent_runtime_protocol::domain::notification::Notification],
+    ) -> Result<Option<MacroUserIdStr<'static>>> {
+        if !crate::domain::app_connections::continues_for_owner(notifications) {
+            return Ok(None);
+        }
+        let session = self.sessions.get_session(session_id).await?;
+        let Some(owner) = session.owner_id.as_user() else {
+            return Ok(None);
+        };
+        let previous = self.sessions.turn_prompter(session_id).await?;
+        Ok(previous
+            .as_ref()
+            .and_then(agent_session::domain::model::TurnPrompter::acting_user)
+            .filter(|user| *user == owner)
+            .cloned())
     }
 
     /// Attach quiet events, or recover the prior turn before dispatching this

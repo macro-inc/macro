@@ -1,7 +1,9 @@
 use super::*;
 use crate::domain::model::ReplyOutcome;
 use agent_fold::domain::ports::FoldedMessageRepo as _;
-use agent_runtime_protocol::domain::notification::{NotificationEvent, input_from_runtime};
+use agent_runtime_protocol::domain::notification::{
+    ImportPlan, NotificationEvent, input_from_runtime,
+};
 use agent_session::domain::notifications::*;
 use macro_uuid::Uuid;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -167,9 +169,15 @@ async fn event(outbox: &Outbox, session: AgentSessionId, subject: &str, wake: bo
             PendingNotification::new(ProduceNotification {
                 session_id: session,
                 subject_id: subject.into(),
-                event: NotificationEvent::AppConnected {
-                    app: "Calendar".into(),
-                },
+                // Any event but `app.connected`, which may continue the
+                // owner's own work (see `app_connected`).
+                event: NotificationEvent::ImportPlanned(ImportPlan {
+                    source: Default::default(),
+                    copy: 1,
+                    task_lists: 0,
+                    skipped: 0,
+                    by_hand: 0,
+                }),
                 dedupe_key: None,
                 wake,
             })
@@ -802,4 +810,124 @@ async fn a_settled_import_wakes_an_idle_session_with_its_final_report() {
         prompter.kind,
         agent_session::domain::model::PrompterKind::System
     );
+}
+
+/// The owner connecting an app wakes the session with an `app.connected`.
+async fn app_connected(outbox: &Outbox, session: AgentSessionId) {
+    outbox
+        .enqueue(
+            PendingNotification::new(ProduceNotification {
+                session_id: session,
+                subject_id: "confluence".into(),
+                event: NotificationEvent::AppConnected {
+                    app: "Confluence".into(),
+                },
+                dedupe_key: None,
+                wake: true,
+            })
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+}
+
+/// The prompter of the turn a woken session runs once it has been prompted
+/// `requests` times in all.
+async fn woken_prompter(
+    service: &TestHarness,
+    repo: &InMemoryAgentSessionRepo,
+    container: &ContainerMock,
+    id: AgentSessionId,
+    requests: usize,
+) -> agent_session::domain::model::TurnPrompter {
+    service.recover_notifications().await.unwrap();
+    container.agent().wait_for_requests(requests).await;
+    let input = container
+        .agent()
+        .received_frames()
+        .iter()
+        .filter_map(|frame| input_from_runtime(&ToRuntimeMessage::Acp(AcpMessage(frame.clone()))))
+        .next_back()
+        .unwrap();
+    assert!(input.system_turn, "the wake has no human prompt");
+    repo.turn_prompter(id).await.unwrap().unwrap()
+}
+
+/// Continuing after connecting from the agent's connect card: the turn that
+/// asked was the owner's, so the continuation spends the owner's access as
+/// a program would, and the owner's own calls are not held as a bot's.
+#[tokio::test]
+async fn an_app_connected_after_the_owners_turn_acts_for_the_owner() {
+    let outbox = Arc::new(Outbox::default());
+    let ((service, repo, containers, _, _), mut turns) = harness_with_outbox(outbox.clone());
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    turns.settled(id).await;
+    let owner = sender();
+    assert_eq!(
+        repo.turn_prompter(id).await.unwrap().unwrap().acting_user(),
+        Some(&owner),
+        "the owner prompted the turn that asked for the app"
+    );
+    app_connected(&outbox, id).await;
+    let prompter = woken_prompter(&service, &repo, &container, id, 4).await;
+    assert_eq!(
+        prompter.kind,
+        agent_session::domain::model::PrompterKind::Program,
+        "the owner's access, never the owner's word"
+    );
+    assert_eq!(prompter.acting_user(), Some(&owner));
+    assert_eq!(service.inner.busy.turn(id).unwrap().actor, Some(owner));
+}
+
+/// Connecting an app is not the owner's word on what somebody else asked
+/// for: continuing another person's turn acts for nobody, so its calls on
+/// the owner's access still wait for the owner.
+#[tokio::test]
+async fn an_app_connected_after_someone_elses_turn_acts_for_nobody() {
+    let outbox = Arc::new(Outbox::default());
+    let ((service, repo, containers, _, _), mut turns) = harness_with_outbox(outbox.clone());
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    turns.settled(id).await;
+    service
+        .execute(
+            id,
+            HarnessCommand::Deliver(forward_message("list my spaces")),
+        )
+        .await
+        .unwrap();
+    container.agent().wait_for_requests(4).await;
+    container.agent().completes_prompt().await;
+    turns.settled(id).await;
+    assert_ne!(
+        repo.turn_prompter(id).await.unwrap().unwrap().acting_user(),
+        Some(&sender())
+    );
+    app_connected(&outbox, id).await;
+    let prompter = woken_prompter(&service, &repo, &container, id, 5).await;
+    assert_eq!(
+        prompter.kind,
+        agent_session::domain::model::PrompterKind::System
+    );
+    assert!(prompter.acting_user().is_none());
+}
+
+/// A wake that carries any other event beside the connection acts for
+/// nobody: only the connection is the owner's own report.
+#[tokio::test]
+async fn an_app_connected_batched_with_another_event_acts_for_nobody() {
+    let outbox = Arc::new(Outbox::default());
+    let ((service, repo, containers, _, _), mut turns) = harness_with_outbox(outbox.clone());
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    turns.settled(id).await;
+    app_connected(&outbox, id).await;
+    event(&outbox, id, "import", true).await;
+    let prompter = woken_prompter(&service, &repo, &container, id, 4).await;
+    assert_eq!(
+        prompter.kind,
+        agent_session::domain::model::PrompterKind::System
+    );
+    assert!(prompter.acting_user().is_none());
 }
