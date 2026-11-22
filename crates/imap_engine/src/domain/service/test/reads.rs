@@ -215,7 +215,7 @@ async fn recent_inbox_defers_one_busy_body_without_restarting_the_batch() {
         vec![message_id.as_str(), "m:3"]
     );
     assert!(messages.iter().all(|message| message.source_complete));
-    assert_eq!(std::iter::from_fn(|| observed.try_recv().ok()).count(), 3);
+    assert_eq!(std::iter::from_fn(|| observed.try_recv().ok()).count(), 4);
 }
 
 #[tokio::test]
@@ -264,4 +264,25 @@ async fn an_underreported_oversized_source_is_fetched_once_and_never_retried() {
     assert!(matches!(result, Err(Error::MessageTooLarge)));
     assert_eq!(observed.try_recv().unwrap(), binding.link_id);
     assert!(observed.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn an_all_busy_recent_batch_retries_only_deferred_items_and_reports_busy() {
+    let ReadFixture {
+        engine,
+        control,
+        mut observed,
+        binding,
+        ..
+    } = read_fixture(
+        b"Message-ID: <synthetic@example.net>\r\n\r\nTest body".to_vec(),
+        BTreeMap::from([(1, Error::AccountBusy)]),
+        None,
+    );
+    control.released.add_permits(2);
+    let result = engine
+        .execute(binding, Operation::RecentInbox { limit: 3 })
+        .await;
+    assert!(matches!(result, Err(Error::AccountBusy)));
+    assert_eq!(std::iter::from_fn(|| observed.try_recv().ok()).count(), 2);
 }

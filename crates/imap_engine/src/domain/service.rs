@@ -12,7 +12,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
-use tracing::Instrument;
+mod recent;
 use uuid::Uuid;
 
 const PAGE_SIZE: usize = 500;
@@ -272,7 +272,11 @@ impl Engine {
         operation: Operation,
         class: OperationClass,
     ) -> Result<Value, Error> {
-        let retryable = operation.access() == OperationAccess::Read
+        if let Operation::RecentInbox { limit } = operation {
+            return self.recent_inbox(binding, limit, class).await;
+        }
+        let retryable = (operation.access() == OperationAccess::Read
+            && !matches!(&operation, Operation::RecentInbox { .. }))
             || matches!(&operation, Operation::Apply { .. });
         if !retryable {
             return self
@@ -511,45 +515,9 @@ impl Engine {
             }
             Operation::Message { id } => value(self.read_message(a, &id).await?),
             Operation::Organization { id } => value(a.state.messages.get(&id)),
-            Operation::RecentInbox { limit } => {
-                let mut messages = a
-                    .state
-                    .messages
-                    .values()
-                    .filter(|m| {
-                        a.state
-                            .folders
-                            .get(&m.folder_id)
-                            .is_some_and(|f| f.folder.role == FolderRole::Inbox)
-                    })
-                    .collect::<Vec<_>>();
-                messages.sort_by_key(|m| std::cmp::Reverse(m.received_at));
-                messages.truncate(usize::try_from(limit.min(100)).map_err(|_| Error::Invalid)?);
-                let ids = messages
-                    .into_iter()
-                    .map(|m| m.id.clone())
-                    .collect::<Vec<_>>();
-                let span = tracing::info_span!(
-                    "imap.recent_inbox",
-                    read.deferred_count = tracing::field::Empty,
-                    read.oversized_count = tracing::field::Empty
-                );
-                let mut deferred = 0i64;
-                let mut oversized = 0i64;
-                let mut messages = Vec::new();
-                for id in ids {
-                    match self.read_message(a, &id).instrument(span.clone()).await {
-                        Ok(Some(message)) => messages.push(message),
-                        Ok(None) => {}
-                        Err(Error::AccountBusy) => deferred += 1,
-                        Err(Error::MessageTooLarge) => oversized += 1,
-                        Err(error) => return Err(error),
-                    }
-                }
-                span.record("read.deferred_count", deferred);
-                span.record("read.oversized_count", oversized);
-                value(messages)
-            }
+            // Batch contention retries retain completed bodies outside the
+            // global slot; execute_in_class dispatches this separate use case.
+            Operation::RecentInbox { .. } => Err(Error::Invalid),
             Operation::Attachment { id, part } => {
                 let m = self.read_message(a, &id).await?.ok_or(Error::NotFound)?;
                 let raw = STANDARD

@@ -21,6 +21,7 @@ import type {
   CalendarMutationApiError,
   CancelBackfillParams,
   CompleteDraftAttachmentParams,
+  ContentTooLargeResponse,
   CopyCalendarEventRequest,
   CreateDraftRequest,
   CreateDraftResponse,
@@ -128,6 +129,11 @@ export type getAttachmentResponse409 = {
   status: 409;
 };
 
+export type getAttachmentResponse413 = {
+  data: ContentTooLargeResponse;
+  status: 413;
+};
+
 export type getAttachmentResponse429 = {
   data: ErrorResponse;
   status: 429;
@@ -147,6 +153,7 @@ export type getAttachmentResponseError = (
   | getAttachmentResponse403
   | getAttachmentResponse404
   | getAttachmentResponse409
+  | getAttachmentResponse413
   | getAttachmentResponse429
   | getAttachmentResponse500
 ) & {
@@ -3331,6 +3338,11 @@ export type getMessageEmlResponse409 = {
   status: 409;
 };
 
+export type getMessageEmlResponse413 = {
+  data: ContentTooLargeResponse;
+  status: 413;
+};
+
 export type getMessageEmlResponse429 = {
   data: ErrorResponse;
   status: 429;
@@ -3349,6 +3361,7 @@ export type getMessageEmlResponseError = (
   | getMessageEmlResponse403
   | getMessageEmlResponse404
   | getMessageEmlResponse409
+  | getMessageEmlResponse413
   | getMessageEmlResponse429
   | getMessageEmlResponse503
 ) & {

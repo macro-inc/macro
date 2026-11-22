@@ -119,6 +119,7 @@ impl Engine {
                             },
                         )
                         .await
+                        .map_err(ApplyError::into_error)
                         .map(|_| ())
                 } else if a.state.messages.contains_key(&reply) {
                     Err(Error::ConnectionUnavailable)

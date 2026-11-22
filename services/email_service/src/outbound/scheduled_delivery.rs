@@ -440,6 +440,7 @@ fn classify_preparation_error(error: anyhow::Error) -> PreparationError {
                     | EmailApiError::NotFound
                     | EmailApiError::Conflict
                     | EmailApiError::SendRejected { .. }
+                    | EmailApiError::ContentTooLarge
                     | EmailApiError::Permanent { .. }
             )
         })

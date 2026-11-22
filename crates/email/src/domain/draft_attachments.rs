@@ -23,6 +23,8 @@ pub enum AttachmentError {
     DeliveryConflict,
     #[error("{0}")]
     Invalid(&'static str),
+    #[error("This message is too large to open in Macro (over 25 MB).")]
+    ContentTooLarge,
     #[error("Attachment storage is temporarily unavailable")]
     Infrastructure,
     /// Another transaction held the inbox's rows past the lock timeout.

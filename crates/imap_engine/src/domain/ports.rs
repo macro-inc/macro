@@ -3,6 +3,27 @@ use super::models::*;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+/// Whether an organization write failed before transport admission or after it
+/// could have changed provider state. Only admission refusal can be retried.
+#[derive(Debug, thiserror::Error)]
+pub enum ApplyError {
+    /// No command session was admitted and no provider mutation was attempted.
+    #[error("organization write not started: {0}")]
+    NotStarted(Error),
+    /// Provider I/O began; the operation must not be replayed on a busy error.
+    #[error("organization write outcome: {0}")]
+    Uncertain(Error),
+}
+impl ApplyError {
+    pub(crate) fn into_error(self) -> Error {
+        match self {
+            Self::NotStarted(error) => error,
+            Self::Uncertain(Error::AccountBusy) => Error::ConnectionUnavailable,
+            Self::Uncertain(error) => error,
+        }
+    }
+}
+
 /// A scoped snapshot, optionally carrying a fenced command lease. The service never exposes ciphertext.
 pub struct Account {
     /// Exact access binding.
@@ -288,6 +309,8 @@ pub trait MailTransport: Send + Sync {
         idle_seconds: u64,
     ) -> Result<(), Error>;
     /// Apply an organization operation to one account-scoped UID.
+    /// NotStarted is permitted only before command-session admission; once any
+    /// mutation can have started, every failure must be Uncertain.
     async fn apply(
         &self,
         credentials: &Credentials,
@@ -295,7 +318,7 @@ pub trait MailTransport: Send + Sync {
         epoch: u32,
         uid: u32,
         action: RemoteAction,
-    ) -> Result<RemoteWriteReceipt, Error>;
+    ) -> Result<RemoteWriteReceipt, ApplyError>;
     /// SMTP submit once. The caller persisted Unknown before invoking this.
     /// Preserve the admission deadline through every pre-body connection attempt.
     async fn submit(

@@ -24,6 +24,7 @@ pub(crate) fn provider_error_headers(error: &EmailApiError) -> HeaderMap {
 pub(crate) fn provider_error_status(error: &EmailApiError) -> StatusCode {
     match error {
         EmailApiError::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
+        EmailApiError::ContentTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         EmailApiError::AuthRequired => StatusCode::UNAUTHORIZED,
         EmailApiError::Forbidden => StatusCode::FORBIDDEN,
         EmailApiError::NotFound => StatusCode::NOT_FOUND,
@@ -32,5 +33,25 @@ pub(crate) fn provider_error_status(error: &EmailApiError) -> StatusCode {
         EmailApiError::Transient { .. }
         | EmailApiError::CredentialsUnavailable { .. }
         | EmailApiError::Permanent { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+/// Closed content-limit response shared by provider-backed message paths.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ContentTooLargeResponse {
+    code: ContentTooLargeCode,
+    message: &'static str,
+}
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+enum ContentTooLargeCode {
+    MessageTooLarge,
+}
+impl Default for ContentTooLargeResponse {
+    fn default() -> Self {
+        Self {
+            code: ContentTooLargeCode::MessageTooLarge,
+            message: "This message is too large to open in Macro (over 25 MB).",
+        }
     }
 }

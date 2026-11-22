@@ -245,3 +245,11 @@ rejected from indexed RFC822.SIZE before any download; actual response length
 is checked too. RecentInbox handles busy and oversized messages independently,
 keeps successful complete bodies, and records deferred/oversized counts. It does
 not refetch the entire batch or pass header-only MIME off as complete content.
+
+Organization-write ports distinguish NotStarted admission refusal from Uncertain
+provider work. Only the former can expose retryable AccountBusy. A recent-inbox
+batch retains completed bodies and retries only deferred items once after
+releasing global admission; a still-all-busy batch reports a busy failure rather
+than an empty success. Public source/attachment failures preserve ContentTooLarge
+as HTTP413 with code message_too_large; the web client presents fixed size-limit
+copy and one capped Retry-After retry for ordinary email mutations, never sends.

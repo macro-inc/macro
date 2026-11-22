@@ -224,3 +224,6 @@ Outlook (Microsoft Graph) outbound adapters.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+Keep ContentTooLarge distinct from transient provider faults. A supported-content
+limit is permanent and must project to a coded 413 at public download boundaries.

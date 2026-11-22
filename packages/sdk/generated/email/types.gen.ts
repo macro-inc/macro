@@ -1065,6 +1065,16 @@ export type ContactInfoWithInteraction = ContactInfoLegacy & {
     last_interaction: string;
 };
 
+export type ContentTooLargeCode = 'message_too_large';
+
+/**
+ * Closed content-limit response shared by provider-backed message paths.
+ */
+export type ContentTooLargeResponse = {
+    code: ContentTooLargeCode;
+    message: string;
+};
+
 /**
  * Request body adding a shared event to the requester's calendar.
  */
@@ -2426,6 +2436,7 @@ export type GetAttachmentErrors = {
     403: ErrorResponse;
     404: ErrorResponse;
     409: ErrorResponse;
+    413: ContentTooLargeResponse;
     429: ErrorResponse;
     500: ErrorResponse;
 };
@@ -3605,6 +3616,7 @@ export type GetMessageEmlErrors = {
     403: ErrorResponse;
     404: ErrorResponse;
     409: ErrorResponse;
+    413: ContentTooLargeResponse;
     429: ErrorResponse;
     503: ErrorResponse;
 };

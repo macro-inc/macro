@@ -654,10 +654,18 @@ impl MailTransport for ProtocolTransport {
         epoch: u32,
         uid: u32,
         action: RemoteAction,
-    ) -> Result<RemoteWriteReceipt, Error> {
-        timeout(IO_TIMEOUT, self.apply_inner(c, folder, epoch, uid, action))
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)?
+    ) -> Result<RemoteWriteReceipt, ApplyError> {
+        timeout(IO_TIMEOUT, async {
+            let session = self
+                .command_session(c)
+                .await
+                .map_err(ApplyError::NotStarted)?;
+            self.apply_inner(c, session, folder, epoch, uid, action)
+                .await
+                .map_err(ApplyError::Uncertain)
+        })
+        .await
+        .map_err(|_| ApplyError::Uncertain(Error::ConnectionUnavailable))?
     }
     #[tracing::instrument(skip_all, err)]
     async fn submit(
@@ -709,12 +717,12 @@ impl ProtocolTransport {
     async fn apply_inner(
         &self,
         c: &Credentials,
+        mut session: commands::Command,
         folder: &str,
         epoch: u32,
         uid: u32,
         action: RemoteAction,
     ) -> Result<RemoteWriteReceipt, Error> {
-        let mut session = self.command_session(c).await?;
         let capabilities = session
             .capabilities()
             .await

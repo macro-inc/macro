@@ -132,7 +132,7 @@ async fn real_tls_accounts_are_isolated_and_flags_move_and_smtp_work() {
                     }
                 )
                 .await,
-            Err(Error::Conflict)
+            Err(ApplyError::Uncertain(Error::Conflict))
         ));
     }
     protocol

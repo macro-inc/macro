@@ -83,7 +83,13 @@ fn provider_error(error: EmailApiError) -> AttachmentError {
         EmailApiError::AuthRequired => AttachmentError::Reauthorization,
         EmailApiError::Forbidden => AttachmentError::Forbidden,
         EmailApiError::RateLimited { .. } => AttachmentError::RateLimited,
-        _ => AttachmentError::Infrastructure,
+        EmailApiError::ContentTooLarge => AttachmentError::ContentTooLarge,
+        EmailApiError::Conflict
+        | EmailApiError::OutdatedCursor
+        | EmailApiError::Transient { .. }
+        | EmailApiError::CredentialsUnavailable { .. }
+        | EmailApiError::Permanent { .. }
+        | EmailApiError::SendRejected { .. } => AttachmentError::Infrastructure,
     }
 }
 
@@ -201,3 +207,6 @@ impl AttachmentFiles for MailAttachmentFiles {
         })
     }
 }
+
+#[cfg(test)]
+mod test;

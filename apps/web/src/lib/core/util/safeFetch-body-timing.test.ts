@@ -187,3 +187,25 @@ it('records a body the caller aborted mid-read', async () => {
   const [span] = exporter.getFinishedSpans();
   expect(span.attributes['http.body_outcome']).toBe('aborted');
 });
+
+it('falls back to ordinary server retry when a selective error handler declines', async () => {
+  vi.useFakeTimers();
+  mocks.fetch
+    .mockResolvedValueOnce(new Response('', { status: 500 }))
+    .mockResolvedValueOnce(
+      new Response('{"items":[1]}', {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  try {
+    const result = safeFetch<{ items: number[] }>('https://api.example/items', {
+      retry: { maxTries: 2, delay: 0 },
+      errorResponseFilter: async () => undefined,
+    });
+    await vi.runAllTimersAsync();
+    expect((await result)._unsafeUnwrap()).toEqual({ items: [1] });
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});

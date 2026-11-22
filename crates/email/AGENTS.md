@@ -850,3 +850,6 @@ pause, disconnect and deletion admission. Outlook's rollout remains separate.
 Attempt message-list refresh before slower projection effects, but retain a failed
 refresh for retry after independent contacts, notifications, search and attachment
 effects run. A websocket outage must not suppress those projections.
+
+Preserve ContentTooLarge through message-source and attachment ports; unsupported
+content is a client limit, never an infrastructure outage or automatic retry.

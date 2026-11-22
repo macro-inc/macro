@@ -5,7 +5,8 @@ import {
 } from '@core/util/fetchWithToken';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import type { Span } from '@macro-inc/observability';
+import { sleep } from '@core/util/sleep';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type {
   CalendarEvent,
   CalendarEventProviderUrl,
@@ -175,6 +176,52 @@ async function imapConnectionError(response: Response) {
   };
 }
 
+/** Keep unsupported content and mailbox contention out of generic server errors. */
+async function emailRequest<T extends ObjectLike | Uint8Array>(
+  url: string,
+  init?: SafeFetchInit
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>> {
+  let retryAfter: number | undefined;
+  const parentSpan = init?.trace?.parentSpan ?? Telemetry.captureContext();
+  const request = () =>
+    fetchWithToken<T>(`${emailHost}${url}`, {
+      ...init,
+      trace: { ...init?.trace, parentSpan },
+      errorResponseFilter: async (response) => {
+        if (response.status === 429) {
+          const seconds = Number(response.headers.get('Retry-After') ?? '1');
+          retryAfter = Number.isFinite(seconds)
+            ? Math.min(5, Math.max(0, seconds))
+            : 1;
+          return {
+            code: 'HTTP_ERROR' as const,
+            message: 'Mailbox is busy, try again.',
+          };
+        }
+        if (response.status === 413) {
+          return {
+            code: 'HTTP_ERROR' as const,
+            message: 'This message is too large to open in Macro (over 25 MB).',
+          };
+        }
+        // Let the shared fetch preserve its status classification and retry policy.
+        return init?.errorResponseFilter?.(response);
+      },
+    });
+  const result = await request();
+  const method = (init?.method ?? 'GET').toUpperCase();
+  // A send response cannot establish pre-I/O refusal; never replay submission.
+  const retryable =
+    method !== 'GET' &&
+    method !== 'HEAD' &&
+    !(url === '/email/messages' && method === 'POST');
+  if (result.isErr() && retryAfter !== undefined && retryable) {
+    await sleep(retryAfter * 1000);
+    if (!init?.signal?.aborted) return request();
+  }
+  return result;
+}
+
 function emailFetch(
   url: string,
   init?: SafeFetchInit
@@ -189,7 +236,7 @@ function emailFetch<T extends ObjectLike = never>(
 ):
   | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
-  return fetchWithToken<T>(`${emailHost}${url}`, init);
+  return emailRequest<T>(url, init);
 }
 
 /**
@@ -396,8 +443,8 @@ export const emailClient = {
   },
   /** The message's original source as `.eml` bytes. */
   async getMessageEml(args: { message_id: string }) {
-    return fetchWithToken<Uint8Array<ArrayBuffer>>(
-      `${emailHost}/email/messages/${args.message_id}/eml`,
+    return emailRequest<Uint8Array<ArrayBuffer>>(
+      `/email/messages/${args.message_id}/eml`,
       { method: 'GET' }
     );
   },

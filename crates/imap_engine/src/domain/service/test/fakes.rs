@@ -285,7 +285,7 @@ impl MailTransport for UncertainTransport {
         _: u32,
         _: u32,
         _: RemoteAction,
-    ) -> Result<RemoteWriteReceipt, Error> {
+    ) -> Result<RemoteWriteReceipt, ApplyError> {
         if let Some(control) = &self.provider_work
             && let Some(organization) = &control.organization
         {

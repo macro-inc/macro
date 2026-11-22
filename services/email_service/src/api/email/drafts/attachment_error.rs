@@ -11,7 +11,15 @@ use model::response::ErrorResponse;
 pub struct AttachmentApiError(#[from] pub AttachmentError);
 impl IntoResponse for AttachmentApiError {
     fn into_response(self) -> Response {
+        if matches!(self.0, AttachmentError::ContentTooLarge) {
+            return (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                Json(crate::api::email::provider_error::ContentTooLargeResponse::default()),
+            )
+                .into_response();
+        }
         let status = match &self.0 {
+            AttachmentError::ContentTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             AttachmentError::NotFound => StatusCode::NOT_FOUND,
             AttachmentError::Forbidden => StatusCode::FORBIDDEN,
             AttachmentError::DeliveryConflict => StatusCode::CONFLICT,

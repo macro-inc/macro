@@ -57,6 +57,9 @@ pub enum EmailApiError {
         /// A sanitized diagnostic suitable for logs.
         message: String,
     },
+    /// Full message content exceeds the supported download size.
+    #[error("This message is too large to open in Macro (over 25 MB).")]
+    ContentTooLarge,
     /// A deterministic failure that should not be retried unchanged.
     #[error("permanent email provider failure: {message}")]
     Permanent {

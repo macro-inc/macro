@@ -11,7 +11,8 @@ pub fn map_email_api_error(error: EmailApiError, context: &'static str) -> Proce
         EmailApiError::RateLimited { .. } => FailureReason::GmailApiRateLimited,
         EmailApiError::AuthRequired => FailureReason::AccessTokenFetchFailed,
         EmailApiError::OutdatedCursor => FailureReason::OutdatedHistoryId,
-        EmailApiError::Forbidden
+        EmailApiError::ContentTooLarge
+        | EmailApiError::Forbidden
         | EmailApiError::NotFound
         | EmailApiError::Conflict
         | EmailApiError::Transient { .. }

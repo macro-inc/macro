@@ -149,3 +149,8 @@ reconciliation/unavailability so it cannot replay the mutation. Never retry
 Submit through this mechanism. Keep MessageTooLarge distinct (HTTP413), reject
 known oversized sources before fetching, and defer busy/oversized RecentInbox
 items individually rather than restarting the batch or returning partial MIME.
+
+Organization writes return ApplyError::NotStarted only before command-session
+admission; every failure afterward is Uncertain. Never promote a post-write busy
+error into a retry. RecentInbox retries only deferred bodies once outside global
+admission and reports AccountBusy when the whole requested batch remains busy.

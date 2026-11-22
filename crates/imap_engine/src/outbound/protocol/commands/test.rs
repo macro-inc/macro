@@ -15,6 +15,7 @@ struct Peer {
     release: Arc<tokio::sync::Semaphore>,
     maximum: Arc<AtomicUsize>,
     stores: Arc<AtomicUsize>,
+    close_after_store: Arc<AtomicBool>,
     server: tokio::task::JoinHandle<()>,
 }
 
@@ -32,6 +33,8 @@ async fn peer() -> Peer {
     let seen = Arc::new(AtomicBool::new(false));
     let stores = Arc::new(AtomicUsize::new(0));
     let stored = stores.clone();
+    let close_after_store = Arc::new(AtomicBool::new(false));
+    let closing = close_after_store.clone();
     let gate = release.clone();
     let server = tokio::spawn(async move {
         let mut peers = tokio::task::JoinSet::new();
@@ -47,6 +50,7 @@ async fn peer() -> Peer {
             let idling = idling.clone();
             let seen = seen.clone();
             let stored = stored.clone();
+            let closing = closing.clone();
             peers.spawn(async move {
                 let mut socket = tokio_rustls::TlsAcceptor::from(tls).accept(socket).await.unwrap();
                 socket.write_all(b"* OK synthetic IMAP\r\n").await.unwrap();
@@ -78,6 +82,7 @@ async fn peer() -> Peer {
                     } else if command.starts_with("UID STORE") {
                         stored.fetch_add(1, Ordering::SeqCst);
                         seen.store(true, Ordering::SeqCst);
+                        if closing.load(Ordering::SeqCst) { break; }
                     } else if command.starts_with("UID FETCH") {
                         let header_only = command.contains("HEADER");
                         let body: &[u8] = if header_only {
@@ -135,6 +140,7 @@ async fn peer() -> Peer {
         release,
         maximum,
         stores,
+        close_after_store,
         server,
     }
 }
@@ -529,4 +535,37 @@ async fn marking_read_after_opening_a_thread_retries_before_any_provider_write()
     assert!(message.flags.iter().any(|flag| flag == "\\Seen"));
     server.abort();
     let _ = server.await;
+}
+
+#[tokio::test]
+async fn apply_admission_is_retryable_but_a_lost_store_reply_is_uncertain() {
+    let Peer {
+        transport,
+        credentials,
+        stores,
+        close_after_store,
+        server,
+        ..
+    } = peer().await;
+    let mut held = Vec::new();
+    for _ in 0..3 {
+        held.push(transport.command_session(&credentials).await.unwrap());
+    }
+    let action = || RemoteAction::Flag {
+        flag: "\\Seen".into(),
+        enabled: true,
+    };
+    assert!(matches!(
+        transport.apply(&credentials, "INBOX", 1, 1, action()).await,
+        Err(ApplyError::NotStarted(Error::AccountBusy))
+    ));
+    assert_eq!(stores.load(Ordering::SeqCst), 0);
+    drop(held);
+    close_after_store.store(true, Ordering::SeqCst);
+    assert!(matches!(
+        transport.apply(&credentials, "INBOX", 1, 1, action()).await,
+        Err(ApplyError::Uncertain(Error::ConnectionUnavailable))
+    ));
+    assert_eq!(stores.load(Ordering::SeqCst), 1);
+    server.abort();
 }

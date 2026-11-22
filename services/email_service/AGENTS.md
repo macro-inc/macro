@@ -437,3 +437,8 @@ engine's five-second retry hint. MessageTooLarge is permanent. Neither changes
 credential health or proves a send outcome; generic connectivity remains
 uncertain. Recent inbox sources contain complete MIME only; the engine defers
 individual busy or oversized items instead of returning partial bodies.
+
+Map engine MessageTooLarge through ContentTooLarge to coded HTTP413
+(message_too_large) on original-source and attachment downloads. Provider-backed
+message/settings errors use the same content-limit response; keep sign-in and
+mailbox health classifications separate.

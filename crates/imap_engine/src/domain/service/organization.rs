@@ -82,7 +82,8 @@ impl Engine {
                 location.uid,
                 remote,
             )
-            .await?;
+            .await
+            .map_err(ApplyError::into_error)?;
         // Once a provider write has succeeded, no busy follow-up may cause a
         // replay of the whole action. It must settle through reconciliation.
         let result = async {
@@ -137,7 +138,8 @@ impl Engine {
                                     },
                                 },
                             )
-                            .await?;
+                            .await
+                            .map_err(ApplyError::into_error)?;
                     }
                     let facts = self
                         .transport

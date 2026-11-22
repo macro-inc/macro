@@ -115,7 +115,7 @@ async fn typed_busy_and_size_failures_survive_the_private_client_without_health_
                 matches!(error, EmailApiError::RateLimited { retry_after: Some(delay), origin: RateLimitOrigin::Local } if delay == std::time::Duration::from_secs(5))
             );
         } else {
-            assert!(matches!(error, EmailApiError::Permanent { .. }));
+            assert!(matches!(error, EmailApiError::ContentTooLarge));
             assert!(!error.is_transient());
         }
     }

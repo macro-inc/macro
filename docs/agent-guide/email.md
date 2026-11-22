@@ -48,6 +48,13 @@ trigger a background cache refresh: rows should not disappear and return. A
 confirmed archive still removes its row. Cached pagination preserves its position
 while those server-confirmed rows load their canonical previews.
 
+An IMAP original-source or attachment download above the supported size returns
+**This message is too large to open in Macro (over 25 MB).** It is a permanent
+content limit, not a temporary server failure. A busy ordinary email mutation
+waits for the suggested delay (at most five seconds) and retries once, then
+reports **Mailbox is busy, try again.** Sending is excluded from this retry;
+follow the existing accepted/failed/unconfirmed delivery state instead.
+
 Email has no Tags section in its inner sidebar. Filter by tag through
 **Filters → Tags** on desktop or the mobile filter drawer; this keeps the current
 mailbox tab. On All, selected tag names appear in the header and breadcrumb.

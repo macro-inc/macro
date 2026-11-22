@@ -211,6 +211,10 @@ export interface SafeFetchTraceOptions {
  * Extended RequestInit interface that includes retry configuration.
  */
 export interface SafeFetchInit extends RequestInit {
+  /** Handle selected closed failures; undefined retains default status/retry behavior. */
+  errorResponseFilter?: (
+    response: Response
+  ) => Promise<ResultError<BaseFetchErrorCode> | undefined>;
   retry?: RetryConfig;
   trace?: SafeFetchTraceOptions;
 }
@@ -307,7 +311,12 @@ export async function safeFetch<
   init?: SafeFetchInit,
   errorResponseHandler?: ErrorResponseHandler<CustomErrorCode>
 ): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
-  const { retry, trace: suppliedTrace, ...fetchInit } = init || {};
+  const {
+    retry,
+    trace: suppliedTrace,
+    errorResponseFilter,
+    ...fetchInit
+  } = init || {};
   const trace = {
     ...suppliedTrace,
     parentSpan: suppliedTrace?.parentSpan ?? Telemetry.captureContext(),
@@ -346,6 +355,8 @@ export async function safeFetch<
       responded = true;
 
       if (!response.ok) {
+        const filtered = await errorResponseFilter?.(response);
+        if (filtered) return fetchErr([filtered]);
         if (errorResponseHandler) {
           const customError = await errorResponseHandler(response);
           return fetchErr(customError ? [customError] : []);

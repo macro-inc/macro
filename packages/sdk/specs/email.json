@@ -88,6 +88,16 @@
               }
             }
           },
+          "413": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentTooLargeResponse"
+                }
+              }
+            }
+          },
           "429": {
             "description": "",
             "content": {
@@ -3066,6 +3076,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentTooLargeResponse"
                 }
               }
             }
@@ -6230,6 +6250,23 @@
             }
           }
         ]
+      },
+      "ContentTooLargeCode": {
+        "type": "string",
+        "enum": ["message_too_large"]
+      },
+      "ContentTooLargeResponse": {
+        "type": "object",
+        "description": "Closed content-limit response shared by provider-backed message paths.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ContentTooLargeCode"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
       },
       "CopyCalendarEventRequest": {
         "type": "object",

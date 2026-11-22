@@ -14,6 +14,10 @@ fn maps_provider_errors_to_api_statuses() {
             },
             StatusCode::TOO_MANY_REQUESTS,
         ),
+        (
+            EmailApiError::ContentTooLarge,
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
         (EmailApiError::AuthRequired, StatusCode::UNAUTHORIZED),
         (EmailApiError::Forbidden, StatusCode::FORBIDDEN),
         (EmailApiError::NotFound, StatusCode::NOT_FOUND),
