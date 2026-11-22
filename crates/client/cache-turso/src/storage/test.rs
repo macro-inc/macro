@@ -2479,8 +2479,12 @@ fn assert_facts_blobs_match(storage: &TursoStorage) {
                 sort_facts: Vec::new(),
             },
         )]);
-        load_index_facts(&connection, &HashMap::from([(id, record_key.clone())]), &mut documents)
-            .unwrap();
+        load_index_facts(
+            &connection,
+            &HashMap::from([(id, record_key.clone())]),
+            &mut documents,
+        )
+        .unwrap();
         assert_eq!(
             stored,
             Some(facts_blob::encode(&documents[&record_key])),
