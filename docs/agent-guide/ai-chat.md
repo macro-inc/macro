@@ -1081,13 +1081,14 @@ they never show a toast, browser or desktop alert, or phone push. Opening one
 opens the routine. The routine's own agent turn sends no "agent finished"
 notification; its questions still notify.
 
-The routines list shows **Failed** in failure color in the Status column while a
-routine's latest finished run failed, whether it is active, paused, or done; a
-run in progress still shows **Running**. The legacy Agents list shows **Last run
+A routine's card on the Routines page reads **Failed <when> · <why>** in failure
+color while its latest finished run failed (a red dot and the reason under
+Last run in the touch table); a run in progress reads **Running now**, and a
+routine that is off reads **Off**. The legacy Agents list shows **Last run
 failed** for the same routine. Verify by running a routine whose required app is
-disconnected: the row turns **Failed** and a "failed" notification appears in the
+disconnected: the card turns **Failed** and a "failed" notification appears in the
 inbox without an alert; reconnect and run again: a "finished" notification
-appears and the row returns to its normal status.
+appears and the card shows the new run.
 
 ## Legacy chats are read-only
 

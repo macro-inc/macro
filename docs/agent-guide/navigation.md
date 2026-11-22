@@ -1314,16 +1314,13 @@ block name also open routines; newly copied links use `/app/routines/<uuid>`.
 On the legacy Agents screen, use the **Routines** button above the list. On touch devices,
 `/app/routines` opens the routines list directly, and the Agents sidebar entry is also available in **Settings → Routines** (on phones **More views → Settings →
 Routines**): tapping a routine closes the settings sheet and opens it, and
-**Create Routine** opens the composer.
+**Create routine** opens the composer.
 
 A routine one of another routine's runs created (from a code step or the
 Ask AI step's session, while that run was in progress) is its **sub-routine**
-and is not a row of its own. On desktop the creating routine's row shows a
-caret and **N sub-routines**; the caret expands the active ones under it,
-indented, each with its own switch (a paused-with-parent one's tooltip reads
-**Paused with the routine that created it**). A search that matches only a
-sub-routine shows its parent, expanded. Touch devices list top-level routines
-only. The creating routine's page has a **Created by this routine** section
+and is not a row of its own. On desktop the creating routine's card ends its last line with **· N
+sub-routines**; they are listed on its page. Touch devices list top-level
+routines only. The creating routine's page has a **Created by this routine** section
 after its settings: the active sub-routines (name, trigger, **Active** /
 **Paused** / **Running**), then **Finished: N** with **Show finished** for the
 one-time ones that have run (the newest 200), each row opening that routine,
@@ -1336,42 +1333,73 @@ and the delete dialog says **The N routines it created will be deleted too.**
 In a run's details, **Created** lists the sub-routines that run created.
 
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
-count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
-search, which matches name, Trigger and Steps. When
-`enable-routine-starter-templates` is on (on in development; PostHog decides in
-deployed environments), **Templates** above the rows shows
-the catalog's first four available template cards (icon, name, one line and its trigger → first step, such as
-**New email → Label with AI**) with **All templates** at the right, which opens
-New routine's start screen. A card opens New routine already filled in from that
-template. The strip hides while searching and on **On**; on phones the cards
-scroll sideways. With `enable-routine-suggestions` on (not on touch devices), suggestions take the
-strip's place: **Suggested for you** above the rows on **All** shows one row
-of Discover's cards, as many as fit, and after them a narrow **N more · In
-Discover** column, which opens a third tab, **Discover**. Discover
+count) on the left and **Create routine** and search on the right;
+**Cmd/Ctrl+F** focuses search, which matches name, Trigger and Steps.
+
+With a pointer (not touch), routines are cards in a grid of three (two below
+760px wide, one below 480px), under **When something happens** and **On a
+schedule**, each heading with its count. Cards have one fill and no outline,
+and every card is the same height in every state. A card shows a tile with the
+routine's icon tinted by its colour (or its trigger's area; grey while off),
+its name, its description (or, without one, what it does), its **…** menu and
+an on/off switch, and one line under them:
+
+- what starts it and its last run, such as **Weekdays at 9:00 AM · Ran 9:00
+  AM** after a green dot (grey for a skipped or stopped run), or **Not run
+  yet**, then **· N sub-routines** when its runs created any;
+- **Running now** with a spinning mark and **Stop** (named **Stop the run of
+  <name>**), which ends the run in progress; it reads **Stopping…** until the
+  run ends, and the run's details then say it was stopped;
+- **Failed <when> · <why>** in failure colour, the whole reason in a tooltip;
+- **<trigger> · Off** while it is off.
+
+Clicking a card opens the routine in the same pane. Switching one off shows
+**<name> is off**, **Its settings and past runs are kept**, with **Undo**,
+which switches it back on. With no routines, the page shows **Nothing is
+running yet** with **New routine** and, where suggestions are on, **Browse
+Discover**, which opens the Discover tab.
+
+When `enable-routine-starter-templates` is on (on in development; PostHog
+decides in deployed environments), **Templates** above the routines shows the
+catalog's first four available template cards (icon, name, one line and its
+trigger → first step, such as **New email → Label with AI**) with **All
+templates** at the right, which opens New routine's start screen. A card opens
+New routine already filled in from that template. The strip hides while
+searching and on **On**; on phones the cards scroll sideways. With
+`enable-routine-suggestions` on (not on touch devices), suggestions take the
+strip's place: **Suggested for you** (**Start with one of these** for someone
+with no routines) above the routines on **All** shows one row of suggestion
+cards in the same grid, as many as it has columns, with **N more in Discover**
+at the end of its heading, which opens a third tab, **Discover**. A suggestion
+card has its tile, title, what it does, why it was picked when there is a
+reason, and **Turn on** (or **Review** / **Use**, which open it in the editor);
+the × beside a suggestion dismisses it. Turning one on keeps the card in place,
+showing the new routine's switch, **On · <trigger>** and **Edit**. Discover
 replaces the list with every suggestion (AI's first, then Macro's) followed by
 the templates no suggestion already offers, as many cards to a row as fit, with
 **All** and one tab per area that has any (`Suggestion area`) and the hint
-**picked for you, then Macro's templates**. Every suggestion card, in the row,
-on Discover and in the sidebar dialog, is the dialog's card: 25rem wide
-(narrower only in a pane too small for one) and as tall as the tallest card in
-its row. The list's search narrows Discover
+**picked for you, then Macro's templates**. Discover's and the sidebar
+dialog's cards are 25rem wide (narrower only in a pane too small for one) and
+as tall as the tallest card in their row. The list's search narrows Discover
 too. Discover's tab carries a violet dot while it has AI picks this browser
 hasn't shown there; opening or leaving it marks them seen. The cards behave as
-in [setup cards](setup-cards.md#suggested-routines). Columns are **Name**, **Trigger**, **Steps** and **Last run**.
-Rows are grouped under **When something happens** and **On a schedule**, each a
-band like the tasks list's group headers, with a count. Each row has an icon for
-its trigger's kind, the name with its description below it when it has one,
-**Trigger** (its triggers in a line, such as **New email received** or
-**Weekdays at 9:00 AM**, with an AI check after " · "), **Steps** (an **AI
-picks** chip and the options for a choice, an **Ask AI** chip and the gist of the
-instructions for an agent, otherwise the actions, such as **Create task · Set
-priority**), **Last run**, and at the end an on/off switch (pause or resume
-without opening it; turned-off rows are dimmed). Last run is a dot (green
-for a run that acted, red for a failure, grey for a skipped run or one that
-changed nothing), the time (today) or day, and what it did or why it failed or
-was skipped (**Skipped: condition not met**), or **Not run yet**. Last run comes
-with the list. Click a row to open it in the same
-pane. Below 760px wide (a phone, or the Settings sheet) rows drop Trigger and Steps,
+in [setup cards](setup-cards.md#suggested-routines).
+
+Touch devices keep the table. Its columns are **Name**, **Trigger**,
+**Steps** and **Last run**. Rows are grouped under **When something happens**
+and **On a schedule**, each a band like the tasks list's group headers, with a
+count. Each row has an icon for its trigger's kind, the name with its
+description below it when it has one, **Trigger** (its triggers in a line,
+such as **New email received** or **Weekdays at 9:00 AM**, with an AI check
+after " · "), **Steps** (an **AI picks** chip and the options for a choice, an
+**Ask AI** chip and the gist of the instructions for an agent, otherwise the
+actions, such as **Create task · Set priority**), **Last run**, and at the end
+an on/off switch (pause or resume without opening it; turned-off rows are
+dimmed). Last run is a dot (green for a run that acted, red for a failure,
+grey for a skipped run or one that changed nothing), the time (today) or day,
+and what it did or why it failed or was skipped (**Skipped: condition not
+met**), or **Not run yet**. Last run comes with the list. Tap a row to open it.
+Below 760px wide (a phone, or the Settings sheet) rows drop Trigger and Steps,
 and Last run shows only the dot and time.
 
 Right-clicking a row (a long press on a tablet) opens its menu, and the row
@@ -1402,7 +1430,7 @@ approval, and people the routine's prompt mentions still notify.
 The prompt's `@` menu also lists agents. Mentioning one only names it for the
 routine: it doesn't start the agent or notify anyone.
 
-**Create → Routine** (U), **New** in the list and **Create Routine** open **New
+**Create → Routine** (U), **New** in the list and **Create routine** open **New
 routine** in the same popover host as task and project creation. It never edits
 a routine itself: a **Describe your routine** box with **Draft it** (AI fills in
 the name, triggers and steps from a sentence such as "When an invoice arrives,
