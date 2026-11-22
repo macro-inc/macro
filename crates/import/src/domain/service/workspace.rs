@@ -4,7 +4,7 @@
 use agent_session::domain::model::AgentSessionId;
 use import_notion::domain::{model::ImportScope, ports::NotionConnections};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
+use connectors::ConnectorSelect;
 use std::time::Duration;
 use uuid::Uuid;
 

@@ -9,7 +9,7 @@ use crate::domain::ports::{
 };
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
+use connectors::ConnectorSelect;
 use uuid::Uuid;
 
 // Separate roles retain the existing ledger kind so older readers can parse them.

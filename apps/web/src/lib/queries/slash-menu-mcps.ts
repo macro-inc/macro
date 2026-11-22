@@ -13,7 +13,7 @@ export type SlashMenuMcp = {
   appSlug: string | null;
 };
 
-/** Mirrors `mcp_select::select_connections`: native credentials win per provider. */
+/** Mirrors `connectors::select_connections`: native credentials win per provider. */
 export function useSlashMenuMcps(enabled: () => boolean) {
   const pipedream = usePipedreamConnectionsQuery({
     neverSuspend: true,

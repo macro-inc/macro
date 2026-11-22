@@ -47,7 +47,7 @@ listings, and calls all go through Connect, with no Pipedream fallback.
   the `mcp_overlays` table,
   and loading a user's Pipedream tools into the agent toolset.
 - Not here: deciding whether a user's tools come from Pipedream or the native
-  MCP stack → `mcp_select`.
+  MCP stack → `connectors`.
 
 ## Boundaries
 
@@ -55,12 +55,12 @@ listings, and calls all go through Connect, with no Pipedream fallback.
   `macro_user_id`, `connect_client` (the only Connect crate Macro may use).
 - Used by: `ai_tools`, `import_notion`, `import_tracker`, `import_linear`,
   `import_jira`, `agent_egress`, `agent_harness`,
-  `granola_sync`, `mcp_select`, `services/agent_harness_service`.
+  `granola_sync`, `connectors`, `services/agent_harness_service`.
 
 ## Gotchas
 
 - A `provider = connect` row stores Connect's app id in `account_id` and keeps
-  the Pipedream slug in `app_slug`, so `mcp_select` and agent egress need no
+  the Pipedream slug in `app_slug`, so `connectors` and agent egress need no
   changes. Granola connects through Connect like any app (an MCP grant).
   Granola meeting sync still reads Granola's API-key REST API, so it only
   syncs Pipedream-held Granola accounts; sync over Granola's MCP server is
@@ -79,7 +79,7 @@ listings, and calls all go through Connect, with no Pipedream fallback.
   proxy. Keep those slugs out of `mcp_overlays` until their readers have a
   native path.
 - Discovery answers an overlaid app's connection status through
-  `OverlayConnections` (implemented in `mcp_select` over the native store); its
+  `OverlayConnections` (implemented in `connectors` over the native store); its
   advertised tools still come from Pipedream's listing for the slug.
 - `github` is overlaid, but its native server is authorized by the GitHub
   account link (`mcp_client`'s `WithLinkedGithub`), not MCP OAuth; the

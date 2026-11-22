@@ -730,9 +730,9 @@ pub async fn build(
 
     // The one sanctioned meeting point of the two MCP stacks: agents load
     // tools through this selector, which prefers a user's Pipedream
-    // connectors and falls back to the native ones (see `mcp_select`).
+    // connectors and falls back to the native ones (see `connectors`).
     // The import service's live Slack source shares this selector.
-    let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
+    let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(connectors::McpToolSelector::new(
         Arc::new(mcp_server_repo.clone()),
         mcp_http.clone(),
         Arc::new(pipedream_repo.clone()),

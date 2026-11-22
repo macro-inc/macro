@@ -376,14 +376,14 @@ impl ConnectorSelect for NoConnector {
     async fn connector_toolset(
         &self,
         _: &MacroUserIdStr<'static>,
-        _: mcp_select::ConnectorRef<'_>,
+        _: connectors::ConnectorRef<'_>,
     ) -> anyhow::Result<Option<UserMcpTools>> {
         panic!("unexpected connector call")
     }
     async fn connector_connected(
         &self,
         _: &MacroUserIdStr<'static>,
-        _: mcp_select::ConnectorRef<'_>,
+        _: connectors::ConnectorRef<'_>,
     ) -> anyhow::Result<bool> {
         panic!("unexpected connector call")
     }

@@ -501,7 +501,7 @@ browser regression on desktop and phone:
 `bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts composer.browser.e2e.ts`.
 
 Composer `/` menus list Connections between Skills and Pull requests. Keep native
-and hosted providers aligned with `mcp_select::select_connections`, prefer native
+and hosted providers aligned with `connectors::select_connections`, prefer native
 credentials per provider, and preserve editor focus on pointer and touch selection.
 
 Undo in a large collaborative Markdown document (Loro undo, mirror, reconcile,

@@ -634,7 +634,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
         );
         let mcp_selector: Arc<ai_tools::ToolMcpSelector> =
-            Arc::new(mcp_select::McpToolSelector::new(
+            Arc::new(connectors::McpToolSelector::new(
                 Arc::new(mcp_repo.clone()),
                 local_mcp_http(),
                 pipedream_connections.clone(),

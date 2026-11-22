@@ -1,7 +1,7 @@
 use crate::cognition::model::stream::ToolSet;
 use ai_tools::{AiToolSet, ToolMcpSelector, ToolServiceContext};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
+use connectors::ConnectorSelect;
 use std::sync::{Arc, LazyLock};
 
 #[cfg(test)]
@@ -90,7 +90,7 @@ pub(crate) async fn service_tools(
         async {
             let mcp_tools = mcp_selector.user_toolset(user_id).await;
             let tools: SelectedTools<ToolServiceContext> =
-                Arc::new(mcp_select::CombinedToolSet::new(static_tools, mcp_tools));
+                Arc::new(connectors::CombinedToolSet::new(static_tools, mcp_tools));
             tools
         },
     )

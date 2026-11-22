@@ -11,7 +11,7 @@ use crate::domain::ports::{
     SlackWorkspaceSource,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
+use connectors::ConnectorSelect;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tokio::time::{Instant, timeout_at};

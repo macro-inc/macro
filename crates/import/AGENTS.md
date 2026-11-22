@@ -121,7 +121,7 @@ from this import's other databases into it are not linked.
 
 - Depends on: `agent_session` (system events for the session presenting a
   review), `ai_toolset`, `ai_usage`, `ai_billing`, `connection_gateway_client`,
-  `mcp_select`, `properties`, `import_notion` (Notion REST), `import_tracker` (tracker snapshots), `models_databases`
+  `connectors`, `properties`, `import_notion` (Notion REST), `import_tracker` (tracker snapshots), `models_databases`
   (database ops the workspace import writes).
 - Used by: `ai_tools`, `slack_integration`, `services/agent_harness_service`
   (cognition `/import/*` routes, the Notion sweeper, import reviews).

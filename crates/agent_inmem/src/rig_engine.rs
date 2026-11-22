@@ -160,7 +160,7 @@ impl<Context> GatedToolSet<Context> {
     /// server the tool was registered under, never by its name's server
     /// segment, which another server's name can mangle to.
     fn reaches_remote_server(&self, tool_name: &str) -> bool {
-        tool_name.starts_with(mcp_select::MANGLED_PREFIX)
+        tool_name.starts_with(connectors::MANGLED_PREFIX)
             && self
                 .remote
                 .as_ref()
@@ -191,7 +191,7 @@ where
                 }));
             }
             let native = !UNGATED_NATIVE_TOOLS.contains(&tool_name)
-                && !tool_name.starts_with(mcp_select::MANGLED_PREFIX);
+                && !tool_name.starts_with(connectors::MANGLED_PREFIX);
             let arguments = if native {
                 // A tool that uses nobody's access (the web, Macro's help)
                 // takes no account and waits for nobody, but still asks the
@@ -306,7 +306,7 @@ async fn check_unless_cancelled(
 
 fn add_native_actor_schema(name: &str, schema: &mut schemars::Schema) {
     if !UNGATED_NATIVE_TOOLS.contains(&name)
-        && !name.starts_with(mcp_select::MANGLED_PREFIX)
+        && !name.starts_with(connectors::MANGLED_PREFIX)
         && agent_egress::domain::approval::spends_owner_access("macro", name)
         && let Some(schema) = schema.as_object_mut()
     {
@@ -903,11 +903,11 @@ async fn drive_turn(
     let remote = mcp_tools.clone();
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
         Some(mcp) if unseen => Arc::new(
-            mcp_select::CombinedToolSet::new(toolset, unseen::CodeModeOnly::new(mcp))
+            connectors::CombinedToolSet::new(toolset, unseen::CodeModeOnly::new(mcp))
                 .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS),
         ),
         Some(mcp) => Arc::new(
-            mcp_select::CombinedToolSet::new(toolset, mcp)
+            connectors::CombinedToolSet::new(toolset, mcp)
                 .with_eager_mcp_tools(EAGER_INTERNAL_MCP_TOOLS),
         ),
         None => toolset,

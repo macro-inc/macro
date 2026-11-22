@@ -6,7 +6,7 @@
 //! This crate is fully separate from the native `mcp_client` stack — its own
 //! endpoints (`/pipedream/mcp/*`), its own `pipedream_mcp_connections`
 //! table, and its own toolset. Which stack serves a user's tools is decided
-//! at load time by the `mcp_select` crate.
+//! at load time by the `connectors` crate.
 
 /// Domain layer: models, ports, and services.
 pub mod domain;

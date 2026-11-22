@@ -661,7 +661,7 @@ pub async fn build_tool_service_context_from_env(
         let pipedream_connections = Arc::new(
             pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
         );
-        let mcp_selector = Arc::new(mcp_select::McpToolSelector::new(
+        let mcp_selector = Arc::new(connectors::McpToolSelector::new(
             native_servers.clone(),
             mcp_client::outbound::guarded_http::McpHttp::new(
                 mcp_client::outbound::guarded_http::AddressPolicy::for_environment(environment),

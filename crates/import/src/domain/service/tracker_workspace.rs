@@ -5,7 +5,7 @@ use futures::StreamExt;
 use import_notion::domain::ports::NotionConnections;
 use import_tracker::domain::model::{Group, Inventory, Issue, TrackerError};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
+use connectors::ConnectorSelect;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tracing::Instrument;

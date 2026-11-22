@@ -24,7 +24,7 @@ use import::{
     outbound::pg_import_repo::PgImportRepo,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::{ConnectorRef, ConnectorSelect, UserMcpTools};
+use connectors::{ConnectorRef, ConnectorSelect, UserMcpTools};
 use models_pagination::{Query, SimpleSortMethod};
 use std::{
     collections::HashSet,

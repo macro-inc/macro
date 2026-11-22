@@ -212,21 +212,21 @@ async fn team_folder_link_does_not_open_an_owner_only_child(pool: PgPool) -> any
 }
 
 struct NoConnector;
-impl mcp_select::ConnectorSelect for NoConnector {
-    async fn user_toolset(&self, _: &MacroUserIdStr<'static>) -> mcp_select::UserMcpTools {
+impl connectors::ConnectorSelect for NoConnector {
+    async fn user_toolset(&self, _: &MacroUserIdStr<'static>) -> connectors::UserMcpTools {
         unreachable!()
     }
     async fn connector_toolset(
         &self,
         _: &MacroUserIdStr<'static>,
-        _: mcp_select::ConnectorRef<'_>,
-    ) -> anyhow::Result<Option<mcp_select::UserMcpTools>> {
+        _: connectors::ConnectorRef<'_>,
+    ) -> anyhow::Result<Option<connectors::UserMcpTools>> {
         unreachable!()
     }
     async fn connector_connected(
         &self,
         _: &MacroUserIdStr<'static>,
-        _: mcp_select::ConnectorRef<'_>,
+        _: connectors::ConnectorRef<'_>,
     ) -> anyhow::Result<bool> {
         unreachable!()
     }

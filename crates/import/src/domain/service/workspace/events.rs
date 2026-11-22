@@ -14,7 +14,7 @@ use agent_runtime_protocol::domain::notification::{
 use agent_session::domain::notifications::{PendingNotification, ProduceNotification};
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
+use connectors::ConnectorSelect;
 use uuid::Uuid;
 
 use super::super::ImportServiceImpl;

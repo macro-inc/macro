@@ -53,7 +53,7 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
 - Depends on: `agent`, `ai_toolset`, `authentication_service_client`,
   `macro_authorization` (feature `axum`),
   `macro_user_id`, `rmcp`.
-- Used by: `agent_egress`, `agent_harness`, `ai_tools`, `mcp_select`,
+- Used by: `agent_egress`, `agent_harness`, `ai_tools`, `connectors`,
   `onboarding`.
 
 ## Checks

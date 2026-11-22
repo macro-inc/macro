@@ -2172,8 +2172,8 @@ pub type ToolPipedreamConnection =
 
 /// The MCP stack selector wired to the concrete DCS stores: the native
 /// server store and the Pipedream connection store. Picks which stack
-/// serves a user's tools (Pipedream connectors win; see `mcp_select`).
-pub type ToolMcpSelector = mcp_select::McpToolSelector<
+/// serves a user's tools (Pipedream connectors win; see `connectors`).
+pub type ToolMcpSelector = connectors::McpToolSelector<
     mcp_client::outbound::NativeServerStore,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
     ToolPipedreamConnection,
@@ -2335,7 +2335,7 @@ pub struct ToolServiceContext {
 pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
     pipedream_mcp::outbound::dispatch::ConnectorBackends,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-    mcp_select::NativeOverlayConnections<mcp_client::outbound::NativeServerStore>,
+    connectors::NativeOverlayConnections<mcp_client::outbound::NativeServerStore>,
 >;
 
 /// Wire connector discovery at the composition boundary.
@@ -2352,7 +2352,7 @@ pub fn build_connector_tool_context(
             pipedream_mcp::domain::service::discovery::ConnectorDiscovery::new(
                 client,
                 Arc::new(pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool)),
-                Arc::new(mcp_select::NativeOverlayConnections::new(native_servers)),
+                Arc::new(connectors::NativeOverlayConnections::new(native_servers)),
             ),
         ),
     }

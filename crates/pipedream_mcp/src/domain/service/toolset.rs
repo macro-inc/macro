@@ -65,7 +65,7 @@ impl PipedreamToolSet {
     }
 
     /// The full catalog of MCP tools, public for hosts that compose this
-    /// toolset (see the `mcp_select` crate).
+    /// toolset (see the `connectors` crate).
     pub fn searchable_catalog(&self) -> Vec<SearchableTool> {
         self.0.searchable_catalog()
     }

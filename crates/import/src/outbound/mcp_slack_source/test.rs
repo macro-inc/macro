@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::SlackConversationKind;
 use ai_toolset::{RequestSchema, ToolCallError, ToolResult, ToolSetError};
-use mcp_select::ConnectorRef;
+use connectors::ConnectorRef;
 use std::collections::VecDeque;
 use std::pin::Pin;
 use std::sync::Mutex;

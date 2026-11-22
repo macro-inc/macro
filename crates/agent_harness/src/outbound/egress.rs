@@ -64,7 +64,7 @@ where
     /// given: the agent author's explicit list, or every app the owner
     /// connected. Code executions read this too, so a program reaches exactly
     /// the apps its agent was given.
-    // Both runtime hosts use mcp_select's provider policy. This adapter only
+    // Both runtime hosts use connectors's provider policy. This adapter only
     // loads owner-scoped rows and converts the result to proxy addresses.
     pub async fn advertised_all(
         &self,
@@ -90,7 +90,7 @@ where
                 let connected = overlays
                     .iter()
                     .find(|overlay| overlay.app_slug == server.app_slug)
-                    .and_then(|overlay| mcp_select::overlay_connection(&native, overlay));
+                    .and_then(|overlay| connectors::overlay_connection(&native, overlay));
                 match connected {
                     Some(record) => custom.push(CustomMcpServerListing {
                         key: CustomMcpServerKey::for_url(&record.url),
@@ -106,7 +106,7 @@ where
                 "could not list Pipedream connections: {error:?}"
             ))
         })?;
-        let (native, pipedream) = mcp_select::select_connections(native, pipedream);
+        let (native, pipedream) = connectors::select_connections(native, pipedream);
         Ok((
             pipedream
                 .into_iter()

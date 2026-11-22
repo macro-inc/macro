@@ -581,6 +581,7 @@ dependencies = [
  "chrono-tz",
  "codex_cloud_agents",
  "codex_connection",
+ "connectors",
  "cursor_api_key",
  "cursor_cloud_agents",
  "dashmap",
@@ -607,7 +608,6 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mcp_client",
- "mcp_select",
  "messages",
  "model",
  "model-entity",
@@ -701,6 +701,7 @@ dependencies = [
  "computer_id",
  "connection_gateway",
  "connection_gateway_client",
+ "connectors",
  "contacts",
  "crm",
  "cursor_api_key",
@@ -766,7 +767,6 @@ dependencies = [
  "macro_uuid",
  "mcp_auth_proxy",
  "mcp_client",
- "mcp_select",
  "memory",
  "messages",
  "mimalloc",
@@ -871,6 +871,7 @@ dependencies = [
  "bytes",
  "chat",
  "cognition",
+ "connectors",
  "dashmap",
  "feature_flags",
  "futures",
@@ -880,7 +881,6 @@ dependencies = [
  "jev",
  "macro_user_id",
  "macro_uuid",
- "mcp_select",
  "mcp_toolset",
  "memory",
  "model-entity",
@@ -1273,6 +1273,7 @@ dependencies = [
  "collab_surface",
  "connection",
  "connection_gateway_client",
+ "connectors",
  "contacts",
  "crm",
  "databases",
@@ -1317,7 +1318,6 @@ dependencies = [
  "macro_service_urls",
  "macro_user_id",
  "mcp_client",
- "mcp_select",
  "memory",
  "messages",
  "model",
@@ -5292,6 +5292,24 @@ dependencies = [
  "serde",
  "serde_json",
  "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "connectors"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "axum",
+ "futures",
+ "macro_user_id",
+ "mcp_client",
+ "pipedream_mcp",
+ "rmcp",
+ "serde_json",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -11339,6 +11357,7 @@ dependencies = [
  "axum",
  "chrono",
  "connection_gateway_client",
+ "connectors",
  "dateparser",
  "futures",
  "import_notion",
@@ -11346,7 +11365,6 @@ dependencies = [
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
- "mcp_select",
  "model-entity",
  "model_user",
  "models_databases",
@@ -13426,24 +13444,6 @@ dependencies = [
  "tracing",
  "url",
  "utoipa",
- "workspace-hack",
-]
-
-[[package]]
-name = "mcp_select"
-version = "0.1.0"
-dependencies = [
- "ai_toolset",
- "anyhow",
- "axum",
- "futures",
- "macro_user_id",
- "mcp_client",
- "pipedream_mcp",
- "rmcp",
- "serde_json",
- "tokio",
- "tracing",
  "workspace-hack",
 ]
 

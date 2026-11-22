@@ -23,7 +23,7 @@ use ai_toolset::{RequestContext, ToolResult, ToolSet, ToolSetError};
 use futures::StreamExt;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::{ConnectorSelect, UserMcpTools};
+use connectors::{ConnectorSelect, UserMcpTools};
 use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;

@@ -82,7 +82,7 @@ messages = { path = "../messages", features = ["ai_tools", "broker", "delivery"]
 macro_queues = { path = "../macro_queues" }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
-mcp_select = { path = "../mcp_select" }
+connectors = { path = "../connectors" }
 pipedream_mcp = { path = "../pipedream_mcp" }
 url = { workspace = true }
 model = { path = "../model" }

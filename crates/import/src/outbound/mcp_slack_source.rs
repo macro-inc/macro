@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use ai_toolset::{RequestContext, ToolSet};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::{ConnectorSelect, UserMcpTools};
+use connectors::{ConnectorSelect, UserMcpTools};
 use serde_json::{Value, json};
 
 use crate::domain::models::{

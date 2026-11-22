@@ -85,8 +85,8 @@ impl ImportSource {
     }
 
     /// This source's connector on both MCP stacks.
-    pub fn connector_ref(self) -> mcp_select::ConnectorRef<'static> {
-        mcp_select::ConnectorRef {
+    pub fn connector_ref(self) -> connectors::ConnectorRef<'static> {
+        connectors::ConnectorRef {
             pipedream_app_slugs: self.pipedream_app_slugs(),
             native_server_url: self.mcp_server_url(),
         }

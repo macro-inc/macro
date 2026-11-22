@@ -285,7 +285,7 @@ impl McpToolSet {
     }
 
     /// The full catalog of MCP tools, public for hosts that compose this
-    /// toolset outside [`CombinedToolSet`] (see the `mcp_select` crate).
+    /// toolset outside [`CombinedToolSet`] (see the `connectors` crate).
     pub fn searchable_catalog(&self) -> Vec<SearchableTool> {
         self.catalog()
     }

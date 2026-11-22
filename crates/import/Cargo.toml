@@ -23,7 +23,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
   "axum",
 ] }
 macro_user_id = { path = "../macro_user_id" }
-mcp_select = { path = "../mcp_select" }
+connectors = { path = "../connectors" }
 model-entity = { path = "../model-entity" }
 import_notion = { path = "../import_notion" }
 import_tracker = { path = "../import_tracker" }
