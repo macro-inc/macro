@@ -836,7 +836,6 @@ pub async fn build(
             &document_tool_context,
         ),
         schedule_tool_context: ai_tools::build_routine_tool_context()?,
-        anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         web_search_provider: ai_tools::build_web_search_provider_from_env(),
         admission,
         recorder,

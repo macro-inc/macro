@@ -546,6 +546,9 @@ the shimmer.
   combines Type, Status, and Pull request filters; choices within a category are
   ORed and categories are ANDed. Sort and filters are remembered per user;
   previously saved grouping is ignored by the redesigned desktop list.
+  The phone list's **Group conversations** offers Status (default) and None:
+  Needs you and Working show counts above an uncounted Recent, a list that is
+  all Recent has no heading, and Archived shows no count.
   With `enable-agent-updates`, **Open PRs** remains between Waiting on you and
   Conversations, showing non-waiting active coding sessions with open or draft
   PRs. Each session appears in only one section; disabling Open PRs returns its
@@ -1391,8 +1394,7 @@ results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
 they remain discoverable through `DescribeCodeTools`. User-review
-tools, `AskUser`, connector discovery, tool loading for connected apps,
-and explicit provider code execution retain their direct lifecycle. Connected
+tools, `AskUser`, connector discovery, and tool loading for connected apps retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
 Sessions without a user owner can't run in-process turns at all.

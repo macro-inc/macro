@@ -591,7 +591,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             &document_tool_context,
         ),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
-        anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
         web_search_provider: std::sync::Arc::new(web_search::outbound::tavily::TavilyClient::new(
             &web_search::outbound::tavily::TavilyApiKey::new_unset(),
         )),

@@ -29,8 +29,6 @@ pub mod serde_utils;
 mod tool_context;
 pub mod user_tool_review;
 
-pub use anthropic::toolset::AnthropicToolContext;
-use anthropic::toolset::anthropic_toolset;
 use bots::inbound::toolset::bot_toolset;
 use calendar_events::inbound::team_toolset::team_calendar_toolset;
 use calendar_events::inbound::toolset::{calendar_toolset, mcp_toolset as calendar_mcp_toolset};
@@ -61,10 +59,8 @@ use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
 use teams::inbound::toolset::team_toolset;
 
-#[cfg(any(test, feature = "test-support"))]
-pub use build_context::build_anthropic_tool_context_test;
 pub use build_context::{
-    build_anthropic_tool_context, build_cognition_tool_context, build_image_generator_from_env,
+    build_cognition_tool_context, build_image_generator_from_env,
     build_tool_service_context_from_env, build_web_search_provider_from_env, service_feature_flags,
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
@@ -193,7 +189,6 @@ pub(crate) fn base_toolset() -> AiToolSet {
         .add_subtoolset::<ToolFormsToolContext>(forms::inbound::toolset::authoring_toolset())
         .add_subtoolset::<ToolDatabasesSqlToolContext>(databases_sql_toolset())
         .add_subtoolset::<ToolSkillToolContext>(skill_toolset())
-        .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
         .add_subtoolset::<web_search::inbound::toolset::WebToolContext>(
             web_search::inbound::toolset::web_toolset(),
         )
@@ -237,7 +232,6 @@ pub enum AiHost {
 /// [`DeferredToolSet`]), listed by name and summary in the prompt and loaded
 /// with `LoadTools` when needed.
 pub const EAGER_TOOLS: &[&str] = &[
-    "BashCodeExecution",
     "ContentSearch",
     "CreateDocument",
     "DisplayResults",
@@ -260,7 +254,6 @@ pub const EAGER_TOOLS: &[&str] = &[
     "SelfKnowledge",
     "SendChannelMessage",
     "ShareWithChannel",
-    "TextEditorCodeExecution",
     "WebFetch",
     "WebSearch",
 ];
@@ -425,6 +418,8 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
         >())
         .merge(&read::read_thread())
         .merge(&schemas::subagent::subagent())
+        .merge(&schemas::anthropic_tools::bash_code_execution())
+        .merge(&schemas::anthropic_tools::text_editor_code_execution())
         .merge(&schemas::read_activity::read_activity())
         .merge(&frontend_compat::LegacyConversationSchemas)
         .build()
