@@ -1034,6 +1034,7 @@ async fn suggestions_brief_programs_type_check() {
                     source: source.clone(),
                     timeout_ms: 30_000,
                     language: code_execution::domain::Language::Javascript,
+                    module: None,
                 },
                 RunEnvironment {
                     session_id: Some(uuid::Uuid::now_v7()),

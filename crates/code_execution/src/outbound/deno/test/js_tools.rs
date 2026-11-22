@@ -23,6 +23,7 @@ fn js_tools(source: &str, timeout_ms: u64) -> ExecuteRequest {
         source: source.into(),
         timeout_ms,
         language: Language::JsTools,
+        module: None,
     }
 }
 
@@ -748,6 +749,7 @@ async fn js_tools_runs_get_exactly_a_javascript_runs_deno_flags() {
                         source: "return 1".into(),
                         timeout_ms: 5000,
                         language,
+                        module: None,
                     },
                     RunEnvironment {
                         allowed_operations,

@@ -87,9 +87,12 @@ a parameter default beside a body `var`), so the analyzer has its own rules:
   finds that we don't, is refused.
 
 That is sound because the interpreter has no global object, `eval`,
-`Function` (it throws), `Proxy`, `Reflect`, getters or extensions: its only
-way to an SDK call is the `tools` namespace, reached by name or loaded by
-`require`/`import`. `makeRuntime` gives the interpreter every tool and a
+`Function` (it throws), `Proxy`, `Reflect` or getters, and its one extension
+(`ModuleBridge`: `get` and `call`, given only for a run's module) reaches a
+separate process with no SDK: its only way to an SDK call is the `tools`
+namespace, reached by name or loaded by `require`/`import`. `get` and `call`
+are plain globals to the analysis, and passing `tools` or an operation to
+them is aliasing, refused like any other. `makeRuntime` gives the interpreter every tool and a
 `tool.before` hook that refuses any outside the analyzed set; the bootstrap
 supplies the function that sends each call. `analyze.test.ts` runs every
 corpus program in the real interpreter and checks it calls nothing the

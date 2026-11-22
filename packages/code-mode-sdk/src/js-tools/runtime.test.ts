@@ -176,4 +176,61 @@ describe('JS tools runtime', () => {
       error: { kind: 'ToolCallLimitExceeded' },
     });
   });
+
+  it("reads and calls the run's module through get and call, as copied data", async () => {
+    const asked: [string, unknown, unknown[]][] = [];
+    const runtime = makeRuntime({
+      catalog: CATALOG,
+      admitted: new Set(['storage.create_task_handler']),
+      call: async () => ({ documentId: 'task-1' }),
+      module: {
+        get: async (name) => {
+          asked.push(['get', name, []]);
+          return { greeting: 'hello' };
+        },
+        call: async (name, args) => {
+          asked.push(['call', name, args]);
+          if (name === 'fails') throw new Error('render failed');
+          return `rendered ${JSON.stringify(args)}`;
+        },
+      },
+      limits: LIMITS,
+    });
+    const result = await runtime.execute(
+      'const task = await tools.storage.create_task_handler({ body: { taskName: "x" } }); const g = await get("greeting"); const r = await call("render", task, g, () => 1); let error; try { await call("fails") } catch (e) { error = String(e) } return { g, r, error, fetch: typeof fetch }',
+      {}
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        g: { greeting: 'hello' },
+        r: expect.stringContaining('task-1'),
+        error: expect.stringContaining('render failed'),
+        fetch: 'undefined',
+      },
+    });
+    // A function argument never crosses: the interpreter leaves it out.
+    expect(asked[1]?.[2]).toEqual([
+      { documentId: 'task-1' },
+      { greeting: 'hello' },
+      undefined,
+    ]);
+  });
+
+  it('has no get or call without a module', async () => {
+    const runtime = makeRuntime({
+      catalog: CATALOG,
+      admitted: new Set(),
+      call: async () => ({}),
+      limits: LIMITS,
+    });
+    const result = await runtime.execute(
+      'return [typeof get, typeof call]',
+      {}
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      value: ['undefined', 'undefined'],
+    });
+  });
 });

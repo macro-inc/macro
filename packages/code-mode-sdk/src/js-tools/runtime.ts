@@ -3,7 +3,7 @@
  * tool per catalog operation, of which only the analyzed ones may run.
  */
 
-import { CodeMode, Tool } from '@opencode/codemode';
+import { CodeMode, Extension, Tool } from '@opencode/codemode';
 import { Effect } from 'codemode-effect';
 import type { Catalog, CatalogTool } from './catalog';
 
@@ -23,11 +23,24 @@ export type CallTool = (
 /** A run's JSON values bound as read-only globals, such as `context`. */
 export type Bindings = Readonly<Record<string, CodeMode.DataValue>>;
 
+/**
+ * The run's TypeScript module, in its own process with no network, SDK or
+ * token: `get(name)` reads an export, `call(name, ...args)` calls one. Each
+ * resolves to a JSON copy of the answer or rejects with why. The bootstrap
+ * relays both; they reach nothing else.
+ */
+export type ModuleBridge = {
+  get: (name: unknown) => Promise<unknown>;
+  call: (name: unknown, args: unknown[]) => Promise<unknown>;
+};
+
 export type RuntimeOptions = {
   catalog: Catalog;
   /** The paths the analysis found (`AnalyzedOperation.path`): the only tools that run. */
   admitted: ReadonlySet<string>;
   call: CallTool;
+  /** Programs get `get` and `call` as globals with it; none without. */
+  module?: ModuleBridge;
   limits: { timeoutMs: number; maxToolCalls: number; maxOutputBytes: number };
 };
 
@@ -99,8 +112,22 @@ export function makeRuntime(options: RuntimeOptions): Runtime {
   // The second backstop: a call outside what the program was analyzed to
   // make never reaches the tool. `search` makes no SDK call. The full catalog
   // stays visible to `search`.
+  // `get` and `call` are plain globals, not tools: they reach only the
+  // module, never the SDK, so the analysis and the gate ignore them.
+  const bridge = options.module;
+  const extensions: Extension.Extension[] = [];
+  if (bridge) {
+    const globals: Readonly<Record<string, unknown>> = {
+      get: Extension.async((name: unknown) => bridge.get(name)),
+      call: Extension.async((name: unknown, ...args: unknown[]) =>
+        bridge.call(name, args)
+      ),
+    };
+    extensions.push(Extension.make({ name: 'module', globals }));
+  }
   const runtime = CodeMode.make({
     tools,
+    extensions,
     hooks: {
       'tool.before': (call) =>
         call.name === 'search' || options.admitted.has(call.name)

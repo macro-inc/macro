@@ -191,6 +191,7 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
                 source: self.source.clone(),
                 timeout_ms: self.timeout_ms,
                 language: Language::Javascript,
+                module: None,
             },
         )
         .await
@@ -288,6 +289,7 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCodeWithJsTools {
                 source: self.source.clone(),
                 timeout_ms: self.timeout_ms,
                 language: ProgramLanguage::from(self.language).into(),
+                module: None,
             },
         )
         .await
@@ -368,6 +370,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
                     language: Language::Javascript,
+                    module: None,
                 },
                 request.cancel,
             )

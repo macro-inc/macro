@@ -5,9 +5,10 @@
  *
  * The interpreter (`@opencode/codemode`) reaches the outside world only
  * through host functions, and the only ones that make SDK calls are the
- * tools under the `tools` namespace: there are no extensions, `fetch`,
- * `globalThis`, `eval`, `Proxy`, `Reflect` or getters, and `Function`
- * throws. `tools` can be reached only by its name or by loading it as a
+ * tools under the `tools` namespace: there is no `fetch`, `globalThis`,
+ * `eval`, `Proxy`, `Reflect` or getters, `Function` throws, and the one
+ * extension, `get` and `call` (a run's module), reaches a process with no
+ * SDK, so they are plain globals here. `tools` can be reached only by its name or by loading it as a
  * module (`require`, `import`). So the rules are:
  *
  * - A1. Module loading is refused: `import` in every form, and `require`

@@ -17,5 +17,11 @@ export type {
 } from './analyze';
 export { analyze, toolsByPath } from './analyze';
 export type { Catalog, CatalogTool, Route } from './catalog';
-export type { Bindings, CallTool, Runtime, ToolInput } from './runtime';
+export type {
+  Bindings,
+  CallTool,
+  ModuleBridge,
+  Runtime,
+  ToolInput,
+} from './runtime';
 export { makeRuntime } from './runtime';

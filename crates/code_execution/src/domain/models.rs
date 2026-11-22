@@ -21,6 +21,11 @@ pub struct ExecuteRequest {
     /// The language `source` is written in.
     #[serde(default)]
     pub language: Language,
+    /// JS tools only: a TypeScript module the program reads with
+    /// `get(name)` and calls with `call(name, ...args)`. It runs in its own
+    /// process with no network, no SDK and no token, for this run only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub module: Option<String>,
 }
 
 /// The language a program is written in.
@@ -227,6 +232,12 @@ pub enum AdmissionError {
     /// Empty or oversized source.
     #[error("source must be nonempty and within the configured size limit")]
     InvalidSource,
+    /// An empty or oversized module, or one sent with a program that
+    /// isn't a JS tools program.
+    #[error(
+        "module must be nonempty, within the configured size limit and sent with a JS tools program"
+    )]
+    InvalidModule,
     /// A caller cannot raise the server's deadline.
     #[error("timeout must be positive and within the configured limit")]
     InvalidTimeout,
@@ -380,6 +391,9 @@ pub enum ProgramImports {
     Sdk,
     /// `@macro-inc/sdk` and `handlebars`, as an attended program runs with.
     SdkAndHandlebars,
+    /// Only `handlebars`, as a JS tools program's module runs with: it never
+    /// reaches the SDK.
+    Handlebars,
 }
 
 /// The checker couldn't decide whether a program checks.

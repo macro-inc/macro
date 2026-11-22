@@ -28,8 +28,9 @@ from `@macro-inc/sdk`. `webAppUrl` is the deployment's web app origin, so
 `webUrl()` links point at the environment the run is in.
 `session` and `execution` are handles supplied by the authenticated host.
 SDK methods perform normal authenticated HTTP requests. Promise concurrency is
-ordinary JavaScript concurrency: there is no per-call Rust tool dispatch or
-stdin/stdout request/reply bridge.
+ordinary JavaScript concurrency: there is no per-call Rust tool dispatch. The
+only stdin/stdout request/reply bridge is a JS tools program's to its module
+(below).
 
 `ExecutionService` owns process admission, type checking, queueing, deadlines,
 cancellation, and shutdown. The Deno adapters implement its process and
@@ -137,6 +138,58 @@ deadline less 500 ms, so its logs still arrive and the run ends `TimedOut`;
 it allows 256 tool calls and keeps at most a frame's worth of result and
 logs. A JS tools program can't run unattended. The bootstrap gives the
 interpreter back the timers it schedules with; the program has none.
+
+### The module
+
+`ExecuteRequest::module` (JS tools only; admission refuses it with any other
+program, empty or over the source limit: `AdmissionError::InvalidModule`) is
+a TypeScript module the program reads with two globals, `await get(name)`
+(an export's value) and `await call(name, ...args)` (an exported function's
+result). It is for computation and libraries, such as rendering with
+Handlebars, never for reaching Macro:
+
+```js
+// source
+const doc = await tools.storage.get_document_markdown({ path: { document_id: "..." } });
+return await call("summary", doc.markdown);
+```
+
+```ts
+// module
+import Handlebars from "handlebars";
+const template = Handlebars.compile("{{lines}} lines, first: {{first}}");
+export function summary(markdown: string): string {
+  const lines = markdown.split("\n");
+  return template({ lines: lines.length, first: lines[0] });
+}
+```
+
+- It is type-checked first like a TypeScript program (`module.ts`, no
+  context, `ProgramImports::Handlebars`: no `@macro-inc/sdk`), and the
+  precheck covers it the same way.
+- `DenoRunner` starts it at the run's start, in its own Deno process
+  (`src/outbound/deno/module.rs`, bootstrap `compute.mjs`): the run's deny
+  flags plus `--deny-net`, `--allow-read` of its own scratch only, and an
+  import map with Handlebars and the allowed Node built-ins but no SDK. Its
+  environment and stdin carry no token. It gets the run's CPU limit and
+  heap, its timers are banned like a TypeScript program's, and it is killed
+  and reaped when the run ends, however it ends.
+- `get` and `call` are `@opencode/codemode` extension globals. Each writes a
+  `{"type":"module",...}` frame on the program's stdout; the bridge relays
+  them one at a time, in order, to the module's stdin and writes each reply
+  on the program's stdin, which stays open for them. Values cross as JSON
+  copies of at most the frame limit less 1 KiB each way; an error in the
+  module, an unknown export or an oversized value rejects the program's
+  promise with the message. A module that stops or breaks the protocol
+  rejects every later request. What the two exchange has its own 16 MiB
+  budget per run; the module's logs share the run's output budget, prefixed
+  `module: `.
+- The analysis ignores `get` and `call` (they reach no SDK); passing `tools`
+  or an operation to them is refused like any other aliasing.
+- Span `code_execution.module` per module process (`execution_id`,
+  `module_bytes`, `requests`, `relayed_bytes` and the `process.*` exit
+  fields), with a `code_execution.module.relay` child per request (`op`,
+  `request_bytes`, `reply_bytes`, `outcome`); never names or values.
 
 `src/outbound/deno/js_tools_analyze.mjs` is the analyzer as a process, for
 the permission gate: beside `js-tools.mjs` and `js-tools.json`, run with

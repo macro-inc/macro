@@ -466,6 +466,7 @@ async fn js_tools_without_the_rollout_is_refused_before_a_credential() {
                 source: example().into(),
                 timeout_ms: 30_000,
                 language: Language::JsTools,
+                module: None,
             },
             CancellationToken::new(),
         )

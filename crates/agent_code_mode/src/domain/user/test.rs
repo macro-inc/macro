@@ -76,6 +76,7 @@ fn request() -> ExecuteRequest {
         source: "export async function main() { return {data: 42}; }".into(),
         timeout_ms: 30_000,
         language: code_execution::domain::Language::Javascript,
+        module: None,
     }
 }
 
@@ -143,11 +144,13 @@ async fn invalid_requests_are_rejected_before_minting_a_credential() {
             source: " ".into(),
             timeout_ms: 1000,
             language: code_execution::domain::Language::Javascript,
+            module: None,
         },
         ExecuteRequest {
             source: "export async function main() {}".into(),
             timeout_ms: 30_001,
             language: code_execution::domain::Language::Javascript,
+            module: None,
         },
     ] {
         assert!(matches!(

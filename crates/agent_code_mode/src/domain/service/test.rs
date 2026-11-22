@@ -174,6 +174,7 @@ fn request() -> ExecuteRequest {
         source: "export async function main() { return {data: 42, reviews: []}; }".into(),
         timeout_ms: 1000,
         language: code_execution::domain::Language::Javascript,
+        module: None,
     }
 }
 /// A program with type errors fails before the owner is asked to approve it
@@ -193,6 +194,7 @@ async fn a_program_with_type_errors_stops_before_credentials() {
                 source: "export async function main() { return TYPE_ERROR; }".into(),
                 timeout_ms: 1000,
                 language: code_execution::domain::Language::Javascript,
+                module: None,
             },
             CancellationToken::new(),
         )
@@ -898,6 +900,7 @@ fn js_tools_request() -> ExecuteRequest {
                 .into(),
         timeout_ms: 1000,
         language: code_execution::domain::Language::JsTools,
+        module: None,
     }
 }
 

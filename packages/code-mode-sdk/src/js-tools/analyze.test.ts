@@ -423,6 +423,29 @@ const CORPUS: Record<string, [string, Expected]> = {
   fetchGlobal: ['return await fetch("https://example.com")', []],
   webAssembly: ['return typeof WebAssembly', []],
   contextBinding: ['return context', []],
+  // `get` and `call` reach the run's module, never the SDK: plain globals.
+  moduleGet: ['return await get("total")', []],
+  moduleCallWithToolData: [
+    'const t = await tools.tasks.read({}); return await call("render", t)',
+    ['tasks.read'],
+  ],
+  moduleShadowed: [
+    'const get = () => tools.docs.del({}); return await get()',
+    ['docs.del'],
+  ],
+  moduleCallPassesTools: ['return await call("f", tools)', 'cannot_analyze'],
+  moduleCallPassesService: [
+    'return await call("f", tools.tasks)',
+    'cannot_analyze',
+  ],
+  moduleCallPassesOperation: [
+    'return await call("f", tools.tasks.read)',
+    'cannot_analyze',
+  ],
+  moduleCallPassesCallback: [
+    'return await call("f", () => tools.docs.del({}))',
+    ['docs.del'],
+  ],
 };
 
 describe('JS tools analysis', () => {
@@ -430,12 +453,24 @@ describe('JS tools analysis', () => {
   // adapter records every call, and every catalog tool is admitted, so only
   // the analysis stands between a program and an unreported call.
   const called: string[] = [];
+  // What reached the module: only copied data, never a function.
+  const crossed: unknown[] = [];
   const runtime = makeRuntime({
     catalog: CATALOG,
     admitted: new Set(TOOLS.keys()),
     call: async (target) => {
       called.push(target.path.join('.'));
       return { ok: true };
+    },
+    module: {
+      get: async (name) => {
+        crossed.push(name);
+        return 1;
+      },
+      call: async (name, args) => {
+        crossed.push(name, ...args);
+        return 1;
+      },
     },
     limits: { timeoutMs: 5000, maxToolCalls: 64, maxOutputBytes: 64 * 1024 },
   });
@@ -453,11 +488,15 @@ describe('JS tools analysis', () => {
       }
 
       called.length = 0;
+      crossed.length = 0;
       await runtime.execute(source, { context: { sessionId: 'session' } });
       if (analysis.status === 'ok') {
         const allowed = analysis.operations.map((op) => op.path);
         expect(called.filter((path) => !allowed.includes(path))).toEqual([]);
       }
+      expect(crossed.filter((value) => typeof value === 'function')).toEqual(
+        []
+      );
     });
   }
 

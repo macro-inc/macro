@@ -36,13 +36,19 @@ composition root.
   permission gate (interface in its header), run by `JsToolsAnalyzer`
   (`src/outbound/deno/analyze.rs`); tests in
   `src/outbound/deno/test/js_tools.rs` and `src/outbound/deno/analyze/test.rs`.
+- A JS tools program's module (`ExecuteRequest::module`): its own Deno
+  process with no network, SDK or token (`src/outbound/deno/module.rs`,
+  `compute.mjs`), read through `get`/`call` frames the bridge relays; README
+  "The module". Tests in `src/outbound/deno/test/module.rs`.
 - `src/outbound/analysis.rs`: the analyzers' shared JSON answer
   (`macro_sdk_calls --json`'s shape plus `diagnostics`).
 
 ## Gotchas
 
 The bundled public SDK makes ordinary HTTP requests. There is no tool-name
-proxy or host-call bridge. Cancellation stops the process; it does not roll back
+proxy or host-call bridge; the only relay is a JS tools program's `get` and
+`call` to its module, which carries copied JSON and nothing that reaches
+Macro. Cancellation stops the process; it does not roll back
 completed API writes. SDK and Handlebars bundles, the operation catalog and
 the SDK's type declarations come from `crates/code_mode_assets`, generated from
 the public SDK at build time by `packages/code-mode-sdk`. A POST that only reads

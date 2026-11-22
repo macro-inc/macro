@@ -104,7 +104,7 @@ const at = location => location ? `main.js:${location.line}:${location.column + 
 // the operations found may run (the interpreter's tool.before hook), and
 // `allowedOperations`, the ones the gate checked it to call, must cover them
 // all. A run without them never starts (DenoRunner refuses it first).
-async function runJsTools(context, limits, allowedOperations, callTool) {
+async function runJsTools(context, limits, allowedOperations, callTool, module) {
   if (!isArray(allowedOperations)) {
     throw new Error("JS tools programs run only with the operations they were checked to call");
   }
@@ -128,6 +128,7 @@ async function runJsTools(context, limits, allowedOperations, callTool) {
     catalog,
     admitted: new Set(analysis.operations.map(found => found.path)),
     call: callTool,
+    module,
     limits,
   });
   const result = await runtime.execute(source, {
@@ -160,8 +161,68 @@ function jsToolsResult(value) {
     hasOwn(value, "data") && Object.keys(value).every(key => RESULT_KEYS.has(key));
   return shaped ? value : {data: value};
 }
+// stdin, one line at a time: the run's context, then, for a JS tools
+// program sent with a module, one reply per `get` or `call`.
+const stdinReader = Deno.stdin.readable.getReader();
+let stdinBuffered = "";
+async function nextLine() {
+  for (;;) {
+    const end = stdinBuffered.indexOf("\n");
+    if (end >= 0) {
+      const line = stdinBuffered.slice(0, end);
+      stdinBuffered = stdinBuffered.slice(end + 1);
+      return line;
+    }
+    const {value, done} = await stdinReader.read();
+    if (done) return undefined;
+    stdinBuffered += decoder.decode(value, {stream: true});
+  }
+}
+// A JS tools program's `get` and `call`: each is one frame to the runner,
+// which relays it to the module's own process (no network, no SDK, no
+// token) and writes its reply on stdin. Values cross as JSON copies, so
+// nothing of either realm reaches the other.
+function moduleBridge(module) {
+  const noModule = () => Promise.reject(new Error("This ExecuteCode call sent no module: pass module, a TypeScript module whose exports get(name) reads and call(name, ...args) calls."));
+  if (!module) return {get: noModule, call: noModule};
+  const pending = new Map();
+  let nextRequest = 0;
+  (async () => {
+    for (;;) {
+      const line = await nextLine();
+      if (line === undefined) break;
+      const reply = parse(line);
+      const waiting = pending.get(reply.id);
+      pending.delete(reply.id);
+      if (!waiting) continue;
+      if (typeof reply.error === "string") waiting.reject(new Error(reply.error));
+      else waiting.resolve(reply.value ?? null);
+    }
+    for (const waiting of pending.values()) waiting.reject(new Error("The module stopped."));
+    pending.clear();
+  })().catch(error => emit({type: "log", level: "warn", message: `module replies stopped: ${String(error)}`}));
+  const request = (op, name, args) => {
+    if (typeof name !== "string") return Promise.reject(new Error(`${op} takes the export's name as a string.`));
+    const frame = args === undefined ? {type: "module", id: nextRequest + 1, op, name} : {type: "module", id: nextRequest + 1, op, name, args};
+    let bytes;
+    try {
+      bytes = encoder.encode(stringify(frame)).length;
+    } catch (error) {
+      return Promise.reject(new Error(`${op}(${stringify(name)}) arguments can't be copied as JSON: ${error?.message ?? error}`));
+    }
+    if (bytes > module.maxValueBytes) {
+      return Promise.reject(new Error(`${op}(${stringify(name)}) arguments are ${bytes} bytes as JSON; at most ${module.maxValueBytes} bytes cross between source and module at a time.`));
+    }
+    nextRequest += 1;
+    return new Promise((resolve, reject) => {
+      pending.set(frame.id, {resolve, reject});
+      emit(frame);
+    });
+  };
+  return {get: name => request("get", name), call: (name, args) => request("call", name, args)};
+}
 try {
-  const {maxResultBytes, maxCallsPerOperation, remainingMs, operations, unattended, language, allowedOperations, jsTools, ...context} = await new Response(Deno.stdin.readable).json();
+  const {maxResultBytes, maxCallsPerOperation, remainingMs, operations, unattended, language, allowedOperations, jsTools, module, ...context} = parse(await nextLine() ?? "null");
   // The requests a JS tools program was checked to send (the permission
   // gate); absent, every request goes as before. Each is matched by its operation
   // and by where it goes: method, the service's host and the route. A
@@ -391,7 +452,7 @@ try {
       return data ?? null;
     };
     Object.assign(globalThis, hostTimers);
-    value = await runJsTools(context, jsTools, allowedOperations, callTool);
+    value = await runJsTools(context, jsTools, allowedOperations, callTool, moduleBridge(module));
   } else if (unattended) {
     const { main } = await import(program);
     if (typeof main !== "function") throw new Error("Export an async main(context: StepContext) function.");

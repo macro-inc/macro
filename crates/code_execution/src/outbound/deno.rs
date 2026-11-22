@@ -22,6 +22,8 @@ use tokio_util::{
 };
 
 const BOOTSTRAP: &str = include_str!("deno/bootstrap.mjs");
+/// A JS tools program's module's bootstrap; see `module.rs`.
+const COMPUTE: &str = include_str!("deno/compute.mjs");
 const TIMERS: &str = include_str!("deno/timers.mjs");
 const UNAVAILABLE: &str = include_str!("deno/unavailable.mjs");
 /// Node built-ins a program may import: none opens a connection or a process,
@@ -137,9 +139,12 @@ const NODE_BUILTINS: &[&str] = &[
 /// and an attended program's worker modules, resolve to timers.mjs, which
 /// refuses to sleep; see bootstrap.mjs. A bare allowed name (`crypto`) resolves
 /// as its `node:` form.
-fn import_map(unattended: bool) -> String {
+/// `sdk` maps `@macro-inc/sdk`; a JS tools program's module goes without it.
+fn import_map(unattended: bool, sdk: bool) -> String {
     let mut imports = serde_json::Map::new();
-    imports.insert("@macro-inc/sdk".into(), "./sdk.mjs".into());
+    if sdk {
+        imports.insert("@macro-inc/sdk".into(), "./sdk.mjs".into());
+    }
     if !unattended {
         imports.insert("handlebars".into(), "./handlebars.mjs".into());
     }
@@ -158,6 +163,24 @@ fn import_map(unattended: bool) -> String {
     }
     serde_json::json!({ "imports": imports }).to_string()
 }
+/// Every program process's flags before its network, read and import-map
+/// ones: nothing to prompt for, no config, lockfile, remote or npm modules,
+/// and no writes, environment, subprocesses, FFI, system facts or imports
+/// beyond its own files.
+const BOOTSTRAP_FLAGS: [&str; 12] = [
+    "run",
+    "--no-prompt",
+    "--no-config",
+    "--no-lock",
+    "--no-remote",
+    "--no-npm",
+    "--deny-write",
+    "--deny-env",
+    "--deny-run",
+    "--deny-ffi",
+    "--deny-sys",
+    "--deny-import",
+];
 /// Runtime version pinned by the container and checked at startup.
 pub const DENO_VERSION: &str = "2.9.6";
 /// Where a JS tools program's source is written; its diagnostics name it.
@@ -269,6 +292,13 @@ impl DenoRunner {
                     "JS tools programs run only with the operations they were checked to call",
                 ));
             }
+            // Only a JS tools program reads a module (`get`, `call`).
+            Language::Javascript if job.request.module.is_some() => {
+                return Err(ExecutionFailure::new(
+                    FailureCode::Internal,
+                    "only JS tools programs take a module",
+                ));
+            }
             Language::JsTools => JS_TOOLS_PROGRAM,
             // Programs are TypeScript; Deno strips their types on load.
             Language::Javascript => "main.ts",
@@ -307,7 +337,7 @@ impl DenoRunner {
         }
         tokio::fs::write(
             root.join("imports.json"),
-            import_map(job.environment.unattended.is_some()),
+            import_map(job.environment.unattended.is_some(), true),
         )
         .await
         .map_err(internal)?;
@@ -355,22 +385,29 @@ impl DenoRunner {
                 destinations.into_iter().collect::<Vec<_>>().join(",")
             )
         };
-        let mut child = self
+        // A JS tools program's module starts beside it, in its own process,
+        // and is reaped with it whatever ends the run.
+        let (mut module, module_pipes) = match &job.request.module {
+            Some(source) => {
+                let (module, pipes) = match self
+                    .start_module(source, &job.environment, &job.limits)
+                    .await
+                {
+                    Ok(started) => started,
+                    Err(error) => {
+                        if let Some(egress) = egress {
+                            egress.stop().await;
+                        }
+                        return Err(error);
+                    }
+                };
+                (Some(module), Some(pipes))
+            }
+            None => (None, None),
+        };
+        let spawned_child = self
             .command(root)
-            .args([
-                "run",
-                "--no-prompt",
-                "--no-config",
-                "--no-lock",
-                "--no-remote",
-                "--no-npm",
-                "--deny-write",
-                "--deny-env",
-                "--deny-run",
-                "--deny-ffi",
-                "--deny-sys",
-                "--deny-import",
-            ])
+            .args(BOOTSTRAP_FLAGS)
             .arg(network)
             .arg(format!("--allow-read={}", root.display()))
             .arg(format!(
@@ -379,11 +416,25 @@ impl DenoRunner {
             ))
             .arg(format!("--v8-flags=--max-old-space-size={}", self.heap_mb))
             .arg(&bootstrap)
-            .spawn()
-            .map_err(internal)?;
+            .spawn();
+        let mut child = match spawned_child {
+            Ok(child) => child,
+            Err(error) => {
+                if let Some(module) = module {
+                    module.stop(0, 0).await;
+                }
+                if let Some(egress) = egress {
+                    egress.stop().await;
+                }
+                return Err(internal(error));
+            }
+        };
         let spawned = tokio::time::Instant::now();
         if let Err(error) = limit(&child, &job.limits) {
             reap(&mut child).await;
+            if let Some(module) = module {
+                module.stop(0, 0).await;
+            }
             return Err(error);
         }
         let pid = child.id();
@@ -395,6 +446,7 @@ impl DenoRunner {
         let mut usage = exit::ProcessUsage::default();
         let mut answered = false;
         let mut exited_by_itself = false;
+        let mut relays = RelayCounts::default();
         let execution = async {
             let bridged = bridge(
                 &job.environment,
@@ -405,6 +457,8 @@ impl DenoRunner {
                     stdout,
                     stderr,
                 },
+                module_pipes,
+                &mut relays,
                 events,
                 &job.limits,
                 job.deadline,
@@ -414,9 +468,14 @@ impl DenoRunner {
             let candidate = loop {
                 tokio::select! {
                     candidate = &mut bridged => break candidate?,
-                    _ = samples.tick() => if let Some(pid) = pid {
-                        usage.sample(pid);
-                    },
+                    _ = samples.tick() => {
+                        if let Some(pid) = pid {
+                            usage.sample(pid);
+                        }
+                        if let Some(module) = module.as_mut() {
+                            module.sample();
+                        }
+                    }
                 }
             };
             answered = candidate.is_some();
@@ -467,6 +526,9 @@ impl DenoRunner {
                 killed,
             }
             .record(&tracing::Span::current());
+        }
+        if let Some(module) = module {
+            module.stop(relays.requests, relays.bytes).await;
         }
         if let Some(egress) = egress {
             egress.stop().await;
@@ -573,7 +635,30 @@ struct ChildContext<'a> {
     /// For a JS tools program, the interpreter's limits.
     #[serde(skip_serializing_if = "Option::is_none")]
     js_tools: Option<JsToolsLimits>,
+    /// For a JS tools program sent with a module, what `get` and `call`
+    /// may carry; their replies follow on stdin.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    module: Option<ChildModule>,
 }
+
+/// How a JS tools program reaches its module.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChildModule {
+    /// The most one value may be, as JSON, either way.
+    max_value_bytes: usize,
+}
+
+/// How much the program and its module exchanged, for the module's span.
+#[derive(Default)]
+struct RelayCounts {
+    requests: u64,
+    bytes: usize,
+}
+
+/// Bytes the program and its module may exchange in one run, both ways:
+/// past it the run stops, as for too much output.
+const MAX_RELAYED_BYTES: usize = 16 * 1024 * 1024;
 
 /// What `@opencode/codemode` enforces on a JS tools run.
 #[derive(Serialize)]
@@ -628,6 +713,8 @@ enum ChildFrame {
         #[serde(default)]
         failure: Option<FrameFailure>,
     },
+    /// A JS tools program's `get` or `call` of its module.
+    Module(module::ModuleRequest),
 }
 
 /// Why an error frame's program failed, when it's not a runtime error.
@@ -647,11 +734,17 @@ struct ChildPipes {
     stderr: tokio::process::ChildStderr,
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the bridge owns one run's pipes, budgets and module relay"
+)]
 async fn bridge(
     environment: &RunEnvironment,
     language: Language,
     forwarder: Option<&std::collections::BTreeMap<String, String>>,
     pipes: ChildPipes,
+    module: Option<module::ModulePipes>,
+    relays: &mut RelayCounts,
     events: &mut EventSink,
     limits: &Limits,
     deadline: tokio::time::Instant,
@@ -681,12 +774,21 @@ async fn bridge(
             max_tool_calls: JS_TOOLS_MAX_TOOL_CALLS,
             max_output_bytes: limits.max_frame_bytes,
         }),
+        module: module.as_ref().map(|_| ChildModule {
+            max_value_bytes: module::max_value_bytes(limits),
+        }),
     })
     .map_err(internal)?;
     initial.push(b'\n');
     stdin.write_all(&initial).await.map_err(internal)?;
     // Credentials travel once through the private pipe, never argv or a file.
-    drop(stdin);
+    // A program with a module keeps reading it for `get` and `call` replies;
+    // any other gets nothing more.
+    let mut stdin = module.is_some().then_some(stdin);
+    // The module's pipes, here while no relay holds them.
+    let mut module = module;
+    let mut queued = std::collections::VecDeque::new();
+    let mut relaying = None;
     let mut stdout = FramedRead::new(
         stdout,
         LinesCodec::new_with_max_length(limits.max_frame_bytes),
@@ -701,11 +803,42 @@ async fn bridge(
     // Reserve bounded observer overhead so SDK diagnostics do not consume the
     // program's existing stdout/stderr allowance.
     let mut remaining_progress = 64 * 1024;
-    let mut remaining_total = remaining + remaining_progress;
+    // What the program and its module exchange has its own budget.
+    let mut remaining_relayed = if js_tools { MAX_RELAYED_BYTES } else { 0 };
+    let mut remaining_total = remaining + remaining_progress + remaining_relayed;
     let mut outcome = None;
     while stdout_open || stderr_open {
         tokio::select! {
             _ = events.closed() => return Ok(Some(Outcome::Cancelled)),
+            relayed = async {
+                match relaying.as_mut() {
+                    Some(relay) => relay.await,
+                    None => std::future::pending().await,
+                }
+            }, if relaying.is_some() => {
+                relaying = None;
+                let (pipes, module::Relayed { reply, logs, bytes }) = relayed;
+                relays.requests += 1;
+                relays.bytes += bytes + reply.len();
+                remaining_relayed = remaining_relayed.checked_sub(bytes).ok_or_else(|| {
+                    ExecutionFailure::new(FailureCode::Limit, "the module exchanged more data than a run may")
+                })?;
+                for (level, message) in logs {
+                    let message = bounded_line(message, &mut remaining)?;
+                    events.emit(EventKind::Log { level, message })?;
+                }
+                // A program that already ended reads no reply; one whose
+                // stdin is gone is ending, and its frames say how.
+                if outcome.is_none() && let Some(stdin) = stdin.as_mut() {
+                    let mut line = reply.into_bytes();
+                    line.push(b'\n');
+                    let _ = stdin.write_all(&line).await;
+                }
+                match queued.pop_front() {
+                    Some(request) => relaying = Some(Box::pin(module::relay(pipes, request, remaining))),
+                    None => module = Some(pipes),
+                }
+            }
             line = stdout.next(), if stdout_open => {
                 let Some(line) = line else { stdout_open = false; continue };
                 let raw = bounded_line(frame_line(line, limits.max_frame_bytes)?, &mut remaining_total)?;
@@ -714,10 +847,10 @@ async fn bridge(
                     return Err(ExecutionFailure::new(FailureCode::Protocol, "output after terminal frame"));
                 }
                 let frame: ChildFrame = serde_json::from_str(&line).map_err(|_| ExecutionFailure::new(FailureCode::Protocol, "invalid child frame"))?;
-                let budget = if matches!(&frame, ChildFrame::Progress { .. }) {
-                    &mut remaining_progress
-                } else {
-                    &mut remaining
+                let budget = match &frame {
+                    ChildFrame::Progress { .. } => &mut remaining_progress,
+                    ChildFrame::Module(_) => &mut remaining_relayed,
+                    _ => &mut remaining,
                 };
                 bounded_line(raw, budget)?;
                 match frame {
@@ -735,6 +868,17 @@ async fn bridge(
                             Some(FrameFailure::TimedOut) => Outcome::TimedOut,
                             None => ExecutionFailure::new(FailureCode::Runtime, message).into(),
                         });
+                    }
+                    // Only a JS tools program sent with a module asks; one at
+                    // a time reaches it, in the order asked.
+                    ChildFrame::Module(request) => {
+                        if !js_tools || stdin.is_none() {
+                            return Err(ExecutionFailure::new(FailureCode::Protocol, "a module request without a module"));
+                        }
+                        match module.take() {
+                            Some(pipes) => relaying = Some(Box::pin(module::relay(pipes, request, remaining))),
+                            None => queued.push_back(request),
+                        }
                     }
                 }
             }
@@ -787,6 +931,7 @@ pub mod analyze;
 pub mod check;
 mod egress;
 mod exit;
+mod module;
 
 #[cfg(test)]
 mod test;

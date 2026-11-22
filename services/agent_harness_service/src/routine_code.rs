@@ -345,6 +345,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 source: run.step.source.clone(),
                 timeout_ms: STEP_TIMEOUT_MS,
                 language: Language::Javascript,
+                module: None,
             },
             environment,
             CancellationToken::new(),

@@ -44,6 +44,7 @@ fn request(timeout_ms: u64) -> ExecuteRequest {
         source: "return 42;".into(),
         timeout_ms,
         language: Language::Javascript,
+        module: None,
     }
 }
 
@@ -74,6 +75,7 @@ async fn validates_before_admission_and_bounds_queue() {
                 source: " ".into(),
                 timeout_ms: 1,
                 language: Language::Javascript,
+                module: None,
             },
             RunEnvironment::default()
         ),
@@ -266,6 +268,7 @@ async fn a_program_with_type_errors_never_runs() {
                     source: source.into(),
                     timeout_ms: 10_000,
                     language: Language::Javascript,
+                    module: None,
                 },
                 RunEnvironment {
                     session_id: Some(uuid::Uuid::now_v7()),
@@ -407,6 +410,7 @@ async fn a_js_tools_program_is_never_type_checked() {
         source: "return await tools.storage.get_document({ path: { id: \"d\" } })".into(),
         timeout_ms: 10_000,
         language: Language::JsTools,
+        module: None,
     };
     assert!(
         service
@@ -447,7 +451,12 @@ fn every_operation_gets_at_least_one_call() {
 /// the model can fix the call without reading the type first.
 #[test]
 fn a_missing_sdk_member_lists_what_the_type_has() {
-    let failure = type_errors(&[Diagnostic {
+    let failure = type_errors(
+        Checked::Program {
+            source: "",
+            shape: ContextShape::default(),
+        },
+        &[Diagnostic {
         file: Some("main.ts".into()),
         message: "TS2339 [ERROR]: Property 'documents' does not exist on type 'SearchNamespace'.\n  const [doc] = await macro.search.documents('Q4 plan');\n                                   ~~~~~~~~~\n    at main.ts:3:36".into(),
     }]);
@@ -460,7 +469,12 @@ fn a_missing_sdk_member_lists_what_the_type_has() {
         failure.message
     );
     // The checker's own suggestion is enough.
-    let suggested = type_errors(&[Diagnostic {
+    let suggested = type_errors(
+        Checked::Program {
+            source: "",
+            shape: ContextShape::default(),
+        },
+        &[Diagnostic {
         file: Some("main.ts".into()),
         message: "TS2551 [ERROR]: Property 'pag' does not exist on type 'SearchNamespace'. Did you mean 'page'?\n    at main.ts:3:36".into(),
     }]);
@@ -600,6 +614,7 @@ async fn a_program_that_turns_checking_off_is_refused() {
                 source: "// @ts-nocheck\nexport async function main() { return {data: 1}; }".into(),
                 timeout_ms: 10_000,
                 language: Language::Javascript,
+                module: None,
             },
             ContextShape::default(),
             CancellationToken::new(),
@@ -611,4 +626,115 @@ async fn a_program_that_turns_checking_off_is_refused() {
     assert_eq!(error.code, FailureCode::Compile);
     assert!(error.message.contains("@ts-nocheck"), "{}", error.message);
     assert!(checker.checked.lock().unwrap().is_empty());
+}
+
+fn with_module(module: &str) -> ExecuteRequest {
+    ExecuteRequest {
+        source: "return await call(\"render\", 1)".into(),
+        timeout_ms: 10_000,
+        language: Language::JsTools,
+        module: Some(module.into()),
+    }
+}
+
+#[test]
+fn only_a_js_tools_program_takes_a_module_within_the_source_limit() {
+    let service = ExecutionService::new(
+        Arc::new(Echoes(AtomicUsize::new(0))),
+        Arc::new(Passes),
+        Limits::default(),
+    )
+    .unwrap();
+    let typescript = ExecuteRequest {
+        language: Language::Javascript,
+        ..with_module("export const x = 1;")
+    };
+    for refused in [
+        typescript,
+        with_module("  "),
+        with_module(&"x".repeat(64 * 1024 + 1)),
+    ] {
+        assert!(matches!(
+            service.execute(refused, RunEnvironment::default()),
+            Err(AdmissionError::InvalidModule)
+        ));
+    }
+}
+
+#[tokio::test]
+async fn a_module_with_type_errors_never_runs_and_is_checked_without_the_sdk() {
+    let runner = Arc::new(Echoes(AtomicUsize::new(0)));
+    let checker = Arc::new(Answers {
+        answer: || {
+            Ok(vec![Diagnostic {
+                file: Some("module.ts".into()),
+                message: "TS2322 [ERROR]: Type 'string' is not assignable to type 'number'.\n    at module.ts:1:14".into(),
+            }])
+        },
+        checked: Default::default(),
+    });
+    let service =
+        ExecutionService::new(runner.clone(), checker.clone(), Limits::default()).unwrap();
+    let module = "export const x: number = 'one';\n";
+    let outcome = finish(
+        service
+            .execute(with_module(module), RunEnvironment::default())
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("expected a failure, got {outcome:?}");
+    };
+    assert_eq!(error.code, FailureCode::Compile);
+    assert!(
+        error
+            .message
+            .starts_with("The program wasn't run: its module doesn't type-check."),
+        "{}",
+        error.message
+    );
+    assert_eq!(runner.0.load(Ordering::SeqCst), 0);
+    let checked = checker.checked.lock().unwrap();
+    let (files, declarations, imports) = &checked[0];
+    assert_eq!(
+        files,
+        &vec![SourceFile {
+            name: "module.ts".into(),
+            source: module.into(),
+        }]
+    );
+    assert_eq!(declarations, "export {};\n");
+    assert_eq!(*imports, ProgramImports::Handlebars);
+}
+
+#[tokio::test]
+async fn a_prechecked_module_is_not_checked_again_and_a_lone_dialect_program_is_not_checked() {
+    let runner = Arc::new(Echoes(AtomicUsize::new(0)));
+    let checker = Arc::new(Answers {
+        answer: || Ok(Vec::new()),
+        checked: Default::default(),
+    });
+    let service =
+        ExecutionService::new(runner.clone(), checker.clone(), Limits::default()).unwrap();
+    let request = with_module("export const x = 1;\n");
+    service
+        .precheck(&request, ContextShape::default(), CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(checker.checked.lock().unwrap().len(), 1);
+    let outcome = finish(service.execute(request, RunEnvironment::default()).unwrap()).await;
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    assert_eq!(checker.checked.lock().unwrap().len(), 1);
+    let alone = ExecuteRequest {
+        module: None,
+        ..with_module("")
+    };
+    service
+        .precheck(&alone, ContextShape::default(), CancellationToken::new())
+        .await
+        .unwrap();
+    let outcome = finish(service.execute(alone, RunEnvironment::default()).unwrap()).await;
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    assert_eq!(checker.checked.lock().unwrap().len(), 1);
+    assert_eq!(runner.0.load(Ordering::SeqCst), 2);
 }

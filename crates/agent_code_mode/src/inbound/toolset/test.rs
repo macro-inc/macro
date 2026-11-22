@@ -400,6 +400,7 @@ async fn every_documented_example_type_checks() {
                         source: source.into(),
                         timeout_ms: 30_000,
                         language: Language::Javascript,
+                        module: None,
                     },
                     // Examples may use the session and the execution.
                     RunEnvironment {
