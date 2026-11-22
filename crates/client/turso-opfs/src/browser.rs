@@ -496,9 +496,11 @@ impl OpfsOwner {
     }
 
     /// Counts one more attempt in the adoption marker beside this owner's
-    /// paths, read back as [`Adoption::attempts`]. The marker only grows by a
-    /// byte, so a stop during the write leaves the adoption it records intact.
-    /// Fails when there is no marker.
+    /// paths, read back as [`Adoption::attempts`]. The marker reserves its
+    /// first attempts' bytes when it is written, so counting one overwrites a
+    /// byte in place, needs no more storage, and a stop during the write
+    /// leaves the adoption it records intact. Fails when there is no marker
+    /// or it does not decode.
     pub async fn record_attempt(&mut self) -> Result<(), OpfsError> {
         let to = self.paths.clone();
         self.in_adoption_phase(async move {
@@ -511,7 +513,20 @@ impl OpfsOwner {
                         "no adoption marker to record an attempt in",
                     )
                 })?;
-            append_attempt(&file, BusyDeadline::start()).await
+            count_attempt(&file, BusyDeadline::start()).await
+        })
+        .await
+    }
+
+    /// Counts one more failure to read the adoption marker beside this
+    /// owner's paths, and returns how many were counted since it was written.
+    /// The count sits in a file of its own beside the marker, since the
+    /// marker cannot be read, and goes with it.
+    pub async fn count_unreadable_adoption(&mut self) -> Result<u8, OpfsError> {
+        let to = self.paths.clone();
+        self.in_adoption_phase(async move {
+            let root = adoption_root().await?;
+            count_unread_marker(&root, &to, BusyDeadline::start()).await
         })
         .await
     }
@@ -522,7 +537,7 @@ impl OpfsOwner {
         let to = self.paths.clone();
         self.in_adoption_phase(async move {
             let root = adoption_root().await?;
-            remove_if_present(&root, &marker_path(&to), false, BusyDeadline::start()).await
+            remove_marker(&root, &to, BusyDeadline::start()).await
         })
         .await
     }
@@ -759,6 +774,12 @@ thread_local! {
     static STOP_BETWEEN_MOVES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Makes the WAL move of the next adoption fail.
     static FAIL_WAL_MOVE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// When not zero, the prefix read this many reads from now returns one
+    /// byte fewer than asked, as a read that fails part-way does.
+    static SHORT_READ: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
+    /// Makes the next attempt or unread count write fail, as a storage error
+    /// would.
+    static FAIL_ATTEMPT_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 async fn existing_file(
@@ -898,7 +919,7 @@ async fn adopt_pair(
             .await
             .is_ok()
         {
-            let _ = remove_if_present(&root, &marker_path(&to), false, deadline).await;
+            let _ = remove_marker(&root, &to, deadline).await;
         }
         return Err(error);
     }
@@ -916,7 +937,7 @@ async fn read_pending(to: Paths) -> Result<Option<Adoption>, OpfsError> {
         // The main file never moved here, or moved back: whatever WAL sits
         // here cannot be opened, and the marker records nothing that happened.
         remove_if_present(&root, to.get(FileRole::Wal), false, deadline).await?;
-        remove_if_present(&root, &marker_path(&to), false, deadline).await?;
+        remove_marker(&root, &to, deadline).await?;
         return Ok(None);
     }
     Ok(Some(Adoption {
@@ -997,7 +1018,7 @@ async fn return_pair(to: Paths, from: Paths) -> Result<ReturnOutcome, OpfsError>
     // A stop from here on leaves a marker without a main file, which the next
     // read removes together with this empty WAL.
     remove_if_present(&root, to.get(FileRole::Wal), false, deadline).await?;
-    remove_if_present(&root, &marker_path(&to), false, deadline).await?;
+    remove_marker(&root, &to, deadline).await?;
     Ok(ReturnOutcome::Returned)
 }
 
@@ -1161,15 +1182,28 @@ async fn file_prefix(
     Ok(read)
 }
 
+/// A file's size and up to its first `len` bytes. A read that returns fewer
+/// bytes than the file holds there failed part-way, which the File System
+/// standard reports as a shorter count, so it is an error: read as content, a
+/// cut-off marker or WAL header would look like one that is not there.
 fn read_prefix(handle: &FileSystemSyncAccessHandle, len: usize) -> Result<(u64, Vec<u8>), JsValue> {
     // OPFS sizes are non-negative integers below 2^53.
     let size = handle.get_size()? as u64;
-    let mut bytes = vec![0; len];
-    if len > 0 {
+    let expected = usize::try_from(size).map_or(len, |size| size.min(len));
+    let mut bytes = vec![0; expected];
+    if expected > 0 {
         let options = FileSystemReadWriteOptions::new();
         options.set_at(0.0);
         let read = handle.read_with_u8_array_and_options(&mut bytes, &options)?;
-        bytes.truncate((read as usize).min(len));
+        #[cfg(test)]
+        let read = if SHORT_READ.with(|short| short.replace(short.get().saturating_sub(1)) == 1) {
+            read - 1.0
+        } else {
+            read
+        };
+        if read as usize != expected {
+            return Err(JsValue::from_str("short OPFS read"));
+        }
     }
     Ok((size, bytes))
 }
@@ -1177,12 +1211,21 @@ fn read_prefix(handle: &FileSystemSyncAccessHandle, len: usize) -> Result<(u64, 
 /// Suffix of the marker file that records an adoption into an identity until
 /// its first open succeeds. No approved identity ends with it.
 const ADOPTION_MARKER_SUFFIX: &str = "-adopting";
+/// Suffix of the file beside a marker that counts, a byte each, the
+/// recoveries that could not read the marker. No approved identity ends with
+/// it either.
+const UNREAD_MARKER_SUFFIX: &str = "-adopting-unread";
 /// The first bytes of every marker, so no other file reads as one.
 const MARKER_MAGIC: &[u8] = b"turso-opfs adoption v1\n";
-/// A marker holds one identity, a WAL header and a byte per attempt; anything
-/// longer was not written here.
+/// A marker holds one identity, a WAL header and a byte per attempt slot;
+/// anything longer was not written here.
 const MAX_MARKER_BYTES: usize = 4096;
-/// Appended to a marker for each attempt [`OpfsOwner::record_attempt`] counts.
+/// Attempt slots a marker reserves when it is written, so counting an attempt
+/// overwrites a byte in place and needs no more storage.
+const RESERVED_ATTEMPTS: u8 = 8;
+/// An attempt slot no attempt has used.
+const FREE_ATTEMPT_BYTE: u8 = b'-';
+/// Written for each attempt [`OpfsOwner::record_attempt`] counts.
 const ATTEMPT_BYTE: u8 = b'+';
 
 /// What a marker records: where the files came from, the WAL that went with
@@ -1196,7 +1239,9 @@ struct Marker {
 
 impl Marker {
     /// Magic, identity length (u16) and bytes, WAL size (u64), header length
-    /// (u8) and bytes, all big-endian, then one byte per attempt.
+    /// (u8) and bytes, all big-endian, then an [`ATTEMPT_BYTE`] per attempt
+    /// and a [`FREE_ATTEMPT_BYTE`] for each of the [`RESERVED_ATTEMPTS`] slots
+    /// left.
     fn encode(&self) -> Option<Vec<u8>> {
         let identity = self.previous_identity.as_bytes();
         let identity_len = u16::try_from(identity.len()).ok()?;
@@ -1211,13 +1256,44 @@ impl Marker {
             ATTEMPT_BYTE,
             usize::from(self.attempts),
         ));
+        bytes.extend(std::iter::repeat_n(
+            FREE_ATTEMPT_BYTE,
+            usize::from(RESERVED_ATTEMPTS.saturating_sub(self.attempts)),
+        ));
         (bytes.len() <= MAX_MARKER_BYTES).then_some(bytes)
     }
 
     /// The marker `bytes` hold, or `None` when they do not hold one exactly.
-    /// Every byte after the WAL header counts as an attempt, whatever its
-    /// value, so an append cut short never makes the marker unreadable.
+    /// Every byte after the WAL header that is not a [`FREE_ATTEMPT_BYTE`]
+    /// counts as an attempt, whatever its value, so a slot written halfway
+    /// never makes the marker unreadable.
     fn decode(bytes: &[u8]) -> Option<Self> {
+        let (marker, slots) = Self::decode_slots(bytes)?;
+        let attempts = slots
+            .iter()
+            .filter(|&&byte| byte != FREE_ATTEMPT_BYTE)
+            .count();
+        Some(Self {
+            attempts: u8::try_from(attempts).unwrap_or(u8::MAX),
+            ..marker
+        })
+    }
+
+    /// Where in the marker `bytes` the next attempt is written: its first
+    /// free slot, or its end once every slot is used.
+    fn next_attempt_offset(bytes: &[u8]) -> Option<usize> {
+        let (_, slots) = Self::decode_slots(bytes)?;
+        let start = bytes.len() - slots.len();
+        Some(
+            slots
+                .iter()
+                .position(|&byte| byte == FREE_ATTEMPT_BYTE)
+                .map_or(bytes.len(), |slot| start + slot),
+        )
+    }
+
+    /// The marker without its attempts, and the attempt slots after it.
+    fn decode_slots(bytes: &[u8]) -> Option<(Self, &[u8])> {
         let rest = bytes.strip_prefix(MARKER_MAGIC)?;
         let (identity_len, rest) = rest.split_first_chunk::<2>()?;
         let (identity, rest) =
@@ -1232,16 +1308,20 @@ impl Marker {
         let valid_header = header.len() <= WAL_HEADER_LEN
             && u64::try_from(header.len()).ok() == Some(wal.size.min(WAL_HEADER_LEN as u64));
         valid_header.then_some(())?;
-        Some(Self {
-            previous_identity: String::from_utf8(identity.to_vec()).ok()?,
-            wal,
-            attempts: u8::try_from(attempts.len()).unwrap_or(u8::MAX),
-        })
+        Some((
+            Self {
+                previous_identity: String::from_utf8(identity.to_vec()).ok()?,
+                wal,
+                attempts: 0,
+            },
+            attempts,
+        ))
     }
 }
 
-/// Appends one [`ATTEMPT_BYTE`] to the marker `file` and flushes it.
-async fn append_attempt(
+/// Writes one [`ATTEMPT_BYTE`] into the first free slot of the marker
+/// `file`, or at its end once none is left, and flushes it.
+async fn count_attempt(
     file: &FileSystemFileHandle,
     deadline: BusyDeadline,
 ) -> Result<(), OpfsError> {
@@ -1249,24 +1329,80 @@ async fn append_attempt(
         .await
         .and_then(|value| value.dyn_into::<FileSystemSyncAccessHandle>())
         .map_err(|error| entry_error(OpfsErrorKind::Write, "OPFS marker open", &error))?;
-    let written = append_byte(&handle, ATTEMPT_BYTE);
+    let written = write_attempt(&handle);
     let closed = close_sync_handle(&handle);
-    written.map_err(|error| js_error(OpfsErrorKind::Write, "OPFS marker append", &error))?;
+    written.map_err(|error| js_error(OpfsErrorKind::Write, "OPFS marker attempt", &error))?;
     closed.map_err(|error| js_error(OpfsErrorKind::Write, "OPFS marker close", &error))
 }
 
-fn append_byte(handle: &FileSystemSyncAccessHandle, byte: u8) -> Result<(), JsValue> {
+fn write_attempt(handle: &FileSystemSyncAccessHandle) -> Result<(), JsValue> {
+    let (size, bytes) = read_prefix(handle, MAX_MARKER_BYTES + 1)?;
+    let offset = (bytes.len() as u64 == size)
+        .then(|| Marker::next_attempt_offset(&bytes))
+        .flatten()
+        .and_then(|offset| u32::try_from(offset).ok())
+        .ok_or_else(|| JsValue::from_str("the adoption marker does not decode"))?;
+    write_byte_at(handle, ATTEMPT_BYTE, f64::from(offset))
+}
+
+/// Writes `byte` at `offset` in the file behind `handle` and flushes it.
+fn write_byte_at(
+    handle: &FileSystemSyncAccessHandle,
+    byte: u8,
+    offset: f64,
+) -> Result<(), JsValue> {
+    #[cfg(test)]
+    if FAIL_ATTEMPT_WRITE.with(|fail| fail.replace(false)) {
+        return Err(JsValue::from_str("injected OPFS write failure"));
+    }
     let options = FileSystemReadWriteOptions::new();
-    options.set_at(handle.get_size()?);
+    options.set_at(offset);
     let written = handle.write_with_u8_array_and_options(&[byte], &options)?;
     if written as usize != 1 {
-        return Err(JsValue::from_str("short OPFS marker append"));
+        return Err(JsValue::from_str("short OPFS write"));
     }
     handle.flush()
 }
 
 fn marker_path(paths: &Paths) -> String {
     format!("{}{ADOPTION_MARKER_SUFFIX}", paths.get(FileRole::Main))
+}
+
+fn unread_marker_path(paths: &Paths) -> String {
+    format!("{}{UNREAD_MARKER_SUFFIX}", paths.get(FileRole::Main))
+}
+
+/// Removes the marker beside `to`, then the count of recoveries that could
+/// not read it, which means nothing once the marker is gone. Both names are
+/// this adapter's own, so whatever sits there goes, a directory included.
+async fn remove_marker(
+    root: &FileSystemDirectoryHandle,
+    to: &Paths,
+    deadline: BusyDeadline,
+) -> Result<(), OpfsError> {
+    remove_if_present(root, &marker_path(to), true, deadline).await?;
+    remove_if_present(root, &unread_marker_path(to), true, deadline).await
+}
+
+/// Adds one to the count of recoveries that could not read the marker beside
+/// `to`, a byte each in a file of its own, and returns the count.
+async fn count_unread_marker(
+    root: &FileSystemDirectoryHandle,
+    to: &Paths,
+    deadline: BusyDeadline,
+) -> Result<u8, OpfsError> {
+    let (handle, _) = open_sync_handle(root, &unread_marker_path(to), deadline)
+        .await
+        .map_err(|error| entry_error(OpfsErrorKind::Write, "OPFS unread count open", &error))?;
+    let counted = handle
+        .get_size()
+        .and_then(|size| write_byte_at(&handle, ATTEMPT_BYTE, size).map(|()| size + 1.0));
+    let closed = close_sync_handle(&handle);
+    let count = counted
+        .map_err(|error| js_error(OpfsErrorKind::Write, "OPFS unread count write", &error))?;
+    closed.map_err(|error| js_error(OpfsErrorKind::Write, "OPFS unread count close", &error))?;
+    // OPFS sizes are non-negative integers; the count saturates.
+    Ok(u8::try_from(count as u64).unwrap_or(u8::MAX))
 }
 
 /// Records `marker` beside `to` and flushes it before any file moves.
@@ -1317,7 +1453,7 @@ async fn read_marker(
         .flatten()
         .filter(|marker| approved_paths(&marker.previous_identity).is_ok_and(|from| from != *to));
     if marker.is_none() {
-        remove_if_present(root, &path, false, deadline).await?;
+        remove_marker(root, to, deadline).await?;
     }
     Ok(marker)
 }
@@ -1540,13 +1676,7 @@ impl ConnectedOpfsSession {
     /// they came from. Does nothing when no adoption is pending.
     pub async fn finish_adoption(&self) -> Result<(), OpfsError> {
         let root = adoption_root().await?;
-        remove_if_present(
-            &root,
-            &marker_path(&self.paths),
-            false,
-            BusyDeadline::start(),
-        )
-        .await
+        remove_marker(&root, &self.paths, BusyDeadline::start()).await
     }
 
     /// Clones the sole production connection for application use.
@@ -2227,6 +2357,7 @@ fn approved_paths(database_name: &str) -> Result<Paths, OpfsError> {
         || database_name == ".."
         || database_name.ends_with("-wal")
         || database_name.ends_with(ADOPTION_MARKER_SUFFIX)
+        || database_name.ends_with(UNREAD_MARKER_SUFFIX)
         || database_name.contains(['/', '\\', '\0'])
     {
         return Err(OpfsError::new(
@@ -2956,7 +3087,7 @@ async fn reset_paths(paths: &Paths, recursive: bool) -> Result<(), OpfsError> {
     // The adoption marker goes first: files left without it open as this
     // identity's own, and a marker left without a main file is removed as
     // stale by the next read.
-    remove_if_present(&root, &marker_path(paths), false, deadline).await?;
+    remove_marker(&root, paths, deadline).await?;
     for role in FileRole::ALL {
         remove_if_present(&root, paths.get(role), recursive, deadline).await?;
         #[cfg(test)]
@@ -2996,8 +3127,10 @@ async fn remove_paths(paths: &Paths) -> Result<(), OpfsError> {
         .await
         .map_err(|error| js_error(OpfsErrorKind::Remove, "OPFS remove root open", &error))?;
     let mut first_error = None;
-    if let Err(error) = remove_if_present(&root, &marker_path(paths), false, deadline).await {
-        first_error.get_or_insert(error);
+    for path in [marker_path(paths), unread_marker_path(paths)] {
+        if let Err(error) = remove_if_present(&root, &path, true, deadline).await {
+            first_error.get_or_insert(error);
+        }
     }
     for role in FileRole::ALL {
         if let Err(error) = remove_if_present(&root, paths.get(role), true, deadline).await {
