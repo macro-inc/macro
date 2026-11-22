@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use connectors::domain::service::McpConnectionsService;
+use connectors::McpConnectionsService;
 use import_notion::domain::inventory::full_markdown;
 use import_notion::domain::macro_cells::PeopleMap;
 use import_notion::domain::model::NotionId;

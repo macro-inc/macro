@@ -354,7 +354,8 @@ proptest! {
         }
     }
 
-    /// OnlyTheOwnersConnections: every handle is the user's own.
+    /// OnlyTheOwnersConnections: every API handle is the user's own. An MCP
+    /// handle carries no user; it is only ever in its owner's answer.
     #[test]
     fn only_the_owners_connections(
         flag in any_flag(),
@@ -364,9 +365,6 @@ proptest! {
         let connect = ConnectSupport::new(connect);
         let resolution = resolve(&user(), flag, &overlays(), &connect, connections);
 
-        for handle in resolution.mcp.handles() {
-            prop_assert_eq!(handle.user(), &user());
-        }
         for handle in &resolution.api {
             prop_assert_eq!(handle.user(), &user());
         }

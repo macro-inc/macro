@@ -2,7 +2,7 @@
 //! GitHub account link.
 
 use super::{GithubAccountLink, LinkToken};
-use crate::outbound::native::domain::models::MacroUserIdStr;
+use crate::outbound::native::models::MacroUserIdStr;
 use authentication_service_client::AuthServiceClient;
 use authentication_service_client::github_access_token::GithubLink;
 use rootcause::Report;

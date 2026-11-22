@@ -3,8 +3,7 @@ use crate::domain::{
     ports::{Accounts, Result},
 };
 use async_trait::async_trait;
-use connectors::domain::models::ConnectorId;
-use connectors::domain::service::ApiConnectionsService;
+use connectors::{ApiConnectionsService, ConnectorId};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 

@@ -12,13 +12,10 @@ use crate::domain::ports::{
 use crate::outbound::hosted_connections::{
     Grant, HostedRepo, HostedRow, Provider, RevokeGrant, revoke_replaced,
 };
-use crate::outbound::pipedream::domain::models::{
-    CatalogEntry, ConnectToken, ConnectionProvider, PipedreamAccount, PipedreamConnection,
+use crate::outbound::pipedream::api::{McpUpstreamCall, PipedreamClient};
+use crate::outbound::pipedream::models::{
+    CatalogEntry, ConnectToken, PipedreamAccount, PipedreamConnection,
 };
-use crate::outbound::pipedream::domain::ports::{
-    ConnectedAppProxy, McpConnection as LegacyMcpConnection, PipedreamConnect,
-};
-use crate::outbound::pipedream::outbound::api::{McpUpstream, McpUpstreamCall, PipedreamClient};
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_toolset::McpServer;
 use rootcause::Report;
@@ -97,13 +94,11 @@ impl PipedreamVendor for PipedreamClient {
     }
 
     async fn dial(&self, record: &PipedreamConnection) -> Result<McpServer, Report> {
-        LegacyMcpConnection::connect(self, record)
-            .await
-            .into_rootcause()
+        self.dial_mcp(record).await.into_rootcause()
     }
 
     async fn upstream(&self, record: &PipedreamConnection) -> Result<McpUpstreamCall, Report> {
-        McpUpstream::upstream(self, record).await.into_rootcause()
+        self.mcp_upstream(record).await.into_rootcause()
     }
 
     async fn proxy(
@@ -111,22 +106,9 @@ impl PipedreamVendor for PipedreamClient {
         record: &PipedreamConnection,
         request: ApiRequest,
     ) -> Result<ApiResponse, Report> {
-        let response = ConnectedAppProxy::proxy(
-            self,
-            record,
-            request.method,
-            &request.url,
-            &request.headers,
-            request.body.as_ref(),
-        )
-        .await
-        .into_rootcause()?;
-
-        Ok(ApiResponse {
-            status: response.status,
-            headers: response.headers,
-            body: response.body,
-        })
+        PipedreamClient::proxy(self, record, request)
+            .await
+            .into_rootcause()
     }
 }
 
@@ -181,7 +163,6 @@ impl PipedreamSource {
             server_name: row.server_name.clone(),
             account_id: row.account_id,
             enabled: row.enabled,
-            provider: ConnectionProvider::Pipedream,
         };
         let connection = Arc::new(PipedreamApp {
             vendor: self.vendor.clone(),

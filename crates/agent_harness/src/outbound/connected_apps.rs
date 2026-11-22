@@ -3,8 +3,7 @@
 
 use std::sync::Arc;
 
-use connectors::domain::models::{ConnectorId, ConnectorKey, ConnectorsError, Status};
-use connectors::domain::service::McpConnectionsService;
+use connectors::{ConnectorId, ConnectorKey, ConnectorsError, McpConnectionsService, Status};
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::app_connections::ConnectedApps;

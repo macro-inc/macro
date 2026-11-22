@@ -15,7 +15,7 @@ use crate::domain::model::{
     AgentSessionId, McpDestination, McpResolution, ProxyRequest, ProxyResponse, RepoSlug,
     SessionGrant, SessionToken, UpstreamCall,
 };
-use connectors::domain::models::Selection;
+use connectors::Selection;
 use macro_user_id::user_id::MacroUserIdStr;
 
 /// Turn a sandbox's session token into what it is allowed to spend.

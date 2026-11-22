@@ -37,7 +37,7 @@ use uuid::Uuid;
 
 /// Connectors for a user with no connections: deterministic Slack imports
 /// never invoke MCP.
-fn no_connections() -> Arc<connectors::domain::service::Connectors> {
+fn no_connections() -> Arc<connectors::Connectors> {
     Arc::new(connectors::fake::FakeConnectors::new().build())
 }
 

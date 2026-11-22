@@ -12,7 +12,7 @@ use agent_runtime_protocol::domain::notification::{
     NotificationEvent, ReviewSettlement,
 };
 use agent_session::domain::notifications::{PendingNotification, ProduceNotification};
-use connectors::domain::service::McpConnectionsService;
+use connectors::McpConnectionsService;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;

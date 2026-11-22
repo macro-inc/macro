@@ -89,7 +89,6 @@ pub(crate) trait ConnectVendor: RevokeGrant {
 /// [`ConnectVendor`] over Connect's HTTP API.
 pub(crate) struct ConnectVendorClient {
     client: ConnectClient,
-    api_url: Url,
     callback_url: Url,
     http: reqwest::Client,
     catalog: tokio::sync::Mutex<Option<(Instant, Arc<Vec<wire::CatalogEntry>>)>>,
@@ -98,7 +97,6 @@ pub(crate) struct ConnectVendorClient {
 impl ConnectVendorClient {
     /// A client for `config`. Fails when the base URL is not an HTTP URL.
     pub(crate) fn new(config: ConnectConfig) -> Result<Self, Report> {
-        let api_url = Url::parse(&config.api_url).map_err(Report::new)?;
         let client =
             ConnectClient::new(&config.api_url, config.customer_key).map_err(Report::new)?;
         let http = reqwest::Client::builder()
@@ -108,16 +106,10 @@ impl ConnectVendorClient {
 
         Ok(Self {
             client,
-            api_url,
             callback_url: config.callback_url,
             http,
             catalog: tokio::sync::Mutex::new(None),
         })
-    }
-
-    /// The Connect origin; catalog icon paths are relative to it.
-    pub(crate) fn api_url(&self) -> &Url {
-        &self.api_url
     }
 }
 

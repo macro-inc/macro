@@ -5,7 +5,7 @@ use crate::domain::model::{
     UpstreamCredential,
 };
 use bot_id::BotId;
-use connectors::domain::models::{ConnectorId, Selection};
+use connectors::{ConnectorId, Selection};
 use http::header::{AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
 use http::{Method, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};

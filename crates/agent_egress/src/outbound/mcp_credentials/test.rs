@@ -45,9 +45,7 @@ fn connectors() -> FakeConnectors {
         .with_connection(&owner(), FakeConnection::server(WIKI).named("Team wiki"))
 }
 
-fn credentials(
-    fake: &FakeConnectors,
-) -> ConnectorsMcpCredentials<connectors::domain::service::Connectors> {
+fn credentials(fake: &FakeConnectors) -> ConnectorsMcpCredentials<connectors::Connectors> {
     ConnectorsMcpCredentials::new(Arc::new(fake.build()))
 }
 
@@ -284,12 +282,8 @@ async fn body_json(response: ProxyResponse) -> serde_json::Value {
     serde_json::from_slice(&bytes).expect("a JSON body")
 }
 
-type Proxy = EgressServiceImpl<
-    Granting,
-    ConnectorsMcpCredentials<connectors::domain::service::Connectors>,
-    NoGit,
-    Recording,
->;
+type Proxy =
+    EgressServiceImpl<Granting, ConnectorsMcpCredentials<connectors::Connectors>, NoGit, Recording>;
 
 fn proxy(selection: Selection) -> (Proxy, Forwarded) {
     let forwarded = Forwarded::default();

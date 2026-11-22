@@ -5,8 +5,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError, Weak};
 
-use connectors::domain::models::{ApiHandle, ApiRequest, ConnectorId};
-use connectors::domain::service::ApiConnectionsService;
+use connectors::{ApiConnectionsService, ApiHandle, ApiRequest, ConnectorId};
 use http::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use macro_user_id::user_id::MacroUserIdStr;
 

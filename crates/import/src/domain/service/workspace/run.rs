@@ -11,7 +11,7 @@
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use connectors::domain::service::McpConnectionsService;
+use connectors::McpConnectionsService;
 use futures::FutureExt;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;

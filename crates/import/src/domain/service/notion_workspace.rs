@@ -34,7 +34,7 @@ use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility, NotionPlanRepo,
     NotionRunRepo, Result, SlackWorkspaceSource, WorkspaceWriter, WrittenObjects,
 };
-use connectors::domain::service::McpConnectionsService;
+use connectors::McpConnectionsService;
 use object::{Outcome, Target};
 use run::{IMPORT_STOPPED, JobControl, Stop, WriteSet};
 

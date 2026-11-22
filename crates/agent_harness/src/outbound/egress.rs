@@ -13,8 +13,7 @@
 use agent_egress::domain::model::{
     CustomMcpServerKey, CustomMcpServerListing, McpServerSlug, SessionToken, agent_selection,
 };
-use connectors::domain::models::ConnectorKey;
-use connectors::domain::service::McpConnectionsService;
+use connectors::{ConnectorKey, McpConnectionsService};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 

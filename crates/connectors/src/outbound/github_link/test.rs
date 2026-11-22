@@ -1,6 +1,7 @@
 use super::*;
-use crate::outbound::native::domain::models::{AddressPolicy, StoredCredentials};
+use crate::outbound::guarded_http::AddressPolicy;
 use crate::outbound::native::memory_store::MemoryStore;
+use crate::outbound::native::models::StoredCredentials;
 use axum::Router;
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::post;

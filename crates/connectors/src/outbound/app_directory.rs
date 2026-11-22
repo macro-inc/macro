@@ -3,8 +3,7 @@
 
 use crate::domain::discovery::{AppDirectory, AppTool, CatalogApp, CatalogPage};
 use crate::domain::models::ConnectorId;
-use crate::outbound::pipedream::domain::models::CatalogEntry;
-use crate::outbound::pipedream::domain::ports::{ConnectorCapabilities, ConnectorDirectory};
+use crate::outbound::pipedream::models::{CatalogEntry, CatalogPage as DirectoryPage};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use rootcause::compat::IntoRootcause as _;
@@ -13,6 +12,47 @@ use std::sync::Arc;
 
 #[cfg(test)]
 mod test;
+
+/// Port for browsing the directory of connectable apps. Pipedream's
+/// directory is the catalog, whatever source a user connects an app through.
+pub(crate) trait ConnectorDirectory: Send + Sync + 'static {
+    /// Search the directory.
+    ///
+    /// `search` filters apps by name; `None` browses everything. `cursor` is
+    /// the opaque pagination cursor from a previous page. Implementations
+    /// return entries most-popular-first, and only apps that can actually be
+    /// connected and used (i.e. apps with an auth flow and at least one
+    /// action to expose as a tool) and that the catalog doesn't hide.
+    fn search(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        search: Option<&str>,
+        cursor: Option<&str>,
+        limit: u32,
+    ) -> impl Future<Output = anyhow::Result<DirectoryPage>> + Send;
+
+    /// Look up one app by its name slug.
+    ///
+    /// `Ok(None)` when Pipedream has no connectable app under that exact slug:
+    /// unknown, an app with no auth flow (nothing to connect), or one the
+    /// catalog hides. A lookup that cannot be completed is an error, not a
+    /// miss.
+    fn retrieve(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        app_slug: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<CatalogEntry>>> + Send;
+}
+
+/// Read an app's advertised capabilities without invoking any of its tools.
+pub(crate) trait ConnectorCapabilities: Send + Sync + 'static {
+    /// List tools, including for apps this user has not connected yet.
+    fn tools(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        app_slug: &str,
+    ) -> impl Future<Output = anyhow::Result<Vec<crate::domain::discovery::AppTool>>> + Send;
+}
 
 /// [`AppDirectory`] over a hosted directory and its capability listing.
 pub(crate) struct HostedAppDirectory<D> {
@@ -94,19 +134,10 @@ where
         user: &MacroUserIdStr<'static>,
         app: &ConnectorId,
     ) -> Result<Vec<AppTool>, Report> {
-        let tools = self
-            .directory
+        self.directory
             .tools(user, app.as_str())
             .await
-            .into_rootcause()?;
-
-        Ok(tools
-            .into_iter()
-            .map(|tool| AppTool {
-                name: tool.name,
-                description: tool.description,
-            })
-            .collect())
+            .into_rootcause()
     }
 }
 

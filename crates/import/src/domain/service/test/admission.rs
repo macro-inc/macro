@@ -369,7 +369,7 @@ impl ImportRepo for Repo {
 }
 
 /// Connectors for a user with no connections: these paths never read one.
-pub(in crate::domain::service) type NoConnector = connectors::domain::service::Connectors;
+pub(in crate::domain::service) type NoConnector = connectors::Connectors;
 
 pub(in crate::domain::service) fn no_connections() -> Arc<NoConnector> {
     Arc::new(connectors::fake::FakeConnectors::new().build())

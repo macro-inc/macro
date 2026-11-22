@@ -17,7 +17,7 @@
 
 use bot_id::BotId;
 use chrono::{DateTime, Duration as ChronoDuration, TimeZone, Utc};
-use connectors::domain::models::Selection;
+use connectors::Selection;
 use lru::LruCache;
 use macro_auth::macro_api_token::{EncodeMacroApiTokenArgs, encode_macro_api_token};
 use macro_user_id::user_id::MacroUserIdStr;

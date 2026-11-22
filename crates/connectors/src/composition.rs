@@ -11,20 +11,19 @@ use crate::domain::discovery::{AppDirectory, Catalog};
 use crate::domain::policy::MacroConnectFlag;
 use crate::domain::ports::{OverlayCatalog, ServerDirectory, Source};
 use crate::domain::service::Connectors;
-use crate::domain::sign_in::ServerSignIns;
 use crate::outbound::app_directory::{HostedAppDirectory, NoAppDirectory};
 use crate::outbound::github_link::GithubLinkSource;
 use crate::outbound::github_link::auth_service::AuthServiceGithubLink;
+use crate::outbound::guarded_http::{AddressPolicy, McpHttp};
 use crate::outbound::hosted_connections::{HostedRepo, Provider, RevokeGrant};
 use crate::outbound::macro_connect::{ConnectSource, ConnectVendorClient};
-use crate::outbound::native::NativeSource;
-use crate::outbound::native::outbound::guarded_http::McpHttp;
-use crate::outbound::native::outbound::oauth::OAuthService;
-use crate::outbound::native::outbound::pg_server_repo::PgServerRepo;
-use crate::outbound::native::outbound::redis_state_store::RedisOAuthStateStore;
+use crate::outbound::native::oauth::OAuthService;
+use crate::outbound::native::pg_server_repo::PgServerRepo;
+use crate::outbound::native::redis_state_store::RedisOAuthStateStore;
 use crate::outbound::native::sign_in::OAuthSignIn;
+use crate::outbound::native::source::NativeSource;
 use crate::outbound::overlays::PgOverlayCatalog;
-use crate::outbound::pipedream::outbound::api::PipedreamClient;
+use crate::outbound::pipedream::api::PipedreamClient;
 use crate::outbound::pipedream::source::PipedreamSource;
 use authentication_service_client::AuthServiceClient;
 use feature_flags::outbound::posthog::PostHogFeatureFlags;
@@ -42,13 +41,10 @@ mod test;
 // The types a process fills [`ConnectorsConfig`] with, named here so the
 // composition root never reaches into a source's module.
 pub use crate::outbound::macro_connect::ConnectConfig;
-pub use crate::outbound::native::domain::models::{AesKey, OAuthClientMetadata};
+pub use crate::outbound::native::models::{AesKey, OAuthClientMetadata};
 #[cfg(feature = "providers")]
-pub use crate::outbound::native::domain::provider_registry::PreRegisteredProviders;
-/// Which addresses a process's outbound MCP traffic may reach; the egress
-/// proxy's forwarders take the same policy the connectors dial with.
-pub use crate::outbound::native::outbound::guarded_http::AddressPolicy;
-pub use crate::outbound::pipedream::outbound::api::{
+pub use crate::outbound::native::provider_registry::PreRegisteredProviders;
+pub use crate::outbound::pipedream::api::{
     DEFAULT_API_URL as PIPEDREAM_DEFAULT_API_URL, DEFAULT_MCP_URL as PIPEDREAM_DEFAULT_MCP_URL,
     PipedreamConfig,
 };
@@ -100,6 +96,10 @@ pub struct FeatureFlagsConfig {
 /// The catalog of connectable apps the `/connectors` routes and the
 /// discovery tool browse.
 pub type ConnectorCatalog = Catalog<Connectors>;
+
+/// Finishing sign-ins to servers added by URL, which the OAuth callback
+/// route runs.
+pub use crate::domain::sign_in::ServerSignIns;
 
 /// The connection services and what the routes need beside them, over one
 /// set of adapters and caches.

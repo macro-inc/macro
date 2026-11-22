@@ -8,7 +8,7 @@ fn user(name: &str) -> MacroUserIdStr<'static> {
         .into_owned()
 }
 
-fn accounts(fake: &FakeConnectors) -> ConnectedAccounts<connectors::domain::service::Connectors> {
+fn accounts(fake: &FakeConnectors) -> ConnectedAccounts<connectors::Connectors> {
     ConnectedAccounts(Arc::new(fake.build()))
 }
 

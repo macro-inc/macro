@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::model::McpServerSlug;
-use connectors::domain::models::Selection;
+use connectors::Selection;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

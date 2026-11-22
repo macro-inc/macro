@@ -121,7 +121,7 @@ async fn unseen_turns_get_only_code_mode() {
         "link_task",
     ])
     .await;
-    let set = connectors::CombinedToolSet::new(
+    let set = mcp_toolset::CombinedToolSet::new(
         Arc::new(AsyncToolCollection::<()>::new()),
         unseen::CodeModeOnly::new(tools),
     )

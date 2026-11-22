@@ -53,6 +53,5 @@ macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
 proptest.workspace = true
 rmcp = { workspace = true, features = ["server"] }
-regex.workspace = true
 tokio = { workspace = true, features = ["io-util", "test-util"] }
 tower = { workspace = true }

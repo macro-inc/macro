@@ -4,7 +4,7 @@ use crate::domain::{
     model::{AgentSessionId, UpstreamCall},
     ports::ActorMcpTransport,
 };
-use connectors::outbound::native::outbound::guarded_http::{self, AddressPolicy};
+use connectors::guarded_http::{self, AddressPolicy};
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::transport::streamable_http_client::{
     StreamableHttpClientTransportConfig, StreamableHttpError,

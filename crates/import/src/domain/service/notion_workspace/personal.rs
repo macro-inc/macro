@@ -7,7 +7,7 @@ use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, ImportVisibility, NotionPlanRepo,
     NotionRunRepo, Result, SlackWorkspaceSource, WorkspaceWriter, WrittenObjects,
 };
-use connectors::domain::service::McpConnectionsService;
+use connectors::McpConnectionsService;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;

@@ -104,7 +104,6 @@ pub(crate) fn resolve(
         let usable = status == Status::Connected;
         let mcp = match (&connection.mcp, usable) {
             (Some(mcp), true) => Some(McpHandle::new(
-                user.clone(),
                 key.clone(),
                 connection.name.clone(),
                 mcp.clone(),

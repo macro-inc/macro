@@ -1,5 +1,5 @@
 use super::*;
-use crate::outbound::pipedream::domain::service::discovery::ConnectorTool;
+use crate::domain::discovery::AppTool;
 use macro_user_id::cowlike::CowLike as _;
 
 /// A directory holding `slack`, its alias `slack_v2`, and an entry whose
@@ -23,8 +23,8 @@ impl ConnectorDirectory for FakeDirectory {
         _search: Option<&str>,
         _cursor: Option<&str>,
         _limit: u32,
-    ) -> anyhow::Result<crate::outbound::pipedream::domain::models::CatalogPage> {
-        Ok(crate::outbound::pipedream::domain::models::CatalogPage {
+    ) -> anyhow::Result<crate::outbound::pipedream::models::CatalogPage> {
+        Ok(crate::outbound::pipedream::models::CatalogPage {
             entries: vec![
                 entry("slack"),
                 entry("slack_v2"),
@@ -49,8 +49,8 @@ impl ConnectorCapabilities for FakeDirectory {
         &self,
         _user_id: &MacroUserIdStr<'static>,
         app_slug: &str,
-    ) -> anyhow::Result<Vec<ConnectorTool>> {
-        Ok(vec![ConnectorTool {
+    ) -> anyhow::Result<Vec<AppTool>> {
+        Ok(vec![AppTool {
             name: format!("{app_slug}_search"),
             description: "Search".to_owned(),
         }])

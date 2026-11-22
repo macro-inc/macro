@@ -555,7 +555,7 @@ pub(crate) type DssBotService = BotServiceImpl<
     PgBotsRepo,
     DssEventBroker,
     DssHarnessService,
-    ai_tools::ConnectorsAppCatalog<connectors::domain::service::Connectors>,
+    ai_tools::ConnectorsAppCatalog<connectors::Connectors>,
 >;
 
 /// Type alias for the bots router state.

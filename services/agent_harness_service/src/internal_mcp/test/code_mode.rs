@@ -255,7 +255,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         .expect("the default agent must discover internal code tools");
     let remote = ai_tools::DeferredToolSet::new(
         Arc::new(
-            connectors::CombinedToolSet::new(Arc::new(AsyncToolCollection::<()>::new()), remote)
+            mcp_toolset::CombinedToolSet::new(Arc::new(AsyncToolCollection::<()>::new()), remote)
                 .with_eager_mcp_tools(&[
                     "mcp__macro_internal__ExecuteCode",
                     "mcp__macro_internal__DescribeCodeTools",

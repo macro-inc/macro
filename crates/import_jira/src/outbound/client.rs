@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use connectors::domain::service::ApiConnectionsService;
+use connectors::ApiConnectionsService;
 use http::Method;
 use import_tracker::domain::model::{
     Comment, Group, GroupKind, Inventory, Issue, ObjectId, TrackerConnections, TrackerError, User,

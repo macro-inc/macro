@@ -1,7 +1,7 @@
 use super::*;
 use connectors::fake::FakeConnectors;
 
-fn catalog(fake: &FakeConnectors) -> ConnectorsAppCatalog<connectors::domain::service::Connectors> {
+fn catalog(fake: &FakeConnectors) -> ConnectorsAppCatalog<connectors::Connectors> {
     ConnectorsAppCatalog::new(Some(fake.build()))
 }
 
@@ -44,7 +44,7 @@ async fn a_malformed_slug_is_not_an_app() {
 
 #[tokio::test]
 async fn a_host_without_connectors_refuses_every_slug() {
-    let catalog = ConnectorsAppCatalog::<connectors::domain::service::Connectors>::new(None);
+    let catalog = ConnectorsAppCatalog::<connectors::Connectors>::new(None);
 
     let error = catalog
         .is_connectable_app("linear")

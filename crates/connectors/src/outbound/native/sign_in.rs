@@ -3,8 +3,8 @@
 
 use crate::domain::models::ServerUrl;
 use crate::domain::sign_in::ServerAuthorization;
-use crate::outbound::native::domain::models::OAuthClientMetadata;
-use crate::outbound::native::domain::ports::OAuthClient;
+use crate::outbound::native::models::OAuthClientMetadata;
+use crate::outbound::native::ports::OAuthClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use rootcause::compat::IntoRootcause as _;

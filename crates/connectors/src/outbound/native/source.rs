@@ -8,14 +8,15 @@
 
 use crate::domain::models::{AddedBy, ConnectStep, ConnectorId, ConnectorKey, ServerUrl, Upstream};
 use crate::domain::ports::{McpConnection, Source, SourceConnection, SourceKind, SourceRefusal};
-use crate::outbound::native::domain::models::{
+use crate::outbound::guarded_http::McpHttp;
+use crate::outbound::native::models::{
     GITHUB_MCP_SERVER_URL, MacroUserIdStr, McpServer, McpServerRecord,
 };
-use crate::outbound::native::domain::ports::{McpConnector, McpServerStore, OAuthClient};
-use crate::outbound::native::domain::service::{
-    self as native_service, AddServerError, ServerAccess, ServerDirectory, server_access,
+use crate::outbound::native::ports::{McpConnector, McpServerStore, OAuthClient};
+use crate::outbound::native::server_access::{ServerAccess, server_access};
+use crate::outbound::native::server_directory::{
+    self as native_service, AddServerError, ServerDirectory,
 };
-use crate::outbound::native::outbound::guarded_http::McpHttp;
 use rmcp::transport::auth::AuthError;
 use rootcause::Report;
 use rootcause::compat::IntoRootcause as _;
@@ -85,31 +86,6 @@ where
             })?;
 
         Ok(self.connection(url.clone(), added.record().clone()))
-    }
-
-    /// Finish signing in to a server: exchange the code the authorization
-    /// server redirected back with, and store the grant. The OAuth callback
-    /// route calls this.
-    #[tracing::instrument(skip_all, err)]
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the inbound OAuth callback route calls this in the next step; remove this then"
-        )
-    )]
-    pub(crate) async fn complete_authorization(
-        &self,
-        code: &str,
-        state: &str,
-    ) -> Result<SourceConnection, Report> {
-        let record = self
-            .oauth
-            .exchange_authorization_code(code, state)
-            .await
-            .into_rootcause()?;
-        let url = ServerUrl::parse(&record.url)?;
-        Ok(self.connection(url, record))
     }
 
     /// The user's rows with their normalized address, leaving out rows whose
@@ -274,8 +250,8 @@ where
         Ok(ConnectStep::OpenUrl(Url::parse(&authorization_url)?))
     }
 
-    /// Native connections complete through the OAuth callback
-    /// ([`NativeSource::complete_authorization`]), never by app.
+    /// Native connections complete through the OAuth callback (the server
+    /// sign-ins in `domain::sign_in`), never by app.
     async fn complete_connect(
         &self,
         _user: &MacroUserIdStr<'static>,

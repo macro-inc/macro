@@ -27,7 +27,7 @@ use url::Url;
 
 use crate::domain::error::EgressError;
 use agent_session::domain::model::AgentMcpServers;
-use connectors::domain::models::{ConnectorId, Selection};
+use connectors::{ConnectorId, Selection};
 
 pub use agent_fold::domain::log::AgentSessionId;
 pub use agent_session::domain::model::TurnPrompter;

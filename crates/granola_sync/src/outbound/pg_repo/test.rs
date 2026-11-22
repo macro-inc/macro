@@ -113,9 +113,8 @@ use call::domain::{
     imports::{CallImportService, ImportedCall, ImportedCallPreview, ImportedCallRecord},
     records::{CallEntityRecord, CallProvider},
 };
-use connectors::domain::models::{ConnectorId, ConnectorKey};
-use connectors::domain::service::{ConnectionManagementService, Connectors};
 use connectors::fake::{FakeConnection, FakeConnectors};
+use connectors::{ConnectionManagementService, ConnectorId, ConnectorKey, Connectors};
 use std::sync::Arc;
 
 /// Granola's answer to every call: a webhook registered for a personal key.

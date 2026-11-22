@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use connectors::domain::models::ApiResponse;
+use connectors::ApiResponse;
 use connectors::fake::{FakeConnection, FakeConnectors};
 use http::{HeaderMap, Method, StatusCode};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -17,7 +17,7 @@ fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("caller@example.com").unwrap()
 }
 
-fn connections(fake: &FakeConnectors) -> ConnectedNotion<connectors::domain::service::Connectors> {
+fn connections(fake: &FakeConnectors) -> ConnectedNotion<connectors::Connectors> {
     ConnectedNotion::new(Arc::new(fake.build()))
 }
 

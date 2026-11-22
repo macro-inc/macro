@@ -3,12 +3,11 @@
 //! read a source's store, the overlay table or the flag, or build a handle by
 //! hand.
 
-use crate::UserMcpTools;
 use crate::domain::catalog::{ConnectSupport, Overlays};
 use crate::domain::models::{
     AddedBy, ApiHandle, ApiRequest, ApiResponse, ConnectStep, Connector, ConnectorId, ConnectorKey,
     ConnectorsError, McpConnections, McpHandle, Permitted, Result, ServerUrl, Status, Surfaces,
-    Upstream,
+    Upstream, UserMcpTools,
 };
 use crate::domain::ports::{
     ConnectFlag, OverlayCatalog, ServerDirectory, Source, SourceConnection, SourceKind,
@@ -489,7 +488,7 @@ impl McpConnectionsService for Connectors {
             .collect();
         tracing::Span::current().record("dialed", servers.len());
 
-        UserMcpTools::connected(RemoteMcpToolSet::from_connected(servers, None).await)
+        UserMcpTools::new(RemoteMcpToolSet::from_connected(servers, None).await)
     }
 
     #[tracing::instrument(name = "connectors.upstream", skip_all, err, fields(connector = %permitted.key()))]

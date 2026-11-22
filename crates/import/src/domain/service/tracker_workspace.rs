@@ -1,7 +1,7 @@
 //! Issue tracker planning and writes. The shared workspace engine owns jobs,
 //! leases, approval, cancellation, adoption and session notifications.
 
-use connectors::domain::service::McpConnectionsService;
+use connectors::McpConnectionsService;
 use futures::StreamExt;
 use import_notion::domain::ports::NotionConnections;
 use import_tracker::domain::model::{Group, Inventory, Issue, TrackerError};

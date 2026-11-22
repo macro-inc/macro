@@ -1,6 +1,7 @@
 use super::*;
-use crate::outbound::native::domain::models::{AddressPolicy, StoredCredentials};
+use crate::outbound::guarded_http::AddressPolicy;
 use crate::outbound::native::memory_store::MemoryStore;
+use crate::outbound::native::models::StoredCredentials;
 use macro_user_id::cowlike::CowLike;
 use oauth2::basic::BasicTokenType;
 use oauth2::{AccessToken, StandardTokenResponse};
@@ -447,16 +448,8 @@ async fn connecting_a_server_starts_its_oauth_sign_in() {
 }
 
 #[tokio::test]
-async fn the_oauth_callback_yields_an_authorized_connection() {
+async fn an_app_does_not_complete_through_native() {
     let fixture = holding(Vec::new());
-
-    let connection = fixture
-        .source
-        .complete_authorization("code", "state")
-        .await
-        .unwrap();
-    assert_eq!(connection.key, server(WIKI));
-    assert!(connection.authorized);
 
     let error = fixture
         .source

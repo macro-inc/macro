@@ -1,5 +1,5 @@
 use super::*;
-use connectors::domain::models::ConnectorId;
+use connectors::ConnectorId;
 use std::str::FromStr;
 
 #[test]

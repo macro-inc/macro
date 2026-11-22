@@ -12,9 +12,7 @@ fn owner() -> MacroUserIdStr<'static> {
 
 const WIKI: &str = "https://wiki.example.com/mcp";
 
-fn provisioner(
-    fake: &FakeConnectors,
-) -> EgressProvisioner<connectors::domain::service::Connectors> {
+fn provisioner(fake: &FakeConnectors) -> EgressProvisioner<connectors::Connectors> {
     EgressProvisioner::new(Arc::new(fake.build()), "https://egress.macro.com")
 }
 

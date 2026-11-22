@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::OnboardingStatus;
-use connectors::domain::service::Connectors;
+use connectors::Connectors;
 use connectors::fake::{FakeConnection, FakeConnectors};
 use std::sync::Mutex;
 

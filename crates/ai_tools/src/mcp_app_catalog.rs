@@ -1,8 +1,7 @@
 //! The connector catalog consulted when an agent pins apps.
 
 use bots::domain::ports::{BotError, McpAppCatalog};
-use connectors::domain::models::ConnectorId;
-use connectors::domain::service::ConnectionManagementService;
+use connectors::{ConnectionManagementService, ConnectorId};
 
 /// Confirms the apps an agent pins against the connectors catalog.
 ///

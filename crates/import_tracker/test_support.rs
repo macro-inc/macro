@@ -1,9 +1,8 @@
 //! Tests drive the real connectors services over `FakeConnectors`: a user
 //! holds an app the way the rules count it, and its API answers in turn.
 
-use connectors::domain::models::ApiResponse;
-use connectors::domain::service::Connectors;
 use connectors::fake::{FakeConnection, FakeConnectors};
+use connectors::{ApiResponse, Connectors};
 use http::{HeaderMap, StatusCode};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value;

@@ -3,8 +3,7 @@
 
 use super::models::{ConnectedServer, DismissedPrompts, OnboardingRow, OnboardingState, PromptId};
 use super::ports::{OnboardingError, OnboardingRepo, Result};
-use connectors::domain::models::Status;
-use connectors::domain::service::ConnectionManagementService;
+use connectors::{ConnectionManagementService, Status};
 use generic_email_domains::is_generic_email_domain;
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;

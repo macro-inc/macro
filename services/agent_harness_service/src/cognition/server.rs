@@ -977,7 +977,7 @@ pub async fn build(
 /// Notion through the app's REST API, Slack's channels and the agent-led
 /// imports (the web's connector-import catalog) through the app's MCP tools.
 fn importable_apps() -> anyhow::Result<connectors::inbound::dto::Importable> {
-    use connectors::domain::models::ConnectorId;
+    use connectors::ConnectorId;
     use connectors::inbound::dto::{ImportSurface, Importable};
 
     let mut importable = Importable::new();

@@ -16,12 +16,12 @@ use crate::domain::models::{
     ConnectStep, ConnectorId, ConnectorKey, ServerUrl, Surfaces, Upstream,
 };
 use crate::domain::ports::{McpConnection, Source, SourceConnection, SourceKind, SourceRefusal};
-use crate::outbound::native::domain::models::{
+use crate::outbound::guarded_http::McpHttp;
+use crate::outbound::native::models::{
     GITHUB_MCP_SERVER_URL, MacroUserIdStr, McpServer, McpServerRecord, dial_with_bearer,
 };
-use crate::outbound::native::domain::ports::McpServerStore;
-use crate::outbound::native::is_github;
-use crate::outbound::native::outbound::guarded_http::McpHttp;
+use crate::outbound::native::ports::McpServerStore;
+use crate::outbound::native::source::is_github;
 use rootcause::Report;
 use rootcause::compat::IntoRootcause as _;
 use std::sync::Arc;

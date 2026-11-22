@@ -111,7 +111,6 @@ fn account(id: &str, slug: &str, created_minute: u32) -> PipedreamAccount {
         external_user_id: Some(USER.to_owned()),
         app_slug: slug.to_owned(),
         app_name: "Slack".to_owned(),
-        healthy: true,
         created_at: Some(
             chrono::DateTime::parse_from_rfc3339(&format!("2026-11-21T10:{created_minute:02}:00Z"))
                 .unwrap()

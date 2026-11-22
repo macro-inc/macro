@@ -11,12 +11,17 @@
 //! handed over ACP; both end here.
 
 mod call_tool_result;
+mod combined;
 mod mangle;
 mod toolset;
 
 pub use call_tool_result::CallToolResultExt;
-pub use mangle::unmangle;
+pub use combined::CombinedToolSet;
+pub use mangle::{MANGLED_PREFIX, unmangle};
 pub use toolset::{ConnectedServer, Error, ListedServer, RemoteMcpToolSet, TraceContext};
+
+#[cfg(test)]
+mod test;
 
 use rmcp::RoleClient;
 use rmcp::model::{ClientConfig, Implementation, ProtocolVersion};

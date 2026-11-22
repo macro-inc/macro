@@ -12,11 +12,10 @@
 //! The bearer and scoping headers it stamps are the owner's, which is why
 //! this traffic flows through the proxy: the sandbox never holds them.
 
-use connectors::domain::models::{
-    ConnectorId, ConnectorKey, ConnectorsError, McpConnections, PermitRefused, Permitted,
-    Selection, Upstream,
+use connectors::{
+    ConnectorId, ConnectorKey, ConnectorsError, McpConnections, McpConnectionsService,
+    PermitRefused, Permitted, Selection, Upstream,
 };
-use connectors::domain::service::McpConnectionsService;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 

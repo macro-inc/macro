@@ -5,8 +5,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use connectors::domain::models::{ApiHandle, ApiRequest, ConnectorId, ConnectorsError};
-use connectors::domain::service::ApiConnectionsService;
+use connectors::{ApiConnectionsService, ApiHandle, ApiRequest, ConnectorId, ConnectorsError};
 use http::{HeaderMap, Method, StatusCode};
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::time::Instant;

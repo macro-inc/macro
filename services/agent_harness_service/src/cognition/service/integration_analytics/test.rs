@@ -1,5 +1,5 @@
 use super::*;
-use connectors::domain::models::{ConnectorId, ServerUrl};
+use connectors::{ConnectorId, ServerUrl};
 use serde_json::json;
 
 #[test]

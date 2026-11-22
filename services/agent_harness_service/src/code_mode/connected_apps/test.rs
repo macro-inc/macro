@@ -74,7 +74,7 @@ fn owner_connections() -> FakeConnectors {
 fn code_mode(
     servers: AgentMcpServers,
 ) -> (
-    SessionConnectedApps<Egress, connectors::domain::service::Connectors, InMemoryAgentSessionRepo>,
+    SessionConnectedApps<Egress, connectors::Connectors, InMemoryAgentSessionRepo>,
     ConnectedAppUse,
 ) {
     let mut session = test_agent_session(AgentSessionId::new());

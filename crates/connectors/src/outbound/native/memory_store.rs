@@ -1,7 +1,7 @@
 //! An in-memory [`McpServerStore`] for the sources' tests.
 
-use crate::outbound::native::domain::models::{MacroUserIdStr, McpServerRecord};
-use crate::outbound::native::domain::ports::McpServerStore;
+use crate::outbound::native::models::{MacroUserIdStr, McpServerRecord};
+use crate::outbound::native::ports::McpServerStore;
 use std::sync::Mutex;
 
 /// Rows keyed by user and URL as stored, like the `mcp_servers` table.

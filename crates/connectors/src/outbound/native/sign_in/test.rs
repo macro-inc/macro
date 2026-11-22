@@ -1,5 +1,5 @@
 use super::*;
-use crate::outbound::native::domain::models::McpServerRecord;
+use crate::outbound::native::models::McpServerRecord;
 use macro_user_id::cowlike::CowLike as _;
 
 /// Exchanges one known code for a stored server.

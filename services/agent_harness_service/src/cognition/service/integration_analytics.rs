@@ -7,7 +7,7 @@
 #[cfg(test)]
 mod test;
 
-use connectors::domain::models::ConnectorKey;
+use connectors::ConnectorKey;
 use connectors::inbound::ConnectorChange;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Serialize;

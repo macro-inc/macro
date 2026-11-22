@@ -6,7 +6,11 @@
 
 use crate::domain::catalog;
 use crate::domain::ports::{ApiConnection, McpConnection};
+use ai_toolset::{
+    RequestContext, RequestSchema, SearchableTool, ToolCallFuture, ToolInfo, ToolSet,
+};
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_toolset::RemoteMcpToolSet;
 use std::fmt;
 use std::sync::Arc;
 use url::Url;
@@ -285,21 +289,14 @@ impl Selection {
 /// it is enabled and authorized, and it is the connection the rules count.
 #[derive(Clone)]
 pub struct McpHandle {
-    user: MacroUserIdStr<'static>,
     key: ConnectorKey,
     name: String,
     connection: Arc<dyn McpConnection>,
 }
 
 impl McpHandle {
-    pub(crate) fn new(
-        user: MacroUserIdStr<'static>,
-        key: ConnectorKey,
-        name: String,
-        connection: Arc<dyn McpConnection>,
-    ) -> Self {
+    pub(crate) fn new(key: ConnectorKey, name: String, connection: Arc<dyn McpConnection>) -> Self {
         Self {
-            user,
             key,
             name,
             connection,
@@ -314,11 +311,6 @@ impl McpHandle {
     /// The display name its tools are listed under.
     pub fn name(&self) -> &str {
         &self.name
-    }
-
-    /// The user whose connection it is.
-    pub(crate) fn user(&self) -> &MacroUserIdStr<'static> {
-        &self.user
     }
 
     /// The source's connection, to dial or address.
@@ -630,3 +622,54 @@ impl From<rootcause::Report> for ConnectorsError {
 
 /// The result of a connectors service call.
 pub type Result<T, E = ConnectorsError> = std::result::Result<T, E>;
+
+/// The MCP tools loaded for a user: one toolset over the servers their
+/// usable connections dialed, built by
+/// [`McpConnectionsService::toolset`](crate::McpConnectionsService::toolset).
+pub struct UserMcpTools(RemoteMcpToolSet);
+
+impl UserMcpTools {
+    /// The tools of servers already dialed.
+    pub(crate) fn new(tools: RemoteMcpToolSet) -> Self {
+        Self(tools)
+    }
+
+    /// Returns `true` when no tools were discovered.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// The full catalog of MCP tools for on-demand loading via tool search.
+    pub fn catalog(&self) -> Vec<SearchableTool> {
+        self.0.searchable_catalog()
+    }
+}
+
+impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
+    fn dispatch_tool_call<'a>(
+        &'a self,
+        context: Context,
+        request_context: RequestContext,
+        tool_name: &'a str,
+        json: &'a serde_json::Value,
+    ) -> ToolCallFuture<'a> {
+        self.0
+            .dispatch_tool_call(context, request_context, tool_name, json)
+    }
+
+    fn request_schemas(&self) -> Option<Vec<RequestSchema>> {
+        ToolSet::<Context>::request_schemas(&self.0)
+    }
+
+    fn searchable_catalog(&self) -> Vec<SearchableTool> {
+        self.catalog()
+    }
+
+    fn searchable_toolset_names(&self) -> Vec<String> {
+        ToolSet::<Context>::searchable_toolset_names(&self.0)
+    }
+
+    fn routing_description<'a>(&'a self, tool_name: &'a str) -> Option<ToolInfo> {
+        ToolSet::<Context>::routing_description(&self.0, tool_name)
+    }
+}

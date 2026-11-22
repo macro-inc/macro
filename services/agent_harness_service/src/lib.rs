@@ -543,7 +543,7 @@ pub async fn run() -> anyhow::Result<()> {
     // Session egress reaches only public addresses, except on a local stack
     // whose MCP and preview services sit on the compose network.
     let mcp_address_policy =
-        connectors::composition::AddressPolicy::for_environment(config.environment);
+        connectors::guarded_http::AddressPolicy::for_environment(config.environment);
 
     // Every session's MCP servers: Macro's own under the reserved `macro`
     // slug, then the owner's connections as the connectors decide them. The

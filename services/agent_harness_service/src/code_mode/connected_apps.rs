@@ -23,7 +23,7 @@ use agent_session::domain::model::{AgentSessionId, TurnPrompter};
 use agent_session::domain::ports::AgentSessionRepo;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
 use async_trait::async_trait;
-use connectors::domain::service::McpConnectionsService;
+use connectors::McpConnectionsService;
 use connectors::inbound::toolset::{
     ConnectMcpServer, ConnectMcpServerResponse, DiscoverConnectors, DiscoverConnectorsResponse,
     DiscoveryRequest,

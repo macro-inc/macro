@@ -175,7 +175,7 @@ pub type ToolBotService = BotServiceImpl<
         harnesses::outbound::pg_harness_repo::PgHarnessRepo,
         hosted_runtimes::outbound::pg::PgComputerAgents,
     >,
-    crate::mcp_app_catalog::ConnectorsAppCatalog<connectors::domain::service::Connectors>,
+    crate::mcp_app_catalog::ConnectorsAppCatalog<connectors::Connectors>,
 >;
 
 /// Bot-management AI tool context.
@@ -189,7 +189,7 @@ pub fn build_bot_tool_context(
     event_broker: MaybeToolEventBroker,
     entity_access_service: Arc<ToolEntityAccessService>,
     document_storage_service_url: String,
-    connectors: Option<connectors::domain::service::Connectors>,
+    connectors: Option<connectors::Connectors>,
 ) -> ToolBotToolContext {
     BotToolContext {
         service: Arc::new(
@@ -2167,10 +2167,10 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
 /// Type alias for the import service implementation used by AI tools.
 pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::pg_import_repo::PgImportRepo,
-    connectors::domain::service::Connectors,
+    connectors::Connectors,
     ToolEntityCreator,
-    import::outbound::mcp_slack_source::McpSlackSource<connectors::domain::service::Connectors>,
-    import_notion::outbound::connected::ConnectedNotion<connectors::domain::service::Connectors>,
+    import::outbound::mcp_slack_source::McpSlackSource<connectors::Connectors>,
+    import_notion::outbound::connected::ConnectedNotion<connectors::Connectors>,
 >;
 
 /// Type alias for the import tool context, wired by hosts with connector access.
@@ -2308,7 +2308,7 @@ pub struct ToolServiceContext {
 /// The connector tools (`DiscoverConnectors`, `ConnectMcpServer`) over the
 /// host's one connectors composition.
 pub type ToolConnectorToolContext = connectors::inbound::toolset::ConnectorToolContext<
-    connectors::domain::service::Connectors,
+    connectors::Connectors,
     connectors::composition::ConnectorCatalog,
 >;
 

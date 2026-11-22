@@ -1,4 +1,4 @@
-//! What a host builds its one [`connectors::domain::service::Connectors`]
+//! What a host builds its one [`connectors::Connectors`]
 //! from: [`connectors_config_from_env`] for hosts that read the shared
 //! AI-tools environment, and the pieces every host's configuration shares.
 

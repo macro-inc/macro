@@ -97,14 +97,14 @@ pub type DcsUsageService =
 
 /// The `/connectors` routes' state over the process's connectors.
 pub type DcsConnectorsRouterState = connectors::inbound::axum_router::ConnectorsRouterState<
-    connectors::domain::service::Connectors,
+    connectors::Connectors,
     connectors::composition::ConnectorCatalog,
     DcsAuthorizationService,
 >;
 
 /// The public callback routes' state over the process's server sign-ins.
 pub type DcsCallbacksState =
-    connectors::inbound::callbacks::CallbacksState<connectors::domain::sign_in::ServerSignIns>;
+    connectors::inbound::callbacks::CallbacksState<connectors::composition::ServerSignIns>;
 
 /// The import pipeline service, shared between the import router and the
 /// chat toolset.
@@ -113,7 +113,7 @@ pub type DcsImportService = ai_tools::ToolImportService;
 /// The onboarding orchestrator wired to the Postgres repo and the connectors.
 pub type DcsOnboardingService = onboarding::domain::service::OnboardingServiceImpl<
     onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo,
-    connectors::domain::service::Connectors,
+    connectors::Connectors,
 >;
 
 /// Redis-backed rate limiting for the web routes.
@@ -166,7 +166,7 @@ pub struct ApiContext {
     pub callbacks_state: DcsCallbacksState,
     /// The process's connections, already decided by the rules: chat loads
     /// a user's MCP tools through them.
-    pub connectors: connectors::domain::service::Connectors,
+    pub connectors: connectors::Connectors,
     pub granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>>,
     pub import_service: Arc<DcsImportService>,
     pub onboarding_service: Arc<DcsOnboardingService>,

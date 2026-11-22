@@ -10,4 +10,4 @@ mod vendor;
 
 pub(crate) use source::ConnectSource;
 pub use vendor::ConnectConfig;
-pub(crate) use vendor::{ConnectVendor, ConnectVendorClient};
+pub(crate) use vendor::ConnectVendorClient;

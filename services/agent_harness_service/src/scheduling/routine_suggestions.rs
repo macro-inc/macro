@@ -10,7 +10,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use scheduled_action::domain::suggestions::ports::{InboxMessage, SuggestionSources};
 
 use crate::routine_sessions::RoutineConnectedApps;
-use connectors::domain::service::{ConnectionManagementService, McpConnectionsService};
+use connectors::{ConnectionManagementService, McpConnectionsService};
 
 /// Snippet length suggestions read: past the provider's preview, from the
 /// body.

@@ -13,7 +13,7 @@ fn app(slug: &str) -> AgentMcpServer {
     }
 }
 
-fn apps(fake: &FakeConnectors) -> RoutineConnectedApps<connectors::domain::service::Connectors> {
+fn apps(fake: &FakeConnectors) -> RoutineConnectedApps<connectors::Connectors> {
     RoutineConnectedApps::new(Arc::new(fake.build()))
 }
 
@@ -22,7 +22,7 @@ fn held(slug: &str) -> FakeConnection {
 }
 
 async fn sorted_slugs(
-    apps: &RoutineConnectedApps<connectors::domain::service::Connectors>,
+    apps: &RoutineConnectedApps<connectors::Connectors>,
 ) -> Vec<String> {
     let mut slugs = apps.connected_app_slugs(&owner()).await.unwrap();
     slugs.sort();

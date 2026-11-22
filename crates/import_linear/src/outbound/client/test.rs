@@ -1,5 +1,5 @@
 use super::*;
-use connectors::domain::service::Connectors;
+use connectors::Connectors;
 use connectors::fake::{FakeConnection, FakeConnectors};
 use strum::IntoEnumIterator;
 #[path = "../../../../import_tracker/test_support.rs"]

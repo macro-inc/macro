@@ -3,7 +3,7 @@
 //! side-effect free.
 
 use chrono::{DateTime, Utc};
-use connectors::domain::models::{ConnectorId, InvalidConnectorId};
+use connectors::{ConnectorId, InvalidConnectorId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

@@ -5,8 +5,7 @@ use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use ai_toolset::{RequestContext, ToolSet};
-use connectors::UserMcpTools;
-use connectors::domain::service::McpConnectionsService;
+use connectors::{McpConnectionsService, UserMcpTools};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::{Value, json};
 

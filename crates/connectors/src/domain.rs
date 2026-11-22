@@ -9,13 +9,6 @@
 
 pub(crate) mod catalog;
 pub mod discovery;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the sources and composition use these in the next step; remove this then"
-    )
-)]
 pub mod models;
 pub(crate) mod policy;
 pub(crate) mod ports;

@@ -212,7 +212,7 @@ async fn team_folder_link_does_not_open_an_owner_only_child(pool: PgPool) -> any
 }
 
 /// No user holds any connection.
-fn no_connections() -> Arc<connectors::domain::service::Connectors> {
+fn no_connections() -> Arc<connectors::Connectors> {
     Arc::new(connectors::fake::FakeConnectors::new().build())
 }
 

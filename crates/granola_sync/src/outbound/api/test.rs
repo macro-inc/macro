@@ -1,7 +1,6 @@
 use super::*;
-use connectors::domain::models::ApiResponse;
-use connectors::domain::service::Connectors;
 use connectors::fake::{ApiCall, FakeConnection, FakeConnectors};
+use connectors::{ApiResponse, Connectors};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
 fn connection() -> Connection {
