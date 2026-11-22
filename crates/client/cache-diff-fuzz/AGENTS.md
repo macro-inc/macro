@@ -74,6 +74,15 @@ purpose (it says what).
   before the hydrate returned must equal the state before it or after it, and one issued
   after it returned the state after it, or the seed fails. Timers don't guarantee overlap:
   stats `split.issued-during` and `split.issued-after` say how many reads overlapped.
+- When a change stores new rows on purpose, such as a derived sort fact and the `meta`
+  key that versions it, add `--ignore-rows COLUMN=VALUE` (repeatable: e.g.
+  `attribute=NAME`, `key=NAME`) to both sides: every table with that column leaves those
+  rows out of the dump. Optimistic layers keep the documents they project as text, so add
+  `--ignore-json-fact NAME` too: it drops `{"attribute":NAME,"value":N}` facts and `"NAME"`
+  array elements from stored text. In a `CHAIN_*` run comparing a migrated file with a
+  fresh one, segment 0 is old against new and differs by design; compare the last
+  segments' traces, which end with a hash per table (`runs/RUN/upgrade/SEED/{a,b}1`, kept
+  for each differing seed; rerun the segment with `--full` for the rows).
 - `FUZZ_ARGS` goes to both sides; `FUZZ_ARGS_A` and `FUZZ_ARGS_B` to one each, for
   one build under two settings (e.g. `FUZZ_ARGS_B="--hot-capacity 16"` against
   itself: the hot tier is a cache, so its size must change nothing).
