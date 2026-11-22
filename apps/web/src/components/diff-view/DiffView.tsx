@@ -170,6 +170,18 @@ function Stack(props: DiffListProps) {
   let pendingSelection = activePath();
   let scrollingToAnchor = false;
   let resizePending = false;
+  // The line a code link revealed, held centred while files above it still
+  // render, until the user takes over scrolling.
+  let revealed: Element | undefined;
+  const keepRevealed = () => {
+    if (!revealed?.isConnected) return;
+    const box = revealed.getBoundingClientRect();
+    const view = scroller.getBoundingClientRect();
+    const drift = box.top + box.height / 2 - (view.top + view.height / 2);
+    if (Math.abs(drift) > 1) {
+      revealed.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  };
   const alignAnchor = () => {
     const card = anchoredPath ? diffReveal.card(anchoredPath) : undefined;
     if (!card?.isConnected) return;
@@ -205,6 +217,7 @@ function Stack(props: DiffListProps) {
       root?.querySelector(row);
     if (!line) return;
     releaseAnchor();
+    revealed = line;
     line.scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
   // Wait for a quiet scroll interval so resize corrections do not interrupt
@@ -218,6 +231,7 @@ function Stack(props: DiffListProps) {
     revealLine();
   }, 120);
   const releaseAnchor = () => {
+    revealed = undefined;
     anchoredPath = undefined;
     pendingSelection = undefined;
     scrollingToAnchor = false;
@@ -243,6 +257,7 @@ function Stack(props: DiffListProps) {
         }
         alignAnchor();
         revealLine();
+        keepRevealed();
       }
     );
   }

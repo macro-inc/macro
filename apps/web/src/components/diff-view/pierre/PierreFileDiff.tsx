@@ -46,11 +46,16 @@ const BASE_OPTIONS = {
   lineHoverHighlight: 'line',
 } satisfies FileDiffOptions<string>;
 
-// Pierre pins the gutter "+" to the number column's right edge, flush with
-// the code; on a lit line (a focused note, a code link) it stays shown, so
-// the code keeps a small gap from it.
+// Pierre pins the gutter "+" to the number column's right edge, between the
+// number and the code; on a lit line (a focused note, a code link) it stays
+// shown, so both keep a small gap from it.
 const GUTTER_UTILITY_CSS =
-  '[data-line] { padding-inline-start: calc(1ch + 6px); }';
+  '[data-line] { padding-inline-start: calc(1ch + 6px); } [data-column-number] { padding-inline-end: calc(1ch + 6px); }';
+
+// Pierre tints a lit line by mixing its selection colour into the row; in dark
+// mode the mix is strong enough to dim the code, so it is lighter there.
+const LIT_LINE_CSS =
+  '[data-line][data-selected-line] { --mix-selection-dark: 85%; }';
 
 export function PierreFileDiff(props: {
   path: string;
@@ -123,9 +128,7 @@ export function PierreFileDiff(props: {
     ...BASE_OPTIONS,
     diffStyle: props.diffStyle,
     themeType: props.themeType,
-    unsafeCSS: props.onSelectLines
-      ? `${GUTTER_UTILITY_CSS}${props.unsafeCSS ?? ''}`
-      : props.unsafeCSS,
+    unsafeCSS: `${LIT_LINE_CSS}${props.onSelectLines ? GUTTER_UTILITY_CSS : ''}${props.unsafeCSS ?? ''}`,
     renderAnnotation,
     enableGutterUtility: props.onSelectLines !== undefined,
     onGutterUtilityClick: props.onSelectLines
