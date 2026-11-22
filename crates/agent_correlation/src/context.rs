@@ -15,8 +15,7 @@ pub struct Attribution {
     pub correlation_id: Option<Uuid>,
     /// Routine whose run the work acts for, from a signed token claim.
     pub routine_id: Option<Uuid>,
-    /// Channel message whose bot mention the work answers, from a signed
-    /// token claim. Restricts (no email sends); never grants.
+    /// Original message from a verified mention credential; restriction only.
     pub channel_mention_id: Option<Uuid>,
     /// The validated invocation's agent session.
     pub session_id: Option<Uuid>,
@@ -24,11 +23,15 @@ pub struct Attribution {
     /// credential signs. Set without a session when the credential signs a
     /// scope but carries no correlation.
     pub scope: Option<SessionScope>,
-    /// The request signs a scope, including a name this build does not know.
+    /// A verified token signs a scope, including unknown scope names.
     pub signed_scope: bool,
     /// Display verb the SDK sent with a validated correlation. Display only;
     /// it is dropped whenever there is no correlation.
     pub verb: Option<AgentVerb>,
+    /// Some scope the request is held to caps document tokens, though
+    /// `scope` names another: a request carrying several scoped tokens keeps
+    /// every one's cap.
+    pub caps_document_tokens: bool,
 }
 
 tokio::task_local! {
@@ -66,6 +69,19 @@ pub fn is_scoped() -> bool {
     attribution().signed_scope || current_scope().is_some()
 }
 
+/// Whether this request may put an agent to work
+/// ([`SessionScope::may_assign_agents`]): an unscoped one may.
+pub fn may_assign_agents() -> bool {
+    current_scope().is_none_or(SessionScope::may_assign_agents)
+}
+
+/// Whether a document or surface token minted for this request grants at
+/// most view access ([`SessionScope::caps_document_tokens_to_view`]).
+pub fn caps_document_tokens_to_view() -> bool {
+    attribution().caps_document_tokens
+        || current_scope().is_some_and(SessionScope::caps_document_tokens_to_view)
+}
+
 /// A request that changes who an item is shared with, refused to the scope
 /// it was made under.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -78,7 +94,7 @@ impl SharingRefused {
 }
 
 /// Whether the current request may change who can see an item: false under
-/// a scope that may not share, and for a channel-mention bot's program.
+/// a scope that may not share.
 pub fn may_share() -> bool {
     current_channel_mention().is_none() && current_scope().is_none_or(SessionScope::allows_sharing)
 }
@@ -97,7 +113,6 @@ pub fn refuse_sharing(changes_sharing: bool) -> Result<(), SharingRefused> {
     tracing::warn!(
         scope = current_scope().map(SessionScope::as_str),
         agent_session_id = ?current_session(),
-        channel_mention_id = ?current_channel_mention(),
         "refused a change to who can see an item"
     );
     Err(SharingRefused)

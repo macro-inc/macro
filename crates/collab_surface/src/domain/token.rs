@@ -8,6 +8,9 @@
 //! `macro_sync_service_jwt` — that crate stays dependency-minimal because it
 //! also compiles to wasm for the sync-service worker.
 
+#[cfg(test)]
+mod test;
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use entity_access::domain::models::EntityPermission;
@@ -62,13 +65,20 @@ pub fn surface_access_level(
     }
 }
 
-/// Sign a sync-service connection token for `surface_id`.
+/// Sign a sync-service connection token for `surface_id`. Under a scope that
+/// caps document tokens (a background job) it grants view access only, as
+/// a document's does.
 pub fn encode_surface_token(
     user_id: MacroUserIdStr<'static>,
     surface_id: String,
     access_level: AccessLevel,
     jwt_secret: &str,
 ) -> Result<DocumentPermissionToken, CollabSurfaceError> {
+    let access_level = if agent_correlation::context::caps_document_tokens_to_view() {
+        AccessLevel::View
+    } else {
+        access_level
+    };
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system clock before unix epoch")

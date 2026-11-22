@@ -65,12 +65,14 @@ pub trait MemoryService: Send + Sync + 'static {
     fn get_memory(
         &self,
         user: MacroUserIdStr<'static>,
+        reader: MemoryReader,
     ) -> impl Future<Output = Result<Option<Memory>>> + Send;
 
     /// Private explicit memory, always read as the authenticated caller.
     fn explicit(
         &self,
         user: &MacroUserIdStr<'_>,
+        reader: MemoryReader,
     ) -> impl Future<Output = Result<ExplicitMemory>> + Send;
 
     /// Apply one explicit edit at the caller's current revision.
@@ -91,7 +93,9 @@ pub trait MemoryService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<Activity>>> + Send;
 }
 
-use super::models::{Activity, ExplicitMemory, MemoryEdit, MemoryKind, Piece, StagedPieces};
+use super::models::{
+    Activity, ExplicitMemory, MemoryEdit, MemoryKind, MemoryReader, Piece, StagedPieces,
+};
 use chrono::NaiveDate;
 
 /// A consistent generation input; profile revision guards every generated write.

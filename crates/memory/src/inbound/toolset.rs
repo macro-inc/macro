@@ -47,7 +47,8 @@ impl<R: ComposedMemoryRepo> AsyncTool<MemoryToolContext<R>> for ReadMemory {
         req: RequestContext,
     ) -> ToolResult<Self::Output> {
         ctx.service
-            .explicit(&req.user_id)
+            // A tool call is an agent's, not the person's own read.
+            .explicit(&req.user_id, crate::domain::MemoryReader::Program)
             .await
             .map_err(memory_error)
     }
