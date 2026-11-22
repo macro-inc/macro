@@ -19,6 +19,7 @@ import { cn } from '@ui';
 import {
   type Accessor,
   createEffect,
+  createMemo,
   createSignal,
   For,
   Show,
@@ -80,10 +81,25 @@ function SimilarTasksInner(props: {
     () => ({ enabled: ids().length > 0, keepPreviousData: true })
   );
 
+  // A page and the ranking it was read for. Only a newly arrived page takes the
+  // current ranking; while the next page loads, the previous page keeps its
+  // own, so the section never collapses between keystrokes.
+  const shown = createMemo<{ page?: typeof soup.data; ids: string[] }>(
+    (previous) => {
+      if (ids().length === 0) return { ids: [] };
+      const page = soup.data;
+      if (!page || soup.isPlaceholderData || page === previous.page)
+        return previous;
+      return { page, ids: ids() };
+    },
+    { ids: [] }
+  );
+
   // Keep the similarity ranking order.
   const entities = () => {
-    const order = new Map(ids().map((id, index) => [id, index] as const));
-    return [...(soup.data?.entities ?? [])]
+    const { page, ids: ranking } = shown();
+    const order = new Map(ranking.map((id, index) => [id, index] as const));
+    return [...(page?.entities ?? [])]
       .filter((entity) => order.has(entity.id))
       .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   };
