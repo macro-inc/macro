@@ -44,9 +44,12 @@ pub const NOTICE_KEPT_FOR: Duration = Duration::from_secs(24 * 60 * 60);
 /// How often each replica runs [`ScreenService::reap`].
 pub const REAP_EVERY: Duration = Duration::from_secs(60);
 /// Thaws that fail while a computer runs before the harness stops: one a
-/// round, so longer than the guest's own timer (3 minutes of its running
-/// time) takes to thaw the agent.
+/// round, and only once the first of them is older than [`GUEST_TIMER`] and
+/// a margin: by then the guest's own timer has thawed the agent.
 pub const THAW_FAILURES_BEFORE_DEAD_MAN: u32 = 5;
+/// How long the guest's timer lets a freeze outlive its last renewal
+/// (`nix/macro-box/files/macro-agent-pause`).
+pub const GUEST_TIMER: Duration = Duration::from_secs(180);
 /// How old an owed thaw gets before it stops mattering: a computer asleep
 /// that long thaws its agent on resume, by its own timer.
 pub const OWED_THAW_EXPIRES: Duration = Duration::from_secs(7 * 24 * 60 * 60);
@@ -529,6 +532,12 @@ where
         };
         let expired_before = Utc::now()
             - chrono::Duration::from_std(OWED_THAW_EXPIRES).unwrap_or(chrono::Duration::days(7));
+        // Failures counted on every replica can pile up quicker than the
+        // guest's timer runs: it has certainly fired only once the first
+        // failure is older than the timer plus a margin.
+        let dead_man_fired_before = Utc::now()
+            - chrono::Duration::from_std(GUEST_TIMER + 2 * REAP_EVERY)
+                .unwrap_or(chrono::Duration::minutes(5));
         let (mut thawed, mut asleep, mut failed, mut given_up) = (0usize, 0usize, 0usize, 0usize);
         for owed in owed {
             let settled = if owed.ended_at < expired_before {
@@ -552,7 +561,10 @@ where
                         None
                     }
                     Err(ThawFailed::Failed)
-                        if owed.failures + 1 >= THAW_FAILURES_BEFORE_DEAD_MAN =>
+                        if owed.failures + 1 >= THAW_FAILURES_BEFORE_DEAD_MAN
+                            && owed
+                                .first_failed_at
+                                .is_some_and(|first| first < dead_man_fired_before) =>
                     {
                         given_up += 1;
                         tracing::warn!(computer.id = %owed.computer_id, "a thaw kept failing on a running computer; its own timer has thawed the agent");
@@ -579,6 +591,27 @@ where
         span.record("screen.failed", failed);
         span.record("screen.given_up", given_up);
         Ok(())
+    }
+
+    /// A renewal found the agent not frozen for `drive`: freeze it again
+    /// while that drive is still the computer's live one (a drive that
+    /// ended is never frozen again), or end the drive when that fails.
+    #[tracing::instrument(skip_all, fields(computer.id = %computer, screen.refrozen = tracing::field::Empty), err)]
+    pub async fn refreeze(&self, computer: ComputerId, drive: &DriveId) -> Result<(), ScreenError> {
+        let Some(lease) = self.lease(computer).await? else {
+            tracing::Span::current().record("screen.refrozen", "ended");
+            return Ok(());
+        };
+        if &lease.drive_id() != drive {
+            tracing::Span::current().record("screen.refrozen", "superseded");
+            return Ok(());
+        }
+        if self.signal.driving(&lease).await.is_ok() {
+            tracing::Span::current().record("screen.refrozen", "frozen");
+            return Ok(());
+        }
+        tracing::Span::current().record("screen.refrozen", "lost");
+        self.freeze_lost(computer, drive).await
     }
 
     /// The guest let the agent run in the middle of `drive` and couldn't

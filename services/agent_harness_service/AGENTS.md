@@ -236,9 +236,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `nix/macro-box/files/macro-agent-pause`; `frozen`/`idle` let it start,
   anything else refuses it with `agentNotPausable`), sends `keep <drive>` on
   each lease renewal (the guest thaws the agent itself 3 minutes after the
-  last; a keep answering `thawed`, `superseded` or `failed` freezes again,
-  and when that fails the drive ends through `ScreenService::freeze_lost`
-  and the driver gets `agentNotPausable`), and `thaw <drive>` after (a few
+  last; a keep answering `thawed`, `superseded` or `failed` is reported to
+  `ScreenService::refreeze`, which freezes again only while that drive is
+  live, and otherwise ends it with `agentNotPausable` to the driver), and
+  `thaw <drive>` after (the guest never freezes a thawed drive again; a few
   tries off the request path, then `ScreenService::reap`; `superseded` means
   a newer drive froze it). A computer that isn't running is never exec'd
   into. An agent computer whose image has no helper fails a freeze and has

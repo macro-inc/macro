@@ -89,14 +89,14 @@ pub struct GuestFiles {
     changes: Option<Arc<PendingChanges>>,
     guest: Option<Guest>,
     tasks: TaskTracker,
-    lost: mpsc::UnboundedSender<LostFreeze>,
-    lost_freezes: Arc<Mutex<Option<mpsc::UnboundedReceiver<LostFreeze>>>>,
+    unfrozen: mpsc::UnboundedSender<UnfrozenDrive>,
+    unfrozen_drives: Arc<Mutex<Option<mpsc::UnboundedReceiver<UnfrozenDrive>>>>,
 }
 
-/// A drive whose agent the guest let run and couldn't freeze again: the
-/// harness ends it (`ScreenService::freeze_lost`).
+/// A drive a renewal found the agent not frozen for: the screen service
+/// freezes it again while it is live, or ends it (`ScreenService::refreeze`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LostFreeze {
+pub struct UnfrozenDrive {
     /// The computer.
     pub computer_id: ComputerId,
     /// The drive.
@@ -116,15 +116,15 @@ impl GuestFiles {
     /// Reach guests through `guest`, on a worker tracked by `tasks` that
     /// stops with `shutdown`; without a fleet nothing is written or frozen.
     pub fn new(guest: Option<Guest>, tasks: &TaskTracker, shutdown: CancellationToken) -> Self {
-        let (lost, lost_freezes) = mpsc::unbounded_channel();
-        let lost_freezes = Arc::new(Mutex::new(Some(lost_freezes)));
+        let (unfrozen, unfrozen_drives) = mpsc::unbounded_channel();
+        let unfrozen_drives = Arc::new(Mutex::new(Some(unfrozen_drives)));
         let Some(guest) = guest else {
             return Self {
                 changes: None,
                 guest: None,
                 tasks: tasks.clone(),
-                lost,
-                lost_freezes,
+                unfrozen,
+                unfrozen_drives,
             };
         };
         let writer = Arc::clone(&guest.exec);
@@ -154,15 +154,15 @@ impl GuestFiles {
             changes: Some(changes),
             guest: Some(guest),
             tasks: tasks.clone(),
-            lost,
-            lost_freezes,
+            unfrozen,
+            unfrozen_drives,
         }
     }
 
-    /// The drives whose freeze was lost, for the one task that ends them;
-    /// `None` once taken.
-    pub fn lost_freezes(&self) -> Option<mpsc::UnboundedReceiver<LostFreeze>> {
-        self.lost_freezes
+    /// The drives a renewal found unfrozen, for the one task that refreezes
+    /// or ends them; `None` once taken.
+    pub fn unfrozen_drives(&self) -> Option<mpsc::UnboundedReceiver<UnfrozenDrive>> {
+        self.unfrozen_drives
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take()
@@ -365,27 +365,23 @@ impl Guest {
     }
 }
 
-/// Keep `drive` frozen: re-arm the guest's timer, and when the guest says
-/// the agent isn't frozen for this drive (its timer fired during an exec
-/// outage, or a late freeze of another drive took the fence), freeze it
-/// again; when that fails too, the drive is lost.
+/// Keep `drive` frozen: re-arm the guest's timer. When the guest says the
+/// agent isn't frozen for this drive (its timer fired during an exec
+/// outage, something thawed or restarted the unit, or a late freeze of
+/// another drive took the fence), the drive is reported: the screen service
+/// freezes it again only while the drive is live, or ends it.
 async fn keep_frozen(
     exec: &dyn GuestExec,
     computer: ComputerId,
     drive: &DriveId,
-    lost: &mpsc::UnboundedSender<LostFreeze>,
+    unfrozen: &mpsc::UnboundedSender<UnfrozenDrive>,
 ) {
     let kept = ask_pause(exec, computer, "keep", drive).await;
     if matches!(kept, PauseAnswer::Frozen | PauseAnswer::Idle) {
         return;
     }
-    tracing::warn!(answer = ?kept, "the agent wasn't frozen for its drive; freezing it again");
-    let refrozen = ask_pause(exec, computer, "freeze", drive).await;
-    if matches!(refrozen, PauseAnswer::Frozen | PauseAnswer::Idle) {
-        return;
-    }
-    tracing::warn!(answer = ?refrozen, "the agent couldn't be frozen again; ending the drive");
-    let _ = lost.send(LostFreeze {
+    tracing::warn!(answer = ?kept, "the agent wasn't frozen for its drive");
+    let _ = unfrozen.send(UnfrozenDrive {
         computer_id: computer,
         drive: drive.clone(),
     });
@@ -421,10 +417,10 @@ impl DriverSignal for GuestFiles {
         let (exec, computer, drive) =
             (Arc::clone(&guest.exec), lease.computer_id, lease.drive_id());
         let span = tracing::info_span!("computer.screen.keep_frozen", computer.id = %computer, screen.pause = tracing::field::Empty);
-        let lost = self.lost.clone();
+        let unfrozen = self.unfrozen.clone();
         self.tasks.spawn(
             async move {
-                keep_frozen(exec.as_ref(), computer, &drive, &lost).await;
+                keep_frozen(exec.as_ref(), computer, &drive, &unfrozen).await;
             }
             .instrument(span),
         );
