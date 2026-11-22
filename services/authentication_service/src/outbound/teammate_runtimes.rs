@@ -1,7 +1,9 @@
 //! Tells agent_harness_service that a machine's teammate installs changed
 //! (`POST /internal/teammates/{harness}/changed`), so the replica holding its
-//! macrod socket delivers or stops them now. Best effort: a machine that
-//! misses it catches up when it next connects.
+//! macrod socket delivers or stops them now, or that its owner asked it to
+//! check its hosting again (`.../recheck`). Best effort: a machine that
+//! misses a change catches up when it next connects, and a missed recheck
+//! is its own next check.
 
 use std::time::Duration;
 
@@ -34,14 +36,27 @@ impl HarnessTeammateRuntimes {
 }
 
 impl TeammateRuntimes for HarnessTeammateRuntimes {
+    #[tracing::instrument(name = "teammate.recheck_host", skip(self))]
+    async fn recheck_host(&self, harness: HarnessId) {
+        self.post(harness, "recheck").await;
+    }
+
     #[tracing::instrument(name = "teammate.installs_changed", skip(self))]
     async fn installs_changed(&self, harness: HarnessId) {
+        self.post(harness, "changed").await;
+    }
+}
+
+impl HarnessTeammateRuntimes {
+    /// `POST /internal/teammates/{harness}/{action}`; a failure is logged
+    /// on the caller's span.
+    async fn post(&self, harness: HarnessId, action: &str) {
         let mut headers = reqwest::header::HeaderMap::new();
         macro_tower_layers::inject_trace_headers(&mut headers);
         let sent = self
             .http
             .post(format!(
-                "{}/internal/teammates/{harness}/changed",
+                "{}/internal/teammates/{harness}/{action}",
                 self.harness_url.trim_end_matches('/')
             ))
             .headers(headers)

@@ -216,6 +216,7 @@ use model::user::{
                 team_agents::inbound::axum_router::set_team_agent_voice_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 team_agents::inbound::axum_router::set_team_agent_avatar_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 team_agents::inbound::axum_router::list_teammate_hosts_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                team_agents::inbound::axum_router::recheck_teammate_host_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 team_agents::inbound::axum_router::move_team_agent_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::domain_notice::handler::<crate::api::context::DomainNoticeServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::toggle_non_admin_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,

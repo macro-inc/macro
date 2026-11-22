@@ -5931,6 +5931,70 @@
         }
       }
     },
+    "/team_agents/hosts/{harness_id}/recheck": {
+      "post": {
+        "tags": ["team-agents"],
+        "summary": "Ask one of the acting admin's own machines to check its teammate hosting\n(its container engine) again now. It answers with a fresh report, which\n`GET /team_agents/hosts` shows a moment later. Someone else's machine is\na 404.",
+        "operationId": "recheck_teammate_host",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "The machine's harness id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgentErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team_agents/me/online": {
       "post": {
         "tags": ["team-agents"],

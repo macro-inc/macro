@@ -420,6 +420,10 @@ pub trait TeammateInstalls: Send + Sync + 'static {
 pub trait TeammateRuntimes: Send + Sync + 'static {
     /// `harness`'s installs changed.
     fn installs_changed(&self, harness: HarnessId) -> impl Future<Output = ()> + Send;
+
+    /// Ask `harness` to check its teammate hosting again now; it answers
+    /// with a fresh report.
+    fn recheck_host(&self, harness: HarnessId) -> impl Future<Output = ()> + Send;
 }
 
 /// Telling an agent's inviter that the agent is up.
@@ -501,6 +505,15 @@ pub trait TeamAgentService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> impl Future<Output = Result<TeammateHosts, TeamAgentError>> + Send;
+
+    /// Ask one of the acting admin's own machines to check its teammate
+    /// hosting again now (its container engine, above all); its fresh report
+    /// shows in [`Self::hosts`]. Someone else's machine is `NotFound`.
+    fn recheck_host(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        harness: HarnessId,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 
     /// Move an agent on an own machine to another of the admin's own
     /// machines. The machine it leaves stops it first (its last push), then

@@ -843,6 +843,10 @@ impl TeammateRuntimes for FakeRuntimes {
     async fn installs_changed(&self, harness: HarnessId) {
         self.0.record(format!("runtimes.changed {harness}"));
     }
+
+    async fn recheck_host(&self, harness: HarnessId) {
+        self.0.record(format!("runtimes.recheck {harness}"));
+    }
 }
 
 /// An image for every architecture.

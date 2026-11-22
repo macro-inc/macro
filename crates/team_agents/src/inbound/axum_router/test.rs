@@ -96,6 +96,13 @@ impl TeamAgentService for Reached {
     ) -> Result<TeammateHosts, TeamAgentError> {
         self.reached()
     }
+    async fn recheck_host(
+        &self,
+        _: EntityAccessReceipt<AdminTeamRole>,
+        _: HarnessId,
+    ) -> Result<(), TeamAgentError> {
+        self.reached()
+    }
     async fn move_install(
         &self,
         _: EntityAccessReceipt<AdminTeamRole>,
@@ -517,4 +524,18 @@ async fn a_program_cannot_move_a_team_agent() {
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert_eq!(service.0.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_machine_recheck_reaches_the_service() {
+    let service = Arc::new(Reached::default());
+    let request = Request::post("/hosts/0193a1b2-0000-7000-8000-000000000d01/recheck")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router(service.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(service.0.load(Ordering::SeqCst), 1);
 }

@@ -5650,6 +5650,33 @@ export type ListTeammateHostsResponses = {
 
 export type ListTeammateHostsResponse = ListTeammateHostsResponses[keyof ListTeammateHostsResponses];
 
+export type RecheckTeammateHostData = {
+    body?: never;
+    path: {
+        /**
+         * The machine's harness id.
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/team_agents/hosts/{harness_id}/recheck';
+};
+
+export type RecheckTeammateHostErrors = {
+    401: ErrorResponse;
+    403: TeamAgentErrorBody;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RecheckTeammateHostError = RecheckTeammateHostErrors[keyof RecheckTeammateHostErrors];
+
+export type RecheckTeammateHostResponses = {
+    204: void;
+};
+
+export type RecheckTeammateHostResponse = RecheckTeammateHostResponses[keyof RecheckTeammateHostResponses];
+
 export type ReportTeamAgentOnlineData = {
     body?: never;
     path?: never;

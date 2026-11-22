@@ -105,7 +105,12 @@ as above and a `team_agent_installs` row (generation 1) instead of a
 purchase, and tells agent_harness_service (`TeammateRuntimes`, internal
 `POST /internal/teammates/{harness}/changed`). `GET /team_agents/hosts` lists
 the admin's machines with eligibility and each installed engine (`engines`,
-with whether it can confine a teammate's network). Status comes from the install's
+with whether it can confine a teammate's network). `POST
+/team_agents/hosts/{harness_id}/recheck` (the admin's own machine only,
+else 404; 204) asks it to check again now (`TeammateRuntimes::recheck_host`,
+internal `POST /internal/teammates/{harness}/recheck`, sent as
+`RecheckTeammateHost` to a macrod that listed `recheck-teammate-host`); its
+fresh report shows in the next `GET /team_agents/hosts`. Status comes from the install's
 `run_state` (`downloading` is new) and `first_online_at`; a `failed` or
 `rolled_back` install also answers `installProblem` (`{kind: failed |
 rolledBack, reason}`, the machine's `InstallFailure`), absent during a move or

@@ -171,6 +171,8 @@ pub struct TeamAgentErrorBody {
 ///   or installs it on one of their own machines.
 /// - `GET /` — a team member lists the team's agents.
 /// - `GET /hosts` — a team admin's own machines, for the Invite dialog.
+/// - `POST /hosts/{harness_id}/recheck` — a team admin asks one of their own
+///   machines to check its teammate hosting again.
 /// - `POST /{agent_user_id}/install` — a team admin moves an agent to
 ///   another of their own machines.
 /// - `POST /me/online` — an agent reports that it is online.
@@ -192,6 +194,10 @@ where
         )
         .route("/me/online", post(agent_online_handler::<S, Eas, Auth>))
         .route("/hosts", get(list_teammate_hosts_handler::<S, Eas, Auth>))
+        .route(
+            "/hosts/{harness_id}/recheck",
+            post(recheck_teammate_host_handler::<S, Eas, Auth>),
+        )
         .route(
             "/{agent_user_id}/install",
             post(move_team_agent_handler::<S, Eas, Auth>),
@@ -353,6 +359,53 @@ where
     Ok(Json(
         state.service.hosts(access.entity_access_receipt).await?,
     ))
+}
+
+/// Path for one of the acting admin's machines.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Path)]
+pub struct HostPath {
+    /// The machine's harness id.
+    pub harness_id: Uuid,
+}
+
+/// Ask one of the acting admin's own machines to check its teammate hosting
+/// (its container engine) again now. It answers with a fresh report, which
+/// `GET /team_agents/hosts` shows a moment later. Someone else's machine is
+/// a 404.
+#[utoipa::path(
+    post,
+    tag = "team-agents",
+    operation_id = "recheck_teammate_host",
+    path = "/team_agents/hosts/{harness_id}/recheck",
+    params(HostPath),
+    responses(
+        (status = 204),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = TeamAgentErrorBody),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn recheck_teammate_host_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+    Path(path): Path<HostPath>,
+) -> Result<StatusCode, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .recheck_host(
+            access.entity_access_receipt,
+            HarnessId::new_from_uuid(path.harness_id),
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Path for one agent.

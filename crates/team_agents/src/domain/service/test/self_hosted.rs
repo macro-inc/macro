@@ -1651,6 +1651,10 @@ impl TeammateRuntimes for SlowRuntimes {
         }
         self.journal.record(format!("runtimes.changed {harness}"));
     }
+
+    async fn recheck_host(&self, _: HarnessId) {
+        unreachable!("offboarding rechecks no machine")
+    }
 }
 
 #[tokio::test(start_paused = true)]
@@ -1690,4 +1694,31 @@ async fn a_slow_nudge_to_an_unpaired_machine_doesnt_hold_up_its_revokes() {
 
     let install = install_of(&service, &agent);
     assert!(install.parked() && !install.revoke_pending, "{install:?}");
+}
+
+#[tokio::test]
+async fn an_admin_asks_their_own_machine_to_check_again() {
+    let (service, journal, _) = self_hosted_service();
+    // Its engine didn't answer.
+    set_connected(&service, LAPTOP, true);
+    service.installs.hosts.lock().unwrap()[0].1.report = None;
+
+    service.recheck_host(receipt(), LAPTOP).await.unwrap();
+
+    assert_eq!(journal.entries(), [format!("runtimes.recheck {LAPTOP}")]);
+}
+
+#[tokio::test]
+async fn someone_elses_machine_cant_be_asked_to_check_again() {
+    let (service, journal, _) = self_hosted_service();
+    let nobodys = HarnessId::new_from_uuid(Uuid::from_u128(0x0d09));
+
+    for harness in [THEIRS, nobodys] {
+        let result = service.recheck_host(receipt(), harness).await;
+        assert!(
+            matches!(result, Err(TeamAgentError::NotFound)),
+            "{result:?}"
+        );
+    }
+    assert!(journal.entries().is_empty());
 }

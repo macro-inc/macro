@@ -945,6 +945,29 @@ where
         })
     }
 
+    #[tracing::instrument(name = "team_agents.recheck_host", skip_all, fields(team_id = %receipt.entity().entity_id, %harness), err)]
+    async fn recheck_host(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        harness: HarnessId,
+    ) -> Result<(), TeamAgentError> {
+        let caller = acting_user(&receipt)?;
+        self.ensure_enabled(&caller).await?;
+        self.ensure_self_hosting(&caller).await?;
+        // Someone else's machine looks the same as no machine.
+        if !self
+            .installs
+            .hosts_of(&caller)
+            .await?
+            .iter()
+            .any(|host| host.harness_id == harness)
+        {
+            return Err(TeamAgentError::NotFound);
+        }
+        self.runtimes.recheck_host(harness).await;
+        Ok(())
+    }
+
     #[tracing::instrument(
         name = "team_agents.move_install",
         skip_all,

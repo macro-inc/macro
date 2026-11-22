@@ -6900,6 +6900,79 @@ export const listTeammateHosts = async (
 };
 
 /**
+ * @summary Ask one of the acting admin's own machines to check its teammate hosting
+(its container engine) again now. It answers with a fresh report, which
+`GET /team_agents/hosts` shows a moment later. Someone else's machine is
+a 404.
+ */
+export type recheckTeammateHostResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type recheckTeammateHostResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type recheckTeammateHostResponse403 = {
+  data: TeamAgentErrorBody;
+  status: 403;
+};
+
+export type recheckTeammateHostResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type recheckTeammateHostResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type recheckTeammateHostResponseSuccess =
+  recheckTeammateHostResponse204 & {
+    headers: Headers;
+  };
+export type recheckTeammateHostResponseError = (
+  | recheckTeammateHostResponse401
+  | recheckTeammateHostResponse403
+  | recheckTeammateHostResponse404
+  | recheckTeammateHostResponse500
+) & {
+  headers: Headers;
+};
+
+export type recheckTeammateHostResponse =
+  | recheckTeammateHostResponseSuccess
+  | recheckTeammateHostResponseError;
+
+export const getRecheckTeammateHostUrl = (harnessId: string) => {
+  return `/team_agents/hosts/${harnessId}/recheck`;
+};
+
+export const recheckTeammateHost = async (
+  harnessId: string,
+  options?: RequestInit
+): Promise<recheckTeammateHostResponse> => {
+  const res = await fetch(getRecheckTeammateHostUrl(harnessId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: recheckTeammateHostResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as recheckTeammateHostResponse;
+};
+
+/**
  * @summary The calling agent reports that it is online, with its own credential.
 The first report makes it `running` and tells its inviter it is ready;
 later ones change nothing. 404 for an account that isn't an agent of its

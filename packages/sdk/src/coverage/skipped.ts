@@ -160,6 +160,7 @@ export const authBacklog = [
   'deleteTeamAgent', // Removing an agent teammate releases its computer; an admin app flow for now.
   'listTeamAgents', // Agent teammates fit a team entity; wrap with the team namespace later.
   'listTeammateHosts', // The machines an admin can put an agent teammate on; an admin app flow for now.
+  'recheckTeammateHost', // Asking an admin's machine to check its teammate hosting again; an admin app flow for now.
   'moveTeamAgent', // Moving an agent teammate between machines; an admin app flow for now.
   'getTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
   'setTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
