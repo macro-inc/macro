@@ -777,9 +777,11 @@ const MOVED_FILES_KEPT: &str =
 const RECOVERY_ATTEMPTS: u8 = 3;
 
 /// How long after an adoption began a recovery whose attempt could not be
-/// counted still tries to decide where the moved files go. Past it such a
-/// recovery discards them unopened, so attempts that cannot be counted are
-/// bounded too.
+/// counted keeps files it cannot decide on. Past it such a recovery discards
+/// them instead, so attempts that cannot be counted are bounded too. It
+/// still decides first: files that can go back go back, however old. A clock
+/// set back by as much counts as time passed, so a skewed clock can only
+/// shorten the wait, never make it endless.
 const UNCOUNTED_RECOVERY_MS: u64 = 10 * 60 * 1000;
 
 #[cfg(test)]
@@ -795,6 +797,12 @@ fn now_ms() -> u64 {
     #[cfg(test)]
     let now = now + CLOCK_AHEAD_MS.with(std::cell::Cell::get);
     now
+}
+
+/// Whether an adoption that began at `adopted_at_ms` is past
+/// [`UNCOUNTED_RECOVERY_MS`], by this browser's clock in either direction.
+fn adoption_is_old(adopted_at_ms: u64) -> bool {
+    now_ms().abs_diff(adopted_at_ms) >= UNCOUNTED_RECOVERY_MS
 }
 
 /// Releases `lock`, if any. Best effort: a lock that fails to release is let go
@@ -1207,11 +1215,26 @@ async fn complete(
 /// beside them, so a later recovery open decides again.
 async fn keep_for_recovery(owner: OpfsOwner, reason: impl std::fmt::Display) -> JsValue {
     if let Err(error) = owner.release().await {
-        return err_js(error);
+        return recovery_deferred(err_js(error));
     }
-    err_js(format!(
+    recovery_deferred(err_js(format!(
         "cache recovery kept the files an upgrade moved here: {reason}"
-    ))
+    )))
+}
+
+/// Marks `error` as a recovery open that kept files it could not decide on
+/// yet ([`RECOVERY_DEFERRED_MARKER`]). The coordinator then keeps this scope
+/// and its pending recovery for a later page instead of giving the database
+/// up, which would leave those files where no open looks for them.
+fn recovery_deferred(error: JsValue) -> JsValue {
+    // Setting a property on a new Error does not fail; if it did, the open
+    // would read as an ordinary failed recovery.
+    let _ = js_sys::Reflect::set(
+        &error,
+        &JsValue::from_str(RECOVERY_DEFERRED_MARKER),
+        &JsValue::TRUE,
+    );
+    error
 }
 
 /// Before a recovery open wipes this build's files, hands back files an
@@ -1221,9 +1244,11 @@ async fn keep_for_recovery(owner: OpfsOwner, reason: impl std::fmt::Display) -> 
 /// files or the marker cannot be read, or their WAL still holds frames, the
 /// open fails and keeps them. Each recovery counts an attempt first, and the
 /// one after [`RECOVERY_ATTEMPTS`] discards the files unopened. One whose
-/// attempt cannot be counted still decides if it can, but once
-/// [`UNCOUNTED_RECOVERY_MS`] passed since the adoption began it discards
-/// instead.
+/// attempt cannot be counted still decides if it can, and discards only what
+/// it would keep once [`UNCOUNTED_RECOVERY_MS`] passed since the adoption
+/// began. A version probe that fails gives the owner up before any file
+/// changes; the count bounds it, and when nothing can be counted either,
+/// nothing does, as when neither adoption file reads.
 async fn recover_adoption(
     scope: &str,
     mut owner: OpfsOwner,
@@ -1237,60 +1262,86 @@ async fn recover_adoption(
         return Ok((owner, None));
     };
     let discarded = Some(CarryForward::new(CarryForwardKind::Discarded, from_version));
-    let past_limit = match owner.record_attempt().await {
-        Ok(count) => count > RECOVERY_ATTEMPTS,
-        Err(_) => now_ms().abs_diff(adoption.adopted_at_ms) >= UNCOUNTED_RECOVERY_MS,
-    };
-    if past_limit {
+    let counted = owner.record_attempt().await;
+    if counted
+        .as_ref()
+        .is_ok_and(|count| *count > RECOVERY_ATTEMPTS)
+    {
         return Ok((owner, discarded));
     }
+    let old = counted.is_err() && adoption_is_old(adoption.adopted_at_ms);
+    match decide_adoption(owner, adoption, from_version).await {
+        Decided::Done(owner, carry_forward) => Ok((owner, carry_forward)),
+        Decided::Kept(owner, _) if old => Ok((owner, discarded)),
+        Decided::Kept(owner, reason) => Err(keep_for_recovery(owner, reason).await),
+        Decided::Lost(error) => Err(recovery_deferred(error)),
+    }
+}
+
+/// What [`decide_adoption`] came to.
+enum Decided {
+    /// The files went back, or are to be discarded with the rest of this
+    /// build's files.
+    Done(OpfsOwner, Option<CarryForward>),
+    /// Nothing could be decided, for the reason given; every file and the
+    /// marker are as they were.
+    Kept(OpfsOwner, String),
+    /// The version probe failed and gave the owner up before any file
+    /// changed.
+    Lost(JsValue),
+}
+
+/// Takes the older build's lock, completes a split, reads the version the
+/// moved files say they are at, then hands them back while they are still
+/// at the version they moved at, or has them discarded when they cannot go
+/// back.
+async fn decide_adoption(mut owner: OpfsOwner, adoption: Adoption, from_version: u32) -> Decided {
+    let discarded = Some(CarryForward::new(CarryForwardKind::Discarded, from_version));
     let previous = match owner.lock_previous(&adoption.previous_identity).await {
         Ok(Some(previous)) => previous,
-        Ok(None) => return Err(keep_for_recovery(owner, OLDER_BUILD_HOLDS_WAL).await),
-        Err(error) => return Err(keep_for_recovery(owner, error).await),
+        Ok(None) => return Decided::Kept(owner, OLDER_BUILD_HOLDS_WAL.to_owned()),
+        Err(error) => return Decided::Kept(owner, error.to_string()),
     };
     if adoption.state == AdoptionState::Split {
         let kept = match owner.complete_adoption(Some(&previous)).await {
             Ok(CompleteOutcome::Completed) => None,
             Ok(CompleteOutcome::WalLost) => {
                 release_previous(Some(previous)).await;
-                return Ok((owner, discarded));
+                return Decided::Done(owner, discarded);
             }
             Ok(CompleteOutcome::LockNeeded) => Some(OLDER_BUILD_HOLDS_WAL.to_owned()),
             Err(error) => Some(error.to_string()),
         };
         if let Some(reason) = kept {
             release_previous(Some(previous)).await;
-            return Err(keep_for_recovery(owner, reason).await);
+            return Decided::Kept(owner, reason);
         }
     }
-    // A probe that fails gives up the owner and fails the open before any file
-    // changes; the count or the adoption's age bounds the next one.
     let (mut owner, stored) = match read_storage_version(owner).await {
         Ok(read) => read,
         Err(error) => {
             release_previous(Some(previous)).await;
-            return Err(error);
+            return Decided::Lost(error);
         }
     };
     let kept = match stored {
         // Half a pair: the reset that leaves only removed them, marker and all.
         StoredVersion::Reset => {
             release_previous(Some(previous)).await;
-            return Ok((owner, discarded));
+            return Decided::Done(owner, discarded);
         }
         StoredVersion::Read(Some(version)) if version == from_version => {
             match owner.return_adoption(&previous).await {
                 Ok(ReturnOutcome::Returned) => {
                     release_previous(Some(previous)).await;
-                    return Ok((
+                    return Decided::Done(
                         owner,
                         Some(CarryForward::new(CarryForwardKind::Returned, from_version)),
-                    ));
+                    );
                 }
                 Ok(ReturnOutcome::Occupied) => {
                     release_previous(Some(previous)).await;
-                    return Ok((owner, discarded));
+                    return Decided::Done(owner, discarded);
                 }
                 Ok(ReturnOutcome::WalNotEmpty) => {
                     "the moved database's WAL still holds frames".to_owned()
@@ -1301,36 +1352,45 @@ async fn recover_adoption(
         // A step this build ran committed: the older build cannot open them.
         StoredVersion::Read(Some(_)) => {
             release_previous(Some(previous)).await;
-            return Ok((owner, discarded));
+            return Decided::Done(owner, discarded);
         }
         StoredVersion::Read(None) => {
             "the moved database's storage version is unreadable".to_owned()
         }
     };
     release_previous(Some(previous)).await;
-    Err(keep_for_recovery(owner, kept).await)
+    Decided::Kept(owner, kept)
 }
 
-/// A recovery that cannot read the adoption marker: counts the attempt and
-/// fails the open, keeping everything, until [`RECOVERY_ATTEMPTS`] were
-/// counted. Then the files are discarded with their storage version unknown;
-/// the wipe that follows removes the marker and its count. An attempt that
-/// cannot be counted either keeps them too: neither file of the adoption's
-/// own then reads or writes, and nothing says how old it is.
+/// A recovery that cannot read the adoption: counts the attempt and fails
+/// the open, keeping everything, until [`RECOVERY_ATTEMPTS`] were counted.
+/// Then the files are discarded with their storage version unknown; the wipe
+/// that follows removes the marker and its count. An attempt that cannot be
+/// counted keeps them too, unless the marker itself still reads (the files
+/// beside it did not) and says the adoption is older than
+/// [`UNCOUNTED_RECOVERY_MS`]. When neither the marker nor the count reads,
+/// nothing bounds the attempt or says how old the adoption is.
 async fn unreadable_adoption(
     mut owner: OpfsOwner,
     error: OpfsError,
 ) -> Result<(OpfsOwner, Option<CarryForward>), JsValue> {
-    match owner.record_attempt().await {
-        Ok(count) if count > RECOVERY_ATTEMPTS => Ok((
+    let past_bound = match owner.record_attempt().await {
+        Ok(count) => count > RECOVERY_ATTEMPTS,
+        Err(_) => matches!(
+            owner.read_adoption_time().await,
+            Ok(Some(adopted_at_ms)) if adoption_is_old(adopted_at_ms)
+        ),
+    };
+    if past_bound {
+        return Ok((
             owner,
             Some(CarryForward {
                 kind: CarryForwardKind::Discarded,
                 from_storage_version: None,
             }),
-        )),
-        _ => Err(keep_for_recovery(owner, error).await),
+        ));
     }
+    Err(keep_for_recovery(owner, error).await)
 }
 
 /// What [`read_storage_version`] found.
@@ -1786,6 +1846,7 @@ const RESET_REQUIRED_MARKER: &str = "cacheStorageResetRequired";
 const RESET_REQUIRED_MESSAGE: &str = "cache storage reset required";
 const OWNER_LOCK_UNAVAILABLE_MARKER: &str = "cacheOwnerLockUnavailable";
 const STORAGE_BUSY_MARKER: &str = "cacheStorageBusy";
+const RECOVERY_DEFERRED_MARKER: &str = "cacheRecoveryDeferred";
 const OWNER_LOCK_UNAVAILABLE_MESSAGE: &str = "cache database owner lock is held by another context";
 
 /// All rejections surface as real `Error` objects with consistent

@@ -3629,7 +3629,7 @@ async fn a_marker_that_never_reads_is_discarded_at_the_limit() {
 }
 
 #[wasm_bindgen_test(async)]
-async fn an_uncounted_recovery_decides_if_it_can_until_the_adoption_is_old() {
+async fn an_uncounted_recovery_decides_first_and_discards_once_old() {
     const SCOPE: &str = "cache-wasm-recovery-uncounted";
     let own = database_identity(SCOPE);
     let older = cache_database_name(SCOPE, 11);
@@ -3671,9 +3671,26 @@ async fn an_uncounted_recovery_decides_if_it_can_until_the_adoption_is_old() {
     assert_eq!(test_generation(&engine).await, generation);
     resolved(engine.close()).await;
 
-    // Past the age bound an uncounted attempt discards without opening
-    // anything, so attempts that cannot be counted cannot keep the cache
-    // from starting either.
+    // It decides before it looks at the age: files that can go back go
+    // back, however long ago the adoption began.
+    older_database_with_a_queued_write(SCOPE, Flaw::None).await;
+    move_without_opening(SCOPE).await;
+    rename_opfs_file(&attempts, &held).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(UNCOUNTED_RECOVERY_MS));
+    let result = recovery_open(SCOPE).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(0));
+    let (engine, report) = result.expect("old uncounted recovery with the lock free");
+    assert_eq!(
+        report.carry_forward,
+        Some(CarryForward::new(CarryForwardKind::Returned, 11))
+    );
+    resolved(engine.close()).await;
+    remove_opfs_file(&held).await;
+    assert!(opfs_file_exists(&older).await);
+
+    // What it would keep, it discards once the adoption is past the age
+    // bound, so attempts that cannot be counted cannot keep the cache from
+    // starting either.
     older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     move_without_opening(SCOPE).await;
     rename_opfs_file(&attempts, &held).await;
@@ -3696,6 +3713,57 @@ async fn an_uncounted_recovery_decides_if_it_can_until_the_adoption_is_old() {
     release_held_web_lock().await;
     remove_opfs_file(&held).await;
     assert!(!opfs_file_exists(&format!("{own}-adopting")).await);
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
+#[wasm_bindgen_test(async)]
+async fn an_uncounted_recovery_reads_the_adoption_time_when_the_files_do_not() {
+    const SCOPE: &str = "cache-wasm-recovery-unread-files";
+    let own = database_identity(SCOPE);
+    let wal = format!("{own}-wal");
+    let wal_held = format!("{own}-wal-held");
+    let attempts = format!("{own}-adopting-attempts");
+    let held = format!("{own}-held");
+    older_database_with_a_queued_write(SCOPE, Flaw::None).await;
+    move_without_opening(SCOPE).await;
+    // The marker reads, but the files beside it cannot be looked up (a
+    // directory where the WAL belongs), and no attempt can be counted.
+    rename_opfs_file(&wal, &wal_held).await;
+    create_opfs_directory(&wal).await;
+    rename_opfs_file(&attempts, &held).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(UNCOUNTED_RECOVERY_MS - 60_000));
+    let kept = recovery_open(SCOPE).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(UNCOUNTED_RECOVERY_MS));
+    let discarded = recovery_open(SCOPE).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(0));
+    let error = kept
+        .err()
+        .expect("a recovery inside the age bound keeps them");
+    assert_eq!(
+        js_sys::Reflect::get(&error, &JsValue::from_str(RECOVERY_DEFERRED_MARKER))
+            .ok()
+            .and_then(|value| value.as_bool()),
+        Some(true),
+        "the coordinator learns the files were kept for a later recovery"
+    );
+    // Past it the marker's time bounds the attempt, as it would a readable
+    // adoption's.
+    let (engine, report) = discarded.expect("a recovery past the age bound discards");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::ResetStorageUncertain,
+            carry_forward: Some(CarryForward {
+                kind: CarryForwardKind::Discarded,
+                from_storage_version: None,
+            }),
+        }
+    );
+    assert_eq!(queue_depth(&engine).await, "0");
+    resolved(engine.close()).await;
+    assert!(!opfs_entry_exists(&format!("{own}-adopting")).await);
+    remove_opfs_file(&held).await;
+    remove_opfs_file(&wal_held).await;
     destroy_cache(SCOPE.into()).await.expect("destroy cache");
 }
 
