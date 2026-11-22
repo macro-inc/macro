@@ -1,0 +1,34 @@
+crates/connectors/src/fake.rs
+  s_f41d1322fdaf56::t_810a800ae9a28c 11,32,63,96-103,263-265
+crates/import_notion/src/outbound/connected.rs
+  s_f41d1322fdaf56::t_d265c9707b5db0 1-7,9-109,111-121
+  s_f41d1322fdaf56::t_1d8d62d6972aec 8,110
+crates/connectors/src/fake/source.rs
+  s_f41d1322fdaf56::t_810a800ae9a28c 22,41,43-44,66,80-83,118,402-403,407,418-419,422-428,432
+crates/import_notion/src/outbound/connected/test.rs
+  s_f41d1322fdaf56::t_1d8d62d6972aec 1-118,126,133-134
+  s_f41d1322fdaf56::t_d2b7d0aee22e22 119-125
+crates/import_tracker/src/outbound/connection.rs
+  s_f41d1322fdaf56::t_8d71d996db501c 1-7,10-51,53-56,60-70,74-75,77-219
+  s_f41d1322fdaf56::t_cdf6a644ed1521 8-9
+  s_f41d1322fdaf56::t_6a45ad9415e506 52,57-59,76
+  s_f41d1322fdaf56::t_d2b7d0aee22e22 71-73
+crates/import_tracker/src/outbound/connection/test.rs
+  s_f41d1322fdaf56::t_452ff59869a972 1-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a467b2f79c7aa3af5ed8285307ec9f0f5d439040",
+  "prompts": {},
+  "sessions": {
+    "s_f41d1322fdaf56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d3f18eae-353e-4bf4-9772-680eff8ef594",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
