@@ -1,0 +1,14 @@
+crates/agent_inmem/src/outbound/rig_engine/turn_code_tools/test.rs
+  h_659b58cf3b37bf 55-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8bc0edccc3b065e389aa31c9df09c714878bb6a3",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
