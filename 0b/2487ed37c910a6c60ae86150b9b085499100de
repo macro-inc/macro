@@ -1,0 +1,41 @@
+.agents/skills/add-sdk-endpoint/SKILL.md
+  s_dba41136531d82::t_12f898d05b3ecd 40-43
+crates/agent_permission_registry/registry.json
+  s_dba41136531d82::t_5759700472c675 84,120,179,247,655
+packages/code-mode-sdk/src/js-tools/catalog.test.ts
+  s_dba41136531d82::t_d83a02353ed182 70,75
+  s_dba41136531d82::t_65f6615cafdd62 7,27-30,35-38,60,62-66,68-69,71-74,76-77,81,83-85,238,334-346
+  s_dba41136531d82::t_e690ca715e6415 347-348
+packages/code-mode-sdk/scripts/generate.ts
+  s_dba41136531d82::t_7541ee83ee5f7e 240-248,258
+packages/code-mode-sdk/AGENTS.md
+  s_dba41136531d82::t_ea1b18c41ad63b 80-83
+crates/agent_permission_registry/AGENTS.md
+  s_dba41136531d82::t_e1c454ac25024f 6-7
+  s_dba41136531d82::t_ea1b18c41ad63b 34-38,55-56
+  s_dba41136531d82::t_12f898d05b3ecd 47-48
+packages/code-mode-sdk/README.md
+  s_dba41136531d82::t_ea1b18c41ad63b 63,65-71
+packages/code-mode-sdk/src/js-tools/catalog.ts
+  s_dba41136531d82::t_7541ee83ee5f7e 5-6,108-113,117-120,340-341,344-347
+  s_dba41136531d82::t_a03e536bd884c9 342-343,358,382
+crates/agent_permission_registry/src/lib.rs
+  s_dba41136531d82::t_ba3c0627b01197 2-5
+  s_dba41136531d82::t_12f898d05b3ecd 1,9-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0b2487ed37c910a6c60ae86150b9b085499100de",
+  "prompts": {},
+  "sessions": {
+    "s_dba41136531d82": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d6968615-4a55-466d-97aa-a623132ee12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
