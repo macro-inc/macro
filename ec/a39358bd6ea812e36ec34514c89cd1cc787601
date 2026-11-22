@@ -1,0 +1,21 @@
+crates/connectors/src/inbound/dto.rs
+  s_8620e367135a73::t_48d118ad8376bb 259
+services/agent_harness_service/src/cognition/server.rs
+  s_8620e367135a73::t_4d0fa95a7db6fa 977-978,989-1001
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "eca39358bd6ea812e36ec34514c89cd1cc787601",
+  "prompts": {},
+  "sessions": {
+    "s_8620e367135a73": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15e08697-488b-4482-984c-9df6826b2c36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
