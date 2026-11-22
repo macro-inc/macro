@@ -1,0 +1,32 @@
+{
+  "head": "4a4e57a5df2272825afbd9c976e9458fb4293660",
+  "integration": "97e32ba9d31f977d742414da52edf940e35c4d71",
+  "traceId": "349b6953c2c27bd243295244aa000c44",
+  "httpStatus": 200,
+  "data": {
+    "input": "labelled DSS-host test client",
+    "ownChannelStatus": 200,
+    "foreignChannelStatus": 403,
+    "unifiedSearchStatus": 403,
+    "readStatus": 200,
+    "readHasMarker": true,
+    "permissionTokenStatus": 403,
+    "documentWriteStatus": 403,
+    "taskCreateStatus": 403,
+    "emailReadStatus": 403,
+    "taskAssignmentStatus": 403,
+    "bookingStatuses": [
+      403,
+      403,
+      403
+    ],
+    "personalReadStatuses": [
+      403,
+      403,
+      403,
+      403,
+      403
+    ],
+    "unchanged": true
+  }
+}

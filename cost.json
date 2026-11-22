@@ -1,0 +1,10 @@
+{
+  "pricedUsd": 0.2587,
+  "unpricedCalls": 0,
+  "calls": 3,
+  "inputTokens": 3013,
+  "cacheReadTokens": 52507,
+  "cacheWriteTokens": 30447,
+  "outputTokens": 2568,
+  "includes": "all attempts since first proof browser activity"
+}

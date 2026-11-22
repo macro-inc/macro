@@ -1,0 +1,730 @@
+{
+  "head": "4a4e57a5df2272825afbd9c976e9458fb4293660",
+  "integration": "97e32ba9d31f977d742414da52edf940e35c4d71",
+  "mentionId": "01a20237-cad5-7578-a6be-c5a47d622f67",
+  "capturedBeforeTestClient": true,
+  "connectedMintAndRead": true,
+  "channelReadAndImportRefusal": true,
+  "traces": [
+    {
+      "traceId": "13046723450f909b1c7118c6b0370370",
+      "minted": true,
+      "documentContentRead200": true,
+      "channelMessagesRead200": false,
+      "importLoadAttempt": false,
+      "spans": [
+        {
+          "name": "fetchHandler POST",
+          "spanId": "pApQyLO6w9A=",
+          "parentSpanId": "ak/Ea/9wPT0=",
+          "attrs": {
+            "http.request.method": "POST",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "fetch GET sync-service:8787",
+          "spanId": "dFTlI9lTzFo=",
+          "parentSpanId": "NUuwGej99Ww=",
+          "attrs": {
+            "http.request.method": "GET",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "fetchHandler POST",
+          "spanId": "l9nYzUuwRnE=",
+          "parentSpanId": "1GTL3Va59I8=",
+          "attrs": {
+            "http.request.method": "POST",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "fetch GET sync-service:8787",
+          "spanId": "w60CLarqzBs=",
+          "parentSpanId": "AsC2eUIzpHk=",
+          "attrs": {
+            "http.request.method": "GET",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "p4RKselLp20=",
+          "parentSpanId": "k19BiZ3ti64=",
+          "attrs": {
+            "http.route": "/calendars",
+            "http.request.method": "GET",
+            "http.response.status_code": "403"
+          }
+        },
+        {
+          "name": "mint_for_channel_mention",
+          "spanId": "Lcjmao655hM=",
+          "parentSpanId": "4xkJfBUc2n8=",
+          "attrs": {
+            "channel_mention_id": "01a20237-cad5-7578-a6be-c5a47d622f67",
+            "channel_mention_channel_id": "Some(01a20237-2240-7f96-8b92-cbe696d1cf23)"
+          }
+        },
+        {
+          "name": "code_mode.internal_user_execution",
+          "spanId": "is01SnCsXNU=",
+          "parentSpanId": "8j/Tl1jcpfo=",
+          "attrs": {
+            "message_id": "01a20237-cad5-7578-a6be-c5a47d622f67"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "8j/Tl1jcpfo=",
+          "parentSpanId": "X+PL9cDeoRg=",
+          "attrs": {
+            "http.route": "/internal/code-mode/user-executions",
+            "http.request.method": "POST",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "9srQ1E0jDkg=",
+          "parentSpanId": "VEJCXSjY+qo=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "VEJCXSjY+qo=",
+          "parentSpanId": "SQOme5Jm9P8=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_metadata",
+          "spanId": "rQxeSnnQVXU=",
+          "parentSpanId": "OBP7o0oiX98=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_participants",
+          "spanId": "6xYPlXSy+vQ=",
+          "parentSpanId": "13ODyxNY7tk=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_participants",
+          "spanId": "13ODyxNY7tk=",
+          "parentSpanId": "OBP7o0oiX98=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_handler",
+          "spanId": "OBP7o0oiX98=",
+          "parentSpanId": "21vXR+7v+Z4=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "agent_sdk_request",
+          "spanId": "PQSEze9zyHk=",
+          "parentSpanId": "6ck+23V0cIg=",
+          "attrs": {
+            "channel_mention_id": "01a20237-cad5-7578-a6be-c5a47d622f67"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "6ck+23V0cIg=",
+          "parentSpanId": "kk5+H9oae0E=",
+          "attrs": {
+            "http.route": "/channels/{channel_id}",
+            "http.request.method": "GET",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "kBYwUdjAYjU=",
+          "parentSpanId": "D78nsVLqScI=",
+          "attrs": {
+            "http.route": "/channels/{channel_id}",
+            "http.request.method": "GET",
+            "http.response.status_code": "403"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "Wf4/D/3NzLc=",
+          "parentSpanId": "dELl+Z+g3P4=",
+          "attrs": {
+            "http.route": "/search",
+            "http.request.method": "POST",
+            "http.response.status_code": "403"
+          }
+        },
+        {
+          "name": "agent_sdk_request",
+          "spanId": "+2LnwQwFNiQ=",
+          "parentSpanId": "Bn/jiBBxeNs=",
+          "attrs": {
+            "channel_mention_id": "01a20237-cad5-7578-a6be-c5a47d622f67"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "Bn/jiBBxeNs=",
+          "parentSpanId": "fZauSs+/Uao=",
+          "attrs": {
+            "http.route": "/documents/{document_id}/markdown",
+            "http.request.method": "GET",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "fyaPRwd4vwY=",
+          "parentSpanId": "YzZWEA5koD0=",
+          "attrs": {
+            "http.route": "/documents/permissions_token/{document_id}",
+            "http.request.method": "POST",
+            "http.response.status_code": "403"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "YA/t5DAwHsg=",
+          "parentSpanId": "gTIzl5fhD6g=",
+          "attrs": {
+            "http.route": "/documents/{document_id}/markdown",
+            "http.request.method": "PUT",
+            "http.response.status_code": "403"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "QgjxgRvJoiY=",
+          "parentSpanId": "yxc1kLCj0Hc=",
+          "attrs": {
+            "http.route": "/documents/create_task",
+            "http.request.method": "POST",
+            "http.response.status_code": "403"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "s6dClL6omd0=",
+          "parentSpanId": "xgUDPuDvwt0=",
+          "attrs": {
+            "http.route": "/properties/entities/{entity_type}/{entity_id}/{property_id}",
+            "http.request.method": "PUT",
+            "http.response.status_code": "403"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "vELMr9yQrYE=",
+          "parentSpanId": "E/VRSBNwAnU=",
+          "attrs": {
+            "http.route": "/documents",
+            "http.request.method": "GET",
+            "http.response.status_code": "403"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "uanIW99J8Ko=",
+          "parentSpanId": "df2+Gtf5uJk=",
+          "attrs": {
+            "http.route": "/documents/list",
+            "http.request.method": "GET",
+            "http.response.status_code": "403"
+          }
+        },
+        {
+          "name": "agent_sdk_request",
+          "spanId": "/YwyLHbFMjA=",
+          "parentSpanId": "dfMZTlUFLUc=",
+          "attrs": {
+            "channel_mention_id": "01a20237-cad5-7578-a6be-c5a47d622f67"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "dfMZTlUFLUc=",
+          "parentSpanId": "+wcLQluy1g0=",
+          "attrs": {
+            "http.route": "/documents/{document_id}/markdown",
+            "http.request.method": "GET",
+            "http.response.status_code": "200"
+          }
+        }
+      ]
+    },
+    {
+      "traceId": "d2006e69dfaea26852aaccb17e2034fc",
+      "minted": true,
+      "documentContentRead200": true,
+      "channelMessagesRead200": true,
+      "importLoadAttempt": true,
+      "spans": [
+        {
+          "name": "share_agent_creations",
+          "spanId": "sQeMWF2RMhE=",
+          "parentSpanId": "KqjVyk7VOtQ=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "channels.recheck_agent_creations",
+          "spanId": "YnJ7GHq5bJE=",
+          "parentSpanId": "sQeMWF2RMhE=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "soNjvvDD0zM=",
+          "parentSpanId": "Ycv7isZPUAU=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "Tt4Wu07/hcM=",
+          "parentSpanId": "soNjvvDD0zM=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "dbuzxWSEOxU=",
+          "parentSpanId": "sJ3hn+uhgxA=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "9nhDhn1EyHk=",
+          "parentSpanId": "dbuzxWSEOxU=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "zKTKvsn5FCA=",
+          "parentSpanId": "EqMxei+owVA=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "bRp7YJyIHd8=",
+          "parentSpanId": "zKTKvsn5FCA=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_users",
+          "spanId": "IJ6Kkq3iQ0s=",
+          "parentSpanId": "Hu57lITFkKE=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "respond",
+          "spanId": "ePYLtuBttyg=",
+          "parentSpanId": "yEryyu5zpu0=",
+          "attrs": {
+            "message_id": "01a20237-cad5-7578-a6be-c5a47d622f67",
+            "channel_id": "Some(01a20237-2240-7f96-8b92-cbe696d1cf23)"
+          }
+        },
+        {
+          "name": "invoke_agent",
+          "spanId": "W9EKN9PxIvM=",
+          "parentSpanId": "ePYLtuBttyg=",
+          "attrs": {
+            "gen_ai.operation.name": "invoke_agent"
+          }
+        },
+        {
+          "name": "chat_streaming",
+          "spanId": "MIf1bsgBsJ0=",
+          "parentSpanId": "W9EKN9PxIvM=",
+          "attrs": {
+            "gen_ai.operation.name": "chat_streaming"
+          }
+        },
+        {
+          "name": "execute_tool",
+          "spanId": "5LopmlVww2c=",
+          "parentSpanId": "W9EKN9PxIvM=",
+          "attrs": {
+            "gen_ai.tool.name": "LoadTools",
+            "gen_ai.operation.name": "execute_tool",
+            "import_tool_refusal": {
+              "loaded": [],
+              "not_found": [
+                "ImportFromNotion"
+              ]
+            }
+          }
+        },
+        {
+          "name": "execute_tool",
+          "spanId": "rSw47LRPvAs=",
+          "parentSpanId": "W9EKN9PxIvM=",
+          "attrs": {
+            "gen_ai.tool.name": "DescribeCodeTools",
+            "gen_ai.operation.name": "execute_tool"
+          }
+        },
+        {
+          "name": "call",
+          "spanId": "na7p7DLgTnI=",
+          "parentSpanId": "ZPyOUoKlURY=",
+          "attrs": {
+            "names": "[\"ImportFromNotion\"]"
+          }
+        },
+        {
+          "name": "chat_streaming",
+          "spanId": "K0tiMf6487Q=",
+          "parentSpanId": "W9EKN9PxIvM=",
+          "attrs": {
+            "gen_ai.operation.name": "chat_streaming"
+          }
+        },
+        {
+          "name": "execute_tool",
+          "spanId": "MYcS3OGMYTw=",
+          "parentSpanId": "W9EKN9PxIvM=",
+          "attrs": {
+            "gen_ai.tool.name": "ExecuteCode",
+            "gen_ai.operation.name": "execute_tool"
+          }
+        },
+        {
+          "name": "code_mode.harness_user_execution",
+          "spanId": "EYQRXEWW1bo=",
+          "parentSpanId": "sF5/2JeUaaU=",
+          "attrs": {
+            "message_id": "01a20237-cad5-7578-a6be-c5a47d622f67"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "uvg9lY5+Cjg=",
+          "parentSpanId": "u+vssk687ns=",
+          "attrs": {
+            "http.route": "/messages/{parent_type}/{parent_id}",
+            "http.request.method": "GET",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "agent_sdk_request",
+          "spanId": "TLzSsH7rhqI=",
+          "parentSpanId": "uvg9lY5+Cjg=",
+          "attrs": {
+            "channel_mention_id": "01a20237-cad5-7578-a6be-c5a47d622f67"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "05mp2bL778E=",
+          "parentSpanId": "iyFjw6dymNA=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "ipj+vcxlxjg=",
+          "parentSpanId": "05mp2bL778E=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "E0G4k4ov+Rg=",
+          "parentSpanId": "9cUZMbSxndM=",
+          "attrs": {
+            "http.route": "/documents/{document_id}/text-content",
+            "http.request.method": "GET",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "agent_sdk_request",
+          "spanId": "5+wPOb8t8hI=",
+          "parentSpanId": "E0G4k4ov+Rg=",
+          "attrs": {
+            "channel_mention_id": "01a20237-cad5-7578-a6be-c5a47d622f67"
+          }
+        },
+        {
+          "name": "chat_streaming",
+          "spanId": "yUAzW97NgsM=",
+          "parentSpanId": "W9EKN9PxIvM=",
+          "attrs": {
+            "gen_ai.operation.name": "chat_streaming"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "qaU2PaXX+RE=",
+          "parentSpanId": "OTjC8qizVhQ=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "+xGrje3VpE4=",
+          "parentSpanId": "qaU2PaXX+RE=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "8Z48Mz23ncQ=",
+          "parentSpanId": "hltH+LPX1Kg=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "rY4IjSEmwJc=",
+          "parentSpanId": "8Z48Mz23ncQ=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_users",
+          "spanId": "7gybcI2KEcc=",
+          "parentSpanId": "+ZRGXOMoSiQ=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_users",
+          "spanId": "R+6p8df+o+s=",
+          "parentSpanId": "7gybcI2KEcc=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "channel.message_posted_notifications",
+          "spanId": "Y3K+GrJcDxY=",
+          "parentSpanId": "GNjGI8GCHpM=",
+          "attrs": {
+            "message_id": "01a20237-cb06-75bc-84c8-a77bb4da358b",
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "send_unregistered_dm_email",
+          "spanId": "KB6MgIIU+M4=",
+          "parentSpanId": "Y3K+GrJcDxY=",
+          "attrs": {
+            "message_id": "01a20237-cb06-75bc-84c8-a77bb4da358b",
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "Rz6UH5i7o6M=",
+          "parentSpanId": "8BX80jl6I8E=",
+          "attrs": {
+            "http.route": "/message/batch_send",
+            "http.request.method": "POST",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "1IcYBZ7+Pbk=",
+          "parentSpanId": "KqjVyk7VOtQ=",
+          "attrs": {
+            "http.route": "/message/batch_send",
+            "http.request.method": "POST",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "evaluate",
+          "spanId": "slM8l7Zd0cA=",
+          "parentSpanId": "oIuWn5WWrTo=",
+          "attrs": {
+            "message_id": "01a20237-cb06-75bc-84c8-a77bb4da358b"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "96iRpxxNsFw=",
+          "parentSpanId": "dQ+HG6WOgfM=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "DfOIJHV6O+4=",
+          "parentSpanId": "96iRpxxNsFw=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "evaluate_bot",
+          "spanId": "nHj7MSeBa3M=",
+          "parentSpanId": "slM8l7Zd0cA=",
+          "attrs": {
+            "message_id": "01a20237-cb06-75bc-84c8-a77bb4da358b"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "9IvYr1iGcr4=",
+          "parentSpanId": "ajshxksh+9g=",
+          "attrs": {
+            "http.route": "/cognition/decisions",
+            "http.request.method": "POST",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "classify jev-latest",
+          "spanId": "o2xWid3oraQ=",
+          "parentSpanId": "9o6BWtbv1is=",
+          "attrs": {
+            "gen_ai.operation.name": "classify",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "Ms/bbJtPrP8=",
+          "parentSpanId": "FpFcFuaWguo=",
+          "attrs": {
+            "http.route": "/cognition/decisions",
+            "http.request.method": "POST",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "classify jev-latest",
+          "spanId": "k8qYKRsTORE=",
+          "parentSpanId": "srvEa1ytHS4=",
+          "attrs": {
+            "gen_ai.operation.name": "classify",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "http.request",
+          "spanId": "NdJeF+2NZUU=",
+          "parentSpanId": "EYQRXEWW1bo=",
+          "attrs": {
+            "http.route": "/internal/code-mode/user-executions",
+            "http.request.method": "POST",
+            "http.response.status_code": "200"
+          }
+        },
+        {
+          "name": "code_mode.internal_user_execution",
+          "spanId": "Xa7LURl0gEA=",
+          "parentSpanId": "NdJeF+2NZUU=",
+          "attrs": {
+            "message_id": "01a20237-cad5-7578-a6be-c5a47d622f67"
+          }
+        },
+        {
+          "name": "mint_for_channel_mention",
+          "spanId": "cXmUGl8WO7s=",
+          "parentSpanId": "0KTVWxf5/t0=",
+          "attrs": {
+            "channel_mention_id": "01a20237-cad5-7578-a6be-c5a47d622f67",
+            "channel_mention_channel_id": "Some(01a20237-2240-7f96-8b92-cbe696d1cf23)"
+          }
+        },
+        {
+          "name": "evaluate",
+          "spanId": "qdm1PkSeULc=",
+          "parentSpanId": "6oaeJ8Zh8Ew=",
+          "attrs": {
+            "message_id": "01a20237-cb06-75bc-84c8-a77bb4da358b"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "1GsWPBpAIUM=",
+          "parentSpanId": "LtpRQF80Fl4=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_role",
+          "spanId": "pO7kemugQMo=",
+          "parentSpanId": "1GsWPBpAIUM=",
+          "attrs": {
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "evaluate_bot",
+          "spanId": "9/tF9ukYYX4=",
+          "parentSpanId": "qdm1PkSeULc=",
+          "attrs": {
+            "message_id": "01a20237-cb06-75bc-84c8-a77bb4da358b"
+          }
+        },
+        {
+          "name": "get_channel_message_by_id",
+          "spanId": "KvStCF/iJdk=",
+          "parentSpanId": "CH2XYnYpArk=",
+          "attrs": {
+            "message_id": "01a20237-cb06-75bc-84c8-a77bb4da358b",
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        },
+        {
+          "name": "get_channel_message_by_id",
+          "spanId": "/9K8eUk6EVE=",
+          "parentSpanId": "D0+lypuTJKo=",
+          "attrs": {
+            "message_id": "01a20237-cb06-75bc-84c8-a77bb4da358b",
+            "channel_id": "01a20237-2240-7f96-8b92-cbe696d1cf23"
+          }
+        }
+      ]
+    }
+  ]
+}
