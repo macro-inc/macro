@@ -1,4 +1,4 @@
-use super::attach_error;
+use super::{attach_error, refused};
 use agent_code_mode::domain::CodeModeError;
 use import::domain::ports::{ImportError, UnreviewableRun};
 
@@ -34,5 +34,18 @@ fn a_review_without_a_plan_is_refused() {
     assert!(
         message.contains("there is no import plan to review"),
         "{message}"
+    );
+}
+
+#[test]
+fn a_review_refused_before_it_is_saved_names_no_review() {
+    let CodeModeError::Invalid(message) = refused(&UnreviewableRun::Failed {
+        error: Some("Notion was unreachable".into()),
+    }) else {
+        panic!("expected a refusal the agent reads");
+    };
+    assert_eq!(
+        message,
+        "The import review was not created: the import plan failed: Notion was unreachable; nothing can be reviewed until it is planned again. Tell the user why instead of presenting it again."
     );
 }

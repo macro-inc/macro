@@ -38,7 +38,12 @@ fn import_source(
 /// tells the user instead of presenting an empty plan.
 fn attach_error(review: uuid::Uuid, error: import::domain::ports::ImportError) -> CodeModeError {
     match error {
-        import::domain::ports::ImportError::RunNotReviewable(refusal) => refused(review, &refusal),
+        import::domain::ports::ImportError::RunNotReviewable(refusal) => {
+            tracing::info!(refusal = ?refusal, %review, "saved import review refused");
+            CodeModeError::Invalid(format!(
+                "Review {review} was not presented: {refusal}. Tell the user why instead of presenting it again."
+            ))
+        }
         error => {
             tracing::warn!(error = ?error, %review, "could not tie the import plan to its review");
             CodeModeError::Invalid(format!(
@@ -49,10 +54,11 @@ fn attach_error(review: uuid::Uuid, error: import::domain::ports::ImportError) -
 }
 
 /// The agent hears why an import review cannot be shown, and tells the user.
-fn refused(review: uuid::Uuid, refusal: &UnreviewableRun) -> CodeModeError {
-    tracing::info!(refusal = ?refusal, %review, "import review refused");
+/// Nothing was saved, so the message names no review.
+fn refused(refusal: &UnreviewableRun) -> CodeModeError {
+    tracing::info!(refusal = ?refusal, "import review refused before it was saved");
     CodeModeError::Invalid(format!(
-        "Review {review} was not presented: {refusal}. Tell the user why instead of presenting it again."
+        "The import review was not created: {refusal}. Tell the user why instead of presenting it again."
     ))
 }
 
@@ -117,7 +123,7 @@ where
             Some(status) => UnreviewableRun::of(status, report.error),
         };
         match refusal {
-            Some(refusal) => Err(refused(record.id.0, &refusal)),
+            Some(refusal) => Err(refused(&refusal)),
             None => Ok(()),
         }
     }
