@@ -15,9 +15,10 @@ failed items remain in the dialog for retry.
 
 A channel you delete, create, rename, join or convert, and a DM or group chat
 you open, changes in your own channel list (the sidebar and every reader of the
-channel directory) as soon as the write is confirmed, before the list rereads it. Check this by renaming
-a channel and watching its row: the new name shows within a second, and a
-reload keeps it.
+channel directory) once the write is confirmed and, except for a delete, the channel is read
+back from the primary database, before the list rereads it. Check this by renaming a
+channel and watching its row: the new name shows without a reload, and a reload
+keeps it.
 
 User mentions sent by integrations may contain only `userId`. For human user
 IDs, messages and editors resolve the current name and fall back to the email
