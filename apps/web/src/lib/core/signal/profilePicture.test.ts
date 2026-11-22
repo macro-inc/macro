@@ -1,20 +1,18 @@
 import { err, ok } from 'neverthrow';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRoot } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const postProfilePictures = vi.hoisted(() => vi.fn());
 vi.mock('@service-auth/client', () => ({
   authServiceClient: { postProfilePictures },
 }));
 
-import {
-  getProfilePictureUrl,
-  handleUserPictureChanged,
-  refreshCachedProfilePictures,
-  refreshCachedProfilePicturesOnReconnect,
-  refreshProfilePicture,
-} from './profilePicture';
+type Module = typeof import('./profilePicture');
+let pictures: Module;
 
-const picturesFor = (url?: string) => (args: { user_id_list: string[] }) =>
+type Args = { user_id_list: string[] };
+
+const picturesFor = (url?: string) => (args: Args) =>
   Promise.resolve(
     ok({ pictures: args.user_id_list.map((id) => ({ id, url })) })
   );
@@ -22,41 +20,83 @@ const picturesFor = (url?: string) => (args: { user_id_list: string[] }) =>
 /** Like the real server: users without a picture are left out. */
 const noPictures = () => Promise.resolve(ok({ pictures: [] }));
 
-describe('profile picture refresh', () => {
-  beforeEach(() => {
+const requestedIds = () =>
+  postProfilePictures.mock.calls.map(([args]) => [
+    ...(args as Args).user_id_list,
+  ]);
+
+/** Past the reconnect jitter and the batch wait. */
+const AFTER_RECONNECT_MS = 2_100;
+
+/** Mounts an avatar for `id` the way a component does; returns its url and unmount. */
+function mount(id: string) {
+  return createRoot((dispose) => {
+    const [url] = pictures.useProfilePictureUrl(id);
+    return { url, unmount: dispose };
+  });
+}
+
+/** A request that answers only when released, and reports when it was sent. */
+function gated() {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let sent!: () => void;
+  const wasSent = new Promise<void>((resolve) => (sent = resolve));
+  return { gate, release, sent, wasSent };
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+describe('profile pictures', () => {
+  beforeEach(async () => {
+    vi.resetModules();
     postProfilePictures.mockReset();
+    pictures = await import('./profilePicture');
   });
 
-  it('does not fetch users that are not cached', async () => {
-    await refreshProfilePicture('macro|nobody@example.com');
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('loads avatars mounted together in one request', async () => {
+    postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
+    const ids = ['macro|a@example.com', 'macro|b@example.com'];
+    const avatars = ids.map(mount);
+    mount(ids[0]);
+    await vi.waitFor(() => expect(avatars[1].url()).toBe('https://x/file/1'));
+    expect(requestedIds()).toEqual([ids]);
+  });
+
+  it('does not refresh users that are not cached', async () => {
+    await pictures.refreshProfilePicture('macro|nobody@example.com');
     expect(postProfilePictures).not.toHaveBeenCalled();
   });
 
   it('refetches a cached user and updates the url', async () => {
     const id = 'macro|cached@example.com';
     postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
-    expect(await getProfilePictureUrl(id)).toBe('https://x/file/1');
+    expect(await pictures.getProfilePictureUrl(id)).toBe('https://x/file/1');
 
     postProfilePictures.mockImplementation(picturesFor('https://x/file/2'));
-    await refreshProfilePicture(id);
+    await pictures.refreshProfilePicture(id);
     expect(postProfilePictures).toHaveBeenLastCalledWith({
       user_id_list: [id],
     });
-    expect(await getProfilePictureUrl(id)).toBe('https://x/file/2');
+    expect(await pictures.getProfilePictureUrl(id)).toBe('https://x/file/2');
   });
 
   it('handles a removed picture', async () => {
     const id = 'macro|removed@example.com';
     postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
-    await getProfilePictureUrl(id);
+    await pictures.getProfilePictureUrl(id);
     postProfilePictures.mockImplementation(picturesFor(undefined));
-    await refreshProfilePicture(id);
-    expect(await getProfilePictureUrl(id)).toBeUndefined();
+    await pictures.refreshProfilePicture(id);
+    expect(await pictures.getProfilePictureUrl(id)).toBeUndefined();
   });
 
   it('ignores malformed payloads', () => {
     for (const bad of [undefined, null, {}, { user_id: 1 }, { user_id: '' }]) {
-      handleUserPictureChanged(bad);
+      pictures.handleUserPictureChanged(bad);
     }
     expect(postProfilePictures).not.toHaveBeenCalled();
   });
@@ -64,196 +104,18 @@ describe('profile picture refresh', () => {
   it('refreshes the cached user from a valid payload', async () => {
     const id = 'macro|handler@example.com';
     postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
-    await getProfilePictureUrl(id);
+    await pictures.getProfilePictureUrl(id);
     postProfilePictures.mockClear();
-    handleUserPictureChanged({ user_id: id });
+    pictures.handleUserPictureChanged({ user_id: id });
     await vi.waitFor(() =>
       expect(postProfilePictures).toHaveBeenCalledTimes(1)
     );
   });
 
-  it('refreshes every cached user after a reconnect, in batches', async () => {
-    const ids = Array.from(
-      { length: 120 },
-      (_, i) => `macro|resync${i}@example.com`
-    );
-    postProfilePictures.mockImplementation(picturesFor('https://x/file/old'));
-    await Promise.all(ids.map((id) => getProfilePictureUrl(id)));
-
-    postProfilePictures.mockClear();
-    postProfilePictures.mockImplementation(picturesFor('https://x/file/new'));
-    await refreshCachedProfilePictures();
-
-    const requested = postProfilePictures.mock.calls.flatMap(
-      ([args]) => args.user_id_list as string[]
-    );
-    expect(requested).toEqual(expect.arrayContaining(ids));
-    for (const [args] of postProfilePictures.mock.calls) {
-      expect(args.user_id_list.length).toBeLessThanOrEqual(100);
-    }
-    for (const id of ids) {
-      expect(await getProfilePictureUrl(id)).toBe('https://x/file/new');
-    }
-  });
-
-  it('keeps cached urls when a reconnect refresh fails', async () => {
-    const id = 'macro|resync-fail@example.com';
-    postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
-    await getProfilePictureUrl(id);
-    postProfilePictures.mockImplementation(() =>
-      Promise.resolve(err(new Error('down')))
-    );
-    await refreshCachedProfilePictures();
-    expect(await getProfilePictureUrl(id)).toBe('https://x/file/1');
-  });
-
   it('loads users the server returns no picture for', async () => {
     const id = 'macro|no-picture@example.com';
     postProfilePictures.mockImplementation(noPictures);
-    expect(await getProfilePictureUrl(id)).toBeUndefined();
-  });
-
-  it('picks up a picture set while a reconnect missed the frame', async () => {
-    const id = 'macro|new-agent@example.com';
-    postProfilePictures.mockImplementation(noPictures);
-    await getProfilePictureUrl(id);
-
-    postProfilePictures.mockImplementation(picturesFor('https://x/file/set'));
-    await refreshCachedProfilePictures();
-    expect(await getProfilePictureUrl(id)).toBe('https://x/file/set');
-  });
-
-  it('does not overwrite an entry written after the batch was sent', async () => {
-    const id = 'macro|race@example.com';
-    postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
-    await getProfilePictureUrl(id);
-
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => (release = resolve));
-    let sent!: () => void;
-    const batchSent = new Promise<void>((resolve) => (sent = resolve));
-    // The sweep's batch for this user answers only after the live refetch.
-    postProfilePictures.mockImplementation(
-      async (args: { user_id_list: string[] }) => {
-        if (args.user_id_list.length === 1) {
-          return picturesFor('https://x/file/new')(args);
-        }
-        if (args.user_id_list.includes(id)) {
-          sent();
-          await gate;
-        }
-        return picturesFor('https://x/file/stale')(args);
-      }
-    );
-    const sweep = refreshCachedProfilePictures();
-
-    await batchSent;
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    await refreshProfilePicture(id);
-    release();
-    await sweep;
-    expect(await getProfilePictureUrl(id)).toBe('https://x/file/new');
-  });
-
-  it('coalesces overlapping reconnects into one extra pass', async () => {
-    const id = 'macro|coalesce@example.com';
-    postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
-    await getProfilePictureUrl(id);
-    postProfilePictures.mockClear();
-
-    refreshCachedProfilePicturesOnReconnect();
-    refreshCachedProfilePicturesOnReconnect();
-    refreshCachedProfilePicturesOnReconnect();
-    await vi.waitFor(() => {
-      const sweeps = postProfilePictures.mock.calls.filter(([args]) =>
-        args.user_id_list.includes(id)
-      );
-      expect(sweeps).toHaveLength(2);
-    });
-  });
-
-  it('keeps a live update when an older sweep batch answers in between', async () => {
-    const id = 'macro|race-mirror@example.com';
-    postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
-    await getProfilePictureUrl(id);
-
-    let releaseSweep!: () => void;
-    const sweepGate = new Promise<void>((resolve) => (releaseSweep = resolve));
-    let sweepSent!: () => void;
-    const sweepWasSent = new Promise<void>((resolve) => (sweepSent = resolve));
-    let releaseLive!: () => void;
-    const liveGate = new Promise<void>((resolve) => (releaseLive = resolve));
-    let liveSent!: () => void;
-    const liveWasSent = new Promise<void>((resolve) => (liveSent = resolve));
-    postProfilePictures.mockImplementation(
-      async (args: { user_id_list: string[] }) => {
-        if (args.user_id_list.length === 1 && args.user_id_list[0] === id) {
-          liveSent();
-          await liveGate;
-          return picturesFor('https://x/file/new')(args);
-        }
-        if (args.user_id_list.includes(id)) {
-          sweepSent();
-          await sweepGate;
-          return picturesFor('https://x/file/stale')(args);
-        }
-        return picturesFor('https://x/file/stale')(args);
-      }
-    );
-
-    // Sweep sent first, then the live refetch; the sweep answers between the
-    // live request and its response.
-    const sweep = refreshCachedProfilePictures();
-    await sweepWasSent;
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    const live = refreshProfilePicture(id);
-    await liveWasSent;
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    releaseSweep();
-    await sweep;
-    releaseLive();
-    await live;
-    expect(await getProfilePictureUrl(id)).toBe('https://x/file/new');
-  });
-
-  it('keeps a live update when an older first-load fetch answers in between', async () => {
-    const id = 'macro|race-queue@example.com';
-    let releaseQueue!: () => void;
-    const queueGate = new Promise<void>((resolve) => (releaseQueue = resolve));
-    let queueSent!: () => void;
-    const queueWasSent = new Promise<void>((resolve) => (queueSent = resolve));
-    let releaseLive!: () => void;
-    const liveGate = new Promise<void>((resolve) => (releaseLive = resolve));
-    let liveSent!: () => void;
-    const liveWasSent = new Promise<void>((resolve) => (liveSent = resolve));
-    let calls = 0;
-    postProfilePictures.mockImplementation(
-      async (args: { user_id_list: string[] }) => {
-        calls += 1;
-        if (calls === 1) {
-          queueSent();
-          await queueGate;
-          return picturesFor('https://x/file/stale')(args);
-        }
-        liveSent();
-        await liveGate;
-        return picturesFor('https://x/file/new')(args);
-      }
-    );
-
-    // First mount queues a fetch; the live refetch is sent while it's in
-    // flight, and the first-load response answers before the live one.
-    const loaded = getProfilePictureUrl(id);
-    await queueWasSent;
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    const live = refreshProfilePicture(id);
-    await liveWasSent;
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    releaseQueue();
-    await loaded;
-    releaseLive();
-    await live;
-    expect(await getProfilePictureUrl(id)).toBe('https://x/file/new');
+    expect(await pictures.getProfilePictureUrl(id)).toBeUndefined();
   });
 
   it('retries a first load that failed instead of waiting forever', async () => {
@@ -261,6 +123,252 @@ describe('profile picture refresh', () => {
     postProfilePictures.mockImplementation(() =>
       Promise.resolve(err(new Error('down')))
     );
-    expect(await getProfilePictureUrl(id)).toBeUndefined();
+    expect(await pictures.getProfilePictureUrl(id)).toBeUndefined();
+
+    postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
+    expect(await pictures.getProfilePictureUrl(id)).toBe('https://x/file/1');
+  });
+
+  describe('on reconnect', () => {
+    it('fetches nothing for users no avatar shows', async () => {
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
+      const ids = Array.from(
+        { length: 150 },
+        (_, i) => `macro|unmounted${i}@example.com`
+      );
+      await Promise.all(ids.map((id) => pictures.getProfilePictureUrl(id)));
+      const avatar = mount('macro|gone@example.com');
+      await vi.waitFor(() => expect(avatar.url()).toBe('https://x/file/1'));
+      avatar.unmount();
+      postProfilePictures.mockClear();
+
+      vi.useFakeTimers();
+      pictures.invalidateProfilePicturesOnReconnect();
+      await vi.advanceTimersByTimeAsync(AFTER_RECONNECT_MS);
+      expect(postProfilePictures).not.toHaveBeenCalled();
+    });
+
+    it('refetches mounted avatars in one batched request', async () => {
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/old'));
+      const mounted = Array.from(
+        { length: 5 },
+        (_, i) => `macro|mounted${i}@example.com`
+      );
+      const avatars = mounted.map(mount);
+      mount(mounted[0]);
+      await pictures.getProfilePictureUrl('macro|unmounted@example.com');
+      await vi.waitFor(() =>
+        expect(avatars.map((a) => a.url())).toEqual(
+          mounted.map(() => 'https://x/file/old')
+        )
+      );
+      postProfilePictures.mockClear();
+
+      // The picture changed while the socket was down; its frame is lost.
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/new'));
+      vi.useFakeTimers();
+      pictures.invalidateProfilePicturesOnReconnect();
+      expect(postProfilePictures).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(AFTER_RECONNECT_MS);
+
+      expect(requestedIds()).toEqual([mounted]);
+      expect(avatars.map((a) => a.url())).toEqual(
+        mounted.map(() => 'https://x/file/new')
+      );
+    });
+
+    it('refetches a stale picture when it next mounts, showing the old one meanwhile', async () => {
+      const id = 'macro|later@example.com';
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/old'));
+      await pictures.getProfilePictureUrl(id);
+
+      pictures.invalidateProfilePicturesOnReconnect();
+      const fetch = gated();
+      postProfilePictures.mockImplementation(async (args: Args) => {
+        fetch.sent();
+        await fetch.gate;
+        return picturesFor('https://x/file/new')(args);
+      });
+      const avatar = mount(id);
+      expect(avatar.url()).toBe('https://x/file/old');
+      await fetch.wasSent;
+      // A second avatar mounting meanwhile shares the request.
+      mount(id);
+      fetch.release();
+      await vi.waitFor(() => expect(avatar.url()).toBe('https://x/file/new'));
+      expect(postProfilePictures).toHaveBeenCalledTimes(2);
+    });
+
+    it('returns the fresh picture when a stale one is read', async () => {
+      const id = 'macro|read@example.com';
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/old'));
+      await pictures.getProfilePictureUrl(id);
+      pictures.invalidateProfilePicturesOnReconnect();
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/new'));
+      expect(await pictures.getProfilePictureUrl(id)).toBe(
+        'https://x/file/new'
+      );
+    });
+
+    it('picks up a picture set for a user who had none', async () => {
+      const id = 'macro|new-agent@example.com';
+      postProfilePictures.mockImplementation(noPictures);
+      const avatar = mount(id);
+      await vi.waitFor(() => expect(postProfilePictures).toHaveBeenCalled());
+      expect(avatar.url()).toBeUndefined();
+
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/set'));
+      vi.useFakeTimers();
+      pictures.invalidateProfilePicturesOnReconnect();
+      await vi.advanceTimersByTimeAsync(AFTER_RECONNECT_MS);
+      expect(avatar.url()).toBe('https://x/file/set');
+    });
+
+    it('coalesces overlapping reconnects into one request', async () => {
+      const id = 'macro|coalesce@example.com';
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
+      const avatar = mount(id);
+      await vi.waitFor(() => expect(avatar.url()).toBe('https://x/file/1'));
+      postProfilePictures.mockClear();
+
+      vi.useFakeTimers();
+      pictures.invalidateProfilePicturesOnReconnect();
+      pictures.invalidateProfilePicturesOnReconnect();
+      await vi.advanceTimersByTimeAsync(100);
+      pictures.invalidateProfilePicturesOnReconnect();
+      await vi.advanceTimersByTimeAsync(AFTER_RECONNECT_MS * 2);
+      expect(requestedIds()).toEqual([[id]]);
+    });
+
+    it('keeps cached urls when the refetch fails, and retries on the next mount', async () => {
+      const id = 'macro|resync-fail@example.com';
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
+      const avatar = mount(id);
+      await vi.waitFor(() => expect(avatar.url()).toBe('https://x/file/1'));
+
+      postProfilePictures.mockImplementation(() =>
+        Promise.resolve(err(new Error('down')))
+      );
+      vi.useFakeTimers();
+      pictures.invalidateProfilePicturesOnReconnect();
+      await vi.advanceTimersByTimeAsync(AFTER_RECONNECT_MS);
+      expect(postProfilePictures).toHaveBeenCalledTimes(2);
+      expect(avatar.url()).toBe('https://x/file/1');
+      vi.useRealTimers();
+
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/2'));
+      mount(id);
+      await vi.waitFor(() => expect(avatar.url()).toBe('https://x/file/2'));
+    });
+
+    it('refetches again when the response was requested before the reconnect', async () => {
+      const id = 'macro|in-flight@example.com';
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/old'));
+      const avatar = mount(id);
+      await vi.waitFor(() => expect(avatar.url()).toBe('https://x/file/old'));
+
+      // A live update's request is in flight when the socket drops; the
+      // picture changes again before it reconnects.
+      const live = gated();
+      postProfilePictures.mockImplementation(async (args: Args) => {
+        live.sent();
+        await live.gate;
+        return picturesFor('https://x/file/older')(args);
+      });
+      const refreshed = pictures.refreshProfilePicture(id);
+      await live.wasSent;
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/new'));
+      vi.useFakeTimers();
+      pictures.invalidateProfilePicturesOnReconnect();
+      live.release();
+      await refreshed;
+      await vi.advanceTimersByTimeAsync(AFTER_RECONNECT_MS);
+      expect(avatar.url()).toBe('https://x/file/new');
+    });
+  });
+
+  describe('ordering', () => {
+    it('keeps a live update when an older request answers after it', async () => {
+      const id = 'macro|race@example.com';
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
+      await pictures.getProfilePictureUrl(id);
+
+      const first = gated();
+      let calls = 0;
+      postProfilePictures.mockImplementation(async (args: Args) => {
+        calls += 1;
+        if (calls === 1) {
+          first.sent();
+          await first.gate;
+          return picturesFor('https://x/file/stale')(args);
+        }
+        return picturesFor('https://x/file/new')(args);
+      });
+      const older = pictures.refreshProfilePicture(id);
+      await first.wasSent;
+      await pictures.refreshProfilePicture(id);
+      first.release();
+      await older;
+      expect(await pictures.getProfilePictureUrl(id)).toBe(
+        'https://x/file/new'
+      );
+    });
+
+    it('keeps a live update when an older first load answers in between', async () => {
+      const id = 'macro|race-queue@example.com';
+      const first = gated();
+      const live = gated();
+      let calls = 0;
+      postProfilePictures.mockImplementation(async (args: Args) => {
+        calls += 1;
+        if (calls === 1) {
+          first.sent();
+          await first.gate;
+          return picturesFor('https://x/file/stale')(args);
+        }
+        live.sent();
+        await live.gate;
+        return picturesFor('https://x/file/new')(args);
+      });
+
+      // The first load is sent, then the live refetch; the first load
+      // answers before the live one.
+      const loaded = pictures.getProfilePictureUrl(id);
+      await first.wasSent;
+      const refreshed = pictures.refreshProfilePicture(id);
+      await live.wasSent;
+      first.release();
+      await loaded;
+      await tick();
+      live.release();
+      await refreshed;
+      expect(await pictures.getProfilePictureUrl(id)).toBe(
+        'https://x/file/new'
+      );
+    });
+
+    it('keeps a picture set locally over a response requested before it', async () => {
+      const id = 'macro|uploaded@example.com';
+      const fetch = gated();
+      postProfilePictures.mockImplementation(async (args: Args) => {
+        fetch.sent();
+        await fetch.gate;
+        return picturesFor('https://x/file/server')(args);
+      });
+      const [url, controls] = createRoot(() =>
+        pictures.useProfilePictureUrl(id)
+      );
+      await fetch.wasSent;
+      controls.mutate({
+        id,
+        url: 'https://x/file/uploaded',
+        loading: false,
+        _createdAt: new Date(),
+      });
+      fetch.release();
+      await vi.waitFor(() => expect(postProfilePictures).toHaveBeenCalled());
+      await tick();
+      expect(url()).toBe('https://x/file/uploaded');
+    });
   });
 });

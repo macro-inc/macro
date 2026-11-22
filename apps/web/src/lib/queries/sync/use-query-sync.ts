@@ -61,7 +61,7 @@ import '@app/features/routines/queries/draft-jobs-sync';
 import '@app/features/routines/queries/sync';
 import {
   handleUserPictureChanged,
-  refreshCachedProfilePicturesOnReconnect,
+  invalidateProfilePicturesOnReconnect,
 } from '@core/signal/profilePicture';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -93,12 +93,12 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
   // the first connection has nothing to catch up on.
   ws.addEventListener(
     WebsocketEvent.Reconnect,
-    refreshCachedProfilePicturesOnReconnect
+    invalidateProfilePicturesOnReconnect
   );
   onCleanup(() =>
     ws.removeEventListener(
       WebsocketEvent.Reconnect,
-      refreshCachedProfilePicturesOnReconnect
+      invalidateProfilePicturesOnReconnect
     )
   );
   ws.addEventListener(WebsocketEvent.Open, invalidateBotProfiles);
