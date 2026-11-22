@@ -1526,7 +1526,7 @@ describe('soup backfill checkpoint locks', () => {
     const initiatives = lane('initiatives', done());
     const coreTab = hold(key(core));
     const initiativesTab = hold(key(initiatives));
-    rejectWaits(key(initiatives));
+    const rejected = rejectWaits(key(initiatives));
     const running = gated();
     const failing = done();
     const suite = Effect.runPromise(
@@ -1536,6 +1536,7 @@ describe('soup backfill checkpoint locks', () => {
       ])
     );
     await locks.waiting(key(core));
+    await rejected;
     await coreTab.release();
     await running.fetched;
 
