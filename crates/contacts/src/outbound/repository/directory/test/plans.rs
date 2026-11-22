@@ -122,7 +122,12 @@ async fn seed(pool: &PgPool) {
     .execute(pool)
     .await
     .unwrap();
-    sqlx::query!("VACUUM (ANALYZE) contact_list_members, contact_inbox_members, team_user")
+    // FREEZE, not a plain VACUUM: a plain one skips any page it cannot
+    // cleanup-lock and leaves it out of the visibility map, so index-only
+    // scans fetch heap tuples. Under parallel tests on Postgres 14, the
+    // checkpoint each CREATE DATABASE forces can hold such pins. FREEZE
+    // waits for the lock instead.
+    sqlx::query!("VACUUM (FREEZE, ANALYZE) contact_list_members, contact_inbox_members, team_user")
         .execute(pool)
         .await
         .unwrap();
