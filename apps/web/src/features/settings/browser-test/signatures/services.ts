@@ -7,9 +7,12 @@ import type {
   ListLinksResponse,
   Settings,
 } from '@service-email/generated/schemas';
+import type { ChannelDirectoryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { QueryClient, useQuery } from '@tanstack/solid-query';
+import type { Client } from '@urql/core';
 import { ok } from 'neverthrow';
 import { batch, createMemo, createSignal } from 'solid-js';
+import { fromPromise } from 'wonka';
 import { signatureHtml } from './sample';
 
 export const queryClient = new QueryClient({
@@ -79,29 +82,57 @@ export function releaseAccountSources() {
 export function waitForReleasedSources() {
   return sourceRefresh ?? Promise.resolve();
 }
-export const storageServiceClient = {};
-export type FixtureChannel = {
-  id: string;
-  name: string;
-  updated_at: string;
-  viewed_at?: string | null;
-  participants: { user_id: string }[];
-};
-/** The account's channels, as one held read: the fixture's stand-in directory. */
-export async function fixtureChannels(): Promise<FixtureChannel[]> {
+/** The account's directory page, held like the other sources. */
+async function channelDirectoryPage() {
   const owner = activeViewer();
   const name =
     activeViewer() === link.macro_id ? 'First channel' : 'Second channel';
   await holdSourceResponse();
-  return [
-    {
-      id: '00000000-0000-4000-8000-000000000001',
-      name,
-      updated_at: '2026-01-01T00:00:00Z',
-      participants: [{ user_id: owner }, { user_id: 'macro|peer@example.com' }],
+  const id = '00000000-0000-4000-8000-000000000001';
+  const at = '2026-01-01T00:00:00Z';
+  const participant = (userId: string) => ({
+    channelId: id,
+    userId,
+    role: 'MEMBER',
+    joinedAt: at,
+    leftAt: null,
+  });
+  const channel: ChannelDirectoryFieldsFragment = {
+    __typename: 'GraphqlSoupChannel',
+    id,
+    name,
+    channelType: 'DIRECT_MESSAGE',
+    ownerId: owner,
+    organizationId: null,
+    teamId: null,
+    autoJoinTeam: false,
+    createdAt: at,
+    updatedAt: at,
+    viewedAt: null,
+    interactedAt: null,
+    isParticipant: true,
+    frecencyScore: null,
+    participants: [participant(owner), participant('macro|peer@example.com')],
+    botParticipants: [],
+    agentDm: null,
+    latestMessage: null,
+    latestNonThreadMessage: null,
+  };
+  return {
+    data: {
+      __typename: 'Query',
+      user: {
+        __typename: 'GraphqlUser',
+        soup: { items: [channel], nextCursor: null },
+      },
     },
-  ];
+  };
 }
+/** The soup client the app's directory pages read through, answering each
+ * page with the account's held page. */
+export const fixtureSoupClient = {
+  query: () => fromPromise(channelDirectoryPage()),
+} as unknown as Pick<Client, 'query'>;
 export const useIsAuthenticated = () => () => true;
 export const useNonPrimaryEmailLinkIdHeader = () => (id: string) => id;
 export function useEmailLinksQuery() {
