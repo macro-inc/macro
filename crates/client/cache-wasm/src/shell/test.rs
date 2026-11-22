@@ -2090,6 +2090,12 @@ async fn mail_page_errors_preserve_reset_latching_and_recovery() {
     assert_reset_required(engine.bound_identity()).await;
     resolved(engine.physical_reset()).await;
 
+    // A server row outside the indexed window is classified from its stored
+    // projection, so every storage read below runs on each page.
+    request["baseline"] = serde_json::json!([{
+        "key": "GraphqlSoupEmailThread:00000000-0000-4000-8000-000000000001",
+        "sortTimestamp": "2025-01-01T00:00:00.000010Z"
+    }]);
     for fault in [
         TestStorageFault::GetBatch,
         TestStorageFault::ReconcilePredicateIndex,
