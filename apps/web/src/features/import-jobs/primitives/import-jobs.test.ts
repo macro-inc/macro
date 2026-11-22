@@ -25,6 +25,7 @@ it('drops a plan waiting for approval an hour after its last change while nothin
         slackChannelsImporting: () => 0,
       },
       createReport: () => () => undefined,
+      dismissals: { restore: () => [], save: () => {} },
     }),
   }));
   expect(jobs().map((job) => job.source)).toEqual(['linear']);
@@ -55,6 +56,7 @@ it('lets a finished import go after a few seconds and keeps a failure until dism
         slackChannelsImporting: () => 0,
       },
       createReport: () => () => undefined,
+      dismissals: { restore: () => [], save: () => {} },
     }),
   }));
   expect(jobs().map((job) => job.source)).toEqual(['notion', 'jira']);
@@ -69,4 +71,39 @@ it('lets a finished import go after a few seconds and keeps a failure until dism
   dismiss(failed.key);
   expect(jobs()).toEqual([]);
   dispose();
+});
+
+it('remembers a dismissed failure across reloads', () => {
+  const failed = {
+    source: 'jira' as const,
+    status: 'failed' as const,
+    error_kind: 'access_lost' as const,
+    updated_at: '2026-11-06T11:00:00Z',
+  };
+  const saved: (readonly string[])[] = [];
+  const first = createRoot((dispose) => ({
+    dispose,
+    ...createImportJobs({
+      runs: { runs: () => [failed], slackChannelsImporting: () => 0 },
+      createReport: () => () => undefined,
+      dismissals: { restore: () => [], save: (keys) => saved.push(keys) },
+    }),
+  }));
+  const [job] = first.jobs();
+  first.dismiss(job.key);
+  expect(first.jobs()).toEqual([]);
+  expect(saved.at(-1)).toEqual([job.key]);
+  first.dispose();
+
+  // A new tray (a reload) restores it, so the failure stays dismissed.
+  const second = createRoot((dispose) => ({
+    dispose,
+    ...createImportJobs({
+      runs: { runs: () => [failed], slackChannelsImporting: () => 0 },
+      createReport: () => () => undefined,
+      dismissals: { restore: () => saved.at(-1) ?? [], save: () => {} },
+    }),
+  }));
+  expect(second.jobs()).toEqual([]);
+  second.dispose();
 });

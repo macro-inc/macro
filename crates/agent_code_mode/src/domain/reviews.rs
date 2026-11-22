@@ -726,6 +726,9 @@ impl ReviewService {
                 } else {
                     ReviewItemStatus::Dismissed
                 };
+                // A new decision starts clean: an earlier refusal's reason
+                // no longer applies.
+                item.error = None;
             }
         }
         record.decision = Some(ReviewDecisionContext {

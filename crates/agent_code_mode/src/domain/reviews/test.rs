@@ -1560,4 +1560,25 @@ async fn an_import_the_fence_refuses_goes_back_to_pending_with_why() {
         state.error.as_deref(),
         Some("The import was not started: the import plan failed.")
     );
+
+    // Approved again once the plan is ready: the old reason is gone.
+    f.actions.refuse_import.store(false, Ordering::SeqCst);
+    f.service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            ReviewDecision::Submit {
+                revision: settled.revision,
+                items: vec![],
+            },
+        )
+        .await
+        .unwrap();
+    let approved = f.settled(row.id).await;
+    assert_eq!(
+        approved.items.states()[0].status,
+        ReviewItemStatus::Completed
+    );
+    assert_eq!(approved.items.states()[0].error, None);
 }

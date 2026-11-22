@@ -10,6 +10,7 @@ export function ImportJobsTrayView() {
   const imports = createImportJobs({
     runs: context.createRuns(),
     createReport: context.createReport,
+    dismissals: context.createDismissals(),
   });
   const [expanded, setExpanded] = createSignal(true);
 

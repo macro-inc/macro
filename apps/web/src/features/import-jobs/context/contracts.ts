@@ -2,6 +2,12 @@ import type { ImportRun, NotionImportReport } from '@service-cognition/import';
 import type { Accessor } from 'solid-js';
 import type { WorkspaceSource } from '../core/import-job';
 
+/** Where dismissed runs are remembered, so a reload keeps them hidden. */
+export type ImportDismissals = {
+  restore(): readonly string[];
+  save(keys: readonly string[]): void;
+};
+
 /** The user's import runs and the Slack channels being imported now. */
 export type ImportRunsSource = {
   runs: Accessor<readonly ImportRun[]>;
@@ -17,4 +23,6 @@ export type ImportJobsContext = {
   ): Accessor<NotionImportReport | undefined>;
   /** Open the agent session presenting an import's review. */
   openSession(sessionId: string): void;
+  /** Called once by the mounted tray. */
+  createDismissals(): ImportDismissals;
 };

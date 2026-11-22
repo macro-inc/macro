@@ -7,10 +7,11 @@ import {
   mapArray,
   onCleanup,
 } from 'solid-js';
-import type { ImportRunsSource } from '../context/contracts';
+import type { ImportDismissals, ImportRunsSource } from '../context/contracts';
 import {
   type ImportJob,
   importJob,
+  importJobKey,
   isWorkspaceSource,
   nextExpiry,
   visibleImportRuns,
@@ -19,16 +20,19 @@ import {
 
 /**
  * The tray's jobs. Each listed workspace run reads its own report, created
- * when the run appears and disposed when it leaves; dismissals last as long
- * as the tray.
+ * when the run appears and disposed when it leaves; dismissals are kept in
+ * `dismissals`, so a reload keeps a dismissed failure hidden.
  */
 export function createImportJobs(sources: {
   runs: ImportRunsSource;
   createReport: (
     source: WorkspaceSource
   ) => Accessor<NotionImportReport | undefined>;
+  dismissals: ImportDismissals;
 }) {
-  const [dismissed, setDismissed] = createSignal<readonly string[]>([]);
+  const [dismissed, setDismissed] = createSignal<readonly string[]>(
+    sources.dismissals.restore()
+  );
   const [now, setNow] = createSignal(Date.now());
 
   const visible = createMemo(() =>
@@ -71,7 +75,15 @@ export function createImportJobs(sources: {
   );
 
   function dismiss(key: string) {
-    setDismissed((previous) => [...previous, key]);
+    // Keep only keys of runs still listed by the server, so the store stays
+    // as small as the runs themselves.
+    const current = new Set(sources.runs.runs().map(importJobKey));
+    const next = [
+      ...dismissed().filter((previous) => current.has(previous)),
+      key,
+    ];
+    setDismissed(next);
+    sources.dismissals.save(next);
   }
 
   return { jobs, dismiss };

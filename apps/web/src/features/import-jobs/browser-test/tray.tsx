@@ -44,6 +44,7 @@ const context: ImportJobsContext = {
   createReport: (source) => () =>
     source === 'notion' ? notionReport() : undefined,
   openSession: (sessionId) => setOpened(sessionId),
+  createDismissals: () => ({ restore: () => [], save: () => {} }),
 };
 
 function scanNotion() {
