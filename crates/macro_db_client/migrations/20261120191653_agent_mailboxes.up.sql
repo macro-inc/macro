@@ -70,52 +70,65 @@ CREATE INDEX agent_mailboxes_sweep_idx
     ON agent_mailboxes (updated_at)
     WHERE state IN ('provisioning', 'releasing', 'paused');
 
--- Every send from an agent mailbox, kept 400 days: idempotency, the
--- per-mailbox and per-team caps, and the record a complaint is traced with.
--- Ids, counts and timestamps only: no recipients, subjects, bodies or
--- approval text. A pending send's outcome is unknown and it counts; a
--- refused one does not.
+-- Sends from an agent mailbox: idempotency and the per-mailbox and per-team
+-- caps. A row without a provider message id is in flight (outcome unknown)
+-- and counts.
 CREATE TABLE agent_mailbox_sends (
-    mailbox_id UUID NOT NULL REFERENCES agent_mailboxes (id),
+    mailbox_id UUID NOT NULL REFERENCES agent_mailboxes (id) ON DELETE CASCADE,
     idempotency_key UUID NOT NULL,
     team_id UUID NOT NULL,
     kind TEXT NOT NULL CHECK (kind IN ('message', 'reply')),
     recipient_count INTEGER NOT NULL CHECK (recipient_count > 0),
     -- SHA-256 of what the send says, so a key is never reused for another message.
     fingerprint BYTEA NOT NULL CHECK (octet_length(fingerprint) = 32),
+    provider_message_id TEXT,
+    provider_thread_id TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (mailbox_id, idempotency_key)
+);
+
+CREATE INDEX agent_mailbox_sends_window_idx
+    ON agent_mailbox_sends (mailbox_id, created_at);
+
+CREATE INDEX agent_mailbox_sends_team_window_idx
+    ON agent_mailbox_sends (team_id, created_at);
+
+-- Pruning records past their retention.
+CREATE INDEX agent_mailbox_sends_created_idx
+    ON agent_mailbox_sends (created_at);
+
+-- What each agent mailbox sent and when its owner's approval was given, kept
+-- long after the dedupe ledger is pruned. Ids, counts and timestamps only:
+-- no recipients, subjects, bodies or approval text.
+CREATE TABLE agent_mailbox_send_audit (
+    mailbox_id UUID NOT NULL REFERENCES agent_mailboxes (id),
+    idempotency_key UUID NOT NULL,
+    team_id UUID NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('message', 'reply')),
+    recipient_count INTEGER NOT NULL CHECK (recipient_count > 0),
+    fingerprint BYTEA NOT NULL CHECK (octet_length(fingerprint) = 32),
     -- pending: reserved, outcome not known yet; sent: the provider accepted
     -- it; refused: the provider definitely did not.
     outcome TEXT NOT NULL CHECK (outcome IN ('pending', 'sent', 'refused')),
     provider_message_id TEXT,
-    provider_thread_id TEXT,
-    attempts INTEGER NOT NULL DEFAULT 1 CHECK (attempts > 0),
-    -- When the send took its cap slot: its reservation, or a later one after
-    -- a refusal. The approval itself is the agent's quote, not a recorded event.
-    reserved_at TIMESTAMPTZ NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 1,
+    -- Every send needs the owner's approval, so the reservation is the
+    -- moment the approval was presented.
+    approved_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (mailbox_id, idempotency_key),
     CHECK ((outcome = 'sent') = (provider_message_id IS NOT NULL))
 );
 
--- The caps' windows: counted sends of one mailbox, and of one team.
-CREATE INDEX agent_mailbox_sends_window_idx
-    ON agent_mailbox_sends (mailbox_id, reserved_at)
-    WHERE outcome <> 'refused';
-
-CREATE INDEX agent_mailbox_sends_team_window_idx
-    ON agent_mailbox_sends (team_id, reserved_at)
-    WHERE outcome <> 'refused';
-
--- Pruning records past their retention.
-CREATE INDEX agent_mailbox_sends_reserved_idx
-    ON agent_mailbox_sends (reserved_at);
+-- Pruning audit records past their retention.
+CREATE INDEX agent_mailbox_send_audit_approved_idx
+    ON agent_mailbox_send_audit (approved_at);
 
 -- Background checks that run once per cluster per interval: a replica that
 -- moves next_run_at forward has the round.
 CREATE TABLE agent_mailbox_sweep_claims (
-    name TEXT PRIMARY KEY CHECK (name IN ('orphans', 'prune')),
+    name TEXT PRIMARY KEY CHECK (name IN ('orphans')),
     next_run_at TIMESTAMPTZ NOT NULL
 );
 
-INSERT INTO agent_mailbox_sweep_claims (name, next_run_at)
-VALUES ('orphans', '-infinity'), ('prune', '-infinity');
+INSERT INTO agent_mailbox_sweep_claims (name, next_run_at) VALUES ('orphans', '-infinity');
