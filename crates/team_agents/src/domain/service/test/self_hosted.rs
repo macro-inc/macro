@@ -1636,3 +1636,58 @@ async fn a_sweep_offboards_agents_side_by_side_so_one_hanging_revoke_costs_one_b
         );
     }
 }
+
+/// Delivery nudges that take `delay` to reach `slow`.
+struct SlowRuntimes {
+    journal: Journal,
+    slow: HarnessId,
+    delay: std::time::Duration,
+}
+
+impl TeammateRuntimes for SlowRuntimes {
+    async fn installs_changed(&self, harness: HarnessId) {
+        if harness == self.slow {
+            tokio::time::sleep(self.delay).await;
+        }
+        self.journal.record(format!("runtimes.changed {harness}"));
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_slow_nudge_to_an_unpaired_machine_doesnt_hold_up_its_revokes() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    service.installs.unentitled.lock().unwrap().push(LAPTOP);
+    // The unpaired laptop is gone: the nudge to it takes 9 s. The revoke
+    // takes 3 s.
+    let runtimes = SlowRuntimes {
+        journal: journal.clone(),
+        slow: LAPTOP,
+        delay: std::time::Duration::from_secs(9),
+    };
+    let repos = SlowRepos {
+        journal: journal.clone(),
+        hangs: "",
+        delay: std::time::Duration::from_secs(3),
+    };
+    let keys = FakeApiKeys(journal.clone(), Arc::default());
+    let offboarding = crate::domain::service::self_hosted::Offboarding {
+        repository: &service.repository,
+        api_keys: &keys,
+        repos: &repos,
+        installs: &service.installs,
+        runtimes: &runtimes,
+    };
+
+    // One after the other: 9 s, then 3 s.
+    let parked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        offboarding.offboard_host(LAPTOP),
+    )
+    .await
+    .expect("the revoke runs alongside the nudge");
+    assert_eq!(parked.unwrap(), 1);
+
+    let install = install_of(&service, &agent);
+    assert!(install.parked() && !install.revoke_pending, "{install:?}");
+}

@@ -627,25 +627,30 @@ where
                 }
             }
         }
+        // They stop them as no longer their own: this machine, and the one
+        // an agent moving here still runs on (parking ended the move, so its
+        // install is back there).
+        let mut machines = Vec::new();
         if !parked.is_empty() {
             tracing::info!(
                 parked = parked.len(),
                 "parked the agent teammates of an unpaired machine"
             );
-            // They stop them as no longer their own: this machine, and the
-            // one an agent moving here still runs on (parking ended the
-            // move, so its install is back there).
-            let mut machines = vec![harness];
+            machines.push(harness);
             for install in &parked {
                 if !machines.contains(&install.harness_id) {
                     machines.push(install.harness_id);
                 }
             }
-            for machine in machines {
-                self.runtimes.installs_changed(machine).await;
-            }
         }
-        self.revoke_each(&parked).await;
+        // The nudges are hints (an unpaired machine is often gone), so they
+        // run alongside the revokes rather than spending the caller's time
+        // before them.
+        let nudges: Vec<_> = machines
+            .into_iter()
+            .map(|machine| self.runtimes.installs_changed(machine))
+            .collect();
+        futures::join!(futures::future::join_all(nudges), self.revoke_each(&parked));
         Ok(parked.len())
     }
 

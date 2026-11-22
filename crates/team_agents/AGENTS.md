@@ -149,9 +149,9 @@ removal or demotion (`teams::domain::member_access`), and by the internal
 `POST /internal/teammate_hosts/{harness_id}/offboard` (`offboard_host`, only
 that machine's installs) that document_storage_service calls after an unpair
 (`harnesses::domain::retired`, a 10 s client timeout). `offboard_host` parks
-every agent on (or moving to) the machine first, tells it and the machine a
-parked mid-move agent was leaving (which still runs it), and only then
-revokes, so a slow revoke or the caller giving up leaves the rest parked, the
+every agent on (or moving to) the machine first, then revokes while telling
+it and the machine a parked mid-move agent was leaving (which still runs it;
+the nudges are hints and never delay a revoke), so a slow revoke or the caller giving up leaves the rest parked, the
 slow one `revoke_pending`; authentication_service's 60 s
 sweep (`offboard_unentitled_hosts`) backs both. The sweep, the removal and
 demotion hook and an unpair offboard and
