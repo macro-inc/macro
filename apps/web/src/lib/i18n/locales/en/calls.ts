@@ -153,6 +153,7 @@ export default {
   detailParts: 'Call parts',
   detailPart: 'Part {{number}}',
   detailDownloadPart: 'Download part {{number}}',
+  detailPartFileName: '{{name}} (Part {{number}})',
   detailChat: 'Chat',
   detailCallChat: 'Call chat',
   detailDetails: 'Details',

@@ -53,4 +53,39 @@ describe('call recording download', () => {
     expect(result?._unsafeUnwrap().name).toBe('Weekly sync.mp4');
     expect(result?._unsafeUnwrap().blob.size).toBe(5);
   });
+
+  it("downloads a later part's own recording as a separate file", async () => {
+    mocks.fetch.mockResolvedValue(new Response('part'));
+    const session = (recordingUrl?: string) => ({
+      startedAt: '2026-10-27T10:00:00Z',
+      endedAt: '2026-10-27T10:20:00Z',
+      recordingUrl,
+    });
+    const resumed = {
+      ...record('https://recordings.example/calls/room-1/1.mp4'),
+      sessions: [
+        session('https://recordings.example/calls/room-1/1.mp4'),
+        session('https://recordings.example/calls/room-2/2.webm'),
+        session(),
+      ],
+    };
+
+    const first = callRecordingDownloadSource(resumed, 'Weekly sync', 0);
+    const second = callRecordingDownloadSource(
+      resumed,
+      'Weekly sync (Part 2)',
+      1
+    );
+    const result = await second?.load(loadOptions());
+
+    expect(mocks.fetch.mock.calls[0][0]).toBe(
+      'https://recordings.example/calls/room-2/2.webm'
+    );
+    expect(result?._unsafeUnwrap().name).toBe('Weekly sync (Part 2).webm');
+    // Each part is its own transfer, so starting one never cancels another.
+    expect(second?.id).not.toBe(first?.id);
+    expect(callRecordingDownloadSource(resumed, 'Weekly sync', 2)).toBe(
+      undefined
+    );
+  });
 });

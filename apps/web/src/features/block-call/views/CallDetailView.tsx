@@ -18,10 +18,8 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ShareIcon from '@icon/share.svg';
-import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { useCallRecordQuery } from '@queries/call/call';
@@ -50,9 +48,9 @@ import { CallRecordingRoot } from '../component/CallRecording/CallRecordingRoot'
 import { CallSidePanelSections } from '../component/sidepanel/CallSidePanelSections';
 import type { CallTranscriptTarget } from '../constants';
 import { recordingName } from '../primitives/recording-identity';
-import { callRecordingDownloadSource } from '../queries/recording-download';
 
 import { CallDetailMobileHeader } from './CallDetailMobileHeader';
+import { createRecordingDownloadOps } from './shared/recording-download-ops';
 
 export type CallDetailData = { record: CallRecord; name: string };
 
@@ -71,8 +69,9 @@ export function useCallDetail(callId: Accessor<string>) {
 }
 
 function CallDetailMoreMenu(props: { data: CallDetailData }) {
-  const download = createFileDownload(() =>
-    callRecordingDownloadSource(props.data.record, props.data.name)
+  const downloadOps = createRecordingDownloadOps(
+    () => props.data.record,
+    () => props.data.name
   );
   const openShare = useShareModal(() => ({
     id: props.data.record.callId,
@@ -85,20 +84,7 @@ function CallDetailMoreMenu(props: { data: CallDetailData }) {
     owner: props.data.record.createdBy,
   }));
   const operations = (): ComponentProps<typeof SplitFileMenu>['ops'] => {
-    const rename = { op: 'rename' as const };
-    const remove = { op: 'delete' as const };
-    if (!props.data.record.recordingUrl) return [rename, remove];
-    return [
-      rename,
-      {
-        group: 'file',
-        label: t('entityActions.download'),
-        icon: DownloadIcon,
-        action: () =>
-          fireAndForget(download.start(), 'call-recording-download'),
-      },
-      remove,
-    ];
+    return [{ op: 'rename' }, ...downloadOps(), { op: 'delete' }];
   };
   return (
     <div class="shrink-0">
