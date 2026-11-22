@@ -1,0 +1,31 @@
+apps/web/src/features/agent-permissions/views/show-permissions-card.tsx
+  s_dba41136531d82::t_d3fa206fd52178 226-238,244,246-249,301-307,371,378
+apps/web/src/features/agent-permissions/primitives/pending-changes.ts
+  s_dba41136531d82::t_2c5eeebcc03c18 35-43
+  s_dba41136531d82::t_d3fa206fd52178 8-13,54-73,85-86,88-93,95-99,101-110
+  s_dba41136531d82::t_0c6fcb7e821d6d 4,31-33,44-45,100
+apps/web/src/features/agent-permissions/views/agent-permissions-page.test.tsx
+  s_dba41136531d82::t_3493e92effabd5 170,181,188-192,209,216-220
+  s_dba41136531d82::t_73695472e8264c 169,171-180,182-187,193-208,210-215,221-226
+apps/web/src/features/agent-permissions/core/model.ts
+  s_dba41136531d82::t_73695472e8264c 77-78
+apps/web/src/features/agent-permissions/views/agent-permissions-list.tsx
+  s_dba41136531d82::t_0c6fcb7e821d6d 11,218-220,222-226,232-237,258-261
+  s_dba41136531d82::t_d3fa206fd52178 221,244-251
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b4ca25e18bd787b37359eeda1907aa6a6dd03d20",
+  "prompts": {},
+  "sessions": {
+    "s_dba41136531d82": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d6968615-4a55-466d-97aa-a623132ee12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

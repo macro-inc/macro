@@ -1,0 +1,29 @@
+crates/agent_permission_registry/AGENTS.md
+  s_dba41136531d82::t_7e7c548803ee05 25-27,31
+crates/agent_permission_registry/registry.json
+  s_ab1058a732cc69::t_6e2e95b83f0b92 147,158,174,626,654-655
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "15696588d7d1031afa82037b8fd545c2686a9945",
+  "prompts": {},
+  "sessions": {
+    "s_ab1058a732cc69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3744eaac-6a23-4a13-8470-3dfc1e7728a7",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_dba41136531d82": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d6968615-4a55-466d-97aa-a623132ee12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
