@@ -390,6 +390,8 @@ async fn a_cors_preflight_with_no_credentials_is_not_refused_for_having_no_calle
     let request = Request::builder()
         .method(Method::OPTIONS)
         .uri("/keys")
+        .header("origin", "https://app.example")
+        .header("access-control-request-method", "POST")
         .body(Body::empty())
         .unwrap();
 
@@ -458,4 +460,28 @@ async fn the_route_walker_does_not_run_the_handler_of_a_route_that_declares_a_ca
 
     assert!(undeclared.is_empty());
     assert_eq!(RAN.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn an_options_request_that_is_not_a_cors_preflight_needs_a_caller() {
+    let router = Router::new().route(
+        "/keys",
+        on(MethodFilter::OPTIONS, Category::CredentialMint, handled),
+    );
+    for headers in [
+        vec![],
+        vec![("origin", "https://app.example")],
+        vec![("access-control-request-method", "POST")],
+    ] {
+        let mut builder = Request::builder().method(Method::OPTIONS).uri("/keys");
+        for (name, value) in &headers {
+            builder = builder.header(*name, *value);
+        }
+        let response = router
+            .clone()
+            .oneshot(builder.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{headers:?}");
+    }
 }

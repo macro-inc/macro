@@ -45,7 +45,7 @@ the axum route constructors that declare each handler's category.
   refused 403 `no_caller` (`Verdict::Unresolved`), always: there is no
   observed mode and no rollout flag for it. Two requests are exempt: a
   `Category::Public` route, which means anyone (so even an unknown scope may
-  POST to it), and a CORS preflight (`OPTIONS`), which carries no credentials
+  POST to it), and a real CORS preflight (`OPTIONS` with `Origin` and `Access-Control-Request-Method`; any other `OPTIONS` needs a caller), which carries no credentials
   by design. So a service puts a `ResolvedCaller` in every request before
   routing, from signed claims, before it categorizes a route; no route does
   yet. The span gets `route_policy.code = no_caller`.
