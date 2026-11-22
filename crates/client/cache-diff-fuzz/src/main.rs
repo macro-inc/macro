@@ -66,6 +66,12 @@ struct Args {
     /// and the storage schema version masked (see `dump::tables`).
     #[arg(long)]
     decoded_facts: bool,
+    /// Leave out stored rows whose COLUMN holds VALUE, in every table with that
+    /// column (repeatable; see `dump::tables`): rows a change stores on purpose,
+    /// such as a new derived sort fact (`attribute=NAME`) or its `meta` entry
+    /// (`key=NAME`).
+    #[arg(long, value_name = "COLUMN=VALUE", value_parser = ignore_rows)]
+    ignore_rows: Vec<(String, String)>,
     /// Compare responses without their `sourceHash` (an upgrade to a build that
     /// hashes records differently rehashes unchanged ones).
     #[arg(long)]
@@ -252,8 +258,13 @@ fn run(
         writeln!(trace, "abort {}", normalizer.text(error))?;
     }
     normalizer.freeze();
-    let tables = dump::tables(&path, args.decoded_records, args.decoded_facts)
-        .map_err(|error| rootcause::report!("{error}"))?;
+    let tables = dump::tables(
+        &path,
+        args.decoded_records,
+        args.decoded_facts,
+        &args.ignore_rows,
+    )
+    .map_err(|error| rootcause::report!("{error}"))?;
     for (table, rows) in tables {
         let rows: Vec<String> = rows.iter().map(|row| normalizer.text(row)).collect();
         let mut sorted = rows.clone();
@@ -295,6 +306,20 @@ fn run(
 }
 
 /// A share from 0 to 1; NaN and anything outside fail to parse.
+fn ignore_rows(text: &str) -> Result<(String, String), String> {
+    match text.split_once('=') {
+        Some((column, value))
+            if !column.is_empty()
+                && column
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte == b'_') =>
+        {
+            Ok((column.to_owned(), value.to_owned()))
+        }
+        _ => Err("expected COLUMN=VALUE, COLUMN of lowercase letters and `_`".to_owned()),
+    }
+}
+
 fn share(text: &str) -> Result<f64, String> {
     let value: f64 = text.parse().map_err(|error| format!("{error}"))?;
     if (0.0..=1.0).contains(&value) {

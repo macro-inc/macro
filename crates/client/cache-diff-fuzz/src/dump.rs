@@ -20,10 +20,14 @@ use turso_core::{
 /// `index_document_facts` holds each complete document's facts, decoded from its
 /// blob (storage schema 13 and later) or gathered from the fact tables (before),
 /// so builds on both sides of that schema change compare.
+///
+/// Each `(column, value)` in `ignore` leaves out the rows whose `column` holds
+/// `value` as text, in every table that has that column, everywhere above too.
 pub fn tables(
     path: &Path,
     decoded: bool,
     facts: bool,
+    ignore: &[(String, String)],
 ) -> Result<BTreeMap<String, Vec<String>>, String> {
     let io: Arc<dyn IO> = Arc::new(PlatformIO::new().map_err(|error| error.to_string())?);
     let path = path.to_str().ok_or("path is not UTF-8")?;
@@ -44,16 +48,16 @@ pub fn tables(
         let name = name.trim_matches('"').to_owned();
         let mut table = Vec::new();
         // A JSON array, so no value can run into the next one.
-        rows(&mut select(&connection, &name, "*")?, |values| {
+        rows(&mut select(&connection, ignore, &name, "*")?, |values| {
             table.push(row_text(values.iter().map(render)));
         })?;
         out.insert(name, table);
     }
     if decoded {
-        decode_records(&connection, &mut out)?;
+        decode_records(&connection, ignore, &mut out)?;
     }
     if facts {
-        decode_facts(&connection, &mut out)?;
+        decode_facts(&connection, ignore, &mut out)?;
     }
     for table in out.values_mut() {
         table.sort();
@@ -65,6 +69,7 @@ pub fn tables(
 /// Rewrites `records` and `search_documents` as [`tables`] describes for `decoded`.
 fn decode_records(
     connection: &Arc<Connection>,
+    ignore: &[(String, String)],
     out: &mut BTreeMap<String, Vec<String>>,
 ) -> Result<(), String> {
     if !out.contains_key("records") {
@@ -73,7 +78,7 @@ fn decode_records(
     let mut hashes = HashMap::new();
     let mut records = Vec::new();
     rows(
-        &mut select(connection, "records", "__typename, id, value")?,
+        &mut select(connection, ignore, "records", "__typename, id, value")?,
         |values| {
             let value = match &values[2] {
                 Value::Blob(bytes) => {
@@ -104,6 +109,7 @@ fn decode_records(
     rows(
         &mut select(
             connection,
+            ignore,
             "search_documents",
             "profile, __typename, id, bucket, search_text, timestamp_ms, source_hash",
         )?,
@@ -126,26 +132,34 @@ fn decode_records(
 /// Rewrites `meta` and `index_document_facts` as [`tables`] describes for `facts`.
 fn decode_facts(
     connection: &Arc<Connection>,
+    ignore: &[(String, String)],
     out: &mut BTreeMap<String, Vec<String>>,
 ) -> Result<(), String> {
     if out.contains_key("meta") {
         let mut meta = Vec::new();
-        rows(&mut select(connection, "meta", "key, value")?, |values| {
-            let schema =
-                matches!(&values[0], Value::Text(key) if key.as_str() == "storage_schema_version");
-            meta.push(row_text(values.iter().enumerate().map(
-                |(index, value)| match index == 1 && schema {
-                    true => "schema".to_owned(),
-                    false => render(value),
-                },
-            )));
-        })?;
+        rows(
+            &mut select(connection, ignore, "meta", "key, value")?,
+            |values| {
+                let schema = matches!(&values[0], Value::Text(key) if key.as_str() == "storage_schema_version");
+                meta.push(row_text(values.iter().enumerate().map(
+                    |(index, value)| match index == 1 && schema {
+                        true => "schema".to_owned(),
+                        false => render(value),
+                    },
+                )));
+            },
+        )?;
         out.insert("meta".into(), meta);
     }
     let mut documents = BTreeMap::new();
     if out.contains_key("index_document_facts") {
         rows(
-            &mut select(connection, "index_document_facts", "document_id, facts")?,
+            &mut select(
+                connection,
+                ignore,
+                "index_document_facts",
+                "document_id, facts",
+            )?,
             |values| {
                 // Undecodable values keep their bytes, so two different ones differ.
                 let facts = match &values[1] {
@@ -158,7 +172,7 @@ fn decode_facts(
     } else if out.contains_key("index_documents") {
         // The facts of each complete document, from the fact tables.
         rows(
-            &mut select(connection, "index_documents", "id, state")?,
+            &mut select(connection, ignore, "index_documents", "id, state")?,
             |values| {
                 if render(&values[1]) == render(&Value::from_i64(0)) {
                     documents.insert(render(&values[0]), Ok::<Vec<String>, String>(Vec::new()));
@@ -171,7 +185,7 @@ fn decode_facts(
             ("sort_facts", "s"),
         ] {
             rows(
-                &mut select(connection, table, "document_id, attribute, value")?,
+                &mut select(connection, ignore, table, "document_id, attribute, value")?,
                 |values| {
                     if let Some(Ok(facts)) = documents.get_mut(&render(&values[0])) {
                         let attribute = match &values[1] {
@@ -286,13 +300,33 @@ mod facts_blob {
     }
 }
 
-fn select(connection: &Arc<Connection>, table: &str, columns: &str) -> Result<Statement, String> {
+fn select(
+    connection: &Arc<Connection>,
+    ignore: &[(String, String)],
+    table: &str,
+    columns: &str,
+) -> Result<Statement, String> {
+    let name = quoted(table, '"');
+    let mut clause = String::new();
+    for (column, value) in ignore {
+        let column = quoted(column, '"');
+        // Only in tables that have the column.
+        if connection
+            .prepare(format!("SELECT {column} FROM {name} LIMIT 0"))
+            .is_ok()
+        {
+            let word = if clause.is_empty() { "WHERE" } else { "AND" };
+            clause.push_str(&format!(" {word} {column} IS NOT {}", quoted(value, '\'')));
+        }
+    }
     connection
-        .prepare(format!(
-            "SELECT {columns} FROM \"{}\"",
-            table.replace('"', "\"\"")
-        ))
+        .prepare(format!("SELECT {columns} FROM {name}{clause}"))
         .map_err(|error| format!("{table}: {error}"))
+}
+
+fn quoted(name: &str, quote: char) -> String {
+    let doubled = name.replace(quote, &format!("{quote}{quote}"));
+    format!("{quote}{doubled}{quote}")
 }
 
 fn row_text(values: impl Iterator<Item = String>) -> String {
