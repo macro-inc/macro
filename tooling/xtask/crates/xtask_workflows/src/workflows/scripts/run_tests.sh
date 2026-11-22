@@ -21,6 +21,7 @@ set -euo pipefail
 common=(
   --config 'profile.dev.package."*".debug=false'
   --all-features --no-tests=pass
+  --no-fail-fast # TEMP: collect every red regression before the behaviour fix
 )
 
 # The Deno tests (code execution, authenticated SDK runs, routine code checks and
