@@ -912,6 +912,9 @@ impl NotificationTitle for ChannelMessageSendMetadata {
 }
 
 const CHANNEL_REACTION_EXCERPT_MAX_CHARS: usize = 80;
+/// What 80 characters of at most four bytes each take, as the excerpt did
+/// when it was cut by `char`.
+const CHANNEL_REACTION_EXCERPT_MAX_BYTES: usize = CHANNEL_REACTION_EXCERPT_MAX_CHARS * 4;
 
 /// A reaction reads as Slack words its Activity item: who reacted, then
 /// "Reacted 👍 to: “message”", then the channel it happened in. The title is
@@ -935,20 +938,21 @@ impl NotificationTitle for ChannelMessageReactionMetadata {
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ");
-        // Cut at whole characters, so a flag or a skin tone never splits.
-        let excerpt: String = message
-            .graphemes(true)
-            .take(CHANNEL_REACTION_EXCERPT_MAX_CHARS)
-            .collect();
-        let suffix = if message
-            .graphemes(true)
-            .nth(CHANNEL_REACTION_EXCERPT_MAX_CHARS)
-            .is_some()
-        {
-            "…"
-        } else {
-            ""
-        };
+        // Cut at whole characters, so a flag or a skin tone never splits, and
+        // within a byte budget, since one character can carry any number of
+        // combining marks and the push has a size limit.
+        let mut excerpt = String::new();
+        let mut cut = false;
+        for (index, grapheme) in message.graphemes(true).enumerate() {
+            if index == CHANNEL_REACTION_EXCERPT_MAX_CHARS
+                || excerpt.len() + grapheme.len() > CHANNEL_REACTION_EXCERPT_MAX_BYTES
+            {
+                cut = true;
+                break;
+            }
+            excerpt.push_str(grapheme);
+        }
+        let suffix = if cut { "…" } else { "" };
         // A message with no text (only attachments) is "your message".
         let reacted = if message.is_empty() {
             format!("Reacted {} to your message", self.emoji)

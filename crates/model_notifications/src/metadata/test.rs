@@ -200,6 +200,14 @@ fn channel_reaction_never_cuts_a_character_in_half() {
 }
 
 #[test]
+fn channel_reaction_keeps_a_character_of_many_marks_within_the_push_budget() {
+    let mut marks = channel_reaction();
+    marks.message_content = format!("ok a{}", "\u{301}".repeat(2100));
+    let body = marks.format_body(None).unwrap();
+    assert_eq!(body, "Reacted 👍 to: “ok …”\n#general");
+}
+
+#[test]
 fn channel_reaction_to_a_message_without_text_names_your_message() {
     let mut attachment = channel_reaction();
     attachment.message_content = String::new();
