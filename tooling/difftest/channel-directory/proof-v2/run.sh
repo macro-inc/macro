@@ -21,7 +21,7 @@ LIVE_MS="${LIVE_MS:-10000}"
 QUIET_GROUPS="${QUIET_GROUPS:-q01,q02,q03,q04,q05,q06,q07,q08,q09,q10}"
 LOADED_GROUPS="${LOADED_GROUPS:-l01,l02,l03,l04,l05,l06,l07,l08,l09,l10}"
 MUTANTS="${MUTANTS:-drop swap alter stale skip-live}"
-node=(nix shell nixpkgs#nodejs_22 --command node)
+node=(nix shell nixpkgs#nodejs_22 --command node --max-old-space-size=16384)
 mkdir -p "$OUT"
 cd "$here"
 

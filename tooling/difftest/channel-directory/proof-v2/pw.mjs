@@ -95,6 +95,9 @@ export async function viewerPage(browser, session, options) {
           endedAt: Date.now(),
         });
         await route.fulfill({ response });
+        // A fetched response keeps its body in Playwright until disposed:
+        // hundreds of thousands of them ran the coordinator out of heap.
+        await response.dispose().catch(() => {});
       } catch {
         await route.abort().catch(() => {});
       }

@@ -34,6 +34,13 @@ const MUTANT = args.mutant ?? null;
 const MODES = [['M', 'main'], ['C', 'branch'], ['N', 'branch']];
 fs.mkdirSync(OUT, { recursive: true });
 const log = (file, value) => fs.appendFileSync(path.join(OUT, file), `${JSON.stringify(value)}\n`);
+// Why a branch page's DM lookup failed (the probe's diag, never compared).
+const logDmErrors = (file, snaps, where) => {
+  for (const [mode, snap] of Object.entries(snaps)) {
+    const errors = snap?.diag?.dmErrors;
+    if (errors && Object.keys(errors).length) log(file, { ...where, mode, errors });
+  }
+};
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const note = (...parts) => console.log(new Date().toISOString().slice(11, 19), ...parts);
 
@@ -297,6 +304,7 @@ async function readPhase() {
     for (let k = 0; k < entry.specs; k++) {
       const spec = genSpec(r, specCtx, k);
       const specSnaps = Object.fromEntries(await Promise.all(Object.entries(trio).map(async ([mode, v]) => [mode, await snapshot(v, spec)])));
+      logDmErrors('dm-errors.jsonl', specSnaps, { viewer: entry.label, spec: k });
       const result = compareTrio(truth, Object.fromEntries(Object.entries(specSnaps).map(([m, s]) => [m, { ...s, rows: snaps[m].rows }])));
       const views = await viewTruth(entry.session.userId, spec.ids);
       const wrong = checkLastViews(specSnaps, views, result, spec.ids, { viewer: entry.label, spec: k });
@@ -504,6 +512,7 @@ async function groupRun(label) {
       const reload = {};
       for (const [v, trio] of trios.entries()) {
         const snaps = Object.fromEntries(await Promise.all(Object.entries(trio).map(async ([mode, viewer]) => [mode, await snapshot(viewer, { ...spec, rows: true })])));
+        logDmErrors(`dm-errors-${label}.jsonl`, snaps, { seq: s, step, viewer: `v${v + 1}` });
         const result = compareTrio(truths[group.viewers[v]], snaps);
         const views = await viewTruth(group.viewers[v], spec.ids);
         const wrong = checkLastViews(snaps, views, result, spec.ids, { group: label, seq: s, step, viewer: `v${v + 1}` });

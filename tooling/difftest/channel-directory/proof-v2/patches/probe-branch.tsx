@@ -580,11 +580,17 @@ export function ProofProbe() {
       lastViewed[id] = views[index].status;
     });
     const dm: Record<string, string | null> = {};
+    const dmErrors: Record<string, { name: string; message: string; ms: number }> = {};
     for (const peer of spec.peers ?? []) {
       const viewer = userId();
       if (!viewer) continue;
+      const lookupStarted = performance.now();
       const result = await existingDirectMessage(viewer, peer);
       dm[peer] = result.isOk() ? (result.value ?? null) : 'error';
+      if (result.isErr()) {
+        const error = result.error as { name?: string; message?: string } | undefined;
+        dmErrors[peer] = { name: String(error?.name ?? typeof error), message: String(error?.message ?? error).slice(0, 200), ms: Math.round(performance.now() - lookupStarted) };
+      }
     }
     // open-direct-message.ts openDirectMessage: what opening the person does
     const dmOpen: Record<string, unknown> = {};
@@ -610,7 +616,7 @@ export function ProofProbe() {
       dm,
       dmOpen,
       // Not compared: how each open settled its last view.
-      diag: { lastViewed },
+      diag: { lastViewed, dmErrors },
       tookMs: Date.now() - at,
     };
   };
