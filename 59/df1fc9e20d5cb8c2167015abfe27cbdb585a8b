@@ -1,0 +1,31 @@
+docs/architecture/agent-sdk-guidance.md
+  s_cd2738b611e99b::t_2658a3909fefcb 41-49
+crates/agent_inmem/src/outbound/rig_engine/measure_prompt_cache.rs
+  s_cd2738b611e99b::t_30ef4f70275d19 95,264
+crates/agent_inmem/src/outbound/rig_engine/test.rs
+  s_cd2738b611e99b::t_b188b6441da961 202,244,272,296,355,379,409,418,455,475,493-510,995-1019
+crates/agent_inmem/src/rig_engine.rs
+  s_cd2738b611e99b::t_66139dd3ec9c08 369-371,403-406,765-766,768-774,1118,1152-1160
+crates/ai_tools/AGENTS.md
+  s_cd2738b611e99b::t_3c78fa5752d062 15-18
+crates/ai_tools/src/lib.rs
+  s_cd2738b611e99b::t_5c584a7741bb3d 3,286-328,444
+crates/ai_tools/src/test.rs
+  s_cd2738b611e99b::t_3b6acafc56604e 1096-1132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "59df1fc9e20d5cb8c2167015abfe27cbdb585a8b",
+  "prompts": {},
+  "sessions": {
+    "s_cd2738b611e99b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "160aae60-b056-44b3-9de2-02a74d7f232d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
