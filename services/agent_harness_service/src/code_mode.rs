@@ -233,6 +233,7 @@ impl ExecutionCredentials for RunCredentials {
         &self,
         identity: &ExecutionIdentity,
         source: &str,
+        module: Option<&str>,
         language: ProgramLanguage,
         cancel: CancellationToken,
     ) -> Result<IssuedRun, CodeModeError> {
@@ -253,9 +254,17 @@ impl ExecutionCredentials for RunCredentials {
                 permission: None,
             }));
         }
-        let actor = approve_run(self.gate.as_ref(), identity, source, language, &cancel).await?;
+        let actor = approve_run(
+            self.gate.as_ref(),
+            identity,
+            source,
+            module,
+            language,
+            &cancel,
+        )
+        .await?;
         if let (Some(gate), Some(checked)) = (&self.permissions, &checked) {
-            gate.hold(checked, identity, &actor, source, &cancel)
+            gate.hold(checked, identity, &actor, source, module, &cancel)
                 .await?;
         }
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
@@ -535,18 +544,25 @@ pub mod permissions;
 pub mod reviews;
 pub mod ui_commands;
 
+/// Ask the owner gate to run the program as the selected account. The
+/// approver sees its source, a JS tools program's module and the language.
 async fn approve_run(
     gate: &dyn NativeToolGate,
     identity: &ExecutionIdentity,
     source: &str,
+    module: Option<&str>,
     language: ProgramLanguage,
     cancel: &CancellationToken,
 ) -> Result<macro_user_id::user_id::MacroUserIdStr<'static>, CodeModeError> {
     let mut args = serde_json::json!({"source": source, "acting_as": identity.acting_as, "turn_id": identity.turn});
-    // The approver sees what the source is written in. JavaScript, the
-    // default, is left out, so its hold reads as it did before languages.
+    // The approver sees what the source is written in, and the module beside
+    // it. JavaScript, the default, is left out, so its hold reads as it did
+    // before languages.
     if language != ProgramLanguage::Javascript {
         args["language"] = serde_json::json!(language);
+    }
+    if let Some(module) = module {
+        args["module"] = serde_json::json!(module);
     }
     let verdict = tokio::select! {
         biased;

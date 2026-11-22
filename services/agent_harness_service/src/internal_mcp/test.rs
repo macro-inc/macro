@@ -536,11 +536,15 @@ async fn execute_code_offers_and_accepts_js_tools_only_with_permissions() {
             .iter()
             .find(|tool| tool["name"] == "ExecuteCode")
             .unwrap();
+        // A dialect turn's ExecuteCode takes a module, and no language.
         assert_eq!(
-            execute["inputSchema"]["properties"]["language"]
-                .to_string()
-                .contains("js_tools"),
+            execute["inputSchema"]["properties"].get("module").is_some(),
             js_tools
+        );
+        assert!(
+            execute["inputSchema"]["properties"]
+                .get("language")
+                .is_none()
         );
         assert_eq!(
             execute["description"]
@@ -577,8 +581,8 @@ async fn execute_code_offers_and_accepts_js_tools_only_with_permissions() {
                 "name": "ExecuteCode",
                 "arguments": {
                     "turn_id": "00000000-0000-0000-0000-000000000001",
-                    "language": "js_tools",
                     "source": "return await tools.storage.get_document_markdown({path: {document_id: \"d\"}})",
+                    "module": "export const x = 1;",
                 },
             }),
         )
@@ -590,6 +594,7 @@ async fn execute_code_offers_and_accepts_js_tools_only_with_permissions() {
                 [code_execution::domain::Language::JsTools]
             );
         } else {
+            // A TypeScript turn's ExecuteCode takes no module: refused unrun.
             assert!(called.get("error").is_some(), "{called}");
             assert!(code_mode.languages.lock().unwrap().is_empty());
         }

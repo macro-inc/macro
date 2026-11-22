@@ -87,11 +87,15 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   any `ask` (`macro-sdk` approval), then runs it limited to every analyzed
   call (`allowed_operations`). Flags off, a language without an analyzer, or
   plain JavaScript: nothing changes. `ShowPermissions` is offered by the
-  internal MCP only then. `ExecuteCode` offers JavaScript tools programs
-  (`language: "js_tools"`) to exactly the owners the gate applies to them
-  for: `lib.rs` wires `CodeModeService::with_js_tools` beside the
-  `JsToolsAnalyzer`, with `code_mode::JsToolsRollout`
-  (`enable-agent-permissions` alone; there is no separate JS tools flag).
+  internal MCP only then. A turn of such an owner is a dialect turn
+  (`CodeModeKind`, resolved once per turn): its `ExecuteCode` runs only JS
+  tools programs, with an optional TypeScript module that has no network,
+  SDK or token, and refuses TypeScript; `lib.rs` wires
+  `CodeModeService::with_js_tools` beside the `JsToolsAnalyzer`, with
+  `code_mode::JsToolsRollout` (`enable-agent-permissions` alone; there is no
+  separate JS tools flag), and hands the same service to the in-process
+  agent (`with_code_mode_kinds`). Both approval holds (the owner gate's and
+  the permission hold) carry the module beside the source.
   `RunCredentials` fails closed: a JS tools program the gate returned
   nothing for (its flag read off at issue time) is refused unrun. Every
   surface behind the flag, with its flag-off test, is listed in

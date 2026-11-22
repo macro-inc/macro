@@ -107,6 +107,7 @@ impl ExecutionStore for Executions {
             turn_id: None,
             execution_id: execution,
             source: String::new(),
+            module: None,
             language: Default::default(),
             sdk_fingerprint: None,
             status: ExecutionStatus::Running,

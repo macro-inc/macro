@@ -23,11 +23,13 @@ pub trait ExecutionTurns: Send + Sync + 'static {
 pub trait ExecutionCredentials: Send + Sync + 'static {
     /// Identity comes from the session, never from generated code. Implementations
     /// apply owner approval before minting and never persist the credential.
-    /// `language` is the language `source` is written in, for the approver.
+    /// `language` is the language `source` is written in, and `module` a JS
+    /// tools program's TypeScript module, both for the approver to see.
     async fn issue(
         &self,
         identity: &ExecutionIdentity,
         source: &str,
+        module: Option<&str>,
         language: ProgramLanguage,
         cancel: CancellationToken,
     ) -> Result<IssuedRun, CodeModeError>;

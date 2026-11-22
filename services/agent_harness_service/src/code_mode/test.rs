@@ -52,6 +52,7 @@ async fn owner_approval_is_required_before_credentials_and_cancel_skips_gate() {
             &gate,
             &identity,
             "fixture",
+            None,
             ProgramLanguage::Javascript,
             &CancellationToken::new()
         )
@@ -65,6 +66,7 @@ async fn owner_approval_is_required_before_credentials_and_cancel_skips_gate() {
             &gate,
             &identity,
             "fixture",
+            None,
             ProgramLanguage::Javascript,
             &cancel
         )
@@ -81,6 +83,7 @@ async fn owner_approval_is_required_before_credentials_and_cancel_skips_gate() {
             &gate,
             &identity,
             "fixture",
+            None,
             ProgramLanguage::Javascript,
             &CancellationToken::new()
         )
@@ -124,11 +127,15 @@ async fn the_approval_hold_names_a_js_tools_programs_language() {
         turn: macro_uuid::Uuid::from_u128(1),
     };
     let gate = Recording::default();
-    for language in [ProgramLanguage::JsTools, ProgramLanguage::Javascript] {
+    for (language, module) in [
+        (ProgramLanguage::JsTools, Some("export const x = 1;")),
+        (ProgramLanguage::Javascript, None),
+    ] {
         let _ = approve_run(
             &gate,
             &identity,
             "fixture",
+            module,
             language,
             &CancellationToken::new(),
         )
@@ -136,6 +143,8 @@ async fn the_approval_hold_names_a_js_tools_programs_language() {
     }
     let held = gate.0.lock().unwrap();
     assert_eq!(held[0]["language"], "js_tools");
+    // The approver sees the module beside the program.
+    assert_eq!(held[0]["module"], "export const x = 1;");
     // A JavaScript hold reads as it did before languages.
     assert_eq!(
         held[1],
@@ -165,6 +174,7 @@ async fn execution_credentials_use_the_gate_resolved_requester() {
             &gate,
             &identity,
             "fixture",
+            None,
             ProgramLanguage::Javascript,
             &CancellationToken::new()
         )
@@ -784,6 +794,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         .issue(
             &identity,
             "fixture",
+            None,
             ProgramLanguage::Javascript,
             CancellationToken::new(),
         )
@@ -1160,7 +1171,13 @@ async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
         let identity = identity.clone();
         async move {
             let issued = credentials
-                .issue(&identity, "fixture", language, CancellationToken::new())
+                .issue(
+                    &identity,
+                    "fixture",
+                    None,
+                    language,
+                    CancellationToken::new(),
+                )
                 .await;
             (issued, gate.calls.load(Ordering::SeqCst))
         }

@@ -200,6 +200,7 @@ impl PermissionGate {
         identity: &ExecutionIdentity,
         actor: &MacroUserIdStr<'static>,
         source: &str,
+        module: Option<&str>,
         cancel: &CancellationToken,
     ) -> Result<(), CodeModeError> {
         if checked.ask.is_empty() {
@@ -226,14 +227,7 @@ impl PermissionGate {
                 .iter()
                 .map(|operation| format!("{}.{}", operation.service, operation.operation))
                 .collect(),
-            arguments: serde_json::json!({
-                "source": source,
-                "permission": {
-                    "executionId": identity.execution,
-                    "language": checked.language,
-                    "operations": checked.ask,
-                },
-            }),
+            arguments: hold_arguments(source, module, checked, identity),
         };
         // A stopped turn drops the hold, which cancels it.
         let status = tokio::select! {
@@ -310,6 +304,29 @@ fn labels(operations: &[GatedOperation]) -> String {
         .map(|operation| operation.label.as_str())
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// What a permission hold carries for its card: the program, with its
+/// module when it has one (the card's "View program" shows both), and what
+/// it may call that is set to Ask.
+fn hold_arguments(
+    source: &str,
+    module: Option<&str>,
+    checked: &Checked,
+    identity: &ExecutionIdentity,
+) -> serde_json::Value {
+    let mut arguments = serde_json::json!({
+        "source": source,
+        "permission": {
+            "executionId": identity.execution,
+            "language": checked.language,
+            "operations": checked.ask,
+        },
+    });
+    if let Some(module) = module {
+        arguments["module"] = serde_json::json!(module);
+    }
+    arguments
 }
 
 /// How the gate's texts name a language's programs.

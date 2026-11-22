@@ -157,6 +157,7 @@ impl CodeModeService {
             acting_as: Some(identity.acting_as),
             turn_id: Some(identity.turn),
             source: request.source.clone(),
+            module: request.module.clone(),
             language,
             sdk_fingerprint: self.sdk_fingerprint(language),
             status: ExecutionStatus::Running,
@@ -173,6 +174,7 @@ impl CodeModeService {
                 match self.0.store.get(identity.session, execution).await {
                     Ok(existing)
                         if existing.source == request.source
+                            && existing.module == request.module
                             && existing.language == record.language
                             && existing.acting_as == Some(identity.acting_as)
                             && existing.turn_id == Some(identity.turn) =>
@@ -207,9 +209,10 @@ impl CodeModeService {
         }
         let executor = self.0.executor.as_ref().ok_or(CodeModeError::Unavailable)?;
         // A program with type errors stops here, before the owner is asked
-        // to approve it or a credential is minted for it. A JS tools program
+        // to approve it or a credential is minted for it, and so does a JS
+        // tools program whose module has them. A JS tools program itself
         // isn't TypeScript: the permission gate parses and analyzes it.
-        if language == ProgramLanguage::Javascript
+        if (language == ProgramLanguage::Javascript || request.module.is_some())
             && let Err(outcome) = executor
                 .check_program(&request, SESSION_PROGRAM, cancel.clone())
                 .await
@@ -224,7 +227,13 @@ impl CodeModeService {
         } = match self
             .0
             .credentials
-            .issue(&identity, &request.source, record.language, cancel.clone())
+            .issue(
+                &identity,
+                &request.source,
+                request.module.as_deref(),
+                record.language,
+                cancel.clone(),
+            )
             .await
         {
             Ok(issued) => {
@@ -599,6 +608,7 @@ impl SessionCodeMode for CodeModeService {
             execution_id = %execution,
             assigned_execution_id = tracing::field::Empty,
             source_bytes = request.source.len(),
+            module_bytes = request.module.as_ref().map(String::len),
             language = request.language.as_str(),
             sdk_fingerprint = self.sdk_fingerprint(language).as_deref(),
             status = tracing::field::Empty,
@@ -842,8 +852,19 @@ pub(super) fn settle_unrun(
 
 /// Reject requests the runner would refuse, before minting a credential.
 pub(super) fn validate_request(request: &ExecuteRequest) -> Result<(), CodeModeError> {
+    let max_source_bytes = Limits::default().max_source_bytes;
+    if request.module.as_ref().is_some_and(|module| {
+        request.language != Language::JsTools
+            || module.trim().is_empty()
+            || module.len() > max_source_bytes
+    }) {
+        return Err(CodeModeError::Invalid(
+            "Provide module only beside a JS tools program, nonempty and at most 64 KiB, or leave it out."
+                .into(),
+        ));
+    }
     if request.source.trim().is_empty()
-        || request.source.len() > Limits::default().max_source_bytes
+        || request.source.len() > max_source_bytes
         || request.timeout_ms == 0
         || request.timeout_ms > 30_000
     {

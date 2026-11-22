@@ -509,56 +509,107 @@ async fn sessions_without_javascript_tools_see_todays_tools() {
     );
 }
 
+/// A dialect turn's ExecuteCode: `source` is always the dialect, `module`
+/// is optional TypeScript, and there is no `language` to choose with.
 #[test]
-fn the_js_tools_tool_is_the_javascript_tool_plus_its_language_and_permissions() {
+fn the_dialect_execute_code_has_source_and_module_and_no_language() {
     let plain = &toolset().tools["ExecuteCode"];
-    let js_tools = &toolset_with_js_tools().tools["ExecuteCode"];
-    assert_eq!(
-        js_tools.description,
-        format!(
-            "{}\n{}\n{}",
-            plain.description,
-            include_str!("session/js_tools.md"),
-            include_str!("session/js_tools_permissions.md")
-        )
+    let dialect = &toolset_with_js_tools().tools["ExecuteCode"];
+    assert!(
+        dialect
+            .description
+            .starts_with(include_str!("session/js_tools.md"))
     );
-    assert!(!js_tools.description.contains("Code_mode.run"));
+    assert!(
+        dialect
+            .description
+            .contains(include_str!("session/js_tools_permissions.md").trim_end())
+    );
     let plain_schema = serde_json::to_value(&plain.input_schema).unwrap();
-    let schema = serde_json::to_value(&js_tools.input_schema).unwrap();
-    let mut properties = schema["properties"].as_object().unwrap().clone();
-    let language = properties.remove("language").unwrap();
-    assert!(language.to_string().contains("\"javascript\""));
-    assert!(language.to_string().contains("\"js_tools\""));
-    assert!(!schema.to_string().to_lowercase().contains("ocaml"));
-    let names = |object: &serde_json::Map<String, serde_json::Value>| {
-        let mut names: Vec<String> = object.keys().cloned().collect();
+    let schema = serde_json::to_value(&dialect.input_schema).unwrap();
+    let names = |schema: &serde_json::Value| {
+        let mut names: Vec<String> = schema["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
         names.sort();
         names
     };
-    assert_eq!(
-        names(&properties),
-        names(plain_schema["properties"].as_object().unwrap())
-    );
+    let mut expected = names(&plain_schema);
+    expected.push("module".into());
+    expected.sort();
+    assert_eq!(names(&schema), expected);
+    assert!(schema["properties"].get("language").is_none());
     assert_eq!(schema["required"], plain_schema["required"]);
 
-    let parse = |language: Option<&str>| {
+    let parse = |extra: serde_json::Value| {
         let mut call = serde_json::json!({
             "acting_as": "requester",
             "turn_id": "00000000-0000-0000-0000-000000000001",
             "source": "return 1",
         });
-        if let Some(language) = language {
-            call["language"] = language.into();
+        for (key, value) in extra.as_object().unwrap() {
+            call[key] = value.clone();
         }
-        serde_json::from_value::<ExecuteCodeWithJsTools>(call).map(|call| call.language)
+        serde_json::from_value::<ExecuteCodeWithJsTools>(call)
     };
-    assert_eq!(parse(None).unwrap(), JsToolsToolLanguage::Javascript);
+    assert_eq!(parse(serde_json::json!({})).unwrap().module, None);
     assert_eq!(
-        parse(Some("js_tools")).unwrap(),
-        JsToolsToolLanguage::JsTools
+        parse(serde_json::json!({"module": "export const x = 1;"}))
+            .unwrap()
+            .module
+            .as_deref(),
+        Some("export const x = 1;")
     );
-    assert!(parse(Some("ocaml")).is_err());
-    assert!(parse(Some("typescript")).is_err());
+    // Nothing chooses a language: the program is always the dialect.
+    assert!(parse(serde_json::json!({"language": "javascript"})).is_err());
+    assert!(parse(serde_json::json!({"language": "js_tools"})).is_err());
+}
+
+/// Each kind's ExecuteCode teaches only its own code: the dialect's never
+/// a TypeScript SDK call, today's never a dialect operation call.
+#[test]
+fn each_kinds_execute_code_teaches_only_its_own_code() {
+    let dialect = &toolset_with_js_tools().tools["ExecuteCode"];
+    let dialect_text = format!(
+        "{}{}",
+        dialect.description,
+        serde_json::to_string(&dialect.input_schema).unwrap()
+    );
+    for marker in [
+        "macro.",
+        "@macro-inc/sdk",
+        "export async function main",
+        "CodeContext",
+        "execution.views",
+        "execution.reviews",
+    ] {
+        assert!(
+            !dialect_text.contains(marker),
+            "the dialect teaches {marker}"
+        );
+    }
+    assert!(dialect_text.contains("tools.<service>.<operation>"));
+    let typescript = &toolset().tools["ExecuteCode"];
+    let typescript_text = format!(
+        "{}{}",
+        typescript.description,
+        serde_json::to_string(&typescript.input_schema).unwrap()
+    );
+    for marker in [
+        "tools.<service>",
+        "tools.storage",
+        "tools.agent_harness",
+        "get(\"",
+        "call(\"",
+    ] {
+        assert!(
+            !typescript_text.contains(marker),
+            "TypeScript teaches {marker}"
+        );
+    }
 }
 
 /// The JS tools texts name real catalog operations.
@@ -580,19 +631,19 @@ fn the_js_tools_texts_call_catalog_operations() {
                 .join(".")
         })
         .collect();
-    let texts = concat!(
-        include_str!("session/js_tools.md"),
-        include_str!("session/js_tools_permissions.md")
-    );
+    let texts = toolset_with_js_tools().tools["ExecuteCode"]
+        .description
+        .clone();
     for path in [
         "storage.create_task_handler",
         "storage.get_document_markdown",
         "agent_harness.get_agent_session",
         "agent_harness.get_agent_tool_permissions",
         "agent_harness.tighten_agent_tool_permissions",
+        "agent_harness.list_agent_session_updates",
     ] {
         assert!(paths.contains(&path.to_owned()), "{path}");
-        assert!(texts.contains(&format!("tools.{path}(")), "{path}");
+        assert!(texts.contains(&format!("tools.{path}")), "{path}");
     }
 }
 
@@ -603,14 +654,12 @@ async fn sessions_see_and_call_js_tools_only_with_the_rollout() {
     let session = agent_session::testing::test_agent_session(
         agent_session::domain::model::AgentSessionId::new(),
     );
-    let call = |language: &str| {
-        serde_json::json!({
-            "acting_as": "requester",
-            "turn_id": "00000000-0000-0000-0000-000000000001",
-            "source": "return await tools.storage.get_document_markdown({path: {document_id: \"d\"}})",
-            "language": language,
-        })
-    };
+    let call = serde_json::json!({
+        "acting_as": "requester",
+        "turn_id": "00000000-0000-0000-0000-000000000001",
+        "source": "return await tools.storage.get_document_markdown({path: {document_id: \"d\"}})",
+        "module": "export const x = 1;",
+    });
     for js_tools in [false, true] {
         let service = Arc::new(Languages {
             js_tools,
@@ -624,7 +673,7 @@ async fn sessions_see_and_call_js_tools_only_with_the_rollout() {
         let tools = session_toolset(kind);
         let tool = &tools.tools["ExecuteCode"];
         let schema = serde_json::to_value(&tool.input_schema).unwrap();
-        assert_eq!(schema.to_string().contains("js_tools"), js_tools);
+        assert_eq!(schema["properties"].get("module").is_some(), js_tools);
         assert_eq!(
             tool.description.contains("tools.<service>.<operation>"),
             js_tools
@@ -637,18 +686,13 @@ async fn sessions_see_and_call_js_tools_only_with_the_rollout() {
             kind,
         };
         let result = tools
-            .try_tool_call(
-                context(),
-                RequestContext::new(user()),
-                "ExecuteCode",
-                &call("js_tools"),
-            )
+            .try_tool_call(context(), RequestContext::new(user()), "ExecuteCode", &call)
             .await;
         if js_tools {
             assert!(result.unwrap().is_ok());
             assert_eq!(*service.seen.lock().unwrap(), [Language::JsTools]);
         } else {
-            // No tool without the rollout takes the language: refused unrun.
+            // TypeScript's tool takes no module: refused unrun.
             assert!(result.is_err());
             assert!(service.seen.lock().unwrap().is_empty());
         }

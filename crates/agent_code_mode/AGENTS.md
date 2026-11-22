@@ -8,7 +8,7 @@ permissions. Credential issuance resolves and approves that selection before
 minting. ExecuteCode requires the originating prompt’s `turn_id`; admission and
 credential approval must reject a replacement turn before adopting its account.
 Saved execution retries must match the actor selection, the original
-turn and the language, so a later requester cannot inherit an earlier
+turn, the language and the module, so a later requester cannot inherit an earlier
 execution result.
 
 Owns session-authorized code executions, user-scoped executions for the public
@@ -119,10 +119,18 @@ stacks. Process isolation belongs to
   `ShowPermissions`; nothing else reads the flag. `execute` refuses a program
   of the other kind before recording it (`refuse_other_kind`).
 - JavaScript tools programs (`ProgramLanguage::JsTools`, `js_tools`) run in a
-  `Dialect` turn. `execute` refuses one in a TypeScript turn before minting a
-  credential, and skips the TypeScript check for it (the gate parses and
-  analyzes it). A record keeps its `language` (left out for JavaScript, so
-  those records read as before) and the interpreter and catalog's
+  `Dialect` turn, and only they do: its `ExecuteCode`
+  (`ExecuteCodeWithJsTools`) has no `language`; `source` is always the
+  dialect and the optional `module` is TypeScript with no network, SDK or
+  token (`code_execution`'s README, "The module"), read with `get`/`call`.
+  `execute` refuses a dialect program in a TypeScript turn and a TypeScript
+  one (or a module) in a dialect turn before minting a credential. A dialect
+  program skips the TypeScript check (the gate parses and analyzes it); its
+  module is checked (`check_program`) before anyone is asked to approve it.
+  Only `source` is analyzed and gated; the approver is shown both
+  (`ExecutionCredentials::issue` takes the module). A record keeps its
+  `language` (left out for JavaScript, so those records read as before),
+  its `module` (left out when absent) and the interpreter and catalog's
   `sdkFingerprint` (`code_mode_assets::JS_TOOLS_FINGERPRINT`), all in the
   `agent_code_execution.record` JSON, so no migration. The public MCP's
   `UserExecuteCode` stays TypeScript only.
@@ -137,8 +145,11 @@ stacks. Process isolation belongs to
   (`every_dialect_example_is_analyzed`, Deno).
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `toolset_with_js_tools()`
   for a dialect turn (`session_toolset(kind)` picks;
-  `ExecuteCodeWithJsTools` adds `toolset/session/js_tools.md` and
-  `js_tools_permissions.md`), `user_toolset()` for the public MCP. With JS
+  `ExecuteCodeWithJsTools`'s description is `toolset/session/js_tools.md`,
+  `js_tools_permissions.md` and the PresentView schema in dialect terms
+  (`dialect_view_schema`), none of today's TypeScript texts;
+  `each_kinds_execute_code_teaches_only_its_own_code` holds both kinds to
+  it), `user_toolset()` for the public MCP. With JS
   tools off, the session tools, the prompt's code-mode sections and the
   discovery guides are pinned byte for byte by
   `toolset/test/without_js_tools.json` (`UPDATE_TOOLSET_SNAPSHOT=1` rewrites
@@ -186,10 +197,12 @@ longer delivery state.
 
 - `cargo test -p agent_code_mode --lib` from the repository root, with live local
   database configuration and `SQLX_OFFLINE` unset.
-- Keep `toolset/session/js_tools.md`'s example running: it runs end to end
+- Keep `toolset/session/js_tools.md`'s example (a program and its module)
+  running: it runs end to end through the gate
   (`toolset/test/js_tools.rs`, `-- --include-ignored` with Deno 2.9.6 on
-  `PATH`), and its operations must be in the JS tools catalog
-  (`the_js_tools_texts_call_catalog_operations`).
+  `PATH`), its module type-checks
+  (`the_descriptions_module_example_type_checks`), and its operations must be
+  in the JS tools catalog (`the_js_tools_texts_call_catalog_operations`).
 - The review toolset test builds every review tool through shared provider schema
   validation.
 - The SDK catalog and operation labels come from `crates/code_mode_assets`,

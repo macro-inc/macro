@@ -123,11 +123,12 @@ enum Gate {
 }
 
 /// The credential issuer, with a stand-in for the harness's permission
-/// gate: it records the language of each program it is asked about.
+/// gate: it records the language and module of each program it is asked
+/// about.
 struct Credentials {
     storage: String,
     gate: Gate,
-    asked: Mutex<Vec<ProgramLanguage>>,
+    asked: Mutex<Vec<(ProgramLanguage, Option<String>)>>,
 }
 
 #[async_trait]
@@ -136,10 +137,14 @@ impl ExecutionCredentials for Credentials {
         &self,
         identity: &ExecutionIdentity,
         _: &str,
+        module: Option<&str>,
         language: ProgramLanguage,
         _: CancellationToken,
     ) -> Result<IssuedRun, CodeModeError> {
-        self.asked.lock().unwrap().push(language);
+        self.asked
+            .lock()
+            .unwrap()
+            .push((language, module.map(str::to_owned)));
         let allowed_operations = match &self.gate {
             Gate::Admit(calls) => Some(calls.clone()),
             Gate::Refuse => {
@@ -197,12 +202,22 @@ fn example_calls() -> Vec<SdkCall> {
     ]
 }
 
-/// The JavaScript tools example in ExecuteCode's description.
-fn example() -> &'static str {
+/// The first `fence` block of ExecuteCode's dialect description.
+fn block(fence: &str) -> &'static str {
     let text = include_str!("../session/js_tools.md");
-    let start = text.find("```js\n").unwrap() + "```js\n".len();
+    let start = text.find(fence).unwrap() + fence.len();
     let end = start + text[start..].find("```").unwrap();
     &text[start..end]
+}
+
+/// The example program in ExecuteCode's description.
+fn example() -> &'static str {
+    block("```js\n")
+}
+
+/// The example's module.
+fn example_module() -> &'static str {
+    block("```ts\n")
 }
 
 /// A stub storage service answering the example's two requests, returning
@@ -285,7 +300,11 @@ async fn service(
 
 /// Call ExecuteCode as the session's tools offer it: the receipt, or why the
 /// call was refused.
-async fn execute(service: CodeModeService, source: &str) -> Result<serde_json::Value, String> {
+async fn execute(
+    service: CodeModeService,
+    source: &str,
+    module: Option<&str>,
+) -> Result<serde_json::Value, String> {
     let session = agent_session::testing::test_agent_session(AgentSessionId::new());
     let kind = service
         .code_mode_kind(session.id, session.owner_user().unwrap())
@@ -301,12 +320,19 @@ async fn execute(service: CodeModeService, source: &str) -> Result<serde_json::V
             },
             RequestContext::new(user()),
             "ExecuteCode",
-            &serde_json::json!({
-                "acting_as": "requester",
-                "turn_id": "00000000-0000-0000-0000-000000000001",
-                "language": "js_tools",
-                "source": source,
-            }),
+            &match module {
+                Some(module) => serde_json::json!({
+                    "acting_as": "requester",
+                    "turn_id": "00000000-0000-0000-0000-000000000001",
+                    "source": source,
+                    "module": module,
+                }),
+                None => serde_json::json!({
+                    "acting_as": "requester",
+                    "turn_id": "00000000-0000-0000-0000-000000000001",
+                    "source": source,
+                }),
+            },
         )
         .await
         .map_err(|error| format!("{error:?}"))?
@@ -318,22 +344,26 @@ async fn execute(service: CodeModeService, source: &str) -> Result<serde_json::V
 async fn js_tools_tool_example_reaches_the_gate_and_creates_and_reads_a_task() {
     let (storage, server) = storage().await;
     let (service, credentials, store) = service(storage, Gate::Admit(example_calls()), true).await;
-    let receipt = execute(service, example()).await.unwrap();
+    let receipt = execute(service, example(), Some(example_module()))
+        .await
+        .unwrap();
     assert_eq!(receipt["status"], "succeeded", "{receipt}");
+    // The module rendered what the program read.
     assert_eq!(
         receipt["result"]["data"],
         serde_json::json!({
             "taskId": "task-1",
-            "markdown": "Signing in from a deep link returns to the login page.",
+            "summary": "Fix login redirect loop: 11 words",
         })
     );
     // The session shows each SDK call, as for a JavaScript run.
     let activity = receipt["activity"].as_array().unwrap();
     assert_eq!(activity.len(), 2, "{receipt}");
     assert!(activity.iter().all(|item| item["status"] == "completed"));
+    // The approver is shown both parts.
     assert_eq!(
         *credentials.asked.lock().unwrap(),
-        [ProgramLanguage::JsTools]
+        [(ProgramLanguage::JsTools, Some(example_module().to_owned()))]
     );
 
     let requests = server.await.unwrap();
@@ -353,9 +383,12 @@ async fn js_tools_tool_example_reaches_the_gate_and_creates_and_reads_a_task() {
         Some(code_mode_assets::JS_TOOLS_FINGERPRINT)
     );
     assert_eq!(record.source, example());
-    // The saved record names its language and fingerprint.
+    assert_eq!(record.module.as_deref(), Some(example_module()));
+    // The saved record names its language and fingerprint, and keeps the
+    // module.
     let saved = serde_json::to_value(&record).unwrap();
     assert_eq!(saved["language"], "js_tools");
+    assert_eq!(saved["module"], example_module());
     assert_eq!(
         saved["sdkFingerprint"],
         code_mode_assets::JS_TOOLS_FINGERPRINT
@@ -369,7 +402,9 @@ async fn js_tools_tool_example_reaches_the_gate_and_creates_and_reads_a_task() {
 async fn a_js_tools_program_the_gate_refuses_does_not_run() {
     let (storage, server) = storage().await;
     let (service, credentials, store) = service(storage, Gate::Refuse, true).await;
-    let receipt = execute(service, example()).await.unwrap();
+    let receipt = execute(service, example(), Some(example_module()))
+        .await
+        .unwrap();
     assert_eq!(receipt["status"], "failed", "{receipt}");
     assert_eq!(receipt["permission"]["outcome"], "blocked", "{receipt}");
     assert!(
@@ -380,7 +415,7 @@ async fn a_js_tools_program_the_gate_refuses_does_not_run() {
     );
     assert_eq!(
         *credentials.asked.lock().unwrap(),
-        [ProgramLanguage::JsTools]
+        [(ProgramLanguage::JsTools, Some(example_module().to_owned()))]
     );
     let record = store.0.lock().unwrap()[0].clone();
     assert_eq!(record.status, ExecutionStatus::Failed);
@@ -412,7 +447,7 @@ async fn a_js_tools_program_outside_what_was_checked_sends_nothing() {
             true,
         )
         .await;
-        let receipt = execute(service, source).await.unwrap();
+        let receipt = execute(service, source, None).await.unwrap();
         assert_eq!(receipt["status"], "failed", "{receipt}");
         assert!(
             receipt["error"].as_str().unwrap().contains(expected),
@@ -453,8 +488,12 @@ async fn js_tools_without_the_rollout_is_refused_before_a_credential() {
             .await,
         CodeModeKind::TypeScript
     );
-    // The tool refuses the language.
-    assert!(execute(service.clone(), example()).await.is_err());
+    // A TypeScript turn's tool takes no module.
+    assert!(
+        execute(service.clone(), example(), Some(example_module()))
+            .await
+            .is_err()
+    );
     // Code mode refuses it too, whatever tool asked.
     let refused = service
         .execute(
@@ -487,4 +526,39 @@ impl code_execution::domain::CodeRunner for Never {
     ) -> code_execution::domain::Outcome {
         unreachable!("nothing runs")
     }
+}
+
+/// The description's module example type-checks as every module is checked:
+/// with Handlebars and without the SDK.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn the_descriptions_module_example_type_checks() {
+    use code_execution::domain::{ProgramChecker, ProgramImports, SourceFile};
+    let deno = tokio::process::Command::new("which")
+        .arg("deno")
+        .output()
+        .await
+        .unwrap();
+    assert!(deno.status.success(), "Deno 2.9.6 must be on PATH");
+    let root = tempfile::tempdir().unwrap();
+    let checker = code_execution::outbound::deno::check::DenoChecker::new(
+        String::from_utf8(deno.stdout).unwrap().trim().into(),
+        root.path().to_owned(),
+        1,
+        1,
+        64 * 1024,
+    )
+    .await
+    .unwrap();
+    let files = [SourceFile {
+        name: "module.ts".into(),
+        source: example_module().into(),
+    }];
+    assert_eq!(
+        checker
+            .check_files(&files, "export {};\n", ProgramImports::Handlebars)
+            .await
+            .unwrap(),
+        Vec::new()
+    );
 }

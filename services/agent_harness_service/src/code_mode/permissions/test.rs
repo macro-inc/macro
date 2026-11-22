@@ -415,6 +415,7 @@ async fn an_ask_operation_holds_for_the_runs_account_and_runs_on_approval() {
             &identity,
             &actor,
             "the source",
+            Some("export const x = 1;"),
             &CancellationToken::new(),
         )
         .await
@@ -424,6 +425,8 @@ async fn an_ask_operation_holds_for_the_runs_account_and_runs_on_approval() {
     assert_eq!(held[0].approver, actor);
     assert_eq!(held[0].operations, ["email.send_message"]);
     assert_eq!(held[0].arguments["source"], "the source");
+    // The card shows the module beside the program.
+    assert_eq!(held[0].arguments["module"], "export const x = 1;");
     assert_eq!(held[0].arguments["permission"]["language"], "js_tools");
     assert_eq!(
         held[0].arguments["permission"]["executionId"],
@@ -456,6 +459,7 @@ async fn nothing_to_ask_holds_nothing() {
             &identity,
             &identity.owner,
             "src",
+            None,
             &CancellationToken::new(),
         )
         .await
@@ -503,6 +507,7 @@ async fn a_declined_or_expired_hold_does_not_run() {
                     &identity,
                     &identity.owner,
                     "src",
+                    None,
                     &CancellationToken::new(),
                 )
                 .await,
@@ -544,6 +549,7 @@ async fn a_turn_that_ended_during_the_hold_does_not_run() {
                 &identity,
                 &identity.owner,
                 "src",
+                None,
                 &CancellationToken::new(),
             )
             .await,
@@ -574,7 +580,7 @@ async fn a_stopped_turn_or_no_turn_records_the_program_as_not_approved() {
     let refused = not_run(
         parts
             .gate
-            .hold(&checked, &identity, &identity.owner, "src", &cancel)
+            .hold(&checked, &identity, &identity.owner, "src", None, &cancel)
             .await,
     );
     assert!(matches!(
@@ -600,6 +606,7 @@ async fn a_stopped_turn_or_no_turn_records_the_program_as_not_approved() {
                 &identity,
                 &identity.owner,
                 "src",
+                None,
                 &CancellationToken::new(),
             )
             .await,
@@ -753,6 +760,7 @@ async fn a_js_tools_ask_operation_holds_naming_the_language_and_runs_on_approval
             &identity,
             &identity.owner,
             "the source",
+            None,
             &CancellationToken::new(),
         )
         .await
@@ -784,6 +792,7 @@ async fn a_js_tools_ask_operation_holds_naming_the_language_and_runs_on_approval
                 &identity,
                 &identity.owner,
                 "src",
+                None,
                 &CancellationToken::new(),
             )
             .await,
@@ -812,6 +821,7 @@ async fn a_js_tools_ask_operation_holds_naming_the_language_and_runs_on_approval
                 &identity,
                 &identity.owner,
                 "src",
+                None,
                 &CancellationToken::new(),
             )
             .await,

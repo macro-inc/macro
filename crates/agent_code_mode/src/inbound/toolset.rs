@@ -1,8 +1,8 @@
 //! SDK discovery and one awaited code execution exposed as ordinary tools.
 use crate::domain::{
-    CodeModeError, CodeModeKind, ExecutionId, ExecutionReceipt, ProgramLanguage, SessionCodeMode,
-    SymbolReferences, TaskDocumentation, UserCodeMode, UserExecutionReceipt,
-    documentation_for_task, read_symbols, with_attached_skill,
+    CodeModeError, CodeModeKind, ExecutionId, ExecutionReceipt, SessionCodeMode, SymbolReferences,
+    TaskDocumentation, UserCodeMode, UserExecutionReceipt, documentation_for_task, read_symbols,
+    with_attached_skill,
 };
 use agent_session::domain::model::AgentSession;
 use ai_toolset::{
@@ -220,50 +220,70 @@ async fn execute_in_session(
         .map_err(tool_error)
 }
 
-/// [`ExecuteCode`] for a session that may run JavaScript tools programs: the
-/// same tool, with a `language`, the JS tools contract and how the agent's
-/// permissions gate those programs.
+/// `ExecuteCode` in a [`CodeModeKind::Dialect`] turn: the program (`source`)
+/// is always a JS tools program, analyzed and gated by the agent's
+/// permissions; an optional TypeScript `module` computes beside it with no
+/// network, SDK or token. It has no `language`: the agent never chooses
+/// whether its permissions apply. Nothing in its text teaches the
+/// TypeScript SDK.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ExecuteCode",
     description = format!(
-        "{SESSION_EXECUTE_CODE}\n{NEVER_GUESS}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}\n{}",
-        SESSION_PRESENT.trim_end(),
-        dynamic_ui::present_view_schema(),
+        "{}\n{}\nPresentView schema; tools.agent_harness.present_session_view takes it as body.view:\n{}\n",
         include_str!("toolset/session/js_tools.md"),
-        include_str!("toolset/session/js_tools_permissions.md"),
+        include_str!("toolset/session/js_tools_permissions.md").trim_end(),
+        dialect_view_schema(),
     )
 )]
 pub struct ExecuteCodeWithJsTools {
     /// As [`ExecuteCode::execution_id`].
     #[serde(default)]
     #[schemars(
-        description = "Optional; usually omit it. The server assigns an ID and the receipt reports it as executionId. Pass a new random UUID only when a repeated write would be harmful: if the reply is lost, resending the same execution_id with identical source and language returns the saved receipt instead of running again. Never use an example or placeholder UUID or an ID from another session; an ID already taken runs under a new ID."
+        description = "Optional; usually omit it. The server assigns an ID and the receipt reports it as executionId. Pass a new random UUID only when a repeated write would be harmful: if the reply is lost, resending the same execution_id with identical source and module returns the saved receipt instead of running again. Never use an example or placeholder UUID or an ID from another session; an ID already taken runs under a new ID."
     )]
     pub execution_id: Option<ExecutionId>,
-    /// Choose whose account authenticates every SDK operation in this execution.
+    /// Choose whose account authenticates every operation in this execution.
     pub acting_as: ai_toolset::actor::ToolActor,
     /// Copy the current server-issued turn_id from the prompt's execution context.
     /// Never reuse an ID from another turn or discover a replacement for a stale call.
     pub turn_id: macro_uuid::Uuid,
-    /// The program's language.
-    #[serde(default)]
+    /// A JavaScript tools program.
     #[schemars(
-        description = "The language of source: javascript (the default) or js_tools. Omit it for JavaScript."
-    )]
-    pub language: JsToolsToolLanguage,
-    /// A JavaScript ES module, or a JavaScript tools script.
-    #[schemars(
-        description = "The program, at most 64 KiB. JavaScript (the default): a TypeScript module, type-checked against the SDK before it runs. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}: CodeContext) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token. JavaScript tools (language js_tools): a script that calls await tools.<service>.<operation>({path, query, body}) and returns its data, as the description's JavaScript tools section shows."
+        description = "The program, at most 64 KiB: plain JavaScript run as one script that reaches Macro only through await tools.<service>.<operation>({path, query, body}) and returns its result, as the description shows. Every operation it names is checked against this agent's permissions before it runs."
     )]
     pub source: String,
+    /// TypeScript the program reads with `get` and `call`.
+    #[serde(default)]
+    #[schemars(
+        description = "Optional TypeScript module, at most 64 KiB, type-checked before anything runs, with no network and no Macro access, for this run only. Export values and functions with export const and export function; source reads one with await get(\"name\") and calls one with await call(\"name\", ...args). It may import Handlebars from \"handlebars\". Omit it when the program needs no computation or library."
+    )]
+    pub module: Option<String>,
     /// Deadline including queueing and API calls.
     #[serde(default = "default_timeout")]
     #[schemars(
         description = "Total deadline in milliseconds, from 1 to 30000; defaults to 30000."
     )]
     pub timeout_ms: u64,
+}
+
+/// The PresentView schema in the dialect's terms: the SDK calls its
+/// guidance names become the operations that do the same.
+fn dialect_view_schema() -> String {
+    dynamic_ui::present_view_schema()
+        .replace(
+            "`await execution.views.present(view)`",
+            "`await tools.agent_harness.present_session_view` with `view` in its body",
+        )
+        .replace(
+            "macro.agentSessions.updates()",
+            "tools.agent_harness.list_agent_session_updates",
+        )
+        .replace(
+            "give the table's or view's webUrl() in the lead-in",
+            "link the table or view in the lead-in",
+        )
 }
 
 impl ToolAnnotated for ExecuteCodeWithJsTools {
@@ -288,32 +308,11 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCodeWithJsTools {
             ExecuteRequest {
                 source: self.source.clone(),
                 timeout_ms: self.timeout_ms,
-                language: ProgramLanguage::from(self.language).into(),
-                module: None,
+                language: Language::JsTools,
+                module: self.module.clone(),
             },
         )
         .await
-    }
-}
-
-/// The languages [`ExecuteCodeWithJsTools`] takes.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum JsToolsToolLanguage {
-    /// A JavaScript ES module exporting `main`.
-    #[default]
-    Javascript,
-    /// A script in opencode's JavaScript dialect that calls SDK operations
-    /// as `tools.<service>.<operation>(input)`.
-    JsTools,
-}
-
-impl From<JsToolsToolLanguage> for ProgramLanguage {
-    fn from(language: JsToolsToolLanguage) -> Self {
-        match language {
-            JsToolsToolLanguage::Javascript => Self::Javascript,
-            JsToolsToolLanguage::JsTools => Self::JsTools,
-        }
     }
 }
 

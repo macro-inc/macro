@@ -183,6 +183,10 @@ pub struct ExecutionRecord {
     pub turn_id: Option<Uuid>,
     /// The submitted program: a JavaScript module or a JS tools script.
     pub source: String,
+    /// A JS tools program's TypeScript module, read with `get` and `call`;
+    /// absent for every other program, so their records read as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub module: Option<String>,
     /// The language `source` is written in; historical records are JavaScript.
     /// JavaScript, the default, is left out, so records of JavaScript
     /// programs serialize as they did before languages.
