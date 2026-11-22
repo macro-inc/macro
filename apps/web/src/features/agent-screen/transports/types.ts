@@ -59,7 +59,11 @@ export type ScreenState = {
 /** Text frames the client sends. */
 export type ScreenClientMessage =
   | { type: 'takeOver' }
-  | { type: 'handBack'; note: string | null }
+  /**
+   * `leaseId`: the drive (`ScreenState.leaseId`) handed back; a stale one is
+   * refused with `staleHandBack` and nothing is released.
+   */
+  | { type: 'handBack'; note: string | null; leaseId?: string }
   | { type: 'input'; event: ScreenInputEvent }
   | { type: 'stop' }
   /** Whether this tab is shown: the server ends a socket nobody looks at. */
@@ -91,6 +95,11 @@ export type ScreenErrorCode =
   | 'tunnelFailed'
   /** Too many screen sockets for this computer; the socket then ends with `error`. */
   | 'tooManySockets'
+  /**
+   * A hand-back named a drive that already ended (or was never this tab's):
+   * nothing was released, and a fresh `state` follows.
+   */
+  | 'staleHandBack'
   | 'badMessage'
   | 'inputFailed'
   /**
@@ -147,7 +156,8 @@ export type ScreenFrameSize = { width: number; height: number };
 export interface ScreenSession {
   sendInput(event: ScreenInputEvent): void;
   takeOver(): void;
-  handBack(note: string | null): void;
+  /** `leaseId`: the drive handed back, when known (see `ScreenClientMessage`). */
+  handBack(note: string | null, leaseId?: string): void;
   /**
    * Stop watching (`stop`): the harness ends this viewer's socket with
    * `stopped`. v1 has no share session to end for anyone else.

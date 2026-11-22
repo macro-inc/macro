@@ -89,6 +89,15 @@ describe('parseServerMessage', () => {
       code: 'tooManySockets',
       message: 'too many sockets',
     });
+    expect(
+      parseServerMessage(
+        JSON.stringify({
+          type: 'error',
+          code: 'staleHandBack',
+          message: 'That drive already ended; nothing was handed back.',
+        })
+      )
+    ).toMatchObject({ type: 'error', code: 'staleHandBack' });
   });
 
   it('keeps an error or an end whose code this client does not know', () => {

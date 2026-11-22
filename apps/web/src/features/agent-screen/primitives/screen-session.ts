@@ -218,7 +218,10 @@ export function createScreenSession(options: ScreenSessionOptions) {
     if (handBackSentOn === generation) return;
     handBackSentOn = generation;
     record('computer.screen.hand_back', { reason: 'resent' });
-    session.handBack(pendingHandBack.note);
+    session.handBack(
+      pendingHandBack.note,
+      pendingHandBack.leaseId ?? undefined
+    );
   };
   /**
    * The lease this tab drove when its connection dropped: only that one is
@@ -303,7 +306,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     handedBackHere = true;
     record('computer.screen.hand_back', { reason: 'leaving' });
     releaseInput();
-    session.handBack(null);
+    session.handBack(null, store.server?.leaseId ?? undefined);
   };
 
   const apply = (
@@ -474,6 +477,13 @@ export function createScreenSession(options: ScreenSessionOptions) {
             lastError = error.code;
             // Its own end state, with Try again (see `afterSessionEnded`).
             if (error.code === 'tooManySockets') return;
+            // The drive handed back had already ended (or moved on): nothing
+            // to hand back, no banner; the fresh state that follows says who
+            // drives now.
+            if (error.code === 'staleHandBack') {
+              pendingHandBack = undefined;
+              return;
+            }
             // A screen not reachable yet is the boot, which the view shows.
             if (
               booting() &&
@@ -859,7 +869,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
       handedBackHere = true;
       pendingHandBack = { note, leaseId: store.server?.leaseId };
       handBackSentOn = generation;
-      session?.handBack(note);
+      session?.handBack(note, store.server?.leaseId ?? undefined);
     },
     stop() {
       record('computer.screen.stop');

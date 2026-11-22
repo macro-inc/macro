@@ -27,7 +27,11 @@ function fakeTransport(connections: FakeConnection[]): ScreenTransport {
       return {
         sendInput: (event) => connection.sent.push(event),
         takeOver: () => connection.controls.push('takeOver'),
-        handBack: (note) => connection.controls.push(`handBack:${note}`),
+        // The drive it names, when it names one: `handBack:note@lease`.
+        handBack: (note, leaseId) =>
+          connection.controls.push(
+            `handBack:${note}${leaseId === undefined ? '' : `@${leaseId}`}`
+          ),
         stop: () => connection.controls.push('stop'),
         close: () => connection.controls.push('close'),
       };
@@ -1919,14 +1923,14 @@ describe('createScreenSession', () => {
       expect(session.drivingMe()).toBe(true);
 
       session.handBack('done');
-      expect(connections[0].controls).toEqual(['handBack:done']);
+      expect(connections[0].controls).toEqual(['handBack:done@lease-1']);
       // The socket drops before the server answers.
       connections[0].handlers.onEnded('connectionLost');
       await vi.advanceTimersByTimeAsync(500);
       // The new connection hears the lease is still ours, on the old socket.
       connections[1].handlers.onState({ ...lease, drivingHere: false });
 
-      expect(connections[1].controls).toEqual(['handBack:done']);
+      expect(connections[1].controls).toEqual(['handBack:done@lease-1']);
       expect(session.store.controlLost).toBeUndefined();
 
       // The server lets go: nothing more is sent.
@@ -1940,7 +1944,7 @@ describe('createScreenSession', () => {
         driver: null,
         leaseId: null,
       });
-      expect(connections[1].controls).toEqual(['handBack:done']);
+      expect(connections[1].controls).toEqual(['handBack:done@lease-1']);
       dispose();
     });
   });
@@ -2176,6 +2180,62 @@ describe('createScreenSession', () => {
       for (const [index, at] of late.slice(1).entries())
         expect(at - late[index]).toBeGreaterThanOrEqual(60_000);
       expect(session.store.status).toEqual({ kind: 'asleep' });
+      dispose();
+    });
+  });
+
+  it('takes a stale hand-back as already done: no banner, no re-send, and follows the fresh state', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+    const lease = {
+      driver: { name: 'Alice', isYou: true },
+      agentHeld: true,
+      waking: false,
+      transport: 'vnc' as const,
+      viewers: 1,
+      leaseId: 'lease-1',
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      connections[0].handlers.onState({ ...lease, drivingHere: true });
+      session.handBack('done');
+      expect(connections[0].controls).toEqual(['handBack:done@lease-1']);
+
+      // lease-1 had already ended: the server refuses, then says who drives.
+      connections[0].handlers.onError({
+        code: 'staleHandBack',
+        message: 'That drive already ended; nothing was handed back.',
+      });
+      connections[0].handlers.onState({
+        ...lease,
+        driver: { name: 'Sam', isYou: false },
+        leaseId: 'lease-2',
+      });
+      expect(session.store.notice).toBeUndefined();
+      expect(session.drivingMe()).toBe(false);
+
+      // No hand-back is pending: a drop and reconnect send nothing.
+      connections[0].handlers.onEnded('connectionLost');
+      await vi.advanceTimersByTimeAsync(500);
+      connections[1].handlers.onState({
+        ...lease,
+        driver: { name: 'Sam', isYou: false },
+        leaseId: 'lease-2',
+      });
+      expect(connections[1].controls).toEqual([]);
       dispose();
     });
   });

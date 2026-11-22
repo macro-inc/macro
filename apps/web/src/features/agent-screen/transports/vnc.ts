@@ -288,7 +288,8 @@ async function connectVnc(
       for (const message of encodeInput(event)) socket.send(message);
     },
     takeOver: () => sendControl(socket, { type: 'takeOver' }),
-    handBack: (note) => sendControl(socket, { type: 'handBack', note }),
+    handBack: (note, leaseId) =>
+      sendControl(socket, { type: 'handBack', note, leaseId }),
     stop: () => sendControl(socket, { type: 'stop' }),
     close,
     snapshot(rect) {

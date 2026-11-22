@@ -74,7 +74,10 @@ Each appears only when the harness list gives the viewer access other than
    desktop the field is focused. Click the picture to focus it again.
 3. **Hold Esc** for a second, or click **Hand back**, to give control back,
    with an optional note. **Ctrl+Alt+Shift** (Control+Option+Shift on a Mac)
-   leaves the keyboard without handing back.
+   leaves the keyboard without handing back. The hand-back names its drive
+   (`leaseId`), so a tab that missed a newer drive of the same person's can't
+   end it: the harness answers `staleHandBack`, which the viewer takes as
+   already done (no banner).
 4. Paste with Ctrl+V or Cmd+V: the text goes onto the computer's clipboard,
    then pastes. Text outside Western European characters is refused with a
    notice; type it instead. Only the driver's socket gets the computer's

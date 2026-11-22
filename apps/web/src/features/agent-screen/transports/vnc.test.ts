@@ -342,4 +342,42 @@ describe('VNC_TRANSPORT', () => {
     port.close();
     element.remove();
   });
+
+  it('names the drive a hand-back is for on the wire', async () => {
+    const element = document.createElement('div');
+    document.body.append(element);
+    const connecting = VNC_TRANSPORT.connect(
+      element,
+      TICKET,
+      handlers(),
+      new AbortController().signal
+    );
+    const socket = FakeSocket.last;
+    if (!socket) throw new Error('no socket');
+    socket.open();
+    const frame = await frameIn(element);
+    const port = await frameAsksForPort(frame);
+    const fromFrame = (message: FromVncFrame) => port.postMessage(message);
+    fromFrame({
+      type: 'send',
+      data: new TextEncoder().encode('RFB 003.008\n').buffer,
+    });
+    fromFrame({ type: 'send', data: new Uint8Array([1, 1]).buffer });
+    fromFrame({ type: 'connected' });
+    const session = await connecting;
+
+    session.handBack('done', 'lease-1');
+    session.handBack(null);
+    const controls = socket.sent
+      .filter((message): message is string => typeof message === 'string')
+      .map((message) => JSON.parse(message))
+      .filter((message) => message.type === 'handBack');
+    expect(controls).toEqual([
+      { type: 'handBack', note: 'done', leaseId: 'lease-1' },
+      { type: 'handBack', note: null },
+    ]);
+    session.close();
+    port.close();
+    element.remove();
+  });
 });

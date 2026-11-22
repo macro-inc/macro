@@ -57,6 +57,7 @@ const serverMessageSchema = z.discriminatedUnion('type', [
         'sourceUnavailable',
         'tunnelFailed',
         'tooManySockets',
+        'staleHandBack',
         'badMessage',
         'inputFailed',
         'agentNotPausable',

@@ -23,7 +23,8 @@ export function ScreenNotice(props: { notice: ScreenError | undefined }) {
       .with('unknown', () => t('agentScreen.noticeUnknown'))
       .with('pasteUnsupported', () => t('agentScreen.noticePasteUnsupported'))
       // A message the client sent wrong: nothing the person can do.
-      .with('badMessage', () => undefined)
+      // A stale hand-back released nothing; the fresh state says who drives.
+      .with('badMessage', 'staleHandBack', () => undefined)
       .exhaustive();
 
   return (
