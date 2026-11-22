@@ -189,7 +189,10 @@ async fn main() -> Result<()> {
         .await
         .context("failed to serve");
 
-    // Write the seen times gathered so far before exiting.
+    // Reached only when serving fails: there is no graceful shutdown, so a
+    // stopped instance exits without this and its last round of seen marks
+    // (at most `FLUSH_EVERY`) is never written. Its clients reconnect to
+    // another instance, which marks them again on connect.
     shutdown.cancel();
     background.close();
     background.wait().await;
