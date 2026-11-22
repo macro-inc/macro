@@ -15,10 +15,7 @@ it.each([
     'PROVIDER_REJECTED',
     'The mail server refused this message. Check the recipient address and sender settings before trying again.',
   ],
-  [
-    undefined,
-    'This message was not submitted. Review your mailbox settings before trying again.',
-  ],
+  [undefined, 'This message was not submitted. Try sending again.'],
 ] as const)(
   'keeps a %s failure visible and requires a deliberate retry',
   async (reason, description) => {
@@ -60,6 +57,14 @@ it('requires deliberate acknowledgement before retrying an uncertain send', asyn
       source={{ operation: () => operation, resolve }}
     />
   ));
+  expect(
+    screen.getByText(
+      'Delivery could not be confirmed. Macro will not resend automatically. Check Sent mail or check again here.'
+    )
+  ).toBeTruthy();
+  expect(
+    screen.queryByText('This message was not submitted. Try sending again.')
+  ).toBeNull();
   await fireEvent.click(screen.getByRole('button', { name: 'Retry send' }));
   expect(resolve).not.toHaveBeenCalled();
   const confirm = screen.getByRole('button', {

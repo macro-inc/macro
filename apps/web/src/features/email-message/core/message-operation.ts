@@ -161,10 +161,7 @@ export function operationDescription(
         () =>
           'The mail server refused this message. Check the recipient address and sender settings before trying again.'
       )
-      .otherwise(
-        () =>
-          'This message was not submitted. Review your mailbox settings before trying again.'
-      );
+      .otherwise(() => 'This message was not submitted. Try sending again.');
   }
   if (operation.issue === 'ACCESS_REVOKED')
     return 'Access to this inbox has changed. Reconnect it or ask its owner to restore your access.';
