@@ -370,9 +370,15 @@ impl SortFactDerivation {
     }
 }
 
+/// `facts` is how many attributes `attributes` yields, duplicates included: no
+/// more facts than the limit can name more distinct attributes than it.
 fn validate_attribute_count<'a>(
+    facts: usize,
     attributes: impl IntoIterator<Item = &'a Token>,
 ) -> Result<(), ValidationError> {
+    if facts <= MAX_ATTRIBUTES_PER_DOCUMENT {
+        return Ok(());
+    }
     let mut distinct = HashSet::new();
     for attribute in attributes {
         distinct.insert(attribute);
@@ -381,6 +387,20 @@ fn validate_attribute_count<'a>(
         }
     }
     Ok(())
+}
+
+/// Whether two items share an attribute. A document has a few sort facts, so
+/// short lists compare pairs instead of hashing.
+fn has_duplicate<T>(items: &[T], attribute: impl Fn(&T) -> &Token) -> bool {
+    if items.len() <= 16 {
+        return items.iter().enumerate().any(|(index, item)| {
+            items[..index]
+                .iter()
+                .any(|earlier| attribute(earlier) == attribute(item))
+        });
+    }
+    let mut seen = HashSet::new();
+    items.iter().any(|item| !seen.insert(attribute(item)))
 }
 
 impl IndexDocument {
@@ -396,18 +416,14 @@ impl IndexDocument {
     /// Validate bounded attribute counts and unique sort attributes.
     pub fn validate(&self) -> Result<(), ValidationError> {
         validate_attribute_count(
+            self.exact_facts.len() + self.integer_facts.len() + self.sort_facts.len(),
             self.exact_facts
                 .iter()
                 .map(|fact| &fact.attribute)
                 .chain(self.integer_facts.iter().map(|fact| &fact.attribute))
                 .chain(self.sort_facts.iter().map(|fact| &fact.attribute)),
         )?;
-        let mut sort_attributes = HashSet::new();
-        if self
-            .sort_facts
-            .iter()
-            .any(|fact| !sort_attributes.insert(&fact.attribute))
-        {
+        if has_duplicate(&self.sort_facts, |fact| &fact.attribute) {
             return Err(ValidationError::DuplicateSortFact);
         }
         Ok(())
@@ -903,6 +919,7 @@ impl OptimisticProjectionMutation {
                 Self::Replace(document) => document.validate(),
                 Self::Delete { .. } | Self::Unknown { .. } => Ok(()),
                 Self::PatchExact { remove, insert, .. } => validate_attribute_count(
+                    remove.len() + insert.len(),
                     remove.iter().chain(insert).map(|fact| &fact.attribute),
                 ),
                 Self::Patch { .. } => unreachable!(),
@@ -910,6 +927,7 @@ impl OptimisticProjectionMutation {
         };
 
         validate_attribute_count(
+            exact.len() + integers.len() + sorts.len(),
             exact
                 .iter()
                 .map(|patch| &patch.attribute)
