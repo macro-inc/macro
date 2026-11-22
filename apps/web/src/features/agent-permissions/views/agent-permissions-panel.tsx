@@ -9,7 +9,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import RobotIcon from '@icon/system/regular/robot.svg';
 import { queryReadyGate } from '@queries/gate';
-import type { ToolPermissionCatalog } from '@service-agent-harness/generated/schemas';
+import type {
+  AgentToolPermissions,
+  ToolPermissionCatalog,
+} from '@service-agent-harness/generated/schemas';
 import { Button } from '@ui';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Match, Show, Switch } from 'solid-js';
@@ -32,7 +35,6 @@ import {
   useResetAgentToolPermissionsMutation,
   useToolPermissionCatalogQuery,
 } from '../queries/permissions';
-import type { PermissionsView } from '../queries/permissions-view';
 import { refusalMessage, usePermissionChanges } from './permission-changes';
 
 type PanelData =
@@ -42,7 +44,7 @@ type PanelData =
   | {
       kind: 'ready';
       catalog: ToolPermissionCatalog;
-      view: PermissionsView;
+      view: AgentToolPermissions;
     };
 
 const EMPTY_CATALOG: ToolPermissionCatalog = {

@@ -1,17 +1,15 @@
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import type { TraceContext } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
-import type { ToolPermissionCatalog } from '@service-agent-harness/generated/schemas';
+import type {
+  AgentToolPermissions,
+  ToolPermissionCatalog,
+  ToolPermissionChange,
+} from '@service-agent-harness/generated/schemas';
 import { toolPermissionsClient } from '@service-agent-harness/tool-permissions';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { agentToolPermissionKeys } from './keys';
-import {
-  normalizePermissionsView,
-  type PermissionChange,
-  type PermissionsView,
-  type PermissionsWireView,
-} from './permissions-view';
 
 /**
  * The routes answer 404 while the feature is off for the caller (or the
@@ -29,26 +27,6 @@ async function orUnavailable<T>(load: () => Promise<T>): Promise<T | null> {
 
 function fetchCatalog(): Promise<ToolPermissionCatalog | null> {
   return orUnavailable(() => throwOnErr(() => toolPermissionsClient.catalog()));
-}
-
-async function fetchAgentView(
-  agentId: string
-): Promise<PermissionsView | null> {
-  const view = await orUnavailable(() =>
-    throwOnErr(() => toolPermissionsClient.get<PermissionsWireView>(agentId))
-  );
-  return view && normalizePermissionsView(view);
-}
-
-async function fetchSessionView(
-  sessionId: string
-): Promise<PermissionsView | null> {
-  const view = await orUnavailable(() =>
-    throwOnErr(() =>
-      toolPermissionsClient.session<PermissionsWireView>(sessionId)
-    )
-  );
-  return view && normalizePermissionsView(view);
 }
 
 export function toolPermissionCatalogQueryOptions(enabled: boolean) {
@@ -69,7 +47,8 @@ export function agentToolPermissionsQueryOptions(
 ) {
   return queryOptions({
     queryKey: agentToolPermissionKeys.agent(agentId).queryKey,
-    queryFn: () => fetchAgentView(agentId),
+    queryFn: () =>
+      orUnavailable(() => throwOnErr(() => toolPermissionsClient.get(agentId))),
     enabled,
     refetchOnWindowFocus: true,
   });
@@ -81,7 +60,10 @@ export function sessionToolPermissionsQueryOptions(
 ) {
   return queryOptions({
     queryKey: agentToolPermissionKeys.session(sessionId).queryKey,
-    queryFn: () => fetchSessionView(sessionId),
+    queryFn: () =>
+      orUnavailable(() =>
+        throwOnErr(() => toolPermissionsClient.session(sessionId))
+      ),
     enabled,
     // Nothing pushes changes; a person may have changed them elsewhere.
     refetchOnWindowFocus: true,
@@ -116,8 +98,7 @@ export function useSessionToolPermissionsQuery(
   );
 }
 
-function storeView(wire: PermissionsWireView) {
-  const view = normalizePermissionsView(wire);
+function storeView(view: AgentToolPermissions) {
   queryClient.setQueryData(
     agentToolPermissionKeys.agent(view.agentId).queryKey,
     view
@@ -132,7 +113,7 @@ function storeView(wire: PermissionsWireView) {
 
 export type SetPermissionsVariables = {
   agentId: string;
-  changes: PermissionChange[];
+  changes: ToolPermissionChange[];
   /** The interaction the change belongs to; context is lost across awaits. */
   trace?: TraceContext;
 };
@@ -153,10 +134,11 @@ function setPermissionsMutationOptions(agentId: string) {
       }),
     mutationFn: (variables: SetPermissionsVariables) =>
       throwOnErr(() =>
-        toolPermissionsClient.set<
-          PermissionsWireView,
-          { changes: PermissionChange[] }
-        >(variables.agentId, { changes: variables.changes }, variables.trace)
+        toolPermissionsClient.set(
+          variables.agentId,
+          { changes: variables.changes },
+          variables.trace
+        )
       ),
     onSuccess: storeView,
   };
@@ -172,10 +154,7 @@ function resetPermissionsMutationOptions(agentId: string) {
       }),
     mutationFn: (variables: ResetPermissionsVariables) =>
       throwOnErr(() =>
-        toolPermissionsClient.reset<PermissionsWireView>(
-          variables.agentId,
-          variables.trace
-        )
+        toolPermissionsClient.reset(variables.agentId, variables.trace)
       ),
     onSuccess: storeView,
   };

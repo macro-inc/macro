@@ -23,9 +23,6 @@ changes.
 - `queries/permissions.ts`: catalog, per-agent and per-session queries,
   set/reset mutations (a save re-reads every session view). A 404 (feature
   off for the caller) reads as `null`: hide the UI.
-- `queries/permissions-view.ts`: the view and change types with action
-  defaults and entity exceptions, ahead of the generated client. Swap them
-  for the generated types when the backend's OpenAPI has them (see its TODO).
 - Chat: `components/gated-operation-list.tsx` and
   `blocked-by-permissions-card.tsx` (held or refused operations),
   `views/show-permissions-card.tsx` (the ShowPermissions card),
@@ -45,10 +42,14 @@ changes.
 
 - Wire names stay `always`/`ask`/`never` and `update`/`destroy`; only labels
   say Allow/Ask/Deny, Edit, Delete (`components/labels.ts`).
-- A default set to Allow sends `null` (no saved default is Allow). An
-  exception keeps any state, even one equal to the default; `Use default (X)`
-  sends `null`. A tool set to its action's state sends `null`
-  (`PendingChanges.setTool`, chat cards).
+- A default set to Allow sends `null` (no saved default is Allow). In the
+  settings an exception keeps any state, even one equal to the default; `Use
+  default (X)` sends `null`. In the chat cards, setting a group's action to
+  its action's default sends `null` (`changeForAction`), and a tool set to
+  its action's state sends `null` (`PendingChanges.setTool`).
+- The view's states are the server's: an exception the agent set on itself
+  only adds to the default (the stricter wins), so show `state`, never
+  recompute it from `rules`.
 - Count and show only visible pairs: an exception or tool rule counts when its
   entity has a tool for its action (`ruleVisible`). Rules on hidden pairs
   stay saved; Reset clears them too.

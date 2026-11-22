@@ -1,8 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import {
-  normalizePermissionsView,
-  type PermissionsWireView,
-} from '../queries/permissions-view';
 import { ENTITY_CATALOG, ENTITY_VIEW, VIEW } from '../tests/fixtures';
 import {
   ACTION_ORDER,
@@ -187,36 +183,5 @@ describe('focusedAction', () => {
       focusedAction(ENTITY_CATALOG, { group: 'email', action: 'read' })
     ).toBe('read');
     expect(focusedAction(ENTITY_CATALOG, { group: 'email' })).toBeUndefined();
-  });
-});
-
-describe('normalizePermissionsView', () => {
-  it('reads a server without defaults as Allow with saved exceptions', () => {
-    const wire: PermissionsWireView = {
-      ...VIEW,
-      defaults: undefined,
-      groups: VIEW.groups.map((group) => ({
-        group: group.group,
-        actions: group.actions.map(({ exception: _, ...pair }) => pair),
-      })),
-    };
-    const view = normalizePermissionsView(wire);
-    expect(view.defaults.map((entry) => entry.state)).toEqual([
-      'always',
-      'always',
-      'always',
-      'always',
-      'always',
-    ]);
-    expect(
-      actionPermission(groupPermissions(view, 'email'), 'send')?.exception
-    ).toBe(true);
-    expect(
-      actionPermission(groupPermissions(view, 'email'), 'read')?.exception
-    ).toBe(false);
-  });
-
-  it("keeps the server's own defaults and exception flags", () => {
-    expect(normalizePermissionsView(ENTITY_VIEW)).toEqual(ENTITY_VIEW);
   });
 });

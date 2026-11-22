@@ -1,18 +1,16 @@
 import type {
+  AgentToolPermissions,
   PermissionAction,
+  ToolPermissionAction,
   ToolPermissionCatalog,
   ToolPermissionCatalogGroup,
   ToolPermissionCatalogTool,
+  ToolPermissionChange,
+  ToolPermissionGroup,
+  ToolPermissionRule,
   ToolPermissionState,
+  ToolPermissionTarget,
 } from '@service-agent-harness/generated/schemas';
-import type {
-  PermissionChange,
-  PermissionGroup,
-  PermissionPair,
-  PermissionRule,
-  PermissionsView,
-  PermissionTarget,
-} from '../queries/permissions-view';
 
 /**
  * The permissions' pure logic. The server resolves every state; this only
@@ -40,25 +38,25 @@ export type PermissionFocus = {
 };
 
 /** A stable string for a target, for pending state and lookups. */
-export function targetKey(target: PermissionTarget): string {
+export function targetKey(target: ToolPermissionTarget): string {
   if (target.kind === 'tool')
     return `tool:${target.service}.${target.operation}`;
   if (target.kind === 'action') return `action:${target.action}`;
   return `group_action:${target.group}.${target.action}`;
 }
 
-export function toolTarget(tool: ToolRef): PermissionTarget {
+export function toolTarget(tool: ToolRef): ToolPermissionTarget {
   return { kind: 'tool', service: tool.service, operation: tool.operation };
 }
 
 export function groupActionTarget(
   group: string,
   action: PermissionAction
-): PermissionTarget {
+): ToolPermissionTarget {
   return { kind: 'group_action', group, action };
 }
 
-export function actionTarget(action: PermissionAction): PermissionTarget {
+export function actionTarget(action: PermissionAction): ToolPermissionTarget {
   return { kind: 'action', action };
 }
 
@@ -71,15 +69,15 @@ export function toolKey(tool: ToolRef): string {
 }
 
 /** The tool's override in its action, when its state differs from the action's. */
-export function toolOverride(action: PermissionPair, tool: ToolRef) {
+export function toolOverride(action: ToolPermissionAction, tool: ToolRef) {
   return action.overrides.find((override) => sameTool(override, tool));
 }
 
 /** The saved rule for a target, if there is one. */
 export function ruleFor(
-  rules: readonly PermissionRule[],
-  target: PermissionTarget
-): PermissionRule | undefined {
+  rules: readonly ToolPermissionRule[],
+  target: ToolPermissionTarget
+): ToolPermissionRule | undefined {
   const key = targetKey(target);
   return rules.find((rule) => targetKey(rule.target) === key);
 }
@@ -94,7 +92,7 @@ export function changeForTool(
   actionState: ToolPermissionState,
   tool: ToolRef,
   state: ToolPermissionState
-): PermissionChange {
+): ToolPermissionChange {
   return {
     target: toolTarget(tool),
     state: state === actionState ? null : state,
@@ -112,7 +110,7 @@ export function changeForAction(
   action: PermissionAction,
   state: ToolPermissionState,
   defaultState: ToolPermissionState
-): PermissionChange {
+): ToolPermissionChange {
   return {
     target: groupActionTarget(group, action),
     state: state === defaultState ? null : state,
@@ -121,16 +119,16 @@ export function changeForAction(
 
 /** The view's permissions for one group, if the view lists it. */
 export function groupPermissions(
-  view: PermissionsView,
+  view: AgentToolPermissions,
   group: string
-): PermissionGroup | undefined {
+): ToolPermissionGroup | undefined {
   return view.groups.find((entry) => entry.group === group);
 }
 
 export function actionPermission(
-  group: PermissionGroup | undefined,
+  group: ToolPermissionGroup | undefined,
   action: PermissionAction
-): PermissionPair | undefined {
+): ToolPermissionAction | undefined {
   return group?.actions.find((entry) => entry.action === action);
 }
 
@@ -180,7 +178,7 @@ export function entitiesFor(
 
 /** The action's default; no saved default is Allow. */
 export function defaultFor(
-  view: PermissionsView,
+  view: AgentToolPermissions,
   action: PermissionAction
 ): ToolPermissionState {
   return (
@@ -195,7 +193,7 @@ export type Exception = {
 
 /** A control's state while its change saves, if one is saving. */
 export type PendingLookup = (
-  target: PermissionTarget
+  target: ToolPermissionTarget
 ) => ToolPermissionState | undefined;
 
 const NOTHING_PENDING: PendingLookup = () => undefined;
@@ -206,7 +204,7 @@ const NOTHING_PENDING: PendingLookup = () => undefined;
  */
 export function exceptionsFor(
   catalog: ToolPermissionCatalog,
-  view: PermissionsView,
+  view: AgentToolPermissions,
   action: PermissionAction,
   pending: PendingLookup = NOTHING_PENDING
 ): Exception[] {
@@ -243,13 +241,13 @@ export function addableEntities(
 export type ToolSetting = {
   tool: ToolPermissionCatalogTool;
   group: ToolPermissionCatalogGroup;
-  rule: PermissionRule;
+  rule: ToolPermissionRule;
 };
 
 /** Saved rules on individual tools of `action`, for catalog tools only. */
 export function toolSettingsFor(
   catalog: ToolPermissionCatalog,
-  view: PermissionsView,
+  view: AgentToolPermissions,
   action: PermissionAction
 ): ToolSetting[] {
   return catalog.groups.flatMap((group) =>
@@ -264,7 +262,7 @@ export function toolSettingsFor(
 export function changeForDefault(
   action: PermissionAction,
   state: ToolPermissionState
-): PermissionChange {
+): ToolPermissionChange {
   return {
     target: actionTarget(action),
     state: state === 'always' ? null : state,
@@ -279,7 +277,7 @@ export function changeForException(
   group: string,
   action: PermissionAction,
   state: ToolPermissionState | null
-): PermissionChange {
+): ToolPermissionChange {
   return { target: groupActionTarget(group, action), state };
 }
 
@@ -299,7 +297,7 @@ export function exceptionStates(
 /** Whether a rule is shown: defaults always, an exception on a visible pair, a tool in the catalog. */
 function ruleVisible(
   catalog: ToolPermissionCatalog,
-  rule: PermissionRule
+  rule: ToolPermissionRule
 ): boolean {
   const target = rule.target;
   if (target.kind === 'action') return true;
@@ -316,7 +314,7 @@ function ruleVisible(
 /** Visible saved settings, for the "N settings changed" line. */
 export function settingCounts(
   catalog: ToolPermissionCatalog,
-  rules: readonly PermissionRule[]
+  rules: readonly ToolPermissionRule[]
 ) {
   const visible = rules.filter((rule) => ruleVisible(catalog, rule));
   return {

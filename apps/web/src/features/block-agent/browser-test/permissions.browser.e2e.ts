@@ -19,6 +19,10 @@ async function shot(
   const path = SHOTS
     ? `${SHOTS}/${name}-${isMobile ? 'mobile' : 'desktop'}-${THEME ?? 'dark'}.png`
     : test.info().outputPath(`${name}.png`);
+  // Let carets and menus finish moving before the picture.
+  await page.evaluate(() =>
+    Promise.all(document.getAnimations().map((animation) => animation.finished))
+  );
   // The transcript (or the page) scrolls inside the window, as in the app:
   // grow the window to all of it for the picture, then put it back.
   const size = page.viewportSize();

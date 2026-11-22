@@ -3,6 +3,7 @@
  */
 
 import { queryClient } from '@queries/client';
+import type { AgentToolPermissions } from '@service-agent-harness/generated/schemas';
 import {
   cleanup,
   fireEvent,
@@ -15,7 +16,6 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PermissionsView } from '../queries/permissions-view';
 import { CATALOG, VIEW } from '../tests/fixtures';
 import { ShowPermissionsCard } from './show-permissions-card';
 
@@ -37,7 +37,7 @@ vi.mock('@core/constant/SettingsState', () => ({
 const toasts = vi.hoisted(() => ({ success: vi.fn(), failure: vi.fn() }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: toasts }));
 
-function renderCard(view: PermissionsView = VIEW) {
+function renderCard(view: AgentToolPermissions = VIEW) {
   client.catalog.mockResolvedValue(ok(CATALOG));
   client.session.mockResolvedValue(ok(view));
   return render(() => (

@@ -5,6 +5,7 @@ import type {
   ToolPermissionCatalogGroup,
   ToolPermissionState,
 } from '@service-agent-harness/generated/schemas';
+import { cn } from '@ui';
 import { createSignal, createUniqueId, For, Show } from 'solid-js';
 import type { Exception, ToolSetting } from '../core/model';
 import { EntityPicker } from './entity-picker';
@@ -82,8 +83,10 @@ export function ActionAccordion(props: {
         >
           <CaretRightIcon
             aria-hidden="true"
-            class="size-3.5 shrink-0 text-ink-muted transition-transform"
-            classList={{ 'rotate-90': props.open }}
+            class={cn(
+              'size-3.5 shrink-0 text-ink-muted transition-transform',
+              props.open && 'rotate-90'
+            )}
           />
           <span class="text-sm font-medium text-ink">{props.name}</span>
           <Show

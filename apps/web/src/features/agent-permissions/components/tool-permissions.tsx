@@ -1,7 +1,9 @@
 import { t } from '@app/lib/i18n';
 import type {
+  AgentToolPermissions,
   PermissionAction,
   ToolPermissionCatalog,
+  ToolPermissionChange,
   ToolPermissionState,
 } from '@service-agent-harness/generated/schemas';
 import { createSignal, For, Show } from 'solid-js';
@@ -19,10 +21,6 @@ import {
   toolSettingsFor,
   toolTarget,
 } from '../core/model';
-import type {
-  PermissionChange,
-  PermissionsView,
-} from '../queries/permissions-view';
 import { ActionAccordion } from './action-accordion';
 import { actionLabel } from './labels';
 
@@ -34,14 +32,14 @@ import { actionLabel } from './labels';
  */
 export function ToolPermissions(props: {
   catalog: ToolPermissionCatalog;
-  view: PermissionsView;
+  view: AgentToolPermissions;
   editable: boolean;
   /** Shows the "Tool permissions" title and its description. */
   heading?: boolean;
   /** The action to show expanded at first, e.g. from a link. */
   initialAction?: PermissionAction;
   pendingState: PendingLookup;
-  onChange: (change: PermissionChange, shown: ToolPermissionState) => void;
+  onChange: (change: ToolPermissionChange, shown: ToolPermissionState) => void;
 }) {
   const [expanded, setExpanded] = createSignal<PermissionAction[]>(
     props.initialAction ? [props.initialAction] : []

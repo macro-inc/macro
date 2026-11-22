@@ -8,6 +8,7 @@ import LockIcon from '@icon/system/regular/lock-simple.svg';
 import ShieldCheckIcon from '@icon/system/regular/shield-check.svg';
 import { queryReadyGate } from '@queries/gate';
 import type {
+  AgentToolPermissions,
   PermissionAction,
   ShowPermissionsSelection,
   ToolPermissionCatalog,
@@ -41,7 +42,6 @@ import {
   useSessionToolPermissionsQuery,
   useToolPermissionCatalogQuery,
 } from '../queries/permissions';
-import type { PermissionsView } from '../queries/permissions-view';
 import { useOpenAgentPermissions } from './open-agent-permissions';
 import { usePermissionChanges } from './permission-changes';
 
@@ -52,7 +52,7 @@ type CardData =
   | {
       kind: 'ready';
       catalog: ToolPermissionCatalog;
-      view: PermissionsView;
+      view: AgentToolPermissions;
     };
 
 /**
@@ -294,7 +294,7 @@ export function ShowPermissionsCard(props: {
 function SelectionGroup(props: {
   block: SelectionBlock;
   catalog: ToolPermissionCatalog;
-  view: PermissionsView;
+  view: AgentToolPermissions;
   agentName: string;
   canEdit: boolean;
   pendingState: (key: string) => ToolPermissionState | undefined;

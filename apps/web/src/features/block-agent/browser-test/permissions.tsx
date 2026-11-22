@@ -8,11 +8,6 @@
 // and entity exceptions) instead of the session.
 
 import { AgentPermissionsPanel } from '@app/features/agent-permissions';
-import type {
-  PermissionChange,
-  PermissionRule,
-  PermissionsWireView,
-} from '@app/features/agent-permissions/queries/permissions-view';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
@@ -24,11 +19,14 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
+  AgentToolPermissions,
   ExecutionPermission,
   ExecutionRecord,
   GatedOperation,
   PermissionAction,
   ToolPermissionCatalog,
+  ToolPermissionChange,
+  ToolPermissionRule,
   ToolPermissionState,
 } from '@service-agent-harness/generated/schemas';
 import { toolPermissionsClient } from '@service-agent-harness/tool-permissions';
@@ -231,8 +229,8 @@ if (params.get('view') === 'page') {
 
 const UPDATED_AT = '2026-11-18T10:00:00Z';
 
-function view(): PermissionsWireView {
-  const rules: PermissionRule[] = [
+function view(): AgentToolPermissions {
+  const rules: ToolPermissionRule[] = [
     ...Object.entries(defaults).map(([action, state]) => ({
       target: { kind: 'action' as const, action: action as PermissionAction },
       state,
@@ -293,7 +291,7 @@ Object.assign(toolPermissionsClient, {
   catalog: async () => ok(CATALOG),
   session: async () => ok(view()),
   get: async () => ok(view()),
-  set: async (_agent: string, body: { changes: PermissionChange[] }) => {
+  set: async (_agent: string, body: { changes: ToolPermissionChange[] }) => {
     await new Promise((resolve) => setTimeout(resolve, 250));
     for (const change of body.changes) {
       const target = change.target;
