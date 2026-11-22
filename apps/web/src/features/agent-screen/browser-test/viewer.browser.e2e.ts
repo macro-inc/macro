@@ -182,7 +182,7 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `toomany-${theme}`);
     });
 
-    test('asleep: Turn on and no Take over; turning on says so through the boot, then live', async ({
+    test('asleep and turning on: no Take over; turning on says so through the boot, then live', async ({
       page,
     }) => {
       await open(page, `state=asleep&width=800&theme=${theme}`);
@@ -194,6 +194,9 @@ for (const theme of ['light', 'dark'] as const) {
 
       await page.getByRole('button', { name: 'Turn on' }).click();
       await expect(page.getByText('Turning Eve’s computer on…')).toBeVisible();
+      await expect(page.getByRole('button', { name: /Take over/ })).toHaveCount(
+        0
+      );
       await shot(page, `turning-on-${theme}`);
       // The boot's unreachable screen is not a reconnect error.
       for (let check = 0; check < 8; check++) {

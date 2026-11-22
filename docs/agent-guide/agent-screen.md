@@ -43,7 +43,7 @@ Each appears only when the harness list gives the viewer access other than
   shows "Reconnecting is paused for a minute", retries once after the
   minute, and if still limited ends with **Try again**.
 - Once the view has ended (stopped, refused, gone), or while the computer is
-  asleep, only the overlay's own action shows: no Take over.
+  asleep or starting, only the overlay's own action shows: no Take over.
 - **Turn on** says "Turning {name}'s computer on…" at once and keeps saying it
   through the boot: for up to two minutes, an unreachable screen (or "off")
   is retried every 2 s without a reconnect error, until the picture shows.
