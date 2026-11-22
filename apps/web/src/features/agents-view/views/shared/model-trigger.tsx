@@ -40,9 +40,9 @@ export function UnifiedModelTrigger(props: {
       .filter(Boolean)
       .join(', ');
   return (
-    // Beside the trigger, in the composer's empty toolbar row: below it, it
-    // covered the mode chips, and above, the prompt's text.
-    <Tooltip.Root placement="left" disabled={props.menuOpen}>
+    // Above the trigger, aligned to its end: below it, it covered the mode
+    // chips, and centred above, the start of the prompt's last line.
+    <Tooltip.Root placement="top-end" disabled={props.menuOpen}>
       <Tooltip.Trigger as="span" class="min-w-0 max-w-full">
         {props.children}
       </Tooltip.Trigger>
