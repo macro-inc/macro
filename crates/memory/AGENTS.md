@@ -48,7 +48,11 @@ workers; each generation has a 20-minute timeout. Profile revisions guard the
 atomic component commit. Days commit in order: a failed day is retried after a
 growing delay and given up after `MAX_REFRESH_ATTEMPTS` claims, committing the
 pieces that passed review (kept in `memory_refresh_piece` between attempts). A day
-with no activity in the activity log (`MemoryActivity`) commits without model calls.
+with no activity in the activity log (`MemoryActivity::acted_on`, which counts
+agent work for the user) commits without model calls. A scheduled claim of a user
+who has not used Macro within `AWAY_AFTER` (14 days, `MemoryActivity::used_since`,
+the activity crate's `UserActivity`) commits its day the same way; missed days
+are not caught up on return. `refresh`/`refresh_through` (the CLI) skip that check.
 
 ## Checks
 

@@ -213,15 +213,51 @@ impl MemoryTeams for Teams {
         Ok(self.0.lock().unwrap().clone())
     }
 }
-struct Active(bool);
+/// The activity log: every day has activity when `acted`, and the user is
+/// around when `around` is `Some(true)`; `None` fails the read.
+struct Active {
+    acted: bool,
+    around: Mutex<Option<bool>>,
+    /// The `since` of every `used_since` read, in order.
+    asked: Mutex<Vec<chrono::DateTime<Utc>>>,
+}
+impl Active {
+    fn new(acted: bool, around: Option<bool>) -> Arc<Self> {
+        Arc::new(Self {
+            acted,
+            around: Mutex::new(around),
+            asked: Mutex::default(),
+        })
+    }
+    fn set_around(&self, around: bool) {
+        *self.around.lock().unwrap() = Some(around);
+    }
+}
 #[async_trait::async_trait]
 impl MemoryActivity for Active {
     async fn acted_on(&self, _: &MacroUserIdStr<'_>, _: NaiveDate) -> Result<bool> {
-        Ok(self.0)
+        Ok(self.acted)
+    }
+    async fn used_since(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        since: chrono::DateTime<Utc>,
+    ) -> Result<bool> {
+        self.asked.lock().unwrap().push(since);
+        let around = *self.around.lock().unwrap();
+        around.ok_or_else(|| MemoryError::Other(anyhow::anyhow!("activity log unavailable")))
     }
 }
 fn active() -> Arc<dyn MemoryActivity> {
-    Arc::new(Active(true))
+    Active::new(true, Some(true))
+}
+fn claim(user: &MacroUserIdStr<'static>, date: NaiveDate) -> RefreshClaim {
+    RefreshClaim {
+        user: user.clone(),
+        date,
+        token: Uuid::now_v7(),
+        attempt: 1,
+    }
 }
 fn no_teams() -> Arc<dyn MemoryTeams> {
     Arc::new(Teams(Mutex::new(vec![])))
@@ -448,7 +484,7 @@ async fn inactive_day_commits_without_model_calls() {
         generator.clone(),
         judge.clone(),
         no_teams(),
-        Arc::new(Active(false)),
+        Active::new(false, Some(true)),
     );
     let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     service.refresh(user, date).await.unwrap();
@@ -587,6 +623,148 @@ async fn claim_past_the_cap_gives_up_without_model_calls() {
     assert_eq!(data.released, vec![MAX_REFRESH_ATTEMPTS + 1]);
     assert_eq!(data.snapshot.through_date, Some(date));
     assert!(data.snapshot.activity.is_empty());
+}
+
+/// A user whose day is due yesterday, with an existing profile.
+fn due_yesterday(repo: &Repo) -> (MacroUserIdStr<'static>, NaiveDate) {
+    let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let date = Utc::now().date_naive() - Duration::days(1);
+    let mut data = repo.0.lock().unwrap();
+    data.snapshot.through_date = Some(date - Duration::days(1));
+    data.snapshot.profile = "Existing profile".into();
+    data.claims = vec![claim(&user, date)];
+    (user, date)
+}
+
+#[tokio::test]
+async fn an_away_user_is_not_generated_for_even_when_their_agents_worked() {
+    let repo = Repo::default();
+    let (_, date) = due_yesterday(&repo);
+    // The day has activity (their routines ran), but they have not used Macro.
+    let activity = Active::new(true, Some(false));
+    let generator = Arc::new(Generator::default());
+    let judge = Arc::new(Judge::default());
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        generator.clone(),
+        judge.clone(),
+        no_teams(),
+        activity.clone(),
+    );
+    let before = Utc::now();
+    service.refresh_pending(|| async { false }).await.unwrap();
+    let after = Utc::now();
+    assert_eq!(generator.calls(), 0);
+    assert_eq!(judge.reviews(), 0);
+    let data = repo.0.lock().unwrap();
+    assert_eq!(data.released, vec![1], "the day is released, not retried");
+    assert!(data.retried.is_empty());
+    assert_eq!(data.snapshot.through_date, Some(date), "the day is passed");
+    assert!(data.snapshot.activity.is_empty(), "with no report");
+    assert_eq!(data.snapshot.profile, "Existing profile");
+    let asked = activity.asked.lock().unwrap();
+    assert_eq!(asked.len(), 1);
+    assert!(before - AWAY_AFTER <= asked[0] && asked[0] <= after - AWAY_AFTER);
+}
+
+#[tokio::test]
+async fn an_active_user_is_generated_for() {
+    let repo = Repo::default();
+    let (_, date) = due_yesterday(&repo);
+    let generator = Arc::new(Generator::default());
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        generator.clone(),
+        Arc::new(Judge::default()),
+        no_teams(),
+        active(),
+    );
+    service.refresh_pending(|| async { false }).await.unwrap();
+    assert_eq!(generator.calls(), 5, "day, week, month, summary, profile");
+    let data = repo.0.lock().unwrap();
+    assert_eq!(data.released, vec![1]);
+    assert_eq!(data.snapshot.through_date, Some(date));
+    assert_eq!(data.snapshot.activity.len(), 4);
+    assert_eq!(data.snapshot.profile, PROFILE);
+}
+
+#[tokio::test]
+async fn an_unreadable_activity_check_still_generates() {
+    let repo = Repo::default();
+    let (_, date) = due_yesterday(&repo);
+    let generator = Arc::new(Generator::default());
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        generator.clone(),
+        Arc::new(Judge::default()),
+        no_teams(),
+        Active::new(true, None),
+    );
+    service.refresh_pending(|| async { false }).await.unwrap();
+    assert_eq!(generator.calls(), 5);
+    assert_eq!(repo.0.lock().unwrap().snapshot.through_date, Some(date));
+}
+
+#[tokio::test]
+async fn a_returning_user_is_generated_for_from_their_return_without_the_missed_days() {
+    let repo = Repo::default();
+    let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let yesterday = Utc::now().date_naive() - Duration::days(1);
+    let away_days = [yesterday - Duration::days(2), yesterday - Duration::days(1)];
+    repo.0.lock().unwrap().snapshot.through_date = Some(away_days[0] - Duration::days(1));
+    let activity = Active::new(true, Some(false));
+    let generator = Arc::new(Generator::default());
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        generator.clone(),
+        Arc::new(Judge::default()),
+        no_teams(),
+        activity.clone(),
+    );
+    // Each day is claimed as it comes due; the user is away for the first two.
+    for day in away_days {
+        repo.0.lock().unwrap().claims = vec![claim(&user, day)];
+        service.refresh_pending(|| async { false }).await.unwrap();
+        assert_eq!(repo.0.lock().unwrap().snapshot.through_date, Some(day));
+    }
+    assert_eq!(generator.calls(), 0);
+    activity.set_around(true);
+    repo.0.lock().unwrap().claims = vec![claim(&user, yesterday)];
+    service.refresh_pending(|| async { false }).await.unwrap();
+    assert_eq!(generator.calls(), 5, "only the day after they came back");
+    let inputs = generator.inputs.lock().unwrap();
+    assert!(inputs[0].0.contains(&yesterday.to_string()));
+    let data = repo.0.lock().unwrap();
+    assert_eq!(data.writes, 3);
+    assert_eq!(data.snapshot.through_date, Some(yesterday));
+    let days: Vec<_> = data
+        .snapshot
+        .activity
+        .iter()
+        .filter(|report| report.granularity == Granularity::Day)
+        .map(|report| report.period_start)
+        .collect();
+    assert_eq!(days, vec![yesterday]);
+}
+
+#[tokio::test]
+async fn the_one_user_catch_up_ignores_the_away_check() {
+    let repo = Repo::default();
+    let date = NaiveDate::from_ymd_opt(2026, 6, 17).unwrap();
+    repo.0.lock().unwrap().snapshot.through_date = Some(date - Duration::days(1));
+    let activity = Active::new(true, Some(false));
+    let generator = Arc::new(Generator::default());
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        generator.clone(),
+        Arc::new(Judge::default()),
+        no_teams(),
+        activity.clone(),
+    );
+    let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    service.refresh_through(user, date).await.unwrap();
+    assert_eq!(generator.calls(), 5);
+    assert!(activity.asked.lock().unwrap().is_empty());
 }
 
 #[test]
