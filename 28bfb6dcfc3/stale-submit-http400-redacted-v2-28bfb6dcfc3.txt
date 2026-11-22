@@ -1,3 +1,15 @@
+ACTUAL CURL RESPONSE EXCERPT (copied from the captured response below)
+HTTP/2 400
+
+This review is not ready to approve yet. Check it again before approving.
+
+SOURCE MAPPING ANNOTATION: CodeModeError::NotApprovable maps to HTTP400
+at the recorded head. The wire response is the plain-text sentence above;
+it does not contain a JSON enum field named NotApprovable.
+
+Raw curl trace follows. Tokens, cookies, addresses, session/review path IDs
+and the request's review-item UUID are redacted; binary TLS dumps omitted.
+
 ACTUAL CURL HTTP TRANSCRIPT — tokens/cookies/private addresses redacted
 POST /agent-harness/agent-sessions/[session]/reviews/[review]
 Content-Type: application/json
@@ -98,8 +110,7 @@ Action: submit; old review/items; current revision
 => Send header, 943 bytes (0x3af)
 [header bytes redacted: authorization/cookies/private addresses omitted]
 => Send data, 81 bytes (0x51)
-0000: {"action":"submit","revision":1,"items":["01a20302-97f7-7d9e-989
-0040: d-cce86ac6be09"]}
+0000: {"action":"submit","revision":1,"items":["[review-item redacted]"]}
 * upload completely sent off: 81 bytes
 <= Recv SSL data, 5 bytes (0x5)
 [TLS record byte dump omitted]
