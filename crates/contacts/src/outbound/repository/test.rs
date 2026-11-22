@@ -38,7 +38,21 @@ async fn test_delete_connections_removes_only_the_named_pairs(pool: PgPool) -> s
          ('macro|ALPHA@example.com', 'macro|leaver@example.com'),
          ('macro|Zed@example.com', 'macro|leaver@example.com'),
          ('macro|b@example.com', 'macro|leaver@example.com'),
-         ('macro|a@example.com', 'macro|b@example.com')"
+         ('macro|a@example.com', 'macro|b@example.com'),
+         ('macro|kept@example.com', 'macro|leaver@example.com')"
+    )
+    .execute(&pool)
+    .await?;
+    // The kept peer's inbox knows the leaver, so their edge stays.
+    sqlx::query!(
+        "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+         VALUES ('00000000-0000-4000-a000-000000000001', 'macro|kept@example.com', 'fa-kept', 'kept@example.com', 'GMAIL')"
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO contact_inbox_members (user_id, contact_user_id, link_id, list_key)
+         VALUES ('macro|kept@example.com', 'macro|leaver@example.com', '00000000-0000-4000-a000-000000000001', 'gmail')"
     )
     .execute(&pool)
     .await?;
@@ -57,6 +71,10 @@ async fn test_delete_connections_removes_only_the_named_pairs(pool: PgPool) -> s
         (
             mid("macro|leaver@example.com"),
             mid("macro|nobody@example.com"),
+        ),
+        (
+            mid("macro|leaver@example.com"),
+            mid("macro|kept@example.com"),
         ),
     ])
     .await
@@ -79,6 +97,10 @@ async fn test_delete_connections_removes_only_the_named_pairs(pool: PgPool) -> s
             (
                 "macro|a@example.com".to_owned(),
                 "macro|b@example.com".to_owned()
+            ),
+            (
+                "macro|kept@example.com".to_owned(),
+                "macro|leaver@example.com".to_owned()
             ),
         ]
     );

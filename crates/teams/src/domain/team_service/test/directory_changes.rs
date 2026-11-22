@@ -327,3 +327,47 @@ async fn deleting_a_team_disconnects_every_pair_of_members() {
         pairs(&[(OWNER, TEAMMATE), (OWNER, MEMBER), (TEAMMATE, MEMBER)])
     );
 }
+
+#[tokio::test]
+async fn deleting_a_large_team_disconnects_every_pair_in_bounded_batches() {
+    let team_id = uuid::Uuid::from_u128(0x6330_000d);
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let members: Vec<String> = (0..34)
+        .map(|index| format!("macro|member{index}@example.com"))
+        .collect();
+    let mut team_repository =
+        MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+    team_repository.team_members = members
+        .iter()
+        .map(|member| make_team_member(team_id, member, TeamRole::Member))
+        .collect();
+    let contacts_enqueuer = RecordingContactsEnqueuer::default();
+    let service = TeamServiceImpl::new(
+        team_repository,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_contacts_enqueuer(contacts_enqueuer.clone())
+    .with_owned_entity_cleanup(RecordingOwnedEntityCleanup::default());
+
+    service
+        .delete_team(test_team_receipt::<OwnerTeamRole>(team_id, &owner))
+        .await
+        .unwrap();
+
+    // 34 members make 561 pairs: one full batch and the rest.
+    let batches = contacts_enqueuer.disconnections.lock().unwrap();
+    let sizes: Vec<_> = batches.iter().map(Vec::len).collect();
+    assert_eq!(sizes, vec![500, 61]);
+    let pairs: HashSet<_> = batches
+        .iter()
+        .flatten()
+        .map(|(first, second)| (first.to_string(), second.to_string()))
+        .collect();
+    assert_eq!(pairs.len(), 561);
+    assert!(pairs.contains(&(members[0].clone(), members[33].clone())));
+}

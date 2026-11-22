@@ -106,6 +106,9 @@ enum SeatBilling {
     Included,
 }
 
+/// How many ended teammate pairs a team deletion hands to contacts at once.
+const ENDED_PAIRS_PER_BATCH: usize = 500;
+
 /// Implementation of the TeamService using a TeamRepository
 #[derive(Debug)]
 pub struct TeamServiceImpl<
@@ -933,16 +936,19 @@ where
             .delete_team(&cleared)
             .await
             .map_err(DeleteTeamError::TeamError)?;
-        // Every member lost every other member as a teammate.
-        let ended = member_user_ids
-            .iter()
-            .enumerate()
-            .flat_map(|(index, member)| {
-                member_user_ids[index + 1..]
-                    .iter()
-                    .map(move |other| (member.clone(), other.clone()))
-            })
-            .collect();
+        // Every member lost every other member as a teammate. A roster has
+        // no size cap, so the n(n-1)/2 pairs go out in bounded batches
+        // instead of being collected whole first.
+        let mut ended = Vec::with_capacity(ENDED_PAIRS_PER_BATCH);
+        for (index, member) in member_user_ids.iter().enumerate() {
+            for other in &member_user_ids[index + 1..] {
+                ended.push((member.clone(), other.clone()));
+                if ended.len() == ENDED_PAIRS_PER_BATCH {
+                    self.enqueue_ended_contacts(&team_id, std::mem::take(&mut ended))
+                        .await;
+                }
+            }
+        }
         self.enqueue_ended_contacts(&team_id, ended).await;
         if member_user_ids.len() > 1 {
             self.send_directory_changed(&team_id, member_user_ids.clone(), member_user_ids.clone())
