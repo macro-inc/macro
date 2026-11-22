@@ -166,6 +166,64 @@ describe('AgentPermissionsPage', () => {
     });
   });
 
+  it("keeps a tool's own choice when its action's save fails", async () => {
+    // Send (saved as Ask) is being set to Never when a tool is set to
+    // Never too; then the Send save fails.
+    let failSend: (value: unknown) => void = () => {};
+    client.set.mockReturnValueOnce(
+      new Promise((resolve) => {
+        failSend = resolve;
+      })
+    );
+    renderPage();
+    await openGroup('Email');
+    fireEvent.click(option('Email: Send', 'Never'));
+    fireEvent.click(option('Forward calendar event', 'Never'));
+    failSend(err([{ code: 'SERVER_ERROR', message: 'Server error' }]));
+
+    await waitFor(() => expect(client.set).toHaveBeenCalledTimes(2));
+    expect(client.set.mock.calls[1]?.[1]).toEqual({
+      changes: [
+        {
+          target: {
+            kind: 'tool',
+            service: 'email',
+            operation: 'forward_event',
+          },
+          state: 'never',
+        },
+      ],
+    });
+  });
+
+  it("lets a tool follow its action once the action's save lands", async () => {
+    let finishSend: (value: unknown) => void = () => {};
+    client.set.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishSend = resolve;
+      })
+    );
+    renderPage();
+    await openGroup('Email');
+    fireEvent.click(option('Email: Send', 'Never'));
+    fireEvent.click(option('Forward calendar event', 'Never'));
+    finishSend(ok(VIEW));
+
+    await waitFor(() => expect(client.set).toHaveBeenCalledTimes(2));
+    expect(client.set.mock.calls[1]?.[1]).toEqual({
+      changes: [
+        {
+          target: {
+            kind: 'tool',
+            service: 'email',
+            operation: 'forward_event',
+          },
+          state: null,
+        },
+      ],
+    });
+  });
+
   it('clears a tool rule from its reset button', async () => {
     renderPage();
     await openGroup('Email');

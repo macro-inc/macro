@@ -74,8 +74,8 @@ export function ruleFor(
 }
 
 /**
- * The change that sets a tool to `state`, given its action's state (the one
- * being saved, if the action is changing too). Setting it to that state
+ * The change that sets a tool to `state`, given the state its action is
+ * saved in (once the action's own change, if any, has saved). Setting it to that state
  * clears its own rule (`null`), so a saved tool rule always means "differs".
  */
 export function changeForTool(

@@ -8,6 +8,7 @@ import type {
   ToolPermissionCatalogTool,
   ToolPermissionChange,
   ToolPermissionState,
+  ToolPermissionTarget,
 } from '@service-agent-harness/generated/schemas';
 import {
   createMemo,
@@ -38,7 +39,6 @@ import {
   ACTION_ORDER,
   actionPermission,
   changeForAction,
-  changeForTool,
   type GroupMatch,
   groupActionTarget,
   groupPermissions,
@@ -215,35 +215,50 @@ export function AgentPermissionsList(props: {
   };
 
   // `apply` reports its own failures, so the clicks don't wait on it.
-  const apply = (change: ToolPermissionChange, shown: ToolPermissionState) =>
-    fireAndForget(props.changes.apply(change, shown), 'agent-permissions');
+  const apply = (
+    target: ToolPermissionTarget,
+    shown: ToolPermissionState,
+    change: ToolPermissionChange
+  ) =>
+    fireAndForget(
+      props.changes.apply(target, shown, change),
+      'agent-permissions'
+    );
 
   const setAction = (
     groupId: string,
     action: PermissionAction,
     state: ToolPermissionState
-  ) => apply(changeForAction(groupId, action, state), state);
+  ) =>
+    apply(
+      groupActionTarget(groupId, action),
+      state,
+      changeForAction(groupId, action, state)
+    );
 
-  // Tools compare with the action's state as shown, so a tool set right
-  // after its action still saves against the action's new state.
   const setTool = (
     group: ToolPermissionCatalogGroup,
     tool: ToolPermissionCatalogTool,
     state: ToolPermissionState
   ) =>
-    apply(
-      changeForTool(shownActionState(group.id, tool.action), tool, state),
-      state
+    fireAndForget(
+      props.changes.setTool(
+        groupActionTarget(group.id, tool.action),
+        permission(group.id, tool.action)?.state ?? 'always',
+        tool,
+        state
+      ),
+      'agent-permissions'
     );
 
   const clearTool = (
     group: ToolPermissionCatalogGroup,
     tool: ToolPermissionCatalogTool
   ) =>
-    apply(
-      { target: toolTarget(tool), state: null },
-      shownActionState(group.id, tool.action)
-    );
+    apply(toolTarget(tool), shownActionState(group.id, tool.action), {
+      target: toolTarget(tool),
+      state: null,
+    });
 
   const toolActions = (group: ToolPermissionCatalogGroup) =>
     toolSections(group).sections.map((section) => section.action);

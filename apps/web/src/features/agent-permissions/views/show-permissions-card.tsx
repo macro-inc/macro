@@ -27,7 +27,6 @@ import {
 import {
   actionPermission,
   changeForAction,
-  changeForTool,
   groupActionTarget,
   groupPermissions,
   ruleFor,
@@ -224,15 +223,30 @@ export function ShowPermissionsCard(props: {
                               onAction={(group, action, state) =>
                                 fireAndForget(
                                   changes.apply(
-                                    changeForAction(group, action, state),
+                                    groupActionTarget(group, action),
+                                    state,
+                                    changeForAction(group, action, state)
+                                  ),
+                                  'agent-permissions'
+                                )
+                              }
+                              onTool={(group, tool, saved, state) =>
+                                fireAndForget(
+                                  changes.setTool(
+                                    groupActionTarget(group, tool.action),
+                                    saved,
+                                    tool,
                                     state
                                   ),
                                   'agent-permissions'
                                 )
                               }
-                              onTool={(change, shown) =>
+                              onClearTool={(tool, shown) =>
                                 fireAndForget(
-                                  changes.apply(change, shown),
+                                  changes.apply(toolTarget(tool), shown, {
+                                    target: toolTarget(tool),
+                                    state: null,
+                                  }),
                                   'agent-permissions'
                                 )
                               }
@@ -284,7 +298,13 @@ function SelectionGroup(props: {
     state: ToolPermissionState
   ) => void;
   onTool: (
-    change: ReturnType<typeof changeForTool>,
+    group: string,
+    tool: ToolPermissionCatalogTool,
+    saved: ToolPermissionState,
+    state: ToolPermissionState
+  ) => void;
+  onClearTool: (
+    tool: ToolPermissionCatalogTool,
     shown: ToolPermissionState
   ) => void;
 }) {
@@ -348,22 +368,14 @@ function SelectionGroup(props: {
           rule() && action() && props.canEdit
             ? () => {
                 const current = action();
-                if (current)
-                  props.onTool(
-                    { target: toolTarget(tool), state: null },
-                    current.state
-                  );
+                if (current) props.onClearTool(tool, current.state);
               }
             : undefined
         }
         disabled={!props.canEdit || !action()}
         onChange={(state) => {
           const current = action();
-          if (current)
-            props.onTool(
-              changeForTool(actionState(tool.action), tool, state),
-              state
-            );
+          if (current) props.onTool(groupId(), tool, current.state, state);
         }}
       />
     );
