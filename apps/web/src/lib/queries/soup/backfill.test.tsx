@@ -800,6 +800,22 @@ describe('runSoupBackfills', () => {
     }
   });
 
+  it.each(
+    DEFAULT_SOUP_BACKFILL_LANES.filter((lane) => !lane.createFetchPage).map(
+      (lane) => [lane.checkpointId, lane] as const
+    )
+  )('fetches %s with its own operation', async (_id, lane) => {
+    graphqlMocks.hydrateGraphqlSoup.mockResolvedValue({ nextCursor: null });
+    await Effect.runPromise(runSoupBackfill('user-1', mockCacheHost, lane));
+    const documents = graphqlMocks.hydrateGraphqlSoup.mock.calls.map(
+      ([document]) => document
+    );
+    expect(documents.length).toBeGreaterThan(0);
+    expect(documents.every((document) => document === lane.operation)).toBe(
+      true
+    );
+  });
+
   it('starts when only the cache host becomes available', async () => {
     vi.useFakeTimers();
     let cacheHost: typeof mockCacheHost | undefined;
@@ -1179,6 +1195,42 @@ describe('soup backfill checkpoint locks', () => {
     );
     expect(stopped).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('gives a lock straight back when it is granted as the waiting tab stops', async () => {
+    let grant = () => {};
+    const granted = new Promise<void>((resolve) => {
+      grant = resolve;
+    });
+    let released: Promise<void> | undefined;
+    // A browser can grant the lock in the same turn the waiter's signal aborts.
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: {
+        request: async (
+          _name: string,
+          _options: { signal?: AbortSignal },
+          callback: () => Promise<void>
+        ) => {
+          await granted;
+          released = callback();
+          return released;
+        },
+      },
+    });
+    const fetchPage = vi.fn(async (_input: FetchInput) => ({
+      nextCursor: null,
+    }));
+    const waiting = Effect.runFork(
+      runSoupBackfill('user-1', mockCacheHost, lane('core-entities', fetchPage))
+    );
+    await settle();
+    await Effect.runPromise(Fiber.interrupt(waiting));
+
+    grant();
+    await vi.waitFor(() => expect(released).toBeDefined());
+    await released;
+    expect(fetchPage).not.toHaveBeenCalled();
   });
 
   it('runs two lanes that differ in contract side by side', async () => {
