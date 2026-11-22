@@ -5331,6 +5331,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "connectors_e2e"
+version = "0.1.0"
+dependencies = [
+ "lazy-regex",
+ "macro_service_urls",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "console"
 version = "0.15.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

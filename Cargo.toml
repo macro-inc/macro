@@ -77,6 +77,7 @@ members = [
   "crates/dictation",
   "crates/email_api_client",
   "crates/email_e2e",
+  "crates/connectors_e2e",
   "crates/entity_mutation",
   "crates/entity_registry/entity_registry",
   "crates/entity_registry/entity_registry_db_utils",

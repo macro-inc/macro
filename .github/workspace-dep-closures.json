@@ -4861,6 +4861,13 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "connectors_e2e": [
+      "crates/connectors_e2e",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_service_urls",
+      "crates/workspace-hack"
+    ],
     "contacts": [
       "crates/activity",
       "crates/agent",
