@@ -1,0 +1,28 @@
+crates/prompt/src/dialect/test.rs
+  s_cd2738b611e99b::t_565040d73704b9 4,21
+  s_cd2738b611e99b::t_a26eafe5977ff5 1-3,5-20,22-73
+crates/prompt/src/code_mode/dialect.md
+  s_cd2738b611e99b::t_f815b078682c4d 1-10
+crates/prompt/src/code_mode.rs
+  s_cd2738b611e99b::t_f815b078682c4d 24-39
+crates/prompt/src/dialect.rs
+  s_cd2738b611e99b::t_f0562e04b0865a 1-104
+crates/prompt/src/lib.rs
+  s_cd2738b611e99b::t_f0562e04b0865a 18,43,73-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3d7b176ccbe828af89e8fc56b29238862590d708",
+  "prompts": {},
+  "sessions": {
+    "s_cd2738b611e99b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "160aae60-b056-44b3-9de2-02a74d7f232d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
