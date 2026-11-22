@@ -70,11 +70,7 @@ pub(super) async fn deliver(
         "delivering screen notices to the agent"
     );
     let claims: Vec<NoticeClaim> = pending.iter().map(|pending| pending.claim).collect();
-    let notices: Vec<AgentNotice> = pending
-        .into_iter()
-        .map(|PendingNotice { notice, .. }| notice)
-        .collect();
-    insert(&mut request, &notices);
+    insert(&mut request, &pending);
     match serde_json::to_vec(&request) {
         Ok(rewritten) => (Bytes::from(rewritten), claims),
         Err(_) => {
@@ -95,10 +91,24 @@ fn last_user_message(request: &mut Value) -> Option<&mut Value> {
         .find(|message| message.get("role").and_then(Value::as_str) == Some("user"))
 }
 
+/// A notice as the agent reads it: with its id, the same each time it is
+/// carried, so a notice given back and carried again (its first answer
+/// may have reached the agent after all) reads as the same notice.
+#[derive(serde::Serialize)]
+struct Framed<'a> {
+    id: uuid::Uuid,
+    #[serde(flatten)]
+    notice: &'a AgentNotice,
+}
+
 /// The frame of one notice. The JSON escapes `<`, `>` and `&`, so a note
 /// or a name can't close the frame early.
-fn frame(notice: &AgentNotice) -> String {
-    let payload = serde_json::to_string(notice)
+fn frame(pending: &PendingNotice) -> String {
+    let framed = Framed {
+        id: pending.claim.id,
+        notice: &pending.notice,
+    };
+    let payload = serde_json::to_string(&framed)
         .unwrap_or_default()
         .replace('<', "\\u003c")
         .replace('>', "\\u003e")
@@ -107,7 +117,7 @@ fn frame(notice: &AgentNotice) -> String {
 }
 
 /// Put `notices` last in the last user message of `request`.
-fn insert(request: &mut Value, notices: &[AgentNotice]) {
+fn insert(request: &mut Value, notices: &[PendingNotice]) {
     let Some(message) = last_user_message(request) else {
         return;
     };

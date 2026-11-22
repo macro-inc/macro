@@ -1,15 +1,22 @@
 use chrono::{TimeZone as _, Utc};
-use computer_screen::domain::models::{AgentNotice, NoticeName};
+use computer_screen::domain::models::{AgentNotice, NoticeClaim, NoticeName, PendingNotice};
+use uuid::Uuid;
 
 use super::insert;
 
-fn hand_back(note: &str) -> AgentNotice {
-    AgentNotice {
-        name: NoticeName::HandBack,
-        driver_name: Some("Alice".to_owned()),
-        started_at: Utc.with_ymd_and_hms(2026, 11, 20, 10, 0, 0).unwrap(),
-        ended_at: Some(Utc.with_ymd_and_hms(2026, 11, 20, 10, 2, 0).unwrap()),
-        note: Some(note.to_owned()),
+fn hand_back(note: &str) -> PendingNotice {
+    PendingNotice {
+        claim: NoticeClaim {
+            id: Uuid::from_u128(0x01a2),
+            until: Utc.with_ymd_and_hms(2026, 11, 20, 10, 17, 0).unwrap(),
+        },
+        notice: AgentNotice {
+            name: NoticeName::HandBack,
+            driver_name: Some("Alice".to_owned()),
+            started_at: Utc.with_ymd_and_hms(2026, 11, 20, 10, 0, 0).unwrap(),
+            ended_at: Some(Utc.with_ymd_and_hms(2026, 11, 20, 10, 2, 0).unwrap()),
+            note: Some(note.to_owned()),
+        },
     }
 }
 
@@ -34,7 +41,7 @@ fn notices_follow_the_tool_results_of_the_last_user_message() {
             { "type": "tool_result", "tool_use_id": "t1", "content": "done" },
             {
                 "type": "text",
-                "text": "<macro-runtime-notice>{\"name\":\"computer.screen.handBack\",\"driverName\":\"Alice\",\"startedAt\":\"2026-11-20T10:00:00Z\",\"endedAt\":\"2026-11-20T10:02:00Z\",\"note\":\"signed you in\"}</macro-runtime-notice>",
+                "text": "<macro-runtime-notice>{\"id\":\"00000000-0000-0000-0000-0000000001a2\",\"name\":\"computer.screen.handBack\",\"driverName\":\"Alice\",\"startedAt\":\"2026-11-20T10:00:00Z\",\"endedAt\":\"2026-11-20T10:02:00Z\",\"note\":\"signed you in\"}</macro-runtime-notice>",
             },
         ])
     );

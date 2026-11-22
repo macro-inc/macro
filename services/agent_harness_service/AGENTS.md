@@ -85,11 +85,16 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   last in its last user message, after its `tool_result` blocks, as
   `<macro-runtime-notice>{json}</macro-runtime-notice>` text blocks with `<`,
   `>` and `&` escaped (`anthropic_gateway/screen_notices.rs`); each is
-  claimed by one request at a time, deleted once the agent read a finished answer to its
-  end (a 2xx JSON body, or a stream that reached `message_stop` with no
-  broken chunk; the body's last part waits for the deletion) and given back
-  otherwise: an SSE `error` after the 200, a broken stream, or a caller that
-  hung up (the rest is still drained, for metering only). A subagent's requests carry the same mark and may
+  claimed by one request at a time, deleted once a finished answer was
+  handed whole to the caller's connection (a 2xx JSON body, or a stream that
+  reached `message_stop` with no broken chunk; the body's last part waits
+  for the deletion) and given back otherwise: an SSE `error` after the 200,
+  a broken stream, or a caller that hung up first (the rest is still
+  drained, for metering only). Handed to the connection is not read by the
+  agent: a hang-up after that (behind a buffering proxy, say) loses the
+  notice. A caller that read the answer but closed before its end was seen
+  gets it again, so delivery is at least once; each frame carries the
+  notice's `id`, the same on every delivery. A subagent's requests carry the same mark and may
   take them, and they are not kept in the agent's history: a hint for its
   next turn, not a record. An agent on its owner's own Claude plan never
   reaches this gateway, so it gets no notices.
@@ -233,7 +238,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Xvnc's side without decoding pixels and drops ServerCutText unless this
   socket drives (Xvnc runs with `-SendPrimary=0`); typed `input` goes through
   `RfbInjector`'s own RFB connection (handshake and each input bounded to
-  10 s, tunnel open included; a connect is bounded by the lease's end and
+  10 s; its tunnel opens in a task of its own, bounded by the tunnel's 20 s
+  ready timeout, so a connect given up never drops a guest program before
+  its reaper exists; a connect is bounded by the lease's end and
   followed by one read of the lease, so input goes in only while it is still
   this socket's unexpired drive; each send is bounded by the lease's end). A drive that ends in the middle of the guest's
   clipboard ends the socket rather than pass the rest. Xvnc is reached only by a `socat`
