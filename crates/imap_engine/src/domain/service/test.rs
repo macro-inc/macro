@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 mod admission;
 mod credential_health;
 mod fakes;
+mod idle;
 mod ownership;
 mod reads;
 pub(crate) use fakes::{MemoryRepository, ProviderWorkControl, TestCipher, UncertainTransport};

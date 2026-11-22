@@ -135,6 +135,8 @@ impl Engine {
                     &mut watchers.current,
                 )
                 .await?;
+                let committed = self.repository.read_scoped(binding, StateSelection::Catalog)
+                    .await?.state.folders.into_values().collect::<Vec<_>>();
                 let host = credentials.imap.endpoint.host.clone();
                 let host_hash = format!("{:x}", Sha256::digest(host.as_bytes()));
                 let previous = self.repository.idle_state(&host_hash).await?;
@@ -154,8 +156,8 @@ impl Engine {
                 let result = tokio::select! {
                     biased;
                     _ = round_stop.cancelled() => return Err(Error::Conflict),
-                    _ = wake.notified() => Ok(()),
-                    result = self.transport.wait_change(&credentials, interval) => result,
+                    _ = wake.notified() => Ok(WaitOutcome::Changed),
+                    result = self.transport.wait_change(&credentials, &committed, interval) => result,
                 };
                 drop(credentials);
                 let elapsed =
@@ -240,7 +242,7 @@ impl Engine {
                 unreadable_attempts = 0;
             }
             match outcome {
-                Ok(()) => {
+                Ok(WaitOutcome::Changed | WaitOutcome::Restarted) => {
                     credential_refusals = 0;
                     if healthy_since.elapsed() >= Duration::from_secs(300) {
                         failures = 0;

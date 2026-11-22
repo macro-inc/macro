@@ -66,6 +66,7 @@ fn read_fixture(
     });
     let (started, observed) = tokio::sync::mpsc::unbounded_channel();
     let control = Arc::new(ProviderWorkControl {
+        idle: None,
         failures,
         organization,
         source: Some(source),

@@ -229,6 +229,7 @@ async fn ingestion_burst_does_not_queue_a_user_message_read() {
         });
         let (started, mut observed) = tokio::sync::mpsc::unbounded_channel();
         let control = Arc::new(ProviderWorkControl {
+            idle: None,
             failures: std::collections::BTreeMap::new(),
             organization: None,
             source: None,
@@ -320,6 +321,7 @@ async fn queued_accounts_rotate_after_stalled_and_cancelled_sync_rounds() {
         submission_deadline: std::sync::Mutex::new(None),
         refusal: None,
         provider_work: Some(Arc::new(ProviderWorkControl {
+            idle: None,
             failures: std::collections::BTreeMap::new(),
             organization: None,
             source: None,
@@ -404,6 +406,7 @@ async fn configured_sync_capacity_bounds_started_rounds_without_limiting_binding
         submission_deadline: std::sync::Mutex::new(None),
         refusal: None,
         provider_work: Some(Arc::new(ProviderWorkControl {
+            idle: None,
             failures: std::collections::BTreeMap::new(),
             organization: None,
             source: None,

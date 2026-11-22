@@ -62,6 +62,7 @@ async fn graceful_restart_releases_both_leases_before_their_expiry(pool: PgPool)
         submission_deadline: std::sync::Mutex::new(None),
         refusal: None,
         provider_work: Some(Arc::new(ProviderWorkControl {
+            idle: None,
             failures: Default::default(),
             organization: None,
             source: None,

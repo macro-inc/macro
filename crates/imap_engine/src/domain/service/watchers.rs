@@ -78,15 +78,18 @@ impl Engine {
                 let result = async {
                     let (user, ciphertext) = repository.credentials(binding).await?;
                     let credentials = cipher.decrypt(binding.link_id, &user, &ciphertext).await?;
+                    let committed = repository.read_scoped(binding, StateSelection::Catalog)
+                        .await?.state.folders.remove(&watched_id).ok_or(Error::NotFound)?;
+                    if committed.path != wire_path { return Err(Error::Conflict); }
                     // Credentials live only for this socket attempt, never its retry delay.
                     tokio::select! {
                         biased;
-                        _ = done.cancelled() => Ok(()),
-                        result = transport.wait_folder(&credentials, &wire_path, 120) => result,
+                        _ = done.cancelled() => Ok(WaitOutcome::Restarted),
+                        result = transport.wait_folder(&credentials, &committed, 120) => result,
                     }
                 }.instrument(tracing::info_span!(parent: None, "imap.watch_folder", link_id = %binding.link_id, folder_id = %watched_id)).await;
                 match result {
-                    Ok(()) => {
+                    Ok(WaitOutcome::Changed | WaitOutcome::Restarted) => {
                         failures = 0;
                         tokio::select! {
                             biased;

@@ -83,6 +83,7 @@ fn fixture(failure: Error) -> Fixture {
         submission_deadline: Default::default(),
         refusal: None,
         provider_work: Some(Arc::new(ProviderWorkControl {
+            idle: None,
             failures: BTreeMap::new(),
             organization: None,
             source: None,

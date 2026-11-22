@@ -6,6 +6,7 @@ mod commands;
 mod folder_roles;
 mod gmail;
 mod identity;
+mod idle;
 mod login;
 mod message;
 mod sent;
@@ -313,14 +314,20 @@ impl MailTransport for ProtocolTransport {
         .map_err(|_| Error::ConnectionUnavailable)?
     }
     #[tracing::instrument(skip_all, err)]
-    async fn wait_change(&self, c: &Credentials, idle_seconds: u64) -> Result<(), Error> {
+    async fn wait_change(
+        &self,
+        c: &Credentials,
+        committed: &[FolderState],
+        idle_seconds: u64,
+    ) -> Result<WaitOutcome, Error> {
         let mut session = self.imap(&c.imap).await?;
         let capabilities = session
             .limit_response(ResponseLimit::Metadata)
             .capabilities()
             .await
             .map_err(|e| imap_error(e, false))?;
-        let folder = if capabilities.has_str("X-GM-EXT-1") {
+        let gmail = capabilities.has_str("X-GM-EXT-1");
+        let path = if gmail {
             gmail::all_path(&mut session)
                 .await?
                 .unwrap_or_else(|| "INBOX".into())
@@ -328,15 +335,36 @@ impl MailTransport for ProtocolTransport {
             "INBOX".into()
         };
         drop(session);
-        self.wait_folder(c, &folder, idle_seconds).await
+        // Gmail's derived feeds share the All Mail wire path, but their counts
+        // are filtered. Only the physical feed is a valid SELECT baseline.
+        let target = committed.iter().find(|folder| {
+            let same_path = folder.path == path
+                || (path.eq_ignore_ascii_case("INBOX")
+                    && folder.path.eq_ignore_ascii_case("INBOX"));
+            same_path
+                && (!gmail
+                    || path.eq_ignore_ascii_case("INBOX")
+                    || folder.virtual_label.as_deref() == Some("\\All"))
+        });
+        let Some(target) = target else {
+            // An incomplete catalog has no safe comparison baseline. Keep the
+            // bounded polling fallback instead of spinning full scans.
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            return Ok(WaitOutcome::Restarted);
+        };
+        self.wait_folder(c, target, idle_seconds).await
     }
+    #[tracing::instrument(skip_all, name = "imap.idle.wait", fields(
+        idle.outcome = tracing::field::Empty,
+        idle.changed_at_arm = tracing::field::Empty,
+    ), err)]
     async fn wait_folder(
         &self,
         c: &Credentials,
-        folder: &str,
+        committed: &FolderState,
         idle_seconds: u64,
-    ) -> Result<(), Error> {
-        timeout(Duration::from_secs(300), async {
+    ) -> Result<WaitOutcome, Error> {
+        let result = timeout(Duration::from_secs(300), async {
             let mut session = self.imap(&c.imap).await?;
             let capabilities = session
                 .limit_response(ResponseLimit::Metadata)
@@ -344,24 +372,59 @@ impl MailTransport for ProtocolTransport {
                 .await
                 .map_err(|e| imap_error(e, false))?;
             if !capabilities.has_str("IDLE") {
-                // Servers without push use a bounded protocol liveness interval.
                 tokio::time::sleep(Duration::from_secs(30)).await;
-                return Ok(());
+                return Ok((WaitOutcome::Restarted, false));
             }
-            session
-                .limit_response(ResponseLimit::Metadata)
-                .select(folder)
-                .await
-                .map_err(|e| imap_error(e, false))?;
+            let selected = if capabilities.has_str("CONDSTORE") {
+                session
+                    .limit_response(ResponseLimit::Metadata)
+                    .select_condstore(&committed.path)
+                    .await
+            } else {
+                session
+                    .limit_response(ResponseLimit::Metadata)
+                    .select(&committed.path)
+                    .await
+            }
+            .map_err(|e| imap_error(e, false))?;
+            let unsolicited = session.unsolicited_responses.clone();
+            let mut changed = idle::selected_changed(committed, &selected);
+            while let Ok(response) = unsolicited.try_recv() {
+                changed |= idle::unsolicited_changed(&response);
+            }
+            if changed {
+                // The committed scan predates this SELECT. No IDLE has been
+                // started, so closing the fresh socket is sufficient.
+                return Ok((WaitOutcome::Changed, true));
+            }
             session.get_mut().begin_response(ResponseLimit::Metadata);
-            let mut idle = session.idle();
-            idle.init().await.map_err(|e| imap_error(e, false))?;
-            {
-                let (wait, _stop) =
-                    idle.wait_with_timeout(Duration::from_secs(idle_seconds.clamp(10, 240)));
-                wait.await.map_err(|e| imap_error(e, false))?;
+            let mut handle = session.idle();
+            handle.init().await.map_err(|e| imap_error(e, false))?;
+            // async-imap queues data received before the IDLE continuation.
+            // Its later wait reads only the socket; consume that queue first.
+            while let Ok(response) = unsolicited.try_recv() {
+                changed |= idle::unsolicited_changed(&response);
             }
-            let mut session = timeout(Duration::from_secs(10), idle.done())
+            let outcome = if changed {
+                WaitOutcome::Changed
+            } else {
+                let duration = Duration::from_secs(idle_seconds.clamp(10, 240));
+                let (wait, _stop) = handle.wait_with_timeout(duration);
+                // The library's timer measures inactivity and is reset by
+                // keepalives. This outer deadline is absolute and planned.
+                match timeout(duration, wait).await {
+                    Err(_) => WaitOutcome::Restarted,
+                    Ok(Ok(
+                        async_imap::extensions::idle::IdleResponse::Timeout
+                        | async_imap::extensions::idle::IdleResponse::ManualInterrupt,
+                    )) => WaitOutcome::Restarted,
+                    Ok(Ok(async_imap::extensions::idle::IdleResponse::NewData(_))) => {
+                        WaitOutcome::Changed
+                    }
+                    Ok(Err(error)) => return Err(imap_error(error, false)),
+                }
+            };
+            let mut session = timeout(Duration::from_secs(10), handle.done())
                 .await
                 .map_err(|_| Error::ConnectionUnavailable)?
                 .map_err(|e| imap_error(e, false))?;
@@ -370,10 +433,15 @@ impl MailTransport for ProtocolTransport {
                 .logout()
                 .await
                 .map_err(|e| imap_error(e, false))?;
-            Ok(())
+            Ok((outcome, changed))
         })
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?
+        .map_err(|_| Error::ConnectionUnavailable)?;
+        result.map(|(outcome, changed)| {
+            tracing::Span::current().record("idle.outcome", outcome.as_ref());
+            tracing::Span::current().record("idle.changed_at_arm", changed);
+            outcome
+        })
     }
     #[tracing::instrument(skip_all, err)]
     async fn apply(

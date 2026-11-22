@@ -260,6 +260,16 @@ pub enum RemoteAction {
     Move(String),
 }
 
+/// Why a bounded folder watch ended successfully.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum WaitOutcome {
+    /// The selected status or an unsolicited response differs from the committed snapshot.
+    Changed,
+    /// The absolute liveness interval elapsed; this is not a provider failure.
+    Restarted,
+}
+
 /// Mail protocol operations. Object safety lets the service share a pooled transport.
 #[async_trait::async_trait]
 pub trait MailTransport: Send + Sync {
@@ -299,15 +309,21 @@ pub trait MailTransport: Send + Sync {
         epoch: u32,
         uid: u32,
     ) -> Result<Vec<u8>, Error>;
-    /// Hold one selected-folder IDLE until a change or bounded liveness restart.
-    async fn wait_change(&self, credentials: &Credentials, idle_seconds: u64) -> Result<(), Error>;
+    /// Compare the selected folder to committed catalog state before arming IDLE.
+    /// A planned absolute restart is successful even while the server sends keepalives.
+    async fn wait_change(
+        &self,
+        credentials: &Credentials,
+        committed: &[FolderState],
+        idle_seconds: u64,
+    ) -> Result<WaitOutcome, Error>;
     /// Watch one catalog-resolved extra folder, never a caller-provided unscoped name.
     async fn wait_folder(
         &self,
         credentials: &Credentials,
-        folder: &str,
+        committed: &FolderState,
         idle_seconds: u64,
-    ) -> Result<(), Error>;
+    ) -> Result<WaitOutcome, Error>;
     /// Apply an organization operation to one account-scoped UID.
     /// NotStarted is permitted only before command-session admission; once any
     /// mutation can have started, every failure must be Uncertain.

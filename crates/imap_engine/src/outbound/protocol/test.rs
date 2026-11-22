@@ -3,7 +3,33 @@ use super::*;
 use crate::outbound::network::LocalEndpoints;
 use std::collections::BTreeMap;
 
+mod idle_gap;
 mod submission;
+
+pub(super) fn committed_inbox() -> FolderState {
+    FolderState {
+        monitored: true,
+        virtual_label: None,
+        uid_next: Some(2),
+        phantom: None,
+        detected_role: Some(FolderRole::Inbox),
+        folder: Folder {
+            sync_enabled: true,
+            id: "inbox".into(),
+            parent_id: None,
+            name: "Inbox".into(),
+            role: FolderRole::Inbox,
+            has_children: false,
+            total_items: Some(1),
+        },
+        path: "INBOX".into(),
+        uid_validity: 1,
+        highest_modseq: Some(1),
+        sync_tier: None,
+        sequence: 1,
+        journal: Vec::new(),
+    }
+}
 
 #[test]
 fn bcc_headers_and_continuations_are_not_transmitted() {

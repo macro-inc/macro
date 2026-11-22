@@ -63,6 +63,10 @@ accepts bearer access to a remote mail server.
 - Gmail scans All Mail, Spam and Trash and derives label feeds with shared header
   storage. Keep virtual feed locators on the physical All Mail path, preserve native
   ids and hash label membership in organization versions.
+- Pass committed physical folder state into every IDLE watch. Compare SELECT's
+  UIDVALIDITY, UIDNEXT, EXISTS and CONDSTORE watermark; consume unsolicited changes
+  queued before the IDLE continuation. Use an absolute deadline independent of
+  keepalives, and return WaitOutcome::Restarted for its normal completion.
 - Spare IMAP and SMTP sockets belong to an exact link and both generations. Evict
   them on disconnect, failed commands and bounded idle/age maintenance. Keep each
   synchronization and IDLE cycle on a fresh independent connection.

@@ -180,7 +180,14 @@ pub(crate) struct OrganizationWorkControl {
     pub(crate) busy_after_write: AtomicBool,
 }
 
+pub(crate) struct IdleWorkControl {
+    pub(crate) started: tokio::sync::Notify,
+    pub(crate) released: tokio::sync::Semaphore,
+    pub(crate) outcome: WaitOutcome,
+}
+
 pub(crate) struct ProviderWorkControl {
+    pub(crate) idle: Option<Arc<IdleWorkControl>>,
     pub(crate) failures: BTreeMap<u32, Error>,
     pub(crate) organization: Option<Arc<OrganizationWorkControl>>,
     pub(crate) source: Option<Vec<u8>>,
@@ -213,8 +220,13 @@ pub(crate) struct UncertainTransport {
 }
 #[async_trait::async_trait]
 impl MailTransport for UncertainTransport {
-    async fn wait_folder(&self, _: &Credentials, _: &str, _: u64) -> Result<(), Error> {
-        Ok(())
+    async fn wait_folder(
+        &self,
+        _: &Credentials,
+        _: &FolderState,
+        _: u64,
+    ) -> Result<WaitOutcome, Error> {
+        Ok(WaitOutcome::Changed)
     }
     async fn message(
         &self,
@@ -275,11 +287,25 @@ impl MailTransport for UncertainTransport {
         }
         Err(Error::NotFound)
     }
-    async fn wait_change(&self, _: &Credentials, _: u64) -> Result<(), Error> {
-        if self.provider_work.is_some() {
+    async fn wait_change(
+        &self,
+        _: &Credentials,
+        _: &[FolderState],
+        _: u64,
+    ) -> Result<WaitOutcome, Error> {
+        if let Some(control) = &self.provider_work {
+            if let Some(idle) = &control.idle {
+                idle.started.notify_one();
+                idle.released
+                    .acquire()
+                    .await
+                    .map_err(|_| Error::ConnectionUnavailable)?
+                    .forget();
+                return Ok(idle.outcome);
+            }
             return std::future::pending().await;
         }
-        Ok(())
+        Ok(WaitOutcome::Changed)
     }
     async fn verify(&self, _: &Credentials) -> Result<(), Error> {
         Ok(())

@@ -123,7 +123,8 @@ Keep the inbox open after connecting a test account with existing mail: it
 shows **Syncing your inbox**, then imported rows without a reload. After the
 import finishes, deliver another test message and verify it appears in the
 unchanged open inbox without navigating or reloading. Repeat with signal
-notifications disabled.
+notifications disabled. Also exercise mail delivered between a completed scan
+and IDLE setup; it must appear without waiting for the periodic walk.
 
 Open **Settings → Email** to check import progress, reconnect or disconnect.
 When **Force sync** encounters provider pacing, it shows **Paused by your provider

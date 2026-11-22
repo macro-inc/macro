@@ -418,7 +418,14 @@ async fn idle_start_and_sent_recovery_do_not_wait_behind_body_reads() {
     );
     let idle_transport = transport.clone();
     let idle_credentials = credentials.clone();
-    let idle = tokio::spawn(async move { idle_transport.wait_change(&idle_credentials, 10).await });
+    let idle = tokio::spawn(async move {
+        let mut committed = crate::outbound::protocol::test::committed_inbox();
+        committed.uid_next = None;
+        committed.highest_modseq = None;
+        idle_transport
+            .wait_change(&idle_credentials, &[committed], 10)
+            .await
+    });
     tokio::time::timeout(Duration::from_secs(2), idles.recv())
         .await
         .expect("IDLE must start while body reads are stalled")

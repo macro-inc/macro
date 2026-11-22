@@ -274,6 +274,28 @@ owner leases bound actor sockets only. Read snapshots use local 30-second
 statement and 10-second idle deadlines; post-IO validation shares the loading
 gate. Operation access classification is exhaustive.
 
+Before arming IDLE, the actor reads its committed catalog state without holding
+an account command lease or database connection across provider IO. The transport
+compares SELECT's UIDVALIDITY, UIDNEXT, message count and CONDSTORE watermark with
+that physical folder baseline. Gmail watches compare the All Mail feed rather
+than its filtered derived-feed counts; an extra derived-feed watcher compares
+physical watermarks while skipping its filtered count. Excluded folders do not repeatedly compare
+a deliberately stale snapshot. A changed status returns immediately for a new
+sync. Unsolicited changes received before the IDLE continuation are consumed too,
+closing both delivery windows around IDLE setup.
+
+If the catalog has no baseline, the watch falls back to a thirty-second sync
+poll. Without CONDSTORE, UIDNEXT still detects new Spam and Trash arrivals;
+HIGHESTMODSEQ additionally detects flag and deletion changes when available.
+
+The watch interval is an absolute deadline, independent of server keepalives.
+A planned deadline completes DONE and LOGOUT and returns WaitOutcome::Restarted;
+it is not false connection-drop evidence or failure backoff. Actual changes
+return WaitOutcome::Changed. The separate 300-second outer timeout remains a
+backstop for stalled protocol IO. The imap.idle.wait span records the closed
+outcome and whether a change was detected while arming, without folder names.
+
+
 ### Busy admission and deterministic content limits
 
 Only AccountBusy permits the bounded one-second retry outside global admission.
