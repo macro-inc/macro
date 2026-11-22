@@ -550,7 +550,7 @@ async fn main() -> anyhow::Result<()> {
     worker_tracker.spawn(email_service::imap_runtime::recover(
         email::domain::mailbox::imap_connection::ImapConnectionService {
             repository: email_service::outbound::imap_connection::PgImapConnections(db.clone()),
-            gateway: email_service::outbound::imap_connection::ImapConnectionClient(
+            gateway: email_service::outbound::imap_connection::ImapConnectionClient::new(
                 imap_gateway.client.clone(),
             ),
             enrollment: imap_flags.clone(),

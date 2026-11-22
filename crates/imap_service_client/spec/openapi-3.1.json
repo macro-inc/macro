@@ -817,11 +817,15 @@
             ]
           },
           "steer": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Steer to an existing OAuth provider."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DiscoverySteer",
+                "description": "Steer to an existing OAuth provider."
+              }
+            ]
           }
         }
       },
@@ -838,6 +842,15 @@
             "description": "User's verified sign-in address."
           }
         }
+      },
+      "DiscoverySteer": {
+        "type": "string",
+        "description": "Closed provider guidance; password connections remain a separate user choice.",
+        "enum": [
+          "gmail",
+          "outlook",
+          "none"
+        ]
       },
       "Draft": {
         "type": "object",

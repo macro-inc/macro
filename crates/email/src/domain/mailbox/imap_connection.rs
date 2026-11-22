@@ -1,7 +1,7 @@
 //! Verified-address IMAP connection and retry-safe promotion into durable streams.
 
 use imap_engine::domain::models::{
-    Binding, ConnectRequest, Discovery, Login, Verification, VerifyRequest,
+    Binding, ConnectRequest, Discovery, DiscoverySteer, Login, Verification, VerifyRequest,
 };
 use macro_user_id::{
     cowlike::{ArcCowStr, CowLike},
@@ -95,6 +95,11 @@ pub trait ImapConnectionRepository: Send + Sync + 'static {
 }
 
 pub trait ImapConnectionGateway: Send + Sync + 'static {
+    /// Passive catalog/domain-only MX hint; never run address-bearing autoconfig.
+    fn provider_hint(
+        &self,
+        email: &Email<ArcCowStr<'_>>,
+    ) -> impl Future<Output = Result<Discovery, ImapConnectionError>> + Send;
     fn discover(
         &self,
         email: &Email<ArcCowStr<'_>>,
@@ -114,7 +119,7 @@ pub trait ImapConnectionEnrollment: Send + Sync + 'static {
     fn enabled(&self, actor: &MacroUserIdStr<'_>) -> impl Future<Output = bool> + Send;
 }
 
-/// Provider offered without making a network request on the user's behalf.
+/// Provider offered using a catalog entry or a domain-only DNS hint.
 #[derive(serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
@@ -147,13 +152,19 @@ impl<R: ImapConnectionRepository, G: ImapConnectionGateway, F: ImapConnectionEnr
         {
             return Ok(ImapConnectionOffer::None);
         }
-        // A passive offer uses only the bundled catalog; the signed-in address
-        // is never disclosed to a third-party discovery server on page load.
-        let discovery = imap_engine::domain::discovery::discover(&actor.email_part())?;
-        Ok(match discovery.steer.as_deref() {
-            Some("gmail") => ImapConnectionOffer::Gmail,
-            Some("outlook") => ImapConnectionOffer::Outlook,
-            _ => ImapConnectionOffer::Imap,
+        // A passive visit may resolve a domain, but never disclose the address
+        // to an autoconfig server. Uncertain hints keep the generic chooser.
+        let Ok(discovery) = self.gateway.provider_hint(&actor.email_part()).await else {
+            return Ok(ImapConnectionOffer::None);
+        };
+        Ok(match discovery.steer {
+            Some(DiscoverySteer::Gmail) => ImapConnectionOffer::Gmail,
+            Some(DiscoverySteer::Outlook) => ImapConnectionOffer::Outlook,
+            Some(DiscoverySteer::NoMailbox) => ImapConnectionOffer::None,
+            None if discovery.imap.is_some() && discovery.smtp.is_some() => {
+                ImapConnectionOffer::Imap
+            }
+            None => ImapConnectionOffer::None,
         })
     }
     pub async fn discover(

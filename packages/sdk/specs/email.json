@@ -6329,10 +6329,22 @@
             ]
           },
           "steer": {
-            "type": ["string", "null"],
-            "description": "Steer to an existing OAuth provider."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DiscoverySteer",
+                "description": "Steer to an existing OAuth provider."
+              }
+            ]
           }
         }
+      },
+      "DiscoverySteer": {
+        "type": "string",
+        "description": "Closed provider guidance; password connections remain a separate user choice.",
+        "enum": ["gmail", "outlook", "none"]
       },
       "EmlFile": {
         "type": "string",
@@ -6794,7 +6806,7 @@
       },
       "ImapConnectionOffer": {
         "type": "string",
-        "description": "Provider offered without making a network request on the user's behalf.",
+        "description": "Provider offered using a catalog entry or a domain-only DNS hint.",
         "enum": ["none", "gmail", "outlook", "imap"]
       },
       "ImapDiscoverRequest": {

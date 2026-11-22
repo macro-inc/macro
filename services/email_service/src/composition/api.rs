@@ -281,7 +281,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
     let imap_connections = Arc::new(
         email::domain::mailbox::imap_connection::ImapConnectionService {
             repository: crate::outbound::imap_connection::PgImapConnections(db.clone()),
-            gateway: crate::outbound::imap_connection::ImapConnectionClient(
+            gateway: crate::outbound::imap_connection::ImapConnectionClient::new(
                 imap_gateway.client.clone(),
             ),
             enrollment: crate::composition::imap_enrollment(&config)?,

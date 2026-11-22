@@ -518,6 +518,19 @@ pub struct Credentials {
     pub smtp: Login,
 }
 
+/// Closed provider guidance; password connections remain a separate user choice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DiscoverySteer {
+    /// Offer Google consent before the app-password form.
+    Gmail,
+    /// Offer Microsoft consent before the app-password form.
+    Outlook,
+    /// The catalog provider serves no mailbox through this integration.
+    #[serde(rename = "none")]
+    NoMailbox,
+}
+
 /// Mailbox-independent provider settings returned without accepting a password.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -529,7 +542,7 @@ pub struct Discovery {
     /// SMTP endpoint proposal.
     pub smtp: Option<Endpoint>,
     /// Steer to an existing OAuth provider.
-    pub steer: Option<String>,
+    pub steer: Option<DiscoverySteer>,
     /// Explicit endpoint confirmation is required before sending any password.
     pub host_confirmation_required: bool,
     /// Provider's application-password instructions.

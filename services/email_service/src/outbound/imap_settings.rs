@@ -49,13 +49,13 @@ impl ImapSettingsAccessRepository for PgImapConnections {
 
 impl ImapSettingsGateway for ImapConnectionClient {
     async fn settings(&self, binding: Binding) -> Result<AccountMailSettings, ImapConnectionError> {
-        Ok(self.0.account_mail_settings(binding).await?)
+        Ok(self.client.account_mail_settings(binding).await?)
     }
     async fn update_settings(
         &self,
         binding: Binding,
         change: &UpdateFolderSettings,
     ) -> Result<AccountMailSettings, ImapConnectionError> {
-        Ok(self.0.update_mail_settings(binding, change).await?)
+        Ok(self.client.update_mail_settings(binding, change).await?)
     }
 }

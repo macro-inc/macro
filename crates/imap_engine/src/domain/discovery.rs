@@ -1,5 +1,5 @@
 //! Password-free provider catalog and discovery policy for mail setup.
-use super::models::{Discovery, Endpoint, Error, TlsMode};
+use super::models::{Discovery, DiscoverySteer, Endpoint, Error, TlsMode};
 use async_trait::async_trait;
 use macro_user_id::{
     cowlike::ArcCowStr,
@@ -36,7 +36,7 @@ struct Provider {
     imap_local_part: bool,
     #[serde(default)]
     smtp_local_part: bool,
-    steer: Option<String>,
+    steer: Option<DiscoverySteer>,
     help_url: Option<String>,
 }
 
@@ -74,7 +74,7 @@ static CATALOG: LazyLock<Result<Entries, Error>> = LazyLock::new(|| {
 pub fn valid_host(host: &str) -> bool {
     host.len() <= 253
         && host.contains('.')
-        && !host.ends_with(".local")
+        && !host.to_ascii_lowercase().ends_with(".local")
         && !egress_guard::is_blocked_host(host)
         && host.parse::<IpAddr>().is_err()
         && host.split('.').all(|l| {
@@ -86,13 +86,27 @@ pub fn valid_host(host: &str) -> bool {
         })
 }
 
+/// Reserved example and test domains never trigger external discovery.
+pub fn is_reserved_domain(domain: &str) -> bool {
+    [
+        "example.com",
+        "example.net",
+        "example.org",
+        "test",
+        "invalid",
+        "example",
+    ]
+    .iter()
+    .any(|reserved| domain == *reserved || domain.ends_with(&format!(".{reserved}")))
+}
+
 /// Validate the submitted address before extracting its domain for anonymous lookup.
 pub fn address_domain(email: &Email<ArcCowStr<'_>>) -> Result<String, Error> {
-    let domain = email.domain_part();
-    if email.email_str().len() > 254 || !valid_host(domain) {
+    let domain = email.domain_part().to_ascii_lowercase();
+    if email.email_str().len() > 254 || !valid_host(&domain) {
         return Err(Error::Invalid);
     }
-    Ok(domain.to_ascii_lowercase())
+    Ok(domain)
 }
 
 /// A missing or unrecognized configuration leaves both manual fields empty.
@@ -137,7 +151,7 @@ impl Provider {
                 .as_deref()
                 .zip(self.smtp_port)
                 .map(|(h, p)| endpoint(h, p, self.smtp_local_part)),
-            steer: self.steer.clone(),
+            steer: self.steer,
             help_url: self.help_url.clone(),
             host_confirmation_required: false,
         }

@@ -324,9 +324,9 @@
             "nullable": true
           },
           "steer": {
+            "$ref": "#/components/schemas/DiscoverySteer",
             "description": "Steer to an existing OAuth provider.",
-            "nullable": true,
-            "type": "string"
+            "nullable": true
           }
         },
         "required": [
@@ -347,6 +347,15 @@
           "email"
         ],
         "type": "object"
+      },
+      "DiscoverySteer": {
+        "description": "Closed provider guidance; password connections remain a separate user choice.",
+        "enum": [
+          "gmail",
+          "outlook",
+          "none"
+        ],
+        "type": "string"
       },
       "Draft": {
         "description": "Versioned draft metadata consumed by the existing coordinator.",

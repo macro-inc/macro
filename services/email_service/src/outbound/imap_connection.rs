@@ -590,23 +590,40 @@ impl ImapConnectionRepository for PgImapConnections {
     }
 }
 #[derive(Clone)]
-pub struct ImapConnectionClient(pub ImapServiceClient);
+pub struct ImapConnectionClient {
+    pub(super) client: ImapServiceClient,
+    hints: std::sync::Arc<imap_engine::outbound::provider_hint::ProviderHints>,
+}
+impl ImapConnectionClient {
+    pub fn new(client: ImapServiceClient) -> Self {
+        Self {
+            client,
+            hints: Default::default(),
+        }
+    }
+}
 impl ImapConnectionGateway for ImapConnectionClient {
+    async fn provider_hint(
+        &self,
+        email: &Email<ArcCowStr<'_>>,
+    ) -> Result<Discovery, ImapConnectionError> {
+        Ok(self.hints.lookup(email).await?)
+    }
     async fn discover(
         &self,
         email: &Email<ArcCowStr<'_>>,
     ) -> Result<Discovery, ImapConnectionError> {
-        Ok(self.0.discover(email).await?)
+        Ok(self.client.discover(email).await?)
     }
     async fn verify(&self, input: &VerifyRequest) -> Result<Verification, ImapConnectionError> {
-        Ok(self.0.verify(input).await?)
+        Ok(self.client.verify(input).await?)
     }
     async fn connect(
         &self,
         link: Uuid,
         input: &ConnectRequest,
     ) -> Result<Binding, ImapConnectionError> {
-        Ok(self.0.connect(link, input).await?)
+        Ok(self.client.connect(link, input).await?)
     }
 }
 

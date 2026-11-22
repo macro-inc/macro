@@ -24,12 +24,8 @@ fn custom_domain_matches_exact_provider_suffix_and_supports_regional_workmail() 
         "imap.mail.us-east-1.awsapps.com"
     );
     assert_eq!(
-        from_mx(email, "aspmx.l.google.com")
-            .unwrap()
-            .unwrap()
-            .steer
-            .as_deref(),
-        Some("gmail")
+        from_mx(email, "aspmx.l.google.com").unwrap().unwrap().steer,
+        Some(DiscoverySteer::Gmail)
     );
     assert!(
         from_mx(email, "l.google.com.unrelated.example")

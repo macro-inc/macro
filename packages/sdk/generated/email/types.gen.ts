@@ -1132,11 +1132,13 @@ export type Discovery = {
      */
     provider?: string | null;
     smtp?: null | Endpoint;
-    /**
-     * Steer to an existing OAuth provider.
-     */
-    steer?: string | null;
+    steer?: null | DiscoverySteer;
 };
+
+/**
+ * Closed provider guidance; password connections remain a separate user choice.
+ */
+export type DiscoverySteer = 'gmail' | 'outlook' | 'none';
 
 export type EmlFile = Blob | File;
 
@@ -1481,7 +1483,7 @@ export type ImapConnectionErrorResponse = {
 };
 
 /**
- * Provider offered without making a network request on the user's behalf.
+ * Provider offered using a catalog entry or a domain-only DNS hint.
  */
 export type ImapConnectionOffer = 'none' | 'gmail' | 'outlook' | 'imap';
 

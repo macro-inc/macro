@@ -6,7 +6,7 @@
  */
 
 /**
- * Provider offered without making a network request on the user's behalf.
+ * Provider offered using a catalog entry or a domain-only DNS hint.
  */
 export type ImapConnectionOffer =
   (typeof ImapConnectionOffer)[keyof typeof ImapConnectionOffer];

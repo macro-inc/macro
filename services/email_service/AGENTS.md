@@ -421,3 +421,7 @@ IMAP discovery/connect request identities deserialize as EmailStr before domain
 admission. Discovery forwards the validated ownership-checked address, while persisted
 promotion identities are validated once when read. Parse failures map to closed
 errors without logging the address.
+
+First-visit inbox suggestions use the bounded catalog/MX-only adapter. Unknown
+providers retain the generic chooser; full address-bearing discovery runs only
+after the user explicitly opens IMAP setup.

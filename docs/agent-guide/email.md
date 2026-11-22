@@ -119,6 +119,10 @@ unchanged open inbox without navigating or reloading. Repeat with signal
 notifications disabled.
 
 Open **Settings → Email** to check import progress, reconnect or disconnect.
+Known custom Google Workspace and Microsoft 365 domains use domain-only MX
+hints. Unknown hosts keep the provider chooser; provider hints never bypass
+the user's enrollment availability policy.
+
 Google- and Microsoft-hosted discovery offers consent first when available,
 with **Use an app password instead** as a secondary path. Without provider
 consent availability, the app-password form opens directly. Reconnecting an

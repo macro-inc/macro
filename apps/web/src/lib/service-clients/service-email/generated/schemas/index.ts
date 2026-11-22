@@ -236,6 +236,7 @@ export * from './discoveryImap';
 export * from './discoveryProvider';
 export * from './discoverySmtp';
 export * from './discoverySteer';
+export * from './discoverySteerProperty';
 export * from './emlFile';
 export * from './emptyResponse';
 export * from './endpoint';

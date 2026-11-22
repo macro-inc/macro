@@ -6,6 +6,14 @@
  */
 
 /**
- * Steer to an existing OAuth provider.
+ * Closed provider guidance; password connections remain a separate user choice.
  */
-export type DiscoverySteer = string | null;
+export type DiscoverySteer =
+  (typeof DiscoverySteer)[keyof typeof DiscoverySteer];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const DiscoverySteer = {
+  gmail: 'gmail',
+  outlook: 'outlook',
+  none: 'none',
+} as const;

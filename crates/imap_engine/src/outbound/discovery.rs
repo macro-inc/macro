@@ -248,17 +248,7 @@ impl DiscoveryProvider for MailDiscovery {
         }
         let domain = discovery::address_domain(email)?;
         // Reserved lab domains have manual or injected test endpoints and no public directory entry.
-        if [
-            "example.com",
-            "example.net",
-            "example.org",
-            "test",
-            "invalid",
-            "example",
-        ]
-        .iter()
-        .any(|reserved| domain == *reserved || domain.ends_with(&format!(".{reserved}")))
-        {
+        if discovery::is_reserved_domain(&domain) {
             return Ok(direct);
         }
         let Ok(_slot) = self.remote_slots.try_acquire() else {

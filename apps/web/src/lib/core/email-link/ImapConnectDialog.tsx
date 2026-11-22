@@ -36,8 +36,25 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 
 type ConnectOutcome = 'connected' | 'payment_required' | 'GMAIL' | 'OUTLOOK';
+
+function consentProvider(steer: Discovery['steer']) {
+  return match(steer ?? undefined)
+    .with(
+      'gmail',
+      () => ({ code: 'GMAIL', name: 'Google', capability: 'gmail' }) as const
+    )
+    .with(
+      'outlook',
+      () =>
+        ({ code: 'OUTLOOK', name: 'Microsoft', capability: 'outlook' }) as const
+    )
+    .with('none', () => undefined)
+    .with(undefined, () => undefined)
+    .exhaustive();
+}
 
 function blankEndpoint(email: string, port: number): Endpoint {
   return { host: '', port, tls: 'implicit', username: email };
@@ -283,14 +300,11 @@ function ConnectForm(props: ImapConnectProps) {
       }
       const found = result.value;
       let consentAvailable = false;
-      if (
-        !props.linkId &&
-        (found?.steer === 'gmail' || found?.steer === 'outlook')
-      ) {
+      const provider = consentProvider(found?.steer);
+      if (!props.linkId && provider) {
         try {
           const providers = await fetchEmailConnectionProviders();
-          consentAvailable =
-            found.steer === 'gmail' ? providers.gmail : providers.outlook;
+          consentAvailable = providers[provider.capability];
         } catch {
           // Provider consent is optional here; an unavailable capability read
           // keeps the app-password route without authorizing an OAuth flow.
@@ -410,15 +424,10 @@ function ConnectForm(props: ImapConnectProps) {
     }
   }
 
-  const steer = () => discovery()?.steer?.toLowerCase();
+  const steer = () => discovery()?.steer;
   const oauthProvider = () => {
     if (props.linkId || !oauthAvailable()) return;
-    switch (steer()) {
-      case 'gmail':
-        return { code: 'GMAIL', name: 'Google' } as const;
-      case 'outlook':
-        return { code: 'OUTLOOK', name: 'Microsoft' } as const;
-    }
+    return consentProvider(steer());
   };
   const canUsePassword = () => {
     return steer() !== 'none' && (!oauthProvider() || passwordSelected());

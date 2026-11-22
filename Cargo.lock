@@ -7934,6 +7934,7 @@ dependencies = [
  "google_token",
  "html-escape",
  "http-body-util",
+ "imap_engine",
  "imap_service_client",
  "infer 0.19.0",
  "lol_html",

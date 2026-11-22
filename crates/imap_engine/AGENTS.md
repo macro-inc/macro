@@ -101,3 +101,7 @@ switches. The email host owns the existing user-scoped enrollment flag; sync,
 send and organization operations never depend on a PostHog response.
 
 Record final SMTP attempt/outcome span fields once after settlement; expected pooled-session probe failures log at WARN. An expired admission wait cannot establish a prior send outcome.
+
+Passive provider hints use only the catalog and bounded domain-only MX lookup.
+Never run identity-bearing HTTP autoconfig for a first-visit suggestion; unknown,
+failed or ambiguous MX evidence leaves provider choice to the user.

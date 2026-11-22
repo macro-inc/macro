@@ -137,3 +137,8 @@ legacy contact edges. Apply the additive list-key constraint migrations and upda
 every contacts worker and directory reader (including document_storage_service)
 before publishing that queue value. The existing contacts
 list-publication flag remains independent of IMAP enrollment and mailbox work.
+
+Passive enrollment suggestions recognize hosted custom domains through bounded,
+domain-only MX queries. This adapter has no HTTP/autoconfig client. Unknown,
+failed, over-limit or ambiguous primary MX answers retain the generic chooser;
+full address-bearing discovery remains an explicit setup action.

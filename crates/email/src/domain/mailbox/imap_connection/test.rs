@@ -8,6 +8,9 @@ struct Fake(Arc<Mutex<State>>);
 struct State {
     enabled: bool,
     discoveries: Vec<String>,
+    hint_mx: Option<String>,
+    hint_error: bool,
+    hints: u32,
     attempt: Option<ImapConnectionAttempt>,
     verifies: u32,
     promotions: u32,
@@ -20,6 +23,21 @@ impl ImapConnectionEnrollment for Fake {
     }
 }
 impl ImapConnectionGateway for Fake {
+    async fn provider_hint(
+        &self,
+        email: &Email<ArcCowStr<'_>>,
+    ) -> Result<Discovery, ImapConnectionError> {
+        let mut state = self.0.lock().unwrap();
+        state.hints += 1;
+        if state.hint_error {
+            return Err(Error::DnsUnavailable.into());
+        }
+        if let Some(mx) = &state.hint_mx {
+            return Ok(imap_engine::domain::discovery::from_mx(email, mx)?
+                .unwrap_or_else(imap_engine::domain::discovery::manual));
+        }
+        Ok(imap_engine::domain::discovery::discover(email)?)
+    }
     async fn discover(
         &self,
         email: &Email<ArcCowStr<'_>>,
@@ -287,4 +305,35 @@ async fn private_relay_policy_remains_enforced_with_validated_domain_parts() {
     let state = fake.0.lock().unwrap();
     assert!(state.discoveries.is_empty());
     assert_eq!(state.verifies, 0);
+}
+
+#[tokio::test]
+async fn passive_suggestions_use_mx_hints_without_address_bearing_discovery() {
+    for (mx, dns_error, expected) in [
+        (Some("aspmx.l.google.com"), false, "gmail"),
+        (Some("tenant.mail.protection.outlook.com"), false, "outlook"),
+        (Some("in1-smtp.messagingengine.com"), false, "imap"),
+        (Some("mx.unknown.example.com"), false, "none"),
+        (None, true, "none"),
+    ] {
+        let fake = Fake::default();
+        {
+            let mut state = fake.0.lock().unwrap();
+            state.enabled = true;
+            state.hint_mx = mx.map(str::to_owned);
+            state.hint_error = dns_error;
+        }
+        let service = ImapConnectionService {
+            repository: fake.clone(),
+            gateway: fake.clone(),
+            enrollment: fake.clone(),
+        };
+        let actor = MacroUserIdStr::try_from("macro|owner@custom.example.com").unwrap();
+        let offer = service.suggestion(&actor).await.unwrap();
+        assert_eq!(serde_json::to_value(offer).unwrap(), expected);
+        let state = fake.0.lock().unwrap();
+        assert_eq!(state.hints, 1);
+        assert!(state.discoveries.is_empty());
+        assert_eq!(state.verifies, 0);
+    }
 }

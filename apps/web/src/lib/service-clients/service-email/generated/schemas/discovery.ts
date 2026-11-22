@@ -8,7 +8,7 @@ import type { DiscoveryHelpUrl } from './discoveryHelpUrl';
 import type { DiscoveryImap } from './discoveryImap';
 import type { DiscoveryProvider } from './discoveryProvider';
 import type { DiscoverySmtp } from './discoverySmtp';
-import type { DiscoverySteer } from './discoverySteer';
+import type { DiscoverySteerProperty } from './discoverySteerProperty';
 
 /**
  * Mailbox-independent provider settings returned without accepting a password.
@@ -22,6 +22,5 @@ export interface Discovery {
   /** Known provider identifier. */
   provider?: DiscoveryProvider;
   smtp?: DiscoverySmtp;
-  /** Steer to an existing OAuth provider. */
-  steer?: DiscoverySteer;
+  steer?: DiscoverySteerProperty;
 }
