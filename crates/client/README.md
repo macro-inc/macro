@@ -123,16 +123,25 @@ with the size and header of its WAL, from just before the first move until the
 moved files first open. A worker stopped in between leaves it behind, and the
 next open acts on it before anything else. An ordinary open completes a move
 stopped between its two renames, but brings the WAL over only while it is still
-the one the marker recorded, then opens the files (`resumed`). If the open of
-moved files would reset them, and they still say they are at the version they
-were moved at, nothing this build wrote is in them: they go back to the older
-name whole (`returned`) and this build starts empty, so their queued writes stay
-with the build that wrote them. A recovery open, which the coordinator asks for
-after losing a worker mid-open, does the same before wiping its own files: it
-removes the marker, opens the files only to read their version, and hands them
-back if it is still the moved one. Files at a newer version were upgraded here,
-so the older build could not open them; they are reset (`discarded`). Once the
-moved files have opened they are this build's own.
+the one the marker recorded, and a WAL with frames only under the older name's
+lock, then opens the files (`resumed`); without that lock the open fails and
+keeps both halves. If the open of moved files would reset them, and they still
+say they are at the version they were moved at, nothing this build wrote is in
+them: they go back to the older name whole (`returned`) and this build starts
+empty, so their queued writes stay with the build that wrote them. When the
+failed open cannot read their version, it fails and keeps them. A recovery
+open, which the coordinator asks for after an open fails or a worker is lost
+mid-open, decides before wiping its own files: it counts an attempt in the
+marker, takes the older name's lock, opens the files only to read their
+version, and hands them back if it is still the moved one; the marker goes only
+once it has acted. While it cannot decide (the lock is busy, the marker or the
+version does not read, the files do not connect, or their WAL still holds
+frames) it fails and keeps everything, and the coordinator retries it. After
+three such attempts the next recovery discards the files unopened, so files
+that never open cannot keep the cache from starting. Files at a newer version
+were upgraded here, so the older build could not open them, and files whose
+older name holds a database again cannot go back over it; both are reset
+(`discarded`). Once the moved files have opened they are this build's own.
 
 Before upgrades a newer build never touched an older file, so its queued writes
 waited there until that build ran again. Each of these narrow windows can now
@@ -145,10 +154,14 @@ lose them instead, and each needs a worker lost or an open failing mid-upgrade:
 - the worker is lost during the first open, before any step committed, and a
   tab of the older build opens its now empty name before the recovery open: the
   files cannot go back over its new ones and are discarded;
-- the first open commits the upgrade and then fails, or is lost, before it is
-  ready: the file is already the newer version, so it is discarded. An open
-  slower than the coordinator's database watchdog (20 seconds) counts as lost;
-  the largest caches can reach that on their first open.
+- the first open commits the upgrade and then fails (its queue checks or a
+  projection rebuild), or is lost, before it is ready: the file is already the
+  newer version, so it is discarded. An open slower than the coordinator's
+  database watchdog (20 seconds) counts as lost; the largest caches can reach
+  that on their first open;
+- the moved files cannot be read through three recovery opens in a row (OPFS
+  or connect failures, or a version that does not read): the next one discards
+  them unread, though the older build might still have opened them.
 
 Already true before upgrades, and unchanged: a worker lost after its open was
 ready but before the coordinator saw it wipes the file on the recovery open; an

@@ -57,10 +57,13 @@ contract and the multi-target verification commands.
   under the older identity's `PreviousLock`, never onto an existing main file,
   with a marker recording the older WAL until the moved files open. Keep the
   lock until the first open ends. `complete_adoption` moves a split's WAL only
-  while it matches the marker, and `return_adoption` moves back only a
-  self-contained database onto an identity holding none; the caller decides the
-  files are still what the older build wrote. Don't checkpoint or copy instead;
-  a copy leaves the older build a second queue to replay.
+  while it matches the marker, and one with frames only under the older lock;
+  `return_adoption` moves back only a self-contained database onto an identity
+  holding none; the caller decides the files are still what the older build
+  wrote, and bounds its retries with `record_attempt`. Never read or move the
+  older identity's files without its lock: a sync handle there can block the
+  older build's open. Don't checkpoint or copy instead; a copy leaves the older
+  build a second queue to replay.
 
 ## Related
 

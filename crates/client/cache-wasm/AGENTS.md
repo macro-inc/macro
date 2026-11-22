@@ -74,17 +74,20 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   ends, then opens it, which upgrades it in place; it first resumes a move an
   earlier open left unfinished. Moved files an open would reset go back to the
   older name (`hand_back`) only when the failed open left them at the version
-  they moved at (`TursoStorageOpenFailure::stored_storage_version`); a recovery
-  open does the same before wiping (`recover_adoption`), reading the version
-  after removing the marker. Anything at a newer version is discarded. The
-  result's `outcome` is `upgraded-existing` with `fromStorageVersion`;
+  they moved at (`TursoStorageOpenFailure::stored_storage_version`); at a newer
+  version they are discarded. A recovery open decides the same before wiping
+  (`recover_adoption`): it counts an attempt in the marker and keeps the marker
+  until it has read the version and acted on it. Whatever leaves either open
+  unsure (an unreadable adoption state or version, a split needing the busy
+  older lock, a failed connect, a WAL with frames) fails the open and keeps the
+  files for the coordinator's next recovery, which discards them unopened once
+  `RECOVERY_ATTEMPTS` (3) were counted. The result's `outcome` is
+  `upgraded-existing` with `fromStorageVersion`;
   `carryForward` (`moved`, `resumed`, `older-in-use`, `unsupported`,
   `unreadable`, `failed`, `returned`, `discarded`) and
   `carryForwardStorageVersion` (absent when unknown) say what happened to the
   older file; add a new value to `CACHE_CARRY_FORWARDS` in the web app too.
-  The carry-forward fails an open, keeping the files, only when it cannot read
-  whether moved files are there or where their WAL is. The carry-forward tests in
-  `shell/test.rs` cover each path over real OPFS.
+  The carry-forward tests in `shell/test.rs` cover each path over real OPFS.
 - The engine is guarded by an async mutex so overlapping JS calls serialize
   instead of causing reentrancy — don't bypass it with a second entry point.
 - Compiles to an empty shell off-wasm specifically so plain `cargo test` across
