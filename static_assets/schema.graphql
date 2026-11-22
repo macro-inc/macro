@@ -12601,15 +12601,25 @@ Where a Soup page reads its channels.
 """
 enum SoupChannelReads {
 	"""
-	The read replica, like every other Soup list.
+	The default: the channel query reads the read replica, as ordinary
+	Soup lists do.
 	"""
 	REPLICA
 	"""
-	The primary, where the REST channel list reads them, so the page
-	reflects every committed membership change: a channel the viewer just
-	left or joined is never listed the other way. Only the channels move;
-	every other entity type in the page still reads the replica. Meant for
-	complete passes over the viewer's channel directory, not ordinary lists.
+	The channel query reads the primary, where the REST channel list reads
+	it, so the page's channels, with their members and activity, reflect
+	every membership change committed before it ran. Nothing else moves:
+	other entity types and per-item lookups keep the database they read.
+	Served only for channel directory pages: a timestamp sort (not NAME,
+	PROPERTY or NOTIFIED_AT), newest first, at most 100 items, channel
+	threads excluded by a nil-id filter, no `favoritesOnly: true`, no CRM
+	association of any kind (company, contact or activity), neither as
+	`crmAssociation` nor as a `crmAssociated` literal anywhere in the
+	document filter (a CRM email scope is allowed), and either no
+	channel filter or one that admits only
+	channels it names by id: at most 100 id literals, with nothing beside
+	them but at most two isParticipant literals in the whole tree. Any
+	other page is refused.
 	"""
 	PRIMARY
 }
