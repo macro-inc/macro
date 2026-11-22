@@ -2,8 +2,17 @@ import { expect, type Page, test } from '@playwright/test';
 
 async function open(page: Page) {
   await page.goto('/src/features/database/browser-test/record.html');
-  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 30_000 });
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible({ timeout: 30_000 });
   await page.evaluate(() => document.fonts.ready);
+  // The phone sheet slides up; measure where it settles.
+  await dialog.evaluate((element) =>
+    Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished)
+    )
+  );
 }
 
 /** Each element's text, and whether it is cut off or outside the dialog. */

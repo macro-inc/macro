@@ -205,6 +205,10 @@ function RecordFields(
       get popupMount() {
         return props.popupMount;
       },
+      // A record's related records wrap onto more lines rather than clip.
+      get wrap() {
+        return !!column().relation;
+      },
       get initialEdit() {
         return column().id === initialEditColumnId;
       },
@@ -270,17 +274,19 @@ function RecordFields(
           {(column) => (
             <div class="grid min-h-9 grid-cols-[minmax(5rem,0.75fr)_minmax(0,1.5fr)] items-start gap-2">
               <div
-                class="flex min-w-0 items-center gap-2 pt-2.5 text-xs text-ink-muted"
+                class="flex min-w-0 items-start gap-2 pt-2.5 text-xs text-ink-muted"
                 title={column().name}
               >
-                <PropertyIcon
-                  type={column().dataType}
-                  relation={!!column().relation}
-                  formula={!!column().formula}
-                  percentage={!!column().percentage}
-                  entityType={column().specificEntityType}
-                />
-                <span class="truncate" data-record-field-name>
+                <span class="flex h-4 shrink-0 items-center">
+                  <PropertyIcon
+                    type={column().dataType}
+                    relation={!!column().relation}
+                    formula={!!column().formula}
+                    percentage={!!column().percentage}
+                    entityType={column().specificEntityType}
+                  />
+                </span>
+                <span class="min-w-0 wrap-break-word" data-record-field-name>
                   {column().name}
                 </span>
               </div>

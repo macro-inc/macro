@@ -56,8 +56,8 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
   const name = (id: string) =>
     props.source.rows().find((row) => row.id === id)?.name ??
     (props.source.loading() ? 'Loading…' : 'Unavailable record');
-  /** Chips shown in the cell; each carries an arrow to its record. */
-  const shown = () => ids().slice(0, 2);
+  /** Chips shown in the cell; each carries an arrow to its record. A wrapping field shows them all. */
+  const shown = () => (props.wrap ? ids() : ids().slice(0, 2));
   const openable = () => shown().filter(available);
   const candidates = () =>
     props.source
@@ -221,15 +221,31 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
             when={ids().length}
             fallback={<span class="text-ink-placeholder opacity-40">—</span>}
           >
-            <span class="flex min-w-0 items-center gap-1 overflow-hidden">
+            <span
+              class="flex min-w-0 items-center gap-1"
+              classList={{
+                'overflow-hidden': !props.wrap,
+                'flex-wrap': props.wrap,
+              }}
+            >
               <For each={shown()}>
                 {(id) => (
                   <span
-                    class="inline-flex min-w-0 max-w-44 items-center gap-1 rounded border border-edge-muted/60 bg-hover/60 py-0.5 pl-1.5 text-xs text-ink"
+                    class="inline-flex min-w-0 items-center gap-1 rounded border border-edge-muted/60 bg-hover/60 py-0.5 pl-1.5 text-xs text-ink"
+                    classList={{
+                      'max-w-44': !props.wrap,
+                      'max-w-full': props.wrap,
+                    }}
                     title={name(id)}
                   >
                     <LinkIcon class="size-3 shrink-0 text-ink-muted" />
-                    <span class="truncate" data-relation-chip-name>
+                    <span
+                      classList={{
+                        truncate: !props.wrap,
+                        'min-w-0 wrap-break-word': props.wrap,
+                      }}
+                      data-relation-chip-name
+                    >
                       {name(id)}
                     </span>
                     {/* A native title: a styled tooltip per chip is a Kobalte root each. */}
@@ -261,9 +277,9 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                   </span>
                 )}
               </For>
-              <Show when={ids().length > 2}>
+              <Show when={ids().length > shown().length}>
                 <span class="shrink-0 text-xs text-ink-muted">
-                  +{ids().length - 2}
+                  +{ids().length - shown().length}
                 </span>
               </Show>
             </span>
@@ -380,9 +396,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                             title={`Open ${name(id)}`}
                             onClick={() => openRecord(id)}
                           >
-                            <span class="truncate" data-relation-chip-name>
-                      {name(id)}
-                    </span>
+                            <span class="truncate">{name(id)}</span>
                             <ArrowUpRightIcon class="size-3 shrink-0 text-ink-muted" />
                           </Button>
                           <Show when={editable()}>
