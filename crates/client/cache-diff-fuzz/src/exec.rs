@@ -397,7 +397,9 @@ impl<'a> Exec<'a> {
             return false;
         }
         #[cfg(storage_faults)]
-        fault.flag().store(true, std::sync::atomic::Ordering::SeqCst);
+        fault
+            .flag()
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         self.count(format!("fault.{}.armed", fault.name()));
         true
     }
@@ -405,7 +407,10 @@ impl<'a> Exec<'a> {
     /// Disarms what `arm_fault` armed, counting whether a write or read took it.
     fn disarm_fault(&mut self, fault: Fault) {
         #[cfg(storage_faults)]
-        if !fault.flag().swap(false, std::sync::atomic::Ordering::SeqCst) {
+        if !fault
+            .flag()
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
             self.count(format!("fault.{}.fired", fault.name()));
         }
         #[cfg(not(storage_faults))]
