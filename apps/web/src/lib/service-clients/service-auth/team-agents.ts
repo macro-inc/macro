@@ -109,6 +109,11 @@ export const teamAgentsClient = {
     }),
   /** The caller's own paired machines, and whether each can host an agent. */
   hosts: () => fetchWithToken<TeammateHosts>(`${base}/hosts`),
+  /** Ask one of the caller's machines to check its hosting again now. */
+  recheckHost: (harnessId: string) =>
+    fetchWithToken(`${base}/hosts/${encodeURIComponent(harnessId)}/recheck`, {
+      method: 'POST',
+    }),
   /** Move an agent running on one of the caller's machines to another. */
   move: (agentUserId: string, harnessId: string) =>
     fetchWithToken<

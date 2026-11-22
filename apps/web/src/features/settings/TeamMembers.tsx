@@ -237,6 +237,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
       ? machineName(placement.harnessId)
       : undefined;
   };
+  /** "Moving to <machine>" while the agent moves; its own status word otherwise. */
+  const movingLabel = (agent: TeamAgent) => {
+    const host = selfHosted() ? movingToName(agent) : undefined;
+    return host ? t('teammateHosts.movingTo', { host }) : undefined;
+  };
   /** The machine a moving agent is moving to. */
   const movingToName = (agent: TeamAgent) => {
     const placement = teammatePlacement(agent);
@@ -643,13 +648,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
                           : undefined
                       }
                       retrying={retryAgent.pending()}
-                      statusLabel={
-                        selfHosted() && movingToName(agent)
-                          ? t('teammateHosts.movingTo', {
-                              host: movingToName(agent),
-                            })
-                          : undefined
-                      }
+                      statusLabel={movingLabel(agent)}
                       runsOn={
                         <Show when={selfHosted() && hostedName(agent)}>
                           {(host) => <TeammateRunsOn host={host()} />}

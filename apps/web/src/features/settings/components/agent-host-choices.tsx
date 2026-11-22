@@ -23,6 +23,8 @@ export function AgentHostChoices(props: {
   hosts: readonly TeammateHost[] | undefined;
   failed: boolean;
   onRetry: () => void;
+  /** Asks a machine whose engine didn't answer to check again now. */
+  onRecheck: (harnessId: string) => void;
   selected: string | undefined;
   onSelect: (host: AgentHost) => void;
   disabled?: boolean;
@@ -84,7 +86,7 @@ export function AgentHostChoices(props: {
                           {t('teammateHosts.hostExperimental')}
                         </span>
                       </Show>
-                      {/* Checked again by itself too; this asks now. */}
+                      {/* Checked again by itself every 30 s; this asks the machine now. */}
                       <Show when={hostEngineUnreachable(host)}>
                         <Button
                           type="button"
@@ -92,7 +94,7 @@ export function AgentHostChoices(props: {
                           size="sm"
                           onClick={(event) => {
                             event.preventDefault();
-                            props.onRetry();
+                            props.onRecheck(host.harnessId);
                           }}
                         >
                           {t('teammateHosts.checkAgain')}

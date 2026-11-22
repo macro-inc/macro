@@ -11,7 +11,10 @@ import {
   isCurrentQueryAccount,
 } from '@queries/auth/account-scope';
 import { useComputerOffersQuery } from '@queries/computers/computers';
-import { useTeammateHostsQuery } from '@queries/team-agents/hosts';
+import {
+  useRecheckTeammateHostMutation,
+  useTeammateHostsQuery,
+} from '@queries/team-agents/hosts';
 import type { CreateTeamAgent } from '@service-auth/team-agents';
 import { FaceSlot } from '../../agent-faces/face-slot';
 import { createFaceDraft } from '../../agent-faces/primitives/create-face-draft';
@@ -42,6 +45,7 @@ export function InviteAgentPanel(props: {
   const selfHosted = useFeatureFlag(enableSelfHostedTeammates);
   const ownMachines = () => !selfHosted().loading && selfHosted().enabled;
   const hosts = useTeammateHostsQuery(() => props.teamId, ownMachines);
+  const recheck = useRecheckTeammateHostMutation();
   // A new random face each time the panel opens.
   const face = createFaceDraft();
   // One upload per face, however often Add is pressed.
@@ -92,6 +96,9 @@ export function InviteAgentPanel(props: {
                 failed={hosts.isError}
                 onRetry={() =>
                   fireAndForget(hosts.refetch(), 'team-agent.hosts')
+                }
+                onRecheck={(harnessId) =>
+                  recheck.mutate({ teamId: props.teamId, harnessId })
                 }
                 selected={choice.selected()}
                 onSelect={choice.onSelect}

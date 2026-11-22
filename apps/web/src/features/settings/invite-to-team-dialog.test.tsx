@@ -30,6 +30,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 }));
 vi.mock('@queries/team-agents/hosts', () => ({
   useTeammateHostsQuery: () => ({ isSuccess: false, isError: false }),
+  useRecheckTeammateHostMutation: () => ({ mutate: () => {} }),
 }));
 vi.mock('@queries/harnesses/harnesses', () => ({
   useHarnessesQuery: () => ({

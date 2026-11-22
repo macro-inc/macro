@@ -83,3 +83,34 @@ export function useMoveTeamAgentMutation() {
     ) => refreshAfterMove(vars.teamId),
   }));
 }
+
+/** How long a machine takes to report a fresh check; the list is read again then. */
+const RECHECK_REPORT_MS = 3_000;
+
+type RecheckHostArgs = { teamId: string; harnessId: string };
+
+async function recheckTeammateHost(vars: RecheckHostArgs): Promise<void> {
+  await Telemetry.span('team-agent.recheck_host', async (span) => {
+    span.setAttr('team.id', vars.teamId);
+    span.setAttr('harness.id', vars.harnessId);
+    await throwOnErr(() => teamAgentsClient.recheckHost(vars.harnessId));
+  });
+}
+
+async function refreshAfterRecheck(teamId: string) {
+  await new Promise((resolve) => setTimeout(resolve, RECHECK_REPORT_MS));
+  await queryClient.invalidateQueries({
+    queryKey: teammateHostKeys.list(teamId).queryKey,
+  });
+}
+
+/** Ask one of the caller's machines to check its hosting now, then read the list again. */
+export function useRecheckTeammateHostMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    retry: false,
+    mutationFn: recheckTeammateHost,
+    onSuccess: (_data: void, vars: RecheckHostArgs) =>
+      refreshAfterRecheck(vars.teamId),
+  }));
+}

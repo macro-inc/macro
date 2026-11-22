@@ -5,6 +5,7 @@ import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import {
   useMoveTeamAgentMutation,
+  useRecheckTeammateHostMutation,
   useTeammateHostsQuery,
 } from '@queries/team-agents/hosts';
 import type { TeamAgent } from '@service-auth/team-agents';
@@ -26,6 +27,7 @@ function MoveTeammate(props: {
     () => true
   );
   const move = useMoveTeamAgentMutation();
+  const recheck = useRecheckTeammateHostMutation();
   const [chosen, setChosen] = createSignal<string>();
   // Only another machine that can host it now; a parked agent runs
   // nowhere, so the machine it was stopped on counts too.
@@ -103,6 +105,9 @@ function MoveTeammate(props: {
               failed={hosts.isError}
               onRetry={() =>
                 fireAndForget(hosts.refetch(), 'team-agent.move.hosts')
+              }
+              onRecheck={(harnessId) =>
+                recheck.mutate({ teamId: props.teamId, harnessId })
               }
               selected={target()?.harnessId}
               onSelect={setChosen}
