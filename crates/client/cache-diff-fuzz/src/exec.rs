@@ -68,6 +68,9 @@ pub struct Exec<'a> {
     pub abandon_reads: f64,
     /// Operations an abandoned read registered against every change.
     broad: BTreeSet<String>,
+    /// The query each operation the case registered was last registered
+    /// with, for reads injected to be abandoned.
+    registered: BTreeMap<String, (String, serde_json::Map<String, Value>)>,
     /// Where those operations were reported affected, as `index op`.
     broad_hits: Vec<String>,
     /// The handle a planned read runs with while it runs.
@@ -142,6 +145,7 @@ impl<'a> Exec<'a> {
             interrupt_migration,
             abandon_reads: 0.0,
             broad: BTreeSet::new(),
+            registered: BTreeMap::new(),
             broad_hits: Vec::new(),
             reader: None,
             broad_out: None,
@@ -338,6 +342,7 @@ impl<'a> Exec<'a> {
                 identity,
                 contacts,
             } => {
+                self.inject_abandoned(index).await?;
                 self.identity.clone_from(identity);
                 self.count(format!("hydrate.{lane}"));
                 let split = self.split_due(index);
@@ -375,8 +380,10 @@ impl<'a> Exec<'a> {
                 identity,
                 register,
             } => {
+                self.inject_abandoned(index).await?;
                 self.identity.clone_from(identity);
                 self.count(format!("write.{lane}"));
+                self.note_registration(register.as_ref(), doc, variables);
                 let outcome = self.write(doc, variables, data, register.clone()).await;
                 self.record(index, "write", outcome);
             }
@@ -385,6 +392,7 @@ impl<'a> Exec<'a> {
                 variables,
                 register,
             } => {
+                self.note_registration(register.as_ref(), doc, variables);
                 if let Some(plan) = self.abandon_plan(index, true) {
                     return self
                         .abandon_read_op(index, plan, doc, variables, register.as_ref())
@@ -413,6 +421,7 @@ impl<'a> Exec<'a> {
             }
             Op::Teardown { op_id } => {
                 self.broad.remove(op_id);
+                self.registered.remove(op_id);
                 let outcome = self
                     .handle()
                     .teardown(op_id.clone())

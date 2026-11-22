@@ -116,6 +116,50 @@ impl Exec<'_> {
         }
     }
 
+    /// Remembers the query an op registered `register` with, so a later read
+    /// of that operation can be sent and abandoned (see `inject_abandoned`).
+    pub(super) fn note_registration(
+        &mut self,
+        register: Option<&String>,
+        doc: &str,
+        variables: &Map<String, Value>,
+    ) {
+        if let (true, Some(op)) = (self.abandon_reads > 0.0, register) {
+            self.registered
+                .insert(op.clone(), (doc.to_owned(), variables.clone()));
+        }
+    }
+
+    /// Before a write or hydrate, at the abandon share, a read of an
+    /// operation the case registered is sent and abandoned while queued, as
+    /// urql re-reading an operation the webview then stops waiting for. Case
+    /// reads of registered operations are rare; these put an operation in its
+    /// broad state just before a change is reported.
+    pub(super) async fn inject_abandoned(&mut self, index: usize) -> Result<(), String> {
+        if self.abandon_reads <= 0.0 || self.registered.is_empty() {
+            return Ok(());
+        }
+        let roll = crate::rng::mix(
+            index as u64,
+            &format!("abandon inject {}", self.generated.viewer),
+        );
+        if ((roll % 1_000) as f64) >= self.abandon_reads * 1_000.0 {
+            return Ok(());
+        }
+        let pick = (roll / 1_000) as usize % self.registered.len();
+        let Some((op, (doc, variables))) = self
+            .registered
+            .iter()
+            .nth(pick)
+            .map(|(op, read)| (op.clone(), read.clone()))
+        else {
+            return Ok(());
+        };
+        self.count("abandon.injected");
+        self.abandon_read_op(index, Plan::Held, &doc, &variables, Some(&op))
+            .await
+    }
+
     #[cfg(abandon_reads)]
     async fn run_planned(
         &mut self,
