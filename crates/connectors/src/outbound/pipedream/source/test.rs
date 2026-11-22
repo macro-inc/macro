@@ -173,7 +173,7 @@ async fn connections_are_the_pipedream_rows_only(pool: PgPool) {
     assert_eq!(slack.source, SourceKind::Pipedream);
     assert_eq!(slack.key, ConnectorKey::App(app("slack")));
     assert_eq!(slack.source_id, "slack_v2");
-    assert!(slack.enabled && slack.authorized);
+    assert!(slack.enabled && slack.grant == crate::domain::ports::GrantState::Working);
     assert!(slack.mcp.is_some() && slack.api.is_some());
 }
 

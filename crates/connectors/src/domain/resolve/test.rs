@@ -6,7 +6,7 @@ use crate::domain::catalog::{ConnectSupport, Overlays};
 use crate::domain::models::{
     ApiRequest, ApiResponse, PermitRefused, Selection, ServerUrl, Surfaces, Upstream,
 };
-use crate::domain::ports::{ApiConnection, McpConnection};
+use crate::domain::ports::{ApiConnection, GrantState, McpConnection};
 use mcp_toolset::McpServer;
 use std::sync::Arc;
 
@@ -92,7 +92,7 @@ fn held(source: SourceKind, key: ConnectorKey) -> SourceConnection {
         name: format!("{source:?}"),
         key,
         enabled: true,
-        authorized: true,
+        grant: GrantState::Working,
         mcp: Some(Arc::new(Undialed)),
         api,
     }
@@ -107,7 +107,14 @@ fn disabled(connection: SourceConnection) -> SourceConnection {
 
 fn unauthorized(connection: SourceConnection) -> SourceConnection {
     SourceConnection {
-        authorized: false,
+        grant: GrantState::Dead,
+        ..connection
+    }
+}
+
+fn without_a_grant(connection: SourceConnection) -> SourceConnection {
+    SourceConnection {
+        grant: GrantState::Missing,
         ..connection
     }
 }
@@ -245,7 +252,7 @@ fn overlaid_app_flag_on_connect_does_not_serve_it_counts_native() {
 fn overlaid_app_native_row_without_a_grant_needs_reauth() {
     let resolution = run(
         Flag::Off,
-        vec![unauthorized(held(
+        vec![without_a_grant(held(
             SourceKind::Native,
             server_key(STRIPE_SERVER),
         ))],
@@ -327,10 +334,24 @@ fn url_server_without_a_grant_is_usable() {
     let url = "https://tools.example.com/mcp";
     let resolution = run(
         Flag::Off,
-        vec![unauthorized(held(SourceKind::Native, server_key(url)))],
+        vec![without_a_grant(held(SourceKind::Native, server_key(url)))],
     );
 
     assert_eq!(resolution.mcp.status(&server_key(url)), Status::Connected);
+}
+
+/// A server whose grant is known dead is not dialed anonymously: the
+/// proxy would refuse it, so it needs signing in again.
+#[test]
+fn url_server_whose_grant_is_dead_needs_reauth() {
+    let url = "https://tools.example.com/mcp";
+    let resolution = run(
+        Flag::Off,
+        vec![unauthorized(held(SourceKind::Native, server_key(url)))],
+    );
+
+    assert_eq!(resolution.mcp.status(&server_key(url)), Status::NeedsReauth);
+    assert_eq!(resolution.mcp.handles().count(), 0);
 }
 
 // Rule 1: any other source is ignored.

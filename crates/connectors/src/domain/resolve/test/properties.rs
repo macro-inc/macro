@@ -24,6 +24,8 @@ const SERVERS: &[&str] = &[
     "https://mcp.linear.app/mcp",
     "https://tools.example.com/mcp",
 ];
+const GRANTS: &[GrantState] = &[GrantState::Working, GrantState::Missing, GrantState::Dead];
+
 const SOURCES: &[SourceKind] = &[
     SourceKind::Native,
     SourceKind::GithubLink,
@@ -40,10 +42,10 @@ fn any_connection(index: usize) -> impl Strategy<Value = SourceConnection> {
         0..SOURCES.len(),
         0..APPS.len().max(SERVERS.len()),
         any::<bool>(),
-        any::<bool>(),
+        0..GRANTS.len(),
         any::<bool>(),
     )
-        .prop_map(move |(source, target, enabled, authorized, api)| {
+        .prop_map(move |(source, target, enabled, grant, api)| {
             let source = SOURCES[source];
             let key = match source {
                 SourceKind::Native => server_key(SERVERS[target % SERVERS.len()]),
@@ -57,7 +59,7 @@ fn any_connection(index: usize) -> impl Strategy<Value = SourceConnection> {
                 source_id: format!("{index:03}"),
                 name: format!("connection {index}"),
                 enabled,
-                authorized,
+                grant: GRANTS[grant],
                 mcp: Some(Arc::new(Undialed)),
                 api,
             }

@@ -7,8 +7,8 @@ use crate::domain::models::{
     Upstream,
 };
 use crate::domain::ports::{
-    ApiConnection, McpConnection, ServerDirectory, Source, SourceConnection, SourceKind,
-    SourceRefusal,
+    ApiConnection, GrantState, McpConnection, ServerDirectory, Source, SourceConnection,
+    SourceKind, SourceRefusal,
 };
 use crate::domain::resolve;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -36,7 +36,7 @@ pub(crate) struct FakeRow {
     pub(crate) key: ConnectorKey,
     pub(crate) name: String,
     pub(crate) enabled: bool,
-    pub(crate) authorized: bool,
+    pub(crate) grant: GrantState,
     /// Whether the row gives API access, as its source would for its app.
     pub(crate) api: bool,
     /// The tools its MCP server lists.
@@ -62,7 +62,7 @@ impl FakeRow {
             source,
             key,
             enabled: true,
-            authorized: true,
+            grant: GrantState::Working,
             api,
             tools: Vec::new(),
             response: (http::StatusCode::OK, "{}".to_owned()),
@@ -131,7 +131,7 @@ impl FakeSource {
             source_id: row.key.to_string(),
             name: row.name.clone(),
             enabled: row.enabled,
-            authorized: row.authorized,
+            grant: row.grant,
             mcp: Some(Arc::new(FakeMcp {
                 name: row.name.clone(),
                 tools: row.tools.clone(),
@@ -352,7 +352,7 @@ impl ServerDirectory for FakeSource {
 
         let mut row = FakeRow::new(user.clone(), SourceKind::Native, key, false);
         row.name = name.to_owned();
-        row.authorized = false;
+        row.grant = GrantState::Missing;
         store.rows.push(row.clone());
 
         Ok(self.connection(&row))

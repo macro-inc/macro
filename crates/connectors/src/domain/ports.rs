@@ -44,9 +44,8 @@ pub(crate) struct SourceConnection {
     pub(crate) name: String,
     /// Whether the user has it turned on.
     pub(crate) enabled: bool,
-    /// Whether it holds a grant that works. A native row without credentials
-    /// is not authorized; a GitHub link whose token stopped working is not.
-    pub(crate) authorized: bool,
+    /// What it holds to sign in with.
+    pub(crate) grant: GrantState,
     /// MCP access, when the source provides it for this app.
     pub(crate) mcp: Option<Arc<dyn McpConnection>>,
     /// API access, when the source provides it for this app.
@@ -61,11 +60,26 @@ impl std::fmt::Debug for SourceConnection {
             .field("key", &self.key)
             .field("source_id", &self.source_id)
             .field("enabled", &self.enabled)
-            .field("authorized", &self.authorized)
+            .field("grant", &self.grant)
             .field("mcp", &self.mcp.is_some())
             .field("api", &self.api.is_some())
             .finish_non_exhaustive()
     }
+}
+
+/// What a connection holds to sign in with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum GrantState {
+    /// A grant that works, as far as the source can tell without asking the
+    /// vendor.
+    Working,
+    /// No grant at all: a server added by URL and never signed in to. Such a
+    /// server may take anonymous requests; an app never does.
+    Missing,
+    /// A grant known not to work (a GitHub link whose token GitHub refuses,
+    /// a native sign-in that never finished, an expired token with nothing
+    /// to refresh it): only the user authorizing again mends it.
+    Dead,
 }
 
 /// Why a source refused an operation, carried as the context of the

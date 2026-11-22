@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::ports::GrantState;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use sqlx::PgPool;
@@ -197,7 +198,7 @@ async fn connections_are_the_connect_rows_only(pool: PgPool) {
                 connection.source,
                 connection.key.clone(),
                 connection.source_id.as_str(),
-                connection.authorized,
+                connection.grant,
                 connection.mcp.is_some(),
                 connection.api.is_some(),
             )
@@ -210,7 +211,7 @@ async fn connections_are_the_connect_rows_only(pool: PgPool) {
                 SourceKind::Connect,
                 ConnectorKey::App(app("granola")),
                 "granola",
-                false,
+                GrantState::Dead,
                 true,
                 false
             ),
@@ -218,7 +219,7 @@ async fn connections_are_the_connect_rows_only(pool: PgPool) {
                 SourceKind::Connect,
                 ConnectorKey::App(app("slack")),
                 "slack_v2",
-                true,
+                GrantState::Working,
                 true,
                 true
             ),
@@ -268,7 +269,7 @@ async fn completing_replaces_the_pipedream_row_and_revokes_its_grant(pool: PgPoo
         .unwrap();
 
     assert_eq!(connection.key, ConnectorKey::App(app("slack")));
-    assert!(connection.enabled && connection.authorized);
+    assert!(connection.enabled && connection.grant == GrantState::Working);
     assert_eq!(*pipedream.revoked.lock().unwrap(), ["apn_slack"]);
     assert!(vendor.revoked.lock().unwrap().is_empty());
     let rows = sqlx::query!("SELECT app_slug, account_id, provider FROM pipedream_mcp_connections")

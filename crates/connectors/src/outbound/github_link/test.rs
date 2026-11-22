@@ -126,7 +126,7 @@ async fn a_working_link_is_github() {
     assert_eq!(connection.key, github());
     assert_eq!(connection.name, "GitHub");
     assert!(connection.enabled);
-    assert!(connection.authorized);
+    assert_eq!(connection.grant, crate::domain::ports::GrantState::Working);
     assert!(connection.mcp.is_some());
     assert!(connection.api.is_none());
 }
@@ -139,7 +139,7 @@ async fn a_link_github_refuses_is_held_but_not_authorized() {
 
     let connection = fixture.source.connections(&user()).await.unwrap().remove(0);
 
-    assert!(!connection.authorized);
+    assert_eq!(connection.grant, crate::domain::ports::GrantState::Dead);
     let error = connection.mcp.unwrap().upstream().await.unwrap_err();
     assert_eq!(refusal(&error), Some(&SourceRefusal::NeedsReauth(github())));
 }
@@ -277,7 +277,7 @@ async fn completing_reads_the_new_link() {
         .complete_connect(&user(), &ConnectorId::github())
         .await
         .unwrap();
-    assert!(connection.authorized);
+    assert_eq!(connection.grant, crate::domain::ports::GrantState::Working);
 }
 
 /// Toggling writes the row at GitHub's address, never with a token in it.

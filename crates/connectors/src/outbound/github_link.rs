@@ -15,7 +15,9 @@
 use crate::domain::models::{
     ConnectStep, ConnectorId, ConnectorKey, ServerUrl, Surfaces, Upstream,
 };
-use crate::domain::ports::{McpConnection, Source, SourceConnection, SourceKind, SourceRefusal};
+use crate::domain::ports::{
+    GrantState, McpConnection, Source, SourceConnection, SourceKind, SourceRefusal,
+};
 use crate::outbound::guarded_http::McpHttp;
 use crate::outbound::native::models::{
     GITHUB_MCP_SERVER_URL, MacroUserIdStr, McpServer, McpServerRecord, dial_with_bearer,
@@ -150,7 +152,11 @@ where
                 .as_ref()
                 .map_or_else(|| GITHUB_NAME.to_owned(), |row| row.server_name.clone()),
             enabled: toggle.as_ref().is_none_or(|row| row.enabled),
-            authorized: token.is_some(),
+            grant: if token.is_some() {
+                GrantState::Working
+            } else {
+                GrantState::Dead
+            },
             mcp: Some(Arc::new(GithubMcp {
                 key,
                 server: self.server.clone(),

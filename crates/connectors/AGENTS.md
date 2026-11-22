@@ -86,6 +86,10 @@ Pipedream, Macro Connect) or tell which one holds a connection.
   native source skips it and the link source owns GitHub.
 - OAuth state lives in Redis apart from the server row: a row surviving does
   not mean its sign-in did.
+- A server added by URL with no grant is connected (anonymous servers work);
+  one whose row shows a dead grant (a sign-in that never finished, an expired
+  token with no refresh token) needs reauth, as the proxy would refuse it.
+  A refresh token the server revoked is found only when dialing.
 
 ## Related
 

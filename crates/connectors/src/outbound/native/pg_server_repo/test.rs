@@ -202,7 +202,10 @@ async fn the_native_source_reads_and_changes_the_table(pool: PgPool) {
     let connections = source.connections(&user(OWNER)).await.unwrap();
     assert_eq!(connections.len(), 1);
     assert_eq!(connections[0].key, wiki);
-    assert!(connections[0].authorized);
+    assert_eq!(
+        connections[0].grant,
+        crate::domain::ports::GrantState::Working
+    );
 
     source
         .set_enabled(&user(OWNER), &wiki, false)

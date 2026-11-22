@@ -5,7 +5,7 @@ use crate::domain::models::{
     ApiRequest, ApiResponse, ConnectStep, ConnectorId, ConnectorKey, Surfaces, Upstream,
 };
 use crate::domain::ports::{
-    ApiConnection, McpConnection, Source, SourceConnection, SourceKind, SourceRefusal,
+    ApiConnection, GrantState, McpConnection, Source, SourceConnection, SourceKind, SourceRefusal,
 };
 use crate::outbound::hosted_connections::{
     Grant, HostedRepo, HostedRow, Provider, RevokeGrant, revoke_replaced,
@@ -115,10 +115,10 @@ impl ConnectSource {
             .iter()
             .find(|entry| entry.id == row.account_id)
             .is_some_and(|entry| surfaces(entry).api());
-        let authorized = matches!(
-            statuses.get(&row.account_id),
-            Some(wire::ConnectionStatus::Active)
-        );
+        let grant = match statuses.get(&row.account_id) {
+            Some(wire::ConnectionStatus::Active) => GrantState::Working,
+            _ => GrantState::Dead,
+        };
         let connection = Arc::new(ConnectApp {
             vendor: self.vendor.clone(),
             user: row.user,
@@ -132,7 +132,7 @@ impl ConnectSource {
             source_id: row.app_slug,
             name: row.server_name,
             enabled: row.enabled,
-            authorized,
+            grant,
             mcp: Some(connection.clone()),
             api: provides_api.then_some(connection as Arc<dyn ApiConnection>),
         })

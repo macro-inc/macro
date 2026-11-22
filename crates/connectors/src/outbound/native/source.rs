@@ -7,16 +7,22 @@
 //! address only stores that link's enabled toggle and name.
 
 use crate::domain::models::{AddedBy, ConnectStep, ConnectorId, ConnectorKey, ServerUrl, Upstream};
-use crate::domain::ports::{McpConnection, Source, SourceConnection, SourceKind, SourceRefusal};
+use crate::domain::ports::{
+    GrantState, McpConnection, Source, SourceConnection, SourceKind, SourceRefusal,
+};
 use crate::outbound::guarded_http::McpHttp;
+use crate::outbound::native::models::StoredCredentials;
 use crate::outbound::native::models::{
     GITHUB_MCP_SERVER_URL, MacroUserIdStr, McpServer, McpServerRecord,
 };
 use crate::outbound::native::ports::{McpConnector, McpServerStore, OAuthClient};
-use crate::outbound::native::server_access::{ServerAccess, server_access};
+use crate::outbound::native::server_access::{
+    ServerAccess, now_epoch_secs, server_access, unexpired_access_token,
+};
 use crate::outbound::native::server_directory::{
     self as native_service, AddServerError, ServerDirectory,
 };
+use oauth2::TokenResponse as _;
 use rmcp::transport::auth::AuthError;
 use rootcause::Report;
 use rootcause::compat::IntoRootcause as _;
@@ -140,17 +146,14 @@ where
 
     fn connection(&self, url: ServerUrl, record: McpServerRecord) -> SourceConnection {
         let key = ConnectorKey::Server(url);
-        let authorized = record
-            .credentials
-            .as_ref()
-            .is_some_and(|credentials| credentials.token_response.is_some());
+        let grant = grant(record.credentials.as_ref(), now_epoch_secs());
         SourceConnection {
             source: SourceKind::Native,
             key: key.clone(),
             source_id: record.url.clone(),
             name: record.server_name.clone(),
             enabled: record.enabled,
-            authorized,
+            grant,
             mcp: Some(Arc::new(NativeMcp {
                 key,
                 record,
@@ -350,6 +353,28 @@ impl<S: McpServerStore> McpConnection for NativeMcp<S> {
         };
         Ok(Upstream::new(url, bearer, http::HeaderMap::new()))
     }
+}
+
+/// What a row's stored credentials hold, from what the row itself shows:
+/// no network call, so a refresh token the server has since revoked still
+/// reads as working until a dial or the proxy finds out. Dead is what the
+/// proxy would answer "authorization required" for without asking the
+/// server: a sign-in that never finished, or an expired token with no
+/// refresh token.
+pub(crate) fn grant(credentials: Option<&StoredCredentials>, now_epoch_secs: u64) -> GrantState {
+    let Some(credentials) = credentials else {
+        return GrantState::Missing;
+    };
+    let Some(token) = &credentials.token_response else {
+        return GrantState::Dead;
+    };
+    if unexpired_access_token(credentials, now_epoch_secs).is_none()
+        && token.refresh_token().is_none()
+    {
+        return GrantState::Dead;
+    }
+
+    GrantState::Working
 }
 
 /// Whether `url` is GitHub's MCP server, whose rows belong to the account

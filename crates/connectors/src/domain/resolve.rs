@@ -18,7 +18,7 @@ use crate::domain::catalog::{ConnectSupport, Overlays};
 use crate::domain::models::{
     ApiHandle, ConnectorId, ConnectorKey, McpConnections, McpHandle, Resolved, Status, Surfaces,
 };
-use crate::domain::ports::{SourceConnection, SourceKind};
+use crate::domain::ports::{GrantState, SourceConnection, SourceKind};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::BTreeMap;
 
@@ -178,15 +178,18 @@ pub(crate) fn counted_source(
 }
 
 /// A counted connection's status. A server added by URL needs no grant to
-/// be usable: some take anonymous requests, and dialing finds out.
+/// be usable: some take anonymous requests, and dialing finds out. One
+/// whose grant is known dead needs signing in again, as an app does.
 fn status(key: &ConnectorKey, connection: &SourceConnection) -> Status {
     if !connection.enabled {
         return Status::Disabled;
     }
 
-    match key {
-        ConnectorKey::App(_) if !connection.authorized => Status::NeedsReauth,
-        _ => Status::Connected,
+    match (key, connection.grant) {
+        (_, GrantState::Working) | (ConnectorKey::Server(_), GrantState::Missing) => {
+            Status::Connected
+        }
+        (_, GrantState::Dead) | (ConnectorKey::App(_), GrantState::Missing) => Status::NeedsReauth,
     }
 }
 

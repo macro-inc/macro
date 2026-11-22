@@ -4,7 +4,7 @@ use crate::outbound::native::memory_store::MemoryStore;
 use crate::outbound::native::models::StoredCredentials;
 use macro_user_id::cowlike::CowLike;
 use oauth2::basic::BasicTokenType;
-use oauth2::{AccessToken, StandardTokenResponse};
+use oauth2::{AccessToken, RefreshToken, StandardTokenResponse};
 use rmcp::transport::auth::VendorExtraTokenFields;
 use std::sync::Mutex;
 
@@ -75,6 +75,25 @@ fn granted(token: &str) -> StoredCredentials {
     )
 }
 
+/// A grant whose access token expired an hour ago, with `refresh` to
+/// refresh it, if any.
+fn expired(refresh: Option<&str>) -> StoredCredentials {
+    let mut token = StandardTokenResponse::new(
+        AccessToken::new("old".to_owned()),
+        BasicTokenType::Bearer,
+        VendorExtraTokenFields::default(),
+    );
+    token.set_expires_in(Some(&std::time::Duration::from_secs(60)));
+    token.set_refresh_token(refresh.map(|refresh| RefreshToken::new(refresh.to_owned())));
+    let received_at = crate::outbound::native::server_access::now_epoch_secs() - 3600;
+    StoredCredentials::new(
+        "client".to_owned(),
+        Some(token),
+        Vec::new(),
+        Some(received_at),
+    )
+}
+
 /// A client registered for a sign-in that never finished.
 fn unfinished() -> StoredCredentials {
     StoredCredentials::new("client".to_owned(), None, Vec::new(), None)
@@ -131,9 +150,11 @@ async fn every_row_is_its_servers_address() {
     assert!(!connections[1].enabled);
 }
 
-/// A row is authorized only when it holds a finished grant.
+/// A row's grant, from what the row shows: a finished grant works, a
+/// sign-in that never finished or an expired token with nothing to refresh
+/// it is dead, and a row never signed in to holds none.
 #[tokio::test]
-async fn only_a_finished_grant_is_authorized() {
+async fn a_rows_grant_is_read_from_the_row() {
     let fixture = holding(vec![
         McpServerRecord {
             credentials: Some(granted("token")),
@@ -144,17 +165,34 @@ async fn only_a_finished_grant_is_authorized() {
             ..row("https://b.example.com/mcp", true)
         },
         row("https://c.example.com/mcp", true),
+        McpServerRecord {
+            credentials: Some(expired(None)),
+            ..row("https://d.example.com/mcp", true)
+        },
+        McpServerRecord {
+            credentials: Some(expired(Some("refresh"))),
+            ..row("https://e.example.com/mcp", true)
+        },
     ]);
 
-    let authorized: Vec<_> = fixture
+    let grants: Vec<_> = fixture
         .source
         .connections(&user())
         .await
         .unwrap()
         .iter()
-        .map(|c| c.authorized)
+        .map(|c| c.grant)
         .collect();
-    assert_eq!(authorized, [true, false, false]);
+    assert_eq!(
+        grants,
+        [
+            GrantState::Working,
+            GrantState::Dead,
+            GrantState::Missing,
+            GrantState::Dead,
+            GrantState::Working
+        ]
+    );
 }
 
 /// Native provides MCP, never an API (rule 6), and serves no catalog app by
@@ -238,7 +276,7 @@ async fn a_user_adds_a_server_enabled_and_not_signed_in() {
     assert_eq!(added.key, ConnectorKey::Server(url));
     assert_eq!(added.name, "Local");
     assert!(added.enabled);
-    assert!(!added.authorized);
+    assert_eq!(added.grant, GrantState::Missing);
     assert_eq!(fixture.store.rows().len(), 1);
 }
 
@@ -262,7 +300,7 @@ async fn adding_a_held_url_keeps_its_grant() {
         .await
         .unwrap();
 
-    assert!(added.authorized);
+    assert_eq!(added.grant, GrantState::Working);
     assert!(!added.enabled);
     assert_eq!(added.name, "Wiki");
     let rows = fixture.store.rows();

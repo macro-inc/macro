@@ -7,7 +7,7 @@ use crate::domain::models::{
     ApiRequest, ApiResponse, ConnectStep, ConnectorId, ConnectorKey, Surfaces, Upstream,
 };
 use crate::domain::ports::{
-    ApiConnection, McpConnection, Source, SourceConnection, SourceKind, SourceRefusal,
+    ApiConnection, GrantState, McpConnection, Source, SourceConnection, SourceKind, SourceRefusal,
 };
 use crate::outbound::hosted_connections::{
     Grant, HostedRepo, HostedRow, Provider, RevokeGrant, revoke_replaced,
@@ -177,7 +177,7 @@ impl PipedreamSource {
             enabled: row.enabled,
             // Pipedream refreshes its grants itself and reports no failed
             // one without a call per account.
-            authorized: true,
+            grant: GrantState::Working,
             mcp: Some(connection.clone()),
             api: Some(connection),
         })

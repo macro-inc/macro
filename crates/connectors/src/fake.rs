@@ -9,7 +9,7 @@
 
 use crate::domain::catalog::Overlays;
 use crate::domain::models::{ApiResponse, ConnectorId, ConnectorKey, ServerUrl, Surfaces};
-use crate::domain::ports::{ConnectFlag, OverlayCatalog, Source, SourceKind};
+use crate::domain::ports::{ConnectFlag, GrantState, OverlayCatalog, Source, SourceKind};
 use crate::domain::service::Connectors;
 use macro_user_id::user_id::MacroUserIdStr;
 use source::{FakeRow, FakeSource, FakeStore, SharedStore, lock};
@@ -26,7 +26,7 @@ pub struct FakeConnection {
     key: FakeKey,
     name: Option<String>,
     enabled: bool,
-    authorized: bool,
+    grant: GrantState,
     tools: Vec<String>,
     response: (http::StatusCode, String),
     in_turn: Vec<ApiResponse>,
@@ -57,7 +57,7 @@ impl FakeConnection {
             key,
             name: None,
             enabled: true,
-            authorized: true,
+            grant: GrantState::Working,
             tools: Vec::new(),
             response: (http::StatusCode::OK, "{}".to_owned()),
             in_turn: Vec::new(),
@@ -78,7 +78,7 @@ impl FakeConnection {
 
     /// Its grant no longer works.
     pub fn needs_reauth(mut self) -> Self {
-        self.authorized = false;
+        self.grant = GrantState::Dead;
         self
     }
 
@@ -266,7 +266,7 @@ impl FakeConnectors {
             row.name = name.clone();
         }
         row.enabled = connection.enabled;
-        row.authorized = connection.authorized;
+        row.grant = connection.grant;
         row.tools = connection.tools.clone();
         row.response = connection.response.clone();
         row.in_turn = Arc::new(std::sync::Mutex::new(
