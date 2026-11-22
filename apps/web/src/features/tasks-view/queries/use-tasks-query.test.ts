@@ -730,6 +730,7 @@ async function createdTaskFixture(initiallyLoading = false) {
   const [showsPending, setShowsPending] = createSignal(true);
   const [known, setKnown] = createSignal<string[] | undefined>();
   const [deleted, setDeleted] = createSignal<ReadonlySet<string>>(new Set());
+  const [placeholder, setPlaceholder] = createSignal(false);
   fixture.deletedKeys = deleted;
   const onListed = vi.fn();
   fixture.query = {
@@ -739,7 +740,9 @@ async function createdTaskFixture(initiallyLoading = false) {
     get isPending() {
       return loading();
     },
-    isPlaceholderData: false,
+    get isPlaceholderData() {
+      return placeholder();
+    },
     get data() {
       return {
         entities: entities(),
@@ -805,6 +808,7 @@ async function createdTaskFixture(initiallyLoading = false) {
     setShowsPending,
     setKnown,
     setDeleted,
+    setPlaceholder,
   };
 }
 
@@ -961,4 +965,52 @@ it('opens a created task’s group where the server orders it', async () => {
   ]);
   // The server's groups are left as they were.
   expect(server.map((group) => group.id)).toEqual(['high', 'low']);
+});
+
+it('leaves a created task that sorts past the loaded rows to its later page', async () => {
+  const { placeOptimisticTasks } = await import('./use-tasks-query');
+  const f = await createdTaskFixture();
+  f.cleanup();
+  const placement = {
+    groupKeys: () => ['todo'],
+    groupLabel: (key: string) => key,
+    compareGroups: () => 0,
+    // Oldest first: a new task sorts last.
+    sort: (entities: ReturnType<typeof f.inProject>[]) =>
+      [...entities].sort((a, b) =>
+        a.id === 'temp' ? 1 : b.id === 'temp' ? -1 : 0
+      ),
+  };
+  const loaded = [f.inProject('a'), f.inProject('b')];
+  // Fifty-one in the group, two loaded: the server may count it already.
+  const paged = [{ id: 'todo', label: 'Todo', entities: loaded, count: 51 }];
+  expect(
+    placeOptimisticTasks(paged, [f.inProject('temp')], placement).map(
+      (group) => [group.count, group.entities.map((task) => task.id)]
+    )
+  ).toEqual([[51, ['a', 'b']]]);
+
+  // With every row loaded, it shows at the end and counts.
+  const whole = [{ id: 'todo', label: 'Todo', entities: loaded, count: 2 }];
+  expect(
+    placeOptimisticTasks(whole, [f.inProject('temp')], placement).map(
+      (group) => [group.count, group.entities.map((task) => task.id)]
+    )
+  ).toEqual([[3, ['a', 'b', 'temp']]]);
+});
+
+it('keeps a created task while the list shows a previous page', async () => {
+  const f = await createdTaskFixture();
+  const created = { ...f.inProject('temp'), id: 'task' };
+  f.setOptimistic([{ entity: created, pending: false }]);
+  try {
+    // The previous page lists it, but the page loading in its place may not.
+    f.setPlaceholder(true);
+    f.setEntities([created]);
+    expect(f.onListed).not.toHaveBeenCalled();
+    f.setPlaceholder(false);
+    expect(f.onListed).toHaveBeenCalledWith(['task']);
+  } finally {
+    f.cleanup();
+  }
 });

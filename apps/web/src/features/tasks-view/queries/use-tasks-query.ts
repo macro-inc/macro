@@ -214,7 +214,8 @@ type OptimisticPlacement = {
  * The groups with each optimistic task they don't list added to the groups its
  * keys name, opening a group no loaded page has where the server would put it,
  * and to the first group when its keys are unknown. Counts include it, since
- * the server's do not yet. Leaves `groups` as it was.
+ * the server's do not yet; a task that sorts past a group's loaded rows is
+ * left to the later page it belongs on. Leaves `groups` as it was.
  */
 export function placeOptimisticTasks(
   serverGroups: readonly SoupGroup<TaskEntityWithProperties>[],
@@ -222,7 +223,6 @@ export function placeOptimisticTasks(
   placement: OptimisticPlacement
 ): SoupGroup<TaskEntityWithProperties>[] {
   const groups = [...serverGroups];
-  const touched = new Set<string>();
   const listed = new Set(
     groups.flatMap((group) => group.entities.map((task) => task.id))
   );
@@ -246,19 +246,22 @@ export function placeOptimisticTasks(
         });
       }
       const group = groups[index];
+      const entities = placement.sort([task, ...group.entities]);
+      // A task that sorts after every loaded row of a group with more rows
+      // belongs on a later page, which the server's count may already hold.
+      const unloaded =
+        !!group.loadMore ||
+        (group.count !== undefined && group.count > group.entities.length);
+      if (unloaded && group.entities.length > 0 && entities.at(-1) === task)
+        continue;
       groups[index] = {
         ...group,
-        entities: [task, ...group.entities],
+        entities,
         count: group.count === undefined ? undefined : group.count + 1,
       };
-      touched.add(key);
     }
   }
-  return groups.map((group) =>
-    touched.has(group.id)
-      ? { ...group, entities: placement.sort(group.entities) }
-      : group
-  );
+  return groups;
 }
 
 /** Query, service search, and row assembly owned by the production Tasks view. */
@@ -345,7 +348,11 @@ export function useTasksDataSource(
   const definitions = useListPropertiesQuery(
     () => ({ scope: 'system', includeOptions: true }),
     () =>
-      facetOptionsReady() && ['status', 'priority'].includes(state.sort[0]?.id)
+      facetOptionsReady() &&
+      // Sorting by an option, or placing a created task in a group no page
+      // has yet, orders by the options' display order.
+      (['status', 'priority'].includes(state.sort[0]?.id) ||
+        ['status', 'priority'].includes(state.groupBy))
   );
   const propertyDefinitions = createMemo(
     () =>
@@ -556,7 +563,9 @@ export function useTasksDataSource(
       const deleted = confirmed.flatMap(({ entity }) =>
         isDeletedTask(entity.id) ? [entity.id] : []
       );
-      if (search.isSearching() || query.isPending) return deleted;
+      // A previous page shown while the next one loads proves nothing.
+      if (search.isSearching() || query.isPending || query.isPlaceholderData)
+        return deleted;
       const listed = new Set(baseTasks().map((task) => task.id));
       for (const group of query.data?.groups ?? []) {
         for (const task of continuations.entities(group.key)) {
