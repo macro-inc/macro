@@ -150,6 +150,11 @@ FUZZ_CASES=<work directory>/shrunk.json FUZZ_TRACE=1 \
   moment as a write through the services is modelled as delivering what it
   held after that write: when the two conflict (a reply held, its parent
   deleted) the other order is reported as a disagreement.
+- Writes held by two pages of one person are modelled as delivered in the
+  order they were written. Without the flag each page sends its own when the
+  connection is back, so two on one message (a reaction added in one window
+  and taken off in the other) can arrive in the other order, which is
+  reported as a disagreement.
 - A write made on a cut-off device is not checked against the services until
   the next operation that waits for them.
 - A deleted message whose last reply is then deleted stays in the model as
