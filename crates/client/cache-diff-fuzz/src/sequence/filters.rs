@@ -154,8 +154,21 @@ impl Gen<'_> {
         let limit = *pick(&mut self.rng, LIMITS);
         if !self.mail_tabs.is_empty() && self.rng.chance(0.4) {
             let (_, tab) = pick(&mut self.rng, self.mail_tabs).clone();
+            let mut filters = tab["filters"].clone();
+            if self.rng.chance(0.3) {
+                // The tab's tree in another shape: the same rows, or more or fewer.
+                let tree = filters["emailFilter"]["tree"].take();
+                self.filter_budget = 40;
+                let other = self.input_named("GraphqlEmailExpr", "tree", 2);
+                filters["emailFilter"]["tree"] = match self.rng.below(4) {
+                    0 => json!({ "not": { "not": tree } }),
+                    1 => json!({ "or": { "left": tree, "right": other } }),
+                    2 => json!({ "or": { "left": other, "right": tree } }),
+                    _ => json!({ "and": { "left": other, "right": tree } }),
+                };
+            }
             return json!({
-                "filters": tab["filters"],
+                "filters": filters,
                 "sortMethod": tab["sortMethod"],
                 "sortDirection": direction,
                 "limit": limit,

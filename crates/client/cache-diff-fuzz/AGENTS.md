@@ -23,6 +23,8 @@ purpose (it says what).
   op hydrates every core page and filters for a few documents past the first window: the
   window has to extend past the rows it rejects. It invalidates nothing, since any incomplete
   document in a query's partitions answers it as incomplete before a window runs.
+  Mail filters often use the app's mail tabs (`assets/mail-tabs.json`), and some of those
+  with the tab's tree reshaped: `not(not(tree))`, or joined to a random tree by `or` or `and`.
 - `src/exec.rs` runs a case. `src/normalize.rs` replaces the ids the engine mints
   (`#1`, `#2`, …) and keeps every id that appears in the case. `src/dump.rs`
   writes the tables after a final reopen, each value tagged with its type.
