@@ -547,16 +547,22 @@ describe('Stop watching', () => {
 });
 
 describe('pasting while others watch', () => {
-  it('warns the driver that watchers can see a paste, only while someone else watches', async () => {
-    vi.useFakeTimers();
-    const connections: Connection[] = [];
-    const { unmount } = renderView(AgentScreen, connections);
-    await vi.advanceTimersByTimeAsync(0);
+  it.each([
+    ['desktop', AgentScreen],
+    ['phone', MobileAgentScreen],
+  ])(
+    '%s: warns the driver that watchers can see a paste, only while someone else watches',
+    async (_device, View) => {
+      vi.useFakeTimers();
+      const connections: Connection[] = [];
+      const { unmount } = renderView(View, connections);
+      await vi.advanceTimersByTimeAsync(0);
 
-    connections[0].handlers.onState(state(true));
-    expect(screen.queryByText('Watchers can see what you paste')).toBeNull();
-    connections[0].handlers.onState({ ...state(true), viewers: 2 });
-    expect(screen.getByText('Watchers can see what you paste')).toBeTruthy();
-    unmount();
-  });
+      connections[0].handlers.onState(state(true));
+      expect(screen.queryByText('Watchers can see what you paste')).toBeNull();
+      connections[0].handlers.onState({ ...state(true), viewers: 2 });
+      expect(screen.getByText('Watchers can see what you paste')).toBeTruthy();
+      unmount();
+    }
+  );
 });
