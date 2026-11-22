@@ -28,6 +28,8 @@ const speedOption = (values: string[]) => ({
 const mocks = vi.hoisted(() => ({
   session: (): { canEdit?: boolean; harness?: string } => ({ canEdit: false }),
   sessionId: (): string => 'session-1',
+  unconfirmed: (): { actionId: string; action: unknown }[] => [],
+  dropUnconfirmed: vi.fn(),
   turn: () => 'idle' as TurnState,
   issue: vi.fn(),
   selectModel: vi.fn(),
@@ -81,6 +83,8 @@ vi.mock('../context/AgentSessionContext', () => ({
     steerFailed: () => new Set(),
     turn: () => mocks.turn(),
     sessionId: () => mocks.sessionId(),
+    unconfirmed: () => mocks.unconfirmed(),
+    dropUnconfirmed: mocks.dropUnconfirmed,
     registerQuoteInsert: vi.fn(),
   }),
 }));
@@ -94,6 +98,21 @@ vi.mock('../ui', () => ({
     return null;
   },
   ComposerNotice: (props: { text: string }) => <p>{props.text}</p>,
+  UnconfirmedSendCard: (props: {
+    text: string;
+    onSendAgain: () => void;
+    onDismiss: () => void;
+  }) => (
+    <div data-testid="unconfirmed">
+      <p>{props.text}</p>
+      <button type="button" onClick={() => props.onSendAgain()}>
+        Send anyway
+      </button>
+      <button type="button" onClick={() => props.onDismiss()}>
+        Dismiss
+      </button>
+    </div>
+  ),
 }));
 vi.mock('@app/features/agents-view/model-selector', () => ({
   UnifiedModelSelector: (props: { state: UnifiedModelSelectorState }) => {
@@ -109,6 +128,7 @@ beforeEach(() => {
   mocks.turn = () => 'idle';
   mocks.metadata = () => undefined;
   mocks.sessionId = () => 'session-1';
+  mocks.unconfirmed = () => [];
   mocks.session = () => ({ canEdit: false });
   mocks.issue.mockResolvedValue({ isErr: () => false });
   setPreferredSpeed('priority');
@@ -566,24 +586,42 @@ describe('a message the harness does not take', () => {
     expect(mocks.toastFailure).not.toHaveBeenCalled();
   });
 
-  it('keeps an unconfirmed send out of the box and says to check the conversation', async () => {
+  it('keeps an unconfirmed send out of the box', async () => {
     mocks.issue.mockResolvedValue(
       err([
         {
           code: 'SEND_OUTCOME_UNKNOWN',
           message: "We couldn't confirm it was sent; check the conversation.",
+          actionId: 'a',
         },
       ])
     );
     render(() => <AgentComposer />);
     sendFromInput('Run the tests');
 
-    await vi.waitFor(() =>
-      expect(mocks.toastFailure).toHaveBeenCalledWith(
-        "We couldn't confirm it was sent; check the conversation."
-      )
-    );
+    await vi.waitFor(() => expect(mocks.issue).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(mocks.input?.draft).toBe('');
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unconfirmed prompt on a card and sends it again only when asked', async () => {
+    const action = { type: 'prompt', prompt: 'Run the tests' };
+    mocks.unconfirmed = () => [{ actionId: 'a', action }];
+    render(() => <AgentComposer />);
+
+    expect(screen.getByTestId('unconfirmed').textContent).toContain(
+      'Run the tests'
+    );
+    expect(mocks.issue).not.toHaveBeenCalled();
+    screen.getByRole('button', { name: 'Send anyway' }).click();
+
+    expect(mocks.dropUnconfirmed).toHaveBeenCalledWith('a');
+    await vi.waitFor(() =>
+      expect(mocks.issue).toHaveBeenCalledWith(action, {
+        onChecking: expect.any(Function),
+      })
+    );
   });
 
   it('shows the checking notice only on the session being checked', async () => {

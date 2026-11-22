@@ -211,6 +211,8 @@ export function AgentSessionProvider(
           retryLoad: live.retry,
           turn,
           issue,
+          unconfirmed: live.unconfirmed,
+          dropUnconfirmed: live.dropUnconfirmed,
           runtimeRefusal,
           selectModel: live.selectModel,
           steer: steering.steer,

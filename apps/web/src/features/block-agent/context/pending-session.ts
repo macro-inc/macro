@@ -30,6 +30,7 @@ import {
   PromptTrace,
 } from '@core/agent-session/prompt-telemetry';
 import { markSessionCreated } from '@core/agent-session/recently-created';
+import { SEND_OUTCOME_UNKNOWN } from '@core/agent-session/send-outcome';
 import { typedInClientId } from '@core/agent-session/ui-client';
 import {
   enableFirstPromptOnCreate,
@@ -315,7 +316,16 @@ export function startPendingSession(
                   firstPrompt,
                   { userId, trace }
                 );
-                if (delivered.isErr()) {
+                // Possibly sent: the session keeps it as unconfirmed, and its
+                // composer shows it. Never hand it back as a failed draft.
+                const unconfirmed =
+                  delivered.isErr() &&
+                  delivered.error.some(
+                    (error) => error.code === SEND_OUTCOME_UNKNOWN
+                  );
+                if (unconfirmed) {
+                  options.onDelivered?.();
+                } else if (delivered.isErr()) {
                   fail(
                     delivered.error.map((error) => error.message).join(' ') ||
                       'The first message could not be sent.'

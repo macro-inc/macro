@@ -478,7 +478,7 @@ describe('AgentSession', () => {
     live.release();
   });
 
-  it('retracts a speculation whose request threw once the log never shows it', async () => {
+  it('keeps a thrown send unconfirmed when nothing shows it, never unsent', async () => {
     vi.useFakeTimers();
     harness.control.mockRejectedValue(new Error('offline'));
     const live = AgentSession.acquire(SESSION);
@@ -486,18 +486,19 @@ describe('AgentSession', () => {
       await live.load();
 
       const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
-      const rejected = expect(issuing).rejects.toThrow('offline');
-      // The wait, the queue read, the grace for a dispatch, the log reread.
+      // The wait, the queue read, the grace for a dispatch, the log read.
       await vi.advanceTimersByTimeAsync(13_000);
-      await rejected;
+      const result = await issuing;
 
+      expect(result.isErr() && result.error.map((error) => error.code)).toEqual(
+        ['SEND_OUTCOME_UNKNOWN']
+      );
       const [speculation] = inputs().filter(
         (input) => input.kind === 'speculated'
       );
-      expect(inputs().at(-1)).toEqual({
-        kind: 'retracted',
-        actionId: (speculation as { actionId: string }).actionId,
-      });
+      const actionId = (speculation as { actionId: string }).actionId;
+      expect(inputs().at(-1)).toEqual({ kind: 'retracted', actionId });
+      expect([...live.unconfirmed().keys()]).toEqual([actionId]);
     } finally {
       live.release();
       vi.useRealTimers();
@@ -681,6 +682,13 @@ describe('AgentSession', () => {
           (span) => span.name === 'agent.prompt.send_check'
         );
         expect(check?.attributes['agent.send_check.outcome']).toBe('unknown');
+        expect(check?.attributes['agent.send_check.reason']).toBe(
+          {
+            queue: 'queue_unreadable',
+            log: 'log_unreadable',
+            released: 'released',
+          }[broken]
+        );
         expect(check?.ends).toBe(1);
       } finally {
         if (broken !== 'released') live.release();
@@ -688,7 +696,7 @@ describe('AgentSession', () => {
       }
     });
 
-    it('counts as not sent when the wait runs out without it', async () => {
+    it('stays unconfirmed when neither the queue nor the log shows it', async () => {
       vi.useFakeTimers();
       harness.control.mockResolvedValueOnce(err([gatewayTimeout]));
       const live = AgentSession.acquire(SESSION);
@@ -700,19 +708,98 @@ describe('AgentSession', () => {
         expect(inputs().filter((input) => input.kind === 'retracted')).toEqual(
           []
         );
-        await vi.advanceTimersByTimeAsync(4_000);
+        await vi.advanceTimersByTimeAsync(5_000);
         const result = await issuing;
 
-        // Neither the queue nor a fresh read of the log has it.
-        expect(result.isErr() && result.error).toEqual([gatewayTimeout]);
+        // Absent from both is not authority: the harness may still run it.
+        expect(
+          result.isErr() && result.error.map((error) => error.code)
+        ).toEqual(['SEND_OUTCOME_UNKNOWN']);
         expect(logSource.watch).toHaveBeenCalledWith(SESSION, 'network-only');
-        const [speculation] = inputs().filter(
-          (input) => input.kind === 'speculated'
+        const check = telemetry.spans.find(
+          (span) => span.name === 'agent.prompt.send_check'
         );
-        expect(inputs().at(-1)).toEqual({
-          kind: 'retracted',
-          actionId: (speculation as { actionId: string }).actionId,
+        expect(check?.attributes).toMatchObject({
+          'agent.send_check.outcome': 'unknown',
+          'agent.send_check.reason': 'absent',
+          'agent.send_check.http_status': 504,
         });
+        for (const phase of ['log_wait', 'queue', 'grace', 'log_read'])
+          expect(check?.attributes[`agent.send_check.${phase}_ms`]).toEqual(
+            expect.any(Number)
+          );
+      } finally {
+        live.release();
+        vi.useRealTimers();
+      }
+    });
+
+    it('counts as sent when a direct read of the log has its prompt', async () => {
+      vi.useFakeTimers();
+      let actionId = '';
+      harness.control.mockImplementationOnce(
+        async (_id: string, request: { actionId: string }) => {
+          actionId = request.actionId;
+          return err([gatewayTimeout]);
+        }
+      );
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+        logSource.fetched.mockImplementationOnce(async () =>
+          logOf([
+            {
+              ...row(2),
+              content: {
+                type: 'acp',
+                jsonrpc: '2.0',
+                id: actionId,
+                method: 'session/prompt',
+              },
+            } as unknown as AgentSessionLogEntryDto,
+          ])
+        );
+
+        const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+        await vi.advanceTimersByTimeAsync(14_000);
+        const result = await issuing;
+
+        expect(result.isOk() && result.value).toEqual({
+          actionId,
+          status: 'sent',
+        });
+        expect(live.unconfirmed().size).toBe(0);
+      } finally {
+        live.release();
+        vi.useRealTimers();
+      }
+    });
+
+    it('lets an unconfirmed prompt go once its row lands', async () => {
+      vi.useFakeTimers();
+      let actionId = '';
+      harness.control.mockImplementationOnce(
+        async (_id: string, request: { actionId: string }) => {
+          actionId = request.actionId;
+          return err([gatewayTimeout]);
+        }
+      );
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+        const changes = vi.fn();
+        live.subscribeUnconfirmed(changes);
+
+        const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+        await vi.advanceTimersByTimeAsync(14_000);
+        await issuing;
+        expect(live.unconfirmed().size).toBe(1);
+
+        fold.pushSession.mockResolvedValueOnce([confirmed(actionId)]);
+        deliver(row(3));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(live.unconfirmed().size).toBe(0);
+        expect(changes).toHaveBeenCalledTimes(2);
       } finally {
         live.release();
         vi.useRealTimers();

@@ -24,9 +24,14 @@ export function isUnknownOutcome(errors: ResultError[]): boolean {
 
 /**
  * The code of the failure `issue` returns when a send could not be
- * confirmed either way: the composer must not put the message back.
+ * confirmed: the message may have run, so it is never put back in the box.
  */
 export const SEND_OUTCOME_UNKNOWN = 'SEND_OUTCOME_UNKNOWN' as const;
+
+/** The failure `issue` returns for an unconfirmed send, naming its action. */
+export type UnconfirmedSendError = ResultError<typeof SEND_OUTCOME_UNKNOWN> & {
+  actionId: string;
+};
 
 /** What a check of a send with no clear answer found. */
 export type SendCheck =
@@ -35,12 +40,13 @@ export type SendCheck =
       /** Where it showed up. */
       via: 'log' | 'queue';
       status: 'sent' | 'queued';
-      waitedMs: number;
     }
-  /** The queue and a fresh read of the log both answered without it. */
-  | { outcome: 'notSent'; waitedMs: number }
+  /**
+   * Neither the log nor the queue showed it. The harness may still be
+   * running it (admitted, or claimed from the queue and not yet logged), so
+   * absence is never taken for "not sent".
+   */
   | {
       outcome: 'unknown';
-      reason: 'released' | 'queue_unreadable' | 'log_unreadable';
-      waitedMs: number;
+      reason: 'absent' | 'released' | 'queue_unreadable' | 'log_unreadable';
     };

@@ -44,7 +44,9 @@ export type PromptOutcome =
   /** Raw text arrived but no visible renderer confirmed it before the deadline. */
   | 'not_rendered'
   /** Still waiting at {@link STALL_THRESHOLD_MS} — reported, not concluded. */
-  | 'stalled';
+  | 'stalled'
+  /** The send got no answer and neither the log nor the queue showed it. */
+  | 'unconfirmed';
 
 /** A point the prompt reached, named as its attribute and event suffix. */
 export type PromptStage =

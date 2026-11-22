@@ -43,6 +43,7 @@ import type {
 import {
   type Accessor,
   batch,
+  createEffect,
   createMemo,
   createResource,
   createSignal,
@@ -63,6 +64,9 @@ export type IssueOptions = {
    */
   onChecking?: () => void;
 };
+
+/** A prompt whose send could not be confirmed, kept so its text is not lost. */
+export type UnconfirmedSend = { actionId: string; action: AgentAction };
 
 export type AgentSessionHandle = {
   /** Session row, absent until the load resolves. */
@@ -95,6 +99,13 @@ export type AgentSessionHandle = {
   expect: (actionId: string, action: AgentAction) => void;
   /** Take a speculation back. See {@link AgentSession.retract}. */
   retract: (actionId: string) => void;
+  /**
+   * Prompts whose send could not be confirmed, oldest first, until their row
+   * reaches the log. See {@link AgentSession.unconfirmed}.
+   */
+  unconfirmed: Accessor<UnconfirmedSend[]>;
+  /** Stop keeping an unconfirmed prompt (resent or dismissed). */
+  dropUnconfirmed: (actionId: string) => void;
   /**
    * The session's own turn state, read at call time - not reactive. It is
    * ahead of `metadata().turn` by the worker round trip: a prompt just
@@ -232,6 +243,22 @@ export function createAgentSession(
     });
     options.onAcquire?.();
     return session;
+  });
+
+  const [unconfirmed, setUnconfirmed] = createSignal<UnconfirmedSend[]>([]);
+  createEffect(() => {
+    const session = live();
+    const read = () =>
+      setUnconfirmed(
+        session
+          ? [...session.unconfirmed()].map(([actionId, action]) => ({
+              actionId,
+              action,
+            }))
+          : []
+      );
+    read();
+    if (session) onCleanup(session.subscribeUnconfirmed(read));
   });
 
   let latestRename: AgentSessionRenamedEvent | undefined;
@@ -460,6 +487,8 @@ export function createAgentSession(
     expect: (actionId, action) =>
       live()?.expect(actionId, action, { userId: options.userId() }),
     retract: (actionId) => live()?.retract(actionId),
+    unconfirmed,
+    dropUnconfirmed: (actionId) => live()?.dropUnconfirmed(actionId),
     currentTurn: () => untrack(live)?.currentTurn() ?? 'idle',
     applySnapshot: (snapshot) => {
       if (sessionId() !== snapshot.id) return;

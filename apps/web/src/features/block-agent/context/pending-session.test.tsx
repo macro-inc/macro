@@ -23,6 +23,7 @@ const harness = vi.hoisted(() => ({
   create: vi.fn(),
   get: vi.fn(),
   control: vi.fn(),
+  queue: vi.fn(),
 }));
 
 vi.mock('@core/agent-fold/client', () => fold);
@@ -351,6 +352,32 @@ describe('pending navigation ownership', () => {
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     expect(pendingSession(id)).toBeUndefined();
     expect(fold.closeSession).toHaveBeenCalledOnce();
+  });
+
+  it('never hands back a first prompt whose send could not be confirmed', async () => {
+    harness.control.mockResolvedValue(
+      err([
+        {
+          code: 'HTTP_ERROR',
+          status: 504,
+          message: 'Agent request failed (HTTP 504).',
+        },
+      ])
+    );
+    harness.queue.mockResolvedValue(ok({ entries: [] }));
+    const onDelivered = vi.fn();
+    const onFailure = vi.fn();
+    const id = startPendingSession({
+      botId: 'persona',
+      prompt: 'Hello',
+      onDelivered,
+      onFailure,
+    });
+    await vi.advanceTimersByTimeAsync(20_000);
+
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(onDelivered).toHaveBeenCalledOnce();
+    expect(pendingSession(id)?.error()).toBeUndefined();
   });
 
   it('forgets a failed create when its error view unmounts', async () => {

@@ -30,8 +30,7 @@ import {
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { ResultError } from '@core/util/result';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   AgentSessionLogUnavailable,
   forgetAgentSessionLog,
@@ -47,6 +46,7 @@ import type {
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentAction,
+  AgentSessionLogEntryDto,
   AgentSessionResponse,
   ControlRequest,
   ControlResponse,
@@ -69,6 +69,7 @@ import {
   isUnknownOutcome,
   SEND_OUTCOME_UNKNOWN,
   type SendCheck,
+  type UnconfirmedSendError,
 } from './send-outcome';
 import { publishSessionTurn } from './session-turn';
 import { typedInClientId } from './ui-client';
@@ -90,7 +91,7 @@ type ControlError =
 /** The harness's answer, or that a send with no clear answer stayed unconfirmed. */
 export type IssueResult = Result<
   ControlResponse,
-  (ControlError | ResultError<typeof SEND_OUTCOME_UNKNOWN>)[]
+  (ControlError | UnconfirmedSendError)[]
 >;
 
 /**
@@ -118,24 +119,6 @@ const DISPATCH_GRACE_MS = 2_000;
  * mid-fetch is ordinary, and a caller that cannot tell it apart from a failed
  * fetch either reports a phantom error or hides a real one.
  */
-/** The value, or `false` when it takes longer than `ms`. */
-async function within<Value>(
-  value: Promise<Value>,
-  ms: number
-): Promise<Value | false> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      value,
-      new Promise<false>((resolve) => {
-        timer = setTimeout(() => resolve(false), ms);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export class AgentSessionReleased extends Error {
   constructor(readonly sessionId: string) {
     super(`agent session released: ${sessionId}`);
@@ -209,6 +192,52 @@ function occupiesTurn(action: AgentAction): boolean {
 
 const RESYNC_RETRY_DELAYS_MS = [1_000, 3_000, 10_000];
 
+/** The value, or `false` when it takes longer than `ms`. */
+async function within<Value>(
+  value: Promise<Value>,
+  ms: number
+): Promise<Value | false> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      value,
+      new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The send check's span, under the prompt's trace when there is one. */
+function startSendCheckSpan(trace: PromptTrace | undefined): Span | undefined {
+  try {
+    const start = () => Telemetry.span('agent.prompt.send_check');
+    return trace ? trace.run(start) : start();
+  } catch {
+    return undefined;
+  }
+}
+
+/** Records each phase's duration since the previous one on `span`. */
+function phaseTimer(span: Span | undefined): (name: string) => void {
+  let last = performance.now();
+  return (name) => {
+    const now = performance.now();
+    span?.setAttr(`agent.send_check.${name}_ms`, Math.round(now - last));
+    last = now;
+  };
+}
+
+/** The JSON-RPC id of a `session/prompt` request row, which is its action id. */
+function promptIdOf(row: AgentSessionLogEntryDto): string | undefined {
+  const content: unknown = row.content;
+  if (typeof content !== 'object' || content === null) return undefined;
+  const { method, id } = content as { method?: unknown; id?: unknown };
+  return method === 'session/prompt' && typeof id === 'string' ? id : undefined;
+}
+
 /**
  * Waits before re-reading a session this tab created and was refused.
  *
@@ -274,14 +303,14 @@ export class AgentSession {
   /** Inputs that arrived before the snapshot, in order. */
   private buffered: FoldInput[] = [];
   private readonly listeners = new Set<AgentSessionListener>();
+  private readonly unconfirmedSends = new Map<string, AgentAction>();
+  private readonly unconfirmedListeners = new Set<() => void>();
   private readonly unsubscribeSocket: () => void;
   private readonly unsubscribeUpdated: () => void;
   private readonly unsubscribeReconnected: () => void;
   /** The refetch in flight; it loops while another is requested. */
   private syncRun?: Promise<void>;
   private resyncRequested = false;
-  /** Rereads of the log that were fetched and folded. */
-  private refreshesSucceeded = 0;
   private resyncRetry = 0;
   private resyncTimer?: ReturnType<typeof setTimeout>;
   /**
@@ -485,47 +514,42 @@ export class AgentSession {
         (result?.isErr() === true && isUnknownOutcome(result.error)))
     ) {
       options.onChecking?.();
-      const check = await this.checkSend(actionId, arrival.arrived);
-      arrival.stop();
       const status = result?.isErr() ? result.error[0]?.status : undefined;
-      this.recordSendCheck(check, status);
-      const settled = match(check)
+      const check = await this.checkSend(
+        actionId,
+        arrival.arrived,
+        trace,
+        status
+      );
+      arrival.stop();
+      // Retracted either way when it is not running: a queued prompt shows
+      // in the queue, and an unconfirmed one is kept by the composer instead
+      // of a bubble that would read as still sending.
+      if (speculated && !(check.outcome === 'sent' && check.status === 'sent'))
+        fireAndForget(
+          this.enqueue({ kind: 'retracted', actionId }),
+          'agent-session'
+        );
+      return match(check)
+        .returnType<IssueResult>()
         .with({ outcome: 'sent' }, ({ status: sentStatus }) => {
           trace?.accepted(actionId, sentStatus === 'queued');
-          if (speculated && sentStatus === 'queued')
-            fireAndForget(
-              this.enqueue({ kind: 'retracted', actionId }),
-              'agent-session'
-            );
           return ok({ actionId, status: sentStatus });
         })
         .with({ outcome: 'unknown' }, () => {
-          trace?.end('failed', new Error('The send could not be confirmed.'));
-          // Not shown as pending forever: the log brings the row back if
-          // the harness ran it.
-          if (speculated)
-            fireAndForget(
-              this.enqueue({ kind: 'retracted', actionId }),
-              'agent-session'
-            );
+          trace?.end('unconfirmed');
+          this.holdUnconfirmed(actionId, action);
           return err([
             {
               name: 'Error',
               code: SEND_OUTCOME_UNKNOWN,
               message:
                 "We couldn't confirm it was sent; check the conversation.",
+              actionId,
             },
           ]);
         })
-        .with({ outcome: 'notSent' }, () => {
-          trace?.end(
-            'failed',
-            thrown?.error ?? new Error('The prompt never reached the harness.')
-          );
-          return undefined;
-        })
         .exhaustive();
-      if (settled) return settled;
     }
     arrival?.stop();
     if (thrown !== undefined || result === undefined) {
@@ -604,15 +628,24 @@ export class AgentSession {
 
   /**
    * What became of a prompt whose send got no clear answer. Sent when its
-   * row reaches the log, or the queue holds it. Not sent only when the
-   * queue and a fresh read of the log both answered without it. Anything
-   * less certain is unknown: the message must not come back as unsent.
+   * row reaches the log, the queue holds it, or a direct read of the log
+   * finds it. Otherwise unknown: the harness can be running a command that
+   * is in neither yet, so absence never counts as "not sent". One
+   * `agent.prompt.send_check` span covers the check, under the prompt's
+   * trace, with each phase's duration.
    */
   private async checkSend(
     actionId: string,
-    arrived: Promise<void>
+    arrived: Promise<void>,
+    trace: PromptTrace | undefined,
+    status: number | undefined
   ): Promise<SendCheck> {
-    const startedAt = performance.now();
+    const span = startSendCheckSpan(trace);
+    span?.setAttr('agent.session.id', this.id);
+    span?.setAttr('agent.action.id', actionId);
+    if (status !== undefined)
+      span?.setAttr('agent.send_check.http_status', status);
+    const phase = phaseTimer(span);
     let seen = false;
     fireAndForget(
       arrived.then(() => {
@@ -620,15 +653,28 @@ export class AgentSession {
       }),
       'agent-session'
     );
-    const waited = () => Math.round(performance.now() - startedAt);
-    const sent = (via: 'log' | 'queue', status: 'sent' | 'queued') =>
-      ({ outcome: 'sent', via, status, waitedMs: waited() }) as const;
+    const finish = (check: SendCheck): SendCheck => {
+      span?.setAttr('agent.send_check.outcome', check.outcome);
+      match(check)
+        .with({ outcome: 'sent' }, ({ via }) =>
+          span?.setAttr('agent.send_check.via', via)
+        )
+        .with({ outcome: 'unknown' }, ({ reason }) =>
+          span?.setAttr('agent.send_check.reason', reason)
+        )
+        .exhaustive();
+      span?.end();
+      return check;
+    };
+    const sent = (via: 'log' | 'queue', sentStatus: 'sent' | 'queued') =>
+      finish({ outcome: 'sent', via, status: sentStatus });
     const unknown = (
-      reason: 'released' | 'queue_unreadable' | 'log_unreadable'
-    ) => ({ outcome: 'unknown', reason, waitedMs: waited() }) as const;
+      reason: 'absent' | 'released' | 'queue_unreadable' | 'log_unreadable'
+    ) => finish({ outcome: 'unknown', reason });
 
-    if (await within(arrived, UNKNOWN_OUTCOME_WAIT_MS))
-      return sent('log', 'sent');
+    const logged = await within(arrived, UNKNOWN_OUTCOME_WAIT_MS);
+    phase('log_wait');
+    if (logged !== false) return sent('log', 'sent');
     if (this.closed) return unknown('released');
 
     const queue = await within(
@@ -643,59 +689,86 @@ export class AgentSession {
       );
       return false as const;
     });
+    phase('queue');
     if (seen) return sent('log', 'sent');
-    if (queue === false || queue.isErr()) {
-      if (queue !== false)
-        console.warn(
-          '[agent-session] queue could not be read for a send check',
-          queue.error
-        );
-      return unknown('queue_unreadable');
-    }
-    if (queue.value.entries.some((entry) => entry.actionId === actionId))
+    const queueRead = queue !== false && queue.isOk();
+    if (queue !== false && queue.isErr())
+      console.warn(
+        '[agent-session] queue could not be read for a send check',
+        queue.error
+      );
+    if (
+      queueRead &&
+      queue.value.entries.some((entry) => entry.actionId === actionId)
+    )
       return sent('queue', 'queued');
 
     // Possibly dispatched while the queue was read: give its row a moment,
-    // then read the log itself.
-    if (await within(arrived, DISPATCH_GRACE_MS)) return sent('log', 'sent');
+    // then read the log itself, fresh from the network.
+    const late = await within(arrived, DISPATCH_GRACE_MS);
+    phase('grace');
+    if (late !== false) return sent('log', 'sent');
     if (this.closed) return unknown('released');
-    const reread = await within(this.refreshed(), SEND_CHECK_READ_MS);
-    if (seen) return sent('log', 'sent');
+    const logRead = await this.logHolds(actionId);
+    phase('log_read');
+    if (seen || logRead === true) return sent('log', 'sent');
     if (this.closed) return unknown('released');
-    return reread === true
-      ? { outcome: 'notSent', waitedMs: waited() }
-      : unknown('log_unreadable');
+    if (logRead === undefined) return unknown('log_unreadable');
+    return unknown(queueRead ? 'absent' : 'queue_unreadable');
   }
 
-  /** One span per send check, with how it ended. */
-  private recordSendCheck(check: SendCheck, status: number | undefined): void {
+  /**
+   * Whether a fresh network read of the log holds the prompt sent under
+   * `actionId`: its `session/prompt` request carries that id. `undefined`
+   * when the log could not be read in time.
+   */
+  private async logHolds(actionId: string): Promise<boolean | undefined> {
+    const watch = watchAgentSessionLog(this.id, 'network-only');
     try {
-      const span = Telemetry.span('agent.prompt.send_check');
-      span.setAttr('agent.session.id', this.id);
-      span.setAttr('agent.send_check.outcome', check.outcome);
-      span.setAttr('agent.send_check.waited_ms', check.waitedMs);
-      if (status !== undefined)
-        span.setAttr('agent.send_check.http_status', status);
-      match(check)
-        .with({ outcome: 'sent' }, ({ via }) =>
-          span.setAttr('agent.send_check.via', via)
-        )
-        .with({ outcome: 'unknown' }, ({ reason }) =>
-          span.setAttr('agent.send_check.reason', reason)
-        )
-        .with({ outcome: 'notSent' }, () => {})
-        .exhaustive();
-      span.end();
-    } catch {
-      // Telemetry never decides a send.
+      const log = await within(watch.fetched, SEND_CHECK_READ_MS);
+      if (log === false) return undefined;
+      return log.rows.some((row) => promptIdOf(row) === actionId);
+    } catch (error: unknown) {
+      console.warn(
+        '[agent-session] log could not be read for a send check',
+        error
+      );
+      return undefined;
+    } finally {
+      watch.stop();
     }
   }
 
-  /** Reread and fold the log; true when the read succeeded. */
-  private async refreshed(): Promise<boolean> {
-    const before = this.refreshesSucceeded;
-    await this.refresh();
-    return this.refreshesSucceeded > before;
+  /** Keep a prompt whose send could not be confirmed until its row lands. */
+  private holdUnconfirmed(actionId: string, action: AgentAction): void {
+    this.unconfirmedSends.set(actionId, action);
+    this.notifyUnconfirmed();
+  }
+
+  /**
+   * Prompts whose send could not be confirmed, by action id, oldest first.
+   * One leaves when its row reaches the log, or when {@link dropUnconfirmed}
+   * lets it go.
+   */
+  unconfirmed(): ReadonlyMap<string, AgentAction> {
+    return this.unconfirmedSends;
+  }
+
+  /** Follow {@link unconfirmed}. */
+  subscribeUnconfirmed(listener: () => void): () => void {
+    this.unconfirmedListeners.add(listener);
+    return () => {
+      this.unconfirmedListeners.delete(listener);
+    };
+  }
+
+  /** Stop keeping an unconfirmed prompt: the person resent or dismissed it. */
+  dropUnconfirmed(actionId: string): void {
+    if (this.unconfirmedSends.delete(actionId)) this.notifyUnconfirmed();
+  }
+
+  private notifyUnconfirmed(): void {
+    for (const listener of this.unconfirmedListeners) listener();
   }
 
   /**
@@ -1146,7 +1219,6 @@ export class AgentSession {
         if (log) {
           await this.apply([{ kind: 'snapshot', rows: log.rows }]);
           this.resyncRetry = 0;
-          this.refreshesSucceeded++;
         }
       } while (this.resyncRequested);
     } catch (error: unknown) {
@@ -1193,6 +1265,23 @@ export class AgentSession {
     return this.apply(inputs);
   }
 
+  /** An unconfirmed prompt whose row the log just delivered was sent. */
+  private confirmArrived(events: FoldedStreamEvent[]): void {
+    let changed = false;
+    for (const event of events) {
+      for (const message of messagesOf(event)) {
+        if (
+          message.author.kind === 'user' &&
+          !message.pending &&
+          message.requestId !== null &&
+          this.unconfirmedSends.delete(message.requestId)
+        )
+          changed = true;
+      }
+    }
+    if (changed) this.notifyUnconfirmed();
+  }
+
   private apply(inputs: FoldInput[]): Promise<void> {
     // Taken now, not after the chain: waiting for earlier pushes is part of
     // what a prompt's fold stage costs.
@@ -1216,6 +1305,7 @@ export class AgentSession {
       }
       const projectionStartedAt = performance.now();
       for (const listener of this.listeners) listener(events);
+      if (this.unconfirmedSends.size > 0) this.confirmArrived(events);
       if (snapshot) {
         this.trace.projected(
           projectionStartedAt,
