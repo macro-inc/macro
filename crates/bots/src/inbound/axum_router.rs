@@ -29,7 +29,7 @@ use entity_access::{
 use macro_authorization::{
     AccountHolderOrInternal, AnyPrincipal, BotOnly, CredentialAttribution, MacroAuthorization,
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal, is_program_run,
+    UserOrInternal, from_dialect_program, is_program_run,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
@@ -600,7 +600,7 @@ pub async fn create_token_handler<
     Json(req): Json<CreateBotTokenRequest>,
 ) -> Result<(StatusCode, Json<CreateBotTokenResponse>), BotsHandlerErr> {
     if refuses_program_mint(authorization.authorization.user.attribution(), &headers) {
-        return Err(BotsHandlerErr::Forbidden(PROGRAM_MINT_REFUSAL));
+        return Err(BotsHandlerErr::Forbidden(program_mint_refusal(&headers)));
     }
     let token = state
         .service
@@ -616,6 +616,20 @@ pub async fn create_token_handler<
 /// Why an agent's program may not mint a bot token: the response carries the
 /// secret, which would reach the model.
 pub(crate) const PROGRAM_MINT_REFUSAL: &str = "An agent's program cannot mint a bot token: its secret would reach you. In an agent session, present execution.views.present({widgets: [{type: 'botCredential', botId}]}); the user mints the token on that card and sees the secret, which never reaches you. Elsewhere, tell the user to mint it in the bot's settings.";
+
+/// [`PROGRAM_MINT_REFUSAL`] for a program in code mode's dialect, naming its
+/// operation.
+pub(crate) const DIALECT_PROGRAM_MINT_REFUSAL: &str = "An agent's program cannot mint a bot token: its secret would reach you. In an agent session, present a view with tools.agent_harness.present_session_view whose view is {widgets: [{type: 'botCredential', botId}]}; the user mints the token on that card and sees the secret, which never reaches you. Elsewhere, tell the user to mint it in the bot's settings.";
+
+/// The mint refusal in the terms of the program that asked
+/// ([`from_dialect_program`]).
+pub(crate) fn program_mint_refusal(headers: &HeaderMap) -> &'static str {
+    if from_dialect_program(headers) {
+        DIALECT_PROGRAM_MINT_REFUSAL
+    } else {
+        PROGRAM_MINT_REFUSAL
+    }
+}
 
 /// Whether a request that would return a new bot token's secret must be
 /// refused because a program made it ([`is_program_run`]): its signed agent

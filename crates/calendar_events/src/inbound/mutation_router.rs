@@ -18,7 +18,7 @@ use axum::{
 };
 use macro_authorization::{
     CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, UserOrInternal, is_agent_run, is_program_run,
+    MacroAuthorizationState, UserOrInternal, from_dialect_program, is_agent_run, is_program_run,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -475,6 +475,10 @@ impl From<CopyRefusal> for CalendarMutationApiError {
 /// it first, as with the `CreateCalendarEvent` tool.
 const PROGRAM_CREATE_REFUSAL: &str = "An agent's program cannot create a calendar event without the user seeing it first. In an agent session, present it with execution.reviews.create({kind: 'calendar', ...}) and return the review's reference. In a channel or document thread, write the event out, ask whether to create it, and only after the user replies approving it call macro.calendar.createConfirmed with their reply quoted in userConfirmation.";
 
+/// [`PROGRAM_CREATE_REFUSAL`] for a program in code mode's dialect
+/// ([`from_dialect_program`]), naming its operations.
+const DIALECT_PROGRAM_CREATE_REFUSAL: &str = "An agent's program cannot create a calendar event without the user seeing it first. In an agent session, present it with tools.agent_harness.create_session_review (kind \"calendar\") and return its id in reviews. In a channel or document thread, write the event out, ask whether to create it, and only after the user replies approving it call tools.cognition.create_confirmed_calendar_event with their reply quoted in userConfirmation.";
+
 /// Refuse an agent run's create (see [`is_agent_run`]); a person in the app
 /// creates from the composer, which is their confirmation.
 fn refuse_program_create(
@@ -484,7 +488,12 @@ fn refuse_program_create(
     if is_agent_run(attribution, headers) {
         return Err(CalendarMutationApiError {
             code: CalendarMutationErrorCode::ConfirmationRequired,
-            message: PROGRAM_CREATE_REFUSAL.to_owned(),
+            message: if from_dialect_program(headers) {
+                DIALECT_PROGRAM_CREATE_REFUSAL
+            } else {
+                PROGRAM_CREATE_REFUSAL
+            }
+            .to_owned(),
             status: StatusCode::FORBIDDEN,
         });
     }
