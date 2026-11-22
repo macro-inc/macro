@@ -62,7 +62,13 @@ export function createProjectSources(
       cache,
       soup.cacheHost ?? (() => undefined)
     );
-  const pendingTasks = createPendingProjectTasks();
+  // Before an unlisted task goes, the project is read once more, in case
+  // its read missed the push that lists it.
+  const pendingTasks = createPendingProjectTasks({
+    beforeExpire: async () => {
+      await refresh();
+    },
+  });
   const context: ProjectsContext = {
     userId,
     pendingTasks: (projectId) => pendingTasks.tasks(projectId),
@@ -149,6 +155,13 @@ export function createProjectSources(
               ...properties,
               [SYSTEM_PROPERTY_IDS.PROJECT, taskProjectValue(projectId)],
             ];
+        // A composer pointed at another project creates the task there.
+        const createsHere = values.some(
+          ([id, value]) =>
+            id === SYSTEM_PROPERTY_IDS.PROJECT &&
+            value.valueType === 'ENTITY' &&
+            !!value.refs?.some((ref) => ref.entity_id === projectId)
+        );
         return Telemetry.span('project.tasks.create', async (span) => {
           span.setAttr('project.id', projectId);
           let pending: PendingProjectTaskHandle | undefined;
@@ -165,18 +178,20 @@ export function createProjectSources(
                 ...options,
                 // Show the task in the project's list as the request starts.
                 onMutate: () => {
-                  pending = pendingTasks.begin(
-                    projectId,
-                    buildOptimisticTask({
-                      id: crypto.randomUUID(),
-                      title,
-                      ownerId: userId() ?? '',
-                      properties: values,
-                      definitions,
-                      now: new Date(),
-                    })
-                  );
-                  span.event('project.tasks.create.pending_added');
+                  if (createsHere) {
+                    pending = pendingTasks.begin(
+                      projectId,
+                      buildOptimisticTask({
+                        id: crypto.randomUUID(),
+                        title,
+                        ownerId: userId() ?? '',
+                        properties: values,
+                        definitions,
+                        now: new Date(),
+                      })
+                    );
+                    span.event('project.tasks.create.pending_added');
+                  }
                   options?.onMutate?.();
                 },
                 onCreated: (task) => {

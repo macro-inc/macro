@@ -1,5 +1,8 @@
 import type { OptimisticTask } from '@app/features/tasks-view/core/optimistic-task';
+import { debounce } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { TaskEntityWithProperties } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { getOwner, onCleanup } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 
@@ -7,13 +10,14 @@ import { createStore, produce } from 'solid-js/store';
  * How long a created task's stand-in waits for the project's list to show
  * it. The list's own subscription normally does so within a second; this
  * only bounds a task the list never shows (its project property was
- * rejected, or a filter hides it).
+ * rejected, a filter hides it, or the project read missed its push).
  */
 export const PENDING_PROJECT_TASK_RETENTION_MS = 60_000;
 
 type PendingProjectTask = OptimisticTask & {
   key: string;
   projectId: string;
+  confirmedAt?: number;
 };
 
 /** One task being created, from submit to the server's answer. */
@@ -24,34 +28,75 @@ export type PendingProjectTaskHandle = {
   fail(): void;
 };
 
+type PendingProjectTasksOptions = {
+  retentionMs?: number;
+  /**
+   * Reads the project again before an unlisted task's stand-in goes, in case
+   * its read missed the push that lists the task: without it, a project's
+   * first task would hide behind the empty state.
+   */
+  beforeExpire?: (projectId: string) => Promise<void>;
+};
+
 /**
  * Tasks created in a project that its task list has not listed yet. Each
  * shows at once on submit, takes its real id when the create succeeds, and
  * goes when the create fails, when the list shows it, or at the retention
  * bound.
  */
-export function createPendingProjectTasks(
-  retentionMs = PENDING_PROJECT_TASK_RETENTION_MS
-) {
+export function createPendingProjectTasks({
+  retentionMs = PENDING_PROJECT_TASK_RETENTION_MS,
+  beforeExpire,
+}: PendingProjectTasksOptions = {}) {
   const [state, setState] = createStore<{ tasks: PendingProjectTask[] }>({
     tasks: [],
   });
-  const expiries = new Map<string, ReturnType<typeof setTimeout>>();
+  // Each confirmed task's pending expiry, by key, as its cancel function.
+  const expiries = new Map<string, () => void>();
 
   const remove = (keys: ReadonlySet<string>) => {
     for (const key of keys) {
-      clearTimeout(expiries.get(key));
+      expiries.get(key)?.();
       expiries.delete(key);
     }
     setState('tasks', (tasks) => tasks.filter((task) => !keys.has(task.key)));
   };
 
+  let disposed = false;
   if (getOwner()) {
     onCleanup(() => {
-      for (const expiry of expiries.values()) clearTimeout(expiry);
+      disposed = true;
+      for (const cancel of expiries.values()) cancel();
       expiries.clear();
     });
   }
+
+  const expireTask = async (task: PendingProjectTask) => {
+    // The list never showed it: a filter hides it, or the project read
+    // missed its push.
+    Telemetry.warn('project.tasks.pending_expired', {
+      'project.id': task.projectId,
+      'document.id': task.entity.id,
+    });
+    try {
+      await beforeExpire?.(task.projectId);
+    } finally {
+      remove(new Set([task.key]));
+    }
+  };
+
+  // A create that settles after the owner is gone, or whose task the list
+  // already released, leaves no timer behind.
+  const expireLater = (key: string) => {
+    const task = state.tasks.find((candidate) => candidate.key === key);
+    if (disposed || !task) return;
+    const expire = debounce(() => {
+      expiries.delete(key);
+      fireAndForget(expireTask(task), 'project-pending-tasks');
+    }, retentionMs);
+    expiries.set(key, expire.clear);
+    expire();
+  };
 
   return {
     tasks(projectId: string): OptimisticTask[] {
@@ -77,12 +122,10 @@ export function createPendingProjectTasks(
             produce((task) => {
               task.entity = { ...task.entity, id: taskId };
               task.pending = false;
+              task.confirmedAt = performance.now();
             })
           );
-          expiries.set(
-            key,
-            setTimeout(() => remove(new Set([key])), retentionMs)
-          );
+          expireLater(key);
         },
         fail() {
           settled = true;
@@ -93,13 +136,22 @@ export function createPendingProjectTasks(
     /** The list shows these tasks itself now. */
     release(taskIds: readonly string[]) {
       const listed = new Set(taskIds);
-      remove(
-        new Set(
-          state.tasks.flatMap((task) =>
-            !task.pending && listed.has(task.entity.id) ? [task.key] : []
-          )
-        )
+      const released = state.tasks.filter(
+        (task) => !task.pending && listed.has(task.entity.id)
       );
+      if (released.length === 0) return;
+      const now = performance.now();
+      for (const task of released) {
+        // How long the list took to show a created task itself.
+        Telemetry.info('project.tasks.pending_released', {
+          'project.id': task.projectId,
+          'document.id': task.entity.id,
+          'pending.listed_after_ms': Math.round(
+            now - (task.confirmedAt ?? now)
+          ),
+        });
+      }
+      remove(new Set(released.map((task) => task.key)));
     },
   };
 }

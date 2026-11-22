@@ -207,6 +207,38 @@ it('removes a created task from its project when the create fails', async () => 
   dispose();
 });
 
+it('shows no stand-in for a task the composer moved to another project', async () => {
+  mock.createTask.mockImplementation(
+    async (_title, _content, _properties, _definitions, _history, options) => {
+      options.onMutate();
+      expect(sources.pendingTasks('project')).toEqual([]);
+      return { documentId: 'task' };
+    }
+  );
+  const { sources, commands: project, dispose } = commands();
+  const onMutate = vi.fn();
+  await project.createTask(
+    'project',
+    'Moved',
+    '',
+    [
+      [
+        SYSTEM_PROPERTY_IDS.PROJECT,
+        {
+          valueType: 'ENTITY',
+          refs: [{ entity_id: 'other', entity_type: 'INITIATIVE' }],
+        },
+      ],
+    ],
+    new Map(),
+    vi.fn(),
+    { onMutate }
+  );
+  expect(onMutate).toHaveBeenCalledOnce();
+  expect(sources.pendingTasks('project')).toEqual([]);
+  dispose();
+});
+
 it('sets and clears each task Project property, reporting failures per task', async () => {
   mock.saveProperty.mockImplementation(
     async ({ properties: [{ entityId }] }) => ({

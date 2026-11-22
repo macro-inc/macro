@@ -30,7 +30,7 @@ afterEach(() => {
 
 it('settles creates in whatever order the server answers them', () => {
   createRoot((dispose) => {
-    const pending = createPendingProjectTasks(1_000);
+    const pending = createPendingProjectTasks({ retentionMs: 1_000 });
     const first = pending.begin('project', task('temp-1'));
     const second = pending.begin('project', task('temp-2'));
     pending.begin('other', task('temp-3'));
@@ -54,7 +54,7 @@ it('settles creates in whatever order the server answers them', () => {
 
 it('releases a confirmed task once listed, and only a confirmed one', () => {
   createRoot((dispose) => {
-    const pending = createPendingProjectTasks(1_000);
+    const pending = createPendingProjectTasks({ retentionMs: 1_000 });
     const created = pending.begin('project', task('temp-1'));
     pending.begin('project', task('temp-2'));
     created.confirm('task-1');
@@ -66,21 +66,45 @@ it('releases a confirmed task once listed, and only a confirmed one', () => {
   });
 });
 
-it('drops a confirmed task the list never shows at the retention bound', () => {
+it('reads the project once more, then drops a task the list never shows', async () => {
+  let answer = () => {};
+  const beforeExpire = vi.fn(
+    () => new Promise<void>((resolve) => (answer = resolve))
+  );
+  const { pending, dispose } = createRoot((dispose) => ({
+    pending: createPendingProjectTasks({ retentionMs: 1_000, beforeExpire }),
+    dispose,
+  }));
+  pending.begin('project', task('temp')).confirm('task');
+  vi.advanceTimersByTime(999);
+  expect(shown(pending)).toEqual(['task']);
+  vi.advanceTimersByTime(1);
+  expect(beforeExpire).toHaveBeenCalledWith('project');
+  // The read may list it, which releases it; it stays until the read ends.
+  expect(shown(pending)).toEqual(['task']);
+  answer();
+  await vi.waitFor(() => expect(shown(pending)).toEqual([]));
+  dispose();
+});
+
+it('starts no timer for a task already gone when its create returns', () => {
   createRoot((dispose) => {
-    const pending = createPendingProjectTasks(1_000);
-    pending.begin('project', task('temp')).confirm('task');
-    vi.advanceTimersByTime(999);
-    expect(shown(pending)).toEqual(['task']);
-    vi.advanceTimersByTime(1);
-    expect(shown(pending)).toEqual([]);
+    const pending = createPendingProjectTasks({ retentionMs: 1_000 });
+    const failed = pending.begin('project', task('temp'));
+    failed.fail();
+    failed.confirm('task');
+    expect(vi.getTimerCount()).toBe(0);
+
+    const late = pending.begin('project', task('temp-2'));
     dispose();
+    late.confirm('task-2');
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 
 it('clears its timers when its owner is disposed', () => {
   createRoot((dispose) => {
-    const pending = createPendingProjectTasks(1_000);
+    const pending = createPendingProjectTasks({ retentionMs: 1_000 });
     pending.begin('project', task('temp')).confirm('task');
     expect(vi.getTimerCount()).toBe(1);
     dispose();
