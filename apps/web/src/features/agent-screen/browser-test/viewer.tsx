@@ -2,12 +2,16 @@ import '@fontsource-variable/inter';
 import '@app/index.css';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
+import type { ComponentMeta } from '@components/app/split-layout/componentRegistry';
+import { PopoverSplitRenderer } from '@components/app/split-layout/components/PopoverSplitRenderer';
 import { ok } from 'neverthrow';
 import { createSignal, For, Show } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import type { ScreenCapabilities } from '../context/screen-context';
+import { agentScreenContent } from '../core/route';
 import { createScreenInput } from '../primitives/screen-input';
 import { createScreenSession } from '../primitives/screen-session';
 import type { ScreenState } from '../transports/types';
@@ -17,9 +21,9 @@ import type { AgentScreenModel } from '../views/shared/agent-screen-model';
 
 /**
  * The real desktop and phone screen viewers over a stand-in transport that
- * draws a white guest desktop. `?view=desktop|phone`, `?state=watch|drive|other`
- * (watching, driving, someone else driving), `?width=<px>` for the desktop
- * split, `?theme=dark`.
+ * draws a white guest desktop. `?view=desktop|phone|popout`,
+ * `?state=watch|drive|other|reconnect|toomany|stopped` (see `capabilities`),
+ * `?width=<px>` for the desktop split, `?theme=dark`.
  */
 const params = new URLSearchParams(location.search);
 document.documentElement.dataset.themeLight = String(
@@ -53,7 +57,9 @@ function serverState(): ScreenState {
 
 /** A white guest desktop, as an agent's browser usually is. */
 function drawGuest(element: HTMLElement) {
-  element.innerHTML = `
+  const guest = document.createElement('div');
+  element.append(guest);
+  guest.innerHTML = `
     <div style="width:1280px;height:800px;background:#fff;font:20px sans-serif;color:#222;display:flex;flex-direction:column">
       <div style="height:56px;background:#f3f3f3;border-bottom:1px solid #ddd;display:flex;align-items:center;padding:0 20px;gap:12px">
         <span style="width:14px;height:14px;border-radius:7px;background:#e66"></span>
@@ -70,30 +76,44 @@ function drawGuest(element: HTMLElement) {
     </div>`;
 }
 
+let connects = 0;
+
+/**
+ * The stand-in transport. `?state=reconnect`: live, then the socket drops and
+ * the next connect never finishes; `toomany`: the harness refuses the socket
+ * for one screen too many; `stopped`: Stop watching ends it as the harness
+ * does.
+ */
 const capabilities: ScreenCapabilities = {
   requestTicket: async () =>
     ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
   transport: () => ({
     kind: 'vnc',
     connect: async (element, _ticket, handlers) => {
+      connects += 1;
+      if (scenario === 'toomany') {
+        handlers.onError({
+          code: 'tooManySockets',
+          message: 'too many screens are open on this computer',
+        });
+        handlers.onEnded('error');
+        throw new DOMException('refused', 'AbortError');
+      }
+      if (scenario === 'reconnect' && connects > 1)
+        return await new Promise<never>(() => {});
       drawGuest(element);
       setTimeout(() => {
         handlers.onFrameSize({ width: 1280, height: 800 });
         handlers.onState(serverState());
+        if (scenario === 'reconnect')
+          setTimeout(() => handlers.onEnded('error'), 300);
       });
       return {
         sendInput: () => {},
         takeOver: () => {},
         handBack: () => {},
-        switchSurface: () => {},
-        stop: () => {},
+        stop: () => setTimeout(() => handlers.onEnded('stopped')),
         close: () => {},
-        stats: () => ({
-          fps: undefined,
-          kbps: 0,
-          rttMs: undefined,
-          decodeMs: undefined,
-        }),
       };
     },
   }),
@@ -193,8 +213,33 @@ function Phone() {
   );
 }
 
+/** Popped out: the real popover renderer, as `popoverSplit({ wide })` opens it. */
+function PopOut() {
+  const [meta, setMeta] = createStore<ComponentMeta>({});
+  const popover = {
+    id: 'popover-1',
+    content: agentScreenContent('harness-1'),
+    mount: {
+      kind: 'component' as const,
+      name: 'agent-screen',
+      element: () => <Viewer phone={false} />,
+      meta,
+      updateMeta: (data: Omit<ComponentMeta, 'kind'>) => setMeta(data),
+    },
+    isOpen: true,
+    options: { content: agentScreenContent('harness-1'), wide: true },
+  };
+  return (
+    <div class="min-h-screen bg-page p-8 text-ink">
+      <p class="text-sm text-ink-muted">The conversation behind the pop-out.</p>
+      <PopoverSplitRenderer popovers={() => new Map([[popover.id, popover]])} />
+    </div>
+  );
+}
+
 const root = document.getElementById('root');
 if (root)
   render(() => {
+    if (view === 'popout') return <PopOut />;
     return view === 'phone' ? <Phone /> : <DesktopSplit />;
   }, root);

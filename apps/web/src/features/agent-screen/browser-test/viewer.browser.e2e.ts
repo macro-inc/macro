@@ -121,6 +121,83 @@ for (const theme of ['light', 'dark'] as const) {
     });
   });
 
+  test.describe(`viewer states, ${theme}`, () => {
+    test.use({
+      viewport: { width: 1320, height: 1040 },
+      contextOptions: { reducedMotion: 'reduce' },
+    });
+
+    test('popped out: its own heading, and the picture at 16:9 across a wide dialog', async ({
+      page,
+    }) => {
+      const errors = await open(page, `view=popout&theme=${theme}`);
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.getByRole('status')).toHaveText('Live');
+      await expect(dialog.getByText('Eve’s desktop')).toBeVisible();
+      // No pop-out button inside a pop-out.
+      await expect(dialog.getByRole('button', { name: 'Pop out' })).toHaveCount(
+        0
+      );
+      const stage = (await dialog
+        .getByRole('img', { name: 'Eve’s desktop' })
+        .boundingBox())!;
+      expect(stage.width).toBeGreaterThan(1000);
+      expect(stage.width / stage.height).toBeCloseTo(16 / 9, 1);
+      const box = (await dialog.boundingBox())!;
+      expect(box.y + box.height).toBeLessThanOrEqual(1040);
+      await shot(page, `popout-${theme}`);
+      expect(errors).toEqual([]);
+    });
+
+    test('reconnecting keeps the last picture under the overlay', async ({
+      page,
+    }) => {
+      await open(page, `state=reconnect&width=800&theme=${theme}`);
+      await expect(page.getByRole('status')).toHaveText('Reconnecting');
+      await expect(page.getByText('Showing the last picture.')).toBeVisible();
+      // The dropped connection's picture is still in the stage.
+      const kept = page.locator('[data-screen-last-picture]');
+      await expect(kept).toHaveCount(1);
+      await expect(kept.getByText('Inbox', { exact: true })).toBeAttached();
+      expect((await kept.boundingBox())!.width).toBeGreaterThan(300);
+      await shot(page, `reconnect-${theme}`);
+    });
+
+    test('too many screens: its own end with Try again, no last picture, no Take over', async ({
+      page,
+    }) => {
+      await open(page, `state=toomany&width=800&theme=${theme}`);
+      await expect(
+        page.getByText('Too many screens are open for this computer')
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Try again' })
+      ).toBeVisible();
+      await expect(page.getByText('Showing the last picture')).toHaveCount(0);
+      await expect(page.getByText('Reconnecting')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /Take over/ })).toHaveCount(
+        0
+      );
+      await shot(page, `toomany-${theme}`);
+    });
+
+    test('after Stop watching only View screen again is offered', async ({
+      page,
+    }) => {
+      await open(page, `state=stopped&width=800&theme=${theme}`);
+      await expect(page.getByRole('status')).toHaveText('Live');
+      await page.getByRole('button', { name: 'Stop watching' }).click();
+      await expect(page.getByText('You stopped watching')).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'View screen again' })
+      ).toBeVisible();
+      await expect(page.getByRole('button', { name: /Take over/ })).toHaveCount(
+        0
+      );
+      await shot(page, `stopped-${theme}`);
+    });
+  });
+
   test.describe(`phone, ${theme}`, () => {
     test.use({
       viewport: { width: 390, height: 844 },
