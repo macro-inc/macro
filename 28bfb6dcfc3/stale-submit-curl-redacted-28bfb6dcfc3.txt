@@ -1,0 +1,169 @@
+ACTUAL CURL HTTP TRANSCRIPT — tokens/cookies/private addresses redacted
+POST /agent-harness/agent-sessions/[session]/reviews/[review]
+Content-Type: application/json
+Action: submit; old review/items; current revision
+
+* Host [local-preview-host]:39190 was resolved.
+[connection address redacted]
+* IPv4: [address]
+[connection address redacted]
+* ALPN: curl offers h2,http/1.1
+=> Send SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+=> Send SSL data, 1578 bytes (0x62a)
+[TLS record byte dump omitted]
+* SSL Trust Anchors:
+*   OpenSSL default paths (fallback)
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+<= Recv SSL data, 1210 bytes (0x4ba)
+[TLS record byte dump omitted]
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+* TLSv1.3 (IN), TLS change cipher, Change cipher spec (1):
+<= Recv SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+<= Recv SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
+<= Recv SSL data, 19 bytes (0x13)
+[TLS record byte dump omitted]
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+<= Recv SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+* TLSv1.3 (IN), TLS handshake, Certificate (11):
+<= Recv SSL data, 3455 bytes (0xd7f)
+[TLS record byte dump omitted]
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+<= Recv SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+* TLSv1.3 (IN), TLS handshake, CERT verify (15):
+<= Recv SSL data, 80 bytes (0x50)
+[TLS record byte dump omitted]
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+<= Recv SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+* TLSv1.3 (IN), TLS handshake, Finished (20):
+<= Recv SSL data, 36 bytes (0x24)
+[TLS record byte dump omitted]
+=> Send SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+* TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):
+=> Send SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+=> Send SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+=> Send SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+* TLSv1.3 (OUT), TLS handshake, Finished (20):
+=> Send SSL data, 36 bytes (0x24)
+[TLS record byte dump omitted]
+* SSL connection using TLSv1.3 / TLS_AES_128_GCM_SHA256 / X25519MLKEM768 / id-ecPublicKey
+* ALPN: server accepted h2
+* Server certificate:
+*   subject: CN=[local-preview-host]
+*   start date: Sep 28 00:23:02 2026 GMT
+*   expire date: Dec 27 00:23:01 2026 GMT
+*   issuer: C=US; O=Let's Encrypt; CN=YE1
+*   Certificate level 0: Public key type EC/prime256v1 (256/128 Bits/secBits), signed using ecdsa-with-SHA384
+*   Certificate level 1: Public key type EC/secp384r1 (384/192 Bits/secBits), signed using ecdsa-with-SHA384
+*   Certificate level 2: Public key type EC/secp384r1 (384/192 Bits/secBits), signed using ecdsa-with-SHA384
+*   Certificate level 3: Public key type EC/secp384r1 (384/192 Bits/secBits), signed using ecdsa-with-SHA384
+*   subjectAltName: "[local-preview-host]" matches cert's "[local-preview-host]"
+* OpenSSL verify result: 0
+* SSL certificate verified via OpenSSL.
+* Established connection to [local-preview-host] ([address] port 39190) from [address] port 38148 
+* using HTTP/2
+* [HTTP/2] [1] OPENED stream for https://[local-preview-host]:39190/agent-harness/agent-sessions/[session]/reviews/[review]
+* [HTTP/2] [1] [:method: POST]
+* [HTTP/2] [1] [:scheme: https]
+* [HTTP/2] [1] [:authority: [local-preview-host]:39190]
+* [HTTP/2] [1] [:path: /agent-harness/agent-sessions/[session]/reviews/[review]]
+* [HTTP/2] [1] [user-agent: curl/8.22.0]
+* [HTTP/2] [1] [accept: */*]
+[sensitive header redacted]
+* [HTTP/2] [1] [content-type: application/json]
+* [HTTP/2] [1] [content-length: 81]
+=> Send SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+=> Send SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+=> Send header, 943 bytes (0x3af)
+[header bytes redacted: authorization/cookies/private addresses omitted]
+=> Send data, 81 bytes (0x51)
+0000: {"action":"submit","revision":1,"items":["01a20302-97f7-7d9e-989
+0040: d-cce86ac6be09"]}
+* upload completely sent off: 81 bytes
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+<= Recv SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+<= Recv SSL data, 122 bytes (0x7a)
+[TLS record byte dump omitted]
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+<= Recv SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+<= Recv SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+=> Send SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+=> Send SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+<= Recv SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+<= Recv SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+<= Recv header, 13 bytes (0xd)
+[header bytes redacted: authorization/cookies/private addresses omitted]
+<= Recv header, 40 bytes (0x28)
+[header bytes redacted: authorization/cookies/private addresses omitted]
+<= Recv header, 41 bytes (0x29)
+[header bytes redacted: authorization/cookies/private addresses omitted]
+<= Recv header, 37 bytes (0x25)
+[header bytes redacted: authorization/cookies/private addresses omitted]
+<= Recv header, 77 bytes (0x4d)
+[header bytes redacted: authorization/cookies/private addresses omitted]
+<= Recv header, 23 bytes (0x17)
+[header bytes redacted: authorization/cookies/private addresses omitted]
+<= Recv header, 16 bytes (0x10)
+[header bytes redacted: authorization/cookies/private addresses omitted]
+<= Recv header, 16 bytes (0x10)
+[header bytes redacted: authorization/cookies/private addresses omitted]
+<= Recv header, 19 bytes (0x13)
+[header bytes redacted: authorization/cookies/private addresses omitted]
+<= Recv header, 2 bytes (0x2)
+[header bytes redacted: authorization/cookies/private addresses omitted]
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+<= Recv SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+<= Recv data, 73 bytes (0x49)
+0000: This review is not ready to approve yet. Check it again before a
+0040: pproving.
+<= Recv SSL data, 5 bytes (0x5)
+[TLS record byte dump omitted]
+<= Recv SSL data, 1 bytes (0x1)
+[TLS record byte dump omitted]
+<= Recv data, 0 bytes (0x0)
+* Connection #0 to host [local-preview-host]:39190 left intact
+
+HTTP/2 400 
+[response header values omitted]
+
+This review is not ready to approve yet. Check it again before approving.
+PROOF_HTTP_STATUS:400
