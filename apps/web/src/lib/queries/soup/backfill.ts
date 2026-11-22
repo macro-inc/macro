@@ -369,12 +369,24 @@ function isCheckpoint(
   );
 }
 
-export function loadSoupBackfillCheckpoint(
+/** A lane's checkpoint as stored, unparsed, or null when none is readable. */
+function savedSoupBackfillCheckpoint(
   userId: string,
-  lane: SoupBackfillParams = CORE_SOUP_BACKFILL_LANE
+  lane: SoupBackfillParams
+): string | null {
+  try {
+    return localStorage.getItem(soupBackfillCheckpointKey(userId, lane));
+  } catch {
+    // Unavailable storage reads as none: restarting from the beginning is safe.
+    return null;
+  }
+}
+
+function parseSoupBackfillCheckpoint(
+  saved: string | null,
+  userId: string
 ): SoupBackfillCheckpoint {
   try {
-    const saved = localStorage.getItem(soupBackfillCheckpointKey(userId, lane));
     if (!saved) return initialCheckpoint(userId);
 
     const parsed: unknown = JSON.parse(saved);
@@ -388,10 +400,20 @@ export function loadSoupBackfillCheckpoint(
       completedAt: parsed.completedAt ?? null,
     };
   } catch {
-    // Restarting from the beginning is safe when storage is unavailable or
-    // the saved checkpoint is malformed.
+    // Restarting from the beginning is safe when the saved checkpoint is
+    // malformed.
     return initialCheckpoint(userId);
   }
+}
+
+export function loadSoupBackfillCheckpoint(
+  userId: string,
+  lane: SoupBackfillParams = CORE_SOUP_BACKFILL_LANE
+): SoupBackfillCheckpoint {
+  return parseSoupBackfillCheckpoint(
+    savedSoupBackfillCheckpoint(userId, lane),
+    userId
+  );
 }
 
 function saveSoupBackfillCheckpoint(
@@ -554,8 +576,13 @@ type SoupBackfillRunOptions = {
   onStarted?: (lockWaitMs: number | undefined) => void;
   /** Leave the lane, returning false, while another tab is running it. */
   ifAvailable?: boolean;
-  /** Skip the lane if another tab completed its pass at or after this time. */
-  completedSince?: number;
+  /**
+   * The lane's checkpoint as stored when this tab left it to another tab:
+   * skip the lane if that tab has since saved a completed pass.
+   */
+  revisit?: { saved: string | null };
+  /** Asked once the lane's locks are held; the lane runs only if it agrees. */
+  claim?: () => boolean;
   /** The build's lanes, which decide the locks a lane run takes. */
   lanes?: readonly SoupBackfillParams[];
 };
@@ -626,7 +653,8 @@ function withBrowserLock<E, R>(
  * save the same checkpoint at once: the second resumes where the first stopped
  * instead of fetching the same pages beside it and saving an older cursor over
  * a newer one. Without the Locks API, as in unit tests, it runs unlocked.
- * Succeeds with false, without running, when `ifAvailable` finds one held.
+ * Succeeds with false, without running, when `ifAvailable` finds one held or
+ * `claim` declines.
  */
 function withLaneLocks<E, R>(
   names: readonly string[],
@@ -636,9 +664,12 @@ function withLaneLocks<E, R>(
   const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
   return Effect.suspend(() => {
     const requestedAt = Date.now();
-    const run = Effect.sync(() =>
-      options.onStarted?.(locks ? Date.now() - requestedAt : undefined)
-    ).pipe(Effect.andThen(effect), Effect.as(true));
+    const run = Effect.suspend(() => {
+      // Another lane took this tab's turn while these locks were awaited.
+      if (options.claim && !options.claim()) return Effect.succeed(false);
+      options.onStarted?.(locks ? Date.now() - requestedAt : undefined);
+      return effect.pipe(Effect.as(true));
+    });
     if (!locks) return run;
     return names.reduceRight<Effect.Effect<boolean, E | Error, R>>(
       (inner, name) =>
@@ -648,36 +679,33 @@ function withLaneLocks<E, R>(
   });
 }
 
-/** Whether another tab completed this pass at or after `since`. */
-function completedSince(
-  checkpoint: SoupBackfillCheckpoint,
-  since: number | undefined
-): boolean {
-  return (
-    since !== undefined &&
-    checkpoint.completed &&
-    checkpoint.completedAt !== null &&
-    Date.parse(checkpoint.completedAt) >= since
-  );
-}
-
 /**
  * The checkpoint a run starts from: the saved one in the current storage
  * generation, without the cursor of the last run for a lane that restarts
- * every run, or null when another tab completed the pass this run waited for.
+ * every run, or null when another tab completed the pass this run waited for:
+ * the checkpoint is completed and is no longer the one stored when this tab
+ * left the lane. Comparing what was stored, not times, keeps a completion
+ * stamped by a skewed clock from passing for a new one.
  */
 function loadRunCheckpoint(
   userId: string,
   params: SoupBackfillParams,
   storageGeneration: string,
-  options: SoupBackfillRunOptions
+  options: Pick<SoupBackfillRunOptions, 'revisit'>
 ): SoupBackfillCheckpoint | null {
-  const saved = loadSoupBackfillCheckpoint(userId, params);
+  const stored = savedSoupBackfillCheckpoint(userId, params);
+  const saved = parseSoupBackfillCheckpoint(stored, userId);
   const checkpoint =
     saved.storageGeneration === storageGeneration
       ? saved
       : initialCheckpoint(userId, storageGeneration);
-  if (completedSince(checkpoint, options.completedSince)) return null;
+  if (
+    options.revisit !== undefined &&
+    checkpoint.completed &&
+    stored !== options.revisit.saved
+  ) {
+    return null;
+  }
   return params.restartOnRun
     ? {
         ...checkpoint,
@@ -731,6 +759,32 @@ function checkpointAfterPage(
   };
 }
 
+/**
+ * The checkpoint a run starts from (`loadRunCheckpoint`), or null to skip the
+ * lane. A skip trusts a completion read after the storage generation was
+ * sampled, so the generation is sampled again: after a reset in between, the
+ * lane runs in the new generation instead.
+ */
+const startingCheckpoint = (
+  userId: string,
+  host: SoupBackfillCacheHost,
+  params: SoupBackfillParams,
+  options: SoupBackfillRunOptions
+) =>
+  Effect.gen(function* () {
+    const generation = yield* Effect.tryPromise(() =>
+      host.currentStorageGeneration()
+    );
+    const loaded = loadRunCheckpoint(userId, params, generation, options);
+    if (loaded !== null) return loaded;
+    const current = yield* Effect.tryPromise(() =>
+      host.currentStorageGeneration()
+    );
+    return current === generation
+      ? null
+      : loadRunCheckpoint(userId, params, current, {});
+  });
+
 const runUnlockedSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   userId: string,
   host: SoupBackfillCacheHost,
@@ -740,12 +794,7 @@ const runUnlockedSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   // Await storage readiness before reading a cursor. Generation notifications
   // may predate this runner or belong to another tab, so they cannot prove that
   // a saved continuation still refers to records in the current database.
-  const storageGeneration = yield* Effect.tryPromise(() =>
-    host.currentStorageGeneration()
-  );
-  const loaded = yield* Effect.sync(() =>
-    loadRunCheckpoint(userId, params, storageGeneration, options)
-  );
+  const loaded = yield* startingCheckpoint(userId, host, params, options);
   // Another tab finished the pass this one waited for.
   if (loaded === null) return;
   let checkpoint = loaded;
@@ -850,7 +899,7 @@ const runTrackedSoupBackfill = (
   lane: SoupBackfillParams,
   attempt: Pick<
     SoupBackfillRunOptions,
-    'ifAvailable' | 'completedSince' | 'lanes'
+    'ifAvailable' | 'revisit' | 'claim' | 'lanes'
   >
 ) =>
   Effect.gen(function* () {
@@ -926,47 +975,69 @@ const runTrackedSoupBackfill = (
   });
 
 /**
+ * Waits for the locks of every lane in `left` at once and runs the first lane
+ * to hold all of its own; the others stop waiting. Succeeds with its index.
+ */
+const runFirstFreeLane = (
+  userId: string,
+  host: SoupBackfillCacheHost,
+  left: readonly { lane: SoupBackfillParams; saved: string | null }[],
+  lanes: readonly SoupBackfillParams[]
+) =>
+  Effect.suspend(() => {
+    let turn: number | null = null;
+    return Effect.raceAll(
+      left.map(({ lane, saved }, index) =>
+        runTrackedSoupBackfill(userId, host, lane, {
+          lanes,
+          revisit: { saved },
+          // A lane granted after another took the turn gives its locks back.
+          claim: () => {
+            if (turn === null) turn = index;
+            return turn === index;
+          },
+        }).pipe(
+          Effect.flatMap((ran) => (ran ? Effect.succeed(index) : Effect.never))
+        )
+      )
+    );
+  });
+
+/**
  * Runs each backfill lane to completion before starting the next lane. A lane
- * another tab is running is left to it and revisited once the others are done,
- * so a stalled tab holds back only the lanes it holds. Lanes that wait for a
- * tab from before checkpoint locks, which keeps its lock while it stays open,
- * are revisited last.
+ * another tab is running is left to it. Once the others are done, the left
+ * lanes run one at a time, each as soon as its locks are free, so a stalled
+ * tab holds back only the lanes it holds. A left lane that tab completed in
+ * the meantime is skipped.
  */
 export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
   userId: string,
   host: SoupBackfillCacheHost,
   lanes: readonly SoupBackfillParams[] = DEFAULT_SOUP_BACKFILL_LANES
 ) {
-  const busy: { lane: SoupBackfillParams; since: number; locks: number }[] = [];
+  const left: { lane: SoupBackfillParams; saved: string | null }[] = [];
   yield* Effect.forEach(
     lanes,
     (lane) => {
-      const since = Date.now();
+      const saved = savedSoupBackfillCheckpoint(userId, lane);
       return runTrackedSoupBackfill(userId, host, lane, {
         ifAvailable: true,
         lanes,
       }).pipe(
         Effect.tap((ran) =>
           Effect.sync(() => {
-            if (!ran) {
-              const locks = soupBackfillLaneLocks(userId, lanes, lane).length;
-              busy.push({ lane, since, locks });
-            }
+            if (!ran) left.push({ lane, saved });
           })
         )
       );
     },
     { concurrency: 1, discard: true }
   );
-  yield* Effect.forEach(
-    busy.sort((left, right) => left.locks - right.locks),
-    ({ lane, since }) =>
-      runTrackedSoupBackfill(userId, host, lane, {
-        completedSince: since,
-        lanes,
-      }),
-    { concurrency: 1, discard: true }
-  );
+  let waiting = left;
+  while (waiting.length > 0) {
+    const ran = yield* runFirstFreeLane(userId, host, waiting, lanes);
+    waiting = waiting.filter((_left, index) => index !== ran);
+  }
 });
 
 const waitForGraphqlSoupCacheHost = Effect.suspend(() => {

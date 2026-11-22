@@ -1132,22 +1132,74 @@ describe('soup backfill checkpoint locks', () => {
     vi.useRealTimers();
   });
 
-  /** A page fetch that waits until `open` is called. */
-  const gated = (nextCursor: string | null = null) => {
-    let open = () => {};
-    const gate = new Promise<void>((resolve) => {
-      open = resolve;
+  /** A promise and the function that settles it. */
+  const signal = () => {
+    let fire = () => {};
+    const fired = new Promise<void>((resolve) => {
+      fire = resolve;
     });
+    return { fire, fired };
+  };
+  /**
+   * A page fetch that waits until `open` is called; `fetched` settles at its
+   * first call.
+   */
+  const gated = (nextCursor: string | null = null) => {
+    const gate = signal();
+    const first = signal();
     const fetchPage = vi.fn(async (_input: FetchInput) => {
-      await gate;
+      first.fire();
+      await gate.fired;
       return { nextCursor };
     });
-    return { fetchPage, open };
+    return { fetchPage, open: gate.fire, fetched: first.fired };
   };
-  const done = () =>
-    vi.fn(async (_input: FetchInput) => ({ nextCursor: null }));
+  /** A page fetch that ends the pass; `fetched` settles at its first call. */
+  const done = () => {
+    const first = signal();
+    const fetchPage = vi.fn(async (_input: FetchInput) => {
+      first.fire();
+      return { nextCursor: null };
+    });
+    return Object.assign(fetchPage, { fetched: first.fired });
+  };
+  /** Holds the lock `name` as another tab would, until `release`. */
+  const hold = (name: string) => {
+    const until = signal();
+    const granted = signal();
+    const held = navigator.locks.request(name, {}, () => {
+      granted.fire();
+      return until.fired;
+    });
+    return {
+      granted: granted.fired,
+      release: async () => {
+        until.fire();
+        await held;
+      },
+    };
+  };
   const key = (params: SoupBackfillParams) =>
     soupBackfillCheckpointKey('user-1', params);
+  /** A completed pass stored for `params`, as another tab saves it. */
+  const storeCompleted = (
+    params: SoupBackfillParams,
+    storageGeneration: string,
+    completedAt: number
+  ) =>
+    localStorage.setItem(
+      key(params),
+      JSON.stringify({
+        userId: 'user-1',
+        storageGeneration,
+        nextCursor: null,
+        pagesFetched: 3,
+        completed: true,
+        scanStartedAt: null,
+        updatedSince: new Date(completedAt - 1000).toISOString(),
+        completedAt: new Date(completedAt).toISOString(),
+      })
+    );
 
   it('leaves a lane another tab runs, then resumes where that tab stopped', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -1163,7 +1215,7 @@ describe('soup backfill checkpoint locks', () => {
         pageDelayMs: 0,
       })
     );
-    await vi.waitFor(() => expect(firstTab).toHaveBeenCalledOnce());
+    await holder.fetched;
     const second = Effect.runPromise(
       runSoupBackfills('user-1', mockCacheHost, [
         lane('core-entities', secondTab),
@@ -1203,7 +1255,7 @@ describe('soup backfill checkpoint locks', () => {
     const held = Effect.runPromise(
       runSoupBackfill('user-1', mockCacheHost, refreshing)
     );
-    await vi.waitFor(() => expect(holder.fetchPage).toHaveBeenCalledOnce());
+    await holder.fetched;
     const waiter = done();
     const other = done();
     const suite = Effect.runPromise(
@@ -1255,7 +1307,7 @@ describe('soup backfill checkpoint locks', () => {
     expect(unchanged).toHaveBeenCalledOnce();
   });
 
-  it('revisits a lane another build left before one that waits for a tab from before checkpoint locks', async () => {
+  it('runs a left lane while another waits for a tab from before checkpoint locks', async () => {
     const changedCore = { ...CORE_SOUP_BACKFILL_LANE, contractVersion: 1 };
     const [v19Lock] = soupBackfillLaneLocks(
       'user-1',
@@ -1280,7 +1332,7 @@ describe('soup backfill checkpoint locks', () => {
         pageDelayMs: 0,
       })
     );
-    await vi.waitFor(() => expect(otherTab).toHaveBeenCalledOnce());
+    await other.fetched;
     const unchanged = done();
     const resumed = done();
     const suite = Effect.runPromise(
@@ -1292,7 +1344,7 @@ describe('soup backfill checkpoint locks', () => {
     await locks.waiting(key(changedCore));
     other.open();
     await otherRun;
-    await vi.waitFor(() => expect(resumed).toHaveBeenCalledOnce());
+    await resumed.fetched;
     expect(unchanged).not.toHaveBeenCalled();
 
     closeOldTab();
@@ -1312,7 +1364,7 @@ describe('soup backfill checkpoint locks', () => {
         lane('core-entities', holder.fetchPage)
       )
     );
-    await vi.waitFor(() => expect(holder.fetchPage).toHaveBeenCalledOnce());
+    await holder.fetched;
     const waiting = Effect.runFork(
       runSoupBackfill('user-1', mockCacheHost, lane('core-entities', stopped))
     );
@@ -1337,7 +1389,10 @@ describe('soup backfill checkpoint locks', () => {
     const isRequested = new Promise<void>((resolve) => {
       requested = resolve;
     });
-    let released: Promise<void> | undefined;
+    let onReleased = (_released: Promise<void>) => {};
+    const released = new Promise<void>((resolve) => {
+      onReleased = resolve;
+    });
     // A browser can grant the lock in the same turn the waiter's signal aborts.
     Object.defineProperty(navigator, 'locks', {
       configurable: true,
@@ -1349,8 +1404,9 @@ describe('soup backfill checkpoint locks', () => {
         ) => {
           requested();
           await granted;
-          released = callback({ name });
-          return released;
+          const release = callback({ name });
+          onReleased(release);
+          return release;
         },
       },
     });
@@ -1362,9 +1418,81 @@ describe('soup backfill checkpoint locks', () => {
     await Effect.runPromise(Fiber.interrupt(waiting));
 
     grant();
-    await vi.waitFor(() => expect(released).toBeDefined());
     await released;
     expect(fetchPage).not.toHaveBeenCalled();
+  });
+
+  it('runs a left lane as soon as its locks are free, one lane at a time', async () => {
+    const core = lane('core-entities', done());
+    const initiatives = lane('initiatives', done());
+    const coreTab = hold(key(core));
+    const initiativesTab = hold(key(initiatives));
+    const second = gated();
+    const first = gated();
+    const suite = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        { ...core, fetchPage: second.fetchPage },
+        { ...initiatives, fetchPage: first.fetchPage },
+      ])
+    );
+    await locks.waiting(key(core));
+    await locks.waiting(key(initiatives));
+
+    // The later lane's tab lets go first; its lane runs without waiting for
+    // the earlier one's.
+    await initiativesTab.release();
+    await first.fetched;
+    // The earlier lane's lock, granted while that lane runs, is given back:
+    // a third tab gets it.
+    await coreTab.release();
+    const thirdTab = hold(key(core));
+    await thirdTab.granted;
+    expect(second.fetchPage).not.toHaveBeenCalled();
+    await thirdTab.release();
+
+    first.open();
+    await second.fetched;
+    second.open();
+    await suite;
+  });
+
+  it('refreshes a left lane its other tab did not save, whatever its completion time', async () => {
+    const refresh = done();
+    const refreshing = lane('core-entities', refresh);
+    // A completion stamped a minute ahead, as by a skewed clock.
+    storeCompleted(refreshing, 'storage-1', Date.now() + 60_000);
+    const otherTab = hold(key(refreshing));
+    const suite = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [refreshing])
+    );
+    await locks.waiting(key(refreshing));
+
+    await otherTab.release();
+    await suite;
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('runs a left lane in the new storage generation when storage resets as the lane is skipped', async () => {
+    const refresh = done();
+    const resetting = lane('core-entities', refresh);
+    const otherTab = hold(key(resetting));
+    const suite = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [resetting])
+    );
+    await locks.waiting(key(resetting));
+    // The other tab completes the lane, and storage resets just after this
+    // tab samples its generation.
+    storeCompleted(resetting, 'storage-1', Date.now());
+    mockCacheHost.currentStorageGeneration
+      .mockResolvedValueOnce('storage-1')
+      .mockResolvedValue('storage-2');
+
+    await otherTab.release();
+    await suite;
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(
+      loadSoupBackfillCheckpoint('user-1', resetting).storageGeneration
+    ).toBe('storage-2');
   });
 
   it('runs two lanes that differ in contract side by side', async () => {
@@ -1377,7 +1505,7 @@ describe('soup backfill checkpoint locks', () => {
         lane('core-entities', older.fetchPage)
       )
     );
-    await vi.waitFor(() => expect(older.fetchPage).toHaveBeenCalledOnce());
+    await older.fetched;
     await Effect.runPromise(
       runSoupBackfill('user-1', mockCacheHost, {
         ...lane('core-entities', newer),
