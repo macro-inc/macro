@@ -77,12 +77,39 @@ pub struct Exec<'a> {
     reader: Option<EngineHandle>,
     /// Where `broad_hits` go when the run finishes.
     pub broad_out: Option<PathBuf>,
-    /// The share of ops run with the next record write armed to fail, and the seed
-    /// that picks them (see `arm_write_fault`).
-    pub fail_writes: (f64, u64),
+    /// The share of ops run with the next record write armed to fail (see `arm_fault`).
+    pub fail_writes: f64,
+    /// The share of ops run with the next record read armed to fail.
+    pub fail_reads: f64,
+    /// The seed that picks those ops.
+    pub fault_seed: u64,
 }
 
 type Outcome = Result<Value, String>;
+
+/// A storage failure `--fail-writes` or `--fail-reads` arms for an op.
+#[derive(Clone, Copy)]
+enum Fault {
+    Write,
+    Read,
+}
+
+impl Fault {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Write => "write",
+            Self::Read => "read",
+        }
+    }
+
+    #[cfg(storage_faults)]
+    fn flag(self) -> &'static std::sync::atomic::AtomicBool {
+        match self {
+            Self::Write => &cache_turso::FUZZ_FAIL_NEXT_PUT,
+            Self::Read => &cache_turso::FUZZ_FAIL_NEXT_READ,
+        }
+    }
+}
 
 /// A hydrate as the staging hooks take it.
 #[cfg(staged_hydrate)]
@@ -152,7 +179,9 @@ impl<'a> Exec<'a> {
             broad_hits: Vec::new(),
             reader: None,
             broad_out: None,
-            fail_writes: (0.0, 0),
+            fail_writes: 0.0,
+            fail_reads: 0.0,
+            fault_seed: 0,
         };
         exec.open(0)?;
         Ok(exec)
@@ -324,7 +353,7 @@ impl<'a> Exec<'a> {
         if self.stage_hydrates && cfg!(not(staged_hydrate)) {
             return Err("this build was made without STAGED_HYDRATE=1".into());
         }
-        if self.fail_writes.0 > 0.0 && cfg!(not(storage_faults)) {
+        if (self.fail_writes > 0.0 || self.fail_reads > 0.0) && cfg!(not(storage_faults)) {
             return Err("this build was made without STORAGE_FAULTS=1".into());
         }
         for (index, op) in ops.iter().enumerate() {
@@ -334,24 +363,33 @@ impl<'a> Exec<'a> {
             {
                 self.stage_ahead(index + 1, next).await;
             }
-            let armed = self.arm_write_fault(index);
+            let write = self.arm_fault(index, Fault::Write);
+            let read = self.arm_fault(index, Fault::Read);
             let stepped = self.step(index, op).await;
-            if armed {
-                self.disarm_write_fault();
+            if write {
+                self.disarm_fault(Fault::Write);
+            }
+            if read {
+                self.disarm_fault(Fault::Read);
             }
             stepped?;
         }
         Ok(())
     }
 
-    /// With `--fail-writes SHARE`, arms the next record write to fail for that share of
-    /// ops. The pick hashes the seed and the op index, drawing nothing from the case.
-    fn arm_write_fault(&mut self, index: usize) -> bool {
-        let (share, seed) = self.fail_writes;
+    /// With `--fail-writes SHARE` (`--fail-reads SHARE`), arms the next record write
+    /// (batch of record reads) to fail for that share of ops. The pick hashes the seed,
+    /// the op index and the kind of fault, drawing nothing from the case.
+    fn arm_fault(&mut self, index: usize, fault: Fault) -> bool {
+        let (share, salt) = match fault {
+            Fault::Write => (self.fail_writes, 0),
+            Fault::Read => (self.fail_reads, 0x5851_f42d_4c95_7f2d),
+        };
         if share <= 0.0 {
             return false;
         }
-        let mut mixed = seed ^ (index as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        let mut mixed =
+            self.fault_seed ^ salt ^ (index as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15);
         mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
         mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
         mixed ^= mixed >> 31;
@@ -359,17 +397,19 @@ impl<'a> Exec<'a> {
             return false;
         }
         #[cfg(storage_faults)]
-        cache_turso::FUZZ_FAIL_NEXT_PUT.store(true, std::sync::atomic::Ordering::SeqCst);
-        self.count("fault.armed");
+        fault.flag().store(true, std::sync::atomic::Ordering::SeqCst);
+        self.count(format!("fault.{}.armed", fault.name()));
         true
     }
 
-    /// Disarms what `arm_write_fault` armed, counting whether a write took it.
-    fn disarm_write_fault(&mut self) {
+    /// Disarms what `arm_fault` armed, counting whether a write or read took it.
+    fn disarm_fault(&mut self, fault: Fault) {
         #[cfg(storage_faults)]
-        if !cache_turso::FUZZ_FAIL_NEXT_PUT.swap(false, std::sync::atomic::Ordering::SeqCst) {
-            self.count("fault.fired");
+        if !fault.flag().swap(false, std::sync::atomic::Ordering::SeqCst) {
+            self.count(format!("fault.{}.fired", fault.name()));
         }
+        #[cfg(not(storage_faults))]
+        let _ = fault;
     }
 
     pub async fn step(&mut self, index: usize, op: &Op) -> Result<(), String> {

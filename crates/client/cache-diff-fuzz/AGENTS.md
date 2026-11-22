@@ -107,10 +107,12 @@ purpose (it says what).
   tier until the write commits, say), build both sides with `STORAGE_FAULTS=1` and give both
   `--fail-writes SHARE`: that share of ops runs with the next record write armed to fail as a
   database error does (build-side.sh patches a flag into cache-turso's test fault point, after
-  the first record a write transaction puts). The ops are picked from the seed apart from the
-  case, so the cases don't change. A side that skips a write the other makes can fail where
-  the other doesn't; check that before calling it a regression. Stats count `fault.armed` and
-  `fault.fired`.
+  the first record a write transaction puts). `--fail-reads SHARE` does the same for the next
+  `get_batch` of records from storage; a read from another thread can take it, so leave out
+  `--concurrent-reads` and `--abandon-reads` then. The ops are picked from the seed apart from
+  the case, so the cases don't change. A side that skips a write or read the other makes can
+  fail where the other doesn't; check that before calling it a regression. Stats count
+  `fault.write.armed`, `fault.write.fired` and the same for `read`.
 - `FUZZ_ARGS` goes to both sides; `FUZZ_ARGS_A` and `FUZZ_ARGS_B` to one each, for
   one build under two settings (e.g. `FUZZ_ARGS_B="--hot-capacity 16"` against
   itself: the hot tier is a cache, so its size must change nothing).

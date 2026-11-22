@@ -136,9 +136,14 @@ struct Args {
     /// The share of ops (0 to 1) run with the next record write armed to fail, as a
     /// database error would (a side built with STORAGE_FAULTS=1). Which ops is drawn from
     /// the seed apart from the case, so both sides arm the same ones and the case is
-    /// unchanged. Stats count `fault.armed` and `fault.fired` (ops whose write failed).
+    /// unchanged. Stats count `fault.write.armed` and `fault.write.fired`.
     #[arg(long, default_value_t = 0.0, value_parser = share)]
     fail_writes: f64,
+    /// As `--fail-writes`, for the next batch of record reads from storage (stats
+    /// `fault.read.*`). A read from another thread can take it, so don't combine it with
+    /// `--concurrent-reads` or `--abandon-reads`.
+    #[arg(long, default_value_t = 0.0, value_parser = share)]
+    fail_reads: f64,
 }
 
 fn main() -> Result<(), rootcause::Report> {
@@ -253,7 +258,9 @@ fn run(
     exec.stage_hydrates = args.stage_hydrates;
     exec.concurrent_reads = args.concurrent_reads;
     exec.abandon_reads = args.abandon_reads;
-    exec.fail_writes = (args.fail_writes, seed);
+    exec.fail_writes = args.fail_writes;
+    exec.fail_reads = args.fail_reads;
+    exec.fault_seed = seed;
     if args.abandon_reads > 0.0 {
         exec.broad_out = Some(args.out.join(format!("{seed}.broad")));
     }
