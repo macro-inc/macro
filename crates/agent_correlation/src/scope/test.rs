@@ -884,3 +884,42 @@ fn every_service_declares_the_specs_it_serves() {
         std::fs::read_to_string(services.join("static_file_service/src/api.rs")).unwrap();
     assert!(static_files.contains("enforce_signed_scope_serving"));
 }
+
+/// A job cannot widen itself: no hour-long document edit token, and no
+/// route that adds an agent or bot to a task's assignees, which starts an
+/// unscoped agent session acting for the owner.
+#[test]
+fn a_job_cannot_mint_a_document_token_or_assign_an_agent() {
+    const A: &str = "0192f1a0-0000-7000-8000-000000000001";
+    const B: &str = "0192f1a0-0000-7000-8000-000000000002";
+    const C: &str = "0192f1a0-0000-7000-8000-000000000003";
+    for (method, path) in [
+        ("POST", format!("/dss/documents/permissions_token/{A}")),
+        (
+            "POST",
+            "/dss/documents/permissions_token/validate".to_owned(),
+        ),
+        // Assignees: one property, its options, many entities, a project
+        // its tasks inherit from, and a task created with them.
+        ("PUT", format!("/properties/entities/task/{A}/{B}")),
+        ("PUT", format!("/properties/entities/project/{A}/{B}")),
+        (
+            "POST",
+            format!("/properties/entities/task/{A}/{B}/options/{C}"),
+        ),
+        (
+            "POST",
+            format!("/properties/entities/task/{A}/options/bulk"),
+        ),
+        ("POST", "/properties/options/bulk".to_owned()),
+        ("POST", "/dss/documents/create_task".to_owned()),
+        ("POST", "/dss/task_templates".to_owned()),
+        ("PUT", format!("/dss/task_templates/{A}")),
+        ("POST", "/items/soup/graphql".to_owned()),
+    ] {
+        assert!(
+            !SessionScope::Job.allows_on(Some(ALL_SPECS), method, &path),
+            "{method} {path}"
+        );
+    }
+}
