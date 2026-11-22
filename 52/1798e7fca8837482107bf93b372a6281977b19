@@ -1,0 +1,25 @@
+apps/web/src/lib/queries/sync/use-query-sync.ts
+  s_abf11522d55e91::t_239f3981744121 64,96,101
+apps/web/src/lib/core/signal/profilePicture.ts
+  s_abf11522d55e91::t_982d44428fd79d 233
+  s_abf11522d55e91::t_c76065145c88d9 6-7,18-182,184-186,188-195,198-201,214-218,232,235,239,242,253,268,271-272,274-275,277-282,284-285,291-295,297-304
+apps/web/src/lib/core/signal/profilePicture.test.ts
+  s_abf11522d55e91::t_655d23ef17a22e 24-26,208-210,312-314,345-347
+  s_abf11522d55e91::t_14d4b6c4fe1ee6 2-3,10-11,13-15,23,27-52,54-67,70-71,78,81,85,91,93-94,99,107,109,115-118,121-122,126,128-129,132-143,145-149,151-165,167-172,174-176,178-207,211-286,290-302,305-311,315,317-322,325-326,329-330,332,334-344,348,350-372
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "521798e7fca8837482107bf93b372a6281977b19",
+  "prompts": {},
+  "sessions": {
+    "s_abf11522d55e91": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc20c629-7a69-4fed-92d8-3d1285788525",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
