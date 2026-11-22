@@ -507,10 +507,17 @@ export function InviteAgentForm(props: {
           aria-busy={adding() || undefined}
           data-disabled={adding() ? '' : undefined}
           onClick={submit}
+          // A long name shortens the label instead of pushing it off a phone.
+          class="min-w-0 max-w-full"
         >
-          <Show when={adding()} fallback={submitLabel()}>
-            <SpinnerIcon class="size-4 animate-spin" />
-            {t('teamAgents.adding', { name: trimmedName() })}
+          <Show
+            when={adding()}
+            fallback={<span class="truncate">{submitLabel()}</span>}
+          >
+            <SpinnerIcon class="size-4 shrink-0 animate-spin" />
+            <span class="truncate">
+              {t('teamAgents.adding', { name: trimmedName() })}
+            </span>
           </Show>
         </Button>
       }
