@@ -41,3 +41,19 @@ it('honors hidden weekends and a focused date without losing the six-week data w
     expect(model.selected().getDate()).toBe(20);
     dispose();
   }));
+
+it('bounds a five-week face without selecting a focus from the unused sixth week', () =>
+  createRoot((dispose) => {
+    const model = createPhoneMonth({
+      month: () => new Date(2026, 10, 1),
+      start: () => new Date(2026, 10, 1),
+      dayCount: () => 35,
+      initialDate: new Date(2026, 10, 20),
+      events: () => [],
+      showWeekends: () => true,
+      focusDate: () => new Date(2026, 11, 8),
+    });
+    expect(model.days()).toHaveLength(35);
+    expect(model.selected()).toEqual(new Date(2026, 10, 20));
+    dispose();
+  }));

@@ -16,6 +16,7 @@ import { PhoneMonthBars } from './month-bars';
 
 const actions = vi.hoisted(() => ({
   gotoDate: vi.fn(),
+  navigateToDate: vi.fn(),
   changeView: vi.fn(),
   create: vi.fn(),
   select: vi.fn(),
@@ -155,4 +156,29 @@ it('omits weekend cells and keeps a focused occurrence reachable in its sheet', 
   ).toBeNull();
   await waitFor(() => expect(handled).toHaveBeenCalledWith(1));
   expect(actions.select).toHaveBeenCalledWith(EVENT, expect.any(HTMLElement));
+});
+
+it('navigates an external focus request beyond a five-week face before opening its day', async () => {
+  render(() => (
+    <PhoneMonthBars
+      range={undefined}
+      initialDate={new Date(2026, 10, 20)}
+      events={[]}
+      showWeekends
+      timeFormat="12-hour"
+      focusTarget={{
+        requestId: 2,
+        requestedAt: Date.now(),
+        eventId: 'next',
+        occurrenceKey: '2026-12-08',
+        date: new Date(2026, 11, 8),
+      }}
+      onFocusHandled={() => {}}
+      onSelect={actions.select}
+    />
+  ));
+  await waitFor(() =>
+    expect(actions.navigateToDate).toHaveBeenCalledWith(new Date(2026, 11, 8))
+  );
+  expect(screen.queryByRole('dialog', { name: 'Day events' })).toBeNull();
 });

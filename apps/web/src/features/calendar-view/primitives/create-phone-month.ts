@@ -17,11 +17,14 @@ export function createPhoneMonth<T extends MonthEvent>(options: {
   events: Accessor<readonly T[]>;
   showWeekends: Accessor<boolean>;
   focusDate: Accessor<Date | undefined>;
+  dayCount?: Accessor<number>;
 }) {
   const [picked, setPicked] = createSignal<{ date: Date; month: string }>();
   const days = createMemo(() => {
     const start = options.start();
-    return start ? agendaEventsByDay(options.events(), start, 42) : [];
+    return start
+      ? agendaEventsByDay(options.events(), start, options.dayCount?.() ?? 42)
+      : [];
   });
   const visibleDays = createMemo(() =>
     days().filter(
@@ -34,7 +37,9 @@ export function createPhoneMonth<T extends MonthEvent>(options: {
     visibleDays().some((day) => isSameLocalDate(day.date, date));
   const selected = () => {
     const focus = options.focusDate();
-    if (focus && isVisible(focus)) return focus;
+    // A linked hidden-weekend event can still open in the day sheet.
+    if (focus && days().some((day) => isSameLocalDate(day.date, focus)))
+      return focus;
     const currentMonth = monthKey(options.month());
     const choice = picked();
     if (choice?.month === currentMonth && isVisible(choice.date))

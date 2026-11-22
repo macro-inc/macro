@@ -63,6 +63,7 @@ export function PhoneMonthBars(props: {
     start: () => range().start,
     month: currentMonth,
     initialDate: props.initialDate,
+    dayCount: () => range().dayCount,
     events: () => props.events,
     showWeekends: () => props.showWeekends,
     focusDate: () => props.focusTarget?.date,
@@ -94,9 +95,20 @@ export function PhoneMonthBars(props: {
     }
   };
   let handledFocus: number | undefined;
+  let navigatedFocus: string | undefined;
   createEffect(() => {
     const target = props.focusTarget;
     if (!target || target.requestId === handledFocus) return;
+    const bounds = range();
+    if (target.date < bounds.start || target.date >= bounds.end) {
+      const key = `${target.requestId}:${bounds.start.getTime()}`;
+      if (navigatedFocus !== key) {
+        navigatedFocus = key;
+        setOpen(false);
+        navigation.navigateToDate(target.date);
+      }
+      return;
+    }
     pick(target.date);
     const root = sheet();
     const event = month
