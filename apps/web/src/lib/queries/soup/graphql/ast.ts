@@ -98,9 +98,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * A Soup request with no GraphQL translation. `reason` names the part in
- * fixed words and filter key names, never a filter value, so it may go to
- * telemetry; a rejected value appears only in `message`.
+ * A Soup request with no GraphQL translation. `reason` is fixed text, never
+ * a filter value or an unrecognized key, so it may go to telemetry; a
+ * rejected value or key appears only in `message`.
  */
 export class UnsupportedGraphqlSoupError extends Error {
   constructor(
@@ -119,13 +119,6 @@ export class UnsupportedGraphqlSoupError extends Error {
 /** Rejects the request; `rejected` values stay out of `reason`. */
 function unsupported(reason: string, ...rejected: unknown[]): never {
   throw new UnsupportedGraphqlSoupError(reason, rejected);
-}
-
-const KEY_NAME = /^[A-Za-z_]{1,32}$/;
-
-/** A literal's key for a reason: key names only, anything else is `other`. */
-function keyName(field: string): string {
-  return KEY_NAME.test(field) ? field : 'other';
 }
 
 function compileExpr<TLiteral>(
@@ -388,7 +381,7 @@ function mapCalendarEventLiteral(
     case 'ns':
       return { notificationState: mapNotificationState(value) };
     default:
-      unsupported(`calendar event literal ${keyName(field)}`);
+      unsupported('calendar event literal with an unknown key', field);
   }
 }
 
@@ -430,7 +423,7 @@ function mapDocumentLiteral(literal: unknown): GraphqlDocumentLiteralInput {
     case 'nc':
       return { nameContains: mapString(value, 'nameContains') };
     default:
-      unsupported(`document literal ${keyName(field)}`);
+      unsupported('document literal with an unknown key', field);
   }
 }
 
@@ -439,7 +432,7 @@ function mapCrmAssociation(value: unknown): GraphqlCrmAssociation {
   const [field, id] = singleLiteralField(value);
   if (field === 'company') return { company: mapString(id, 'company') };
   if (field === 'contact') return { contact: mapString(id, 'contact') };
-  unsupported(`CRM association ${keyName(field)}`);
+  unsupported('CRM association with an unknown key', field);
 }
 
 function mapProjectLiteral(literal: unknown): GraphqlProjectLiteralInput {
@@ -460,7 +453,7 @@ function mapProjectLiteral(literal: unknown): GraphqlProjectLiteralInput {
     case 'ua':
       return { updatedAt: mapDateLiteral(value) };
     default:
-      unsupported(`project literal ${keyName(field)}`);
+      unsupported('project literal with an unknown key', field);
   }
 }
 
@@ -470,7 +463,7 @@ function mapInitiativeLiteral(literal: unknown): GraphqlInitiativeLiteralInput {
   if (field === 'id') return { id: mapString(value, 'id') };
   if (field === 'o') return { owner: mapString(value, 'owner') };
   if (field === 'ns') return { notificationState: mapNotificationState(value) };
-  return unsupported(`initiative literal ${keyName(field)}`);
+  return unsupported('initiative literal with an unknown key', field);
 }
 
 function mapChatLiteral(literal: unknown): GraphqlChatLiteralInput {
@@ -491,7 +484,7 @@ function mapChatLiteral(literal: unknown): GraphqlChatLiteralInput {
     case 'ua':
       return { updatedAt: mapDateLiteral(value) };
     default:
-      unsupported(`chat literal ${keyName(field)}`);
+      unsupported('chat literal with an unknown key', field);
   }
 }
 
@@ -541,7 +534,7 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
     case 'ua':
       return { updatedAt: mapDateLiteral(value) };
     default:
-      unsupported(`email literal ${keyName(field)}`);
+      unsupported('email literal with an unknown key', field);
   }
 }
 
@@ -563,7 +556,7 @@ function mapChannelLiteral(literal: unknown): GraphqlChannelLiteralInput {
     case 'NotificationState':
       return { notificationState: mapNotificationState(value) };
     default:
-      unsupported(`channel literal ${keyName(field)}`);
+      unsupported('channel literal with an unknown key', field);
   }
 }
 
@@ -599,7 +592,7 @@ function mapChannelThreadLiteral(
 ): GraphqlChannelThreadLiteralInput {
   const [field, value] = singleLiteralField(literal);
   if (!isChannelThreadLiteralField(field)) {
-    unsupported(`channel thread literal ${keyName(field)}`);
+    unsupported('channel thread literal with an unknown key', field);
   }
 
   return match(field)
@@ -637,7 +630,7 @@ function mapCallLiteral(literal: unknown): GraphqlCallLiteralInput {
     case 'Attended':
       return { attended: mapBoolean(value, 'attended') };
     default:
-      unsupported(`call literal ${keyName(field)}`);
+      unsupported('call literal with an unknown key', field);
   }
 }
 
@@ -649,7 +642,7 @@ function mapCrmCompanyLiteral(literal: unknown): GraphqlCrmCompanyLiteralInput {
     case 'hidden':
       return { hidden: mapBoolean(value, 'hidden') };
     default:
-      unsupported(`crm company literal ${keyName(field)}`);
+      unsupported('crm company literal with an unknown key', field);
   }
 }
 
@@ -670,7 +663,7 @@ function mapCrmContactLiteral(literal: unknown): GraphqlCrmContactLiteral {
     case 'hidden':
       return { hidden: mapBoolean(value, 'hidden') };
     default:
-      unsupported(`crm contact literal ${keyName(field)}`);
+      unsupported('crm contact literal with an unknown key', field);
   }
 }
 
@@ -690,7 +683,7 @@ function mapForeignEntityLiteral(
     case 'ns':
       return { notificationState: mapNotificationState(value) };
     default:
-      unsupported(`foreign entity literal ${keyName(field)}`);
+      unsupported('foreign entity literal with an unknown key', field);
   }
 }
 
@@ -746,7 +739,7 @@ function mapGithubPullRequestLiteral(
     case 'rb':
       return { reviewedBy: mapString(value, 'reviewedBy') };
     default:
-      unsupported(`github pull request literal ${keyName(field)}`);
+      unsupported('github pull request literal with an unknown key', field);
   }
 }
 
@@ -937,7 +930,7 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
           return { visibility: 'UNLISTED' };
         if (field === 'vis' && value === 'hidden')
           return { visibility: 'HIDDEN' };
-        return unsupported(`agent session literal ${keyName(field)}`);
+        return unsupported('unsupported agent session literal', field);
       }
     );
   }
