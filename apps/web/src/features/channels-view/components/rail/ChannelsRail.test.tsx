@@ -17,6 +17,14 @@ import type { ChannelsSources } from '../../queries';
 import type { ChannelSectionKey, ChannelSectionPreferences } from '../../types';
 import type { ChannelRailRow } from './ChannelsRailContext';
 
+// Tracked by the mocked `queryAccountSession`, so a sign-in reaches what
+// follows the session.
+const [sessionChanges, setSessionChanges] = createSignal(0);
+const signInAgain = () => {
+  mocks.session += 1;
+  setSessionChanges((changes) => changes + 1);
+};
+
 vi.mock('@core/context/channels', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/context/channels')>()),
   useChannelDirectory: () => ({
@@ -35,7 +43,11 @@ vi.mock('@core/context/user', () => ({
 }));
 vi.mock('@queries/auth/account-scope', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@queries/auth/account-scope')>()),
-  queryAccountSession: () => mocks.session,
+  queryAccountSession: () => {
+    // Read through a signal, as the real one is.
+    sessionChanges();
+    return mocks.session;
+  },
 }));
 const mocks = vi.hoisted(() => ({
   session: 0,
@@ -1589,7 +1601,7 @@ describe('section notification actions', () => {
     );
     const actions = mountActions();
     const pending = actions.markSectionRead('team_channels');
-    mocks.session = 1;
+    signInAgain();
     finish([{ id: 'one' }]);
     await pending;
     expect(mocks.markChannelsAsRead).not.toHaveBeenCalled();
@@ -1835,6 +1847,27 @@ describe('section notification actions', () => {
     cleanup();
 
     expect(read?.aborted).toBe(true);
+    await expect(pending).resolves.toBeUndefined();
+    expect(mocks.failure).not.toHaveBeenCalled();
+    expect(mocks.source.muteEntity).not.toHaveBeenCalled();
+  });
+
+  it('ends the membership read when the viewer signs in again, though the rail stays', async () => {
+    let read: AbortSignal | undefined;
+    mocks.readComplete.mockImplementationOnce(
+      (signal) =>
+        new Promise((_, reject) => {
+          read = signal;
+          signal?.addEventListener('abort', () => reject(signal.reason));
+        })
+    );
+    const actions = mountActions();
+    const pending = actions.muteSection('team_channels', true);
+    expect(read?.aborted).toBe(false);
+
+    signInAgain();
+
+    await waitFor(() => expect(read?.aborted).toBe(true));
     await expect(pending).resolves.toBeUndefined();
     expect(mocks.failure).not.toHaveBeenCalled();
     expect(mocks.source.muteEntity).not.toHaveBeenCalled();

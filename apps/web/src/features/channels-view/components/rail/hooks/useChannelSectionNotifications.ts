@@ -9,7 +9,14 @@ import { queryAccountSession } from '@queries/auth/account-scope';
 import { useBulkNotificationPreferencesMutation } from '@queries/notification/unsubscribes';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { type Accessor, createSignal, type Owner, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  type Owner,
+  on,
+  onCleanup,
+} from 'solid-js';
 import { channelGroupIds } from '../../../queries';
 import type { ChannelSectionKey } from '../../../types';
 
@@ -37,6 +44,17 @@ export function useChannelSectionNotifications(
     disposed = true;
     for (const read of reads) read.abort();
   });
+  // A new sign-in, even to the same account, ends them too: the rail can
+  // outlive it, and a read under way pages on with the new credentials.
+  createEffect(
+    on(
+      queryAccountSession,
+      () => {
+        for (const read of reads) read.abort();
+      },
+      { defer: true }
+    )
+  );
 
   const favoriteIds = () =>
     options
@@ -194,7 +212,8 @@ export function useChannelSectionNotifications(
         );
       });
     } catch (error) {
-      // The rail went while the members were read: nothing is left to tell.
+      // The rail went, or the viewer signed in again, while the members were
+      // read: nothing is left to tell.
       if (read.signal.aborted) return;
       if (isCurrent()) {
         toast.failure(t('channelSections.notificationsFailed'));
