@@ -690,6 +690,21 @@ async fn run_server() -> anyhow::Result<()> {
     let internal_key = config.service_internal_auth_key.to_string();
     let harness_url = macro_service_urls::AgentHarnessServiceUrl::new()?.to_string();
     let scheduled_action_url = macro_service_urls::ScheduledActionServiceUrl::new()?.to_string();
+    // Agents on owners' own machines, for team deletion and membership
+    // changes; the agent service is built on the team service, so this holds
+    // only the ports.
+    let install_offboarding: Arc<
+        dyn crate::outbound::team_owned_entity_cleanup::TeamTeammateInstalls,
+    > = Arc::new(team_agents::domain::service::InstallOffboarding::new(
+        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
+        agent_api_keys(&db),
+        agent_git_repos(&internal_key)?,
+        team_agents::outbound::pg_teammate_installs::PgTeammateInstalls::new(db.clone()),
+        crate::outbound::teammate_runtimes::HarnessTeammateRuntimes::new(
+            harness_url.clone(),
+            &internal_key,
+        )?,
+    ));
     let team_owned_entity_cleanup = TeamOwnedEntityCleanupAdapter::new(
         Arc::new(
             passwords::outbound::postgres::PgRepository::new(db.clone())
@@ -709,17 +724,7 @@ async fn run_server() -> anyhow::Result<()> {
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
             hosted_runtimes::domain::service::SystemClock,
         )),
-        // Likewise: the agent service is built on the team service.
-        Arc::new(team_agents::domain::service::TeamInstallRelease::new(
-            team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
-            agent_api_keys(&db),
-            agent_git_repos(&internal_key)?,
-            team_agents::outbound::pg_teammate_installs::PgTeammateInstalls::new(db.clone()),
-            crate::outbound::teammate_runtimes::HarnessTeammateRuntimes::new(
-                harness_url.clone(),
-                &internal_key,
-            )?,
-        )),
+        install_offboarding.clone(),
     )
     .map_err(|error| anyhow::anyhow!("{error:?}"))?;
     let crm_access_rollout: Arc<dyn teams::domain::crm_member_access::CrmAccessRollout> =
@@ -744,7 +749,10 @@ async fn run_server() -> anyhow::Result<()> {
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup)
     .with_crm_access_rollout(crm_access_rollout)
-    .with_invite_rewarder(Arc::new(invite_rewards));
+    .with_invite_rewarder(Arc::new(invite_rewards))
+    .with_member_access_lost(Arc::new(
+        crate::outbound::team_owned_entity_cleanup::TeammateMemberAccessLost(install_offboarding),
+    ));
     let computer_rollout = feature_flags
         .clone()
         .map(hosted_runtimes::domain::rollout::ComputerRollout::new)

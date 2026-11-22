@@ -34,9 +34,9 @@ use super::self_hosting::{
 use super::voice::AgentVoice;
 
 mod self_hosted;
-mod team_release;
+mod install_offboarding;
 
-pub use team_release::TeamInstallRelease;
+pub use install_offboarding::InstallOffboarding;
 #[cfg(test)]
 mod test;
 

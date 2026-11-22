@@ -985,7 +985,7 @@ async fn a_failed_revoke_at_a_finished_move_holds_deliveries_until_the_sweep_ret
 async fn deleting_a_team_takes_its_agents_off_their_machines_and_revokes_their_keys() {
     let (service, journal, _) = self_hosted_service();
     service.create(receipt(), own(LAPTOP)).await.unwrap();
-    let release = crate::domain::service::TeamInstallRelease::new(
+    let release = crate::domain::service::InstallOffboarding::new(
         service.repository.clone(),
         FakeApiKeys(journal.clone(), Arc::default()),
         FakeRepos(journal.clone()),
@@ -1023,7 +1023,7 @@ async fn a_team_release_whose_revoke_fails_keeps_the_install_for_the_retry() {
     let (service, journal, _) = self_hosted_service();
     service.create(receipt(), own(LAPTOP)).await.unwrap();
     let keys = FakeApiKeys(journal.clone(), Arc::new(AtomicBool::new(true)));
-    let release = crate::domain::service::TeamInstallRelease::new(
+    let release = crate::domain::service::InstallOffboarding::new(
         service.repository.clone(),
         keys,
         FakeRepos(journal.clone()),
@@ -1041,4 +1041,32 @@ async fn a_team_release_whose_revoke_fails_keeps_the_install_for_the_retry() {
     let rows = service.installs.rows.lock().unwrap().clone();
     assert_eq!(rows.len(), 1);
     assert!(rows[0].parked() && rows[0].revoke_pending, "{rows:?}");
+}
+
+#[tokio::test]
+async fn a_membership_change_parks_the_agents_it_unentitled_at_once() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let offboarding = crate::domain::service::InstallOffboarding::new(
+        service.repository.clone(),
+        FakeApiKeys(journal.clone(), Arc::default()),
+        FakeRepos(journal.clone()),
+        service.installs.clone(),
+        FakeRuntimes(journal.clone()),
+    );
+    // Nothing changed yet: nothing to park.
+    assert_eq!(offboarding.offboard_unentitled().await.unwrap(), 0);
+
+    // The host was just removed from the team or demoted.
+    service.installs.unentitled.lock().unwrap().push(LAPTOP);
+    assert_eq!(offboarding.offboard_unentitled().await.unwrap(), 1);
+
+    let parked = install_of(&service, &agent);
+    assert!(parked.parked() && !parked.revoke_pending, "{parked:?}");
+    assert!(
+        journal
+            .entries()
+            .contains(&format!("runtimes.changed {LAPTOP}"))
+    );
+    assert_kept(&service, &journal);
 }

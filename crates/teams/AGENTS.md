@@ -28,6 +28,10 @@ event contract (schema, sanitization, delivery semantics).
   invite is accepted or someone joins through an invite link (rewarding the
   sender or `team_invite_link.created_by`). Billing implements it in
   `authentication_service`; `teams` cannot depend on `ai_billing`.
+- `src/domain/member_access.rs`: the `MemberAccessLost` port, called (best
+  effort) after a member is removed or demoted from admin, so agent teammates
+  the member hosted are parked at once. `authentication_service` implements it
+  with team_agents' `InstallOffboarding`; `teams` cannot depend on team_agents.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
   deletion side effects (owned-entity transfer, seat release). Team deletion
   calls `OwnedEntityCleanup::release_computers` after the purge and before

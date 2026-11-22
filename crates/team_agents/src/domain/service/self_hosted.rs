@@ -179,60 +179,32 @@ where
         Ok(())
     }
 
-    /// Take an agent off a machine that may no longer host it: park it
-    /// (stopped there, its account, seat and repository kept, for an admin
-    /// to move to a machine of theirs), then void its credentials. Parking
-    /// first waits for a delivery in flight and stops any later one, so the
-    /// revoke voids every key the machine was given.
+    /// Offboarding over this service's ports.
+    fn offboarding(&self) -> Offboarding<'_, Repository, ApiKeys, Repos, Installs, Runtimes> {
+        Offboarding {
+            repository: &self.repository,
+            api_keys: &self.api_keys,
+            repos: &self.repos,
+            installs: &self.installs,
+            runtimes: &self.runtimes,
+        }
+    }
+
+    /// See [`Offboarding::offboard`].
     pub(super) async fn offboard(
         &self,
         install: &TeammateInstallRecord,
     ) -> Result<(), TeamAgentError> {
-        let Some(parked) = self.installs.park(&install.agent).await? else {
-            return Ok(());
-        };
-        tracing::info!(install_id = %parked.install_id, "parking an agent teammate off a machine that may no longer host it");
-        // The machine stops it as no longer its own.
-        self.runtimes.installs_changed(parked.harness_id).await;
-        self.finish_revoke(&parked).await
+        self.offboarding().offboard(install).await
     }
 
-    /// Revoke an install's pending credentials, then let deliveries resume
-    /// (nudging its machine, unless it is parked).
     async fn finish_revoke(&self, install: &TeammateInstallRecord) -> Result<(), TeamAgentError> {
-        self.revoke_credentials(&install.agent).await?;
-        self.installs.revoked(&install.agent).await?;
-        if !install.parked() {
-            self.runtimes.installs_changed(install.harness_id).await;
-        }
-        Ok(())
+        self.offboarding().finish_revoke(install).await
     }
 
-    /// Offboard every install on a machine that may no longer host it, and
-    /// retry every revoke that failed, a page at a time; one failure doesn't
-    /// stop the rest. How many were offboarded and revoked.
+    /// See [`Offboarding::offboard_unentitled`].
     pub(super) async fn offboard_unentitled(&self) -> Result<(usize, usize), TeamAgentError> {
-        let installs = self.installs.unentitled_installs(OFFBOARD_PAGE).await?;
-        let mut offboarded = 0;
-        for install in &installs {
-            match self.offboard(install).await {
-                Ok(()) => offboarded += 1,
-                Err(error) => {
-                    tracing::error!(install_id = %install.install_id, error = ?error, "could not take an agent off its machine");
-                }
-            }
-        }
-        let pending = self.installs.revoke_pending(OFFBOARD_PAGE).await?;
-        let mut revoked = 0;
-        for install in &pending {
-            match self.finish_revoke(install).await {
-                Ok(()) => revoked += 1,
-                Err(error) => {
-                    tracing::error!(install_id = %install.install_id, error = ?error, "could not revoke an agent's credentials");
-                }
-            }
-        }
-        Ok((offboarded, revoked))
+        self.offboarding().offboard_unentitled().await
     }
 
     /// Start removing an agent on its owner's own machine.
@@ -539,6 +511,86 @@ where
             image,
             env,
         }))
+    }
+}
+
+/// Taking agents off machines that may no longer host them, over borrowed
+/// ports, so the agent service and [`super::InstallOffboarding`] (which team
+/// deletion and membership changes hold) share it.
+pub(super) struct Offboarding<'a, Repository, ApiKeys, Repos, Installs, Runtimes> {
+    pub(super) repository: &'a Repository,
+    pub(super) api_keys: &'a ApiKeys,
+    pub(super) repos: &'a Repos,
+    pub(super) installs: &'a Installs,
+    pub(super) runtimes: &'a Runtimes,
+}
+
+impl<Repository, ApiKeys, Repos, Installs, Runtimes>
+    Offboarding<'_, Repository, ApiKeys, Repos, Installs, Runtimes>
+where
+    Repository: TeamAgentRepository,
+    ApiKeys: AgentApiKeys,
+    Repos: AgentRepos,
+    Installs: TeammateInstalls,
+    Runtimes: TeammateRuntimes,
+{
+    /// Take an agent off a machine that may no longer host it: park it
+    /// (stopped there, its account, seat and repository kept, for an admin
+    /// to move to a machine of theirs), then void its credentials. Parking
+    /// first waits for a delivery in flight and stops any later one, so the
+    /// revoke voids every key the machine was given.
+    pub(super) async fn offboard(
+        &self,
+        install: &TeammateInstallRecord,
+    ) -> Result<(), TeamAgentError> {
+        let Some(parked) = self.installs.park(&install.agent).await? else {
+            return Ok(());
+        };
+        tracing::info!(install_id = %parked.install_id, "parking an agent teammate off a machine that may no longer host it");
+        // The machine stops it as no longer its own.
+        self.runtimes.installs_changed(parked.harness_id).await;
+        self.finish_revoke(&parked).await
+    }
+
+    /// Revoke an install's pending credentials, then let deliveries resume
+    /// (nudging its machine, unless it is parked).
+    pub(super) async fn finish_revoke(
+        &self,
+        install: &TeammateInstallRecord,
+    ) -> Result<(), TeamAgentError> {
+        revoke_credentials(self.repository, self.api_keys, self.repos, &install.agent).await?;
+        self.installs.revoked(&install.agent).await?;
+        if !install.parked() {
+            self.runtimes.installs_changed(install.harness_id).await;
+        }
+        Ok(())
+    }
+
+    /// Offboard every install on a machine that may no longer host it, and
+    /// retry every revoke that failed, a page at a time; one failure doesn't
+    /// stop the rest. How many were offboarded and revoked.
+    pub(super) async fn offboard_unentitled(&self) -> Result<(usize, usize), TeamAgentError> {
+        let installs = self.installs.unentitled_installs(OFFBOARD_PAGE).await?;
+        let mut offboarded = 0;
+        for install in &installs {
+            match self.offboard(install).await {
+                Ok(()) => offboarded += 1,
+                Err(error) => {
+                    tracing::error!(install_id = %install.install_id, error = ?error, "could not take an agent off its machine");
+                }
+            }
+        }
+        let pending = self.installs.revoke_pending(OFFBOARD_PAGE).await?;
+        let mut revoked = 0;
+        for install in &pending {
+            match self.finish_revoke(install).await {
+                Ok(()) => revoked += 1,
+                Err(error) => {
+                    tracing::error!(install_id = %install.install_id, error = ?error, "could not revoke an agent's credentials");
+                }
+            }
+        }
+        Ok((offboarded, revoked))
     }
 }
 

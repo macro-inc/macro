@@ -24,16 +24,19 @@ pub struct TeamOwnedEntityCleanupConfig {
     pub scheduled_action_url: String,
 }
 
-/// Takes a team's agent teammates off their owners' own machines ahead of
-/// the team's deletion.
+/// Takes agent teammates off their owners' own machines: a team's ahead of
+/// its deletion, and those on machines that may no longer host them when a
+/// member is removed or demoted.
 #[async_trait::async_trait]
 pub trait TeamTeammateInstalls: Send + Sync {
     async fn release_team(&self, team_id: Uuid) -> Result<(), Report>;
+
+    async fn offboard_unentitled(&self) -> Result<(), Report>;
 }
 
 #[async_trait::async_trait]
 impl<Repository, ApiKeys, Repos, Installs, Runtimes> TeamTeammateInstalls
-    for team_agents::domain::service::TeamInstallRelease<
+    for team_agents::domain::service::InstallOffboarding<
         Repository,
         ApiKeys,
         Repos,
@@ -48,9 +51,41 @@ where
     Runtimes: team_agents::domain::ports::TeammateRuntimes,
 {
     async fn release_team(&self, team_id: Uuid) -> Result<(), Report> {
-        team_agents::domain::service::TeamInstallRelease::release_team(self, team_id)
+        team_agents::domain::service::InstallOffboarding::release_team(self, team_id)
             .await
             .map_err(|error| Report::new(error).into_dynamic())
+    }
+
+    async fn offboard_unentitled(&self) -> Result<(), Report> {
+        team_agents::domain::service::InstallOffboarding::offboard_unentitled(self)
+            .await
+            .map(|_offboarded| ())
+            .map_err(|error| Report::new(error).into_dynamic())
+    }
+}
+
+/// Parks the agents a removed or demoted member may no longer host, as soon
+/// as the team service says so; the 60 s sweep still backs it.
+#[derive(Clone)]
+pub struct TeammateMemberAccessLost(pub Arc<dyn TeamTeammateInstalls>);
+
+impl std::fmt::Debug for TeammateMemberAccessLost {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("TeammateMemberAccessLost")
+    }
+}
+
+impl teams::domain::member_access::MemberAccessLost for TeammateMemberAccessLost {
+    fn member_access_lost(
+        &self,
+        _team_id: Uuid,
+    ) -> teams::domain::member_access::MemberAccessFuture<'_> {
+        Box::pin(async move {
+            self.0
+                .offboard_unentitled()
+                .await
+                .map_err(|error| anyhow::anyhow!("{error:?}"))
+        })
     }
 }
 

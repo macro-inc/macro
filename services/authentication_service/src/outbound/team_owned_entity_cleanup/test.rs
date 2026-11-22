@@ -22,6 +22,10 @@ impl TeamTeammateInstalls for NoTeammateInstalls {
     async fn release_team(&self, _team_id: Uuid) -> Result<(), rootcause::Report> {
         Ok(())
     }
+
+    async fn offboard_unentitled(&self) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
 }
 
 fn record(owner: Owner) -> EntityRecord {

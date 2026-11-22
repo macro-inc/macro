@@ -1,19 +1,19 @@
-//! Taking a team's agents off their owners' own machines before the team
-//! is deleted.
+//! Taking agents off their owners' own machines outside the agent service:
+//! before a team is deleted, and as soon as a member loses the right to host.
 
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use super::self_hosted::revoke_credentials;
+use super::self_hosted::{Offboarding, revoke_credentials};
 use crate::domain::models::TeamAgentError;
 use crate::domain::ports::{
     AgentApiKeys, AgentRepos, TeamAgentRepository, TeammateInstalls, TeammateRuntimes,
 };
 
-/// Releases a team's own-machine installs ahead of its deletion. Needs only
-/// storage, keys, repositories and delivery nudges, so team deletion can
-/// hold it without the agent service, which is built on the team service.
-pub struct TeamInstallRelease<Repository, ApiKeys, Repos, Installs, Runtimes> {
+/// Takes agents off their owners' own machines. Needs only storage, keys,
+/// repositories and delivery nudges, so the team service can hold it without
+/// the agent service, which is built on the team service.
+pub struct InstallOffboarding<Repository, ApiKeys, Repos, Installs, Runtimes> {
     repository: Repository,
     api_keys: ApiKeys,
     repos: Repos,
@@ -22,7 +22,7 @@ pub struct TeamInstallRelease<Repository, ApiKeys, Repos, Installs, Runtimes> {
 }
 
 impl<Repository, ApiKeys, Repos, Installs, Runtimes>
-    TeamInstallRelease<Repository, ApiKeys, Repos, Installs, Runtimes>
+    InstallOffboarding<Repository, ApiKeys, Repos, Installs, Runtimes>
 where
     Repository: TeamAgentRepository,
     ApiKeys: AgentApiKeys,
@@ -62,6 +62,27 @@ where
             tracing::info!(install_id = %install.install_id, "took a deleted team's agent teammate off its machine");
         }
         Ok(())
+    }
+
+    /// Park every agent on a machine that may no longer host it now, rather
+    /// than at the next 60 s sweep (see
+    /// [`crate::domain::ports::TeamAgentService::offboard_unentitled_hosts`]).
+    /// How many were parked.
+    #[tracing::instrument(name = "team_agents.offboard_hosts_now", skip(self), fields(offboarded = tracing::field::Empty, revoked = tracing::field::Empty), err)]
+    pub async fn offboard_unentitled(&self) -> Result<usize, TeamAgentError> {
+        let (offboarded, revoked) = Offboarding {
+            repository: &self.repository,
+            api_keys: &self.api_keys,
+            repos: &self.repos,
+            installs: &self.installs,
+            runtimes: &self.runtimes,
+        }
+        .offboard_unentitled()
+        .await?;
+        let span = tracing::Span::current();
+        span.record("offboarded", offboarded);
+        span.record("revoked", revoked);
+        Ok(offboarded)
     }
 
     async fn release(&self, agent: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
