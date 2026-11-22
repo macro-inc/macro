@@ -1,12 +1,17 @@
 use super::*;
-use crate::outbound::pg_access_repo::queries::get_user_source_ids;
+use crate::outbound::pg_access_repo::queries::{
+    source_list_oracle,
+    test_viewers::{assert_matrix_agrees, matrix_viewers},
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::user_id::MacroUserIdStr;
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
 const OWNER: &str = "macro|owner@team.com";
 const MEMBER: &str = "macro|member@team.com";
 const MEMBER_TEAM: &str = "00000000-0000-0000-0000-0000000ea001";
+/// In no team, and in no channel unless a test adds them to one.
+const NO_TEAM: &str = "macro|database-row-no-team@example.com";
 
 /// A database with one table and one row; returns `(database_id, row_id)`.
 async fn insert_row(pool: &PgPool) -> (Uuid, Uuid) {
@@ -41,11 +46,6 @@ async fn insert_row(pool: &PgPool) -> (Uuid, Uuid) {
     (database_id, row_id)
 }
 
-async fn source_ids(pool: &PgPool, email: &str) -> SourceIds {
-    let user = MacroUserIdStr::try_from_email(email).unwrap();
-    get_user_source_ids(pool, Some(&user)).await.unwrap()
-}
-
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../../fixtures", scripts("user_team"))
@@ -69,10 +69,8 @@ async fn row_access_is_the_highest_grant_on_its_database(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-
-    let member = source_ids(&pool, "member@team.com").await;
     assert_eq!(
-        get_database_row_access(&pool, &row_id, &member)
+        get_database_row_access(&pool, &row_id, Viewer::User(MEMBER))
             .await
             .unwrap(),
         Some(AccessLevel::Edit)
@@ -80,30 +78,32 @@ async fn row_access_is_the_highest_grant_on_its_database(pool: PgPool) {
 
     let missing_row_id = Uuid::now_v7();
     assert_eq!(
-        get_database_rows_access(&pool, &[row_id, other_row_id, missing_row_id], &member)
-            .await
-            .unwrap(),
+        get_database_rows_access(
+            &pool,
+            &[row_id, other_row_id, missing_row_id],
+            Viewer::User(MEMBER)
+        )
+        .await
+        .unwrap(),
         std::collections::HashMap::from([
             (row_id, AccessLevel::Edit),
             (other_row_id, AccessLevel::Owner)
         ])
     );
     assert!(
-        get_database_rows_access(&pool, &[], &member)
+        get_database_rows_access(&pool, &[], Viewer::User(MEMBER))
             .await
             .unwrap()
             .is_empty()
     );
-
-    let outsider = source_ids(&pool, "noteam@team.com").await;
     assert!(
-        get_database_rows_access(&pool, &[row_id, other_row_id], &outsider)
+        get_database_rows_access(&pool, &[row_id, other_row_id], Viewer::User(NO_TEAM))
             .await
             .unwrap()
             .is_empty()
     );
     assert_eq!(
-        get_database_row_access(&pool, &row_id, &outsider)
+        get_database_row_access(&pool, &row_id, Viewer::User(NO_TEAM))
             .await
             .unwrap(),
         None
@@ -115,9 +115,8 @@ async fn row_access_is_the_highest_grant_on_its_database(pool: PgPool) {
     fixtures(path = "../../../../../fixtures", scripts("user_team"))
 )]
 async fn unknown_row_has_no_access(pool: PgPool) {
-    let member = source_ids(&pool, "member@team.com").await;
     assert_eq!(
-        get_database_row_access(&pool, &Uuid::now_v7(), &member)
+        get_database_row_access(&pool, &Uuid::now_v7(), Viewer::User(MEMBER))
             .await
             .unwrap(),
         None
@@ -188,28 +187,26 @@ async fn a_form_editor_edits_the_rows_of_its_database(pool: PgPool) {
     insert_form_over_row(&pool, edited, "edit", false).await;
     insert_form_over_row(&pool, viewed, "view", false).await;
     insert_form_over_row(&pool, trashed, "owner", true).await;
-
-    let member = source_ids(&pool, "member@team.com").await;
     assert_eq!(
-        get_database_row_access(&pool, &edited, &member)
+        get_database_row_access(&pool, &edited, Viewer::User(MEMBER))
             .await
             .unwrap(),
         Some(AccessLevel::Edit)
     );
     assert_eq!(
-        get_database_row_access(&pool, &viewed, &member)
+        get_database_row_access(&pool, &viewed, Viewer::User(MEMBER))
             .await
             .unwrap(),
         None
     );
     assert_eq!(
-        get_database_row_access(&pool, &trashed, &member)
+        get_database_row_access(&pool, &trashed, Viewer::User(MEMBER))
             .await
             .unwrap(),
         None
     );
     assert_eq!(
-        get_database_rows_access(&pool, &[edited, viewed, trashed], &member)
+        get_database_rows_access(&pool, &[edited, viewed, trashed], Viewer::User(MEMBER))
             .await
             .unwrap(),
         HashMap::from([(edited, AccessLevel::Edit)])
@@ -234,16 +231,14 @@ async fn a_direct_database_grant_above_edit_wins_over_a_form_on_rows(pool: PgPoo
     .await
     .unwrap();
     insert_form_over_row(&pool, row_id, "edit", false).await;
-
-    let member = source_ids(&pool, "member@team.com").await;
     assert_eq!(
-        get_database_row_access(&pool, &row_id, &member)
+        get_database_row_access(&pool, &row_id, Viewer::User(MEMBER))
             .await
             .unwrap(),
         Some(AccessLevel::Owner)
     );
     assert_eq!(
-        get_database_rows_access(&pool, &[row_id], &member)
+        get_database_rows_access(&pool, &[row_id], Viewer::User(MEMBER))
             .await
             .unwrap(),
         HashMap::from([(row_id, AccessLevel::Owner)])
@@ -266,29 +261,56 @@ async fn viewing_a_form_that_shares_responses_views_the_rows_of_its_database(poo
     .execute(&pool)
     .await
     .unwrap();
-
-    let member = get_user_source_ids(
-        &pool,
-        Some(&MacroUserIdStr::try_from(MEMBER.to_string()).unwrap()),
-    )
-    .await
-    .unwrap();
     assert_eq!(
-        get_database_row_access(&pool, &shared, &member)
+        get_database_row_access(&pool, &shared, Viewer::User(MEMBER))
             .await
             .unwrap(),
         Some(AccessLevel::View)
     );
     assert_eq!(
-        get_database_row_access(&pool, &hidden, &member)
+        get_database_row_access(&pool, &hidden, Viewer::User(MEMBER))
             .await
             .unwrap(),
         None
     );
     assert_eq!(
-        get_database_rows_access(&pool, &[shared, hidden], &member)
+        get_database_rows_access(&pool, &[shared, hidden], Viewer::User(MEMBER))
             .await
             .unwrap(),
         HashMap::from([(shared, AccessLevel::View)])
     );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../fixtures",
+        scripts("viewer_matrix", "typed_owner_team", "viewer_matrix_database")
+    )
+)]
+async fn database_row_access_matches_the_source_list_form(pool: PgPool) -> anyhow::Result<()> {
+    let viewers = matrix_viewers(&pool).await?;
+    let rows = sqlx::query_scalar!(r#"SELECT id FROM database_rows ORDER BY id"#)
+        .fetch_all(&pool)
+        .await?;
+
+    assert_matrix_agrees(&viewers, &rows, async |viewer, row_id| {
+        Ok((
+            source_list_oracle::get_database_row_access(&pool, row_id, &viewer.sources).await?,
+            get_database_row_access(&pool, row_id, viewer.viewer()).await?,
+        ))
+    })
+    .await?;
+
+    // The batch check answers every row in one statement.
+    assert_matrix_agrees(&viewers, &["every row"], async |viewer, _| {
+        let old =
+            source_list_oracle::get_database_rows_access(&pool, &rows, &viewer.sources).await?;
+        let new = get_database_rows_access(&pool, &rows, viewer.viewer()).await?;
+        Ok((
+            old.into_iter().collect::<BTreeMap<_, _>>(),
+            new.into_iter().collect::<BTreeMap<_, _>>(),
+        ))
+    })
+    .await
 }

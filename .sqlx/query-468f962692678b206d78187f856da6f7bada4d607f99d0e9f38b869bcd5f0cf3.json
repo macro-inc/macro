@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ea.access_level::text FROM entity_access ea\n         WHERE ea.entity_id = $1 AND ea.entity_type = 'crm_pipeline'\n           AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))\n           AND NOT EXISTS (\n               SELECT FROM team_user crm_denied\n               WHERE crm_denied.user_id = $2 AND crm_denied.team_id::text = ea.source_id\n                 AND (crm_denied.crm_access OR crm_denied.team_role <> 'member') IS NOT TRUE)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "468f962692678b206d78187f856da6f7bada4d607f99d0e9f38b869bcd5f0cf3"
+}

@@ -1,17 +1,43 @@
 -- Every grant one signed-in caller holds on each of many documents: the four
--- sources of `get_document_access`, checked for each requested id in turn.
--- Keep each source's conditions equivalent to that query's; the caller takes
--- the highest level per document, as `get_document_access` does.
+-- sources of `get_document_access`. Keep each source's conditions equivalent
+-- to that query's; the caller takes the highest level per document, as
+-- `get_document_access` does.
 --
--- The OFFSET 0 fences keep the plan to index lookups from each requested
--- document and each of its attachments, whatever the row estimates. Without
--- them, stale statistics on the attachment tables led the planner to hash
--- whole email and discussion tables.
+-- Membership is checked without the caller's source list. The requested
+-- documents' grants are read once, and each distinct grant source is checked
+-- once, since a project's tasks share a few sources; source 1 joins on the
+-- sources that matched. Team links compare the owner's teams with the
+-- caller's, read once: a team id is never a user or channel id, so that is the
+-- team part of `entity_access_source_matches`.
 --
--- $1: document ids, $2: the caller's source ids, $3: the caller's user id.
+-- Sources 2 to 4 are checked for each requested document in turn. The OFFSET 0
+-- fences keep their plan to index lookups from each requested document and
+-- each of its attachments, whatever the row estimates. Without them, stale
+-- statistics on the attachment tables led the planner to hash whole email and
+-- discussion tables.
+--
+-- $1: document ids, $2: the caller's user id.
+WITH requested_grants AS MATERIALIZED (
+    SELECT entity_id, source_id, access_level
+    FROM entity_access
+    WHERE entity_id = ANY($1)
+      AND entity_type = 'document'
+),
+viewer_grant_sources AS MATERIALIZED (
+    SELECT sources.source_id
+    FROM (SELECT DISTINCT source_id FROM requested_grants) AS sources
+    WHERE EXISTS (SELECT FROM entity_access_source_matches(sources.source_id, $2, NULL::uuid))
+)
+-- Source 1: entity_access source_id match
 SELECT
-    requested.id AS "document_id!",
-    grants.access_level AS "access_level!: AccessLevel"
+    requested_grants.entity_id AS "document_id!",
+    requested_grants.access_level AS "access_level!: AccessLevel"
+FROM requested_grants
+WHERE requested_grants.source_id IN (SELECT source_id FROM viewer_grant_sources)
+
+UNION ALL
+
+SELECT requested.id, grants.access_level
 FROM (
     -- The document and attachment tables key documents by text, in the
     -- canonical form `uuid::text` produces.
@@ -21,16 +47,8 @@ FROM (
 CROSS JOIN LATERAL (
     SELECT access_level
     FROM (
-        -- Source 1: entity_access source_id match
-        SELECT access_level
-        FROM entity_access
-        WHERE entity_id = requested.id
-          AND entity_type = 'document'
-          AND source_id = ANY($2)
-
-        UNION ALL
         -- Source 2: document link share permission
-        SELECT share_permission."linkShareAccessLevel"
+        SELECT share_permission."linkShareAccessLevel" AS access_level
         FROM "Document" document
         JOIN "DocumentPermission" document_permission
           ON document_permission."documentId" = document.id
@@ -45,7 +63,9 @@ CROSS JOIN LATERAL (
                   AND EXISTS (
                       SELECT 1
                       FROM owner_team(document.owner) owner_team
-                      WHERE owner_team.team_id::text = ANY($2)
+                      WHERE owner_team.team_id = ANY(ARRAY(
+                          SELECT viewer_team.team_id FROM team_user viewer_team WHERE viewer_team.user_id = $2
+                      ))
                   )
               )
           )
@@ -64,12 +84,12 @@ CROSS JOIN LATERAL (
             -- The attachment's thread and inbox, by primary keys.
             SELECT
                 t.id AS thread_id,
-                l.macro_id = $3
+                l.macro_id = $2
                   OR EXISTS (
                       SELECT 1
                       FROM macro_user_links mul
                       WHERE mul.link_id = l.id
-                        AND mul.primary_macro_id = $3
+                        AND mul.primary_macro_id = $2
                   ) AS owned
             FROM email_attachments ea
             JOIN email_messages em ON em.id = ea.message_id
@@ -86,7 +106,9 @@ CROSS JOIN LATERAL (
                   FROM entity_access thread_access
                   WHERE thread_access.entity_id = inbox.thread_id
                     AND thread_access.entity_type = 'email_thread'
-                    AND thread_access.source_id = ANY($2)
+                    AND EXISTS (
+                        SELECT FROM entity_access_source_matches(thread_access.source_id, $2, NULL::uuid)
+                    )
               )
           )
 
@@ -117,13 +139,15 @@ CROSS JOIN LATERAL (
               AND mt.deleted_at IS NULL
               AND parent_doc."deletedAt" IS NULL
               AND (
-                  parent_doc.owner = $3
+                  parent_doc.owner = $2
                   OR EXISTS (
                       SELECT 1
                       FROM entity_access pa
                       WHERE pa.entity_type = 'document'
                         AND pa.entity_id::text = parent_doc.id
-                        AND pa.source_id = ANY($2)
+                        AND EXISTS (
+                            SELECT FROM entity_access_source_matches(pa.source_id, $2, NULL::uuid)
+                        )
                   )
                   OR (
                       sp."linkShareAccessLevel" IS NOT NULL
@@ -134,7 +158,9 @@ CROSS JOIN LATERAL (
                               AND EXISTS (
                                   SELECT 1
                                   FROM owner_team(parent_doc.owner) tu
-                                  WHERE tu.team_id::text = ANY($2)
+                                  WHERE tu.team_id = ANY(ARRAY(
+                                      SELECT viewer_team.team_id FROM team_user viewer_team WHERE viewer_team.user_id = $2
+                                  ))
                               )
                           )
                       )

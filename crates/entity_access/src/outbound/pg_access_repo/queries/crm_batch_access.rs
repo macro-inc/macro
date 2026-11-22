@@ -1,26 +1,21 @@
 //! Bounded current CRM visibility for mixed activity pages.
 
-use super::pipeline_access;
+#[cfg(test)]
+mod test;
+
 use crate::domain::models::EntityType;
 use sqlx::PgPool;
 use std::collections::HashSet;
 use uuid::Uuid;
 
-/// Apply the single-record rules in batches, resolving pipeline sources once.
+/// Apply the single-record rules in batches. Pipeline grants are matched
+/// against the caller's memberships as `pipeline_access` does.
 #[tracing::instrument(skip_all, err)]
 pub async fn visible_entities(
     pool: &PgPool,
     viewer: &str,
     entities: &[(EntityType, String)],
 ) -> Result<HashSet<(EntityType, String)>, sqlx::Error> {
-    let sources = if entities
-        .iter()
-        .any(|(kind, _)| *kind == EntityType::CrmPipeline)
-    {
-        Some(pipeline_access::user_sources(pool, Some(viewer)).await?)
-    } else {
-        None
-    };
     let mut visible = HashSet::new();
     for batch in entities.chunks(100) {
         let ids = |kind| {
@@ -56,17 +51,21 @@ pub async fn visible_entities(
             }
         }
         let pipelines = ids(EntityType::CrmPipeline);
-        if let Some(sources) = &sources
-            && !pipelines.is_empty()
-        {
+        if !pipelines.is_empty() {
             let mut tx = Box::pin(pool.begin()).await?;
             // A requested pipeline can have many sharing grants even with 100 IDs.
             sqlx::query!("SET LOCAL statement_timeout = '15s'")
                 .execute(&mut *tx)
                 .await?;
             let rows = sqlx::query_scalar!(
-                "SELECT DISTINCT entity_id FROM entity_access WHERE entity_type = 'crm_pipeline' AND entity_id = ANY($1) AND source_id = ANY($2)",
-                &pipelines, &sources.0,
+                r#"SELECT DISTINCT ea.entity_id FROM entity_access ea
+                   WHERE ea.entity_type = 'crm_pipeline' AND ea.entity_id = ANY($1)
+                     AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, NULL::uuid))
+                     AND NOT EXISTS (
+                         SELECT FROM team_user crm_denied
+                         WHERE crm_denied.user_id = $2 AND crm_denied.team_id::text = ea.source_id
+                           AND (crm_denied.crm_access OR crm_denied.team_role <> 'member') IS NOT TRUE)"#,
+                &pipelines, viewer,
             ).fetch_all(&mut *tx).await?;
             tx.commit().await?;
             visible.extend(

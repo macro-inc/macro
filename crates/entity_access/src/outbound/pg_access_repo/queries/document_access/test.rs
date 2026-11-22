@@ -1,11 +1,17 @@
 use super::*;
+use crate::outbound::pg_access_repo::queries::{
+    source_list_oracle,
+    test_viewers::{assert_matrix_agrees, matrix_viewers},
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+#[cfg(feature = "explain_binary")]
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 const OWNER_WITH_TEAM: &str = "macro|document-owner@team.test";
 const OWNER_WITHOUT_TEAM: &str = "macro|document-owner@personal.test";
+const TEAMMATE: &str = "macro|teammate@team.test";
 
 async fn insert_user(pool: &PgPool, user_id: &str) -> anyhow::Result<()> {
     let macro_user_id = Uuid::new_v4();
@@ -52,6 +58,22 @@ async fn add_owner_to_team(pool: &PgPool, owner: &str, team_id: Uuid) -> anyhow:
         VALUES ($1, $2, 'owner')
         "#,
         owner,
+        team_id,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+async fn add_member_to_team(pool: &PgPool, member: &str, team_id: Uuid) -> anyhow::Result<()> {
+    insert_user(pool, member).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO team_user (user_id, team_id, team_role)
+        VALUES ($1, $2, 'member')
+        "#,
+        member,
         team_id,
     )
     .execute(pool)
@@ -145,7 +167,7 @@ async fn public_link_allows_anonymous_access(pool: PgPool) -> anyhow::Result<()>
         insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("PUBLIC"), Some("view"))
             .await?;
 
-    let access = get_document_access(&pool, &document_id, &SourceIds(vec![]), None).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::Anonymous).await?;
 
     assert_eq!(access, Some(AccessLevel::View));
     Ok(())
@@ -155,9 +177,12 @@ async fn public_link_allows_anonymous_access(pool: PgPool) -> anyhow::Result<()>
 async fn null_link_denies_access(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER_WITHOUT_TEAM).await?;
     let document_id = insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, None, None).await?;
-    let source_ids = SourceIds(vec!["macro|requester@team.test".to_string()]);
-
-    let access = get_document_access(&pool, &document_id, &source_ids, None).await?;
+    let access = get_document_access(
+        &pool,
+        &document_id,
+        Viewer::User("macro|requester@team.test"),
+    )
+    .await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -170,9 +195,9 @@ async fn team_link_allows_same_team_access(pool: PgPool) -> anyhow::Result<()> {
     add_owner_to_team(&pool, OWNER_WITH_TEAM, owner_team_id).await?;
     let document_id =
         insert_link_shared_document(&pool, OWNER_WITH_TEAM, Some("TEAM"), Some("comment")).await?;
-    let source_ids = SourceIds(vec![owner_team_id.to_string()]);
+    add_member_to_team(&pool, TEAMMATE, owner_team_id).await?;
 
-    let access = get_document_access(&pool, &document_id, &source_ids, None).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::User(TEAMMATE)).await?;
 
     assert_eq!(access, Some(AccessLevel::Comment));
     Ok(())
@@ -185,9 +210,10 @@ async fn team_link_denies_other_team_access(pool: PgPool) -> anyhow::Result<()> 
     add_owner_to_team(&pool, OWNER_WITH_TEAM, owner_team_id).await?;
     let document_id =
         insert_link_shared_document(&pool, OWNER_WITH_TEAM, Some("TEAM"), Some("comment")).await?;
-    let source_ids = SourceIds(vec![Uuid::new_v4().to_string()]);
+    insert_user(&pool, TEAMMATE).await?;
+    add_owner_to_team(&pool, TEAMMATE, Uuid::new_v4()).await?;
 
-    let access = get_document_access(&pool, &document_id, &source_ids, None).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::User(TEAMMATE)).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -201,7 +227,7 @@ async fn team_link_denies_anonymous_access(pool: PgPool) -> anyhow::Result<()> {
     let document_id =
         insert_link_shared_document(&pool, OWNER_WITH_TEAM, Some("TEAM"), Some("edit")).await?;
 
-    let access = get_document_access(&pool, &document_id, &SourceIds(vec![]), None).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::Anonymous).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -212,9 +238,10 @@ async fn team_link_denies_access_when_owner_has_no_team(pool: PgPool) -> anyhow:
     insert_user(&pool, OWNER_WITHOUT_TEAM).await?;
     let document_id =
         insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("TEAM"), Some("edit")).await?;
-    let source_ids = SourceIds(vec![Uuid::new_v4().to_string()]);
+    insert_user(&pool, OWNER_WITH_TEAM).await?;
+    add_owner_to_team(&pool, OWNER_WITH_TEAM, Uuid::new_v4()).await?;
 
-    let access = get_document_access(&pool, &document_id, &source_ids, None).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::User(OWNER_WITH_TEAM)).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -226,7 +253,7 @@ async fn public_link_requires_an_access_level(pool: PgPool) -> anyhow::Result<()
     let document_id =
         insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("PUBLIC"), None).await?;
 
-    let access = get_document_access(&pool, &document_id, &SourceIds(vec![]), None).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::Anonymous).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -241,9 +268,7 @@ async fn returns_highest_link_or_explicit_access_level(pool: PgPool) -> anyhow::
         insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("PUBLIC"), Some("comment"))
             .await?;
     insert_document_entity_access(&pool, document_id, REQUESTER, AccessLevel::Edit).await?;
-    let source_ids = SourceIds(vec![REQUESTER.to_string()]);
-
-    let access = get_document_access(&pool, &document_id, &source_ids, None).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::User(REQUESTER)).await?;
 
     assert_eq!(access, Some(AccessLevel::Edit));
     Ok(())
@@ -257,9 +282,7 @@ async fn direct_owner_grant_returns_owner(pool: PgPool) -> anyhow::Result<()> {
             .await?;
     insert_document_entity_access(&pool, document_id, OWNER_WITHOUT_TEAM, AccessLevel::Owner)
         .await?;
-    let source_ids = SourceIds(vec![OWNER_WITHOUT_TEAM.to_string()]);
-
-    let access = get_document_access(&pool, &document_id, &source_ids, None).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::User(OWNER_WITHOUT_TEAM)).await?;
 
     assert_eq!(access, Some(AccessLevel::Owner));
     Ok(())
@@ -274,9 +297,7 @@ async fn link_share_above_direct_grant_wins(pool: PgPool) -> anyhow::Result<()> 
         insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("PUBLIC"), Some("edit"))
             .await?;
     insert_document_entity_access(&pool, document_id, REQUESTER, AccessLevel::View).await?;
-    let source_ids = SourceIds(vec![REQUESTER.to_string()]);
-
-    let access = get_document_access(&pool, &document_id, &source_ids, None).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::User(REQUESTER)).await?;
 
     assert_eq!(access, Some(AccessLevel::Edit));
     Ok(())
@@ -292,9 +313,7 @@ async fn another_sources_owner_grant_is_ignored(pool: PgPool) -> anyhow::Result<
             .await?;
     insert_document_entity_access(&pool, document_id, OWNER_WITHOUT_TEAM, AccessLevel::Owner)
         .await?;
-    let source_ids = SourceIds(vec![REQUESTER.to_string()]);
-
-    let access = get_document_access(&pool, &document_id, &source_ids, None).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::User(REQUESTER)).await?;
 
     assert_eq!(access, Some(AccessLevel::View));
     Ok(())
@@ -309,16 +328,15 @@ const INBOX_OWNER: &str = "macro|inbox-owner@corp.test";
 const DELEGATE: &str = "macro|delegate@corp.test";
 const OTHER_USER: &str = "macro|other@corp.test";
 
+#[cfg(feature = "explain_binary")]
 fn user(s: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(s.to_string()).unwrap()
 }
 
-/// Runs `get_document_access` as an authenticated `user_id` whose only source
-/// id is itself, so any grant must come through a user-keyed arm.
+/// Runs `get_document_access` as an authenticated `user_id` in no team or
+/// channel, so any grant must come through a user-keyed arm.
 async fn access_as(pool: &PgPool, document_id: &Uuid, user_id: &str) -> Option<AccessLevel> {
-    let requester = user(user_id);
-    let source_ids = SourceIds(vec![user_id.to_string()]);
-    get_document_access(pool, document_id, &source_ids, Some(&*requester))
+    get_document_access(pool, document_id, Viewer::User(user_id))
         .await
         .unwrap()
 }
@@ -551,7 +569,7 @@ async fn email_arm_never_grants_anonymous_access(pool: PgPool) -> anyhow::Result
     insert_user(&pool, INBOX_OWNER).await?;
     let (_, _, document_id) = insert_attachment_document(&pool, INBOX_OWNER).await;
 
-    let access = get_document_access(&pool, &document_id, &SourceIds(vec![]), None).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::Anonymous).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -586,12 +604,10 @@ async fn explain_lists_public_and_entity_access_and_matches_effective(
         insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("PUBLIC"), Some("comment"))
             .await?;
     insert_document_entity_access(&pool, document_id, REQUESTER, AccessLevel::Edit).await?;
-    let source_ids = SourceIds(vec![REQUESTER.to_string()]);
     let requester = user(REQUESTER);
 
-    let access = get_document_access(&pool, &document_id, &source_ids, Some(&*requester)).await?;
-    let grants =
-        explain_document_access(&pool, &document_id, &source_ids, Some(&*requester)).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::User(REQUESTER)).await?;
+    let grants = explain_document_access(&pool, &document_id, &requester).await?;
     let explanation = crate::domain::models::AccessExplanation::from_grants(
         requester,
         crate::domain::models::Entity {
@@ -629,13 +645,7 @@ async fn explain_email_attachment_reasons(pool: PgPool) -> anyhow::Result<()> {
     insert_thread_entity_access(&pool, thread_id, OTHER_USER, AccessLevel::Edit).await;
 
     let owner = user(INBOX_OWNER);
-    let owner_grants = explain_document_access(
-        &pool,
-        &document_id,
-        &SourceIds(vec![INBOX_OWNER.to_string()]),
-        Some(&*owner),
-    )
-    .await?;
+    let owner_grants = explain_document_access(&pool, &document_id, &owner).await?;
     assert!(owner_grants.iter().any(|grant| matches!(
         grant,
         crate::domain::models::AccessGrant::EmailAttachmentThread {
@@ -645,13 +655,7 @@ async fn explain_email_attachment_reasons(pool: PgPool) -> anyhow::Result<()> {
     )));
 
     let delegate = user(DELEGATE);
-    let delegate_grants = explain_document_access(
-        &pool,
-        &document_id,
-        &SourceIds(vec![DELEGATE.to_string()]),
-        Some(&*delegate),
-    )
-    .await?;
+    let delegate_grants = explain_document_access(&pool, &document_id, &delegate).await?;
     assert!(delegate_grants.iter().any(|grant| matches!(
         grant,
         crate::domain::models::AccessGrant::EmailAttachmentThread {
@@ -661,13 +665,7 @@ async fn explain_email_attachment_reasons(pool: PgPool) -> anyhow::Result<()> {
     )));
 
     let other = user(OTHER_USER);
-    let other_grants = explain_document_access(
-        &pool,
-        &document_id,
-        &SourceIds(vec![OTHER_USER.to_string()]),
-        Some(&*other),
-    )
-    .await?;
+    let other_grants = explain_document_access(&pool, &document_id, &other).await?;
     assert!(other_grants.iter().any(|grant| matches!(
         grant,
         crate::domain::models::AccessGrant::EmailAttachmentThread {
@@ -686,12 +684,11 @@ async fn explain_team_link_matches_access_level(pool: PgPool) -> anyhow::Result<
     add_owner_to_team(&pool, OWNER_WITH_TEAM, owner_team_id).await?;
     let document_id =
         insert_link_shared_document(&pool, OWNER_WITH_TEAM, Some("TEAM"), Some("comment")).await?;
-    let requester = user("macro|teammate@team.test");
-    let source_ids = SourceIds(vec![owner_team_id.to_string()]);
+    add_member_to_team(&pool, TEAMMATE, owner_team_id).await?;
+    let requester = user(TEAMMATE);
 
-    let access = get_document_access(&pool, &document_id, &source_ids, Some(&*requester)).await?;
-    let grants =
-        explain_document_access(&pool, &document_id, &source_ids, Some(&*requester)).await?;
+    let access = get_document_access(&pool, &document_id, Viewer::User(TEAMMATE)).await?;
+    let grants = explain_document_access(&pool, &document_id, &requester).await?;
     let explanation = crate::domain::models::AccessExplanation::from_grants(
         requester,
         crate::domain::models::Entity {
@@ -711,4 +708,101 @@ async fn explain_team_link_matches_access_level(pool: PgPool) -> anyhow::Result<
         } if *id == owner_team_id
     )));
     Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../fixtures",
+        scripts("viewer_matrix", "typed_owner_team", "viewer_matrix_document")
+    )
+)]
+async fn document_access_matches_the_source_list_form(pool: PgPool) -> anyhow::Result<()> {
+    let viewers = matrix_viewers(&pool).await?;
+    let documents = sqlx::query_scalar!(r#"SELECT id FROM "Document" ORDER BY id"#)
+        .fetch_all(&pool)
+        .await?;
+    let (current, legacy): (Vec<_>, Vec<_>) = documents
+        .into_iter()
+        .partition(|id| id.parse::<Uuid>().is_ok());
+    let current: Vec<Uuid> = current
+        .iter()
+        .map(|id| id.parse())
+        .collect::<Result<_, _>>()?;
+
+    assert_matrix_agrees(&viewers, &current, async |viewer, document_id| {
+        let user_id = viewer.user_id();
+        Ok((
+            source_list_oracle::get_document_access(
+                &pool,
+                document_id,
+                &viewer.sources,
+                user_id.as_deref(),
+            )
+            .await?,
+            get_document_access(&pool, document_id, viewer.viewer()).await?,
+        ))
+    })
+    .await?;
+
+    // Only users reach legacy documents: a team scope checks uuids alone.
+    let users: Vec<_> = viewers
+        .into_iter()
+        .filter(|viewer| viewer.viewer().scope_team().is_none())
+        .collect();
+    assert_matrix_agrees(&users, &legacy, async |viewer, document_id| {
+        let user_id = viewer.user_id();
+        Ok((
+            source_list_oracle::get_legacy_document_access(
+                &pool,
+                document_id,
+                &viewer.sources,
+                user_id.as_deref(),
+            )
+            .await?,
+            get_legacy_document_access(&pool, document_id, viewer.viewer().user_id()).await?,
+        ))
+    })
+    .await
+}
+
+/// The batched check answers every user as main's batched statement did. Bots
+/// and anonymous callers never reach it: they take the one-document check.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../fixtures",
+        scripts("viewer_matrix", "typed_owner_team", "viewer_matrix_document")
+    )
+)]
+async fn documents_access_matches_the_source_list_form(pool: PgPool) -> anyhow::Result<()> {
+    let users: Vec<_> = matrix_viewers(&pool)
+        .await?
+        .into_iter()
+        .filter(|viewer| viewer.viewer().user_id().is_some())
+        .collect();
+    let documents: Vec<Uuid> = sqlx::query_scalar!(r#"SELECT id FROM "Document" ORDER BY id"#)
+        .fetch_all(&pool)
+        .await?
+        .iter()
+        .filter_map(|id| id.parse().ok())
+        .collect();
+
+    assert_matrix_agrees(&users, &["every document"], async |viewer, _| {
+        let user_id = viewer
+            .user_id()
+            .ok_or_else(|| anyhow::anyhow!("{} is not a user", viewer.label))?;
+        let old: std::collections::BTreeMap<_, _> =
+            source_list_oracle::get_documents_access(&pool, &documents, &viewer.sources, &user_id)
+                .await?
+                .into_iter()
+                .collect();
+        let new: std::collections::BTreeMap<_, _> =
+            get_documents_access(&pool, &documents, user_id.as_ref())
+                .await?
+                .into_iter()
+                .collect();
+        Ok((old, new))
+    })
+    .await
 }

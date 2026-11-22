@@ -1,5 +1,5 @@
 //! All typed TEAM-link query implementations must agree, including explanations.
-use super::{SourceIds, chat_access, document_access, project_access};
+use super::{Viewer, chat_access, document_access, project_access};
 use crate::domain::models::AccessLevel;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -20,8 +20,9 @@ async fn discussion_attachments_use_the_parents_typed_owner_audience(
     )
     .execute(&pool)
     .await?;
-    let sources = SourceIds(vec!["90000000-0000-0000-0000-000000000011".to_string()]);
-    let other = SourceIds(vec!["90000000-0000-0000-0000-000000000012".to_string()]);
+    insert_viewers(&pool).await?;
+    let member = Viewer::User(OWNER_TEAM_MEMBER);
+    let other = Viewer::User(OTHER_TEAM_OWNER);
     for (suffix, has_team) in [
         (31, true),
         (32, false),
@@ -51,21 +52,55 @@ async fn discussion_attachments_use_the_parents_typed_owner_audience(
         .execute(&pool)
         .await?;
         assert_eq!(
-            document_access::get_document_access(&pool, &child, &sources, None).await?,
+            document_access::get_document_access(&pool, &child, member).await?,
             has_team.then_some(AccessLevel::View)
         );
         assert_eq!(
-            document_access::get_document_access(&pool, &child, &other, None).await?,
+            document_access::get_document_access(&pool, &child, other).await?,
             None
         );
         sqlx::query!("DELETE FROM comms_attachments WHERE id = $1", attachment)
             .execute(&pool)
             .await?;
         assert_eq!(
-            document_access::get_document_access(&pool, &child, &sources, None).await?,
+            document_access::get_document_access(&pool, &child, member).await?,
             None
         );
     }
+    Ok(())
+}
+
+/// In the owner's team only.
+const OWNER_TEAM_MEMBER: &str = "macro|typed-member@example.com";
+/// The other team's owner, who owns none of the fixture's entities.
+const OTHER_TEAM_OWNER: &str = "macro|typed-other@example.com";
+/// In no team, and owns none of the fixture's entities.
+const TEAMLESS_VIEWER: &str = "macro|typed-viewer@example.com";
+
+async fn insert_viewers(pool: &PgPool) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES
+        ('90000000-0000-0000-0000-000000000004', 'typed-member', 'typed-member@example.com', 'typed-member'),
+        ('90000000-0000-0000-0000-000000000005', 'typed-viewer', 'typed-viewer@example.com', 'typed-viewer')"#
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES
+        ($1, 'typed-member@example.com', '90000000-0000-0000-0000-000000000004'),
+        ($2, 'typed-viewer@example.com', '90000000-0000-0000-0000-000000000005')"#,
+        OWNER_TEAM_MEMBER,
+        TEAMLESS_VIEWER,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO team_user (team_id, user_id, team_role)
+        VALUES ('90000000-0000-0000-0000-000000000011', $1, 'member')"#,
+        OWNER_TEAM_MEMBER,
+    )
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
@@ -80,7 +115,9 @@ fn fixture_entity_id(suffix: u8) -> Uuid {
 async fn typed_owner_team_links_allow_only_the_resolved_audience(
     pool: PgPool,
 ) -> anyhow::Result<()> {
+    #[cfg(feature = "explain_binary")]
     let team = Uuid::parse_str("90000000-0000-0000-0000-000000000011")?;
+    insert_viewers(&pool).await?;
     for (suffix, has_team) in [
         (31, true),
         (32, false),
@@ -91,45 +128,53 @@ async fn typed_owner_team_links_allow_only_the_resolved_audience(
         (37, false),
     ] {
         let id = fixture_entity_id(suffix);
-        for (sources, matches_team) in [
-            (vec![team.to_string()], true),
-            (
-                vec!["90000000-0000-0000-0000-000000000012".to_string()],
-                false,
-            ),
-            (vec!["macro|typed-teamless@example.com".to_string()], false),
-            (vec![], false),
+        for (viewer, matches_team) in [
+            (Viewer::User(OWNER_TEAM_MEMBER), true),
+            (Viewer::User(OTHER_TEAM_OWNER), false),
+            (Viewer::User(TEAMLESS_VIEWER), false),
+            (Viewer::Anonymous, false),
         ] {
-            let sources = SourceIds(sources);
             let expected = (has_team && matches_team).then_some(AccessLevel::Comment);
             assert_eq!(
-                document_access::get_document_access(&pool, &id, &sources, None).await?,
+                document_access::get_document_access(&pool, &id, viewer).await?,
                 expected,
                 "document {suffix}"
             );
             assert_eq!(
-                document_access::get_legacy_document_access(&pool, &id.to_string(), &sources, None)
-                    .await?,
+                document_access::get_legacy_document_access(
+                    &pool,
+                    &id.to_string(),
+                    viewer.user_id()
+                )
+                .await?,
                 expected,
                 "legacy {suffix}"
             );
             assert_eq!(
-                project_access::get_project_access(&pool, &id, &sources).await?,
+                project_access::get_project_access(&pool, &id, viewer).await?,
                 expected,
                 "project {suffix}"
             );
             assert_eq!(
-                chat_access::get_chat_access(&pool, &id, &sources).await?,
+                chat_access::get_chat_access(&pool, &id, viewer).await?,
                 expected,
                 "chat {suffix}"
             );
 
+            // Explanations are for signed-in users only.
             #[cfg(feature = "explain_binary")]
-            for grants in [
-                document_access::explain_document_access(&pool, &id, &sources, None).await?,
-                project_access::explain_project_access(&pool, &id, &sources).await?,
-                chat_access::explain_chat_access(&pool, &id, &sources).await?,
-            ] {
+            for grants in match viewer.user_id() {
+                Some(user_id) => {
+                    let user_id =
+                        macro_user_id::user_id::MacroUserIdStr::try_from(user_id.to_string())?;
+                    vec![
+                        document_access::explain_document_access(&pool, &id, &user_id).await?,
+                        project_access::explain_project_access(&pool, &id, &user_id).await?,
+                        chat_access::explain_chat_access(&pool, &id, &user_id).await?,
+                    ]
+                }
+                None => Vec::new(),
+            } {
                 use crate::domain::models::AccessGrant;
                 let expected = expected.map(|access_level| AccessGrant::TeamLink {
                     access_level,

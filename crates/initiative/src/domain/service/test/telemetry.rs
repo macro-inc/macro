@@ -1,4 +1,4 @@
-//! A project read records what its cost depends on.
+//! A project read records the project and how many of its tasks it checked.
 
 use super::*;
 use crate::domain::{
@@ -6,7 +6,6 @@ use crate::domain::{
     resources::{InitiativeResources, ResourceFuture},
 };
 use entity_access::domain::models::EntityAccessAuth;
-use entity_access::domain::telemetry::record_source_ids;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tracing::field::{Field, Visit};
@@ -15,14 +14,11 @@ use tracing::{Instrument, Subscriber};
 use tracing_subscriber::layer::{Context as LayerContext, Layer, SubscriberExt};
 use tracing_subscriber::registry::LookupSpan;
 
-/// How many source ids the fake access check binds.
-const SOURCE_IDS: usize = 12;
-
 /// Tasks the viewer can see, then one they can't.
 const TASKS: [&str; 4] = ["open", "done", "done-too", "hidden"];
 
-/// Resources whose task checks refuse `hidden` and bind [`SOURCE_IDS`] source
-/// ids each, in their own span as the access repository's checks do.
+/// Resources whose task checks refuse `hidden`, each in its own span as the
+/// access repository's checks are.
 #[derive(Debug)]
 struct CheckedTasks;
 
@@ -49,10 +45,9 @@ impl InitiativeResources for CheckedTasks {
         auth: EntityAccessAuth,
         entity: Entity,
     ) -> ResourceFuture<'_, Option<EntityAccessReceipt<ViewAccessLevel>>> {
-        let check = tracing::info_span!("check", source_id_count = tracing::field::Empty);
+        let check = tracing::info_span!("check");
         Box::pin(
             async move {
-                record_source_ids(SOURCE_IDS);
                 if entity.entity_id == "hidden" {
                     return Ok(None);
                 }
@@ -144,7 +139,7 @@ fn read_service() -> TestService {
 }
 
 #[tokio::test]
-async fn read_records_the_project_its_task_counts_and_the_viewers_source_ids() {
+async fn read_records_the_project_and_its_task_counts() {
     let svc = read_service();
     let fields = ReadFields::default();
     let _guard =
@@ -165,9 +160,4 @@ async fn read_records_the_project_its_task_counts_and_the_viewers_source_ids() {
         "every associated task, once"
     );
     assert_eq!(fields.all("visible_task_count"), ["i64:3"]);
-    assert_eq!(
-        fields.all("source_id_count"),
-        [format!("i64:{SOURCE_IDS}")],
-        "the checks' source-id count, recorded once"
-    );
 }

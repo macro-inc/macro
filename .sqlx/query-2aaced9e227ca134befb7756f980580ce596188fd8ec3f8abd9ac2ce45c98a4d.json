@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level FROM (\n            -- Source 1: entity_access source_id match\n            SELECT\n                access_level::text FROM entity_access\n            WHERE entity_id = $1\n            AND entity_type = 'email_thread'\n            AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $4))\n\n            UNION ALL\n            -- Source 2: item share permission\n            SELECT\n                sp.\"linkShareAccessLevel\"::text AS access_level\n            FROM \"SharePermission\" sp\n            WHERE sp.\"linkShareAccessLevel\" IS NOT NULL\n            AND (\n                sp.\"linkShare\" = 'PUBLIC'\n                OR (\n                    sp.\"linkShare\" = 'TEAM'\n                    AND EXISTS (\n                        SELECT 1\n                        FROM email_threads t\n                        JOIN email_links l ON l.id = t.link_id\n                        JOIN team_user owner_tu ON owner_tu.user_id = l.macro_id\n                        WHERE t.id = $1::uuid\n                          AND EXISTS (SELECT FROM entity_access_source_matches(owner_tu.team_id::text, $2, $4))\n                    )\n                )\n            )\n            AND sp.id IN (\n                SELECT \"sharePermissionId\" FROM \"EmailThreadPermission\" WHERE \"threadId\" = $3\n            )\n\n            UNION ALL\n            -- Source 3: access to the thread's containing project grants View\n            SELECT 'view' AS access_level\n            FROM email_threads t\n            JOIN entity_access pea ON pea.entity_id::text = t.project_id\n                AND pea.entity_type = 'project'\n                AND EXISTS (SELECT FROM entity_access_source_matches(pea.source_id, $2, $4))\n            WHERE t.id = $1::uuid\n        ) AS combined_access\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2aaced9e227ca134befb7756f980580ce596188fd8ec3f8abd9ac2ce45c98a4d"
+}

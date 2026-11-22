@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level::text\n        FROM entity_access\n        WHERE entity_id = $2\n        AND entity_type = 'chat'\n        AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $1, NULL::uuid))\n        ORDER BY\n            CASE access_level::text\n                WHEN 'owner' THEN 4\n                WHEN 'edit' THEN 3\n                WHEN 'comment' THEN 2\n                WHEN 'view' THEN 1\n                ELSE 0\n            END DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "742b902476a59189ab8a6fed5c837a2ee9e17f09426f379f940f99d93bcf43ea"
+}

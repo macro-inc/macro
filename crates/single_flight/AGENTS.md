@@ -23,8 +23,7 @@ lookups use it so overlapping searches by one user run one database query.
 ## Boundaries
 
 - Used by: `macro_db_client` (`item_access::get_accessible_items`,
-  `call_record::get::get_accessible_call_ids`) and `entity_access`
-  (`get_user_source_ids`).
+  `call_record::get::get_accessible_call_ids`).
 
 ## Checks
 

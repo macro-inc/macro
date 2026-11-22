@@ -1,4 +1,8 @@
 use super::*;
+use crate::outbound::pg_access_repo::queries::{
+    source_list_oracle,
+    test_viewers::{assert_matrix_agrees, matrix_viewers, user_in_channel, user_in_team},
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -6,6 +10,10 @@ use uuid::Uuid;
 const OWNER_WITH_TEAM: &str = "macro|call-owner@corp.test";
 const OWNER_WITHOUT_TEAM: &str = "macro|call-owner-no-team@corp.test";
 const REQUESTER: &str = "macro|call-requester@corp.test";
+const OTHER_TEAM_REQUESTER: &str = "macro|call-requester@other.test";
+const CHANNEL_MEMBER: &str = "macro|call-channel-member@corp.test";
+const TEAM_MEMBER: &str = "macro|call-team-member@corp.test";
+const EVERY_SOURCE_MEMBER: &str = "macro|call-every-source@corp.test";
 const DIRECT_SOURCE_ID: &str = "macro|direct-grantee@corp.test";
 const CHANNEL_SOURCE_ID: &str = "00000000-0000-0000-0000-00000000ca11";
 const TEAM_SOURCE_ID: &str = "00000000-0000-0000-0000-000000007ea1";
@@ -272,12 +280,7 @@ async fn insert_entity_access(
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn returns_none_when_call_does_not_exist(pool: PgPool) -> anyhow::Result<()> {
-    let access = get_call_access(
-        &pool,
-        &Uuid::new_v4(),
-        &SourceIds(vec![REQUESTER.to_string()]),
-    )
-    .await?;
+    let access = get_call_access(&pool, &Uuid::new_v4(), Viewer::User(REQUESTER)).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -288,9 +291,11 @@ async fn enforces_link_access_for_calls_and_call_records(pool: PgPool) -> anyhow
     insert_user(&pool, OWNER_WITH_TEAM).await?;
     add_owner_to_team(&pool, OWNER_WITH_TEAM, OWNER_TEAM).await?;
 
-    let anonymous = SourceIds(vec![]);
-    let other_team = SourceIds(vec![REQUESTER.to_string(), OTHER_TEAM.to_string()]);
-    let same_team = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+    user_in_team(&pool, OTHER_TEAM_REQUESTER, OTHER_TEAM).await?;
+    user_in_team(&pool, REQUESTER, OWNER_TEAM).await?;
+    let anonymous = Viewer::Anonymous;
+    let other_team = Viewer::User(OTHER_TEAM_REQUESTER);
+    let same_team = Viewer::User(REQUESTER);
 
     for call_table in CallTable::ALL {
         for case in LINK_ACCESS_CASES {
@@ -304,19 +309,19 @@ async fn enforces_link_access_for_calls_and_call_records(pool: PgPool) -> anyhow
             .await?;
 
             assert_eq!(
-                get_call_access(&pool, &call_id, &anonymous).await?,
+                get_call_access(&pool, &call_id, anonymous).await?,
                 case.anonymous,
                 "anonymous access for {call_table:?} with {:?}",
                 case.link_share,
             );
             assert_eq!(
-                get_call_access(&pool, &call_id, &other_team).await?,
+                get_call_access(&pool, &call_id, other_team).await?,
                 case.other_team,
                 "other-team access for {call_table:?} with {:?}",
                 case.link_share,
             );
             assert_eq!(
-                get_call_access(&pool, &call_id, &same_team).await?,
+                get_call_access(&pool, &call_id, same_team).await?,
                 case.same_team,
                 "same-team access for {call_table:?} with {:?}",
                 case.link_share,
@@ -330,7 +335,8 @@ async fn enforces_link_access_for_calls_and_call_records(pool: PgPool) -> anyhow
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn team_link_denies_when_call_owner_has_no_team(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER_WITHOUT_TEAM).await?;
-    let requester = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+    user_in_team(&pool, REQUESTER, OWNER_TEAM).await?;
+    let requester = Viewer::User(REQUESTER);
 
     for call_table in CallTable::ALL {
         let call_id = insert_link_shared_call(
@@ -343,7 +349,7 @@ async fn team_link_denies_when_call_owner_has_no_team(pool: PgPool) -> anyhow::R
         .await?;
 
         assert_eq!(
-            get_call_access(&pool, &call_id, &requester).await?,
+            get_call_access(&pool, &call_id, requester).await?,
             None,
             "TEAM access for {call_table:?}",
         );
@@ -355,37 +361,53 @@ async fn team_link_denies_when_call_owner_has_no_team(pool: PgPool) -> anyhow::R
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn preserves_user_channel_and_team_entity_access(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER_WITHOUT_TEAM).await?;
+    let channel = Uuid::parse_str(CHANNEL_SOURCE_ID)?;
+    let team = Uuid::parse_str(TEAM_SOURCE_ID)?;
+    user_in_channel(&pool, CHANNEL_MEMBER, channel).await?;
+    user_in_team(&pool, TEAM_MEMBER, team).await?;
+    user_in_channel(&pool, EVERY_SOURCE_MEMBER, channel).await?;
+    user_in_team(&pool, EVERY_SOURCE_MEMBER, team).await?;
     let grants = [
-        (DIRECT_SOURCE_ID, "user", AccessLevel::View),
-        (CHANNEL_SOURCE_ID, "channel", AccessLevel::Comment),
-        (TEAM_SOURCE_ID, "team", AccessLevel::Edit),
+        (
+            DIRECT_SOURCE_ID,
+            "user",
+            AccessLevel::View,
+            DIRECT_SOURCE_ID,
+        ),
+        (
+            CHANNEL_SOURCE_ID,
+            "channel",
+            AccessLevel::Comment,
+            CHANNEL_MEMBER,
+        ),
+        (TEAM_SOURCE_ID, "team", AccessLevel::Edit, TEAM_MEMBER),
+        (
+            EVERY_SOURCE_MEMBER,
+            "user",
+            AccessLevel::View,
+            EVERY_SOURCE_MEMBER,
+        ),
     ];
 
     for call_table in CallTable::ALL {
         let call_id =
             insert_link_shared_call(&pool, call_table, OWNER_WITHOUT_TEAM, None, None).await?;
 
-        for (source_id, source_type, access_level) in grants {
+        for (source_id, source_type, access_level, _) in grants {
             insert_entity_access(&pool, call_id, source_id, source_type, access_level).await?;
         }
 
-        for (source_id, _, access_level) in grants {
-            let source_ids = SourceIds(vec![source_id.to_string()]);
+        for (source_id, _, access_level, viewer) in &grants[..3] {
             assert_eq!(
-                get_call_access(&pool, &call_id, &source_ids).await?,
-                Some(access_level),
+                get_call_access(&pool, &call_id, Viewer::User(viewer)).await?,
+                Some(*access_level),
                 "{source_id} grant for {call_table:?}",
             );
         }
 
-        let all_sources = SourceIds(
-            grants
-                .iter()
-                .map(|(source_id, _, _)| source_id.to_string())
-                .collect(),
-        );
+        // A user grant, the channel and the team: the highest wins.
         assert_eq!(
-            get_call_access(&pool, &call_id, &all_sources).await?,
+            get_call_access(&pool, &call_id, Viewer::User(EVERY_SOURCE_MEMBER)).await?,
             Some(AccessLevel::Edit),
             "highest explicit grant for {call_table:?}",
         );
@@ -402,9 +424,11 @@ async fn explicit_team_grant_allows_team_members_only(pool: PgPool) -> anyhow::R
     insert_user(&pool, OWNER_WITH_TEAM).await?;
     add_owner_to_team(&pool, OWNER_WITH_TEAM, OWNER_TEAM).await?;
 
-    let anonymous = SourceIds(vec![]);
-    let other_team = SourceIds(vec![REQUESTER.to_string(), OTHER_TEAM.to_string()]);
-    let same_team = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+    user_in_team(&pool, OTHER_TEAM_REQUESTER, OTHER_TEAM).await?;
+    user_in_team(&pool, REQUESTER, OWNER_TEAM).await?;
+    let anonymous = Viewer::Anonymous;
+    let other_team = Viewer::User(OTHER_TEAM_REQUESTER);
+    let same_team = Viewer::User(REQUESTER);
 
     for call_table in CallTable::ALL {
         let call_id =
@@ -419,17 +443,17 @@ async fn explicit_team_grant_allows_team_members_only(pool: PgPool) -> anyhow::R
         .await?;
 
         assert_eq!(
-            get_call_access(&pool, &call_id, &anonymous).await?,
+            get_call_access(&pool, &call_id, anonymous).await?,
             None,
             "anonymous access for {call_table:?}"
         );
         assert_eq!(
-            get_call_access(&pool, &call_id, &other_team).await?,
+            get_call_access(&pool, &call_id, other_team).await?,
             None,
             "other-team access for {call_table:?}"
         );
         assert_eq!(
-            get_call_access(&pool, &call_id, &same_team).await?,
+            get_call_access(&pool, &call_id, same_team).await?,
             Some(AccessLevel::View),
             "same-team access for {call_table:?}"
         );
@@ -442,7 +466,8 @@ async fn explicit_team_grant_allows_team_members_only(pool: PgPool) -> anyhow::R
 async fn takes_maximum_of_explicit_team_grant_and_link(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER_WITH_TEAM).await?;
     add_owner_to_team(&pool, OWNER_WITH_TEAM, OWNER_TEAM).await?;
-    let same_team = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+    user_in_team(&pool, REQUESTER, OWNER_TEAM).await?;
+    let same_team = Viewer::User(REQUESTER);
 
     for call_table in CallTable::ALL {
         // Team grant (view) below a public edit link: the link wins.
@@ -476,12 +501,12 @@ async fn takes_maximum_of_explicit_team_grant_and_link(pool: PgPool) -> anyhow::
         .await?;
 
         assert_eq!(
-            get_call_access(&pool, &link_wins, &same_team).await?,
+            get_call_access(&pool, &link_wins, same_team).await?,
             Some(AccessLevel::Edit),
             "link beats team grant for {call_table:?}"
         );
         assert_eq!(
-            get_call_access(&pool, &grant_only, &same_team).await?,
+            get_call_access(&pool, &grant_only, same_team).await?,
             Some(AccessLevel::View),
             "team grant alone for {call_table:?}"
         );
@@ -493,7 +518,7 @@ async fn takes_maximum_of_explicit_team_grant_and_link(pool: PgPool) -> anyhow::
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn returns_highest_link_or_explicit_access(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER_WITHOUT_TEAM).await?;
-    let requester = SourceIds(vec![DIRECT_SOURCE_ID.to_string()]);
+    let requester = Viewer::User(DIRECT_SOURCE_ID);
 
     for call_table in CallTable::ALL {
         let explicit_wins = insert_link_shared_call(
@@ -531,16 +556,38 @@ async fn returns_highest_link_or_explicit_access(pool: PgPool) -> anyhow::Result
         .await?;
 
         assert_eq!(
-            get_call_access(&pool, &explicit_wins, &requester).await?,
+            get_call_access(&pool, &explicit_wins, requester).await?,
             Some(AccessLevel::Edit),
             "explicit access for {call_table:?}",
         );
         assert_eq!(
-            get_call_access(&pool, &link_wins, &requester).await?,
+            get_call_access(&pool, &link_wins, requester).await?,
             Some(AccessLevel::Edit),
             "link access for {call_table:?}",
         );
     }
 
     Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../fixtures",
+        scripts("viewer_matrix", "typed_owner_team", "viewer_matrix_call")
+    )
+)]
+async fn call_access_matches_the_source_list_form(pool: PgPool) -> anyhow::Result<()> {
+    let viewers = matrix_viewers(&pool).await?;
+    let calls = sqlx::query_scalar!(r#"SELECT id FROM call_entities ORDER BY id"#)
+        .fetch_all(&pool)
+        .await?;
+
+    assert_matrix_agrees(&viewers, &calls, async |viewer, call_id| {
+        Ok((
+            source_list_oracle::get_call_access(&pool, call_id, &viewer.sources).await?,
+            get_call_access(&pool, call_id, viewer.viewer()).await?,
+        ))
+    })
+    .await
 }

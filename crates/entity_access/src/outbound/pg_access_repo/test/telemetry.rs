@@ -1,7 +1,6 @@
-//! Access checks record how many source ids they bound, and no user id.
+//! Access checks and their queries are traced, without the viewer's user id.
 
 use super::*;
-use crate::outbound::pg_access_repo::queries::get_user_source_ids;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use tracing::Subscriber;
@@ -60,11 +59,8 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for SpanValues {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("user_team"))
 )]
-async fn document_check_records_its_source_id_count_and_no_user_id(
-    pool: PgPool,
-) -> anyhow::Result<()> {
+async fn document_check_is_traced_without_the_user_id(pool: PgPool) -> anyhow::Result<()> {
     let viewer = user_id(TEAM_MEMBER);
-    let bound = get_user_source_ids(&pool, Some(&viewer)).await?.0.len();
     let repo = PgAccessRepository::new(pool);
     let document_id = Uuid::now_v7().to_string();
 
@@ -82,13 +78,13 @@ async fn document_check_records_its_source_id_count_and_no_user_id(
         .await?;
 
     let values = values.0.lock().unwrap().clone();
-    assert!(
-        values.contains(&format!("get_document_access.source_id_count=i64:{bound}")),
-        "{values:?}"
-    );
-    assert!(
-        values.iter().any(|value| value == "get_user_source_ids"),
-        "the source-id lookup is traced too: {values:?}"
+    assert_eq!(
+        values
+            .iter()
+            .filter(|value| *value == "get_document_access")
+            .count(),
+        2,
+        "the check and the query that takes the viewer each open a span: {values:?}"
     );
     let leaked: Vec<_> = values
         .iter()
@@ -105,9 +101,8 @@ async fn document_check_records_its_source_id_count_and_no_user_id(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("user_team"))
 )]
-async fn pipelines_check_records_counts_and_no_ids(pool: PgPool) -> anyhow::Result<()> {
+async fn pipelines_check_records_its_count_and_no_ids(pool: PgPool) -> anyhow::Result<()> {
     let viewer = user_id(TEAM_MEMBER);
-    let bound = get_user_source_ids(&pool, Some(&viewer)).await?.0.len();
     let repo = PgAccessRepository::new(pool);
     let pipelines = [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
 
@@ -123,10 +118,6 @@ async fn pipelines_check_records_counts_and_no_ids(pool: PgPool) -> anyhow::Resu
     let values = values.0.lock().unwrap().clone();
     assert!(
         values.contains(&"get_pipelines_access.pipeline_count=i64:3".to_owned()),
-        "{values:?}"
-    );
-    assert!(
-        values.contains(&format!("get_pipelines_access.source_id_count=i64:{bound}")),
         "{values:?}"
     );
     let leaked: Vec<_> = values

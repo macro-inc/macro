@@ -1,6 +1,10 @@
 use super::*;
-use crate::outbound::pg_access_repo::queries::get_user_source_ids;
+use crate::outbound::pg_access_repo::queries::{
+    source_list_oracle,
+    test_viewers::{assert_matrix_agrees, matrix_viewers, user_in_team},
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+#[cfg(feature = "explain_binary")]
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -8,6 +12,8 @@ use uuid::Uuid;
 const OWNER: &str = "macro|initiative-owner@corp.test";
 const GRANTEE: &str = "macro|initiative-grantee@corp.test";
 const STRANGER: &str = "macro|initiative-stranger@corp.test";
+const TEAM_MEMBER: &str = "macro|initiative-team-member@corp.test";
+const OTHER_TEAM_MEMBER: &str = "macro|initiative-member@other.test";
 const OWNER_TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_1a01);
 const OTHER_TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_1a02);
 const GRANTED_TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_1a03);
@@ -162,14 +168,6 @@ async fn grant(
     Ok(())
 }
 
-fn sources(ids: &[&str]) -> SourceIds {
-    SourceIds(ids.iter().map(ToString::to_string).collect())
-}
-
-fn anonymous() -> SourceIds {
-    SourceIds(Vec::new())
-}
-
 #[cfg(feature = "explain_binary")]
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
@@ -180,12 +178,12 @@ async fn owner_row_grants_owner(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
     let initiative_id = insert_initiative(&pool, OWNER, LinkShare::Off).await?;
 
-    let before = get_initiative_access(&pool, &initiative_id, &sources(&[OWNER])).await?;
+    let before = get_initiative_access(&pool, &initiative_id, Viewer::User(OWNER)).await?;
     assert_eq!(before, None);
 
     grant(&pool, initiative_id, OWNER, "user", AccessLevel::Owner).await?;
 
-    let after = get_initiative_access(&pool, &initiative_id, &sources(&[OWNER])).await?;
+    let after = get_initiative_access(&pool, &initiative_id, Viewer::User(OWNER)).await?;
     assert_eq!(after, Some(AccessLevel::Owner));
     Ok(())
 }
@@ -195,7 +193,7 @@ async fn owner_column_is_not_a_grant(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
     let initiative_id = insert_initiative(&pool, OWNER, LinkShare::Off).await?;
 
-    let access = get_initiative_access(&pool, &initiative_id, &sources(&[OWNER])).await?;
+    let access = get_initiative_access(&pool, &initiative_id, Viewer::User(OWNER)).await?;
     assert_eq!(access, None);
     Ok(())
 }
@@ -217,7 +215,7 @@ async fn initiative_member_is_not_a_grant(pool: PgPool) -> anyhow::Result<()> {
     .execute(&pool)
     .await?;
 
-    let access = get_initiative_access(&pool, &initiative_id, &sources(&[GRANTEE])).await?;
+    let access = get_initiative_access(&pool, &initiative_id, Viewer::User(GRANTEE)).await?;
     assert_eq!(access, None);
     Ok(())
 }
@@ -228,8 +226,8 @@ async fn direct_user_grant_is_returned(pool: PgPool) -> anyhow::Result<()> {
     let initiative_id = insert_initiative(&pool, OWNER, LinkShare::Off).await?;
     grant(&pool, initiative_id, GRANTEE, "user", AccessLevel::Edit).await?;
 
-    let grantee = get_initiative_access(&pool, &initiative_id, &sources(&[GRANTEE])).await?;
-    let stranger = get_initiative_access(&pool, &initiative_id, &sources(&[STRANGER])).await?;
+    let grantee = get_initiative_access(&pool, &initiative_id, Viewer::User(GRANTEE)).await?;
+    let stranger = get_initiative_access(&pool, &initiative_id, Viewer::User(STRANGER)).await?;
 
     assert_eq!(grantee, Some(AccessLevel::Edit));
     assert_eq!(stranger, None);
@@ -249,13 +247,9 @@ async fn team_grant_reaches_team_members(pool: PgPool) -> anyhow::Result<()> {
     )
     .await?;
 
-    let with_team = get_initiative_access(
-        &pool,
-        &initiative_id,
-        &sources(&[GRANTEE, &GRANTED_TEAM.to_string()]),
-    )
-    .await?;
-    let user_only = get_initiative_access(&pool, &initiative_id, &sources(&[GRANTEE])).await?;
+    user_in_team(&pool, TEAM_MEMBER, GRANTED_TEAM).await?;
+    let with_team = get_initiative_access(&pool, &initiative_id, Viewer::User(TEAM_MEMBER)).await?;
+    let user_only = get_initiative_access(&pool, &initiative_id, Viewer::User(GRANTEE)).await?;
 
     assert_eq!(with_team, Some(AccessLevel::Comment));
     assert_eq!(user_only, None);
@@ -263,7 +257,7 @@ async fn team_grant_reaches_team_members(pool: PgPool) -> anyhow::Result<()> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn team_grant_resolves_through_user_source_ids(pool: PgPool) -> anyhow::Result<()> {
+async fn team_grant_resolves_through_team_membership(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
     insert_user(&pool, GRANTEE).await?;
     let initiative_id = insert_initiative(&pool, OWNER, LinkShare::Off).await?;
@@ -278,9 +272,7 @@ async fn team_grant_resolves_through_user_source_ids(pool: PgPool) -> anyhow::Re
     )
     .await?;
 
-    let requester = MacroUserIdStr::parse_from_str(GRANTEE).expect("valid requester id");
-    let source_ids = get_user_source_ids(&pool, Some(&*requester)).await?;
-    let access = get_initiative_access(&pool, &initiative_id, &source_ids).await?;
+    let access = get_initiative_access(&pool, &initiative_id, Viewer::User(GRANTEE)).await?;
 
     assert_eq!(access, Some(AccessLevel::Comment));
     Ok(())
@@ -293,19 +285,12 @@ async fn team_link_grants_owner_team_members(pool: PgPool) -> anyhow::Result<()>
     add_team_user(&pool, OWNER_TEAM, OWNER, "owner").await?;
     let initiative_id = insert_initiative(&pool, OWNER, LinkShare::Team(AccessLevel::View)).await?;
 
-    let owner_team = get_initiative_access(
-        &pool,
-        &initiative_id,
-        &sources(&[GRANTEE, &OWNER_TEAM.to_string()]),
-    )
-    .await?;
-    let other_team = get_initiative_access(
-        &pool,
-        &initiative_id,
-        &sources(&[GRANTEE, &OTHER_TEAM.to_string()]),
-    )
-    .await?;
-    let unauthenticated = get_initiative_access(&pool, &initiative_id, &anonymous()).await?;
+    user_in_team(&pool, GRANTEE, OWNER_TEAM).await?;
+    user_in_team(&pool, OTHER_TEAM_MEMBER, OTHER_TEAM).await?;
+    let owner_team = get_initiative_access(&pool, &initiative_id, Viewer::User(GRANTEE)).await?;
+    let other_team =
+        get_initiative_access(&pool, &initiative_id, Viewer::User(OTHER_TEAM_MEMBER)).await?;
+    let unauthenticated = get_initiative_access(&pool, &initiative_id, Viewer::Anonymous).await?;
 
     assert_eq!(owner_team, Some(AccessLevel::View));
     assert_eq!(other_team, None);
@@ -319,8 +304,8 @@ async fn public_link_grants_anonymous_access(pool: PgPool) -> anyhow::Result<()>
     let initiative_id =
         insert_initiative(&pool, OWNER, LinkShare::Public(AccessLevel::Comment)).await?;
 
-    let unauthenticated = get_initiative_access(&pool, &initiative_id, &anonymous()).await?;
-    let stranger = get_initiative_access(&pool, &initiative_id, &sources(&[STRANGER])).await?;
+    let unauthenticated = get_initiative_access(&pool, &initiative_id, Viewer::Anonymous).await?;
+    let stranger = get_initiative_access(&pool, &initiative_id, Viewer::User(STRANGER)).await?;
 
     assert_eq!(unauthenticated, Some(AccessLevel::Comment));
     assert_eq!(stranger, Some(AccessLevel::Comment));
@@ -332,9 +317,9 @@ async fn no_grant_and_no_link_denies(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
     let initiative_id = insert_initiative(&pool, OWNER, LinkShare::Off).await?;
 
-    let stranger = get_initiative_access(&pool, &initiative_id, &sources(&[STRANGER])).await?;
-    let unauthenticated = get_initiative_access(&pool, &initiative_id, &anonymous()).await?;
-    let unknown = get_initiative_access(&pool, &Uuid::now_v7(), &sources(&[OWNER])).await?;
+    let stranger = get_initiative_access(&pool, &initiative_id, Viewer::User(STRANGER)).await?;
+    let unauthenticated = get_initiative_access(&pool, &initiative_id, Viewer::Anonymous).await?;
+    let unknown = get_initiative_access(&pool, &Uuid::now_v7(), Viewer::User(OWNER)).await?;
 
     assert_eq!(stranger, None);
     assert_eq!(unauthenticated, None);
@@ -353,8 +338,8 @@ async fn highest_level_across_arms_wins(pool: PgPool) -> anyhow::Result<()> {
         insert_initiative(&pool, OWNER, LinkShare::Public(AccessLevel::View)).await?;
     grant(&pool, grant_higher, GRANTEE, "user", AccessLevel::Edit).await?;
 
-    let from_public = get_initiative_access(&pool, &public_higher, &sources(&[GRANTEE])).await?;
-    let from_grant = get_initiative_access(&pool, &grant_higher, &sources(&[GRANTEE])).await?;
+    let from_public = get_initiative_access(&pool, &public_higher, Viewer::User(GRANTEE)).await?;
+    let from_grant = get_initiative_access(&pool, &grant_higher, Viewer::User(GRANTEE)).await?;
 
     assert_eq!(from_public, Some(AccessLevel::Edit));
     assert_eq!(from_grant, Some(AccessLevel::Edit));
@@ -366,12 +351,8 @@ async fn team_link_denies_when_owner_has_no_team(pool: PgPool) -> anyhow::Result
     insert_user(&pool, OWNER).await?;
     let initiative_id = insert_initiative(&pool, OWNER, LinkShare::Team(AccessLevel::Edit)).await?;
 
-    let access = get_initiative_access(
-        &pool,
-        &initiative_id,
-        &sources(&[GRANTEE, &OTHER_TEAM.to_string()]),
-    )
-    .await?;
+    user_in_team(&pool, GRANTEE, OTHER_TEAM).await?;
+    let access = get_initiative_access(&pool, &initiative_id, Viewer::User(GRANTEE)).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -389,8 +370,8 @@ async fn explain_agrees_with_access_level(pool: PgPool) -> anyhow::Result<()> {
         insert_initiative(&pool, OWNER, LinkShare::Team(AccessLevel::View)).await?;
     grant(&pool, team_initiative, GRANTEE, "user", AccessLevel::Edit).await?;
 
-    let src = sources(&[GRANTEE, &OWNER_TEAM.to_string()]);
-    let grants = explain_initiative_access(&pool, &team_initiative, &src).await?;
+    user_in_team(&pool, GRANTEE, OWNER_TEAM).await?;
+    let grants = explain_initiative_access(&pool, &team_initiative, &user(GRANTEE)).await?;
     let explained = AccessExplanation::from_grants(
         user(GRANTEE),
         Entity {
@@ -399,7 +380,7 @@ async fn explain_agrees_with_access_level(pool: PgPool) -> anyhow::Result<()> {
         },
         grants.clone(),
     );
-    let queried = get_initiative_access(&pool, &team_initiative, &src).await?;
+    let queried = get_initiative_access(&pool, &team_initiative, Viewer::User(GRANTEE)).await?;
 
     assert!(grants.iter().any(|grant| matches!(
         grant,
@@ -426,7 +407,8 @@ async fn explain_agrees_with_access_level(pool: PgPool) -> anyhow::Result<()> {
 
     let public_initiative =
         insert_initiative(&pool, OWNER, LinkShare::Public(AccessLevel::Comment)).await?;
-    let public_grants = explain_initiative_access(&pool, &public_initiative, &anonymous()).await?;
+    let public_grants =
+        explain_initiative_access(&pool, &public_initiative, &user(STRANGER)).await?;
     assert_eq!(
         public_grants,
         vec![AccessGrant::PublicLink {
@@ -434,4 +416,27 @@ async fn explain_agrees_with_access_level(pool: PgPool) -> anyhow::Result<()> {
         }]
     );
     Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../fixtures",
+        scripts("viewer_matrix", "typed_owner_team", "viewer_matrix_initiative")
+    )
+)]
+async fn initiative_access_matches_the_source_list_form(pool: PgPool) -> anyhow::Result<()> {
+    let viewers = matrix_viewers(&pool).await?;
+    let initiatives = sqlx::query_scalar!(r#"SELECT id FROM initiative ORDER BY id"#)
+        .fetch_all(&pool)
+        .await?;
+
+    assert_matrix_agrees(&viewers, &initiatives, async |viewer, initiative_id| {
+        Ok((
+            source_list_oracle::get_initiative_access(&pool, initiative_id, &viewer.sources)
+                .await?,
+            get_initiative_access(&pool, initiative_id, viewer.viewer()).await?,
+        ))
+    })
+    .await
 }

@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level AS \"access_level!: AccessLevel\"\n        FROM entity_access\n        WHERE entity_id = $1 AND entity_type = 'scheduled_action' AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $3))\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4cd4baab72b1bb6555b410db4549d3e58edeb7ef2b7fe097f82686c92cb6af68"
+}

@@ -7,7 +7,7 @@ use email_db_client::threads::search_filters::{
     sent_thread_ids, thread_ids_matching_states,
 };
 use entity_access::outbound::{
-    get_user_source_ids, project_email_threads, project_shared_email_threads, shared_email_threads,
+    project_email_threads, project_shared_email_threads, shared_email_threads,
 };
 use item_filters::ast::email::AttachmentKind;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
@@ -48,11 +48,8 @@ impl EmailSearchSource for EmailSearchPgSource {
         requested: &[Uuid],
         max: usize,
     ) -> Result<Vec<SharedThread>, Report> {
-        let sources = get_user_source_ids(&self.db, Some(user))
-            .await
-            .map_err(|error| rootcause::report!("{error:#}"))?;
         let threads =
-            shared_email_threads(&self.db, &sources, own_link_ids, requested, limit(max)).await?;
+            shared_email_threads(&self.db, user, own_link_ids, requested, limit(max)).await?;
         Ok(threads.into_iter().map(shared_thread).collect())
     }
 
@@ -66,12 +63,9 @@ impl EmailSearchSource for EmailSearchPgSource {
         include_thread_shares: bool,
         max: usize,
     ) -> Result<Vec<SharedThread>, Report> {
-        let sources = get_user_source_ids(&self.db, Some(user))
-            .await
-            .map_err(|error| rootcause::report!("{error:#}"))?;
         let threads = project_email_threads(
             &self.db,
-            &sources,
+            user,
             own_link_ids,
             project_ids,
             requested,
@@ -89,11 +83,8 @@ impl EmailSearchSource for EmailSearchPgSource {
         own_link_ids: &[Uuid],
         thread_ids: &[Uuid],
     ) -> Result<Vec<SharedThread>, Report> {
-        let sources = get_user_source_ids(&self.db, Some(user))
-            .await
-            .map_err(|error| rootcause::report!("{error:#}"))?;
         let threads =
-            project_shared_email_threads(&self.db, &sources, own_link_ids, thread_ids).await?;
+            project_shared_email_threads(&self.db, user, own_link_ids, thread_ids).await?;
         Ok(threads.into_iter().map(shared_thread).collect())
     }
 

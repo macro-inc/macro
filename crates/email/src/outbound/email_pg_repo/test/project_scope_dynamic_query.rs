@@ -160,6 +160,57 @@ async fn team_sourced_project_grant_widens(pool: Pool<Postgres>) -> anyhow::Resu
         scripts("email_dynamic_query", "email_shared_threads", "email_project_scope")
     )
 )]
+async fn channel_sourced_project_grant_widens(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let channel_id = Uuid::parse_str("ffff0000-0000-0000-0000-00000000ffff")?;
+    sqlx::query!(
+        r#"INSERT INTO comms_channels (id, name, channel_type, owner_id)
+           VALUES ($1, 'Scope channel', 'private', $2)"#,
+        channel_id,
+        USER1,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO comms_channel_participants (channel_id, user_id, role)
+           VALUES ($1, $2, 'member')"#,
+        channel_id,
+        USER1,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           VALUES ($1::text::uuid, 'project', $2::uuid::text, 'channel', 'view')"#,
+        PRIVATE_PROJECT,
+        channel_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let ids = run_query(
+        &pool,
+        PreviewViewStandardLabel::All,
+        project_filter(PRIVATE_PROJECT),
+        USER1,
+    )
+    .await?;
+
+    assert_eq!(
+        ids,
+        vec![USER2_IN_PRIVATE.to_string(), OWN_IN_PRIVATE.to_string()],
+        "a grant to a channel the caller is in should widen like a user grant"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_shared_threads", "email_project_scope")
+    )
+)]
 async fn no_project_access_returns_only_own_threads(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let ids = run_query(
         &pool,

@@ -192,7 +192,7 @@ per-entity-type search plus a unified search across them — mounted into
   filter is an `ExpandErr`. `project_ids` (Drive folders) is an allowlist with
   the list's Project candidate rule (`entity_access::project_email_threads`):
   the caller's own threads in the folders, every thread in a folder granted to
-  their sources whoever's inbox holds it, and thread shares in the folders,
+  them, a channel they are in or one of their teams, whoever's inbox holds it, and thread shares in the folders,
   at most `MAX_PROJECT_THREADS`, from at most `MAX_EMAIL_PROJECTS` folders
   (more is a 400); the other thread-level filters are then checked per hit.
   Each folder's read stops once it has the cap's worth of threads the caller
