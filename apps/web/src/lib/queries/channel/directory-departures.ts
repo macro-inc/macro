@@ -481,7 +481,13 @@ export function createDepartureRecheck(
                       };
                       try {
                         await check(job);
-                        if (deadline.aborted) {
+                        // A reset or disposal that ended the round as well
+                        // cleared what it held: nothing to put back.
+                        if (
+                          deadline.aborted &&
+                          !lifetime.aborted &&
+                          !deps.signal.aborted
+                        ) {
                           tally.failed += 1;
                           retry(
                             id,
