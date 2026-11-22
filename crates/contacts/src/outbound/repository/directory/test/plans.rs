@@ -130,6 +130,19 @@ async fn seed(pool: &PgPool) {
     diagnose(pool, "after VACUUM").await;
 }
 
+async fn diagnose_connection(connection: &mut PgConnection, when: &str) {
+    let row: (String,) = sqlx::query_as(
+        "SELECT (SELECT row_to_json(v)::text FROM pg_visibility_map_summary('contact_inbox_members') v) \
+         || ' n_tup_ins=' || (SELECT n_tup_ins::text || ' n_tup_upd=' || n_tup_upd::text || ' n_tup_del=' || n_tup_del::text \
+         || ' last_vacuum=' || coalesce(last_vacuum::text, '-') || ' last_autovacuum=' || coalesce(last_autovacuum::text, '-') \
+         || ' last_autoanalyze=' || coalesce(last_autoanalyze::text, '-') FROM pg_stat_user_tables WHERE relname = 'contact_inbox_members')",
+    )
+    .fetch_one(&mut *connection)
+    .await
+    .unwrap();
+    eprintln!("HORIZON {when} visibility contact_inbox_members: {}", row.0);
+}
+
 // Throwaway CI diagnostic: what holds the xmin horizon back.
 async fn diagnose(pool: &PgPool, when: &str) {
     for (label, query) in [
@@ -147,7 +160,7 @@ async fn diagnose(pool: &PgPool, when: &str) {
         ),
         (
             "me",
-            "SELECT json_build_object('db', current_database(), 'txid', txid_current()::text,              'snapshot', txid_current_snapshot()::text, 'version', version())::text",
+            "SELECT json_build_object('db', current_database(), 'txid', txid_current_if_assigned()::text,              'snapshot', txid_current_snapshot()::text, 'version', version())::text",
         ),
     ] {
         let row: (String,) = sqlx::query_as(query).fetch_one(pool).await.unwrap();
@@ -164,8 +177,6 @@ async fn diagnose(pool: &PgPool, when: &str) {
     .await
     .unwrap();
     eprintln!("HORIZON {when} visibility contact_inbox_members: {}", row.0);
-    // Fail on purpose after the VACUUM so CI prints this test's output.
-    assert!(when != "after VACUUM", "diagnostic run: see HORIZON lines");
 }
 
 async fn hosted_planner(connection: &mut PgConnection) {
@@ -367,6 +378,7 @@ async fn directory_reads_stay_bounded_at_100k_in_custom_and_generic_plans(pool: 
         )
         .await;
         // One range read of the subject's inbox rows.
+        diagnose_connection(&mut connection, "before inbox check").await;
         check(
             &mut connection,
             &format!("EXECUTE directory_inbox_contacts('{SUBJECT}')"),
@@ -376,4 +388,5 @@ async fn directory_reads_stay_bounded_at_100k_in_custom_and_generic_plans(pool: 
         )
         .await;
     }
+    panic!("diagnostic run: see HORIZON lines");
 }
