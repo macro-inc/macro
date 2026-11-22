@@ -70,6 +70,11 @@ type SessionStore = {
    * back, a dismissal, or the server confirming the lease; never silently.
    */
   controlLost: 'drop' | 'lapse' | undefined;
+  /**
+   * Why a drive lapsed, when the server said: the agent couldn't be kept
+   * paused, so it took the computer back (`agentNotPausable` mid-drive).
+   */
+  lapseReason: 'agentNotPausable' | undefined;
 };
 
 /**
@@ -89,6 +94,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     takeOvers: 0,
     notice: undefined,
     controlLost: options.continueDriving ? 'drop' : undefined,
+    lapseReason: undefined,
   });
 
   let element: HTMLElement | undefined;
@@ -260,6 +266,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
             // person moved it to another tab of theirs on purpose.
             const lapsed = drivingMe() && !driving && !ours && !handedBackHere;
             if (driving) handedBackHere = false;
+            if (driving) setStore('lapseReason', undefined);
             // One update, so a lease being taken back never shows as lost.
             batch(() => {
               setStore({
@@ -292,6 +299,16 @@ export function createScreenSession(options: ScreenSessionOptions) {
             // ordinary Take over here instead of holding the keyboard.
             const resumeRefused =
               store.takingOver && store.controlLost === 'drop';
+            // Mid-drive, `agentNotPausable` ends the drive (the agent couldn't
+            // be kept paused): the reason for the lapse that comes with it,
+            // before or after, not a refused take-over.
+            if (
+              error.code === 'agentNotPausable' &&
+              (drivingMe() || store.controlLost === 'lapse')
+            ) {
+              setStore({ lapseReason: 'agentNotPausable', takingOver: false });
+              return;
+            }
             setStore({
               notice: error,
               takingOver: false,
@@ -529,6 +546,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
       kind: 'released',
       driver: store.server.driver,
       reconnected: store.controlLost === 'drop',
+      reason: store.controlLost === 'lapse' ? store.lapseReason : undefined,
     };
   };
 

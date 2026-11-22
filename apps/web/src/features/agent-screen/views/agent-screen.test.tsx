@@ -566,3 +566,40 @@ describe('pasting while others watch', () => {
     }
   );
 });
+
+describe('a drive the agent takes back', () => {
+  it.each([
+    ['desktop', AgentScreen],
+    ['phone', MobileAgentScreen],
+  ])(
+    '%s: says the agent could not stay paused, keeps the keys, and offers Take over again',
+    async (_device, View) => {
+      vi.useFakeTimers();
+      const connections: Connection[] = [];
+      const { unmount } = renderView(View, connections);
+      await vi.advanceTimersByTimeAsync(0);
+      connections[0].handlers.onState(state(true));
+
+      // The lease change first, then the harness's reason.
+      connections[0].handlers.onState({ ...state(false), driver: null });
+      connections[0].handlers.onError({
+        code: 'agentNotPausable',
+        message:
+          'The agent couldn’t be kept paused, so it has the computer back.',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(
+        screen.getByText(
+          'You’re no longer driving: Scout couldn’t stay paused, so it has the computer back.'
+        )
+      ).toBeTruthy();
+      expect(screen.queryByText(/after a while without input/)).toBeNull();
+      expect(screen.queryByText(/can’t be taken over right now/)).toBeNull();
+      expect(
+        screen.getByRole('button', { name: 'Take over again' })
+      ).toBeTruthy();
+      unmount();
+    }
+  );
+});

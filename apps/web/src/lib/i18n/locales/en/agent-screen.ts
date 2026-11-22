@@ -27,6 +27,8 @@ export default {
   controlLostLapsed:
     'You’re no longer driving: the drive ended after a while without input.',
   controlTakenBy: 'You’re no longer driving: {{name}} took over.',
+  controlLostAgentResumed:
+    'You’re no longer driving: {{name}} couldn’t stay paused, so it has the computer back.',
   someoneElse: 'Someone else',
   dismissControlLost: 'Dismiss',
   takingOver: 'Taking over…',

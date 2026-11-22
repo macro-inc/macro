@@ -16,6 +16,7 @@ export function ControlLostBanner(props: {
   state: ControlLost | undefined;
   /** The current driver's display name, resolved from their user id. */
   driverName: string | undefined;
+  agentName: string;
   /** Present when this viewer may drive. */
   onTakeOver: (() => void) | undefined;
   onDismiss: () => void;
@@ -24,6 +25,9 @@ export function ControlLostBanner(props: {
     match(state)
       .with({ kind: 'reconnecting' }, () =>
         t('agentScreen.controlLostReconnecting')
+      )
+      .with({ kind: 'released', reason: 'agentNotPausable' }, () =>
+        t('agentScreen.controlLostAgentResumed', { name: props.agentName })
       )
       .with({ kind: 'released', driver: null, reconnected: true }, () =>
         t('agentScreen.controlLostReleased')

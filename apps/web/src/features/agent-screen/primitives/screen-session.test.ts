@@ -1238,4 +1238,66 @@ describe('createScreenSession', () => {
       dispose();
     });
   });
+
+  it('says the drive ended because the agent could not be kept paused, whichever comes first, the error or the lease change', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+    const state = (driver: { name: string; isYou: boolean } | null) => ({
+      driver,
+      agentHeld: driver !== null,
+      waking: false,
+      transport: 'vnc' as const,
+      viewers: 1,
+      drivingHere: driver !== null,
+    });
+    const alice = { name: 'Alice', isYou: true };
+    const resumed = {
+      code: 'agentNotPausable' as const,
+      message:
+        'The agent couldn’t be kept paused, so it has the computer back.',
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      const live = connections[0].handlers;
+
+      // The error first, then the lease change.
+      live.onState(state(alice));
+      live.onError(resumed);
+      live.onState(state(null));
+      expect(session.controlLost()).toEqual({
+        kind: 'released',
+        driver: null,
+        reconnected: false,
+        reason: 'agentNotPausable',
+      });
+      // Not shown as a refused take-over; the keys stay held.
+      expect(session.store.notice).toBeUndefined();
+      expect(session.holdsKeyboard()).toBe(true);
+
+      // Driving again forgets it; then the lease change first.
+      session.takeOver();
+      live.onState(state(alice));
+      live.onState(state(null));
+      expect(session.controlLost()).toMatchObject({ reason: undefined });
+      live.onError(resumed);
+      expect(session.controlLost()).toMatchObject({
+        reason: 'agentNotPausable',
+      });
+      expect(session.store.notice).toBeUndefined();
+      dispose();
+    });
+  });
 });

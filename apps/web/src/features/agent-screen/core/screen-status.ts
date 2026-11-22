@@ -37,7 +37,13 @@ export type ControlLost =
    * No longer driving: the lease lapsed, or `driver` took it; `reconnected`
    * when that was found after a reconnect.
    */
-  | { kind: 'released'; driver: ScreenDriver | null; reconnected: boolean };
+  | {
+      kind: 'released';
+      driver: ScreenDriver | null;
+      reconnected: boolean;
+      /** The server's reason, when it gave one. */
+      reason?: 'agentNotPausable';
+    };
 
 /** Why minting a ticket failed, from the service client's error codes. */
 export type TicketFailure =

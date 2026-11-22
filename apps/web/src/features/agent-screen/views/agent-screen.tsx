@@ -217,6 +217,7 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
         <ControlLostBanner
           state={session.controlLost()}
           driverName={props.model.driverName()}
+          agentName={props.model.agentName()}
           onTakeOver={
             props.model.canDrive() ? () => session.takeOver() : undefined
           }

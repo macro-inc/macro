@@ -55,8 +55,9 @@ Each appears only when the harness list gives the viewer access other than
    shows "You stopped watching" with **View screen again**.
 
 When a drive ends without the driver letting go (the lease lapsed for lack of
-input, or someone else took over), a banner says "You're no longer driving"
-with **Take over again**, and keys stay swallowed until the person acts on it.
+input, someone else took over, or the agent couldn't stay paused and has the
+computer back), a banner says "You're no longer driving" and why, with
+**Take over again**, and keys stay swallowed until the person acts on it.
 A dropped connection while driving says "Connection lost while you were
 driving. Reconnecting…" and wins the same drive back.
 
