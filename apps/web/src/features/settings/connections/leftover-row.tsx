@@ -107,17 +107,12 @@ export function LeftoverRow(props: { leftover: Leftover }) {
   });
 
   // Only a server added by URL is named by the user.
-  const renameItems = (): ConnectionMenuItem[] =>
-    props.leftover.kind === 'server'
-      ? [
-          {
-            label: 'Rename',
-            onSelect: openRename,
-            disabled: busy(),
-            icon: 'rename',
-          },
-        ]
-      : [];
+  const renameItem = (): ConnectionMenuItem => ({
+    label: 'Rename',
+    onSelect: openRename,
+    disabled: busy(),
+    icon: 'rename',
+  });
 
   const reconnectItem = (): ConnectionMenuItem => ({
     label: 'Reconnect',
@@ -126,7 +121,71 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     disabled: busy(),
   });
 
-  const actions = (): JSX.Element =>
+  // A server added by URL counts as connected with or without a sign-in, and
+  // the web cannot tell which: its sign-in stays one tap away in every state.
+  const signInLabel = () =>
+    props.leftover.status === 'action-required' ? 'Reconnect' : 'Sign in';
+
+  const signInAction = () => (
+    <ConnectAction
+      label={signInLabel()}
+      ariaLabel={`${signInLabel()} to ${props.leftover.title}`}
+      onClick={startConnect}
+      loading={connectBusy()}
+      disabled={busy()}
+    />
+  );
+
+  const signInItem = (): ConnectionMenuItem => ({
+    label: 'Sign in',
+    icon: 'reconnect',
+    onSelect: startConnect,
+    disabled: busy(),
+  });
+
+  const serverActions = (): JSX.Element =>
+    match(props.leftover.status)
+      .with('not-connected', 'action-required', () => (
+        <ConnectionRowActions
+          primary={signInAction()}
+          items={[
+            renameItem(),
+            // A server never signed in to holds nothing to disconnect.
+            disconnectItem(props.leftover.status === 'action-required'),
+          ]}
+        />
+      ))
+      .with('connected', () => (
+        <ConnectionRowActions
+          primary={signInAction()}
+          items={[
+            {
+              label: 'Disable',
+              onSelect: () => setEnabled(false),
+              disabled: busy(),
+              icon: 'disable',
+            },
+            renameItem(),
+            disconnectItem(),
+          ]}
+        />
+      ))
+      .with('off', () => (
+        <ConnectionRowActions
+          primary={
+            <ConnectAction
+              label="Enable"
+              variant="neutral"
+              onClick={() => setEnabled(true)}
+              disabled={busy()}
+            />
+          }
+          items={[renameItem(), signInItem(), disconnectItem()]}
+        />
+      ))
+      .exhaustive();
+
+  const appActions = (): JSX.Element =>
     match(props.leftover.status)
       .with('not-connected', 'action-required', () => (
         <ConnectionRowActions
@@ -137,14 +196,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
               disabled={busy()}
             />
           }
-          items={[
-            ...renameItems(),
-            // A server never signed in to holds nothing to disconnect.
-            disconnectItem(
-              props.leftover.kind === 'app' ||
-                props.leftover.status === 'action-required'
-            ),
-          ]}
+          items={[disconnectItem()]}
         />
       ))
       .with('connected', () => (
@@ -156,7 +208,6 @@ export function LeftoverRow(props: { leftover: Leftover }) {
               disabled: busy(),
               icon: 'disable',
             },
-            ...renameItems(),
             reconnectItem(),
             disconnectItem(),
           ]}
@@ -172,10 +223,13 @@ export function LeftoverRow(props: { leftover: Leftover }) {
               disabled={busy()}
             />
           }
-          items={[...renameItems(), reconnectItem(), disconnectItem()]}
+          items={[reconnectItem(), disconnectItem()]}
         />
       ))
       .exhaustive();
+
+  const actions = (): JSX.Element =>
+    props.leftover.kind === 'server' ? serverActions() : appActions();
 
   const status = (): IntegrationStatus =>
     match(props.leftover.status)

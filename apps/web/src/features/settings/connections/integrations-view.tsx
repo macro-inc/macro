@@ -51,7 +51,7 @@ import {
   type Leftover,
   type ProviderId,
 } from './model';
-import { CATALOG_HIDDEN_SLUGS } from './provider-meta';
+import { CATALOG_HIDDEN_SLUGS, OWN_ROW_APPS } from './provider-meta';
 import { SlackChannelImportFlow } from './slack-channel-import/SlackChannelImportFlow';
 import { useConnectionsModel } from './use-connections-model';
 import {
@@ -260,8 +260,12 @@ function IntegrationsOverview(
   // Servers the user added themselves lead the list.
   const customLeftovers = () =>
     leftovers().filter((leftover) => leftover.kind === 'server');
+  // An app with a row of its own above (Granola) shows only there.
   const otherLeftovers = () =>
-    leftovers().filter((leftover) => leftover.kind === 'app');
+    leftovers().filter(
+      (leftover) =>
+        leftover.kind === 'app' && !OWN_ROW_APPS.has(leftover.appSlug)
+    );
 
   // Every app the user holds already has a row above.
   const alreadyHave = createMemo(

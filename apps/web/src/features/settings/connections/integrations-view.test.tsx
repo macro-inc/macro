@@ -451,27 +451,73 @@ describe('unified Integrations page', () => {
     expect(row('Stripe').textContent).toContain('Not connected');
   });
 
-  it('connects a held server by the key the server gave', async () => {
-    const linear = connector(
-      { type: 'server', url: 'https://mcp.linear.app/mcp' },
-      'My issues',
-      'notConnected'
-    );
-    mocks.connectors = [linear];
-    mocks.connect.mockResolvedValueOnce('closed');
+  it.each(['connected', 'notConnected'] as const)(
+    'offers sign-in on a %s server, by the key the server gave',
+    async (status) => {
+      // A server counts as connected with or without a sign-in, so a server
+      // that needs OAuth must still be signable from its row.
+      const linear = connector(
+        { type: 'server', url: 'https://mcp.linear.app/mcp' },
+        'My issues',
+        status
+      );
+      mocks.connectors = [linear];
+      mocks.connect.mockResolvedValueOnce('closed');
+      render(() => (
+        <IntegrationsView
+          onOpenEmailSettings={() => {}}
+          onOpenMacroMcp={() => {}}
+        />
+      ));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Sign in to My issues' })
+      );
+      await waitFor(() =>
+        expect(mocks.connect).toHaveBeenCalledWith({
+          key: linear.key,
+          container: undefined,
+        })
+      );
+    }
+  );
+
+  it('offers Reconnect on a server whose sign-in stopped working', () => {
+    mocks.connectors = [
+      connector(
+        { type: 'server', url: 'https://tools.example.com/mcp' },
+        'Team tools',
+        'needsReauth'
+      ),
+    ];
     render(() => (
       <IntegrationsView
         onOpenEmailSettings={() => {}}
         onOpenMacroMcp={() => {}}
       />
     ));
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
-    await waitFor(() =>
-      expect(mocks.connect).toHaveBeenCalledWith({
-        key: linear.key,
-        container: undefined,
-      })
-    );
+    expect(
+      screen.getByRole('button', { name: 'Reconnect to Team tools' })
+    ).toBeTruthy();
+  });
+
+  it('shows an app with a row of its own only once', () => {
+    mocks.granolaConnected = true;
+    mocks.connectors = [
+      connector({ type: 'app', slug: 'granola' }, 'Granola'),
+      connector({ type: 'app', slug: 'hubspot' }, 'HubSpot'),
+    ];
+    render(() => (
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+      />
+    ));
+    const names = screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => row.querySelector('span.font-medium')?.textContent);
+    expect(names.filter((name) => name === 'Granola')).toHaveLength(1);
+    expect(names).toContain('HubSpot');
   });
 
   it('filters every row by search', () => {
