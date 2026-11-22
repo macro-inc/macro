@@ -5,7 +5,8 @@
 A differential fuzzer for the client GraphQL cache. Two builds of it, one per
 version of the cache (before and after a change), run the same seeded operation
 sequences through the native host engine. Every response and every table left on
-disk after a reopen must come out the same.
+disk after a reopen must come out the same, apart from what a mode below masks on
+purpose (it says what).
 
 ## How it works
 
@@ -108,7 +109,10 @@ disk after a reopen must come out the same.
   side runs every read (`src/exec/abandon.rs`). Abandoned answers are masked, an abandoned
   read that answered fails the seed, and operations left registered broadly drop out of
   `affectedOps`, where b must report every one a reported (`<seed>.broad`). Put the side
-  without abandons as SIDE_A.
+  without abandons as SIDE_A. `CHAIN_*` runs don't make that check. A `Dup` plan sends a
+  second read with the same id from another task; the first is expected to hold the id,
+  but the scheduler picks which registers first, so a seed failing with "an abandon
+  reached a second read" may be timing, not the cache (none has been seen).
 - Rerun one seed: `bin/SIDE --seed N --schema static_assets/schema.graphql --assets
   crates/client/cache-diff-fuzz/assets --out D --work D/w --full`. Use
   `--emit-case` and `--case FILE` to save a case and rerun it. A seed's case
