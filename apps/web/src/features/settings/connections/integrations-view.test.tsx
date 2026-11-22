@@ -451,35 +451,61 @@ describe('unified Integrations page', () => {
     expect(row('Stripe').textContent).toContain('Not connected');
   });
 
-  it.each(['connected', 'notConnected'] as const)(
-    'offers sign-in on a %s server, by the key the server gave',
-    async (status) => {
-      // A server counts as connected with or without a sign-in, so a server
-      // that needs OAuth must still be signable from its row.
-      const linear = connector(
-        { type: 'server', url: 'https://mcp.linear.app/mcp' },
-        'My issues',
-        status
-      );
-      mocks.connectors = [linear];
-      mocks.connect.mockResolvedValueOnce('closed');
-      render(() => (
-        <IntegrationsView
-          onOpenEmailSettings={() => {}}
-          onOpenMacroMcp={() => {}}
-        />
-      ));
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Sign in to My issues' })
-      );
-      await waitFor(() =>
-        expect(mocks.connect).toHaveBeenCalledWith({
-          key: linear.key,
-          container: undefined,
-        })
-      );
-    }
-  );
+  it('signs in to a server that is not connected from its row, by the key the server gave', async () => {
+    const linear = connector(
+      { type: 'server', url: 'https://mcp.linear.app/mcp' },
+      'My issues',
+      'notConnected'
+    );
+    mocks.connectors = [linear];
+    mocks.connect.mockResolvedValueOnce('closed');
+    render(() => (
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+      />
+    ));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Sign in to My issues' })
+    );
+    await waitFor(() =>
+      expect(mocks.connect).toHaveBeenCalledWith({
+        key: linear.key,
+        container: undefined,
+      })
+    );
+  });
+
+  it('keeps sign-in in the menu of a connected server', async () => {
+    // A server can count as connected without a sign-in, so one that needs
+    // OAuth must still be signable from its row.
+    const tools = connector(
+      { type: 'server', url: 'https://tools.example.com/mcp' },
+      'Team tools',
+      'connected'
+    );
+    mocks.connectors = [tools];
+    mocks.connect.mockResolvedValueOnce('closed');
+    render(() => (
+      <IntegrationsView
+        onOpenEmailSettings={() => {}}
+        onOpenMacroMcp={() => {}}
+      />
+    ));
+    expect(
+      screen.queryByRole('button', { name: 'Sign in to Team tools' })
+    ).toBeNull();
+    const more = screen.getByRole('button', { name: 'More' });
+    fireEvent.keyDown(more, { key: 'Enter' });
+    const signIn = await screen.findByRole('menuitem', { name: 'Sign in' });
+    fireEvent.keyDown(signIn, { key: 'Enter' });
+    await waitFor(() =>
+      expect(mocks.connect).toHaveBeenCalledWith({
+        key: tools.key,
+        container: undefined,
+      })
+    );
+  });
 
   it('offers Reconnect on a server whose sign-in stopped working', () => {
     mocks.connectors = [

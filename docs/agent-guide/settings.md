@@ -833,10 +833,11 @@ in a new tab (system browser on native) or the embedded connect dialog, then
 `POST /connectors/{key}/complete` records it. A server added by URL is listed
 as a custom MCP server unless the server reports it as an app; existing native
 Linear and Notion connections therefore appear among the custom servers, and
-the Linear and Notion rows read Not connected. A server added by URL counts as
-connected with or without a sign-in, so its row always offers **Sign in**
-(**Reconnect** when its sign-in stopped working; in the menu while it is off),
-which runs `POST /connectors/server/{id}/connect`. An app with a row of its own
+the Linear and Notion rows read Not connected. A server added by URL can count as
+connected without a sign-in, so every server row offers **Sign in**, which
+runs `POST /connectors/server/{id}/connect`: on the row while it is not
+connected (**Reconnect** when its sign-in stopped working), in its menu
+otherwise. An app with a row of its own
 (Granola) is listed once, in that row. A held connection that no longer
 counts (for example one through a provider the user is not on) reads
 **Not connected** with **Connect**.

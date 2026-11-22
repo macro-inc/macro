@@ -121,8 +121,9 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     disabled: busy(),
   });
 
-  // A server added by URL counts as connected with or without a sign-in, and
-  // the web cannot tell which: its sign-in stays one tap away in every state.
+  // A server added by URL can count as connected without a sign-in, so its
+  // sign-in stays in reach in every state: on the row while it is not
+  // connected, in the menu otherwise.
   const signInLabel = () =>
     props.leftover.status === 'action-required' ? 'Reconnect' : 'Sign in';
 
@@ -157,7 +158,6 @@ export function LeftoverRow(props: { leftover: Leftover }) {
       ))
       .with('connected', () => (
         <ConnectionRowActions
-          primary={signInAction()}
           items={[
             {
               label: 'Disable',
@@ -166,6 +166,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
               icon: 'disable',
             },
             renameItem(),
+            signInItem(),
             disconnectItem(),
           ]}
         />
