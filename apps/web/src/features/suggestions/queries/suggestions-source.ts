@@ -143,6 +143,12 @@ export function useSuggestionsSource(): SuggestionsSource {
       );
       await refresh();
     },
+    async stop(id) {
+      await throwOnErr(() =>
+        scheduledActionClient.stopSuggestionRun({ suggestionId: id })
+      );
+      await refresh();
+    },
     async restore(id) {
       await throwOnErr(() =>
         scheduledActionClient.restoreSuggestion({ suggestionId: id })

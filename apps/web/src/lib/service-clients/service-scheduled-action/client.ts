@@ -49,6 +49,7 @@ import {
   getRecordSuggestionsViewedUrl,
   getRegenerateSuggestionsUrl,
   getRestoreSuggestionUrl,
+  getStopSuggestionRunUrl,
 } from './generated/client';
 import type {
   AcceptSuggestionRequest,
@@ -390,6 +391,12 @@ export const scheduledActionClient = {
   /** Take back the caller's own dismissal, within a few minutes of it. */
   restoreSuggestion: (args: { suggestionId: string }) =>
     scheduledActionFetch(getRestoreSuggestionUrl(args.suggestionId), {
+      method: 'POST',
+    }),
+
+  /** Stop a suggestion's run and keep the suggestion: it is open again once the run stops. */
+  stopSuggestionRun: (args: { suggestionId: string }) =>
+    scheduledActionFetch(getStopSuggestionRunUrl(args.suggestionId), {
       method: 'POST',
     }),
 
