@@ -1,7 +1,7 @@
 {
   "viewport": "390x844 touch emulation;44/34px simulated safe insets; Chromium, not physical iOS",
   "run": "ca6b5cecff4f",
-  "scope": "synthetic Dovecot/Mailpit lab through protected tailnet HTTPS preview",
+  "scope": "synthetic Dovecot/Mailpit lab through protected private HTTPS preview",
   "realProvider": "unverified",
   "stages": {
     "login": {

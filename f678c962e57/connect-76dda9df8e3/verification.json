@@ -1,6 +1,6 @@
 {
   "run": "3e737f2231fe",
-  "scope": "synthetic Dovecot/Mailpit lab through protected tailnet HTTPS preview",
+  "scope": "synthetic Dovecot/Mailpit lab through protected private HTTPS preview",
   "realProvider": "unverified",
   "stages": {
     "login": {
