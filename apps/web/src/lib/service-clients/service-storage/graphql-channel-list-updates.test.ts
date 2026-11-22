@@ -10,6 +10,10 @@ import {
 } from '../../queries/channel/notification-refresh';
 import { registerGraphqlSoupRevalidations } from '../../queries/soup/graphql/active-queries';
 import {
+  type ChannelMembershipPatch,
+  subscribeToChannelMembership,
+} from './channel-membership';
+import {
   ChannelListSoupDocument,
   ChannelUnreadPresenceDocument,
   SoupDocument,
@@ -364,5 +368,84 @@ describe('new channel pushes', () => {
     ]);
 
     expect(expectChannel).not.toHaveBeenCalled();
+  });
+});
+
+describe('live channel membership', () => {
+  const update = (
+    id: string,
+    isParticipant: boolean,
+    typename = 'GraphqlSoupChannel'
+  ) =>
+    ({
+      __typename: 'SoupUpdated',
+      item: {
+        __typename: typename,
+        id,
+        channelType: 'public',
+        isParticipant,
+        createdAt: '2026-01-01T00:00:00Z',
+      },
+    }) as SoupUpdatesSubscription['soupUpdates'][number];
+  const deletion = (entityId: string, graphqlTypeName = 'GraphqlSoupChannel') =>
+    ({
+      __typename: 'GraphqlCacheDeletion',
+      graphqlTypeName,
+      entityId,
+    }) as SoupUpdatesSubscription['soupUpdates'][number];
+
+  function listen() {
+    const seen: ChannelMembershipPatch[] = [];
+    cleanup.push(subscribeToChannelMembership((patch) => seen.push(patch)));
+    return seen;
+  }
+
+  it('publishes each channel the viewer is shown in or out of, and each deleted channel', () => {
+    const { handler } = setup();
+    const seen = listen();
+
+    handler.onSoupUpdates([
+      update('joined', true),
+      update('left', false),
+      deletion('deleted'),
+      update('a-document', true, 'GraphqlSoupDocument'),
+      deletion('a-document', 'GraphqlSoupDocument'),
+    ]);
+
+    expect(seen).toEqual([
+      { channelId: 'joined', member: true },
+      { channelId: 'left', member: false },
+      { channelId: 'deleted', member: false },
+    ]);
+  });
+
+  it('publishes nothing after disposal or to a listener that unsubscribed', () => {
+    const { handler } = setup();
+    const seen: ChannelMembershipPatch[] = [];
+    const unsubscribe = subscribeToChannelMembership((patch) =>
+      seen.push(patch)
+    );
+    unsubscribe();
+    const kept = listen();
+
+    handler.dispose();
+    handler.onSoupUpdates([update('left', false)]);
+
+    expect(seen).toEqual([]);
+    expect(kept).toEqual([]);
+  });
+
+  it('reaches every listener when one throws', () => {
+    const { handler } = setup();
+    cleanup.push(
+      subscribeToChannelMembership(() => {
+        throw new Error('listener failed');
+      })
+    );
+    const seen = listen();
+
+    handler.onSoupUpdates([update('left', false)]);
+
+    expect(seen).toEqual([{ channelId: 'left', member: false }]);
   });
 });

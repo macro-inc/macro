@@ -22,6 +22,10 @@ import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalize
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
+  type ChannelMembershipPatch,
+  subscribeToChannelMembership,
+} from '@service-storage/channel-membership';
+import {
   ChannelDirectoryEntityDocument,
   ChannelDirectoryPageDocument,
   SoupChannelDirectoryBackfillDocument,
@@ -91,7 +95,10 @@ import {
   insertInDirectoryOrder,
   toDirectoryChannel,
 } from './directory-core';
-import { createDepartureRecheck } from './directory-departures';
+import {
+  createDepartureRecheck,
+  type RemoveUnreadableResult,
+} from './directory-departures';
 import {
   CHANNEL_DIRECTORY_CHECKPOINT_ID,
   CHANNEL_DIRECTORY_INPUT,
@@ -1445,7 +1452,13 @@ type CachedDirectoryDeps = {
     ids: readonly string[],
     generation: string,
     signal: AbortSignal
-  ) => Promise<unknown>;
+  ) => Promise<RemoveUnreadableResult | undefined>;
+  /** Subscribes to live changes of the viewer's channel membership, which
+   * show leaves the directory's own reads may never see. None when left
+   * out. */
+  subscribeMembership?: (
+    listener: (patch: ChannelMembershipPatch) => void
+  ) => () => void;
   /** When a channel the viewer was seen leaving is checked again;
    * `DEPARTURE_RECHECKS_MS` when left out. */
   departureRechecksMs?: readonly number[];
@@ -1698,6 +1711,12 @@ export function createCachedChannelDirectory(
     signal: controller.signal,
     rechecksMs: deps.departureRechecksMs,
   });
+  const unsubscribeMembership = deps.subscribeMembership?.((patch) =>
+    patch.member
+      ? departures.rejoin(patch.channelId)
+      : departures.depart(patch.channelId)
+  );
+  if (unsubscribeMembership) onCleanup(unsubscribeMembership);
   const view = createMemo(() =>
     views.apply(
       // The fallback's unconfirmed channels show nothing of the viewer.
@@ -2578,6 +2597,7 @@ export function createAppChannelDirectory(): ChannelDirectory {
       stampView: (channelId, viewedAt) =>
         stampCachedChannelView(cache, channelId, viewedAt),
       ownWrites: ownChannelWrites(queryClient),
+      subscribeMembership: subscribeToChannelMembership,
       removeUnreadable: (ids, generation, signal) =>
         removeChannelsGoneOnPrimary({
           host: cache,

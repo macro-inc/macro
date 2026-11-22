@@ -11,6 +11,7 @@ import type {
 } from '@graphql-cache/host/types';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
+import type { ChannelMembershipPatch } from '@service-storage/channel-membership';
 import {
   type ChannelDirectoryEntityQuery,
   type ChannelDirectoryFieldsFragment,
@@ -91,6 +92,7 @@ import {
   walkCurrentJoinedChannels,
 } from './directory';
 import { type DirectoryChannel, toDirectoryChannel } from './directory-core';
+import type { RemoveUnreadableResult } from './directory-departures';
 import { CHANNEL_DIRECTORY_CHECKPOINT_ID } from './directory-lane';
 import { ownChannelWrites } from './own-writes';
 import { channelName, channelUuid } from './tests/channel-uuid';
@@ -1043,10 +1045,14 @@ type CachedDirectoryOptions = {
     ids: readonly string[],
     generation: string,
     signal: AbortSignal
-  ) => Promise<unknown>;
+  ) => Promise<RemoveUnreadableResult | undefined>;
   /** When the directory checks a channel the viewer left that came back
    * joined; the production delays when left out. */
   departureRechecksMs?: readonly number[];
+  /** Live membership changes, as the soup subscription delivers them. */
+  subscribeMembership?: (
+    listener: (patch: ChannelMembershipPatch) => void
+  ) => () => void;
 };
 
 const CACHE_SESSION = 'session-1';
@@ -1138,6 +1144,7 @@ function mountCachedDirectory(
         for (const id of ids) cache.records.delete(`GraphqlSoupChannel:${id}`);
         for (const listener of [...generationListeners])
           listener({ storage: 'preserved' } as CacheGenerationChange);
+        return { unconfirmed: [] };
       })
   );
   const directory = createRoot((dispose) => {
@@ -1160,6 +1167,7 @@ function mountCachedDirectory(
       ownWrites: ownChannelWrites(options.queryClient ?? new QueryClient()),
       sessionStartedAt: options.sessionStartedAt,
       departureRechecksMs: options.departureRechecksMs,
+      subscribeMembership: options.subscribeMembership,
     });
   });
   return {
@@ -3342,6 +3350,81 @@ describe('cached channel directory', () => {
       ]);
       await new Promise((resolve) => setTimeout(resolve, RECHECKS[1] + 100));
       expect(goneReads(reloaded.readFromPrimary)).toBe(0);
+    });
+
+    /** Live membership changes, as the soup socket publishes them. */
+    function membershipFeed() {
+      const listeners = new Set<(patch: ChannelMembershipPatch) => void>();
+      return {
+        subscribe(listener: (patch: ChannelMembershipPatch) => void) {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+        emit(name: string, member: boolean) {
+          for (const listener of listeners)
+            listener({ channelId: channelUuid(name), member });
+        },
+      };
+    }
+
+    /** Mounts a complete directory of `kept` alone, with a live feed. */
+    async function listedKept(options: CachedDirectoryOptions = {}) {
+      const feed = membershipFeed();
+      const mounted = mountCachedDirectory([], {
+        departureRechecksMs: RECHECKS,
+        subscribeMembership: feed.subscribe,
+        ...options,
+      });
+      mounted.cache.put(channelRecord('kept'));
+      completeLane('g1');
+      await vi.waitFor(() => expect(mounted.directory.complete()).toBe(true));
+      expect(ids(mounted.directory.channels())).toEqual(['kept']);
+      return { ...mounted, feed };
+    }
+
+    it('checks a channel the viewer left live before the directory ever listed it, once a stale read lands it joined', async () => {
+      const mounted = await listedKept({
+        readFromPrimary: async () => ({ kind: 'read', channel: null }),
+      });
+      mounted.feed.emit('gone', false);
+      // A read sent before the leave lands the channel as joined.
+      mounted.cache.put(channelRecord('gone'), { sourceHash: 'gone-stale' });
+      mounted.reopen();
+
+      await vi.waitFor(() =>
+        expect(mounted.removeUnreadable).toHaveBeenCalledWith(
+          [channelUuid('gone')],
+          'g1',
+          expect.any(AbortSignal)
+        )
+      );
+      expect(goneReads(mounted.readFromPrimary)).toBe(1);
+    });
+
+    it('reads nothing for a live leave the viewer takes back before a stale read lands', async () => {
+      const mounted = await listedKept();
+      mounted.feed.emit('gone', false);
+      mounted.feed.emit('gone', true);
+      mounted.cache.put(channelRecord('gone'), { sourceHash: 'gone-rejoined' });
+      mounted.reopen();
+      await vi.waitFor(() =>
+        expect(ids(mounted.directory.channels()).sort()).toEqual([
+          'gone',
+          'kept',
+        ])
+      );
+      await new Promise((resolve) => setTimeout(resolve, RECHECKS[1] + 100));
+      expect(goneReads(mounted.readFromPrimary)).toBe(0);
+      expect(mounted.removeUnreadable).not.toHaveBeenCalled();
+    });
+
+    it('stops following live membership once unmounted', async () => {
+      const mounted = await listedKept();
+      for (const dispose of disposers.splice(0)) dispose();
+      mounted.feed.emit('gone', false);
+      mounted.cache.put(channelRecord('gone'), { sourceHash: 'gone-stale' });
+      await new Promise((resolve) => setTimeout(resolve, RECHECKS[1] + 100));
+      expect(goneReads(mounted.readFromPrimary)).toBe(0);
     });
   });
 
