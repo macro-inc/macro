@@ -6,6 +6,9 @@ use turso_core::Value;
 pub(super) const INDEX: &str = "records_contacts_cover_idx";
 pub(super) const CREATE_INDEX: &str = "CREATE INDEX records_contacts_cover_idx ON records (__typename, id, value) WHERE __typename = 'GraphqlContact'";
 pub(super) const LOAD: &str = include_str!("contact_search.sql");
+/// Appended after the query's filters: storage 13's order, which the browse
+/// index gives without a sort. Reference resolution keeps the first witnesses.
+pub(super) const ORDER: &str = " ORDER BY s.timestamp_ms DESC, s.__typename ASC, s.id ASC";
 
 pub(super) fn validate_indexes(connection: &Db) -> Result<(), TursoStorageError> {
     let indexes = driver::query(connection, "PRAGMA index_list('records')", vec![])

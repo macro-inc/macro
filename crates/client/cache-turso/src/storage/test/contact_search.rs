@@ -8,6 +8,7 @@ fn contact_reads_use_both_covering_indexes_without_a_sort_or_limit() {
     for query in ["", "Directory", "é%_", "nul\0term"] {
         let (sql, values) =
             search::statement_with_base(contact_index::LOAD, 1, &SearchQuery::new(query)).unwrap();
+        let sql = format!("{sql}{}", contact_index::ORDER);
         let rows = driver::query(
             &storage.connection(),
             &format!("EXPLAIN QUERY PLAN {sql}"),

@@ -5,22 +5,18 @@ fn borrowed_search_rows_reject_corrupt_shapes_before_visiting() {
     let storage = TursoStorage::open_in_memory("borrowed-row-validation").unwrap();
     let mut key_buffer = String::new();
     for sql in [
-        "SELECT 'Thing', 'id', 'text', 0, 'hash', 1",
-        "SELECT 'Thing', 'id', 'text', 0, 'hash', 1, 1, 'extra'",
-        "SELECT 'Thing', 'id', 'text', 'invalid', 'hash', 1, 1",
-        "SELECT '', 'id', 'text', 0, 'hash', 1, 1",
-        "SELECT 'Thing:bad', 'id', 'text', 0, 'hash', 1, 1",
-        "SELECT 'Thing', 'id', NULL, 0, 'hash', 1, 1",
-        // A row of another slot or profile inside this slot's range.
-        "SELECT 'Thing', 'id', 'text', 0, 'hash', 2, 1",
-        "SELECT 'Thing', 'id', 'text', 0, 'hash', 1, 2",
+        "SELECT 'Thing', 'id', 'text', 0",
+        "SELECT 'Thing', 'id', 'text', 0, 'hash', 'extra'",
+        "SELECT 'Thing', 'id', 'text', 'invalid', 'hash'",
+        "SELECT '', 'id', 'text', 0, 'hash'",
+        "SELECT 'Thing:bad', 'id', 'text', 0, 'hash'",
+        "SELECT 'Thing', 'id', NULL, 0, 'hash'",
     ] {
         let result = driver::query_each(&storage.connection(), sql, vec![], |row| {
             search::visit_row(
                 row,
                 SearchProfile::QuickAccessV1,
                 "document",
-                1,
                 &SearchQuery::new(""),
                 &mut key_buffer,
                 &mut |_| panic!("corrupt row visited"),

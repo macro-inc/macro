@@ -166,9 +166,10 @@ fn a_duplicated_slot_is_corruption_not_a_choice() {
 }
 
 /// A row whose slot column disagrees with its rowid range would be listed under
-/// one bucket by text search and another by browse; both reads refuse it.
+/// one bucket by text search, which reads the range, and another by browse,
+/// which reads the slot column. Browse checks the two agree and refuses it.
 #[test]
-fn a_row_outside_its_slots_range_is_corruption_for_every_read() {
+fn a_row_outside_its_slots_range_is_corruption_for_browse() {
     let tampered = |name: &str, sql: &str| {
         let storage = TursoStorage::open_in_memory(name).unwrap();
         write(
@@ -181,20 +182,6 @@ fn a_row_outside_its_slots_range_is_corruption_for_every_read() {
     let moved_slot = "UPDATE search_rows SET slot = 2 WHERE id = 'a'";
     let other_profile = "UPDATE search_rows SET profile = 2 WHERE id = 'a'";
     block_on(async {
-        for sql in [moved_slot, other_profile] {
-            let storage = tampered("search-slot-text", sql);
-            expect_reset_reason(
-                storage
-                    .visit_search_documents(
-                        SearchProfile::QuickAccessV1,
-                        "task",
-                        &SearchQuery::new(""),
-                        |_| {},
-                    )
-                    .await,
-                PhysicalResetReason::Corruption,
-            );
-        }
         // Browse finds the moved row through slot 2 (document), outside its range.
         let storage = tampered("search-slot-browse", moved_slot);
         expect_reset_reason(

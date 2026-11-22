@@ -1298,7 +1298,7 @@ impl Storage for TursoStorage {
             let (sql, values) = search::statement(slot)?;
             let mut key = String::new();
             driver::query_each(&connection, &sql, values, |row| {
-                search::visit_row(row, profile, bucket, slot, query, &mut key, &mut visit)
+                search::visit_row(row, profile, bucket, query, &mut key, &mut visit)
             })
         })();
         self.latch_result(result)
@@ -1325,7 +1325,8 @@ impl Storage for TursoStorage {
             else {
                 return Ok(());
             };
-            let (sql, values) = search::statement_with_base(contact_search::LOAD, slot, query)?;
+            let (mut sql, values) = search::statement_with_base(contact_search::LOAD, slot, query)?;
+            sql.push_str(contact_search::ORDER);
             let mut key_buffer = String::new();
             driver::query_each(&connection, &sql, values, |row| {
                 let mut values = row.get_values();
