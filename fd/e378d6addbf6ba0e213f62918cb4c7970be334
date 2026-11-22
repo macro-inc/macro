@@ -1,0 +1,21 @@
+crates/call/src/outbound/pg_call_repo/lifecycle/test.rs
+  s_e4dab6ab069ba5::t_ca47f7a59b56c9 569-576
+crates/call/src/outbound/pg_call_repo/call_list/page.sql
+  s_e4dab6ab069ba5::t_ca47f7a59b56c9 78-79,85-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fde378d6addbf6ba0e213f62918cb4c7970be334",
+  "prompts": {},
+  "sessions": {
+    "s_e4dab6ab069ba5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cd9cc4b6-e475-4672-bb0c-d61b5198aec2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
