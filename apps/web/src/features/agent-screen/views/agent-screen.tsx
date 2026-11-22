@@ -30,11 +30,12 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
   const [handingBack, setHandingBack] = createSignal(false);
 
   const live = () => session.store.status.kind === 'live';
-  // Stopped, refused or gone: the overlay's own action is the way back, and
-  // there is nothing to take over.
+  // Stopped, refused, gone or asleep: the overlay's own action is the way
+  // back, and there is nothing to take over.
   const over = () =>
     session.store.status.kind === 'ended' ||
-    session.store.status.kind === 'denied';
+    session.store.status.kind === 'denied' ||
+    session.store.status.kind === 'asleep';
   const driver = () => session.store.server?.driver;
   const isPopover = () => panel?.handle.isPopover() ?? false;
 

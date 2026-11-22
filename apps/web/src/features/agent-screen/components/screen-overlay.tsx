@@ -72,6 +72,13 @@ export function ScreenOverlay(props: {
           }
         />
       </Match>
+      <Match when={props.status.kind === 'waking' && props.status.turningOn}>
+        <Message
+          busy
+          title={t('agentScreen.turningOnTitle', name())}
+          hint={t('agentScreen.turningOnHint')}
+        />
+      </Match>
       <Match when={props.status.kind === 'waking'}>
         <Message
           busy

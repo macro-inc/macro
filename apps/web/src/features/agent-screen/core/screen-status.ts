@@ -20,8 +20,11 @@ export type ScreenStatus =
       /** Waiting out the ticket rate limit (`TICKET_RATE_WINDOW_MS`). */
       rateLimited?: true;
     }
-  /** The server is waking the hibernated computer; frames follow. */
-  | { kind: 'waking' }
+  /**
+   * The computer is starting: the server woke it from hibernation, or this
+   * person turned it on (`turningOn`). Frames follow.
+   */
+  | { kind: 'waking'; turningOn?: true }
   /** The computer is asleep, off or unreachable; Turn on may help. */
   | { kind: 'asleep' }
   | { kind: 'denied'; reason: 'cannotWatch' | 'rolloutDisabled' }
@@ -221,6 +224,38 @@ export function afterConnectFailed(
       .with('failed', () => retryOrFail(attempt + 1, context))
       .exhaustive()
   );
+}
+
+/** How long a computer gets to boot before failures count as failures. */
+export const BOOT_TIMEOUT_MS = 120_000;
+
+/** Between tries while the computer boots: its screen appears within seconds. */
+export const BOOT_RETRY_MS = 2000;
+
+/**
+ * While the computer boots, a failure to reach its screen (a tunnel not up
+ * yet, a guest not listening, "off" until it is on) is the boot, not a
+ * drop: the viewer keeps saying it is waking and tries again shortly.
+ * Anything final (stopped, refused, too many) stands.
+ */
+export function whileBooting(
+  step: NextStep,
+  waking: Extract<ScreenStatus, { kind: 'waking' }>
+): NextStep {
+  const asleep = step.kind === 'show' && step.status.kind === 'asleep';
+  const gaveUp =
+    step.kind === 'show' &&
+    step.status.kind === 'ended' &&
+    step.status.reason === 'failed';
+  if (step.kind !== 'retry' && !asleep && !gaveUp) return step;
+  // A rate limit is waited out as it would be otherwise.
+  if (
+    step.kind === 'retry' &&
+    step.status.kind === 'reconnecting' &&
+    step.status.rateLimited
+  )
+    return step;
+  return { kind: 'retry', status: waking, delayMs: BOOT_RETRY_MS };
 }
 
 /** Whether the picture is current enough to act on. */

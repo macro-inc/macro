@@ -54,6 +54,8 @@ export default {
   connectingHint: 'Usually under 3 seconds.',
   reconnectingTitle: 'Reconnecting…',
   wakingTitle: 'Waking the computer…',
+  turningOnTitle: 'Turning {{name}}’s computer on…',
+  turningOnHint: 'Usually about 20 seconds. The desktop appears when it’s up.',
   wakingHint:
     '{{name}}’s computer was asleep. The desktop appears when it’s up.',
   reconnectingHint:

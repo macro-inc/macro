@@ -13,10 +13,12 @@ import type { ScreenCapabilities } from '../context/screen-context';
 import {
   afterConnectFailed,
   afterSessionEnded,
+  BOOT_TIMEOUT_MS,
   type ControlLost,
   type NextStep,
   type RetryContext,
   type ScreenStatus,
+  whileBooting,
 } from '../core/screen-status';
 import type {
   ScreenError,
@@ -135,6 +137,16 @@ export function createScreenSession(options: ScreenSessionOptions) {
   let steadyDroppedAt: number | undefined;
   /** Quick retries used since that drop (`QUICK_RETRIES` at most). */
   let quickUsed = 0;
+  /**
+   * Until when the computer is booting (turned on here, or woken by the
+   * server): failures to reach it are the boot, not drops (`whileBooting`).
+   */
+  let bootUntil: number | undefined;
+  const booting = () => bootUntil !== undefined && Date.now() < bootUntil;
+  /** Whether this person turned the computer on: the copy says so. */
+  let turnedOnHere = false;
+  const wakingStatus = (): Extract<ScreenStatus, { kind: 'waking' }> =>
+    turnedOnHere ? { kind: 'waking', turningOn: true } : { kind: 'waking' };
   const retryContext = (lastError?: ScreenErrorCode): RetryContext => ({
     recentlyLive:
       steadyDroppedAt !== undefined &&
@@ -238,7 +250,15 @@ export function createScreenSession(options: ScreenSessionOptions) {
     session.handBack(null);
   };
 
-  const apply = (step: NextStep, attempt: number) => {
+  const apply = (next: NextStep, nextAttempt: number) => {
+    const boot = booting();
+    const step = boot ? whileBooting(next, wakingStatus()) : next;
+    // A boot's tries don't count towards the reconnect backoff.
+    const attempt = boot && step !== next ? 0 : nextAttempt;
+    if (!boot && bootUntil !== undefined) {
+      bootUntil = undefined;
+      turnedOnHere = false;
+    }
     // Over for good (stopped, revoked, refused, gave up): there is no drive
     // to win back, and the keyboard goes back to the app.
     setStore({
@@ -347,11 +367,18 @@ export function createScreenSession(options: ScreenSessionOptions) {
                     : store.controlLost,
               });
               resumeDriving();
-              // Until the first frame, say the computer is waking while it is.
+              // Until the first frame, say the computer is waking while it is
+              // (and while a boot this viewer waits on lasts).
               if (store.status.kind !== 'live') {
-                if (state.waking) setStore('status', { kind: 'waking' });
-                else if (store.status.kind === 'waking')
-                  setStore('status', { kind: 'connecting' });
+                // Whole values: `setStore('status', …)` would merge into the
+                // previous status and keep its fields.
+                if (state.waking) {
+                  bootUntil ??= Date.now() + BOOT_TIMEOUT_MS;
+                  setStore({ status: wakingStatus() });
+                } else if (store.status.kind === 'waking' && !turnedOnHere)
+                  // The server's wake is done; one turned on here waits for
+                  // the picture.
+                  setStore({ status: { kind: 'connecting' } });
               }
             });
           },
@@ -364,6 +391,13 @@ export function createScreenSession(options: ScreenSessionOptions) {
             lastError = error.code;
             // Its own end state, with Try again (see `afterSessionEnded`).
             if (error.code === 'tooManySockets') return;
+            // A screen not reachable yet is the boot, which the view shows.
+            if (
+              booting() &&
+              (error.code === 'tunnelFailed' ||
+                error.code === 'sourceUnavailable')
+            )
+              return;
             // An error answering the take-back of a dropped drive ends the
             // resume: the lease stays where it is, and the view offers the
             // ordinary Take over here instead of holding the keyboard.
@@ -431,6 +465,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
       liveSince = Date.now();
       hiddenSinceOpen = document.visibilityState !== 'visible';
       dropLastPicture();
+      bootUntil = undefined;
+      turnedOnHere = false;
       batch(() => {
         setStore({
           status: { kind: 'live' },
@@ -654,8 +690,29 @@ export function createScreenSession(options: ScreenSessionOptions) {
       element = next;
       setAttached(true);
     },
-    /** Try again now: after giving up, or after the computer was turned on. */
+    /** Try again now: after giving up. */
     retry,
+    /**
+     * This person is turning the computer on: say so at once, and until it
+     * boots (or `BOOT_TIMEOUT_MS`) treat failures to reach it as the boot.
+     */
+    turningOn() {
+      clearTimeout(retryTimer);
+      bootUntil = Date.now() + BOOT_TIMEOUT_MS;
+      turnedOnHere = true;
+      setStore({ status: wakingStatus(), notice: undefined });
+    },
+    /** The computer took the power-on: connect, still showing it waking. */
+    turnedOn() {
+      clearTimeout(retryTimer);
+      fireAndForget(connect(0), 'agent-screen.connect');
+    },
+    /** The power-on failed: back to asleep, with Turn on again. */
+    turnOnFailed() {
+      bootUntil = undefined;
+      turnedOnHere = false;
+      setStore({ status: { kind: 'asleep' } });
+    },
     sendInput(event: ScreenInputEvent) {
       if (drivingMe()) session?.sendInput(event);
     },

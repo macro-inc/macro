@@ -121,15 +121,17 @@ function AgentScreenModelProvider(props: {
   const turnOn = async () => {
     const target = computer();
     if (!target) return;
+    session.turningOn();
     const powered = await ResultAsync.fromPromise(
       setPower.mutateAsync({ computerId: target.id, on: true }),
       () => 'failed' as const
     );
     if (powered.isErr()) {
+      session.turnOnFailed();
       toast.failure(t('agentScreen.turnOnFailed'));
       return;
     }
-    session.retry();
+    session.turnedOn();
   };
 
   const model: AgentScreenModel = {

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   afterConnectFailed,
   afterSessionEnded,
+  BOOT_RETRY_MS,
   MAX_RECONNECT_ATTEMPTS,
   QUICK_RETRIES,
   TICKET_RATE_WINDOW_MS,
+  whileBooting,
 } from './screen-status';
 
 describe('afterSessionEnded', () => {
@@ -131,5 +133,31 @@ describe('the ticket rate limit', () => {
       kind: 'show',
       status: { kind: 'ended', reason: 'rateLimited' },
     });
+  });
+});
+
+describe('while the computer boots', () => {
+  const waking = { kind: 'waking', turningOn: true } as const;
+  const keepWaking = { kind: 'retry', status: waking, delayMs: BOOT_RETRY_MS };
+
+  it('treats an unreachable screen, and "off" until it is on, as the boot', () => {
+    expect(whileBooting(afterSessionEnded('error', 0), waking)).toEqual(
+      keepWaking
+    );
+    expect(whileBooting(afterConnectFailed('failed', 9), waking)).toEqual(
+      keepWaking
+    );
+    expect(whileBooting(afterSessionEnded('computerOff', 0), waking)).toEqual(
+      keepWaking
+    );
+  });
+
+  it('lets a final end and the rate limit stand', () => {
+    const stopped = afterSessionEnded('stopped', 0);
+    expect(whileBooting(stopped, waking)).toBe(stopped);
+    const limited = afterConnectFailed('rateLimited', 0);
+    expect(whileBooting(limited, waking)).toBe(limited);
+    const full = afterConnectFailed('tooManyScreens', 0);
+    expect(whileBooting(full, waking)).toBe(full);
   });
 });

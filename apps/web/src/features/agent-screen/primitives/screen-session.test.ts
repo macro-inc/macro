@@ -1603,4 +1603,118 @@ describe('createScreenSession', () => {
       dispose();
     });
   });
+
+  it('after Turn on, says it is turning the computer on and rides out the boot, then is live', async () => {
+    const tickets: number[] = [];
+    let up = false;
+    const connections: FakeConnection[] = [];
+    const real = fakeTransport(connections);
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () => {
+        tickets.push(Date.now());
+        return ok({
+          socketUrl: 'wss://screen.test/ws?ticket=t',
+          expiresAt: '',
+        });
+      },
+      transport: () => ({
+        kind: 'vnc',
+        connect: async (element, ticket, handlers, signal) => {
+          if (up) return real.connect(element, ticket, handlers, signal);
+          // Booting: the guest's screen isn't reachable yet.
+          handlers.onError({
+            code: 'tunnelFailed',
+            message: "could not reach the computer's screen",
+          });
+          handlers.onEnded('error');
+          throw new DOMException('closed', 'AbortError');
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      expect(tickets).toHaveLength(1);
+
+      // Turn on: said at once, before the power call answers.
+      session.turningOn();
+      expect(session.store.status).toEqual({ kind: 'waking', turningOn: true });
+      session.turnedOn();
+      await vi.advanceTimersByTimeAsync(20_000);
+
+      // Twenty seconds of boot: still turning on, no reconnect error shown,
+      // tried every 2 s.
+      expect(session.store.status).toEqual({ kind: 'waking', turningOn: true });
+      expect(session.store.notice).toBeUndefined();
+      expect(tickets.length).toBeGreaterThanOrEqual(10);
+
+      up = true;
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(session.store.status).toEqual({ kind: 'live' });
+      dispose();
+    });
+  });
+
+  it('gives a boot two minutes, then counts failures as it would otherwise', async () => {
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t', expiresAt: '' }),
+      transport: () => ({
+        kind: 'vnc',
+        connect: async () => {
+          throw new Error('never comes up');
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      session.turningOn();
+      session.turnedOn();
+      await vi.advanceTimersByTimeAsync(119_000);
+      expect(session.store.status.kind).toBe('waking');
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(session.store.status.kind).toBe('reconnecting');
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(session.store.status).toEqual({ kind: 'ended', reason: 'failed' });
+      dispose();
+    });
+  });
+
+  it('goes back to asleep when the power call fails', async () => {
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t', expiresAt: '' }),
+      transport: () => fakeTransport([]),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.turningOn();
+      session.turnOnFailed();
+      expect(session.store.status).toEqual({ kind: 'asleep' });
+      dispose();
+    });
+  });
 });

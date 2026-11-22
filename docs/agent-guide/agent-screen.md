@@ -42,8 +42,11 @@ Each appears only when the harness list gives the viewer access other than
 - The ticket rate limit (a 429 with `too_many_tickets`, or with no code)
   shows "Reconnecting is paused for a minute", retries once after the
   minute, and if still limited ends with **Try again**.
-- Once the view has ended (stopped, refused, gone) only the overlay's own
-  action shows: no Take over.
+- Once the view has ended (stopped, refused, gone), or while the computer is
+  asleep, only the overlay's own action shows: no Take over.
+- **Turn on** says "Turning {name}'s computer on…" at once and keeps saying it
+  through the boot: for up to two minutes, an unreachable screen (or "off")
+  is retried every 2 s without a reconnect error, until the picture shows.
 - Members watch only: Take over is disabled with a lock and "Only owners and
   admins can take over". Owners and admins connect with a drive ticket.
 - A hidden tab says so to the server (a heartbeat). After two minutes hidden
