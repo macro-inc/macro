@@ -595,7 +595,7 @@ where
             .map_err(anyhow::Error::from)?)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     async fn list_caller_tag_sets(
         &self,
         user_id: &str,
@@ -1205,7 +1205,7 @@ where
             .collect())
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn get_property_definition(
         &self,
         property_definition_id: Uuid,
@@ -1234,7 +1234,7 @@ where
         Ok(definition)
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn list_property_definitions(
         &self,
         team: Option<&TeamReceipt>,
@@ -1286,7 +1286,7 @@ where
             .collect())
     }
 
-    #[tracing::instrument(skip(self, team, request), fields(display_name = %request.display_name), err)]
+    #[tracing::instrument(skip(self, team, request, user_id), fields(display_name = %request.display_name), err)]
     async fn create_property_definition(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1352,7 +1352,7 @@ where
         Ok(property)
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn delete_property_definition(
         &self,
         property_definition_id: Uuid,
@@ -1400,7 +1400,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn get_property_options(
         &self,
         property_definition_id: Uuid,
@@ -1433,7 +1433,7 @@ where
             .map_err(anyhow::Error::from)?)
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn get_property_options_batch(
         &self,
         property_definition_ids: &[Uuid],
@@ -1451,7 +1451,7 @@ where
             .map_err(anyhow::Error::from)?)
     }
 
-    #[tracing::instrument(skip(self, team, request), fields(request = ?request), err)]
+    #[tracing::instrument(skip(self, team, request, user_id), fields(request = ?request), err)]
     async fn add_property_option(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1509,7 +1509,7 @@ where
         Ok(result.option)
     }
 
-    #[tracing::instrument(skip(self, team, request), fields(request = ?request), err)]
+    #[tracing::instrument(skip(self, team, request, user_id), fields(request = ?request), err)]
     async fn update_property_option(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1580,7 +1580,7 @@ where
         }
     }
 
-    #[tracing::instrument(skip(self, team, plan), err)]
+    #[tracing::instrument(skip(self, team, plan, user_id), err)]
     async fn replace_property_options(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1654,7 +1654,7 @@ where
         Ok(after)
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn delete_property_option(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1697,7 +1697,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn list_tag_sets(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1724,7 +1724,7 @@ where
         Ok(sets)
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn ensure_tag_set(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1751,7 +1751,7 @@ where
         self.build_tag_set(scope, Some(result.definition)).await
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn promote_tag_option(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1791,7 +1791,7 @@ where
         Ok(remap.option)
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn merge_tag_option(
         &self,
         user_id: &MacroUserIdStr<'_>,

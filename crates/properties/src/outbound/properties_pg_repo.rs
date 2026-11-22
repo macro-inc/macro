@@ -75,7 +75,7 @@ impl PropertiesRepo for PropertiesPgRepo {
             .await
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, user_id))]
     async fn get_property_definition_with_owner(
         &self,
         property_definition_id: Uuid,
@@ -91,7 +91,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     async fn list_property_definitions(
         &self,
         team_id: Option<Uuid>,
@@ -123,7 +123,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
-    #[tracing::instrument(skip(self, options), err)]
+    #[tracing::instrument(skip(self, options, owner), err)]
     async fn create_property_definition(
         &self,
         owner: PropertyDefinitionOwner<'_>,
@@ -185,7 +185,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         property_option_queries::get_property_option(&self.pool, option_id).await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     async fn get_bindable_property_definition(
         &self,
         property_definition_id: Uuid,
@@ -201,7 +201,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     async fn get_editable_property_definition_ids(
         &self,
         property_definition_ids: &[Uuid],
@@ -238,7 +238,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         )
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     async fn get_visible_property_options_batch(
         &self,
         property_definition_ids: &[Uuid],
@@ -332,7 +332,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, owner), err)]
     async fn get_tag_definition(
         &self,
         owner: PropertyDefinitionOwner<'_>,
@@ -340,7 +340,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         property_definition_queries::get_tag_definition(&self.pool, owner).await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, owner), err)]
     async fn get_or_create_tag_definition(
         &self,
         owner: PropertyDefinitionOwner<'_>,
@@ -520,7 +520,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     async fn get_caller_tag_definitions(
         &self,
         user_id: &str,
