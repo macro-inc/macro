@@ -46,6 +46,7 @@ async fn graceful_restart_releases_both_leases_before_their_expiry(pool: PgPool)
         scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
+        command_leases: None,
         owner_available: AtomicBool::new(true),
         owner_claims: AtomicU32::new(0),
         owner_errors: AtomicU32::new(0),

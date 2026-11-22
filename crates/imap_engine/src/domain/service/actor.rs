@@ -4,6 +4,8 @@ use std::time::Duration;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument;
 
+const FULL_WALK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
 const UNREADABLE_CONFIRMATION: Duration = Duration::from_secs(30);
 
 struct AccountWatchers {
@@ -104,17 +106,34 @@ impl Engine {
         let mut unreadable_since = None;
         let mut unreadable_attempts = 0u8;
         let mut healthy_since = tokio::time::Instant::now();
+        let mut scan_required = true;
+        let mut baseline_failures = 0u8;
+        let mut rescan_after = None;
+        let mut next_full_walk = tokio::time::Instant::now() + FULL_WALK_INTERVAL;
         loop {
             if cancellation.is_cancelled() {
                 return Ok(());
             }
-            let round_span = tracing::info_span!(parent: None, "imap.account_round", link_id = %binding.link_id, retry_count = failures);
+            let round_span = tracing::info_span!(parent: None, "imap.account_round", link_id = %binding.link_id, retry_count = failures, sync.full_scan = scan_required, idle.baseline_failures = baseline_failures);
             let round_stop = cancellation.child_token();
             let work = async {
                 if !self.repository.claim_owner(binding, owner).await? {
                     return Err(Error::Conflict);
                 }
-                self.execute_owned_sync(binding, owner, &round_stop).await?;
+                if scan_required {
+                    // Wait under the owner heartbeat, before taking any command
+                    // lease. Sends and mailbox actions remain independently admitted.
+                    if let Some(deadline) = rescan_after.take() {
+                        tokio::select! {
+                            biased;
+                            _ = round_stop.cancelled() => return Err(Error::Conflict),
+                            _ = wake.notified() => { baseline_failures = 0; },
+                            _ = tokio::time::sleep_until(deadline) => {},
+                        }
+                    }
+                    self.execute_owned_sync(binding, owner, &round_stop).await?;
+                    next_full_walk = tokio::time::Instant::now() + FULL_WALK_INTERVAL;
+                }
                 // Prompt one independent delivery attempt before IDLE without
                 // making provider progress wait for callback availability.
                 hints_changed.notify_one();
@@ -157,6 +176,7 @@ impl Engine {
                     biased;
                     _ = round_stop.cancelled() => return Err(Error::Conflict),
                     _ = wake.notified() => Ok(WaitOutcome::Changed),
+                    _ = tokio::time::sleep_until(next_full_walk) => Ok(WaitOutcome::Changed),
                     result = self.transport.wait_change(&credentials, &committed, interval) => result,
                 };
                 drop(credentials);
@@ -241,8 +261,19 @@ impl Engine {
                 unreadable_since = None;
                 unreadable_attempts = 0;
             }
+            scan_required = !matches!(&outcome, Ok(WaitOutcome::Restarted));
             match outcome {
+                Ok(WaitOutcome::BaselineUnavailable) => {
+                    baseline_failures = baseline_failures.saturating_add(1);
+                    let seconds = (30
+                        * 2u64.pow(u32::from(baseline_failures.saturating_sub(1).min(6))))
+                    .min(FULL_WALK_INTERVAL.as_secs());
+                    rescan_after = Some(tokio::time::Instant::now() + Duration::from_secs(seconds));
+                    credential_refusals = 0;
+                    continue;
+                }
                 Ok(WaitOutcome::Changed | WaitOutcome::Restarted) => {
+                    baseline_failures = 0;
                     credential_refusals = 0;
                     if healthy_since.elapsed() >= Duration::from_secs(300) {
                         failures = 0;

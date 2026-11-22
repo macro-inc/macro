@@ -268,6 +268,8 @@ pub enum WaitOutcome {
     Changed,
     /// The absolute liveness interval elapsed; this is not a provider failure.
     Restarted,
+    /// A physical baseline cannot be established; retry synchronization with backoff.
+    BaselineUnavailable,
 }
 
 /// Mail protocol operations. Object safety lets the service share a pooled transport.

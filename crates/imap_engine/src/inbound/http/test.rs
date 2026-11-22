@@ -16,6 +16,7 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
             scoped_acquire_errors: Default::default(),
             state: Mutex::new(AccountState::default()),
             saved_unknown: AtomicBool::new(false),
+            command_leases: None,
             owner_available: AtomicBool::new(true),
             owner_claims: std::sync::atomic::AtomicU32::new(0),
             owner_gate: std::sync::Mutex::new(None),

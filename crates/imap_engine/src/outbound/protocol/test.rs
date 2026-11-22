@@ -451,6 +451,7 @@ async fn lost_real_smtp_final_reply_is_unknown_and_a_restarted_engine_never_retr
         scoped_acquire_errors: Default::default(),
         state: Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
+        command_leases: None,
         owner_available: AtomicBool::new(true),
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),

@@ -34,16 +34,14 @@ impl Engine {
         let target = if let Some(id) = requested {
             let account = self
                 .repository
-                .acquire_scoped(binding, StateSelection::Catalog)
+                .read_scoped(binding, StateSelection::Catalog)
                 .await?;
-            let target = account
+            account
                 .state
                 .folders
                 .get(&id)
                 .filter(|folder| folder.folder.role != FolderRole::Inbox)
-                .map(|folder| (id, folder.path.clone()));
-            self.repository.release(&account).await?;
-            target
+                .map(|folder| (id, folder.path.clone()))
         } else {
             None
         };
@@ -89,7 +87,20 @@ impl Engine {
                     }
                 }.instrument(tracing::info_span!(parent: None, "imap.watch_folder", link_id = %binding.link_id, folder_id = %watched_id)).await;
                 match result {
-                    Ok(WaitOutcome::Changed | WaitOutcome::Restarted) => {
+                    Ok(WaitOutcome::Restarted) => {
+                        failures = 0;
+                    }
+                    Ok(WaitOutcome::BaselineUnavailable) => {
+                        failures = failures.saturating_add(1);
+                        if failures == 1 { changed.notify_one(); }
+                        let seconds = (30 * 2u64.pow(failures.saturating_sub(1).min(6))).min(1800);
+                        tokio::select! {
+                            biased;
+                            _ = done.cancelled() => return,
+                            _ = tokio::time::sleep(Duration::from_secs(seconds)) => {},
+                        }
+                    }
+                    Ok(WaitOutcome::Changed) => {
                         failures = 0;
                         tokio::select! {
                             biased;

@@ -284,9 +284,21 @@ a deliberately stale snapshot. A changed status returns immediately for a new
 sync. Unsolicited changes received before the IDLE continuation are consumed too,
 closing both delivery windows around IDLE setup.
 
-If the catalog has no baseline, the watch falls back to a thirty-second sync
-poll. Without CONDSTORE, UIDNEXT still detects new Spam and Trash arrivals;
-HIGHESTMODSEQ additionally detects flag and deletion changes when available.
+Planned primary and extra-folder IDLE renewals re-arm the cheap SELECT/watch
+without a full scan. An actual change, configuration wake or thirty-minute
+periodic walk requests synchronization. Watcher setup reads only the scoped
+catalog, without a command lease or a second discovery/login session. Without
+IDLE, SELECT comparison runs every thirty seconds and uses HIGHESTMODSEQ when
+CONDSTORE is advertised. UIDNEXT still detects new Spam and Trash arrivals.
+On servers with neither IDLE nor CONDSTORE, remote read/unread and flagged
+changes can wait for the periodic walk, up to thirty minutes; this is the
+trade-off for avoiding full scans on quiet accounts.
+
+An absent or refused physical baseline returns BaselineUnavailable. Recovery
+scans back off from thirty seconds, doubling to thirty minutes. That wait is
+covered by the owner heartbeat and holds no command lease, so submissions and
+mailbox actions remain admitted. A process restart resets this in-memory ladder;
+a valid baseline resets it immediately.
 
 The watch interval is an absolute deadline, independent of server keepalives.
 A planned deadline completes DONE and LOGOUT and returns WaitOutcome::Restarted;

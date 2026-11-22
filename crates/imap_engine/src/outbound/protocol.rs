@@ -320,37 +320,20 @@ impl MailTransport for ProtocolTransport {
         committed: &[FolderState],
         idle_seconds: u64,
     ) -> Result<WaitOutcome, Error> {
-        let mut session = self.imap(&c.imap).await?;
-        let capabilities = session
-            .limit_response(ResponseLimit::Metadata)
-            .capabilities()
-            .await
-            .map_err(|e| imap_error(e, false))?;
-        let gmail = capabilities.has_str("X-GM-EXT-1");
-        let path = if gmail {
-            gmail::all_path(&mut session)
-                .await?
-                .unwrap_or_else(|| "INBOX".into())
-        } else {
-            "INBOX".into()
-        };
-        drop(session);
-        // Gmail's derived feeds share the All Mail wire path, but their counts
-        // are filtered. Only the physical feed is a valid SELECT baseline.
-        let target = committed.iter().find(|folder| {
-            let same_path = folder.path == path
-                || (path.eq_ignore_ascii_case("INBOX")
-                    && folder.path.eq_ignore_ascii_case("INBOX"));
-            same_path
-                && (!gmail
-                    || path.eq_ignore_ascii_case("INBOX")
-                    || folder.virtual_label.as_deref() == Some("\\All"))
-        });
+        // The committed catalog identifies the physical watcher; opening a
+        // separate TLS/LOGIN session only to rediscover it adds no information.
+        let target = committed
+            .iter()
+            .find(|folder| folder.virtual_label.as_deref() == Some("\\All"))
+            .or_else(|| {
+                committed.iter().find(|folder| {
+                    folder.path.eq_ignore_ascii_case("INBOX") && folder.virtual_label.is_none()
+                })
+            });
         let Some(target) = target else {
-            // An incomplete catalog has no safe comparison baseline. Keep the
-            // bounded polling fallback instead of spinning full scans.
-            tokio::time::sleep(Duration::from_secs(30)).await;
-            return Ok(WaitOutcome::Restarted);
+            // The actor owns the growing recovery backoff; an absent physical
+            // baseline must not cause a full scan every quiet watch interval.
+            return Ok(WaitOutcome::BaselineUnavailable);
         };
         self.wait_folder(c, target, idle_seconds).await
     }
@@ -371,10 +354,6 @@ impl MailTransport for ProtocolTransport {
                 .capabilities()
                 .await
                 .map_err(|e| imap_error(e, false))?;
-            if !capabilities.has_str("IDLE") {
-                tokio::time::sleep(Duration::from_secs(30)).await;
-                return Ok((WaitOutcome::Restarted, false));
-            }
             let selected = if capabilities.has_str("CONDSTORE") {
                 session
                     .limit_response(ResponseLimit::Metadata)
@@ -385,8 +364,14 @@ impl MailTransport for ProtocolTransport {
                     .limit_response(ResponseLimit::Metadata)
                     .select(&committed.path)
                     .await
-            }
-            .map_err(|e| imap_error(e, false))?;
+            };
+            let selected = match selected {
+                Ok(selected) => selected,
+                Err(async_imap::error::Error::No(_) | async_imap::error::Error::Bad(_)) => {
+                    return Ok((WaitOutcome::BaselineUnavailable, false));
+                }
+                Err(error) => return Err(imap_error(error, false)),
+            };
             let unsolicited = session.unsolicited_responses.clone();
             let mut changed = idle::selected_changed(committed, &selected);
             while let Ok(response) = unsolicited.try_recv() {
@@ -396,6 +381,12 @@ impl MailTransport for ProtocolTransport {
                 // The committed scan predates this SELECT. No IDLE has been
                 // started, so closing the fresh socket is sufficient.
                 return Ok((WaitOutcome::Changed, true));
+            }
+            // Without IDLE, poll this cheap SELECT comparison; do not rescan
+            // headers merely because the bounded watch interval elapsed.
+            if !capabilities.has_str("IDLE") {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                return Ok((WaitOutcome::Restarted, false));
             }
             session.get_mut().begin_response(ResponseLimit::Metadata);
             let mut handle = session.idle();

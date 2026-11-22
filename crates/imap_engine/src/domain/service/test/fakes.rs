@@ -8,9 +8,23 @@ pub(crate) struct MemoryRepository {
     pub(crate) owner_errors: std::sync::atomic::AtomicU32,
     pub(crate) releases: std::sync::atomic::AtomicU32,
     pub(crate) acquire_gate: Option<Arc<tokio::sync::Semaphore>>,
+    pub(crate) command_leases: Option<std::sync::Mutex<std::collections::HashSet<Uuid>>>,
     pub(crate) owner_available: std::sync::atomic::AtomicBool,
     pub(crate) state: std::sync::Mutex<AccountState>,
     pub(crate) saved_unknown: std::sync::atomic::AtomicBool,
+}
+impl MemoryRepository {
+    fn view(&self, binding: Binding, lease_id: Option<Uuid>) -> Account {
+        Account {
+            binding,
+            user_id: "owner".into(),
+            ciphertext: Vec::new(),
+            state: self.state.lock().unwrap().clone(),
+            checkpoint: Default::default(),
+            revision: self.revision.load(Ordering::Acquire),
+            lease_id,
+        }
+    }
 }
 #[async_trait::async_trait]
 impl Repository for MemoryRepository {
@@ -70,17 +84,14 @@ impl Repository for MemoryRepository {
                 .map_err(|_| Error::ConnectionUnavailable)?
                 .forget();
         }
-        let state = self.state.lock().unwrap();
-        Ok(Account {
-            binding,
-            user_id: "owner".into(),
-            ciphertext: Vec::new(),
-            state: state.clone(),
-            checkpoint: Default::default(),
-            revision: self.revision.load(Ordering::Acquire),
-            lease_id: Some(Uuid::now_v7()),
-        })
+        if let Some(leases) = &self.command_leases
+            && !leases.lock().unwrap().insert(binding.link_id)
+        {
+            return Err(Error::AccountBusy);
+        }
+        Ok(self.view(binding, Some(Uuid::now_v7())))
     }
+
     async fn acquire_scoped(&self, binding: Binding, _: StateSelection) -> Result<Account, Error> {
         if self
             .scoped_acquire_errors
@@ -92,7 +103,11 @@ impl Repository for MemoryRepository {
         self.acquire(binding).await
     }
     async fn read_scoped(&self, binding: Binding, _: StateSelection) -> Result<Account, Error> {
-        let mut account = self.acquire(binding).await?;
+        let mut account = if self.command_leases.is_some() {
+            self.view(binding, None)
+        } else {
+            self.acquire(binding).await?
+        };
         account.lease_id = None;
         Ok(account)
     }
@@ -128,6 +143,9 @@ impl Repository for MemoryRepository {
     async fn release(&self, account: &Account) -> Result<(), Error> {
         account.lease_id.ok_or(Error::Conflict)?;
         self.releases.fetch_add(1, Ordering::Relaxed);
+        if let Some(leases) = &self.command_leases {
+            assert!(leases.lock().unwrap().remove(&account.binding.link_id));
+        }
         Ok(())
     }
     async fn delete(&self, _: Binding) -> Result<(), Error> {
@@ -181,6 +199,7 @@ pub(crate) struct OrganizationWorkControl {
 }
 
 pub(crate) struct IdleWorkControl {
+    pub(crate) entries: std::sync::atomic::AtomicU32,
     pub(crate) started: tokio::sync::Notify,
     pub(crate) released: tokio::sync::Semaphore,
     pub(crate) outcome: WaitOutcome,
@@ -295,6 +314,7 @@ impl MailTransport for UncertainTransport {
     ) -> Result<WaitOutcome, Error> {
         if let Some(control) = &self.provider_work {
             if let Some(idle) = &control.idle {
+                idle.entries.fetch_add(1, Ordering::Relaxed);
                 idle.started.notify_one();
                 idle.released
                     .acquire()

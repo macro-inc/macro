@@ -67,6 +67,10 @@ accepts bearer access to a remote mail server.
   UIDVALIDITY, UIDNEXT, EXISTS and CONDSTORE watermark; consume unsolicited changes
   queued before the IDLE continuation. Use an absolute deadline independent of
   keepalives, and return WaitOutcome::Restarted for its normal completion.
+  Re-arm quiet watches without a full scan; use the thirty-minute full walk for
+  unobserved changes. See the [watch cadence and fallback trade-offs](../../docs/architecture/imap-engine.md).
+  Retry BaselineUnavailable with growing backoff under the owner heartbeat,
+  before acquiring a command lease.
 - Spare IMAP and SMTP sockets belong to an exact link and both generations. Evict
   them on disconnect, failed commands and bounded idle/age maintenance. Keep each
   synchronization and IDLE cycle on a fresh independent connection.

@@ -12,6 +12,9 @@ enum Arrival {
     ModseqOnly,
     BeforeContinuation,
     Keepalives,
+    NoIdleUidNext,
+    NoIdleModseq,
+    SelectRefused,
 }
 
 struct IdlePeer {
@@ -56,15 +59,29 @@ async fn peer(arrival: Arrival) -> IdlePeer {
                     }
                     let (tag, command) = request.trim_end().split_once(' ').unwrap();
                     if command.starts_with("CAPABILITY") {
-                        write.write_all(b"* CAPABILITY IMAP4rev1 IDLE CONDSTORE\r\n").await.unwrap();
+                        let capabilities: &[u8] = match arrival {
+                            Arrival::NoIdleUidNext => b"* CAPABILITY IMAP4rev1\r\n",
+                            Arrival::NoIdleModseq => b"* CAPABILITY IMAP4rev1 CONDSTORE\r\n",
+                            _ => b"* CAPABILITY IMAP4rev1 IDLE CONDSTORE\r\n",
+                        };
+                        write.write_all(capabilities).await.unwrap();
                     } else if command.starts_with("SELECT") {
+                        if matches!(arrival, Arrival::SelectRefused) {
+                            write.write_all(format!("{tag} NO mailbox unavailable\r\n").as_bytes()).await.unwrap();
+                            write.flush().await.unwrap();
+                            continue;
+                        }
+                        if matches!(arrival, Arrival::NoIdleModseq) {
+                            assert!(command.contains("CONDSTORE"));
+                        }
                         let (exists, next, modseq) = match arrival {
                             Arrival::BeforeSelect => (2, 3, 2),
                             Arrival::BeforeContinuation | Arrival::Keepalives => (1, 2, 1),
-                            Arrival::UidNextOnly => (1, 3, 1),
+                            Arrival::UidNextOnly | Arrival::NoIdleUidNext => (1, 3, 1),
                             Arrival::ExistsOnly => (2, 2, 1),
                             Arrival::EpochOnly => (1, 2, 1),
-                            Arrival::ModseqOnly => (1, 2, 2),
+                            Arrival::ModseqOnly | Arrival::NoIdleModseq => (1, 2, 2),
+                            Arrival::SelectRefused => unreachable!(),
                         };
                         let epoch = if matches!(arrival, Arrival::EpochOnly) { 2 } else { 1 };
                         write.write_all(format!(
@@ -218,6 +235,40 @@ async fn each_selected_watermark_can_wake_a_committed_folder() {
     }
 }
 
+#[tokio::test]
+async fn no_idle_checks_uidnext_and_uses_condstore_for_existing_message_changes() {
+    for arrival in [Arrival::NoIdleUidNext, Arrival::NoIdleModseq] {
+        let mut peer = peer(arrival).await;
+        let outcome = tokio::time::timeout(
+            Duration::from_secs(2),
+            peer.transport
+                .wait_change(&peer.credentials, &[committed_inbox()], 180),
+        )
+        .await
+        .expect("a changed SELECT must not wait for the no-IDLE poll")
+        .unwrap();
+        assert_eq!(outcome, WaitOutcome::Changed);
+        assert!(
+            peer.idles.try_recv().is_err(),
+            "server did not advertise IDLE"
+        );
+    }
+}
+
+#[tokio::test]
+async fn an_unselectable_physical_folder_requests_baseline_recovery() {
+    let peer = peer(Arrival::SelectRefused).await;
+    let outcome = tokio::time::timeout(
+        Duration::from_secs(2),
+        peer.transport
+            .wait_change(&peer.credentials, &[committed_inbox()], 180),
+    )
+    .await
+    .expect("SELECT refusal must reach the actor's bounded recovery backoff")
+    .unwrap();
+    assert_eq!(outcome, WaitOutcome::BaselineUnavailable);
+}
+
 struct LabCipher(Credentials);
 #[async_trait::async_trait]
 impl CredentialCipher for LabCipher {
@@ -280,6 +331,7 @@ async fn real_tls_mail_after_snapshot_commit_is_indexed_without_an_idle_timeout(
         owner_errors: AtomicU32::new(0),
         releases: AtomicU32::new(0),
         acquire_gate: None,
+        command_leases: None,
         owner_available: AtomicBool::new(true),
         state: Default::default(),
         saved_unknown: AtomicBool::new(false),

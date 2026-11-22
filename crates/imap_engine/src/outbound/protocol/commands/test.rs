@@ -305,6 +305,7 @@ fn indexed_engine(transport: Arc<ProtocolTransport>) -> Arc<crate::domain::servi
         scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(state),
         saved_unknown: AtomicBool::new(false),
+        command_leases: None,
         owner_available: AtomicBool::new(true),
         owner_claims: AtomicU32::new(0),
         owner_errors: AtomicU32::new(0),
