@@ -91,6 +91,10 @@ pub struct JobSettlement {
     /// Why it did not succeed, or why the result is absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The program never started (the server stopped, or the job ran out of
+    /// time, before it got a slot): nothing it would have done took effect.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub never_ran: bool,
 }
 
 /// A job the agent started, listed in its next prompts so it can say what

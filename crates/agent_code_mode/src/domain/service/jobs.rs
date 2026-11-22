@@ -856,6 +856,7 @@ fn settlement(record: &ExecutionRecord) -> JobSettlement {
         status: record.status.job_status(),
         result,
         error,
+        never_ran: record.job.as_ref().is_some_and(|job| job.never_ran),
     }
 }
 

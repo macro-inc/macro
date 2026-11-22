@@ -104,9 +104,20 @@ function importSettlementSummary(report: ImportSettlement) {
   };
 }
 
-/** How a background job ended, named by its title. */
+/** How a background job ended, named by its title. A job that never got to
+ * run (it timed out or was interrupted waiting) reads muted: nothing it would
+ * have done took effect. */
 function jobSettledSummary(job: JobSettlement) {
   const title = job.title;
+  const neverRan =
+    (job.neverRan ?? false) &&
+    (job.status === 'timed_out' || job.status === 'interrupted');
+  if (neverRan) {
+    return {
+      summary: t('agentJobs.settledDidNotRun', { title }),
+      failed: false,
+    };
+  }
   const summary = match(job.status)
     .with('done', () => t('agentJobs.settledDone', { title }))
     .with('failed', () => t('agentJobs.settledFailed', { title }))

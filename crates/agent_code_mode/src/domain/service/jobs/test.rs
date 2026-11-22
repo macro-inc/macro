@@ -553,6 +553,7 @@ async fn a_background_execution_returns_at_once_and_settles_into_one_waking_even
             status: JobStatus::Done,
             result: Some(json!({"data": "passed", "reviews": []})),
             error: None,
+            never_ran: false,
         }]
     );
     assert_eq!(
@@ -931,6 +932,27 @@ async fn a_queued_job_has_no_credential_until_it_gets_a_slot() {
     harness.service.shutdown_jobs().await;
 }
 
+/// The server stopping while a job still waits for a slot (a restart before
+/// it ran) settles it as interrupted before it started: its card and its
+/// wake row both say it didn't run, and no credential was ever minted.
+#[tokio::test]
+async fn a_restart_before_a_job_runs_says_it_did_not_run() {
+    let harness = harness(Credentials::default());
+    let _slots = harness.fill_slots().await;
+    let id = ExecutionId::mint();
+    harness.launch(id, check_routine()).await.unwrap();
+    harness.service.shutdown_jobs().await;
+    let settlement = &harness.rows.settlements()[0];
+    assert_eq!(settlement.status, JobStatus::Interrupted);
+    assert_eq!(settlement.error.as_deref(), Some(INTERRUPTED_BEFORE_START));
+    assert!(settlement.never_ran, "the wake row says it didn't run");
+    assert!(
+        harness.rows.record(id).job.unwrap().never_ran,
+        "so does its card"
+    );
+    assert_eq!(harness.credentials.minted(), 0);
+}
+
 /// A job that never got a slot says nothing ran, not that its calls may
 /// have taken effect.
 #[tokio::test(start_paused = true)]
@@ -943,6 +965,8 @@ async fn a_job_that_never_got_a_slot_says_it_did_not_start() {
     let settlement = &harness.rows.settlements()[0];
     assert_eq!(settlement.status, JobStatus::TimedOut);
     assert_eq!(settlement.error.as_deref(), Some(NEVER_STARTED));
+    // Its wake row says so too.
+    assert!(settlement.never_ran);
     assert_eq!(harness.credentials.minted(), 0);
     // Its card says it never ran.
     assert!(harness.rows.record(id).job.unwrap().never_ran);
@@ -1060,6 +1084,8 @@ async fn the_sweep_says_a_dead_replicas_queued_job_never_ran() {
     let settlement = &harness.rows.settlements()[0];
     assert_eq!(settlement.status, JobStatus::Interrupted);
     assert_eq!(settlement.error.as_deref(), Some(INTERRUPTED_BEFORE_START));
+    // Its wake row says so too.
+    assert!(settlement.never_ran);
     assert!(harness.rows.record(id).job.unwrap().never_ran);
     assert!(harness.credentials.revoked.lock().unwrap().is_empty());
 }

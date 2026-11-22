@@ -20,4 +20,5 @@ export default {
   settledCancelled: '{{title}} cancelled',
   settledTimedOut: '{{title}} ran out of time',
   settledInterrupted: '{{title}} was interrupted',
+  settledDidNotRun: "{{title}} didn't run",
 };

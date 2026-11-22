@@ -294,3 +294,26 @@ it('names a settled background job by its title and how it ended', () => {
   expect(rows[2].classList.contains('text-failure')).toBe(false);
   expect(view.queryByRole('button')).toBeNull();
 });
+
+it('reads a background job that never ran as muted, not a failure', () => {
+  const view = render(() => (
+    <SessionEventRow
+      event={{
+        ...base,
+        id: 'never-ran',
+        kind: 'job.settled',
+        payload: {
+          jobId: 'job-4',
+          title: 'Scanning inbox',
+          status: 'interrupted',
+          error:
+            'Background job did not start: the server stopped before it got a turn',
+          neverRan: true,
+        },
+      }}
+    />
+  ));
+  const row = view.getByRole('status');
+  expect(row.textContent).toContain("Scanning inbox didn't run");
+  expect(row.classList.contains('text-failure')).toBe(false);
+});

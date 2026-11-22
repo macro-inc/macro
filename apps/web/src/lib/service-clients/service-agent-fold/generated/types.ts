@@ -1386,6 +1386,11 @@ export type JobSettlement_Deserialize = {
   result?: unknown | null;
   /**  Why it did not succeed, or why the result is absent. */
   error?: string | null;
+  /**
+   *  The program never started (the server stopped, or the job ran out of
+   *  time, before it got a slot): nothing it would have done took effect.
+   */
+  neverRan?: boolean;
 };
 
 /**  How a background job ended, for the agent's next turn. */
@@ -1400,6 +1405,11 @@ export type JobSettlement_Serialize = {
   result?: unknown | null;
   /**  Why it did not succeed, or why the result is absent. */
   error?: string | null;
+  /**
+   *  The program never started (the server stopped, or the job ran out of
+   *  time, before it got a slot): nothing it would have done took effect.
+   */
+  neverRan?: boolean;
 };
 
 /**  Where a background job is. */
