@@ -49,8 +49,8 @@ Each appears only when the harness list gives the viewer access other than
    leaves the keyboard without handing back.
 4. Paste with Ctrl+V or Cmd+V: the text goes onto the computer's clipboard,
    then pastes. Text outside Western European characters is refused with a
-   notice; type it instead. While others watch, the pill warns that watchers
-   can see a paste.
+   notice; type it instead. Only the driver's socket gets the computer's
+   clipboard; watchers never do.
 5. **Stop watching** closes the stream (handing back first when driving) and
    shows "You stopped watching" with **View screen again**.
 

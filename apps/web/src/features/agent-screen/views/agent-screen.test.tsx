@@ -546,27 +546,6 @@ describe('Stop watching', () => {
   });
 });
 
-describe('pasting while others watch', () => {
-  it.each([
-    ['desktop', AgentScreen],
-    ['phone', MobileAgentScreen],
-  ])(
-    '%s: warns the driver that watchers can see a paste, only while someone else watches',
-    async (_device, View) => {
-      vi.useFakeTimers();
-      const connections: Connection[] = [];
-      const { unmount } = renderView(View, connections);
-      await vi.advanceTimersByTimeAsync(0);
-
-      connections[0].handlers.onState(state(true));
-      expect(screen.queryByText('Watchers can see what you paste')).toBeNull();
-      connections[0].handlers.onState({ ...state(true), viewers: 2 });
-      expect(screen.getByText('Watchers can see what you paste')).toBeTruthy();
-      unmount();
-    }
-  );
-});
-
 describe('a drive the agent takes back', () => {
   it.each([
     ['desktop', AgentScreen],

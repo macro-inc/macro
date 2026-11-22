@@ -196,18 +196,6 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
           </Switch>
         </div>
 
-        {/* As on desktop: a paste (a hardware keyboard, a long-press) may
-            still reach the other sockets until the harness's driver-only
-            clipboard is proven. */}
-        <Show
-          when={session.drivingMe() && (session.store.server?.viewers ?? 0) > 1}
-        >
-          <p class="flex items-center gap-1.5 px-3 pb-2 text-xs text-ink-muted">
-            <InfoIcon class="size-3.5 shrink-0" />
-            {t('agentScreen.watchersSeePaste')}
-          </p>
-        </Show>
-
         <Show when={!props.model.canDrive() && live()}>
           <p class="flex items-center gap-1.5 px-3 pb-2 text-xs text-ink-muted">
             <InfoIcon class="size-3.5 shrink-0" />
