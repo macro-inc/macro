@@ -244,6 +244,46 @@ async fn a_tunnel_whose_exec_ended_but_whose_program_may_not_is_killed_too() {
     );
 }
 
+/// An injector connect given up while the guest was still starting its
+/// tunnel (the drive ended) leaves that tunnel to start and be reaped,
+/// rather than drop its program before anything could end it.
+#[tokio::test(start_paused = true)]
+async fn a_connect_given_up_before_the_tunnel_started_still_ends_it() {
+    let (exec, mut guest, _exit) = FakeExec::new();
+    let tunnel: Arc<dyn GuestTunnel> = Arc::new(FleetTunnel::new(exec.clone(), TaskTracker::new()));
+    let called = exec.called.notified();
+    tokio::pin!(called);
+    called.as_mut().enable();
+
+    let given_up = tokio::time::timeout(
+        Duration::from_secs(1),
+        super::super::socket::connect_injector(tunnel, COMPUTER),
+    )
+    .await;
+    assert!(given_up.is_err());
+    // The tunnel's exec ran; its ready line comes only now.
+    called.as_mut().await;
+    let killed = exec.called.notified();
+    tokio::pin!(killed);
+    killed.as_mut().enable();
+    guest.write_all(READY).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(60), killed)
+        .await
+        .expect("the tunnel the connect gave up on was never ended");
+
+    assert_eq!(
+        exec.calls().last().unwrap(),
+        &vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            KILL_SCRIPT.to_owned(),
+            "sh".to_owned(),
+            "4242".to_owned(),
+            "5901".to_owned(),
+        ]
+    );
+}
+
 #[test]
 fn the_kill_spares_a_pid_the_guest_gave_another_program() {
     // A program that took the tunnel's pid after it exited: not socat to
