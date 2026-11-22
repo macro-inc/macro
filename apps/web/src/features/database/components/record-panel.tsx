@@ -280,7 +280,9 @@ function RecordFields(
                   percentage={!!column().percentage}
                   entityType={column().specificEntityType}
                 />
-                <span class="truncate">{column().name}</span>
+                <span class="truncate" data-record-field-name>
+                  {column().name}
+                </span>
               </div>
               <div class="min-w-0">
                 {props.renderCell(() => props.row, column, options(column))}

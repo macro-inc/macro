@@ -229,7 +229,9 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                     title={name(id)}
                   >
                     <LinkIcon class="size-3 shrink-0 text-ink-muted" />
-                    <span class="truncate">{name(id)}</span>
+                    <span class="truncate" data-relation-chip-name>
+                      {name(id)}
+                    </span>
                     {/* A native title: a styled tooltip per chip is a Kobalte root each. */}
                     <button
                       type="button"
@@ -378,7 +380,9 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                             title={`Open ${name(id)}`}
                             onClick={() => openRecord(id)}
                           >
-                            <span class="truncate">{name(id)}</span>
+                            <span class="truncate" data-relation-chip-name>
+                      {name(id)}
+                    </span>
                             <ArrowUpRightIcon class="size-3 shrink-0 text-ink-muted" />
                           </Button>
                           <Show when={editable()}>
