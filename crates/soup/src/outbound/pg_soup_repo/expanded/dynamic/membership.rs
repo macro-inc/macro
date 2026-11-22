@@ -14,17 +14,14 @@ use system_properties::SystemPropertyKey;
 
 use super::sql_string_literal;
 
-fn matches_assignee(
-    owner: &Owner,
-    property: &PropertiesLiteral,
-    kind: Option<PropertyEntityType>,
-) -> bool {
+fn matches_assignee(owner: &Owner, property: &PropertiesLiteral) -> bool {
     property.property_definition_id == SystemPropertyKey::ASSIGNEES_UUID
-        && property.entity_type == kind
         && matches!(&property.value, PropertyMatchValue::EntityRef(id) if id.to_string() == owner.principal_id())
 }
 
-fn document_owner(expr: &Expr<DocumentLiteral>) -> Option<&Owner> {
+fn document_membership(
+    expr: &Expr<DocumentLiteral>,
+) -> Option<(&Owner, Option<PropertyEntityType>)> {
     let Expr::Or(left, right) = expr else {
         return None;
     };
@@ -39,7 +36,7 @@ fn document_owner(expr: &Expr<DocumentLiteral>) -> Option<&Owner> {
         ) => (owner, property),
         _ => return None,
     };
-    matches_assignee(owner, property, None).then_some(owner)
+    matches_assignee(owner, property).then_some((owner, property.entity_type))
 }
 
 fn initiative_owner(expr: &Expr<InitiativeLiteral>) -> Option<&Owner> {
@@ -57,14 +54,16 @@ fn initiative_owner(expr: &Expr<InitiativeLiteral>) -> Option<&Owner> {
         ) => (owner, property),
         _ => return None,
     };
-    matches_assignee(owner, property, Some(PropertyEntityType::Initiative)).then_some(owner)
+    (property.entity_type == Some(PropertyEntityType::Initiative)
+        && matches_assignee(owner, property))
+    .then_some(owner)
 }
 
 /// Only positive conjuncts bound the whole query to personal membership.
 pub(super) fn bounds_documents(expr: Option<&Expr<DocumentLiteral>>) -> bool {
     expr.is_some_and(|expr| match expr {
         Expr::And(left, right) => bounds_documents(Some(left)) || bounds_documents(Some(right)),
-        _ => document_owner(expr).is_some(),
+        _ => document_membership(expr).is_some(),
     })
 }
 
@@ -78,7 +77,7 @@ pub(super) fn bounds_initiatives(expr: Option<&Expr<InitiativeLiteral>>) -> bool
 /// Membership work needs a timeout even inside a broader OR or negation.
 pub(super) fn contains_documents(expr: Option<&Expr<DocumentLiteral>>) -> bool {
     expr.is_some_and(|expr| {
-        document_owner(expr).is_some()
+        document_membership(expr).is_some()
             || match expr {
                 Expr::And(left, right) | Expr::Or(left, right) => {
                     contains_documents(Some(left)) || contains_documents(Some(right))
@@ -118,10 +117,11 @@ fn assigned_ids(owner: &Owner, kind: Option<PropertyEntityType>) -> String {
 
 /// Keep membership in an uncorrelated indexed set; a direct OR scans accessible documents.
 pub(super) fn document_predicate(expr: &Expr<DocumentLiteral>) -> Option<String> {
-    let owner = document_owner(expr)?;
+    let (owner, kind) = document_membership(expr)?;
     let principal = sql_string_literal(&owner.principal_id());
-    // A document that became a task can retain DOCUMENT property assignments.
-    let assigned = assigned_ids(owner, None);
+    // Unscoped membership includes retained DOCUMENT assignments on converted
+    // tasks. An explicit namespace must narrow the same indexed assignment leg.
+    let assigned = assigned_ids(owner, kind);
     Some(format!(
         r#"d.id = ANY(ARRAY(
         SELECT owned.id FROM "Document" owned
