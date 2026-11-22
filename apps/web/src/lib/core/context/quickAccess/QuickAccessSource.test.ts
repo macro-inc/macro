@@ -45,6 +45,7 @@ import {
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQuickAccess } from './context';
+import type { createPersonList } from './person-list';
 import { MAX_BROWSE_PAGES_PER_LOAD } from './projected-list';
 import { QuickAccessProvider } from './QuickAccessProvider';
 import { createQuickAccessValue } from './QuickAccessSource';
@@ -67,6 +68,7 @@ vi.mock('@queries/email/local-draft-source', async () => ({
 }));
 
 const mocks = vi.hoisted(() => ({
+  personPolicies: [] as Parameters<typeof createPersonList>[0]['policy'][],
   search: vi.fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>(),
   history: [] as HistoryItem[],
   channels: vi.fn<() => ApiChannelWithLatest[]>(() => []),
@@ -115,16 +117,22 @@ vi.mock('@core/context/channels', () => ({
 vi.mock('@queries/contacts/use-directory', () => ({
   useContactDirectoryScope: () => () => ({ userId: 'viewer' }),
 }));
+vi.mock('@queries/team/roster', () => ({
+  useTeammateIds: () => () => new Set<string>(),
+}));
 vi.mock('./person-list', () => ({
-  createPersonList: () => ({
-    items: () => [],
-    totalCount: () => 0,
-    hasMore: () => false,
-    isLoading: () => false,
-    isLoadingMore: () => false,
-    error: () => undefined,
-    loadMore: async () => {},
-  }),
+  createPersonList: (options: Parameters<typeof createPersonList>[0]) => {
+    mocks.personPolicies.push(options.policy);
+    return {
+      items: () => [],
+      totalCount: () => 0,
+      hasMore: () => false,
+      isLoading: () => false,
+      isLoadingMore: () => false,
+      error: () => undefined,
+      loadMore: async () => {},
+    };
+  },
 }));
 vi.mock('@core/context/emailLinks', () => ({
   useEmailLinksContext: () => ({
@@ -1663,6 +1671,30 @@ describe('Soup search pool', () => {
       rendered.unmount();
       client.clear();
     }
+  });
+});
+
+describe('personal people windows', () => {
+  it("passes a surface's list order to its people window, and none without one", () => {
+    mocks.personPolicies = [];
+    const order = [['teammates'], ['interacted', 'invited']];
+    const [listPriority, setListPriority] = createSignal<
+      string[][] | undefined
+    >(order);
+    setup((source) => [
+      source.useList({
+        buckets: ['person'],
+        peopleMode: 'mention',
+        peopleListPriority: listPriority,
+      }),
+      source.useList({ buckets: ['person'], peopleMode: 'command' }),
+    ]);
+    const [mention, command] = mocks.personPolicies;
+    expect(mention()).toMatchObject({ mode: 'mention', listPriority: order });
+    setListPriority(undefined);
+    expect(mention().listPriority).toBeUndefined();
+    expect(command()).toMatchObject({ mode: 'command' });
+    expect(command().listPriority).toBeUndefined();
   });
 });
 

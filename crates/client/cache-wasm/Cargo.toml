@@ -43,5 +43,7 @@ wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+# Lets the browser tests rewrite a database as an older storage version wrote it.
+cache-turso = { path = "../cache-turso", features = ["migration-test-hooks"] }
 soup-filter-projection = { path = "../../soup_filter_projection", default-features = false }
 wasm-bindgen-test = { workspace = true }

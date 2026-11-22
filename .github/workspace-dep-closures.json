@@ -4898,6 +4898,7 @@
       "crates/workspace-hack"
     ],
     "connection_gateway": [
+      "crates/activity",
       "crates/agent",
       "crates/agent_correlation",
       "crates/ai_toolset",
@@ -4905,6 +4906,8 @@
       "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
+      "crates/broadcast",
+      "crates/channel_sender",
       "crates/connection_gateway_client",
       "crates/connection_gateway_models",
       "crates/cowlike",
@@ -4918,6 +4921,7 @@
       "crates/harness_id",
       "crates/harness_token",
       "crates/item_filters",
+      "crates/kafka_util",
       "crates/last_online_tracker",
       "crates/macro_auth",
       "crates/macro_authorization",
@@ -4927,6 +4931,8 @@
       "crates/macro_entrypoint",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_event_broker",
+      "crates/macro_event_topics",
       "crates/macro_service_urls",
       "crates/macro_tower_layers",
       "crates/macro_user_id",

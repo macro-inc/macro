@@ -3085,6 +3085,88 @@ describe('CacheWorkerCore', () => {
     );
   });
 
+  it('records where an upgraded or left-behind older database came from', async () => {
+    const engine = {
+      queueDiagnostics: vi.fn().mockResolvedValue({
+        availability: 'available',
+        depth: '1',
+        oldestCreatedAtMs: '1',
+      }),
+    };
+    for (const [opened, expected] of [
+      [
+        {
+          outcome: 'upgraded-existing',
+          fromStorageVersion: 11,
+          carryForward: 'moved',
+          carryForwardStorageVersion: 11,
+        },
+        {
+          openOutcome: 'upgraded-existing',
+          fromStorageVersion: 11,
+          carryForward: 'moved',
+        },
+      ],
+      [
+        {
+          outcome: 'opened-new',
+          carryForward: 'older-in-use',
+          carryForwardStorageVersion: 11,
+        },
+        {
+          openOutcome: 'opened-new',
+          fromStorageVersion: 11,
+          carryForward: 'older-in-use',
+        },
+      ],
+      [
+        {
+          outcome: 'reset-storage-uncertain',
+          carryForward: 'returned',
+          carryForwardStorageVersion: 11,
+        },
+        {
+          openOutcome: 'reset-storage-uncertain',
+          fromStorageVersion: 11,
+          carryForward: 'returned',
+        },
+      ],
+      [
+        { outcome: 'opened-new', carryForward: 'failed' },
+        { openOutcome: 'opened-new', carryForward: 'failed' },
+      ],
+      [{ outcome: 'opened-existing' }, { openOutcome: 'opened-existing' }],
+    ] as const) {
+      const observations: Array<Record<string, unknown>> = [];
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: vi.fn().mockResolvedValue({ engine, ...opened }),
+      });
+      const onInitializationOutcome = vi.fn();
+      const core = new CacheWorkerCore({
+        onInitializationOutcome,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+      expect(onInitializationOutcome).toHaveBeenCalledWith(opened.outcome);
+      const schemaInit = observations.find(
+        (observation) => observation.name === 'graphql_cache.schema_init'
+      );
+      expect(schemaInit).toMatchObject(expected);
+      if (!('carryForward' in expected)) {
+        expect(schemaInit).not.toHaveProperty('carryForward');
+      }
+      if (!('fromStorageVersion' in expected)) {
+        expect(schemaInit).not.toHaveProperty('fromStorageVersion');
+      }
+    }
+  });
+
   it('leaves recovery-open wipe authority with the coordinator', async () => {
     const observations: Array<Record<string, unknown>> = [];
     loadCacheWasmMock.mockResolvedValue({
@@ -3181,6 +3263,38 @@ describe('CacheWorkerCore', () => {
     expect(messages.slice(-2)).toEqual([
       { id: 2, ok: false, error: 'cache storage reset required' },
       { id: 3, ok: false, error: 'cache storage reset required' },
+    ]);
+  });
+
+  it('reports a recovery open that kept moved files undecided', async () => {
+    const deferredError = Object.assign(
+      new Error('cache recovery kept the files an upgrade moved here'),
+      { cacheRecoveryDeferred: true as const }
+    );
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockRejectedValue(deferredError),
+    });
+    const onRecoveryDeferred = vi.fn();
+    const onStorageBusy = vi.fn();
+    const messages: unknown[] = [];
+    const core = new CacheWorkerCore({ onRecoveryDeferred, onStorageBusy });
+
+    await core.handleRequest(
+      {
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
+      },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    expect(onRecoveryDeferred).toHaveBeenCalledOnce();
+    expect(onStorageBusy).not.toHaveBeenCalled();
+    expect(messages).toEqual([
+      {
+        id: 1,
+        ok: false,
+        error: 'cache recovery kept the files an upgrade moved here',
+      },
     ]);
   });
 

@@ -53,6 +53,23 @@ contract and the multi-target verification commands.
   same files to a different lock.
 - Local tests prove physical lock contention but not real cross-worker
   termination — don't read passing tests here as proof of that.
+- `adopt` is the only way files move between identities: main and WAL together,
+  under the older identity's `PreviousLock`, never onto an existing main file
+  nor a whole pair with a marker of its own (`PreviousAdopting`), with a
+  marker recording the older WAL until the moved files open. Keep the
+  lock until the first open ends. `complete_adoption` moves a split's WAL only
+  while it matches the marker, and one with frames only under the older lock;
+  `return_adoption` moves back only a self-contained database onto an identity
+  holding none, clearing a marker there beside no main file first; a wipe
+  removes the pair before the marker. The caller decides the files are still what the older build
+  wrote, and bounds its retries with `record_attempt` (which counts only beside
+a marker; a count goes only as cleanup and is never waited on), or by
+  `Adoption::adopted_at_ms` (`read_adoption_time` when the files beside the
+  marker do not read) when an attempt cannot be counted. The marker is
+  written once, before any move; never write it again. Never read or move the
+  older identity's files without its lock: a sync handle there can block the
+  older build's open. Don't checkpoint or copy instead; a copy leaves the older
+  build a second queue to replay.
 
 ## Related
 

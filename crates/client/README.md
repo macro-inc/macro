@@ -76,17 +76,227 @@ projections keep their unframed postcard encoding, so a format upgrade never
 re-encodes them.
 
 Only the immediately prior cache format version is migratable
-(`MIGRATABLE_CACHE_FORMAT_VERSIONS`), and only while the storage schema still
-matches. A storage-schema mismatch instead follows physical reset. Opening a
-migratable format drops records, search
+(`MIGRATABLE_CACHE_FORMAT_VERSIONS`). A file at an older storage schema version
+is first upgraded when a chain of steps from its version is registered (Storage
+upgrades, below), and resets otherwise. Opening a migratable format drops records, search
 projections, index facts, and calendar ranges — all refetchable — and keeps
 queued mutations, optimistic layers, and their projections, then rewrites the
 namespace in the same transaction. An interrupted migration therefore retries on
-the next open. Native owners then `VACUUM INTO` a fresh file and swap it in, so an
-upgrade also releases the space the dropped records occupied instead of leaving
-free pages in the old file. The browser's physical database name embeds the format
-version, so a browser upgrade starts a new file instead of migrating; the previous
-file is left for any tab still running the older bundle.
+the next open. Native owners then try to `VACUUM INTO` a fresh file and swap it in, so an
+upgrade usually releases the space the dropped records occupied instead of
+leaving free pages in the old file. The browser's physical database name embeds the format
+version, and a carry-forward (below) looks only at older storage versions of the
+current format, so a format change starts a new browser file instead of migrating;
+the previous file is left for any tab still running the older bundle.
+
+## Storage upgrades
+
+A database written at an older `STORAGE_SCHEMA_VERSION` is upgraded in place
+when `cache-turso/src/storage/migration.rs` registers a chain of steps from its
+version to the current one. Each step runs in one write transaction that also
+advances `meta.storage_schema_version`, so a stopped upgrade resumes from the
+last committed step. The last step's transaction also runs the frozen-schema
+checks every reopen runs, so the current version is committed only for a file
+with exactly the tables and indexes a fresh file has; a chain that would produce
+anything else rolls back to the version before its last step. The open then
+runs the queue checks as every reopen does. Records, queued mutations,
+optimistic layers and the storage generation stay, so the upgrade refetches
+nothing and loses no queued write; a format migration that runs after it (above)
+still drops the refetchable rows. A file whose `meta` names another scope, or a cache
+format this build cannot carry forward, is rejected before any step runs, so no step
+commits to it: native resets it as before, and in the browser moved files stay at
+the version they moved at, which a failed first open decides as below. A version with no chain, a newer version, or
+a failing step resets as before. Bumping the version without registering a step
+fails to compile; clearing `STEPS` declares that every older file resets.
+
+Native hosts upgrade the fixed file at open. Browser database names embed the
+storage version, so the browser first carries the old database forward: when
+this build's database does not exist yet, the open takes the newest upgradable
+older name's owner lock if it is free (`OpfsOwner::lock_previous`), moves its
+main and WAL to this build's name (`OpfsOwner::adopt`), and opens them, which
+runs the steps. It holds that lock until the first open ends, so no tab of the
+older build can open, reset or recreate its name meanwhile. A tab of the older
+build already holding the lock, a whole pair with a marker of its own beside it
+(an adoption into that name whose first open has not succeeded, below, or whose
+marker could not be removed after it did; its build decides those files first,
+and its next open removes such a marker: `older-in-use`), a browser without
+OPFS moves, a pair whose headers Turso would not open, or a failed move that put
+everything back leaves the old file where it is and starts empty, as every
+version change did before; after a failed move that left a split, the same open
+tries to complete the split, as it would when resuming an adoption (below), and
+one whose result does not read fails the open and keeps the files.
+A marker beside no whole pair is an adoption into that name stopped before its
+moves finished, or a wipe of it stopped after removing its pair, and the open
+looks further back: any whole pair such an adoption named is still at its own
+name, and a split (its main file moved in, its WAL still further back) leaves no
+whole pair anywhere, so nothing moves and that build completes it. So moved files come
+from a name whose files are at its own version, which a hand-back compares
+against: a wipe removes a pair before its marker, and a hand-back first removes
+a marker that an adoption into the older name left beside no main file. Only a
+later storage bump can meet any of these markers. The open result reports
+`upgraded-existing` with `fromStorageVersion`, and `carryForward` says what
+happened to the older database; `graphql_cache.schema_init` records both. The
+coordinator protocol carries an upgrade as `opened-existing`, since storage
+survived.
+
+A marker beside this build's files (`<name>-adopting`) names the older database,
+with the size and header of its WAL, from just before the first move until the
+moved files first open. A worker stopped in between leaves it behind, and the
+next open acts on it before anything else. An ordinary open completes a move
+stopped between its two renames, but brings the WAL over only while it is still
+the one the marker recorded, and a WAL with frames only under the older name's
+lock, then opens the files (`resumed`); without that lock the open fails and
+keeps both halves. If the open of moved files would reset them, and they still
+say they are at the version they were moved at, nothing this build wrote is in
+them: they go back to the older name whole (`returned`) and this build starts
+empty, so their queued writes stay with the build that wrote them. When the
+failed open cannot read their version, it fails and keeps them. A recovery
+open, which the coordinator asks for after an open fails or a worker is lost
+mid-open, decides before wiping its own files: it counts an attempt, takes the
+older name's lock, opens the files only to read their version, and hands them
+back if it is still the moved one; the marker goes only once it has acted.
+While it cannot decide (the lock is busy, the marker or the version does not
+read, the files do not connect, or their WAL still holds frames) it fails and
+keeps everything, and the coordinator retries it. After three such attempts
+the next recovery discards the files unopened, so files that never open cannot
+keep the cache from starting. Attempts are counted in a file of their own
+beside the marker (`<name>-adopting-attempts`), written with eight free slots
+before any file moves, so counting overwrites one byte in place, needs no more
+storage, and works while the marker does not read; a count that is not exactly
+its eight slots counts nothing, nor does one left without its marker, so a
+count goes with its marker only as cleanup, never waited on. The marker
+itself, which also records when the
+adoption began, is never written again. An attempt that cannot be counted
+decides as any other, and only where it would keep the files does it look at
+that time: ten minutes after the adoption began it discards them instead, so
+those are bounded too, though a later attempt might still have sent them back.
+The browser's clock measures that time in either direction: a jump forward
+brings it early, and a jump back postpones it by the size of the jump, unless it
+lands ten minutes or more before the adoption began, which ends the wait at
+once. An attempt that
+could not read the adoption and cannot count reads it again before it looks at
+the time, and decides as above if it now reads, so a read that fails once is decided as
+any uncounted attempt is, never discarded for not reading. When it still does not read but the marker
+does (the files beside it cannot be looked up), the time comes from the marker.
+When neither the marker nor the count reads, nothing bounds the attempt or says
+how old the adoption is, so it keeps everything. A version probe that fails
+loses its hold on the files before any of them changes, so it cannot discard
+them and only the count bounds it; uncounted, it keeps everything too. A read
+that returns fewer bytes than the file holds is an error, never a shorter
+marker or WAL header.
+
+An open that keeps moved files says so (`cacheRecoveryDeferred` on its error,
+`movedFilesKept` beside its failure code to the coordinator), whether it is the
+ordinary open that found them unusable or a recovery that could not decide,
+and whatever else failed with it. The coordinator
+runs up to five recoveries in a row, so with counting this usually resolves
+within one page load; a version probe that counts and then exits
+`storage-busy` ends that page load's retries, and the count goes on in the next. Until an open succeeds, it never gives up a scope where
+an open kept moved files, whatever ended the retries: a recovery that kept
+them again, or failures that never reached storage, such as assets that did
+not load. An open that reached storage and ended without a report counts the
+same until a later open that reaches storage reports a failure other than
+`storage-busy`, or one succeeds: the database watchdog, a fatal error, a
+rejected readiness proof, or a lost tab or worker says nothing of what it kept.
+Giving up
+would quarantine the scope and open a different database on the next load,
+leaving the moved files and their queue behind. Instead the
+coordinator keeps the scope and the open it had pending (a recovery wipe, or
+an ordinary open a navigation departure ended; both read an unfinished
+adoption first), refuses queued requests
+with `owner-lock-unavailable`, and the page runs uncached until its cache
+recovery (backoff doubling to 30 seconds with 20% jitter, so at most 36
+seconds, and on reconnect or return to the tab) registers again. After that
+first deferral each registration runs one recovery, not five, so a page waits
+for one open before it runs uncached again; the attempts go on counting. A
+busy exit (below) does not defer by itself, so the registration after one runs
+all five unless an earlier one deferred since the last accepted readiness.
+Requests sent meanwhile wait for that open as they wait for any activation:
+the 10-second request timeout starts only after it, so the startup budgets
+bound the wait (five minutes for the assets, then the lock and the 20-second
+database open). Readiness the coordinator accepts ends this, even when the
+owner drains at once because its tab is hidden: the retries and the deferral
+start over there. A version probe that meets a busy sync handle fails as
+`storage-busy`, which stops the coordinator's retries the same way; it still
+carries `movedFilesKept`, so the scope stays after it too. Two paths older
+than upgrades still lose the deferral. A transport failure of the cache worker
+itself never reaches the coordinator, and the host quarantines the scope as it
+does for any queue, which leaves the moved files behind with it. A coordinator
+that restarts forgets the deferral, and any open that ended without a report:
+its next ordinary open finds the marker
+and defers again, failures that never reach storage keep the scope because
+storage was untouched, and only the one-recovery rule is lost until that
+open. Files at a newer version
+were upgraded here, so the older build could not open them, and files whose
+older name holds a database again cannot go back over it; both are reset
+(`discarded`). Once the moved files have opened they are this build's own.
+
+Before upgrades a newer build never touched an older file, so its queued writes
+waited there until that build ran again. Each of these narrow windows can now
+lose them instead, and each needs a worker lost or an open failing mid-upgrade:
+
+- the worker is lost between the two renames, the older WAL still held frames
+  (its build was itself lost without closing), and before this build opens
+  again a tab of the older build opens its name, or stale cleanup in a tab of
+  this or a newer build finds the lone older WAL: either removes the half it
+  finds, the WAL no longer matches the marker, and the main file is discarded.
+  Whatever the older WAL held, even nothing, stale cleanup in a tab of a build
+  whose name is newer in any part (schema epoch, record format or storage
+  version) removes the moved main file itself, with the queue it holds, as it
+  removes any half pair under an older name: keeping it for a marker only this
+  build resolves would leave it on disk for good once this build no longer
+  runs. A WAL move that fails, and whose move of the main file back fails too,
+  leaves the same split;
+- the worker is lost during the first open, before any step committed, and a
+  tab of the older build opens its now empty name before the recovery open: the
+  files cannot go back over its new ones and are discarded. That tab may
+  instead lose its own worker before its open creates any file (after its
+  storage grant, which its coordinator answers with a wipe before the next
+  open; on a later storage bump also while moving an even older pair into its
+  name, before the move): a hand-back that lands before that tab's next open
+  puts the files back, and that open wipes them. Landing after it, the
+  hand-back finds a database there and discards them, and refusing it would
+  discard them the same way, so no order keeps them once that wipe is
+  pending; returning still keeps them whenever the older build's next open is
+  an ordinary one;
+- the first open commits the upgrade and then fails (its queue checks or a
+  projection rebuild), or is lost, before it is ready: the file is already the
+  newer version, so it is discarded. An open slower than the coordinator's
+  database watchdog (20 seconds) counts as lost; the largest caches can reach
+  that on their first open;
+- three recovery opens cannot decide where the moved files go, for any reason
+  above: OPFS or connect failures, a marker or version that does not read, a
+  WAL that still holds frames, the older name's lock held by a tab of the older
+  build through all three, or recoveries lost after counting their attempt. The
+  next one discards the files unread, though the older build might still have
+  opened them. Recoveries whose attempts cannot be counted do the same once ten
+  minutes passed since the adoption began by the browser's clock, so a clock
+  jump either way can bring that early, and then one count write that fails
+  while a tab of the older build briefly holds its lock is enough. An uncounted
+  recovery whose two reads of the adoption both fail takes the time from the
+  marker alone, so two passing read failures after ten minutes discard files
+  that could have gone back;
+- the first carry-forward into storage 12 only: a tab of a build from before
+  upgrades that is already at storage 12 shares this build's name but knows
+  nothing of markers. If it opens that name after the adopting worker was lost
+  or let it go, while a move is split or the moved files are still at 11, it
+  resets them as any half pair or older file. Builds that use the name of any
+  later storage version all know the marker.
+
+Already true before upgrades, and unchanged: a worker lost after its open was
+ready but before the coordinator saw it wipes the file on the recovery open; an
+older tab holding its lock, or this build's file already existing, when the
+newer build first opens leaves the older file where it is, its queue sent only
+if that build runs again; and repeated OPFS failures end in a recovery wipe.
+
+Returning to the older build after a move finds its own name empty and starts
+fresh; its queued writes went forward with the file and are sent by the newer
+build. Natively, an older build opening a file a newer build upgraded resets
+it, as any newer file did before. The next newer open finds its own file and
+moves nothing again. A recovery open never carries anything forward.
+
+Only storage versions migrate this way. A record format change keeps its own
+path above, and a GraphQL schema epoch change still starts a new file.
 
 ## Network refreshes
 
@@ -270,23 +480,23 @@ including deleted and nonmatching replacements. Empty-query browsing retains its
 indexed recent path and cursors. Leading-wildcard matching still scans the selected
 buckets: this bounds application search memory, not search work or database page
 cache memory. The existing SQL telemetry includes streamed processing and cleanup.
-Storage schema 12 introduces this covering index through an intentionally
-incompatible cutover, not a migration. Native `open_or_reset` replaces a schema-11
-cache, including its records, queued mutations, and optimistic layers. Browsers
-open a fresh `s4.v4.t12` database; existing cleanup still keeps older files with
-pending mutations, but the new engine does not replay those queues. Backfill
-restarts against the new storage generation. That index cutover kept the GraphQL
-schema epoch and record format unchanged. Native binaries
-must be rebuilt to gain the new index; an OTA frontend update alone cannot add it.
+Storage schema 12 introduced this covering index. It shipped as a reset: native
+`open_or_reset` replaced a schema-11 cache, including its queued mutations, and
+browsers opened a fresh `s4.v4.t12` database. The registered 11 to 12 step now
+builds it in place instead (see [storage upgrades](#storage-upgrades)), so a
+schema-11 cache still on disk upgrades keeping its records and queue. That
+version kept the GraphQL schema epoch and record format unchanged. Native
+binaries must be rebuilt to gain the new index; an OTA frontend update alone
+cannot add it.
 
-The same unpublished schema-12 cutover now includes `records_contacts_cover_idx`,
-a partial covering index on `records(__typename, id, value)` for `GraphqlContact`.
-Ranked reads explicitly seek this index after the text prefilter instead of also
-fetching the record table. They still decode one row at a time and apply membership,
-exclusions, ranking and DM dedup before limiting. Exact schema validation protects
-the predicate/collation; older local schema-12 shapes without it are incompatible,
-not silently upgraded. No additional format/version cutover or contacts store was
-introduced.
+Schema 12 also includes `records_contacts_cover_idx`, a partial covering index
+on `records(__typename, id, value)` for `GraphqlContact`, which the same step
+builds. Ranked reads explicitly seek this index after the text prefilter instead
+of also fetching the record table. They still decode one row at a time and apply
+membership, exclusions, ranking and DM dedup before limiting. Exact schema
+validation protects the predicate/collation; a pre-release local schema-12 shape
+without it is incompatible, since it already records version 12 and no step runs.
+No contacts store was introduced.
 
 `cargo test -p cache-turso --test search` checks matching/ranking parity, including
 Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
@@ -300,7 +510,7 @@ statement reuse, covering-index scans, and borrowed-row decoding against the sam
 fixture adds a legacy non-covering index for comparison with the production
 covering index. Statement reuse has not shown a material benefit and is not
 enabled in production. See [search performance](search-performance.md) for
-measured costs, memory boundaries, and the schema-12 reset behavior.
+measured costs and memory boundaries.
 
 ### Contact projection and page retention
 
@@ -323,7 +533,7 @@ old hydration cannot resurrect verified removals, and old absence evidence canno
 delete a newer positive observation. Unfenced network/optimistic contact writes reject.
 The same backfill then verifies existing membership in bounded raw-key windows using
 the existing exact lookup. Only successful requested-ID omissions permit deletion;
-scan omissions do not. Checkpoint v2 tracks hydration/verification and completes
+scan omissions do not. Checkpoint v2 (v3 while `enable-contact-lists` selects contact lists) tracks hydration/verification and completes
 only after an exhaustive, non-malformed verification pass. Context-only stubs,
 explicit selections and shared name labels do not establish membership. See the
 [contacts plan](../../docs/design/disk-backed-contacts.md) for remaining acceptance.

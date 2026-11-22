@@ -428,7 +428,32 @@ is created by a canceled initialization, even if its timer already fired.
 `graphql_cache.registration_retry` reports the wait duration, retry number,
 triggering error class, and whether the wait completed or was canceled. This is
 separate from a repeated-ready restart and does not make generic transport
-failures storage-safe. Engine recovery retains its bounded five retries.
+failures storage-safe. Engine recovery retains its bounded five retries. When
+an open since the last accepted readiness kept files an interrupted storage
+upgrade moved (`movedFilesKept` on `activation-failed`, from the ordinary open
+or a recovery, beside any failure code including `storage-busy`), or when an
+open that reached storage ended without a report (the database watchdog, an
+`engine-fatal`, a rejected readiness proof, a lost tab or worker) and no open
+that reached storage has reported since with anything but `storage-busy`, the
+end of the retries is never terminal, whatever failure
+ends them: the coordinator keeps the scope and the database action it had
+pending (`wipe-before-open`, or `open-existing` when a navigation departure
+ended an ordinary open; both read an unfinished adoption before anything
+else), fails closed as for an unavailable lock (`owner-lock-unavailable`,
+`cache-unavailable`, telemetry `ownerEvent: recovery-deferred`), and each later
+registration runs the same recovery once rather than five times. A busy exit
+fails closed without deferring, so the registration after it runs all five
+unless an earlier one deferred; a busy exit, a navigation departure or the
+end of the retries that follows a promised handover to a newer build completes
+the handover instead.
+A terminal
+failure would quarantine the scope and strand the moved files with their
+queue; the Rust side bounds most of these recoveries by count or age, and
+`crates/client/README.md#storage-upgrades` lists the cases it cannot bound. Accepted readiness resets the
+retries and the deferral, even when visibility drains that owner at once.
+The deferral lives in the coordinator's memory: a worker transport failure
+still quarantines as for any queue, and a restarted coordinator relearns it
+from the next open that keeps the files.
 Exhausted bootstrap retries preserve the cache
 scope only when the coordinator explicitly proves storage was untouched, not from
 a page's last-seen phase. Missing/broken transports remain conservatively
@@ -526,7 +551,10 @@ compatibility epochs, record formats, or storage schemas use separate files and
 owner locks instead of resetting each other's data. Builds at the versions in
 use when names began to embed them (epoch 3, format 3, storage 11) keep the
 unversioned `graphql-cache:{scope}`, so that change moved no database and the
-next build still replays its queued mutations. Once an owner is active and no
+next build still replays its queued mutations. A build whose own name has no file
+yet first moves the newest older storage version of the same epoch and format
+that it can upgrade to its own name, when no tab of that build holds it
+(`crates/client/README.md`, storage upgrades). Once an owner is active and no
 other build has live tabs, the coordinator lets that page delete stale
 databases of its scope: names for versions no newer than its own that it does
 not open, which includes the unversioned name once the versions move past it.
@@ -551,12 +579,16 @@ paths remain behind the same `CacheHost` interface.
 Normalized records are serialized with `postcard` into `records.value`, behind a
 one-byte encoding tag: records of 256 bytes or more are stored deflated when that
 is smaller, and everything else stays raw. Other persisted payloads (queued
-mutations, optimistic layers, projections) remain plain postcard. A format bump
-that only changes the record encoding carries the previous database forward by
-dropping records, search projections, index facts, and calendar ranges — all
-refetchable — while keeping queued mutations, optimistic layers, and their
-projections. Native storage then compacts the migrated file with `VACUUM INTO`, so
-the upgrade reclaims the space instead of leaving freed pages behind.
+mutations, optimistic layers, projections) remain plain postcard. On native, a
+format bump that only changes the record encoding carries the previous database
+forward, after any storage upgrade the file needs, by dropping records, search
+projections, index facts, and calendar ranges — all refetchable — while keeping
+queued mutations, optimistic layers, and their projections. Native storage then
+tries to compact the migrated file with `VACUUM INTO`, so the upgrade usually
+reclaims the space instead of leaving freed pages behind. Browser database names embed the format
+version and a carry-forward looks only at older storage versions of the current
+format, so a browser format bump starts a new file and leaves the previous one to
+the older build's tabs.
 Both hosts use the same `Storage` implementation and compound entity keys.
 Wasm futures are not `Send`, so the `Storage` trait's futures are bound by
 `MaybeSend` (`crates/maybe_send`): `Send` on native targets, where Tauri drives
@@ -1359,10 +1391,10 @@ matching compact projections into a Rust heap of at most `limit + 1` documents.
 It no longer retains per-bucket text catalogs. Matching and ranking semantics,
 optimistic overlays, and indexed empty-query browsing are preserved; leading
 wildcards still scan selected buckets. Storage schema 12 makes the browse index
-covering by appending search text and source hashes. This is an incompatible
-cutover, not a migration: native caches reset, including queued mutations;
-browsers open a fresh `s4.v4.t12` file and do not replay older files' queues.
-Existing cleanup safeguards for those older files remain. That streaming-search
+covering by appending search text and source hashes. It shipped as a reset; the
+registered 11 to 12 step now upgrades a schema-11 cache in place, and browsers
+move the `t11` file to the `t12` name first (`crates/client/README.md`, storage
+upgrades). That streaming-search
 cutover did not change the record format or schema epoch. See
 [streaming text search](../../../crates/client/README.md#streaming-text-search)
 for the memory boundary and native/OPFS verification.
@@ -1392,7 +1424,7 @@ Invalidations coalesce on a 15-minute cadence without interrupting active scans;
 hourly passes refresh names. Scan omissions never delete records. The same lane
 then scans at most 500 raw cached contact records per keyset window and verifies
 scoped IDs through the existing exact lookup. Only validated requested-ID omissions
-permit removal. Checkpoint v2 tracks hydration/verification and completes only
+permit removal. Checkpoint v2 (v3 while `enable-contact-lists` selects contact lists) tracks hydration/verification and completes only
 after the verification pass; failures/interruption resume at the last committed
 cursor. No directory-sized seen set or extra synchronization endpoint is used.
 

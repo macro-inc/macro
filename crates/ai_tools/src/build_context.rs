@@ -600,6 +600,7 @@ pub async fn build_tool_service_context_from_env(
         &databases_tool_context,
         soup_service.clone(),
         pool.clone(),
+        side_effect_clients.feature_flags.clone(),
     );
     let crm_tool_context = crate::tool_context::build_crm_tool_context(pool.clone());
     let pipeline_tool_context = crate::tool_context::build_pipeline_tool_context(

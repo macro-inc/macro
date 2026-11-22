@@ -66,11 +66,21 @@ const SEARCH_REBUILD_RECORDS: &str =
 const SEARCH_REBUILD_RECORDS_AFTER: &str =
     "SELECT id, value FROM records WHERE __typename = ?1 AND id > ?2 ORDER BY id LIMIT ?3";
 
+#[cfg(feature = "migration-test-hooks")]
+pub use migration::test_hooks as migration_test_hooks;
+pub use migration::{oldest_upgradable_storage_version, storage_version_upgradable};
+
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TursoStorageOpenOutcome {
     /// Existing compatible storage was validated and preserved.
     OpenedExisting,
+    /// Existing storage written at an older storage version was upgraded in
+    /// place, keeping its records and queued writes, then validated.
+    UpgradedExisting {
+        /// The storage version the database was written at.
+        from_storage_version: u32,
+    },
     /// A fresh physical database was initialized.
     OpenedNew,
 }
@@ -240,22 +250,53 @@ impl TursoStorage {
         let fresh = session.disposition() == OpenDisposition::Fresh;
         let connection = Db::uncached(session.connection());
         let result = initialize(&connection, scope, fresh);
+        // Read before the connection goes: whether a failed open left the file
+        // at the version it was written at decides whether the browser may
+        // still hand it back to the build that wrote it.
+        let stored_storage_version = result
+            .is_err()
+            .then(|| migration::stored_storage_version(&connection))
+            .flatten();
         drop(connection);
         match result {
-            Ok(_) => Ok((
+            Ok(initialized) => Ok((
                 Self {
                     health: AtomicU8::new(0),
                     connection: Db::cached(session.connection()),
                     session,
                 },
-                if fresh {
-                    TursoStorageOpenOutcome::OpenedNew
-                } else {
-                    TursoStorageOpenOutcome::OpenedExisting
-                },
+                initialized.outcome(fresh),
             )),
-            Err(error) => Err(TursoStorageOpenFailure { error, session }),
+            Err(error) => Err(TursoStorageOpenFailure {
+                error,
+                stored_storage_version,
+                session,
+            }),
         }
+    }
+
+    /// Ends the OPFS adoption that brought these files to this identity, now
+    /// that their open succeeded (`turso_opfs::ConnectedOpfsSession::finish_adoption`).
+    pub async fn finish_adoption(&self) -> Result<(), OpfsError> {
+        self.session.finish_adoption().await
+    }
+
+    /// Reads the storage version a connected session's file says it was
+    /// written at, without initializing or writing to it, then closes the
+    /// session and keeps its files. Used to decide whether files an unfinished
+    /// OPFS adoption brought here can go back to the identity they came from.
+    /// The close checkpoints, so kept files are self-contained afterwards.
+    pub fn read_storage_version_and_close(
+        session: ConnectedOpfsSession,
+    ) -> (Option<u32>, Result<OpfsOwner, OpfsError>) {
+        let connection = Db::uncached(session.connection());
+        let version = migration::stored_storage_version(&connection);
+        drop(connection);
+        let owner = session
+            .try_close()
+            .map_err(|failure| failure.error().clone())
+            .and_then(|closed| closed.preserve());
+        (version, owner)
     }
 
     /// Browser-test-artifact-only helper used by the storage-control worker.
@@ -553,6 +594,7 @@ impl std::error::Error for TursoStorageResetFailure {
 #[cfg(target_arch = "wasm32")]
 pub struct TursoStorageOpenFailure {
     error: TursoStorageError,
+    stored_storage_version: Option<u32>,
     session: ConnectedOpfsSession,
 }
 
@@ -563,10 +605,22 @@ impl TursoStorageOpenFailure {
         self.error
     }
 
+    /// The storage version the file said it was written at once the open
+    /// failed, or `None` when it no longer says so readably. Equal to the
+    /// version it was written at only when this open committed nothing to it:
+    /// every upgrade step advances the version in its own transaction, and the
+    /// last runs the frozen-schema checks before committing.
+    pub fn stored_storage_version(&self) -> Option<u32> {
+        self.stored_storage_version
+    }
+
     /// Consumes a non-reset failure, closes Turso, and preserves main and WAL.
     ///
     /// This accessor must only be used when [`Self::error`] does not require a
-    /// physical reset. A close failure poisons the worker-local owner.
+    /// physical reset, or to hand files an unfinished OPFS adoption brought
+    /// here back to the identity they came from
+    /// (`turso_opfs::OpfsOwner::return_adoption`) before this identity is
+    /// reset. A close failure poisons the worker-local owner.
     pub fn preserve(self) -> Result<OpfsOwner, OpfsError> {
         let closed = self
             .session
@@ -817,7 +871,7 @@ fn open_native_database(
         return Err(if fresh { error } else { error.initialization() });
     }
     let migrated = match initialize(&Db::uncached(connection.clone()), scope, fresh) {
-        Ok(migrated) => migrated,
+        Ok(initialized) => initialized.format_migrated,
         Err(error) => {
             if connection.close().is_err() {
                 return Err(TursoStorageError::reset(
@@ -3420,10 +3474,7 @@ fn migrate_previous_format(
     scope: &str,
     previous_namespace: &str,
 ) -> Result<(), TursoStorageError> {
-    let migratable = MIGRATABLE_CACHE_FORMAT_VERSIONS
-        .iter()
-        .any(|version| cache_namespace_at(scope, *version) == previous_namespace);
-    if !migratable {
+    if !migratable_namespace(scope, previous_namespace) {
         return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
     }
     driver::write_transaction(connection, || {
@@ -3442,9 +3493,69 @@ fn migrate_previous_format(
     .map_err(TursoStorageError::initialization)
 }
 
-/// Validates or initializes a database. Returns whether a previous format was
-/// carried forward, which native owners compact after opening.
-fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoStorageError> {
+/// Whether `namespace` is a previous cache format of `scope` that opening
+/// carries forward.
+fn migratable_namespace(scope: &str, namespace: &str) -> bool {
+    MIGRATABLE_CACHE_FORMAT_VERSIONS
+        .iter()
+        .any(|version| cache_namespace_at(scope, *version) == namespace)
+}
+
+/// Rejects a file that another scope wrote, or a cache format this build
+/// cannot carry forward, before any upgrade step commits to it: such a file
+/// resets as written.
+fn check_owner(connection: &Db, scope: &str) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        "SELECT key, value FROM meta WHERE key IN ('namespace', 'scope') ORDER BY key ASC",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let [namespace, stored_scope] = rows.as_slice() else {
+        return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
+    };
+    let namespace = meta_value(namespace, "namespace")?;
+    let owned = meta_value(stored_scope, "scope")? == scope
+        && (namespace == cache_namespace(scope) || migratable_namespace(scope, &namespace));
+    owned
+        .then_some(())
+        .ok_or_else(|| TursoStorageError::reset(PhysicalResetReason::Compatibility))
+}
+
+/// The value of a `meta` row read as `key, value`, which must be `key`'s.
+fn meta_value(row: &[Value], key: &str) -> Result<String, TursoStorageError> {
+    match (required_text(row, 0), required_text(row, 1)) {
+        (Ok(found), Ok(value)) if found == key => Ok(value),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Compatibility)),
+    }
+}
+
+/// What opening an existing or fresh database changed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Initialized {
+    /// A previous cache format was carried forward; native owners compact
+    /// after opening.
+    format_migrated: bool,
+    /// The storage version an older database was upgraded from.
+    storage_upgraded_from: Option<u32>,
+}
+
+impl Initialized {
+    #[cfg(target_arch = "wasm32")]
+    fn outcome(self, fresh: bool) -> TursoStorageOpenOutcome {
+        match (fresh, self.storage_upgraded_from) {
+            (true, _) => TursoStorageOpenOutcome::OpenedNew,
+            (false, Some(from_storage_version)) => TursoStorageOpenOutcome::UpgradedExisting {
+                from_storage_version,
+            },
+            (false, None) => TursoStorageOpenOutcome::OpenedExisting,
+        }
+    }
+}
+
+/// Validates or initializes a database, first upgrading one written at an
+/// older storage version in place.
+fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<Initialized, TursoStorageError> {
     enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
     if fresh {
         driver::write_transaction(connection, || {
@@ -3475,11 +3586,16 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
         .map_err(TursoStorageError::initialization)?;
         enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
         validate_frozen_schema(connection)?;
-        return Ok(false);
+        return Ok(Initialized::default());
     }
 
     // Ordinary reopen only validates compatibility and pending writes. A changed
     // derived projection performs one bounded rebuild before serving queries.
+    // An older storage version is upgraded first, so the checks below hold the
+    // upgraded file to exactly what a fresh file has; one this scope does not
+    // own is never upgraded.
+    check_owner(connection, scope)?;
+    let storage_upgraded_from = migration::upgrade(connection)?;
     validate_frozen_schema(connection)?;
     let metadata = driver::query(
         connection,
@@ -3512,7 +3628,7 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
             previous_namespace = Some(value.to_owned());
         }
     }
-    let migrated = match previous_namespace {
+    let format_migrated = match previous_namespace {
         Some(previous_namespace) => {
             migrate_previous_format(connection, scope, &previous_namespace)?;
             true
@@ -3565,7 +3681,10 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
     ensure_search_projection_version(connection)?;
     calendar::ensure_projection_version(connection)?;
     people_sql::open(connection)?;
-    Ok(migrated)
+    Ok(Initialized {
+        format_migrated,
+        storage_upgraded_from,
+    })
 }
 
 fn save_search_projection_version(connection: &Db) -> Result<(), TursoStorageError> {
@@ -5590,6 +5709,7 @@ mod conjunction;
 mod contact_search;
 mod derived_sorts;
 mod integrity;
+mod migration;
 mod mutation_retry;
 mod name_search;
 mod page_retention;

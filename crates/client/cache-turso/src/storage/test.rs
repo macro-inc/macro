@@ -8,6 +8,8 @@ mod engine_writes;
 mod fact_lookup_cost;
 mod filter_scope_cost;
 mod filter_scope_semantics;
+mod migration;
+mod migration_cost;
 mod mutation_retry;
 mod optimistic_atomicity;
 mod page_retention;

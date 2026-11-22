@@ -185,7 +185,12 @@ expanded workflows. Disk and write costs are measured, not assumed free.
 is now the active local-only suggestion path: among exact full or first names and all-word prefixes, people the viewer has a direct message with come first (policy 6), each group by name tier;
 then literal contains, then address terms, recent-first with identity ties. Policy 7 lets a
 caller pass a list order (`listPriority`, groups of contact list keys, and `onlyListed`):
-then the messaged split gives way to name stage, list group, recency. Consumers preserve that
+then the messaged split gives way to name stage, list group, recency. With
+`enable-contact-lists`, personal @mention windows pass teammates, then interacted and
+invited, then Gmail and Outlook contacts; other surfaces pass none yet. Hosts report their
+policy only in answers and those on 5 or 6 refuse list fields, so the web sends an order
+only to a host that has answered with 7 (the first search on a host goes without it and
+is resent). Consumers preserve that
 order; server suggestion fallback and old person scoring are removed. Partial
 hydration stays explicit, and refresh schedules background sync. Fresh regular-profile
 runs of `94dce7c0` put 100k broad command reads at 89–92 ms, recipient reads at
@@ -218,9 +223,9 @@ Migrating Quick Access alone leaves other callers retaining the entire corpus.
 - SQL results stream into a top-K ranker; there is no retained text-search catalog.
 - Row fields are borrowed and a canonical-key buffer is reused; only winners are
   copied into owned documents.
-- Storage schema 12 adds covering search and contact-payload indexes. The deliberately incompatible
-  cache cutover is already implemented; do not add another rollout mechanism for
-  contacts unnecessarily.
+- Storage schema 12 adds covering search and contact-payload indexes. Schema-11
+  caches upgrade to it in place through the registered 11 to 12 step; do not add
+  another rollout mechanism for contacts.
 
 See [client cache architecture](../../crates/client/README.md#streaming-text-search)
 and [search measurements](../../crates/client/search-performance.md). These are
@@ -273,7 +278,10 @@ and search projection, not a new database or bespoke contact-storage subsystem.
   existing email fallback choice. Self remains included.
 - [x] Define a distinct viewer-scoped contact record and stable normalized identity.
   `GraphqlContact.id` derives from the viewer/person pair; `userId` identifies the
-  target. Names do not affect identity.
+  target. Names do not affect identity. `lists` carries the viewer's list keys
+  for the person (`teammates`, `interacted`, `invited`, `gmail`, `outlook`),
+  read from the list-aware tables for every viewer; which store chooses the
+  directory's ids follows the per-viewer `contacts-list-reads` flag.
   Do not reuse `GraphqlUser`, which is the authenticated viewer/identity witness;
   do not merge viewer-specific names into a global public-profile record.
 - [x] Provide bounded search and batch ID/email resolution under the same authorized
@@ -466,7 +474,14 @@ foreign record keys, duplicates, unsolicited IDs and omitted self. Context stubs
 never establish membership; malformed membership prevents completion. Empty raw
 windows may continue. Hydration-page omissions never authorize deletion.
 
-Checkpoint v2 stores phase, cursor and scalar completeness/progress. Verification
+Checkpoint v2 stores phase, cursor and scalar completeness/progress. The web
+flag `enable-contact-lists` adds `lists` to the two reads that write contacts
+to the cache (the backfill page and the exact lookup); the fetch-only server
+pages never select it, and a server without the field still answers every
+read while the flag is off. Storing lists needs one full rescan, so it runs
+under checkpoint v3: only the clients the flag turns on start cold, and
+turning it off returns them to their v2 checkpoint. Native binaries take their
+schema from the bundle's SDL, so builds older than the field store it too. Verification
 resumes after failures/interruption, and completion is published only after its
 last acknowledged write and storage-generation recheck. Account/session,
 leadership and storage changes interrupt work. Offline/error responses never

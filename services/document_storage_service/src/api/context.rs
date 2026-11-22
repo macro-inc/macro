@@ -711,11 +711,19 @@ pub(crate) type DssSqlState = databases_sql::inbound::axum_router::SqlRouterStat
     DatabasesServiceType,
     EntityAccessService,
     DssSoupService,
+    DssContactReads,
+    AuthorizationService,
+>;
+
+/// Contact reads that follow each viewer's `contacts-list-reads` flag between
+/// the legacy graph and the list-aware tables.
+pub(crate) type DssContactReads = contacts::domain::list_reads::FlaggedContactReads<
     contacts::domain::service::ContactsDomainService<
         contacts::outbound::repository::DbContactsRepository,
         Option<contacts::outbound::gateway::ConnectionGatewayNotifier>,
     >,
-    AuthorizationService,
+    contacts::outbound::repository::DbContactsRepository,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
 >;
 
 /// Type alias for the databases router state.
@@ -955,9 +963,7 @@ pub(crate) type DssWebhookState =
 pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
     EntityAccessService,
     PgWebhookRepo,
-    crate::outbound::stream_contacts::ContactsStreamChecker<
-        contacts::outbound::repository::DbContactsRepository,
-    >,
+    crate::outbound::stream_contacts::ContactsStreamChecker<DssContactReads>,
 >;
 
 /// Type alias for the webhook-event SSE router state.

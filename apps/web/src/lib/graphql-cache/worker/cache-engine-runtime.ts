@@ -15,9 +15,11 @@ import {
 import { workerCacheTelemetry } from '../telemetry-relay';
 import { compiledEngineFromPage } from './compiled-engine';
 import {
+  type ActivationFailureCode,
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CleanupToPageEnvelope,
   type CoordinatorToEngineEnvelope,
+  type DatabaseAction,
   type EngineFatalCode,
   type EngineOpenOutcome,
   type EngineToCoordinatorEnvelope,
@@ -41,6 +43,7 @@ import {
 } from './stale-databases';
 import { OWNER_LOCK_RETRY_DELAYS_MS } from './startup';
 import {
+  type CacheOpenOutcome,
   type CacheWasmModule,
   cacheWasmLinearMemoryBytes,
   loadCacheWasm,
@@ -117,6 +120,38 @@ const withVersion = <
     coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
     ...value,
   }) as unknown as T;
+
+/**
+ * The coordinator protocol says only whether storage survived the open. An
+ * in-place upgrade keeps every record, queued write and generation, so it
+ * travels as an ordinary existing open and the protocol stays as it is. An
+ * outcome this glue doesn't know claims nothing survived.
+ */
+const engineOpenOutcome = (outcome: CacheOpenOutcome): EngineOpenOutcome =>
+  match(outcome)
+    .with('upgraded-existing', (): EngineOpenOutcome => 'opened-existing')
+    .with(
+      'opened-existing',
+      'opened-new',
+      'reset-incompatible',
+      'reset-corrupt',
+      'reset-storage-uncertain',
+      (same) => same
+    )
+    .exhaustive((): EngineOpenOutcome => 'reset-storage-uncertain');
+
+/** Why an activation failed. Busy files outrank everything: the open
+ * changed nothing. Whether the open kept files a storage upgrade moved here
+ * travels beside the code (`movedFilesKept`), so a busy open says both. */
+function activationFailureCode(
+  databaseAction: DatabaseAction,
+  storageBusy: boolean
+): ActivationFailureCode {
+  if (storageBusy) return 'storage-busy';
+  return databaseAction === 'wipe-before-open'
+    ? 'recovery-open-failed'
+    : 'initialization-failed';
+}
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -217,6 +252,8 @@ async function activate(
   let ownerLockGaveUp = false;
   // Set when opening outwaited database files another context kept open.
   let storageBusy = false;
+  // Set when an open of either kind kept files an upgrade moved, undecided.
+  let movedFilesKept = false;
   let openGranted = false;
   let resolveOpen!: () => void;
   const openPermission = new Promise<void>((resolve) => {
@@ -325,8 +362,11 @@ async function activate(
     onStorageBusy: () => {
       storageBusy = true;
     },
+    onRecoveryDeferred: () => {
+      movedFilesKept = true;
+    },
     onInitializationOutcome: (outcome) => {
-      initializationOpenOutcome = outcome;
+      initializationOpenOutcome = engineOpenOutcome(outcome);
     },
     telemetry,
   });
@@ -536,11 +576,11 @@ async function activate(
               tabId: activation.tabId,
               ownerEpoch: activation.ownerEpoch,
               reason: errorMessage(error),
-              failureCode: storageBusy
-                ? 'storage-busy'
-                : activation.databaseAction === 'wipe-before-open'
-                  ? 'recovery-open-failed'
-                  : 'initialization-failed',
+              failureCode: activationFailureCode(
+                activation.databaseAction,
+                storageBusy
+              ),
+              movedFilesKept,
             })
       );
     }
