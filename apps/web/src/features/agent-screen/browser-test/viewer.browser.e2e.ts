@@ -1,6 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
 const fixture = '/src/features/agent-screen/browser-test/viewer.html';
+const dmHeader = '/src/features/agent-screen/browser-test/dm-header.html';
 // Set to keep a PNG of each state for review.
 const shots = process.env.AGENT_SCREEN_SHOTS_DIR;
 
@@ -85,19 +86,38 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `desktop-600-other-${theme}`);
     });
 
-    test('a DM header keeps the agent name readable beside its status', async ({
+    test('the real DM top bar: the Offline chip yields before the agent name', async ({
       page,
     }) => {
-      for (const width of [600, 420]) {
-        await open(page, `surface=dm-header&width=${width}&theme=${theme}`);
-        const title = page.getByTestId('dm-title');
-        await expect
-          .poll(() =>
-            title.evaluate((span) => span.scrollWidth <= span.clientWidth)
-          )
-          .toBe(true);
-        await shot(page, `dm-header-${width}-${theme}`);
-      }
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      // The stubs answer the header's own data; nothing reaches a backend.
+      await page.route('**/__macro_dev/**', (route) => route.abort());
+      const chip = page.locator('[data-agent-dm-chip="offline"]');
+      const title = page.getByText('Eve', { exact: true });
+      const truncated = () =>
+        title.evaluate((span) => span.scrollWidth > span.clientWidth);
+
+      // Room for both: the chip keeps its label.
+      await page.goto(`${dmHeader}?width=600&theme=${theme}`, {
+        waitUntil: 'networkidle',
+      });
+      await expect(chip).toHaveText('Offline');
+      await expect(chip).not.toHaveAttribute('data-compact');
+      await expect(page.getByRole('button', { name: 'Screen' })).toBeVisible();
+      expect(await truncated()).toBe(false);
+      await shot(page, `dm-header-600-${theme}`);
+
+      // Narrower: the chip drops to its dot, and the name stays whole (at
+      // this width it would truncate beside the labelled chip).
+      await page.goto(`${dmHeader}?width=530&theme=${theme}`, {
+        waitUntil: 'networkidle',
+      });
+      await expect(chip).toHaveAttribute('data-compact', '');
+      await expect(chip).toHaveAttribute('title', 'Offline');
+      await expect.poll(truncated).toBe(false);
+      await shot(page, `dm-header-530-${theme}`);
+      expect(errors).toEqual([]);
     });
   });
 

@@ -1,10 +1,5 @@
 import '@fontsource-variable/inter';
 import '@app/index.css';
-import {
-  createPriorityCollapseController,
-  PriorityCollapseOverflowSensor,
-} from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
-import { TeamAgentRunStateChip } from '@app/features/settings/views/team-agent-dm-status';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { ok } from 'neverthrow';
@@ -24,8 +19,7 @@ import type { AgentScreenModel } from '../views/shared/agent-screen-model';
  * The real desktop and phone screen viewers over a stand-in transport that
  * draws a white guest desktop. `?view=desktop|phone`, `?state=watch|drive|other`
  * (watching, driving, someone else driving), `?width=<px>` for the desktop
- * split, `?theme=dark`. `?surface=dm-header&width=<px>` is a DM top bar with
- * the agent's Offline chip instead.
+ * split, `?theme=dark`.
  */
 const params = new URLSearchParams(location.search);
 document.documentElement.dataset.themeLight = String(
@@ -199,61 +193,8 @@ function Phone() {
   );
 }
 
-/**
- * A DM top bar as `ChannelDetail` composes it: the title and tabs in the
- * collapse sensor, the actions (with the agent's chip) beside it.
- */
-function DmHeader() {
-  const collapse = createPriorityCollapseController();
-  return (
-    <div class="min-h-screen bg-page p-4 text-ink">
-      <div
-        data-testid="pane"
-        class="overflow-hidden rounded-xl border border-edge-frame bg-panel"
-        style={{ width: `${width}px` }}
-      >
-        <div
-          ref={collapse.setRow}
-          class="@container/channel-header flex h-10 items-center gap-3 px-3"
-        >
-          <PriorityCollapseOverflowSensor
-            controller={collapse}
-            truncateAsLastResort
-            class="relative h-full min-w-0 shrink overflow-hidden"
-            contentClass="flex h-full items-center gap-3 not-touch:pr-1"
-          >
-            <div class="flex min-w-0 shrink items-center gap-2">
-              <span class="size-5 shrink-0 rounded-full bg-accent" />
-              <span
-                data-testid="dm-title"
-                class="truncate text-sm font-semibold"
-              >
-                {agentName}
-              </span>
-            </div>
-          </PriorityCollapseOverflowSensor>
-          <div class="ml-auto flex shrink-0 items-center gap-2">
-            <TeamAgentRunStateChip
-              state="offline"
-              collapser={collapse.collapser}
-            />
-            <For each={['Ask Macro', 'Invite', 'Screen', 'Call']}>
-              {(label) => (
-                <span class="rounded-md border border-edge-button px-2 py-1 text-xs">
-                  {label}
-                </span>
-              )}
-            </For>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 const root = document.getElementById('root');
 if (root)
   render(() => {
-    if (params.get('surface') === 'dm-header') return <DmHeader />;
     return view === 'phone' ? <Phone /> : <DesktopSplit />;
   }, root);
