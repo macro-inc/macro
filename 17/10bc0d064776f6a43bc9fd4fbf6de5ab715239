@@ -1,0 +1,19 @@
+apps/web/src/features/external-chat/views/external-chat-view.test.tsx
+  s_2db3c52becabb3::t_e4f608d10dc3f0 41-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1710bc0d064776f6a43bc9fd4fbf6de5ab715239",
+  "prompts": {},
+  "sessions": {
+    "s_2db3c52becabb3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "28fee745-79bf-4627-bef3-a0dcd95797e8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
