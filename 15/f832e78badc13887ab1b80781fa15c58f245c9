@@ -10,6 +10,9 @@ apps/web/src/features/agent-permissions/core/model.ts
   s_9aaadd038e8bff::t_3fd17af1dcfd34 8-15,18-20,23,26,29,35-41,43,46,50,57,61-64,69-70,73-75,80-82,89-91,97,115,124,126,131,133,137,139-142,160-168,171,173-177,181-188,191-193,207,209,212-213,216-218,222-224,227,229,231-233,236,243-252,254-260,263-271,274-284,287-289,291-297,299,301-308,311-314,316-327,330-340
   s_9aaadd038e8bff::t_1293d6b12db106 138,300
   s_9aaadd038e8bff::t_2dd9f1b7a641bf 230
+  s_9aaadd038e8bff::t_b06e61ea11bb04 125,127-130,132,134-136,143-144,219
+  s_9aaadd038e8bff::t_9f883330c68a11 105-108,113-114,118
+  s_9aaadd038e8bff::t_dcaefbcd173caf 169,178
 apps/web/src/features/agent-permissions/components/exception-row.tsx
   s_9aaadd038e8bff::t_ef511b591fd027 1-56
 apps/web/src/features/agent-permissions/components/reset-permissions-dialog.tsx
@@ -19,6 +22,7 @@ apps/web/src/features/agent-permissions/index.ts
 apps/web/src/features/agent-permissions/tests/fixtures.ts
   s_9aaadd038e8bff::t_af1e143bee5313 281-304
   s_9aaadd038e8bff::t_06acfb2bb433b8 3,6,114,151-279,305-331,333,335-381
+  s_9aaadd038e8bff::t_b06e61ea11bb04 5,334
 apps/web/src/features/agent-permissions/views/agent-permissions-panel.test.tsx
   s_9aaadd038e8bff::t_1be2f567583efa 1-64,68-97,101-110,112-143,146-147,149-198,202-203,207-214,218-283
   s_9aaadd038e8bff::t_af1e143bee5313 65-67,98-100,199-201,204-206,215-217
@@ -26,6 +30,7 @@ apps/web/src/features/agent-permissions/views/agent-permissions-panel.test.tsx
 apps/web/src/features/agent-permissions/views/show-permissions-card.tsx
   s_9aaadd038e8bff::t_af1e143bee5313 26,44
   s_9aaadd038e8bff::t_63d019cc62d739 55,297
+  s_9aaadd038e8bff::t_9f883330c68a11 30,229-234
 apps/web/src/features/agent-permissions/components/labels.ts
   s_9aaadd038e8bff::t_4e6f15638c7176 8,34-35,37-41
 apps/web/src/features/agent-permissions/components/permission-state-menu.tsx
@@ -45,16 +50,20 @@ apps/web/src/features/agent-permissions/queries/permissions-view.ts
 apps/web/src/features/agent-permissions/core/model.test.ts
   s_9aaadd038e8bff::t_4b2bf600590bce 3-8,10-12,14-18,21-23,26-28,51-52,60-78,80-82,84,86-87,89-96,99-107,109-132,136-144,148-156,160-166,168,170-176,178-179,181-185,187-189,191,193-216,219-220
   s_9aaadd038e8bff::t_af1e143bee5313 53-59
+  s_9aaadd038e8bff::t_b06e61ea11bb04 79,88,108,134,186
 apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
   s_9aaadd038e8bff::t_ac9f4045e5c173 106,117,122-126,128-148,150-174,178
   s_e4dab6ab069ba5::t_f8da07a232f8cf 127,223
+  s_9aaadd038e8bff::t_b06e61ea11bb04 191
 apps/web/src/features/block-agent/browser-test/permissions.tsx
   s_9aaadd038e8bff::t_048273298aaa7f 132-202
   s_9aaadd038e8bff::t_af1e143bee5313 225-229
   s_9aaadd038e8bff::t_a7c9859da9cdab 7-8,10-15,206-208,216-224,230-251,260-265,296,299-308,312,520,525
+  s_9aaadd038e8bff::t_dcaefbcd173caf 280
 apps/web/src/lib/i18n/locales/en/agent-permissions.ts
   s_9aaadd038e8bff::t_3a2c8f7a734578 1,4-5,8-10,20,26,29,32,34,36-58,60-65,67,88
   s_9aaadd038e8bff::t_60cd8d1d4d551b 6-7
+  s_9aaadd038e8bff::t_b06e61ea11bb04 59
 apps/web/src/features/agent-permissions/views/open-agent-permissions.ts
   s_9aaadd038e8bff::t_f2de45fed91f62 3
   s_9aaadd038e8bff::t_318a111be757a3 7-8
