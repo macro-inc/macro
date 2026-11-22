@@ -32,6 +32,8 @@ import {
 } from './directory-cache';
 import {
   addChannelRereads,
+  endChannelRereadDelete,
+  type OwedRereads,
   owedChannelRereads,
   settleChannelRereads,
 } from './directory-rereads';
@@ -304,6 +306,20 @@ async function settleRereads(
   return ids.filter((id) => !gone.has(id)).length;
 }
 
+/** Runs the delete of channels `owed` names, then lets a read settle them:
+ * a read answered while the delete is pending would be erased by it. */
+async function deleteOwed<T>(
+  input: { userId: string; generation: string },
+  owed: OwedRereads,
+  remove: () => Promise<T>
+): Promise<T> {
+  try {
+    return await remove();
+  } finally {
+    endChannelRereadDelete(input.userId, input.generation, owed);
+  }
+}
+
 /** `settleRereads` in its own span, for a fetcher outside reconciliation. */
 function settleRereadsTraced(input: RereadInput): Promise<number> {
   return Telemetry.span('channel_directory.reread', async (span) => {
@@ -425,11 +441,11 @@ async function removeUnreadableChannels(
         // them again. Storage that refuses them would leave a channel the
         // viewer was added back to deleted for good, so the pass stops
         // unproven and the directory reads the network instead.
-        if (
-          addChannelRereads(input.userId, input.generation, batch) === undefined
-        )
-          return finish('unsaved');
-        await span.run(() => input.host.deleteRecords(keys, session));
+        const owed = addChannelRereads(input.userId, input.generation, batch);
+        if (owed === undefined) return finish('unsaved');
+        await deleteOwed(input, owed, () =>
+          span.run(() => input.host.deleteRecords(keys, session))
+        );
       }
       removed += stale.length;
       pending = decided.filter(
@@ -513,10 +529,12 @@ export async function removeChannelsGoneOnPrimary(
     input.signal?.throwIfAborted();
     const owed = addChannelRereads(input.userId, input.generation, stale);
     if (owed === undefined) return finish([], 'unsaved');
-    await span.run(() =>
-      input.host.deleteRecords(
-        stale.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`),
-        session
+    await deleteOwed(input, owed, () =>
+      span.run(() =>
+        input.host.deleteRecords(
+          stale.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`),
+          session
+        )
       )
     );
     try {

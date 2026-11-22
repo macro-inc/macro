@@ -1178,6 +1178,65 @@ describe('removing channels the primary shows gone', () => {
     expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
   });
 
+  it('keeps the delete owed through a lane pass that reads while it is in flight', async () => {
+    const { cache, host } = reconcileHost(['gone']);
+    let readable: string[] = [];
+    let reads = 0;
+    const shows = primary(cache, () => readable);
+    const read = vi.fn<ReadFromPrimary>(async (id, signal) => {
+      reads += 1;
+      // The cleanup's own look after its delete fails.
+      if (reads > 1) throw new Error('primary down');
+      return shows(id, signal);
+    });
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    host.deleteRecords.mockImplementationOnce(async (keys) => {
+      await held;
+      for (const key of keys) cache.records.delete(key);
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
+    });
+
+    const removing = remove(host, ['gone'], read);
+    await vi.waitFor(() => expect(host.deleteRecords).toHaveBeenCalled());
+
+    // The viewer rejoins and a lane pass runs while the delete is pending:
+    // whatever it reads now, the delete is about to erase.
+    readable = ['gone'];
+    const lane = primary(cache, () => readable);
+    const fetchPage = await fetcher(
+      host,
+      server([{ nextCursor: null, entityIds: [] }]),
+      undefined,
+      lane
+    );
+    await fetchPage(FIRST);
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([
+      channelUuid('gone'),
+    ]);
+
+    release();
+    expect((await removing).unconfirmed.map(channelName)).toEqual(['gone']);
+    expect(cache.records.has(`GraphqlSoupChannel:${channelUuid('gone')}`)).toBe(
+      false
+    );
+
+    // Still owed, so the next pass writes it back.
+    const next = await fetcher(
+      host,
+      server([{ nextCursor: null, entityIds: [] }]),
+      undefined,
+      lane
+    );
+    await next(FIRST);
+    expect(cache.records.has(`GraphqlSoupChannel:${channelUuid('gone')}`)).toBe(
+      true
+    );
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
+  });
+
   it('deletes nothing when storage refuses the look it owes', async () => {
     const { host } = reconcileHost(['gone']);
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
