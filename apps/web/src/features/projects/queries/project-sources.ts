@@ -3,6 +3,7 @@ import { createTaskWithProperties } from '@block-md/util/taskComposerProperties'
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { Telemetry } from '@macro-inc/observability';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { revalidateActivityQueries } from '@queries/activity/push-registry';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
@@ -150,53 +151,60 @@ export function createProjectSources(
               ...properties,
               [SYSTEM_PROPERTY_IDS.PROJECT, taskProjectValue(projectId)],
             ];
-        let pending: PendingProjectTaskHandle | undefined;
-        let created: Awaited<ReturnType<typeof createTaskWithProperties>> =
-          null;
-        try {
-          created = await createTaskWithProperties(
-            title,
-            content,
-            values,
-            definitions,
-            upsertToHistory,
-            {
-              ...options,
-              // Show the task in the project's list as the request starts.
-              onMutate: () => {
-                pending = pendingTasks.begin(
-                  projectId,
-                  buildOptimisticTask({
-                    id: crypto.randomUUID(),
-                    title,
-                    ownerId: userId() ?? '',
-                    properties: values,
-                    definitions,
-                    now: new Date(),
-                  })
-                );
-                options?.onMutate?.();
-              },
-              onCreated: (task) => {
-                pending?.confirm(task.documentId);
-                options?.onCreated?.(task);
-                // The project's task ids and counts come from its own read,
-                // which the task list's cache does not maintain.
-                fireAndForget(
-                  revalidateActivityQueries(
-                    soup.client(),
-                    new Set([projectId])
-                  ),
-                  'projects'
-                );
-              },
-            }
-          );
-        } finally {
-          // The composer tells the user the create was not confirmed.
-          if (!created) pending?.fail();
-        }
-        return created;
+        return Telemetry.span('project.tasks.create', async (span) => {
+          span.setAttr('project.id', projectId);
+          let pending: PendingProjectTaskHandle | undefined;
+          let created: Awaited<ReturnType<typeof createTaskWithProperties>> =
+            null;
+          try {
+            created = await createTaskWithProperties(
+              title,
+              content,
+              values,
+              definitions,
+              upsertToHistory,
+              {
+                ...options,
+                // Show the task in the project's list as the request starts.
+                onMutate: () => {
+                  pending = pendingTasks.begin(
+                    projectId,
+                    buildOptimisticTask({
+                      id: crypto.randomUUID(),
+                      title,
+                      ownerId: userId() ?? '',
+                      properties: values,
+                      definitions,
+                      now: new Date(),
+                    })
+                  );
+                  span.event('project.tasks.create.pending_shown');
+                  options?.onMutate?.();
+                },
+                onCreated: (task) => {
+                  span.setAttr('task.id', task.documentId);
+                  pending?.confirm(task.documentId);
+                  options?.onCreated?.(task);
+                  // The project's task ids and counts come from its own read,
+                  // which the task list's cache does not maintain.
+                  fireAndForget(
+                    revalidateActivityQueries(
+                      soup.client(),
+                      new Set([projectId])
+                    ),
+                    'projects'
+                  );
+                },
+              }
+            );
+          } finally {
+            span.setAttr('task.created', !!created);
+            // The composer tells the user the create was not confirmed.
+            if (!created) pending?.fail();
+          }
+          if (!created) span.error('Task was not created');
+          return created;
+        });
       };
       const create = createProjectMutation(
         client,
