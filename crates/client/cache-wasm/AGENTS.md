@@ -82,8 +82,8 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   `unreadable`, `failed`, `returned`, `discarded`) and
   `carryForwardStorageVersion` (absent when unknown) say what happened to the
   older file; add a new value to `CACHE_CARRY_FORWARDS` in the web app too.
-  The carry-forward fails an open only when it cannot read whether moved files
-  are there and the open would reset them. The carry-forward tests in
+  The carry-forward fails an open, keeping the files, only when it cannot read
+  whether moved files are there or where their WAL is. The carry-forward tests in
   `shell/test.rs` cover each path over real OPFS.
 - The engine is guarded by an async mutex so overlapping JS calls serialize
   instead of causing reentrancy — don't bypass it with a second entry point.
