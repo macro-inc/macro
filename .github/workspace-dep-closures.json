@@ -13053,8 +13053,18 @@
       "crates/workspace-hack"
     ],
     "opensearch_client": [
+      "crates/bot_id",
+      "crates/cowlike",
+      "crates/document_sub_type",
+      "crates/filter_ast",
+      "crates/item_filters",
+      "crates/macro_user_id",
+      "crates/model_file_type",
+      "crates/model_owner",
       "crates/models_opensearch",
       "crates/models_search_cursor",
+      "crates/non_empty",
+      "crates/notification_state",
       "crates/opensearch_client",
       "crates/opensearch_query_builder",
       "crates/workspace-hack"
@@ -14384,6 +14394,8 @@
       "crates/generic_email_domains",
       "crates/gmail_client",
       "crates/google_token",
+      "crates/graphql_common",
+      "crates/graphql_soup_filter_input",
       "crates/harness_id",
       "crates/harness_token",
       "crates/harnessd_protocol",
