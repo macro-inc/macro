@@ -1981,6 +1981,67 @@ describe('CoordinatorRouter', () => {
     ).toHaveLength(1);
   });
 
+  it('hands over instead of giving the scope up when the promised last recovery fails', async () => {
+    const { router, channel, tabA, tabB, engine, ask } =
+      await holdTheDatabase(1_000);
+    engine.receive({
+      ...version,
+      kind: 'engine-fatal',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'cache engine worker crashed',
+      fatalCode: 'runtime-failure',
+    });
+    const ports = new Map([
+      ['tab-a', tabA],
+      ['tab-b', tabB],
+    ]);
+    const last = 1 + RECOVERY_RETRIES;
+    for (let epoch = 2; epoch <= last; epoch += 1) {
+      await vi.advanceTimersByTimeAsync(1_000);
+      const state = router.snapshot()?.state;
+      expect(state).toMatchObject({ kind: 'activating', ownerEpoch: epoch });
+      // The recoveries move between the two tabs.
+      const tabId = state?.kind === 'activating' ? state.tabId : '';
+      const tab = ports.get(tabId);
+      if (!tab) throw new Error(`no recovery elected for epoch ${epoch}`);
+      const recovery = new FakePort();
+      await attach(router, tab, tabId, epoch, recovery);
+      if (epoch === last) {
+        for (const kind of [
+          'engine-assets-ready',
+          'owner-lock-acquired',
+        ] as const)
+          recovery.receive({ ...version, kind, tabId, ownerEpoch: epoch });
+        // The newer build is promised the files this recovery is opening.
+        ask(2_000);
+        expect(channel.posted).toEqual([
+          expect.objectContaining({ kind: 'reply', decision: 'yield' }),
+        ]);
+      }
+      recovery.receive({
+        ...version,
+        kind: 'activation-failed',
+        tabId,
+        ownerEpoch: epoch,
+        reason: 'OPFS recovery open failed',
+        failureCode: 'recovery-open-failed',
+        movedFilesKept: false,
+      });
+    }
+    await vi.advanceTimersByTimeAsync(1_000);
+    for (const tab of [tabA, tabB]) {
+      expect(messagesOfKind(tab, 'terminal-error')).toEqual([]);
+      expect(messagesOfKind(tab, 'cache-superseded')).toHaveLength(1);
+    }
+    expect(router.snapshot()?.state.kind).toBe('waiting-for-tab');
+    // The first owner and the five recoveries; nothing after them.
+    expect(
+      messagesOfKind(tabA, 'become-owner').length +
+        messagesOfKind(tabB, 'become-owner').length
+    ).toBe(last);
+  });
+
   it('sends the tabs of an idle older build to the newer one without answering', async () => {
     vi.useFakeTimers();
     const channel = fakeTakeoverChannel();

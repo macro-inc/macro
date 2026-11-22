@@ -661,9 +661,20 @@ export class CoordinatorCore {
     return actions;
   }
 
-  /** Stops this recovery cycle. Only untouched storage permits a new host to retry. */
+  /** Stops this recovery cycle. Only untouched storage permits a new host to
+   * retry. A cycle promised to a newer build hands over instead, as
+   * `resumeAfterLoss` does: no engine runs between recoveries, and failing
+   * here would leave the newer build a quarantined scope. */
   terminalFailure(reason: string): CoordinatorAction[] {
-    if (this.stateValue.kind === 'failed') return [];
+    const state = this.stateValue;
+    if (state.kind === 'failed') return [];
+    if (this.supersedePending && state.kind === 'resetting-after-loss') {
+      this.stateValue = {
+        kind: 'waiting-for-tab',
+        nextDatabaseAction: state.databaseAction,
+      };
+      return this.completeSupersede();
+    }
     const storageUntouched =
       this.stateValue.kind === 'resetting-after-loss' &&
       this.stateValue.databaseAction === 'open-existing';
