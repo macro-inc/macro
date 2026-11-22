@@ -20,6 +20,7 @@ use macro_event_topics::MacroAgentSessionLifecycleTopic;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::models::MessageParent;
+pub use model_notifications::AgentTurnStopReason;
 use serde::{Deserialize, Serialize};
 
 use super::model::{
@@ -133,8 +134,8 @@ pub struct TurnSummary {
     pub actor: Option<MacroUserIdStr<'static>>,
     /// The magic-chip message posted for this turn, when one was.
     pub announcement_message_id: Option<Uuid>,
-    /// The ACP stop reason, or `"error"` when the runtime refused the prompt.
-    pub stop_reason: String,
+    /// Why the turn stopped.
+    pub stop_reason: AgentTurnStopReason,
     /// The agent's last text in the turn, whole; what the magic chip shows
     /// once the turn ends. `None` when the turn produced no prose.
     pub excerpt: Option<String>,
@@ -200,8 +201,8 @@ pub struct TurnEndedMetadata {
     pub actor: Option<MacroUserIdStr<'static>>,
     /// The magic-chip message posted for this turn, when one was.
     pub announcement_message_id: Option<Uuid>,
-    /// The ACP stop reason, or `"error"` when the runtime refused the prompt.
-    pub stop_reason: String,
+    /// Why the turn stopped.
+    pub stop_reason: AgentTurnStopReason,
     /// Prompts still waiting behind this turn.
     pub queued_remaining: usize,
 }

@@ -2378,8 +2378,18 @@ export const listTypedNotificationsResponse = zod
                                 "The agent's last prose in the turn, whole; `None` when it wrote none."
                               ),
                             stopReason: zod
-                              .string()
-                              .describe('The ACP stop reason, or `error`.'),
+                              .enum([
+                                'end_turn',
+                                'max_tokens',
+                                'max_turn_requests',
+                                'refusal',
+                                'cancelled',
+                                'error',
+                                'other',
+                              ])
+                              .describe(
+                                "Why an agent's turn stopped: one of ACP's stop reasons, or `error` for a\nturn whose prompt the runtime answered with an error. On the wire each is\nits `snake_case` name, ACP's own spelling."
+                              ),
                             turn: zod
                               .number()
                               .min(
@@ -4756,8 +4766,18 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                 "The agent's last prose in the turn, whole; `None` when it wrote none."
                               ),
                             stopReason: zod
-                              .string()
-                              .describe('The ACP stop reason, or `error`.'),
+                              .enum([
+                                'end_turn',
+                                'max_tokens',
+                                'max_turn_requests',
+                                'refusal',
+                                'cancelled',
+                                'error',
+                                'other',
+                              ])
+                              .describe(
+                                "Why an agent's turn stopped: one of ACP's stop reasons, or `error` for a\nturn whose prompt the runtime answered with an error. On the wire each is\nits `snake_case` name, ACP's own spelling."
+                              ),
                             turn: zod
                               .number()
                               .min(
@@ -7084,8 +7104,18 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                 "The agent's last prose in the turn, whole; `None` when it wrote none."
                               ),
                             stopReason: zod
-                              .string()
-                              .describe('The ACP stop reason, or `error`.'),
+                              .enum([
+                                'end_turn',
+                                'max_tokens',
+                                'max_turn_requests',
+                                'refusal',
+                                'cancelled',
+                                'error',
+                                'other',
+                              ])
+                              .describe(
+                                "Why an agent's turn stopped: one of ACP's stop reasons, or `error` for a\nturn whose prompt the runtime answered with an error. On the wire each is\nits `snake_case` name, ACP's own spelling."
+                              ),
                             turn: zod
                               .number()
                               .min(
@@ -9363,8 +9393,18 @@ export const getTypedNotificationByIdResponse = zod
                         "The agent's last prose in the turn, whole; `None` when it wrote none."
                       ),
                     stopReason: zod
-                      .string()
-                      .describe('The ACP stop reason, or `error`.'),
+                      .enum([
+                        'end_turn',
+                        'max_tokens',
+                        'max_turn_requests',
+                        'refusal',
+                        'cancelled',
+                        'error',
+                        'other',
+                      ])
+                      .describe(
+                        "Why an agent's turn stopped: one of ACP's stop reasons, or `error` for a\nturn whose prompt the runtime answered with an error. On the wire each is\nits `snake_case` name, ACP's own spelling."
+                      ),
                     turn: zod
                       .number()
                       .min(

@@ -864,6 +864,23 @@ fn parse_agent_session_mention_missing_id() {
 }
 
 #[test]
+fn agent_reply_reads_as_its_session_steps_and_answer() {
+    // A chat agent's thread reply as Lexical composes it: the session link,
+    // the steps the agent took, then its answer.
+    let input = concat!(
+        r#"<m-agent-session-mention>{"id":"s1","label":"Centralize read-on-open"}</m-agent-session-mention>"#,
+        "\n\n",
+        r#"<m-agent-activity>{"agentSessionId":"s1","turn":1,"segment":0,"rows":[{"id":"r1","label":"Searched tasks","status":"completed"},{"id":"r2","label":"Created \"Centralize read-on-open\"","status":"completed","card":{"root":{"kind":"stack"}}}],"sealed":true}</m-agent-activity>"#,
+        "\n\nDone, assigned to you.",
+    );
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    assert_eq!(
+        PlainTextFormatter::format_xml_text(parsed).0,
+        "Centralize read-on-open\n\nSearched tasks\nCreated \"Centralize read-on-open\"\n\nDone, assigned to you."
+    );
+}
+
+#[test]
 fn parse_pull_request_mention() {
     let input = r#"<m-pr-mention>{"id":"foreign-1","label":"macro/macro#123"}</m-pr-mention>"#;
     let parsed = ParsedXmlText::parse(input).unwrap();

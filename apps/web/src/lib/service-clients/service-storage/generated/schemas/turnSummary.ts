@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentActionId } from './agentActionId';
+import type { AgentTurnStopReason } from './agentTurnStopReason';
 import type { TurnSummaryActor } from './turnSummaryActor';
 import type { TurnSummaryAnnouncementMessageId } from './turnSummaryAnnouncementMessageId';
 import type { TurnSummaryExcerpt } from './turnSummaryExcerpt';
@@ -21,8 +22,8 @@ export interface TurnSummary {
   /** The agent's last text in the turn, whole; what the magic chip shows
 once the turn ends. `None` when the turn produced no prose. */
   excerpt?: TurnSummaryExcerpt;
-  /** The ACP stop reason, or `"error"` when the runtime refused the prompt. */
-  stop_reason: string;
+  /** Why the turn stopped. */
+  stop_reason: AgentTurnStopReason;
   /**
    * Position in the session's log.
    * @minimum 0

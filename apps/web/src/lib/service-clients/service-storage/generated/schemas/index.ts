@@ -91,6 +91,7 @@ export * from './agentSessionSource';
 export * from './agentSessionVisibility';
 export * from './agentStoppedReason';
 export * from './agentStoppedReasonProperty';
+export * from './agentTurnStopReason';
 export * from './agentTyping';
 export * from './agentTypingPhase';
 export * from './aiAdmissionErrorBody';

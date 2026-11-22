@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentActionId } from './agentActionId';
+import type { AgentTurnStopReason } from './agentTurnStopReason';
 import type { SessionIdentity } from './sessionIdentity';
 import type { TurnEndedMetadataActor } from './turnEndedMetadataActor';
 import type { TurnEndedMetadataAnnouncementMessageId } from './turnEndedMetadataAnnouncementMessageId';
@@ -26,8 +27,8 @@ export interface TurnEndedMetadata {
    * @minimum 0
    */
   queued_remaining: number;
-  /** The ACP stop reason, or `"error"` when the runtime refused the prompt. */
-  stop_reason: string;
+  /** Why the turn stopped. */
+  stop_reason: AgentTurnStopReason;
   /**
    * Position in the session's log.
    * @minimum 0
