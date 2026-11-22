@@ -2486,6 +2486,13 @@ fn directory_page(fields: &str, channel_filter: &str, selection: &str) -> String
     )
 }
 
+/// A directory page on the primary with `scope` among its filters.
+fn scoped_directory_page(scope: &str) -> String {
+    format!(
+        "{{ user {{ soup(input: {{initial: {{filters: {{{scope}, {DIRECTORY_FILTERS}}}, limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY}}}}) {{ nextCursor }} }} }}"
+    )
+}
+
 /// The ordinary directory page: 100 items by creation time.
 fn directory_page_query(extra: &str, selection: &str) -> String {
     directory_page(
@@ -2824,6 +2831,26 @@ async fn soup_channel_reads_primary_refuses_pages_that_are_not_directory_pages()
             directory_page(
                 ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
                 &named_channels_filter(101),
+                "nextCursor",
+            ),
+        ),
+        (
+            "favorites only",
+            scoped_directory_page("favoritesOnly: true"),
+        ),
+        (
+            "a CRM company",
+            scoped_directory_page(r#"crmAssociation: {company: "00000000-0000-0000-0000-000000000007"}"#),
+        ),
+        (
+            "CRM activity",
+            scoped_directory_page("crmAssociation: {activity: true}"),
+        ),
+        (
+            "more participation states than a page needs",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                r#"{and: {left: {literal: {channelId: "00000000-0000-0000-0000-000000000001"}}, right: {and: {left: {literal: {isParticipant: true}}, right: {or: {left: {literal: {isParticipant: true}}, right: {literal: {isParticipant: false}}}}}}}}"#,
                 "nextCursor",
             ),
         ),

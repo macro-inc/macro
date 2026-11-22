@@ -473,8 +473,12 @@ impl SoupRequest<EntityFilterAst> {
     /// continuation of a timestamp-sorted Soup, newest first, at most
     /// [`CHANNEL_DIRECTORY_PAGE_LIMIT`] items, with channel threads left out
     /// and a channel filter the request bounds (`channel_directory::bounded`).
-    /// Only such a page may read its channels from the primary database: it
-    /// costs what one page of the REST channel list costs there.
+    /// It carries no favorites or CRM record scope: Soup turns either into
+    /// channel ids (as many as the favorites or the record hold) after this
+    /// check, and a CRM scope also reads the record's references through the
+    /// channel repository. Only such a page may read its channels from the
+    /// primary database: it costs what one page of the REST channel list
+    /// costs there.
     ///
     /// Newest first because the channel query fetches descending and an
     /// ascending page reverses that slice, so its next page would read nearly
@@ -484,6 +488,8 @@ impl SoupRequest<EntityFilterAst> {
         self.limit <= CHANNEL_DIRECTORY_PAGE_LIMIT
             && self.sort_direction == SoupSortDirection::Desc
             && matches!(self.cursor, SoupQuery::Simple(_))
+            && filter.favorites_only != Some(true)
+            && filter.crm_association.is_none()
             && exclusions::channel_thread(Some(filter))
             && channel_directory::bounded(filter.channel_filter.as_deref())
     }

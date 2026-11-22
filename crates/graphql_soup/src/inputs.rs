@@ -78,9 +78,9 @@ pub enum SoupChannelReads {
     /// other entity types and per-item lookups keep the database they read.
     /// Served only for channel directory pages: a timestamp sort (not NAME,
     /// PROPERTY or NOTIFIED_AT), newest first, at most 100 items, channel
-    /// threads excluded by a nil-id filter, and either no channel filter or
-    /// one naming at most 100 channel ids beside isParticipant. Any other
-    /// page is refused.
+    /// threads excluded by a nil-id filter, no favoritesOnly or CRM scope, and
+    /// either no channel filter or one naming at most 100 channel ids beside
+    /// at most two isParticipant states. Any other page is refused.
     Primary,
 }
 

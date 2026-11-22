@@ -1,6 +1,7 @@
 use super::*;
 use entity_access::domain::models::EntityAccessReceipt;
 use item_filters::ast::channel::{ChannelLiteral, ChannelThreadLiteral};
+use item_filters::ast::crm_association::CrmAssociation;
 use item_filters::ast::crm_company::CrmCompanyLiteral;
 use item_filters::ast::foreign_entity::ForeignEntityLiteral;
 use models_pagination::CursorVal;
@@ -374,8 +375,28 @@ fn channel_directory_pages_admit_only_channel_filters_the_request_bounds() {
         Expr::and(named(1..=limit), either_participation()),
         named(1..=3),
         Expr::and(named([1]), Expr::val(ChannelLiteral::IsParticipant(true))),
+        // The most participation states a page may carry.
+        Expr::and(
+            named(1..=limit),
+            Expr::and(
+                Expr::val(ChannelLiteral::IsParticipant(true)),
+                Expr::val(ChannelLiteral::IsParticipant(true)),
+            ),
+        ),
     ];
     let refused = [
+        // A membership check per candidate for each participation state.
+        Expr::and(
+            named(1..=3),
+            Expr::and(either_participation(), either_participation()),
+        ),
+        Expr::and(
+            named(1..=limit),
+            Expr::and(
+                Expr::val(ChannelLiteral::IsParticipant(true)),
+                either_participation(),
+            ),
+        ),
         // Every channel of the user's teams, bounded by no id.
         either_participation(),
         Expr::val(ChannelLiteral::IsParticipant(false)),
@@ -411,6 +432,54 @@ fn channel_directory_pages_admit_only_channel_filters_the_request_bounds() {
                     .is_channel_directory_page(),
                 "{channels:?} (follow_up={follow_up})"
             );
+        }
+    }
+}
+
+#[test]
+fn channel_directory_pages_carry_no_scope_soup_turns_into_channel_ids() {
+    let scopes: [(&str, fn(&mut EntityFilterAst)); 4] = [
+        ("favorites", |filter| filter.favorites_only = Some(true)),
+        ("company", |filter| {
+            filter.crm_association = Some(CrmAssociation::Company(id(7)));
+        }),
+        ("contact", |filter| {
+            filter.crm_association = Some(CrmAssociation::Contact(id(7)));
+        }),
+        ("activity", |filter| {
+            filter.crm_association = Some(CrmAssociation::Activity);
+        }),
+    ];
+    for follow_up in [false, true] {
+        for channels in [None, Some(Expr::and(named(1..=3), either_participation()))] {
+            let page = || match channels.clone() {
+                Some(channels) => directory_page_with_channels(channels, follow_up),
+                None => request(
+                    filter_for(Leg::ChannelThread, &Expr::val(Uuid::nil())),
+                    follow_up,
+                ),
+            };
+            assert!(page().is_channel_directory_page(), "follow_up={follow_up}");
+            let mut unscoped = page();
+            unscoped.cursor = unscoped.cursor.map(|mut filter| {
+                filter.favorites_only = Some(false);
+                filter
+            });
+            assert!(
+                unscoped.is_channel_directory_page(),
+                "favorites_only false (follow_up={follow_up})"
+            );
+            for (name, scope) in scopes {
+                let mut scoped = page();
+                scoped.cursor = scoped.cursor.map(|mut filter| {
+                    scope(&mut filter);
+                    filter
+                });
+                assert!(
+                    !scoped.is_channel_directory_page(),
+                    "{name} (follow_up={follow_up})"
+                );
+            }
         }
     }
 }

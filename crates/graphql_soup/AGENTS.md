@@ -30,8 +30,10 @@ viewer pattern), which apply to every type defined here.
   `PrimaryChannelSoup` in the request data and errors when it is missing,
   never falling back to the replica service. It admits only channel directory
   pages (`SoupRequest::is_channel_directory_page`: a timestamp sort, newest
-  first, at most 100 items, channel threads excluded, and no channel filter
-  or one naming at most 100 ids beside `isParticipant`) and refuses the rest,
+  first, at most 100 items, channel threads excluded, no `favoritesOnly` or
+  CRM scope (Soup turns both into channel ids after the check), and no
+  channel filter or one naming at most 100 ids beside at most two
+  `isParticipant` states) and refuses the rest,
   so the primary query stays bounded by the request. `soup.page` records
   `outcome`, never error text: errors carry submitted filter values. Type the data by
   the schema's service, `PrimaryChannelSoup<<Schema as SoupSchemaService>::Service>`
