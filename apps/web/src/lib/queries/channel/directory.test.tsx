@@ -1036,6 +1036,9 @@ type CachedDirectoryOptions = {
     generation: string,
     signal: AbortSignal
   ) => Promise<unknown>;
+  /** When the directory checks a channel the viewer left that came back
+   * joined; the production delays when left out. */
+  departureRechecksMs?: readonly number[];
 };
 
 const CACHE_SESSION = 'session-1';
@@ -1148,6 +1151,7 @@ function mountCachedDirectory(
       stampView,
       ownWrites: ownChannelWrites(options.queryClient ?? new QueryClient()),
       sessionStartedAt: options.sessionStartedAt,
+      departureRechecksMs: options.departureRechecksMs,
     });
   });
   return {
@@ -3165,6 +3169,8 @@ describe('cached channel directory', () => {
           sourceHash: 'gone-left',
         }),
     };
+    /** The checks after a departure, short enough for real timers. */
+    const RECHECKS = [50, 200];
 
     /** Mounts a complete directory of `kept` and `gone`, then shows the
      * viewer leaving `gone`. */
@@ -3172,7 +3178,10 @@ describe('cached channel directory', () => {
       how: keyof typeof leaveBy,
       options: CachedDirectoryOptions = {}
     ) {
-      const mounted = mountCachedDirectory([], options);
+      const mounted = mountCachedDirectory([], {
+        departureRechecksMs: RECHECKS,
+        ...options,
+      });
       mounted.cache.put(channelRecord('kept'));
       mounted.cache.put(channelRecord('gone'));
       completeLane('g1');
@@ -3189,33 +3198,51 @@ describe('cached channel directory', () => {
       return mounted;
     }
 
+    /** Lands a read sent before the leave, which shows `gone` joined. */
+    async function comeBack(
+      mounted: Awaited<ReturnType<typeof leftGone>>,
+      sourceHash = 'gone-stale'
+    ) {
+      mounted.cache.put(channelRecord('gone'), { sourceHash });
+      mounted.reopen();
+      await vi.waitFor(() =>
+        expect(ids(mounted.directory.channels()).sort()).toEqual([
+          'gone',
+          'kept',
+        ])
+      );
+    }
+
+    const goneReads = (
+      readFromPrimary: ReturnType<
+        typeof mountCachedDirectory
+      >['readFromPrimary']
+    ) =>
+      readFromPrimary.mock.calls.filter(([id]) => id === channelUuid('gone'))
+        .length;
+
     it.each(Object.keys(leaveBy) as (keyof typeof leaveBy)[])(
-      'stays hidden after a leave by %s until the primary says the viewer can no longer read it, then is deleted',
+      'shows it as the cache has it after a leave by %s, then deletes it once the primary says the viewer can no longer read it',
       async (how) => {
         let answer!: (read: PrimaryChannelRead) => void;
-        const { cache, directory, reopen, readFromPrimary, removeUnreadable } =
-          await leftGone(how, {
-            readFromPrimary: () =>
-              new Promise((resolve) => {
-                answer = resolve;
-              }),
-          });
-        const seen = recordStates(directory);
+        const mounted = await leftGone(how, {
+          readFromPrimary: () =>
+            new Promise((resolve) => {
+              answer = resolve;
+            }),
+        });
+        const { cache, directory, readFromPrimary, removeUnreadable } = mounted;
+        await comeBack(mounted);
+        // Nothing is hidden: the directory stays complete and shows it.
+        expect(directory.complete()).toBe(true);
+        expect(directory.lookup(channelUuid('gone')).status).toBe('loaded');
 
-        // A read sent before the leave lands its older answer.
-        cache.put(channelRecord('gone'), { sourceHash: 'gone-stale' });
-        reopen();
         await vi.waitFor(() =>
           expect(readFromPrimary).toHaveBeenCalledWith(
             channelUuid('gone'),
             expect.any(AbortSignal)
           )
         );
-        expect(ids(directory.channels())).toEqual(['kept']);
-        expect(directory.lookup(channelUuid('gone')).status).toBe('pending');
-        // The directory may not call itself complete while it hides one.
-        expect(directory.complete()).toBe(false);
-
         answer({ kind: 'read', channel: null });
         await vi.waitFor(() =>
           expect(removeUnreadable).toHaveBeenCalledWith(
@@ -3228,134 +3255,85 @@ describe('cached channel directory', () => {
           expect(directory.lookup(channelUuid('gone')).status).toBe('missing')
         );
         expect(cache.records.has(key('gone'))).toBe(false);
+        expect(ids(directory.channels())).toEqual(['kept']);
         expect(directory.complete()).toBe(true);
-        expect(seen.every((state) => !state.ids.includes('gone'))).toBe(true);
       }
     );
 
-    it('stays hidden, and complete, while the primary shows the viewer out of it', async () => {
-      const { cache, directory, reopen, readFromPrimary, removeUnreadable } =
-        await leftGone('deletion', {
-          readFromPrimary: async () => ({
-            kind: 'read',
-            channel: directoryChannel('gone', { isParticipant: false }),
-          }),
-        });
-      cache.put(channelRecord('gone'), { sourceHash: 'gone-stale' });
-      reopen();
-      await vi.waitFor(() => expect(readFromPrimary).toHaveBeenCalledOnce());
-      await vi.waitFor(() => expect(directory.complete()).toBe(true));
-      expect(ids(directory.channels())).toEqual(['kept']);
-      expect(directory.lookup(channelUuid('gone')).status).toBe('missing');
-      expect(removeUnreadable).not.toHaveBeenCalled();
+    it('reads nothing while the cache keeps it out', async () => {
+      const { readFromPrimary } = await leftGone('deletion');
+      await new Promise((resolve) => setTimeout(resolve, RECHECKS[1] + 100));
+      expect(goneReads(readFromPrimary)).toBe(0);
     });
 
-    it('shows it once the primary shows the viewer back in, and forgets the leave', async () => {
-      const { cache, directory, reopen, readFromPrimary } = await leftGone(
-        'deletion',
-        {
-          readFromPrimary: async (channelId) => ({
-            kind: 'read',
-            channel: directoryChannel(channelName(channelId)),
-          }),
-        }
-      );
-      cache.put(channelRecord('gone'), { sourceHash: 'gone-rejoined' });
-      reopen();
+    it('keeps it once the primary shows the viewer back in, and reads it no more', async () => {
+      const mounted = await leftGone('deletion', {
+        readFromPrimary: async (channelId) => ({
+          kind: 'read',
+          channel: directoryChannel(channelName(channelId)),
+        }),
+      });
+      await comeBack(mounted, 'gone-rejoined');
       await vi.waitFor(() =>
-        expect(ids(directory.channels()).sort()).toEqual(['gone', 'kept'])
+        expect(goneReads(mounted.readFromPrimary)).toBe(1)
       );
-      expect(readFromPrimary).toHaveBeenCalledOnce();
-      expect(directory.complete()).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, RECHECKS[1] + 100));
+      expect(goneReads(mounted.readFromPrimary)).toBe(1);
+      expect(mounted.removeUnreadable).not.toHaveBeenCalled();
+      expect(ids(mounted.directory.channels()).sort()).toEqual([
+        'gone',
+        'kept',
+      ]);
+    });
 
-      // A reload reads it from the cache alone.
+    it('reads it again at the next check while the primary shows the viewer out, and deletes nothing', async () => {
+      const mounted = await leftGone('deletion', {
+        readFromPrimary: async () => ({
+          kind: 'read',
+          channel: directoryChannel('gone', { isParticipant: false }),
+        }),
+      });
+      await comeBack(mounted);
+      await vi.waitFor(() =>
+        expect(goneReads(mounted.readFromPrimary)).toBe(2)
+      );
+      await new Promise((resolve) => setTimeout(resolve, RECHECKS[1] + 100));
+      expect(goneReads(mounted.readFromPrimary)).toBe(2);
+      expect(mounted.removeUnreadable).not.toHaveBeenCalled();
+    });
+
+    it('shows it as the cache has it while the primary read fails, and tries again at the next check', async () => {
+      const mounted = await leftGone('deletion', {
+        readFromPrimary: async () => ({ kind: 'failed' }),
+      });
+      await comeBack(mounted);
+      await vi.waitFor(() =>
+        expect(goneReads(mounted.readFromPrimary)).toBe(2)
+      );
+      expect(ids(mounted.directory.channels()).sort()).toEqual([
+        'gone',
+        'kept',
+      ]);
+      expect(mounted.directory.complete()).toBe(true);
+      expect(mounted.removeUnreadable).not.toHaveBeenCalled();
+    });
+
+    it('forgets the leave on a reload, leaving the channel to reconciliation', async () => {
+      await leftGone('deletion');
       for (const dispose of disposers.splice(0)) dispose();
-      const reloaded = mountCachedDirectory([]);
+
+      const reloaded = mountCachedDirectory([], {
+        departureRechecksMs: RECHECKS,
+      });
       reloaded.cache.put(channelRecord('kept'));
-      reloaded.cache.put(channelRecord('gone'));
+      reloaded.cache.put(channelRecord('gone'), { sourceHash: 'gone-stale' });
       await vi.waitFor(() => expect(reloaded.directory.complete()).toBe(true));
       expect(ids(reloaded.directory.channels()).sort()).toEqual([
         'gone',
         'kept',
       ]);
-      expect(reloaded.readFromPrimary).not.toHaveBeenCalled();
-    });
-
-    it('still hides it after a reload that finds the stale record cached', async () => {
-      await leftGone('deletion');
-      for (const dispose of disposers.splice(0)) dispose();
-
-      let answer!: (read: PrimaryChannelRead) => void;
-      const reloaded = mountCachedDirectory([], {
-        readFromPrimary: () =>
-          new Promise((resolve) => {
-            answer = resolve;
-          }),
-      });
-      const seen = recordStates(reloaded.directory);
-      reloaded.cache.put(channelRecord('kept'));
-      reloaded.cache.put(channelRecord('gone'), { sourceHash: 'gone-stale' });
-      reloaded.reopen();
-      await vi.waitFor(() =>
-        expect(reloaded.readFromPrimary).toHaveBeenCalledWith(
-          channelUuid('gone'),
-          expect.any(AbortSignal)
-        )
-      );
-      await vi.waitFor(() =>
-        expect(ids(reloaded.directory.channels())).toEqual(['kept'])
-      );
-      answer({ kind: 'read', channel: null });
-      await vi.waitFor(() =>
-        expect(reloaded.removeUnreadable).toHaveBeenCalledOnce()
-      );
-      await vi.waitFor(() => expect(reloaded.directory.complete()).toBe(true));
-      expect(seen.every((state) => !state.ids.includes('gone'))).toBe(true);
-    });
-
-    it('shows it as the cache has it when the primary read fails', async () => {
-      const { cache, directory, reopen, readFromPrimary } = await leftGone(
-        'deletion',
-        { readFromPrimary: async () => ({ kind: 'failed' }) }
-      );
-      cache.put(channelRecord('gone'), { sourceHash: 'gone-stale' });
-      reopen();
-      await vi.waitFor(() =>
-        expect(ids(directory.channels()).sort()).toEqual(['gone', 'kept'])
-      );
-      expect(readFromPrimary).toHaveBeenCalledOnce();
-      expect(directory.complete()).toBe(true);
-    });
-
-    it('reads it again when the cache rewrites it, and shows it past three reads', async () => {
-      const { cache, directory, reopen, readFromPrimary } = await leftGone(
-        'deletion',
-        {
-          readFromPrimary: async () => ({
-            kind: 'read',
-            channel: directoryChannel('gone', { isParticipant: false }),
-          }),
-        }
-      );
-      for (let write = 1; write <= 3; write += 1) {
-        cache.put(channelRecord('gone', { name: `stale ${write}` }), {
-          sourceHash: `gone-stale-${write}`,
-        });
-        reopen();
-        await vi.waitFor(() =>
-          expect(readFromPrimary).toHaveBeenCalledTimes(write)
-        );
-        await vi.waitFor(() => expect(directory.complete()).toBe(true));
-        expect(ids(directory.channels())).toEqual(['kept']);
-      }
-      cache.put(channelRecord('gone', { name: 'stale 4' }), {
-        sourceHash: 'gone-stale-4',
-      });
-      reopen();
-      await vi.waitFor(() =>
-        expect(ids(directory.channels()).sort()).toEqual(['gone', 'kept'])
-      );
-      expect(readFromPrimary).toHaveBeenCalledTimes(3);
+      await new Promise((resolve) => setTimeout(resolve, RECHECKS[1] + 100));
+      expect(goneReads(reloaded.readFromPrimary)).toBe(0);
     });
   });
 
@@ -4163,6 +4141,7 @@ describe("the viewer's own channel writes", () => {
     const client = queryClient();
     const { cache, directory, reopen } = mountCachedDirectory([], {
       queryClient: client,
+      departureRechecksMs: [50, 200],
     });
     cache.put(channelRecord('a', { name: 'before' }));
     completeLane('g1');
@@ -4194,9 +4173,9 @@ describe("the viewer's own channel writes", () => {
       true
     );
 
-    // The old answer wrote the channel back. The directory keeps it hidden,
-    // reads it on the primary, and deletes the record the primary shows
-    // the viewer out of.
+    // The old answer wrote the channel back. The directory shows it until
+    // its check reads it on the primary, then deletes the record the
+    // primary shows the viewer out of.
     reopen();
     await vi.waitFor(() =>
       expect(cache.records.has(`GraphqlSoupChannel:${channelUuid('a')}`)).toBe(

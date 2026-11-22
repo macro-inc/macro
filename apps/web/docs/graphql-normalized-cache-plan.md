@@ -1507,7 +1507,24 @@ in, so an earlier read never replaces a later one; a storage reset or a new
 sign-in lets them all go, with the reads still in flight. A write of many channels reads at most twenty, four at a
 time; a link join, whose response names no channel, reads none. The in-memory directory reads its pages again while they lag, after
 1, 2, 4 and 8 seconds. A read that fails, or that lands after the account
-changed, holds nothing (`channel_directory.own_writes` span). The viewer's
+changed, holds nothing (`channel_directory.own_writes` span).
+
+A read sent before the viewer left a channel (an event's refetch, a by-id
+read, another list's page), or a replica read sent just after, can land the
+channel back in the cache as joined. The cached directory remembers each
+joined channel it saw leave its complete list (removed, or kept as a
+nonmember's) and, 10 and 60 seconds after the leave, reads any that came back
+joined from the primary (`queries/channel/directory-departures.ts`, at most
+200 followed at once, four reads at a time): a channel the viewer is in again
+is forgotten, one they are out of is written back by that read, and one they
+can no longer read is deleted the way the lane deletes
+(`removeChannelsGoneOnPrimary`: only the record the read decided on, read on
+the primary once more after the delete). Nothing is hidden meanwhile: the
+channel shows as the cache has it until a check decides. A failed read waits
+for the next check. Departures live only in the page: a reload or a new
+storage generation forgets them, and so does a leave no open page saw; the
+lane's next pass reconciles those (`channel_directory.departure_recheck`
+span). The viewer's
 own views reach no soup update, so the channel view
 hands each recorded view to its tab's directory (`recordView`). That
 directory lays it over every record it reads for the rest of its life, so in
