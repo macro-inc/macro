@@ -9,7 +9,7 @@ import { isAgentAccount, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import { Button, Spinner } from '@ui';
+import { Button, cn, Spinner } from '@ui';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { TeamAgentRunState } from '../core/team-agent-setup';
@@ -169,8 +169,10 @@ export function TeamAgentRunStateChip(props: {
       data-agent-dm-chip={props.state}
       data-compact={compact() ? '' : undefined}
       title={compact() ? chipText(props.state) : undefined}
-      class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-edge-muted px-2 py-0.5 text-xs text-ink-muted"
-      classList={{ 'h-5 px-1.5': compact() }}
+      class={cn(
+        'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-edge-muted py-0.5 text-xs text-ink-muted',
+        compact() ? 'h-5 px-1.5' : 'px-2'
+      )}
     >
       <Show
         when={props.state === 'setting_up'}
