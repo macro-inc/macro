@@ -144,7 +144,7 @@
       "rsvp_calendar_event": {"group": "calendar", "action": "send", "label": "RSVP to calendar event"},
       "save_booking_settings": {"group": "calendar", "action": "update", "label": "Save booking settings"},
       "set_availability_calendar": {"group": "calendar", "action": "update", "label": "Set availability calendar"},
-      "set_team_sharing": {"group": "calendar", "action": "send", "label": "Share calendar with team"},
+      "set_team_sharing": {"group": "sharing", "action": "send", "label": "Share calendar with team"},
       "update_calendar_event": {"group": "calendar", "action": "send", "label": "Update calendar event"}
     },
     "cognition": {
@@ -155,7 +155,7 @@
       "decline_import_entity": {"group": "connections", "action": "update", "label": "Decline import entity"},
       "delete_chat": {"group": "ai", "action": "destroy", "label": "Delete AI chat"},
       "edit_explicit_memory": {"group": "ai", "action": "update", "label": "Edit saved memories"},
-      "fetch_web_page": {"group": "ai", "action": "read", "label": "Fetch web page"},
+      "fetch_web_page": {"group": "ai", "action": "send", "label": "Fetch web page"},
       "generate_image": {"group": "ai", "action": "create", "label": "Generate image"},
       "get_chat": {"group": "ai", "action": "read", "label": "Read AI chat"},
       "get_chat_history_handler": {"group": "ai", "action": "read", "label": "Read AI chat history"},
@@ -171,7 +171,7 @@
       "read_my_activity": {"group": "ai", "action": "read", "label": "Read my activity"},
       "read_skill": {"group": "ai", "action": "read", "label": "Read skill"},
       "revert_delete_chat": {"group": "ai", "action": "update", "label": "Restore AI chat"},
-      "search_web": {"group": "ai", "action": "read", "label": "Search web"},
+      "search_web": {"group": "ai", "action": "send", "label": "Search web"},
       "send_chat_message": {"group": "ai", "action": "create", "label": "Send message to AI chat"},
       "send_confirmed_email": {"group": "email", "action": "send", "label": "Send confirmed email"},
       "stop_chat_stream": {"group": "ai", "action": "update", "label": "Stop AI response"},
@@ -623,7 +623,7 @@
       "set_saved_view_appearance": {"group": "databases", "action": "update", "label": "Set saved view appearance"},
       "set_skill_description": {"group": "ai", "action": "update", "label": "Set skill description"},
       "share_crm_pipeline": {"group": "sharing", "action": "send", "label": "Share CRM pipeline"},
-      "share_with_channel": {"group": "channels", "action": "send", "label": "Share with channel"},
+      "share_with_channel": {"group": "sharing", "action": "send", "label": "Share with channel"},
       "simple_save": {"group": "documents", "action": "update", "label": "Save document"},
       "start_call": {"group": "calls", "action": "send", "label": "Start call"},
       "submit_form_response": {"group": "databases", "action": "update", "label": "Submit form response"},
@@ -651,8 +651,8 @@
       "write_document_markdown": {"group": "documents", "action": "update", "label": "Write document markdown"}
     },
     "unfurl": {
-      "get_unfurl": {"group": "search", "action": "read", "label": "Preview link"},
-      "get_unfurl_bulk": {"group": "search", "action": "read", "label": "Preview links"}
+      "get_unfurl": {"group": "search", "action": "send", "label": "Preview link"},
+      "get_unfurl_bulk": {"group": "search", "action": "send", "label": "Preview links"}
     }
   }
 }

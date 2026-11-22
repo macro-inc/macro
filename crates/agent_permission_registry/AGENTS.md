@@ -22,11 +22,13 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
   its service in `registry.json` with the group whose area it touches, the
   action, and a short label a person understands ("Send email"). `send` is
   anything that reaches other people (messages, email, invites, sharing,
-  calendar changes guests see), even when it also creates or updates;
+  calendar changes guests see), even when it also creates or updates, and
+  anything that carries text the program chose out of Macro (searching the
+  web, fetching or previewing a URL), even when it only reads;
   `destroy` deletes; a POST that only reads is `read`, but nothing that
   saves a file, may write (a query that can run any statement) or reaches
   an outside app is. Changing who can see or edit something is `send` in
-  `sharing`. Labels are unique within a group.
+  `sharing`, whatever area the item is in. Labels are unique within a group.
 - Mark an operation `"always_allowed": true` only when it can do nothing
   but restrict the agent itself (today: `tighten_agent_tool_permissions`):
   no setting then applies to it, so a person's Ask or Never on its group
