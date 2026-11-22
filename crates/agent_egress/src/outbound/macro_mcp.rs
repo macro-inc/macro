@@ -285,6 +285,7 @@ impl MacroApiTokenSigner {
         correlation: Option<SignedCorrelation>,
     ) -> Result<String, EgressError> {
         let claims = SignedClaims {
+            channel_mention_channel_id: None,
             agent_id,
             agent_via,
             agent_session_id,
@@ -307,8 +308,10 @@ impl MacroApiTokenSigner {
         lifetime_seconds: usize,
         agent_id: macro_uuid::Uuid,
         channel_mention_id: uuid::Uuid,
+        channel_mention_channel_id: Option<uuid::Uuid>,
     ) -> Result<String, EgressError> {
-        let claims = SignedClaims::channel_mention(agent_id, channel_mention_id);
+        let mut claims = SignedClaims::channel_mention(agent_id, channel_mention_id);
+        claims.channel_mention_channel_id = channel_mention_channel_id;
         self.sign(user, lifetime_seconds, claims).await
     }
 
@@ -395,8 +398,10 @@ impl MacroApiTokenSigner {
             agent_scope,
             routine_id,
             channel_mention_id,
+            channel_mention_channel_id,
         } = claims;
         encode_macro_api_token(EncodeMacroApiTokenArgs {
+            channel_mention_channel_id,
             agent_correlation_id,
             agent_session_id,
             fusionauth_id,
@@ -439,6 +444,7 @@ struct SignedClaims {
     agent_scope: Option<agent_correlation::scope::SessionScope>,
     routine_id: Option<macro_uuid::Uuid>,
     channel_mention_id: Option<uuid::Uuid>,
+    channel_mention_channel_id: Option<uuid::Uuid>,
 }
 
 impl SignedClaims {
@@ -451,6 +457,7 @@ impl SignedClaims {
             agent_scope: Some(agent_correlation::scope::SessionScope::ChannelMention),
             routine_id: None,
             channel_mention_id: Some(channel_mention_id),
+            channel_mention_channel_id: None,
         }
     }
 
@@ -469,6 +476,7 @@ impl SignedClaims {
             agent_scope: scope,
             routine_id: Some(routine_id),
             channel_mention_id: None,
+            channel_mention_channel_id: None,
         }
     }
 }

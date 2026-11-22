@@ -639,6 +639,10 @@ where
             .respond(
                 event.requesting_user.as_ref(),
                 BotMention {
+                    channel_id: match &event.message.parent {
+                        MessageParent::Channel(id) => Some(*id),
+                        _ => None,
+                    },
                     message_id: event.message.message_id,
                     root_id: event.message.root_id,
                 },

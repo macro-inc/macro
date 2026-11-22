@@ -33,7 +33,14 @@ async fn mention_environment(pool: sqlx::PgPool, endpoints: SdkEndpoints) -> Run
         signer: MacroApiTokenSigner::new(pool, "fixture", PRIVATE),
         endpoints,
     }
-    .issue(&owner, uuid::Uuid::from_u128(907))
+    .issue(
+        &owner,
+        &agent_code_mode::domain::MentionContext {
+            message_id: uuid::Uuid::from_u128(907),
+            root_id: uuid::Uuid::from_u128(907),
+            channel_id: Some(uuid::Uuid::from_u128(909)),
+        },
+    )
     .await
     .unwrap()
 }
@@ -72,6 +79,10 @@ async fn a_mention_uses_the_forwarder_even_when_the_egress_flag_is_off(pool: sql
         panic!("expected signed mention token")
     };
     assert_eq!(token.channel_mention_id, Some(mention));
+    assert_eq!(
+        token.channel_mention_channel_id,
+        Some(uuid::Uuid::from_u128(909))
+    );
     assert_eq!(token.agent_scope.as_deref(), Some("channel_mention"));
     assert!(
         SessionScope::parse(token.agent_scope.as_deref().unwrap())

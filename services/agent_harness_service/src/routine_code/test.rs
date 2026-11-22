@@ -318,6 +318,7 @@ impl RoutineCredentials for SignedTokens {
         let (agent_id, scope) = routine_claims(acts_as, dry_run);
         macro_auth::macro_api_token::encode_macro_api_token(
             macro_auth::macro_api_token::EncodeMacroApiTokenArgs {
+                channel_mention_channel_id: None,
                 fusionauth_id: "fixture".into(),
                 macro_user_id: "macro|owner@example.com".into(),
                 organization_id: None,

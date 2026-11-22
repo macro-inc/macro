@@ -67,6 +67,7 @@ impl ChannelBotTools {
                 service: Arc::new(MentionPrograms {
                     executions: self.executions.clone(),
                     mention: MentionContext {
+                        channel_id: mention.channel_id,
                         message_id: mention.message_id,
                         root_id: mention.root_id,
                     },

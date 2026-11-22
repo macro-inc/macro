@@ -43,8 +43,10 @@ pub struct BotEvent {
 pub struct BotMention {
     /// The message that triggered the bot.
     pub message_id: Uuid,
-    /// The conversation it belongs to.
+    /// Canonical thread root, not the channel identifier.
     pub root_id: Uuid,
+    /// Channel from the trusted posted-message parent, absent for other surfaces.
+    pub channel_id: Option<Uuid>,
 }
 
 /// A thread message rendered for trigger inference, oldest-first.

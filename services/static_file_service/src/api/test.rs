@@ -59,6 +59,7 @@ fn service() -> Router {
 
 fn credential(scope: Option<&str>) -> String {
     encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_channel_id: None,
         fusionauth_id: "fixture".into(),
         macro_user_id: "macro|owner@example.com".into(),
         organization_id: None,

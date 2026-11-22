@@ -94,6 +94,7 @@ pub fn encode_local_jwt_claims_with(
     };
 
     encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_channel_id: None,
         agent_correlation_id: None,
         agent_session_id: None,
         agent_id: None,

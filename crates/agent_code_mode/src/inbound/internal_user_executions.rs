@@ -84,7 +84,7 @@ impl<Auth> FromRef<UserExecutionsState<Auth>> for MacroAuthorizationState<Auth> 
 /// One request's credentials: always the mention's, whatever the caller.
 struct ForMention {
     credentials: Arc<dyn MentionExecutionCredentials>,
-    mention: Uuid,
+    mention: crate::domain::MentionContext,
 }
 
 #[async_trait::async_trait]
@@ -95,7 +95,7 @@ impl UserExecutionCredentials for ForMention {
         _caller: &ToolCaller,
         _session: Option<Uuid>,
     ) -> Result<RunEnvironment, CodeModeError> {
-        self.credentials.issue(user, self.mention).await
+        self.credentials.issue(user, &self.mention).await
     }
 }
 
@@ -136,7 +136,7 @@ async fn execute<Auth: MacroAuthorizationService>(
         state.executor.clone(),
         Arc::new(ForMention {
             credentials: state.credentials.clone(),
-            mention: command.mention.message_id,
+            mention: command.mention.clone(),
         }),
     );
     service

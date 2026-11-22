@@ -9,6 +9,7 @@ const KEY: &str = "client-test-key";
 
 fn mention() -> MentionContext {
     MentionContext {
+        channel_id: None,
         message_id: uuid::Uuid::from_u128(1),
         root_id: uuid::Uuid::from_u128(2),
     }

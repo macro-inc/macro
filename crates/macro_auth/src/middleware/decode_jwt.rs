@@ -443,6 +443,7 @@ CwIDAQAB
         });
 
         let claims = MacroApiToken {
+            channel_mention_channel_id: None,
             agent_correlation_id: None,
             agent_session_id: None,
             agent_id: None,

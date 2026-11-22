@@ -362,15 +362,15 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     };
     let mut toolset = toolset;
     if code_mode_direct {
-        // Review submission still needs these user-tool implementations internally,
-        // but advertising their blocking agent calls would reintroduce elicitation.
-        // The channel bot's programs run in Deno; it gets no second sandbox.
-        let drops_sandbox = matches!(host, AiHost::ChannelBot);
+        // Direct tools run in-process, outside the program's signed-credential
+        // boundary. Mention replies keep only audited discovery/knowledge reads;
+        // native import planners and future unclassified tools stay unavailable.
+        let mention_reads_only = matches!(host, AiHost::ChannelBot);
         toolset.tools.retain(|name, _| {
-            (!drops_sandbox
-                || !matches!(
+            (!mention_reads_only
+                || matches!(
                     name.as_str(),
-                    "BashCodeExecution" | "TextEditorCodeExecution"
+                    "SearchTools" | "LoadTools" | "SelfKnowledge" | "ReadToolResult"
                 ))
                 && !matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent")
                 && !agent_code_mode::domain::covered_by_code_sdk(

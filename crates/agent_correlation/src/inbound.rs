@@ -380,7 +380,11 @@ async fn propagate_request(
         .authenticating
         .iter()
         .chain(&tokens.others)
-        .find_map(|token| token.channel_mention_id);
+        .find_map(|token| {
+            token
+                .channel_mention_id
+                .map(|id| (id, token.channel_mention_channel_id))
+        });
     let token = tokens.authenticating;
     let signed = match checked_signed_scope(token.as_ref(), &parts, state.specs) {
         Ok(signed) => signed,
@@ -417,7 +421,8 @@ async fn propagate_request(
     let attribution = Attribution {
         correlation_id,
         routine_id: token.as_ref().and_then(|token| token.routine_id),
-        channel_mention_id: mention,
+        channel_mention_id: mention.map(|(id, _)| id),
+        channel_mention_channel_id: mention.and_then(|(_, channel)| channel),
         signed_scope: others_scope.signed_scope || !matches!(signed, SignedScope::Unscoped),
         session_id: correlation.map(|(_, correlation)| correlation.session_id),
         scope: narrowest(

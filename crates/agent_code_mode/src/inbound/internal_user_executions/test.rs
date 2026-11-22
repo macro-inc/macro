@@ -75,12 +75,12 @@ impl MentionExecutionCredentials for Spy {
     async fn issue(
         &self,
         user: &MacroUserIdStr<'static>,
-        mention: Uuid,
+        mention: &crate::domain::MentionContext,
     ) -> Result<RunEnvironment, CodeModeError> {
         self.issued
             .lock()
             .unwrap()
-            .push((user.as_ref().to_owned(), mention));
+            .push((user.as_ref().to_owned(), mention.message_id));
         Ok(RunEnvironment {
             token: "mention-signed-token".into(),
             trace_headers: Default::default(),

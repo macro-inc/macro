@@ -40,6 +40,9 @@ pub struct MacroApiToken {
     /// runs carrying it never send email.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel_mention_id: Option<Uuid>,
+    /// Trusted origin channel of the mention, signed by the host; restriction only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_mention_channel_id: Option<Uuid>,
     /// The narrower scope its code-mode session runs in (`SessionScope`'s
     /// stored name in `agent_correlation`), signed by the harness beside
     /// `agent_correlation_id` so services with no database can enforce it.
@@ -75,6 +78,8 @@ pub struct EncodeMacroApiTokenArgs {
     /// harness; never supplied by an API caller. A restriction, not a grant:
     /// runs carrying it never send email.
     pub channel_mention_id: Option<Uuid>,
+    /// Origin channel from the trusted posted-message metadata, never API input.
+    pub channel_mention_channel_id: Option<Uuid>,
     /// The correlated session's scope by its stored name; never supplied by
     /// an API caller.
     pub agent_scope: Option<String>,
@@ -88,6 +93,7 @@ pub fn encode_macro_api_token(args: EncodeMacroApiTokenArgs) -> anyhow::Result<S
         .as_secs() as usize;
 
     let claims = MacroApiToken {
+        channel_mention_channel_id: args.channel_mention_channel_id,
         exp: now + args.expiry_seconds,
         agent_id: args.agent_id,
         agent_via: args.agent_via,

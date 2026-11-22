@@ -32,8 +32,11 @@ pub trait UserExecutionCredentials: Send + Sync + 'static {
 pub struct MentionContext {
     /// The message that mentioned the bot.
     pub message_id: uuid::Uuid,
-    /// The conversation the message belongs to.
+    /// Canonical thread root, not the channel identifier.
     pub root_id: uuid::Uuid,
+    /// Trusted posted-message channel; missing on legacy/non-channel origins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<uuid::Uuid>,
 }
 
 /// Runs a program as a user to answer a channel mention, attributed to
@@ -61,7 +64,7 @@ pub trait MentionExecutionCredentials: Send + Sync + 'static {
     async fn issue(
         &self,
         user: &MacroUserIdStr<'static>,
-        mention: uuid::Uuid,
+        mention: &MentionContext,
     ) -> Result<RunEnvironment, CodeModeError>;
 }
 

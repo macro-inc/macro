@@ -1,8 +1,9 @@
 //! Legacy mention claims can only narrow an independently verified scope.
 use super::*;
 
-fn verified_mention(scope: Option<&str>) -> MacroApiToken {
-    let bearer = encode_macro_api_token(EncodeMacroApiTokenArgs {
+fn mention_bearer(scope: Option<&str>, channel: Option<Uuid>) -> String {
+    encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_channel_id: channel,
         fusionauth_id: "fixture".into(),
         macro_user_id: "macro|owner@example.com".into(),
         organization_id: None,
@@ -17,7 +18,11 @@ fn verified_mention(scope: Option<&str>) -> MacroApiToken {
         channel_mention_id: Some(Uuid::from_u128(908)),
         agent_scope: scope.map(str::to_owned),
     })
-    .unwrap();
+    .unwrap()
+}
+
+fn verified_mention(scope: Option<&str>) -> MacroApiToken {
+    let bearer = mention_bearer(scope, None);
     match macro_auth::middleware::decode_jwt::handler(
         &JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         &bearer,
@@ -57,4 +62,144 @@ fn a_mention_claim_cannot_widen_an_unknown_signed_scopes_get_only_fallback() {
         .unwrap()
         .into_parts();
     assert!(checked_signed_scope(Some(&token), &parts, Some(&["search"])).is_err());
+}
+
+async fn mention_request(bearer: &str, cookie: Option<&str>, path: &str) -> (StatusCode, usize) {
+    use tower::ServiceExt;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed = calls.clone();
+    let app = axum::Router::new()
+        .fallback(move || {
+            observed.fetch_add(1, Ordering::SeqCst);
+            async { StatusCode::OK }
+        })
+        .layer(axum::middleware::from_fn_with_state(
+            CorrelationState {
+                jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+                repository: Arc::new(Repository {
+                    calls: AtomicUsize::new(0),
+                }),
+                specs: Some(&["storage"]),
+            },
+            propagate,
+        ));
+    let mut request = Request::builder()
+        .uri(path)
+        .header("authorization", format!("Bearer {bearer}"));
+    if let Some(cookie) = cookie {
+        request = request.header("cookie", format!("macro-access-token={cookie}"));
+    }
+    let response = app
+        .oneshot(request.body(axum::body::Body::empty()).unwrap())
+        .await
+        .unwrap();
+    (response.status(), calls.load(Ordering::SeqCst))
+}
+
+#[tokio::test]
+async fn signed_mentions_read_only_their_origin_channel_and_its_threads() {
+    let channel = Uuid::from_u128(910);
+    let own = mention_bearer(Some("channel_mention"), Some(channel));
+    for path in [
+        format!("/channels/{channel}"),
+        format!("/channels/{channel}/participants"),
+        format!("/channels/{channel}/bots"),
+        format!("/channels/{channel}/attachments"),
+        format!("/messages/channel/{channel}"),
+        format!("/messages/channel/{channel}/timeline"),
+        format!("/messages/channel/{channel}/items/{}", Uuid::from_u128(913)),
+        format!(
+            "/messages/channel/{channel}/threads/{}",
+            Uuid::from_u128(913)
+        ),
+        format!(
+            "/dss/v1/messages/channel/{channel}/threads/{}",
+            Uuid::from_u128(913)
+        ),
+    ] {
+        assert_eq!(
+            mention_request(&own, None, &path).await,
+            (StatusCode::OK, 1),
+            "{path}"
+        );
+    }
+    for (kind, foreign) in [
+        ("another channel", Uuid::from_u128(911)),
+        ("another DM", Uuid::from_u128(912)),
+    ] {
+        for path in [
+            format!("/channels/{foreign}"),
+            format!("/messages/channel/{foreign}"),
+            format!(
+                "/messages/channel/{foreign}/threads/{}",
+                Uuid::from_u128(913)
+            ),
+            format!("/dss/v1/messages/channel/{foreign}/timeline"),
+            format!("/messages/channel/{foreign}?parent_id={channel}"),
+        ] {
+            assert_eq!(
+                mention_request(&own, None, &path).await,
+                (StatusCode::FORBIDDEN, 0),
+                "{kind}: {path}"
+            );
+        }
+    }
+    let other_parent = format!("/messages/document/{channel}");
+    assert_eq!(
+        mention_request(&own, None, &other_parent).await,
+        (StatusCode::FORBIDDEN, 0)
+    );
+}
+
+#[tokio::test]
+async fn legacy_mentions_without_a_signed_channel_fail_closed_for_channel_reads() {
+    let channel = Uuid::from_u128(910);
+    for scope in [
+        None,
+        Some("no_send"),
+        Some("channel_mention"),
+        Some("future_scope"),
+    ] {
+        let legacy = mention_bearer(scope, None);
+        assert_eq!(
+            mention_request(&legacy, None, &format!("/channels/{channel}")).await,
+            (StatusCode::FORBIDDEN, 0),
+            "{scope:?}"
+        );
+        assert_eq!(
+            mention_request(
+                &legacy,
+                None,
+                "/documents/0192f1a0-0000-7000-8000-000000000001/markdown"
+            )
+            .await,
+            (StatusCode::OK, 1)
+        );
+    }
+}
+
+#[tokio::test]
+async fn secondary_mention_credentials_keep_their_own_channel_restriction() {
+    let channel = Uuid::from_u128(910);
+    let own = mention_bearer(Some("channel_mention"), Some(channel));
+    let other = mention_bearer(Some("channel_mention"), Some(Uuid::from_u128(911)));
+    let ordinary = mint(None, None, None, None);
+    let path = format!("/channels/{channel}");
+    assert_eq!(
+        mention_request(&ordinary, Some(&own), &path).await,
+        (StatusCode::OK, 1)
+    );
+    assert_eq!(
+        mention_request(
+            &ordinary,
+            Some(&own),
+            &format!("/channels/{}", Uuid::from_u128(911))
+        )
+        .await,
+        (StatusCode::FORBIDDEN, 0)
+    );
+    assert_eq!(
+        mention_request(&own, Some(&other), &path).await,
+        (StatusCode::FORBIDDEN, 0)
+    );
 }

@@ -88,6 +88,7 @@ async fn the_responder_runs_code_for_the_original_user_and_mention(pool: sqlx::P
             .with_test_model(model),
     );
     let mention = BotMention {
+        channel_id: Some(uuid::Uuid::from_u128(909)),
         message_id: uuid::Uuid::from_u128(101),
         root_id: uuid::Uuid::from_u128(202),
     };
@@ -121,6 +122,7 @@ async fn the_responder_runs_code_for_the_original_user_and_mention(pool: sqlx::P
         vec![(
             ADMISSION_TEST_USER.to_owned(),
             MentionContext {
+                channel_id: Some(uuid::Uuid::from_u128(909)),
                 message_id: mention.message_id,
                 root_id: mention.root_id,
             },

@@ -17,6 +17,8 @@ pub struct Attribution {
     pub routine_id: Option<Uuid>,
     /// Original message from a verified mention credential; restriction only.
     pub channel_mention_id: Option<Uuid>,
+    /// Verified origin channel; absent for legacy or non-channel mentions.
+    pub channel_mention_channel_id: Option<Uuid>,
     /// The validated invocation's agent session.
     pub session_id: Option<Uuid>,
     /// The scope stored with the validated invocation, else the one the
@@ -119,6 +121,7 @@ pub fn refuse_sharing(changes_sharing: bool) -> Result<(), SharingRefused> {
     tracing::warn!(
         scope = current_scope().map(SessionScope::as_str),
         agent_session_id = ?current_session(),
+        channel_mention_id = ?current_channel_mention(),
         "refused a change to who can see an item"
     );
     Err(SharingRefused)
@@ -145,6 +148,11 @@ pub fn current_routine() -> Option<Uuid> {
 /// The channel mention whose bot program the current request comes from, if any.
 pub fn current_channel_mention() -> Option<Uuid> {
     attribution().channel_mention_id
+}
+
+/// The trusted origin channel of the current mention, when known.
+pub fn current_mention_channel() -> Option<Uuid> {
+    attribution().channel_mention_channel_id
 }
 
 /// Why a channel-mention bot's program may not create, change or run a

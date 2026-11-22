@@ -45,6 +45,7 @@ fn resource_metadata_defaults_to_http_without_forwarded_proto() {
 
 fn api_token(channel_mention_id: Option<uuid::Uuid>) -> JwtToken {
     JwtToken::MacroApiToken(MacroApiToken {
+        channel_mention_channel_id: None,
         exp: 0,
         iss: "macro".into(),
         fusion_user_id: "fusion".into(),
@@ -79,6 +80,7 @@ const PUBLIC: &str = include_str!(
 fn agent_token(scope: Option<&str>) -> String {
     macro_auth::macro_api_token::encode_macro_api_token(
         macro_auth::macro_api_token::EncodeMacroApiTokenArgs {
+            channel_mention_channel_id: None,
             fusionauth_id: "fixture".into(),
             macro_user_id: "macro|owner@example.com".into(),
             organization_id: None,

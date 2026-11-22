@@ -421,11 +421,17 @@ impl agent_code_mode::domain::MentionExecutionCredentials for MentionRunCredenti
     async fn issue(
         &self,
         user: &MacroUserIdStr<'static>,
-        mention: uuid::Uuid,
+        mention: &agent_code_mode::domain::MentionContext,
     ) -> Result<RunEnvironment, CodeModeError> {
         let token = self
             .signer
-            .mint_for_channel_mention(user, 60, bot_id::MACRO_AI_BOT_ID.as_uuid(), mention)
+            .mint_for_channel_mention(
+                user,
+                60,
+                bot_id::MACRO_AI_BOT_ID.as_uuid(),
+                mention.message_id,
+                mention.channel_id,
+            )
             .await
             .map_err(|error| {
                 tracing::error!(?error, "could not mint channel-mention credential");

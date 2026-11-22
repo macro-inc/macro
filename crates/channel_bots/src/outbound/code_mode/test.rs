@@ -18,6 +18,7 @@ impl MentionCodeMode for NeverRuns {
 
 fn mention() -> BotMention {
     BotMention {
+        channel_id: None,
         message_id: uuid::Uuid::from_u128(1),
         root_id: uuid::Uuid::from_u128(2),
     }
@@ -85,6 +86,7 @@ fn code_mode_tools() -> CodeModeTools {
             service: Arc::new(MentionPrograms {
                 executions: Arc::new(NeverRuns),
                 mention: MentionContext {
+                    channel_id: None,
                     message_id: uuid::Uuid::from_u128(1),
                     root_id: uuid::Uuid::from_u128(2),
                 },

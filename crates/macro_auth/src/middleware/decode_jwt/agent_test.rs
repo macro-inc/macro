@@ -5,6 +5,7 @@ use crate::macro_api_token::{EncodeMacroApiTokenArgs, encode_macro_api_token};
 fn signed_execution_token_preserves_owner_agent_and_lifetime() {
     let agent = uuid::Uuid::from_u128(0xa2a2);
     let token = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_channel_id: None,
         agent_correlation_id: Some(uuid::Uuid::from_u128(123)),
         agent_session_id: Some(uuid::Uuid::from_u128(456)),
         fusionauth_id: "fusion-owner".into(),
@@ -80,6 +81,7 @@ fn legacy_user_token_has_no_agent_attribution() {
 fn signed_routine_token_carries_its_routine_and_rejects_a_forged_one() {
     let routine = uuid::Uuid::from_u128(0x7001);
     let token = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_channel_id: None,
         fusionauth_id: "fusion-owner".into(),
         macro_user_id: "macro|owner@example.com".into(),
         organization_id: None,
@@ -112,6 +114,7 @@ fn signed_routine_token_carries_its_routine_and_rejects_a_forged_one() {
 
     // A payload without the routine cannot borrow the routine token's signature.
     let plain_token = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_channel_id: None,
         fusionauth_id: "fusion-owner".into(),
         macro_user_id: "macro|owner@example.com".into(),
         organization_id: None,
@@ -151,6 +154,7 @@ fn signed_routine_token_carries_its_routine_and_rejects_a_forged_one() {
 fn a_signed_scope_survives_decoding_and_cannot_be_dropped() {
     let mint = |agent_scope: Option<&str>| {
         encode_macro_api_token(EncodeMacroApiTokenArgs {
+            channel_mention_channel_id: None,
             fusionauth_id: "fusion-owner".into(),
             macro_user_id: "macro|owner@example.com".into(),
             organization_id: None,
