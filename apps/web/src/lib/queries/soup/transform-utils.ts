@@ -967,6 +967,8 @@ export const mapApiSoupItemToEntity = (
     }))
     .with({ tag: 'document' }, (item) => ({
       ...item.data,
+      isBlocked: item.taskDependencies?.isBlocked,
+      openBlockerIds: item.taskDependencies?.openBlockerIds,
       createdAt: item.data.createdAt,
       updatedAt: item.data.updatedAt,
       type: item.tag,

@@ -208,6 +208,7 @@ export * from './patchTeamRequestDefaultLinkShare';
 export * from './patchTeamRequestLanguage';
 export * from './patchTeamRequestMemberCrmAccess';
 export * from './patchTeamRequestName';
+export * from './patchTeamRequestPreventCompletingBlockedTasks';
 export * from './patchTeamRequestSlug';
 export * from './patchTeamRequestUserRoleUpdates';
 export * from './patchTeamUserRole';

@@ -1,8 +1,11 @@
 import { analytics } from '@app/lib/analytics';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
+import { buildSimpleEntityUrl } from '@core/util/url';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
+import { Telemetry } from '@macro-inc/observability';
 import { entityPropertyFromApi } from '@property/api/converters';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type {
@@ -15,10 +18,12 @@ import { refreshCrmAssociatedSoupQueries } from '@queries/soup/crm-association';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { DeleteEntityPropertyDocument } from '@service-storage/graphql/generated/graphql';
 import {
+  getGraphqlCacheHost,
   getGraphqlSoupClient,
   hasGraphqlCacheHost,
 } from '@service-storage/graphql-soup';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import { CombinedError } from '@urql/core';
 import { type Accessor, batch } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
@@ -45,6 +50,7 @@ import {
   refetchGraphqlInitiativeProperties,
 } from './graphql/entity';
 import { updateGraphqlEntityPropertyOptions } from './graphql/entity-options';
+import { readFirstOpenBlocker } from './graphql/task-dependencies';
 import {
   type BulkUpdateEntityPropertyOptionsParams,
   bulkEntityPropertyOptionsKey,
@@ -676,9 +682,45 @@ function handleCommittedPropertySave(
   );
 }
 
-function reportBulkPropertySaveFailure(error: Error): void {
-  console.error('Failed to bulk save properties', error);
-  toast.failure('Failed to save properties');
+async function reportBulkPropertySaveFailure(
+  error: Error,
+  variables: BulkSaveEntityPropertiesParams
+): Promise<void> {
+  Telemetry.error(error, { surface: 'task-properties' });
+  if (!error.message.includes('Task is blocked')) {
+    toast.failure('Failed to save properties');
+    return;
+  }
+  const item = variables.properties.find(
+    (item) =>
+      getPropertyDefinitionId(item.property) === SYSTEM_PROPERTY_IDS.STATUS
+  );
+  const rejectedId =
+    error instanceof CombinedError
+      ? error.graphQLErrors.find(
+          (error) => error.extensions.code === 'TASK_BLOCKED'
+        )?.extensions.taskId
+      : undefined;
+  const taskId = typeof rejectedId === 'string' ? rejectedId : item?.entityId;
+  const blockerId = taskId
+    ? await readFirstOpenBlocker(getGraphqlCacheHost(), taskId)
+    : undefined;
+  const destination = blockerId ?? taskId;
+  toast.failure(t('entityActions.taskBlockedCompletion'), {
+    actions: destination
+      ? [
+          {
+            label: blockerId
+              ? t('entityActions.taskOpenBlocker')
+              : t('entityActions.taskViewBlockers'),
+            onClick: () =>
+              window.location.assign(
+                buildSimpleEntityUrl({ type: 'task', id: destination })
+              ),
+          },
+        ]
+      : undefined,
+  });
 }
 
 /** Transport-neutral mutation interface exposed to property consumers. */
@@ -715,7 +757,7 @@ export function useBulkSaveEntityPropertiesMutation(
           );
         },
         onError: async (error, variables, context) => {
-          reportBulkPropertySaveFailure(error);
+          await reportBulkPropertySaveFailure(error, variables);
           await callbacks?.onError?.(
             error,
             variables,

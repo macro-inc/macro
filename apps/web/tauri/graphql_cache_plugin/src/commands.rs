@@ -712,6 +712,7 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
     operation_name: Option<String>,
     variables: Option<Variables>,
     data: serde_json::Value,
+    task_dependency_recipe: Option<cache_core::task_dependency::TaskDependencyRecipe>,
     link_patches: Option<Vec<OptimisticLinkPatch>>,
     revalidations: Option<Vec<QueryRevalidation>>,
     identity_bindings: Option<Vec<cache_core::identity::IdentityBinding>>,
@@ -740,6 +741,7 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
             lease_expires_at_ms,
             client_metadata,
             uncertain_calendar_event_keys.unwrap_or_default(),
+            task_dependency_recipe,
         )
         .await?;
     emit_ops_affected(

@@ -11,6 +11,7 @@ it('limits recipient names to current-team humans and the current team', () => {
       owner_id: 'human-1',
       slug: 'product',
       allow_non_admin_invites: true,
+      prevent_completing_blocked_tasks: false,
       crm_enabled: false,
       enterprise: false,
     },

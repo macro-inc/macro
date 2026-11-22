@@ -805,6 +805,7 @@ describe('GraphQL Soup document sub types', () => {
       const { mapGraphqlSoupItem } = await import('./graphql-soup');
       const item = {
         __typename: 'GraphqlSoupDocument',
+        taskDependencies: null,
         appearance: null,
         id: 'doc-sub-type',
         entityType: 'DOCUMENT' as GraphqlSoupEntityType,

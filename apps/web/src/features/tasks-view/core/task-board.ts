@@ -46,6 +46,7 @@ export type TaskBoardTask = {
   closed?: boolean;
   subtypeCompleted?: boolean;
   deadline?: TaskDueDateBucket;
+  isBlocked?: boolean;
 };
 
 export type TaskBoardColumn = {

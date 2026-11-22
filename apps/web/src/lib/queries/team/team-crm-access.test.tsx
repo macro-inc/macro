@@ -40,6 +40,7 @@ const TEAM: TeamWithMembers = {
     slug: 'EXAMPLE_TEAM',
     owner_id: 'owner',
     allow_non_admin_invites: true,
+    prevent_completing_blocked_tasks: false,
     crm_enabled: true,
     enterprise: false,
   },

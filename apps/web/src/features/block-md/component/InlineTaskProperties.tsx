@@ -15,6 +15,7 @@ import { resolvePinnedPropertyIds } from '@property/core/pinned-property-ids';
 import { useEntityProperties } from '@property/hooks';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
+import { TaskDependencyDetail } from '@property/views/task-dependency-detail';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import { Key } from '@solid-primitives/keyed';
@@ -203,6 +204,9 @@ export function InlineTaskProperties() {
                 <ProgressChip stats={progressStats()} />
               </Show>
             )}
+          </Show>
+          <Show when={documentKind === 'task'}>
+            <TaskDependencyDetail taskId={blockId} />
           </Show>
           <Modals />
         </PropertiesProvider>

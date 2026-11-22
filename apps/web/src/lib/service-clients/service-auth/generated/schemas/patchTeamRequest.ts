@@ -8,6 +8,7 @@ import type { PatchTeamRequestDefaultLinkShare } from './patchTeamRequestDefault
 import type { PatchTeamRequestLanguage } from './patchTeamRequestLanguage';
 import type { PatchTeamRequestMemberCrmAccess } from './patchTeamRequestMemberCrmAccess';
 import type { PatchTeamRequestName } from './patchTeamRequestName';
+import type { PatchTeamRequestPreventCompletingBlockedTasks } from './patchTeamRequestPreventCompletingBlockedTasks';
 import type { PatchTeamRequestSlug } from './patchTeamRequestSlug';
 import type { PatchTeamRequestUserRoleUpdates } from './patchTeamRequestUserRoleUpdates';
 
@@ -20,6 +21,8 @@ export interface PatchTeamRequest {
   member_crm_access?: PatchTeamRequestMemberCrmAccess;
   /** The new name for the team */
   name?: PatchTeamRequestName;
+  /** Reject task completion while an unfinished dependency remains. Omit to leave unchanged. */
+  prevent_completing_blocked_tasks?: PatchTeamRequestPreventCompletingBlockedTasks;
   /** The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE. */
   slug?: PatchTeamRequestSlug;
   /** Role updates to apply to team users */

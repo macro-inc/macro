@@ -427,6 +427,7 @@ async fn enqueue_delete(
         .enqueue_optimistic_mutation_with_calendar(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid: UUID,
                 query: MUTATION,
@@ -551,6 +552,7 @@ fn uncertain_keys_must_name_calendar_events() {
             .enqueue_optimistic_mutation_with_calendar(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: UUID,
                     query: MUTATION,

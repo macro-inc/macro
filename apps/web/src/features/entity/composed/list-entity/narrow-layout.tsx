@@ -3,6 +3,7 @@ import { EntityRowTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn } from '@ui';
 import { children, type ParentProps, Show } from 'solid-js';
+import { TaskBlockedBadge } from '../../components/TaskBlockedBadge';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
 import { Entity } from '../../entity';
 import { TaskPropertyControl } from '../../extractors-property/task-property-control';
@@ -104,6 +105,9 @@ export function NarrowLayout(props: ParentProps<LayoutProps>) {
           {(entity) => <ChannelMessageSingleLine entity={entity()} />}
         </Show>
         {props.titleTrailing}
+        <Show when={isTaskEntity(props.entity) ? props.entity : undefined}>
+          {(task) => <TaskBlockedBadge blocked={task().isBlocked} />}
+        </Show>
         <Show when={isTaskEntity(props.entity) ? props.entity : undefined}>
           {(task) => (
             <EntityRowTags

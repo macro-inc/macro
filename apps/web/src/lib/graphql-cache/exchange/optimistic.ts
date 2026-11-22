@@ -1,3 +1,4 @@
+import type { TaskDependencyRecipe } from '../authority.generated';
 import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { IdentityBindingWire } from '../protocol';
@@ -127,6 +128,7 @@ export type OptimisticMutationOptions = {
   uuid: string;
   /** Opaque durable client correlation; never included in GraphQL variables. */
   clientMetadata?: Record<string, unknown>;
+  taskDependencyRecipe?: TaskDependencyRecipe;
   identityBindings?: readonly IdentityBindingWire[];
   /** Runs after durable layer installation, independently of HTTP settlement. */
   onEnqueued?: () => void;
@@ -160,6 +162,7 @@ export type OptimisticMutationContext<TData = unknown> = {
   optimisticResponse: TData;
   /** Opaque durable client correlation; never included in GraphQL variables. */
   clientMetadata?: Record<string, unknown>;
+  taskDependencyRecipe?: TaskDependencyRecipe;
   identityBindings?: IdentityBindingWire[];
   linkPatches: OptimisticLinkPatchWire[];
   revalidations: QueryRevalidationWire[];
@@ -213,6 +216,7 @@ export function withoutOptimisticSnapshot(operation: Operation): Operation {
     [OPTIMISTIC_MUTATION_CONTEXT_KEY]: {
       ...context,
       snapshotRejected: true,
+      taskDependencyRecipe: undefined,
       optimisticResponse: undefined,
       linkPatches: [],
       revalidations,
@@ -572,6 +576,7 @@ export function optimisticMutationContext<TData>(
   const context: OptimisticMutationContext<TData> = {
     uuid,
     snapshotRejected: options.snapshotRejected,
+    taskDependencyRecipe: options.taskDependencyRecipe,
     clientMetadata: options.clientMetadata,
     optimisticResponse: optimisticData,
     authorizationEpoch:
@@ -625,6 +630,7 @@ export function optimisticContextOf(
     return {
       uuid: context.uuid,
       snapshotRejected: context.snapshotRejected,
+      taskDependencyRecipe: context.taskDependencyRecipe,
       clientMetadata: context.clientMetadata,
       optimisticResponse: context.optimisticResponse,
       authorizationEpoch: context.authorizationEpoch,

@@ -996,6 +996,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           variables: args.variables,
           data: args.data,
           generation: args.generation,
+          taskDependencyRecipe: args.taskDependencyRecipe,
           linkPatches: args.linkPatches,
           revalidations: args.revalidations,
           identityBindings: args.identityBindings,

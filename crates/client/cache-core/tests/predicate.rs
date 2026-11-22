@@ -125,6 +125,7 @@ async fn try_begin_with_projection_uuid(
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid,
                 query: OPTIMISTIC_MUTATION,

@@ -52,6 +52,7 @@ export function toBoardTask(
   return {
     id: task.id,
     name: task.name,
+    isBlocked: task.isBlocked,
     dueDate: getTaskDueDate(task),
     closed: isTaskClosed(task),
     subtypeCompleted:

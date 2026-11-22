@@ -22,6 +22,7 @@ async fn enqueue(engine: &mut Engine<InMemoryStorage>, uuid: &str) -> MutationId
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid,
                 query: MUTATION,
@@ -266,6 +267,7 @@ async fn enqueue_aliased(engine: &mut Engine<InMemoryStorage>) -> MutationId {
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid: UUID,
                 query: ALIASED_MUTATION,
@@ -618,6 +620,7 @@ fn cross_inbox_draft_settlement_preserves_source_thread_and_rebases_queued_edits
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        task_dependency_recipe: None,
                         client_metadata: None,
                         uuid: UUID,
                         query: SAVE,
@@ -759,6 +762,7 @@ fn rollback_after_restart_returns_persisted_revalidations_with_resolved_ids() {
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        task_dependency_recipe: None,
                         client_metadata: None,
                         uuid: UUID,
                         query: MUTATION,

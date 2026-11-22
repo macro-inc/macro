@@ -25,3 +25,6 @@ pub mod revision;
 pub mod search;
 pub mod store;
 pub mod value;
+
+/// Rebasable task-dependency optimistic intent.
+pub mod task_dependency;

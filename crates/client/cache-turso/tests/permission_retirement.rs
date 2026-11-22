@@ -42,6 +42,7 @@ fn permission_retirement_preserves_reply_command_without_restoring_original_thre
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     uuid: "00000000-0000-4000-8000-000000000001",
                     client_metadata: Some(&json!({"draftRevision":4})),
                     query: MUTATION,

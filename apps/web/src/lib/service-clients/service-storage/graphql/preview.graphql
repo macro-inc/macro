@@ -60,6 +60,7 @@ query ItemPreviews($input: SoupInput!) {
 fragment ItemPreviewDetailsFields on GraphqlSoupEntity {
 	...ItemPreviewFields
 	... on GraphqlSoupDocument {
+        taskDependencies { ...TaskDependencyStateFields }
 		properties {
 			...SoupPropertyFields
 		}

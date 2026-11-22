@@ -41,6 +41,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/queue.rs`: the optimistic mutation queue.
 - `tests/`: the primary spec for engine behavior — one file per concern
   (optimistic updates, calendar range, search, subscriptions, fuzz).
+- `tests/task_dependency_optimistic.rs`: reciprocal task assignment and Blocked facts survive queue reload and roll back in one normalized transaction.
 
 ## Scope
 

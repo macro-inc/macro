@@ -1874,6 +1874,7 @@ impl CacheEngine {
         client_metadata: JsValue,
         uncertain_calendar_event_keys: JsValue,
         generation: Option<String>,
+        task_dependency_recipe: JsValue,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
@@ -1903,6 +1904,12 @@ impl CacheEngine {
             let empty = serde_json::json!({});
             let projection_data = if admitted { &data } else { &empty };
 
+            let task_dependency_recipe: Option<cache_core::task_dependency::TaskDependencyRecipe> =
+                if task_dependency_recipe.is_null() || task_dependency_recipe.is_undefined() {
+                    None
+                } else {
+                    Some(serde_wasm_bindgen::from_value(task_dependency_recipe).map_err(js_err)?)
+                };
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
             let identity_bindings: Vec<cache_core::identity::IdentityBinding> =
@@ -1972,6 +1979,7 @@ impl CacheEngine {
             };
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
             let input = BeginOptimisticWrite {
+                task_dependency_recipe: task_dependency_recipe.as_ref(),
                 client_metadata: client_metadata.as_ref(),
                 uuid: &uuid,
                 query: &query,

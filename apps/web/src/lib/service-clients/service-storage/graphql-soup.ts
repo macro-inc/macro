@@ -53,6 +53,10 @@ import { classifyCacheError } from '@graphql-cache/telemetry';
 import { TauriWebSocketWrapper } from '@macro-inc/collaboration/websocket/platform/tauri-websocket';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@property/identifiers';
 import { localDraftQueueLifecycle } from '@queries/email/local-drafts';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
@@ -125,6 +129,7 @@ import {
   type SoupNotificationNavigationMetadataFieldsFragment,
   type SoupPropertyFieldsFragment,
   type SoupQuery,
+  type TaskDependencyStateFieldsFragment,
 } from './graphql/generated/graphql';
 import { isActivityUpdatesSubscription } from './graphql-activity-updates';
 import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
@@ -1203,9 +1208,19 @@ function mapGraphqlPropertyValue(
 
 /** Maps GraphQL property fragments to the shared Soup property shape. */
 export function mapGraphqlProperties(
-  properties: SoupPropertyFieldsFragment[]
+  properties: SoupPropertyFieldsFragment[],
+  taskProperties?: SoupPropertyFieldsFragment[]
 ): SoupProperty[] {
-  return properties.map((property) => ({
+  const overrides = new Set(
+    taskProperties?.map((property) => property.propertyDefinitionId)
+  );
+  const merged = [
+    ...properties.filter(
+      (property) => !overrides.has(property.propertyDefinitionId)
+    ),
+    ...(taskProperties ?? []),
+  ];
+  return merged.map((property) => ({
     id: property.id,
     definition: {
       id: property.propertyDefinitionId,
@@ -1223,13 +1238,25 @@ export function mapGraphqlProperties(
   }));
 }
 
-function mapDocumentSubType(subType: GraphqlSoupDocument['subType']) {
+function mapDocumentSubType(
+  subType: GraphqlSoupDocument['subType'],
+  taskState?: TaskDependencyStateFieldsFragment | null
+) {
   if (!subType) return undefined;
   return match(subType)
-    .with({ __typename: 'GraphqlTaskSubType' }, ({ isCompleted }) => ({
-      type: 'task' as const,
-      is_completed: isCompleted,
-    }))
+    .with({ __typename: 'GraphqlTaskSubType' }, ({ isCompleted }) => {
+      let completed = isCompleted;
+      if (taskState) {
+        const status = taskState.properties.find(
+          (property) =>
+            property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS
+        )?.value;
+        completed =
+          status?.__typename === 'GraphqlSelectOptionPropertyValue' &&
+          status.optionIds.includes(PROPERTY_OPTION_IDS.STATUS.COMPLETED);
+      }
+      return { type: 'task' as const, is_completed: completed };
+    })
     .with({ __typename: 'GraphqlSnippetSubType' }, () => ({
       type: 'snippet' as const,
     }))
@@ -2159,6 +2186,7 @@ export function mapGraphqlAgentSessionRow(
 /** GraphQL rows carry Mail facts alongside the legacy Soup row shape. */
 export type SoupItemWithCalendarInvite = SoupApiItem & {
   hasCalendarInvite?: boolean;
+  taskDependencies?: TaskDependencyStateFieldsFragment | null;
 };
 
 export function mapGraphqlSoupItem(
@@ -2198,6 +2226,7 @@ export function mapGraphqlSoupItem(
       (entity) =>
         ({
           tag: 'document',
+          taskDependencies: entity.taskDependencies,
           frecency_score: frecency,
           is_favorited: entity.isFavorited,
           data: {
@@ -2212,8 +2241,14 @@ export function mapGraphqlSoupItem(
             viewedAt: entity.viewedAt ?? undefined,
             deletedAt: entity.deletedAt ?? undefined,
             documentVersionId: 0,
-            properties: mapGraphqlProperties(entity.properties),
-            subType: mapDocumentSubType(entity.subType),
+            properties: mapGraphqlProperties(
+              entity.properties,
+              entity.taskDependencies?.properties
+            ),
+            subType: mapDocumentSubType(
+              entity.subType,
+              entity.taskDependencies
+            ),
             notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem

@@ -112,6 +112,7 @@ async fn begin_optimistic_projection(
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid: "00000000-0000-4000-8000-000000001000",
                 query: r#"
@@ -471,6 +472,7 @@ fn turso_rehydrates_and_queries_durable_optimistic_projection_layers() {
             .begin_optimistic_write_with_projections(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000001001",
                     query: r#"

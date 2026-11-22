@@ -142,6 +142,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 	}
 	... on GraphqlSoupDocument {
         appearance
+        taskDependencies { ...TaskDependencyStateFields }
 		documentName: name
 		ownerId
 		fileType

@@ -3,6 +3,15 @@
 On touch, **Show sidebar** stays on the left while **Search** and **Filters** float on the right over the full-height list with a list-local top fade. The initial chrome inset, tutorial, warning rows, and touch column headings scroll with the tasks. Above 720px on touch, the task or project list remains left of an empty or selected detail preview. At every touch width, Show sidebar opens navigation (task views, projects, saved views) in a sheet; there are no view pills.
 Search uses the same 40px glass island as Filters. Tasks and Projects lists reserve the greater of the bottom safe area and floating controls, plus 16px, so the final row can scroll fully clear of them.
 
+## Dependencies and blocked tasks
+
+- Edit **Depends On** to choose prerequisite tasks, or **Blocking** to choose tasks that depend on the current task. Both directions use the existing task picker in the properties panel.
+- Adding or removing a link updates both tasks immediately. Failed writes roll back both sides. Editing either direction requires edit access to every affected task, including removed tasks.
+- A task shows **Blocked** while at least one existing prerequisite is not Completed. Canceled tasks still block. Completing or reopening a prerequisite updates the dependent tasks.
+- Desktop rows, phone rows, and board cards share the Blocked badge. Task details show linked prerequisites with their status icons; unavailable tasks reveal no name.
+- Team admins can enable **Prevent completing blocked tasks** in **Settings → Team → General**. The default is off. When enabled, completion is rejected by every backend Status writer; **Open blocker** opens an unfinished prerequisite after rollback.
+- Self-dependencies and direct two-task cycles are rejected; longer cycles are allowed. Deleted prerequisites no longer block a task; losing access hides their details without changing the dependency.
+
 ## Surface
 
 The main Tasks list (List layout, not project or CRM task lists) starts with the Tasks `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows, so list keyboard focus skips it.

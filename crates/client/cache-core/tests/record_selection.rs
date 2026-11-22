@@ -297,6 +297,7 @@ fn merges_optimistic_updates_with_cold_linked_bases() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000003",
                     query: mutation,
@@ -360,6 +361,7 @@ fn includes_optimistic_only_records() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000004",
                     query: mutation,

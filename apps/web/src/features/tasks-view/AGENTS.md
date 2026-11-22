@@ -15,6 +15,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
   mobile header through `SplitHeaderScope`.
 - `views/task-saved-views.tsx`: compound sidebar/mobile lists, filter summaries, imperative action dialogs, and request-scoped write/reload completion; the Tasks host owns selection and navigation.
 - `queries/use-tasks-query.ts`: shared list, board, Gantt, and search filtering.
+- `@queries/properties/graphql/task-dependency-source`: normalized task facts; REST search rows hydrate missing facts in 500-ID batches without changing search order. Detail blocker names/statuses use the shared batched preview source.
 
 ## Gotchas
 
@@ -37,6 +38,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Mix light-theme due-date warnings with 40% foreground in list and board values for contrast; keep dark-theme warnings, global warning tokens, and status colors unchanged.
 - Use the matching `task-status-*` theme token for each status icon and group-header tint; default Completed to accent while preserving explicit theme overrides and independent global colors.
 - Edit priority then status through leading `TaskPropertyControl` icons on desktop and mobile; share their presentation through `PropertyIconControl`, place status directly beside the title, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
+- Read Blocked from GraphQL dependency facts, not a new Status option; use `TaskBlockedBadge` across desktop rows, phone rows, and board cards, and the shared dependency strip in Markdown task details.
 - Order trailing task properties as Due date, Project, then Assignees in wide and narrow rows and title pills; show both avatars for exactly two compact assignees, otherwise one avatar plus the remaining count, anchored left in a fixed-width slot so overflow grows right.
 - At container widths up to 840px, use tooltip-labeled icons for Project, Assignees, Due date, and Updated headers; keep Project at 32px and Assignees at 44px, with the assignee header aligned to the first avatar and collapsed property pills padded 4px on both axes.
 - While a text search keeps the search service's order (`TasksDataSource.sortsSearchResults` false), column headers stop sorting and show a static Updated descending arrow; CRM's scoped search reruns the list's query and keeps sortable headers. The Sort dropdown and S hotkey drop out during any search. Never change the stored sort for search.

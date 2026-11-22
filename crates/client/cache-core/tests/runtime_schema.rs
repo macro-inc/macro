@@ -57,6 +57,7 @@ fn installed_binary_accepts_new_fields_and_replays_them_after_bundle_rollback() 
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     identity_bindings: &[],
                     uuid: "01900000-0000-7000-8000-000000000001",

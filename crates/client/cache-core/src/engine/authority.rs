@@ -81,6 +81,7 @@ pub struct AuthorityTransitionWire {
 #[cfg(any(test, feature = "schema"))]
 pub fn transport_schemas() -> serde_json::Value {
     serde_json::json!({"schemas": {
+        "TaskDependencyRecipe": schemars::schema_for!(crate::task_dependency::TaskDependencyRecipe),
         "CacheAuthority": schemars::schema_for!(CacheAuthority),
         "AuthorityTransition": schemars::schema_for!(AuthorityTransitionWire),
     }})
@@ -236,6 +237,11 @@ impl<S: Storage> Engine<S> {
             )
         });
         let input = BeginOptimisticWrite {
+            task_dependency_recipe: if accepted {
+                input.task_dependency_recipe
+            } else {
+                None
+            },
             data: if accepted { input.data } else { &empty },
             link_patches: if accepted { input.link_patches } else { &[] },
             revalidations: revalidations.as_deref().unwrap_or(input.revalidations),

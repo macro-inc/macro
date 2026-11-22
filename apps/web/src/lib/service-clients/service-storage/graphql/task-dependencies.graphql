@@ -1,0 +1,56 @@
+fragment TaskDependencyStateFields on GraphqlTaskDependencyState {
+  __typename
+  id
+  isBlocked
+  openBlockerIds
+  properties { ...SoupPropertyFields }
+}
+
+# Realtime blocker patches carry their immediate dependents' state too.
+fragment TaskDependencyStateWithDependentsFields on GraphqlTaskDependencyState {
+  ...TaskDependencyStateFields
+  dependentTasks { ...TaskDependencyStateFields }
+}
+
+query TaskDependencies($input: SoupEntityInput!) {
+  user {
+    id
+    soupEntity(input: $input) {
+      __typename
+      id
+      displayName
+      ... on GraphqlSoupDocument {
+        taskDependencies { ...TaskDependencyStateFields }
+      }
+    }
+  }
+}
+
+mutation SetTaskProperty($input: SetEntityPropertyInput!) {
+  setTaskProperty(input: $input) {
+    property { ...SoupPropertyFields }
+    tasks { ...TaskDependencyStateFields }
+    effectsComplete
+  }
+}
+
+# Failure fallback only: do not refetch cache-maintained lists after successful effects.
+query RepairTaskDependencies($input: SoupEntityInput!) {
+  user {
+    id
+    soupEntity(input: $input) {
+      __typename
+      id
+      ... on GraphqlSoupDocument {
+        taskDependencies { ...TaskDependencyStateWithDependentsFields }
+      }
+    }
+  }
+}
+
+query TaskDependencyStates($taskIds: [ID!]!) {
+  user {
+    id
+    taskDependencyStates(taskIds: $taskIds) { ...TaskDependencyStateFields }
+  }
+}

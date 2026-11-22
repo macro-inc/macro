@@ -326,6 +326,7 @@ fn restored_draft_enqueues_without_a_previously_loaded_thread_query() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "11111111-1111-4111-8111-111111111110",
                     query: MUTATION,
@@ -405,6 +406,7 @@ fn restored_draft_enqueues_and_survives_restart_with_a_null_thread_lookup() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "11111111-1111-4111-8111-111111111109",
                     query: MUTATION,
@@ -522,6 +524,7 @@ fn queued_draft_save_is_visible_in_the_thread_page_read() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "11111111-1111-4111-8111-111111111101",
                     query: MUTATION,
@@ -591,6 +594,7 @@ fn queued_draft_delete_removes_the_draft_from_the_thread_page_read() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "11111111-1111-4111-8111-111111111102",
                     query: MUTATION,
@@ -613,6 +617,7 @@ fn queued_draft_delete_removes_the_draft_from_the_thread_page_read() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "11111111-1111-4111-8111-111111111103",
                     query: DELETE_MUTATION,
@@ -718,6 +723,7 @@ fn identity_binding_keeps_newer_edits_readable_across_commit_and_restart() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "11111111-1111-4111-8111-111111111104",
                     query: MUTATION,
@@ -737,6 +743,7 @@ fn identity_binding_keeps_newer_edits_readable_across_commit_and_restart() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "11111111-1111-4111-8111-111111111104",
                     query: MUTATION,
@@ -836,6 +843,7 @@ fn committed_draft_save_with_the_same_id_keeps_the_draft_visible() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "11111111-1111-4111-8111-111111111104",
                     query: MUTATION,
@@ -916,6 +924,7 @@ fn committed_alias_id_response_skips_the_patch_and_stays_readable() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "11111111-1111-4111-8111-111111111105",
                     query: MUTATION,

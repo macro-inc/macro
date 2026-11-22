@@ -1,3 +1,4 @@
+import type { TaskDependencyRecipe } from '../authority.generated';
 import type { CacheAuthorityHost } from '../authority';
 import type { PeopleCache } from '../people/host';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
@@ -98,6 +99,7 @@ export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
   /** Opaque durable client correlation; never included in GraphQL variables. */
   clientMetadata?: Record<string, unknown>;
   identityBindings?: IdentityBindingWire[];
+  taskDependencyRecipe?: TaskDependencyRecipe;
   linkPatches?: OptimisticLinkPatchWire[];
   /** Revalidations for relevant cached fields that could not be patched. */
   revalidations?: QueryRevalidationWire[];

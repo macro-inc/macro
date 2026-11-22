@@ -66,6 +66,7 @@ async fn opfs_stale_generation_settles_commands_without_restoring_retired_respon
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
             generation.clone(),
+            JsValue::UNDEFINED,
         ))
         .await;
         assert_eq!(enqueued["initialClaim"]["kind"], "claimed");

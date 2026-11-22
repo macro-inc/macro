@@ -13,6 +13,7 @@ import {
   UnreadIndicator,
 } from '@entity';
 import { SharedBadgeSmall } from '@entity/components/Badges';
+import { TaskBlockedBadge } from '@entity/components/TaskBlockedBadge';
 import { NarrowLayout } from '@entity/composed/list-entity/narrow-layout';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
@@ -238,6 +239,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
                   <span class="min-w-0 truncate">
                     <Entity.Title entity={props.entity} />
                   </span>
+                  <TaskBlockedBadge blocked={props.entity.isBlocked} />
                   <Show when={props.isShared}>
                     <span class="task-shared-badge hidden shrink-0">
                       <SharedBadgeSmall ownerId={props.entity.ownerId} />

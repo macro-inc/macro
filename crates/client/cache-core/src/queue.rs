@@ -84,7 +84,7 @@ impl StoredMutation {
 }
 
 /// Current version of the durable optimistic source envelope.
-pub const OPTIMISTIC_SOURCE_VERSION: u8 = 3;
+pub const OPTIMISTIC_SOURCE_VERSION: u8 = 4;
 
 const OPTIMISTIC_SOURCE_ENVELOPE_PREFIX: &str = "@macro-cache/optimistic-source:";
 
@@ -92,6 +92,9 @@ const OPTIMISTIC_SOURCE_ENVELOPE_PREFIX: &str = "@macro-cache/optimistic-source:
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OptimisticSource {
+    /// Authored task relationship assignment, replayed without snapshots.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_dependency_recipe: Option<crate::task_dependency::TaskDependencyRecipe>,
     /// Client recovery context, such as the local draft revision being saved.
     /// Stored with the mutation for replay; never included in server requests.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -119,6 +122,8 @@ pub struct OptimisticSource {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OptimisticSourceEnvelope {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    task_dependency_recipe: Option<crate::task_dependency::TaskDependencyRecipe>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     client_metadata: Option<Json>,
     #[serde(default)]
@@ -149,6 +154,7 @@ struct OptimisticSourceEnvelopeV2 {
 pub fn encode_optimistic_source(source: &OptimisticSource) -> String {
     let envelope = canonical_json(
         &serde_json::to_value(OptimisticSourceEnvelope {
+            task_dependency_recipe: source.task_dependency_recipe.clone(),
             client_metadata: source.client_metadata.clone(),
             identity_bindings: source.identity_bindings.clone(),
             version: OPTIMISTIC_SOURCE_VERSION,
@@ -168,6 +174,7 @@ pub fn encode_optimistic_source(source: &OptimisticSource) -> String {
 pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String> {
     let Some(envelope) = value.strip_prefix(OPTIMISTIC_SOURCE_ENVELOPE_PREFIX) else {
         return Ok(OptimisticSource {
+            task_dependency_recipe: None,
             client_metadata: None,
             identity_bindings: Vec::new(),
             mutation_data: serde_json::from_str(value).map_err(|error| error.to_string())?,
@@ -188,6 +195,7 @@ pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String>
                 serde_json::from_value(value).map_err(|error| error.to_string())?;
             debug_assert_eq!(envelope.version, 2);
             Ok(OptimisticSource {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 identity_bindings: Vec::new(),
                 mutation_data: envelope.mutation_data,
@@ -197,10 +205,11 @@ pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String>
                 uncertain_calendar_event_keys: Vec::new(),
             })
         }
-        version if version == u64::from(OPTIMISTIC_SOURCE_VERSION) => {
+        version if version == 3 || version == u64::from(OPTIMISTIC_SOURCE_VERSION) => {
             let envelope: OptimisticSourceEnvelope =
                 serde_json::from_value(value).map_err(|error| error.to_string())?;
             Ok(OptimisticSource {
+                task_dependency_recipe: envelope.task_dependency_recipe,
                 client_metadata: envelope.client_metadata,
                 identity_bindings: envelope.identity_bindings,
                 mutation_data: envelope.mutation_data,

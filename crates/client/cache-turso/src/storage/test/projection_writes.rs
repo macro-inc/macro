@@ -32,6 +32,7 @@ fn deletion_rebases_ordered_pending_contributions_without_changing_other_keys_or
             let mut mutation = queued("Pending");
             mutation.optimistic.optimistic_data_json =
                 cache_core::queue::encode_optimistic_source(&cache_core::queue::OptimisticSource {
+                    task_dependency_recipe: None,
                     client_metadata: Some(serde_json::json!({"authored":"kept"})),
                     identity_bindings: vec![],
                     mutation_data: serde_json::json!({}),
@@ -220,6 +221,7 @@ fn unchanged_authority_still_rebases_durable_optimistic_intent() {
         let mut mutation = queued("Pending");
         mutation.optimistic.optimistic_data_json =
             cache_core::queue::encode_optimistic_source(&cache_core::queue::OptimisticSource {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 identity_bindings: Vec::new(),
                 mutation_data: serde_json::json!({}),

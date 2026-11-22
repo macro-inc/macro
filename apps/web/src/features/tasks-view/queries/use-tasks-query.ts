@@ -22,8 +22,10 @@ import {
   taskCustomPropertyReferences,
 } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { PROPERTY_OPTION_IDS } from '@property/identifiers';
 import { toPropertyDefinitionDomain } from '@property/utils/transforms';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
+import { createTaskDependencyStatesSource } from '@queries/properties/graphql/task-dependency-source';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import {
   type SoupApiItemFilter,
@@ -31,6 +33,7 @@ import {
 } from '@queries/soup/items';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
+import { mapGraphqlProperties } from '@service-storage/graphql-soup';
 import { type Accessor, createMemo } from 'solid-js';
 import { sortTasks } from '../constants';
 import {
@@ -315,6 +318,16 @@ export function useTasksDataSource(
           }),
       });
 
+  const searchDependencies = createTaskDependencyStatesSource(() =>
+    search.isSearching() && !options.crm
+      ? search
+          .data()
+          .filter(isTaskEntity)
+          .filter((task) => task.isBlocked === undefined)
+          .map((task) => task.id)
+      : []
+  );
+
   const groupedQueries = createGroupedSoupQueries({
     groupedPaging: () => query.groupedPaging,
     initialPage: createMemo(() => {
@@ -355,7 +368,35 @@ export function useTasksDataSource(
   const tasks = createMemo<TaskEntityWithProperties[]>((previous) => {
     if (!search.isSearching()) return baseTasks();
 
-    const results = transformEntities(search.data());
+    const facts = searchDependencies.states();
+    const results = transformEntities(search.data()).map((task) => {
+      const dependency = facts.get(task.id);
+      if (!dependency) return task;
+      const updated = mapGraphqlProperties(dependency.properties);
+      const replaced = new Set(
+        updated.map((property) => property.definition.id)
+      );
+      const properties = [
+        ...(task.properties ?? []).filter(
+          (property) => !replaced.has(property.definition.id)
+        ),
+        ...updated,
+      ];
+      const status = dependency.properties.find(
+        (property) =>
+          property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS
+      )?.value;
+      const completed =
+        status?.__typename === 'GraphqlSelectOptionPropertyValue' &&
+        status.optionIds.includes(PROPERTY_OPTION_IDS.STATUS.COMPLETED);
+      return {
+        ...task,
+        properties,
+        subType: { ...task.subType, is_completed: completed },
+        isBlocked: dependency.isBlocked,
+        openBlockerIds: dependency.openBlockerIds,
+      };
+    });
     if (
       results.length === 0 &&
       previous.length > 0 &&
@@ -457,7 +498,7 @@ export function useTasksDataSource(
 
   const error = () => {
     if (!usesServiceSearch()) return query.error ?? undefined;
-    return search.error();
+    return search.error() ?? searchDependencies.error();
   };
 
   const hasMore = () => {

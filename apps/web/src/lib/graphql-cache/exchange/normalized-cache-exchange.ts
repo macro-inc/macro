@@ -1243,6 +1243,7 @@ export function normalizedCacheExchange(
           operationName: operationName(op),
           variables: op.variables as Record<string, unknown> | undefined,
           data: optimistic.optimisticResponse,
+          taskDependencyRecipe: optimistic.taskDependencyRecipe,
           linkPatches: optimistic.linkPatches,
           revalidations: optimistic.revalidations,
           identityBindings: optimistic.identityBindings,

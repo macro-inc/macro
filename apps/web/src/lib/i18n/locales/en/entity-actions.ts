@@ -1,4 +1,13 @@
 export default {
+  taskBlocked: 'Blocked',
+  taskBlockedCompletion: 'Task is blocked',
+  taskDependsOn: 'Depends on',
+  taskLoading: 'Loading task…',
+  taskUnavailable: 'Unavailable task',
+  taskUntitled: 'Untitled task',
+  taskDependenciesFailed: 'Could not load task dependencies',
+  taskOpenBlocker: 'Open blocker',
+  taskViewBlockers: 'View blockers',
   notSpam: 'Not spam',
   restoreEmail: 'Restore',
   toastEmailRestoreRequested: 'Restore requested',

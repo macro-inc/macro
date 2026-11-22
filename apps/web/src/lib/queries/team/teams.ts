@@ -496,6 +496,7 @@ export function useCreateTeamWithInvitesMutation(
               auto_join_domain: null,
               enterprise: false,
               allow_non_admin_invites: true,
+              prevent_completing_blocked_tasks: false,
               default_link_share: 'TEAM',
             };
 

@@ -41,6 +41,7 @@ function row(
 > {
   return {
     __typename: 'GraphqlSoupDocument',
+    taskDependencies: null,
     appearance: null,
     id: String(id),
     entityType: 'DOCUMENT',

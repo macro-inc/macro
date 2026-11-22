@@ -31,6 +31,7 @@ fn stale_enqueue_derives_query_link_repair_before_current_generation_settlement(
                 .enqueue_optimistic_mutation_in_generation(
                     None,
                     BeginOptimisticWrite {
+                        task_dependency_recipe: None,
                         client_metadata: None,
                         identity_bindings: &[],
                         uuid: "00000000-0000-4000-8000-000000000081",
@@ -121,6 +122,7 @@ fn stale_commands_keep_fresh_revalidations_through_retirement_and_settlement() {
                 .enqueue_optimistic_mutation_in_generation(
                     None,
                     BeginOptimisticWrite {
+                        task_dependency_recipe: None,
                         client_metadata: None,
                         identity_bindings: &[],
                         uuid: "00000000-0000-4000-8000-000000000080",
@@ -258,6 +260,7 @@ fn retirement_recomposes_shared_projection_shadows_in_both_layer_orders() {
             let mut ids = Vec::new();
             for (index, attribute) in ["older", "newer"].into_iter().enumerate() {
                 let result = engine.begin_optimistic_write_with_projections(None, BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None, identity_bindings: &bindings, uuid: &format!("00000000-0000-4000-8000-00000000009{index}"),
                     query: "mutation Rename($inputs: [RenameEntityInput!]!) { renameEntities(inputs: $inputs) { results { __typename } } }",
                     operation_name: Some("Rename"), variables: json!({"inputs":[]}).as_object().unwrap(), data: &json!({}),
@@ -379,6 +382,7 @@ fn retirement_strips_projection_only_sources_and_preserves_other_queued_owners()
                 .begin_optimistic_write_with_projections(
                     None,
                     BeginOptimisticWrite {
+                        task_dependency_recipe: None,
                         client_metadata: Some(&json!({"intent":"keep command"})),
                         identity_bindings: &[],
                         uuid,
@@ -476,6 +480,7 @@ fn stale_success_settles_the_command_and_identity_without_restoring_its_response
             .enqueue_optimistic_mutation_in_generation(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     identity_bindings: &[binding],
                     uuid: "00000000-0000-4000-8000-000000000001",
@@ -586,6 +591,7 @@ fn an_old_windows_enqueue_keeps_authored_variables_but_no_copied_snapshot() {
         engine.enqueue_optimistic_mutation_in_generation(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None, identity_bindings: &[],
                 uuid: "00000000-0000-4000-8000-000000000002",
                 query: "mutation Save($input: SaveEmailDraftInput!) { saveEmailDraft(input: $input) { thread { __typename id name } } }",
@@ -882,6 +888,7 @@ fn first_account_binding_preserves_unproven_generation_and_authored_queue() {
         let initial = engine.current_authority("profile").await.unwrap();
         let storage_generation = engine.current_storage_generation().await.unwrap();
         engine.begin_optimistic_write(None, BeginOptimisticWrite {
+            task_dependency_recipe: None,
             uuid: "00000000-0000-4000-8000-000000000001",
             query: "mutation Save($input: SaveEmailDraftInput!) { saveEmailDraft(input: $input) { thread { id } } }",
             operation_name: Some("Save"),
@@ -1086,6 +1093,7 @@ fn retired_calendar_create_can_select_its_committed_identity_without_response_co
             .enqueue_optimistic_mutation_in_generation(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     identity_bindings: &[binding],
                     uuid,

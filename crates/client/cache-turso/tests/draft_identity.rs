@@ -61,6 +61,7 @@ async fn enqueue(
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid: UUID,
                 query: if delete { DELETE } else { SAVE },

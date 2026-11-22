@@ -21,6 +21,8 @@ property, not the prop you passed in. Save handlers keep their own caches
 current, so `Property.Root` editors never refetch properties after a save;
 side-panel collections own their refresh (below).
 
+Task **Depends On** and **Blocking** use the existing multi-task entity editor in both directions. Saves use `setTaskProperty`, whose normalized dependency records update reciprocal assignments and Blocked state in one optimistic layer. `views/task-dependency-detail.tsx` renders authorized blocker links and status icons inside task details. The shared cache owns rollback; never maintain a second relationship cache in a component.
+
 `extractors/PropertyEmpty.tsx` shares empty-value glyphs across task list rows,
 board cards, group and column headers, and pickers: the wide ascending priority
 bars at 30% opacity for no priority, a corner-dashed cube for no project, a

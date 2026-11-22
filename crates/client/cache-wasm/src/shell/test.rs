@@ -1451,6 +1451,7 @@ async fn optimistic_v2_patch_is_filterable_after_enqueue_reopen_and_rollback() {
             js(serde_json::json!({"draftRevision": 10})),
             JsValue::UNDEFINED,
             test_generation(&engine).await,
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1596,6 +1597,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
             test_generation(&engine).await,
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1621,6 +1623,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
             test_generation(&engine).await,
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1728,6 +1731,7 @@ async fn optimistic_commit_reports_affected_ops_and_rejects_settled_or_malformed
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
             test_generation(&engine).await,
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1831,6 +1835,7 @@ async fn destroy_recovery_wipes_records_and_queue() {
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
         test_generation(&engine).await,
+        JsValue::UNDEFINED,
     ))
     .await;
     resolved(engine.close()).await;
@@ -2051,6 +2056,7 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
         test_generation(&engine).await,
+        JsValue::UNDEFINED,
     ))
     .await;
     assert_reset_required(engine.bound_identity()).await;
@@ -2167,6 +2173,7 @@ async fn physical_reset_serializes_recreates_and_preserves_interner_registration
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
         test_generation(&engine).await,
+        JsValue::UNDEFINED,
     ))
     .await;
 
@@ -2290,6 +2297,7 @@ async fn every_method_rejects_after_consuming_close() {
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
         None,
+        JsValue::UNDEFINED,
     ))
     .await;
     assert_closed(engine.inspect_query_variants(
@@ -2645,6 +2653,7 @@ async fn queue_one_mutation(engine: &CacheEngine) {
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
         test_generation(&engine).await,
+        JsValue::UNDEFINED,
     ))
     .await;
 }
@@ -2847,6 +2856,7 @@ async fn calendar_ranges_report_gaps_watermarks_and_uncertain_events_across_the_
         JsValue::UNDEFINED,
         js(serde_json::json!(["GraphqlCalendarEvent:e1"])),
         test_generation(&engine).await,
+        JsValue::UNDEFINED,
     ))
     .await;
     let covered: serde_json::Value = from_js(resolved(engine.calendar_range(js(week))).await);

@@ -1,6 +1,7 @@
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { TaskBlockedBadge } from '@entity/components/TaskBlockedBadge';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -204,6 +205,7 @@ export function TaskBoardView(props: {
           {renderProperty(task, readOnly, SYSTEM_PROPERTY_IDS.ASSIGNEES, true)}
         </div>
       </TaskBoard.CardHeader>
+      <TaskBlockedBadge blocked={task().isBlocked} />
       <TaskBoard.CardFields>
         <div data-kanban-no-drag class="contents">
           <For each={cardPropertyIds()}>

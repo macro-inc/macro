@@ -27,6 +27,7 @@ async fn begin(engine: &mut Engine<InMemoryStorage>, uuid: &str, read: bool) -> 
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid,
                 query: MUTATION,
