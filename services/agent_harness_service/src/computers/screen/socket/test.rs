@@ -959,6 +959,44 @@ mod over_the_wire {
         assert_eq!(rig.screens.lease(COMPUTER).await.unwrap(), None);
     }
 
+    /// The drive can end as unpaused before this socket hears the lease
+    /// change: the driver's next renewal finds the lease gone, and the
+    /// socket still says why.
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_renewal_that_finds_the_drive_unpaused_tells_the_driver(pool: PgPool) {
+        let rig = rig(pool.clone(), grant("alice", Mode::Drive)).await;
+        let mut client = connect(&rig).await;
+        control_of(&mut client, "state").await;
+        send(&mut client, serde_json::json!({ "type": "takeOver" })).await;
+        assert_eq!(control_of(&mut client, "state").await["drivingHere"], true);
+        // The take-over's own lease notification, so no later one can end
+        // the drive for this socket.
+        assert_eq!(control_of(&mut client, "state").await["drivingHere"], true);
+        // Ended as unpaused with no lease notification, as when the renewal
+        // runs before the notification arrives.
+        sqlx::query!("DELETE FROM computer_screen_driver_leases")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query!("UPDATE computer_screen_drives SET ended_at = now(), end_reason = 'unpaused'")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // The next input past the renewal interval renews, and finds it gone.
+        tokio::time::sleep(RENEW_EVERY + Duration::from_millis(500)).await;
+        send(
+            &mut client,
+            serde_json::json!({ "type": "input", "event": { "kind": "key", "keysym": 97, "down": true } }),
+        )
+        .await;
+
+        let told = tokio::time::timeout(Duration::from_secs(10), control_of(&mut client, "error"))
+            .await
+            .expect("the driver was never told the drive ended unpaused");
+        assert_eq!(told["code"], "agentNotPausable");
+    }
+
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn viewers_see_who_drives_by_name_never_by_user_id(pool: PgPool) {
         let rig = rig(pool, grant("alice", Mode::Drive)).await;
