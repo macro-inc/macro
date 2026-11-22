@@ -2574,10 +2574,11 @@ Macro people and groups are pinned. The PostHog `disable-crm-contact-search`
 kill switch removes contact results and disables their search while leaving
 companies and Macro users available; existing contact mentions still work.
 Override locally with `VITE_DISABLE_CRM_CONTACT_SEARCH=true`. Results include cached companies even if they are
-absent from the first 500 companies in the REST Quick Access feed; the REST feed
-remains a fallback. Cache search covers synchronized companies, not the entire CRM.
+absent from the first 500 companies of the company suggestion feed, a GraphQL
+Soup page (`QUICK_ACCESS_CRM_COMPANIES_ARGS`); that page remains a fallback. Cache
+search covers synchronized companies, not the entire CRM.
 
-To verify, search for a cached company absent from that REST page, select it, and
+To verify, search for a cached company absent from that GraphQL page, select it, and
 check that the inserted company mention points to the correct company. Also check
 searching by domain and that an open picker updates when companies finish hydrating.
 Discard unsent test drafts rather than sending them.
