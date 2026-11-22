@@ -505,7 +505,10 @@ export function toChannelListItem(
  * then the lowest id, and so does this. Undefined when there is none: the
  * server may still answer a DM only the other person left, which a record
  * cannot tell apart from one a third member also left (records list current
- * members only), or a DM the directory has not received yet.
+ * members only), or a DM the directory has not received yet. A record cannot
+ * show people a DM no longer has: the server refuses to leave a DM or to add
+ * or remove its members, so a DM changes only by being deleted. Undefined
+ * too when a creation time does not parse, since the order is then unknown.
  */
 export function directMessageWithPerson(
   channels: readonly DirectoryChannel[],
@@ -523,6 +526,7 @@ export function directMessageWithPerson(
     const ids = new Set(members.map(({ userId }) => userId));
     if (!ids.has(viewerId) || !ids.has(personId)) continue;
     const at = instantMicros(channel.createdAt);
+    if (!Number.isFinite(at)) return undefined;
     if (!best || at < best.at || (at === best.at && channel.id < best.id))
       best = { id: channel.id, at };
   }

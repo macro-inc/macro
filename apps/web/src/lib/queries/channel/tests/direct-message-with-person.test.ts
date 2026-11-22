@@ -87,3 +87,13 @@ it('takes the oldest of several, to the microsecond, then the lowest id', () => 
   ];
   expect(directMessageWithPerson(channels, VIEWER, PERSON)).toBe('0000000a');
 });
+
+it('leaves the order to the server when a creation time does not parse', () => {
+  const channels = [
+    dm('0000000a', [VIEWER, PERSON], { createdAt: 'not a time' }),
+    dm('0000000b', [VIEWER, PERSON], {
+      createdAt: '2026-11-01T00:00:00.000001Z',
+    }),
+  ];
+  expect(directMessageWithPerson(channels, VIEWER, PERSON)).toBeUndefined();
+});
