@@ -1037,12 +1037,15 @@ rollbackable link until the server confirms deletion.
 Property catalog option edits and deletes, and definition deletes, are predicted.
 A new option is created under an id the client mints and sends; the server
 answers a replay of that id with the option it made, so the id is final. It
-is linked into the cached option, definition-with-options and tag-set lists
-at once, but the add resolves only once the server has it (a queued add waits
-for its commit), so a caller never applies an option id to an entity that the
-server could still refuse. Creating a definition, provisioning a tag set, and
-sharing or replacing a tag wait for the server, then reload the mounted catalog
-lists they can change (`lib/queries/properties/catalog`).
+shows at once in the cached option and tag-set lists, and through the
+definition's record in every cached list holding that definition. The add
+resolves only once the server has it (a queued add waits for its commit), so a
+caller never applies an option id to an entity that the server could still
+refuse. Creating a definition, provisioning a tag set, and sharing or replacing
+a tag wait for the server, then reload the mounted catalog lists they can
+change (`lib/queries/properties/catalog`). A write the server answers waits
+while the app is offline, as TanStack paused it, and is dropped if another
+login took over the page meanwhile.
 
 Server-generated identities, per-task permission outcomes, and exact notification
 IDs used by undo are not fabricated. A queued acknowledgement is not a completed
