@@ -40,9 +40,10 @@ export const DELETE_IN_FLIGHT_MS = 2 * 60_000;
 /** Generations kept per viewer. Only the current one is read; the others
  * stay so an older pass's write cannot replace it. A generation stops
  * being kept once it owes nothing, so only storage resets while reads were
- * still owed add up to this many: another pass, whatever clock stamped it,
- * pushes a generation that still owes out only once 15 others that owe were
- * written after it. */
+ * still owed add up to this many. Once they do, a save keeps its own
+ * generation and the 15 others stamped latest, by whichever tab's clock: an
+ * older pass's save can then push out the current generation's debt when
+ * the others were stamped after it. */
 const KEPT_GENERATIONS = 16;
 
 const OWED_DELETE = z.object({

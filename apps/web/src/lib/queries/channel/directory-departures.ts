@@ -104,8 +104,9 @@ type Departure = {
   /** Checks still to make, as delays from the departure. */
   remaining: number[];
   at: number;
-  /** Deleted without a confirming reread: read on the primary at its next
-   * check even though the cache no longer shows it. */
+  /** A check left the cache unsure: a delete without a confirming reread, a
+   * deadline once its delete may have been sent, or rejoins during every
+   * read. Read on the primary at its next check whatever the cache shows. */
   repair: boolean;
   retries: number;
   /** What saw the leave: its scan or live update parents the checks. */
@@ -398,8 +399,8 @@ export function createDepartureRecheck(
     const due: [string, Departure][] = [];
     for (const [id, departure] of departures) {
       if (departure.at + (departure.remaining[0] ?? 0) > now) continue;
-      // Only a channel the cache shows joined again, or one deleted without
-      // a confirming read, needs the primary.
+      // Only a channel the cache shows joined again, or one an earlier check
+      // left for repair, needs the primary.
       if (state.records[id]?.isParticipant || departure.repair) {
         due.push([id, departure]);
         continue;
