@@ -349,3 +349,62 @@ async fn a_write_reads_both_layers_and_a_refused_plan_writes_nothing(pool: PgPoo
     assert!(matches!(refused, Err(PermissionError::Forbidden)));
     assert_eq!(store.rules(&owner).await.unwrap().len(), 1);
 }
+
+/// The CodeRabbit interleaving: the gate has read the policy (no setting,
+/// so the default Always) when a person saves Never and the agent then drops
+/// its own Never from the session. Read at the gate's isolation, the overlay
+/// read that follows still sees the agent's Never, so no snapshot resolves
+/// the call to Always.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("permissions"))
+)]
+async fn a_gate_reads_the_policy_and_overlay_as_one_snapshot(pool: PgPool) {
+    let store = PgPermissionStore::new(pool.clone());
+    let owner = PolicyOwner::Agent(AGENT);
+    let session = AgentSessionId::new_from_uuid(SESSION);
+    store
+        .apply_session(session, &[tool(Some(PermissionState::Never))], &user(OTHER))
+        .await
+        .unwrap();
+
+    let mut gate = pool.begin_with(SNAPSHOT).await.unwrap();
+    assert!(policy_rules(&mut gate, &owner).await.unwrap().is_empty());
+
+    store
+        .apply(
+            &owner,
+            &[tool(Some(PermissionState::Never))],
+            &user(OWNER),
+            SetBy::Person,
+        )
+        .await
+        .unwrap();
+    store
+        .apply_session(session, &[tool(None)], &user(OTHER))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        states(&overlay_rules(&mut gate, session).await.unwrap()),
+        vec![(
+            "static-files.delete_file".to_owned(),
+            PermissionState::Never,
+            true,
+            true
+        )]
+    );
+    gate.commit().await.unwrap();
+
+    let (saved, overlay) = store.rules_with_session(&owner, session).await.unwrap();
+    assert_eq!(
+        states(&saved),
+        vec![(
+            "static-files.delete_file".to_owned(),
+            PermissionState::Never,
+            false,
+            false
+        )]
+    );
+    assert!(overlay.is_empty());
+}

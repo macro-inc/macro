@@ -106,6 +106,16 @@ impl PermissionStore for Arc<FakeStore> {
         Ok(self.read(&Key::Session(session)))
     }
 
+    async fn rules_with_session(
+        &self,
+        owner: &PolicyOwner,
+        session: AgentSessionId,
+    ) -> Result<(Vec<Rule>, Vec<Rule>), Infallible> {
+        let rules = self.rules.lock().unwrap();
+        let read = |key: &Key| rules.get(key).cloned().unwrap_or_default();
+        Ok((read(&key(owner)), read(&Key::Session(session))))
+    }
+
     async fn write<Plan>(
         &self,
         write: Write<'_>,

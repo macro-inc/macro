@@ -37,7 +37,9 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
 ## Start here
 
 - `src/domain/service.rs`: who may read, set, tighten, reset; `resolve_calls`
-  for a run's gate.
+  for a run's gate, which reads the saved rules and the session overlay in
+  one snapshot (`rules_with_session`), never as two reads a write can fall
+  between.
 - `src/domain/resolve.rs`: resolution, the view, tighten-only.
 - `src/inbound/axum_router.rs`: routes, credential mapping, error codes.
 - `src/domain/admission.rs`: `admit`, the gate's question: every

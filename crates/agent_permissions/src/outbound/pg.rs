@@ -3,7 +3,8 @@
 //! `agent_session_tool_permission` (an agent's restrictions on itself for one
 //! session). Every query is a lookup by its table's primary-key prefix.
 //! Writes take a transaction-scoped advisory lock per policy and per
-//! session, so a check and the write it allows see the same rules.
+//! session, so a check and the write it allows see the same rules; a gate
+//! reads the policy and the overlay in one read-only snapshot.
 
 #[cfg(test)]
 mod test;
@@ -105,6 +106,11 @@ fn lock_key(owner: Option<&PolicyOwner>, session: Option<AgentSessionId>) -> Str
         (None, None) => String::new(),
     }
 }
+
+/// The isolation a gate's read runs at: its two statements see one snapshot,
+/// so a write committing between them can't pair the policy before it with
+/// the overlay after it. Read only, so it never blocks a writer.
+const SNAPSHOT: &str = "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY";
 
 async fn lock(connection: &mut PgConnection, key: &str) -> Result<(), sqlx::Error> {
     sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key,)
@@ -331,6 +337,19 @@ impl PermissionStore for PgPermissionStore {
     async fn session_rules(&self, session: AgentSessionId) -> Result<Vec<Rule>, Self::Err> {
         let mut connection = self.pool.acquire().await?;
         overlay_rules(&mut connection, session).await
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn rules_with_session(
+        &self,
+        owner: &PolicyOwner,
+        session: AgentSessionId,
+    ) -> Result<(Vec<Rule>, Vec<Rule>), Self::Err> {
+        let mut snapshot = self.pool.begin_with(SNAPSHOT).await?;
+        let saved = policy_rules(&mut snapshot, owner).await?;
+        let overlay = overlay_rules(&mut snapshot, session).await?;
+        snapshot.commit().await?;
+        Ok((saved, overlay))
     }
 
     #[tracing::instrument(skip_all, err)]

@@ -605,10 +605,12 @@ where
         } else {
             PolicyOwner::Agent(policy.agent)
         };
-        let saved = self.store.rules(&owner).await.map_err(internal)?;
-        let overlay = self
+        // One snapshot: a gate must never combine layers no single
+        // committed state held, such as the saved rules from before a
+        // person's Never with the overlay from after the agent dropped its own.
+        let (saved, overlay) = self
             .store
-            .session_rules(policy.session)
+            .rules_with_session(&owner, policy.session)
             .await
             .map_err(internal)?;
         let saved = Layer::new(&saved);

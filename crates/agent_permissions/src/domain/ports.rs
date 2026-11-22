@@ -26,6 +26,15 @@ pub trait PermissionStore: Send + Sync + 'static {
         session: AgentSessionId,
     ) -> impl Future<Output = Result<Vec<Rule>, Self::Err>> + Send;
 
+    /// A policy's saved settings and a session's overlay, as one snapshot:
+    /// a write committing between the two reads can't pair the saved rules
+    /// before it with the overlay after it.
+    fn rules_with_session(
+        &self,
+        owner: &PolicyOwner,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<(Vec<Rule>, Vec<Rule>), Self::Err>> + Send;
+
     /// Change a policy or a session's overlay in one transaction: lock the
     /// policy (and the session, when `write.session` names one) against every
     /// other write, read its rules and the overlay, ask `plan` for the
