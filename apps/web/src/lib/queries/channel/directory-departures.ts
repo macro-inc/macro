@@ -104,9 +104,11 @@ type Departure = {
   /** Checks still to make, as delays from the departure. */
   remaining: number[];
   at: number;
-  /** A check left the cache unsure: a delete without a confirming reread, a
-   * deadline once its delete may have been sent, or rejoins during every
-   * read. Read on the primary at its next check whatever the cache shows. */
+  /** A check left the cache unsure: its cleanup threw (before or after the
+   * delete was sent), a delete answered without a confirming reread, a
+   * deadline passed once its delete may have been sent, or rejoins landed
+   * during every read. Read on the primary at its next check whatever the
+   * cache shows. */
   repair: boolean;
   retries: number;
   /** What saw the leave: its scan or live update parents the checks. */
