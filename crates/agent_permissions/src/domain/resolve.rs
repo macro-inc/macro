@@ -34,14 +34,14 @@ use super::model::{
 #[derive(Debug, Default)]
 pub struct Layer<'a> {
     actions: HashMap<Action, PermissionState>,
-    group_actions: HashMap<(&'a str, Action), ToolSetting>,
-    tools: HashMap<(&'a str, &'a str), ToolSetting>,
+    group_actions: HashMap<(&'a str, Action), Setting>,
+    tools: HashMap<(&'a str, &'a str), Setting>,
 }
 
 /// A group's action or an operation's own setting, and whether it only
 /// restricts.
 #[derive(Debug, Clone, Copy)]
-struct ToolSetting {
+struct Setting {
     state: PermissionState,
     restriction_only: bool,
 }
@@ -51,7 +51,7 @@ impl<'a> Layer<'a> {
     pub fn new(rules: &'a [Rule]) -> Self {
         let mut layer = Layer::default();
         for rule in rules {
-            let setting = ToolSetting {
+            let setting = Setting {
                 state: rule.state,
                 restriction_only: rule.restriction_only,
             };
@@ -78,7 +78,7 @@ impl<'a> Layer<'a> {
         self.actions.get(&action).copied()
     }
 
-    fn group_action(&self, group: &str, action: Action) -> Option<ToolSetting> {
+    fn group_action(&self, group: &str, action: Action) -> Option<Setting> {
         self.group_actions.get(&(group, action)).copied()
     }
 
@@ -87,7 +87,7 @@ impl<'a> Layer<'a> {
         self.group_actions.contains_key(&(group, action))
     }
 
-    fn tool(&self, entry: &CatalogEntry) -> Option<ToolSetting> {
+    fn tool(&self, entry: &CatalogEntry) -> Option<Setting> {
         self.tools
             .get(&(entry.service.as_str(), entry.operation.as_str()))
             .copied()
@@ -130,11 +130,11 @@ fn saved_default(saved: &Layer, action: Action) -> (PermissionState, Origin) {
 fn saved_pair(saved: &Layer, group: &str, action: Action) -> (PermissionState, Origin) {
     let default = saved_default(saved, action);
     match saved.group_action(group, action) {
-        Some(ToolSetting {
+        Some(Setting {
             state,
             restriction_only: false,
         }) => (state, Origin::GroupAction),
-        Some(ToolSetting {
+        Some(Setting {
             state,
             restriction_only: true,
         }) if state > default.0 => (state, Origin::GroupAction),
@@ -173,13 +173,13 @@ pub fn effective(
     let pair = saved_pair(saved, &entry.group, entry.action);
     let base = match saved.tool(entry) {
         // A person's setting on the operation replaces its group's.
-        Some(ToolSetting {
+        Some(Setting {
             state,
             restriction_only: false,
         }) => (state, Origin::Tool),
         // Anyone else's (the agent's, an API key's) only adds to it: a
         // stricter group setting still wins.
-        Some(ToolSetting {
+        Some(Setting {
             state,
             restriction_only: true,
         }) if state > pair.0 => (state, Origin::Tool),
