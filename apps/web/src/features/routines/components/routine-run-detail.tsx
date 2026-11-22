@@ -5,7 +5,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import type {
   CallStatus,
@@ -201,6 +201,8 @@ export function RunDetail(props: {
   onOpenConversation?: () => void;
   /** Opens a routine the run created. */
   onOpenRoutine?: (id: string) => void;
+  /** Controls at the header's end, such as rating the run. */
+  actions?: JSX.Element;
 }) {
   const steps = () => props.record.steps ?? [];
   // A run can fail outside its steps, e.g. while preparing its agent.
@@ -252,6 +254,7 @@ export function RunDetail(props: {
             </Button>
           )}
         </Show>
+        {props.actions}
       </header>
       <ol aria-label="Steps" class="flex flex-col">
         <For each={steps()}>
