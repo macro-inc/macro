@@ -122,10 +122,48 @@ async fn seed(pool: &PgPool) {
     .execute(pool)
     .await
     .unwrap();
+    diagnose(pool, "before VACUUM").await;
     sqlx::query!("VACUUM (ANALYZE) contact_list_members, contact_inbox_members, team_user")
         .execute(pool)
         .await
         .unwrap();
+    diagnose(pool, "after VACUUM").await;
+}
+
+// Throwaway CI diagnostic: what holds the xmin horizon back.
+async fn diagnose(pool: &PgPool, when: &str) {
+    for (label, query) in [
+        (
+            "activity",
+            "SELECT coalesce(json_agg(json_build_object('pid', pid, 'datname', datname, 'state', state,              'backend_xid', backend_xid::text, 'backend_xmin', backend_xmin::text,              'xact_start', xact_start, 'backend_type', backend_type, 'query', left(query, 120))), '[]')::text              FROM pg_stat_activity WHERE backend_xmin IS NOT NULL OR backend_xid IS NOT NULL",
+        ),
+        (
+            "prepared",
+            "SELECT coalesce(json_agg(row_to_json(p)), '[]')::text FROM pg_prepared_xacts p",
+        ),
+        (
+            "slots",
+            "SELECT coalesce(json_agg(json_build_object('slot', slot_name, 'xmin', xmin::text,              'catalog_xmin', catalog_xmin::text, 'active', active)), '[]')::text FROM pg_replication_slots",
+        ),
+        (
+            "me",
+            "SELECT json_build_object('db', current_database(), 'txid', txid_current()::text,              'snapshot', txid_current_snapshot()::text, 'version', version())::text",
+        ),
+    ] {
+        let row: (String,) = sqlx::query_as(query).fetch_one(pool).await.unwrap();
+        eprintln!("HORIZON {when} {label}: {}", row.0);
+    }
+    sqlx::query("CREATE EXTENSION IF NOT EXISTS pg_visibility")
+        .execute(pool)
+        .await
+        .unwrap();
+    let row: (String,) = sqlx::query_as(
+        "SELECT (SELECT row_to_json(v)::text FROM pg_visibility_map_summary('contact_inbox_members') v)          || ' pages=' || (SELECT relpages::text FROM pg_class WHERE relname = 'contact_inbox_members')",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    eprintln!("HORIZON {when} visibility contact_inbox_members: {}", row.0);
 }
 
 async fn hosted_planner(connection: &mut PgConnection) {
