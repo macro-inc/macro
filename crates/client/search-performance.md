@@ -132,9 +132,9 @@ ordering, and late winners; engine tests cover optimistic replacement and settle
 
 Storage schema 12 shipped as a reset of schema-11 caches. The registered 11 to
 12 step now upgrades them in place, keeping queued mutations and optimistic
-layers; browsers move the schema-11 database to the schema-12 name first when
-nothing is at that name yet and the browser can move files, and otherwise start
-empty there (see
+layers. A browser with nothing yet at the schema-12 name first moves the
+schema-11 database there; one already at schema 12 keeps its database, and one
+that cannot move files starts empty at schema 12 (see
 [storage upgrades](README.md#storage-upgrades)). Rollback across the native
 schema boundary uses the existing incompatible-cache reset behavior.
 That index cutover kept the schema epoch, record format, and search projection
