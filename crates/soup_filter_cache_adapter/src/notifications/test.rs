@@ -138,6 +138,7 @@ async fn mark_done<S: Storage>(engine: &mut Engine<S>, id: &str, uuid: &str) -> 
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid,
                 query: UPDATE,

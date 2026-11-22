@@ -148,9 +148,9 @@ impl<S: Storage> Engine<S> {
                 json!({"setTaskProperty":{"property":authored["setTaskProperty"]["property"]}}),
             );
         };
-        let mut authored_property = property(&primary, recipe.definition())
-            .unwrap_or(&authored["setTaskProperty"]["property"])
-            .clone();
+        // Keep the authored assignment identity so parent-link recipes and
+        // settlement bindings refer to the same record as the task state.
+        let mut authored_property = authored["setTaskProperty"]["property"].clone();
         if authored_property["propertyDefinitionId"].as_str() != Some(recipe.definition()) {
             return Err(EngineError::InvalidOptimisticProjection(
                 "task recipe property does not match authored response".into(),

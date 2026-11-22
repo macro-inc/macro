@@ -103,6 +103,7 @@ async fn offline_lifecycle<S: PredicateIndexStorage>(storage: S) {
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid: "00000000-0000-4000-8000-000000000081",
                 query: SAVE,

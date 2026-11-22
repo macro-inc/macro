@@ -43,6 +43,7 @@ async fn large_set_lifecycle<S: PredicateIndexStorage>(storage: S) {
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid: "00000000-0000-0000-0000-000000000101",
                 query: UPDATE,

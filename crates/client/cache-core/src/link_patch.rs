@@ -468,11 +468,10 @@ pub fn apply_link_patches(
         ) {
             if skip_not_applicable
                 || matches!(error, LinkPatchError::NullParent)
-                || (patch.record_root.is_none()
-                    && matches!(
-                        error,
-                        LinkPatchError::MissingParent(_) | LinkPatchError::MissingField { .. }
-                    ))
+                || matches!(
+                    error,
+                    LinkPatchError::MissingParent(_) | LinkPatchError::MissingField { .. }
+                )
             {
                 all_applied = false;
                 continue;

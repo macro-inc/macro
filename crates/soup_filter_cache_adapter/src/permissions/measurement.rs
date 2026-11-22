@@ -155,6 +155,7 @@ fn measure_full_permission_retirement_with_properties_and_pending_commands() {
                 .unwrap();
                 assert!(normalized_updates.contains_key(&key));
                 let source = OptimisticSource {
+                    task_dependency_recipe: None,
                     client_metadata: Some(json!({"revision":index})),
                     identity_bindings: vec![cache_core::identity::IdentityBinding {
                         local_key: key.clone(),

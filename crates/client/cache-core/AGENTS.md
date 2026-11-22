@@ -41,7 +41,8 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/queue.rs`: the optimistic mutation queue.
 - `tests/`: the primary spec for engine behavior — one file per concern
   (optimistic updates, calendar range, search, subscriptions, fuzz).
-- `tests/task_dependency_optimistic.rs`: reciprocal task assignment and Blocked facts survive queue reload and roll back in one normalized transaction.
+- `src/task_dependency.rs`, `src/engine/task_dependency.rs`: persist authored dependency/status assignments, not copied task neighborhoods. Replay each recipe against committed records plus surviving earlier layers before normalization. Preserve the authored assignment ID for parent links and canonical identity settlement; missing task roots never invent reciprocal records.
+- `tests/task_dependency_optimistic.rs`: real-engine regressions cover overlapping rejection, committed-base rebasing, completion/reopen, engine replacement, missing-root assignment links, canonical assignment IDs, and generation retirement at enqueue/settlement.
 
 ## Scope
 
@@ -81,6 +82,7 @@ eviction and reset make it miss. A miss requires full registration and never reu
 
 - Preserve the authority generation when binding the first account without a stored policy; commit account/authority metadata atomically on binding or reset and publish the cached authority without post-commit I/O. Reject malformed stored authority instead of treating it as absent.
 - Use the shared `_in_generation` enqueue/commit methods in every host; discard stale copied data, links, and projections while retaining authored commands and fresh query revalidation descriptors. `None` is reserved for legacy native clients.
+- Retire `task_dependency_recipe` with copied optimistic snapshots while preserving commands, identity bindings, metadata and fresh query revalidations. Missing record-root parents/fields skip link application without recreating records; retain the durable patch for later hydration. `UpsertByField` prefers its declared assignment identity among response records before unique-definition discovery.
 
 - Keep ordinary title/channel query tokens split on whitespace and commas, with each token matching independently in any order; storage filtering must remain a superset of core ranking.
 

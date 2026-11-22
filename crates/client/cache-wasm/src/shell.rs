@@ -1908,7 +1908,7 @@ impl CacheEngine {
                 if task_dependency_recipe.is_null() || task_dependency_recipe.is_undefined() {
                     None
                 } else {
-                    Some(serde_wasm_bindgen::from_value(task_dependency_recipe).map_err(js_err)?)
+                    Some(serde_wasm_bindgen::from_value(task_dependency_recipe).map_err(err_js)?)
                 };
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;

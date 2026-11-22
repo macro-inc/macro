@@ -990,6 +990,29 @@ link recipes, then revalidates active queries. The draft journal sees the full
 server result before content is discarded. A confirmed local settlement retry
 keeps its original generation; a new HTTP attempt captures the current one.
 
+Task dependency optimism persists a `TaskDependencyRecipe` containing only the
+edited task ID and replacement Depends On, Blocking, or Status assignment.
+The engine replays recipes in queue order against committed records plus
+surviving earlier layers before normalization. Rejection, replacement, base
+writes and engine reload recompute reciprocal links and Blocked facts instead
+of replaying copied task neighborhoods. Completion evidence comes from explicit
+dependency IDs; an uncached task root never creates reciprocal task records.
+
+Replay preserves the authored property assignment ID so record-rooted parent
+links and canonical identity bindings address the same normalized record.
+`UpsertByField` prefers its declared assignment ID among response records;
+only an absent ID requires unique-definition discovery. Missing parent records
+or fields skip link application without inventing cached data. The durable
+patch remains available when the parent later hydrates, and explicit targeted
+revalidations repair absent parents after settlement.
+
+Generation retirement removes task recipes alongside copied optimism, while
+preserving authored commands, identity bindings, client metadata and fresh
+query revalidations. Stale-generation enqueue drops the recipe immediately;
+stale settlement consumes the command without restoring its task neighborhood.
+`cache-core/tests/task_dependency_optimistic.rs` exercises these paths through
+the real engine, including reload, rejection and canonical assignment IDs.
+
 Initial access stays pending until proof succeeds. Network failures and stale
 proof generations retry once; network retries wait 250 ms and use a 3-second
 second deadline instead of 15 seconds. Terminal failures and timeouts do not
