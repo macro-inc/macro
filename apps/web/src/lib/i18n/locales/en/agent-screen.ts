@@ -80,6 +80,7 @@ export default {
   endedTooManyScreensHint: 'Close one of them, then try again.',
   endedRateLimitedTitle: 'Couldn’t reconnect: too many tries',
   endedRateLimitedHint: 'Wait a minute, then try again.',
+  endedDidNotStartTitle: '{{name}}’s computer didn’t come back',
   viewAgain: 'View screen again',
   tryAgain: 'Try again',
 

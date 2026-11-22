@@ -40,6 +40,8 @@ export type ScreenStatus =
         | 'tooManyScreens'
         /** Still rate limited after waiting out the window once. */
         | 'rateLimited'
+        /** A computer turned on (or woken) whose screen never came up. */
+        | 'didNotStart'
         | 'failed';
     };
 
@@ -229,33 +231,64 @@ export function afterConnectFailed(
 /** How long a computer gets to boot before failures count as failures. */
 export const BOOT_TIMEOUT_MS = 120_000;
 
-/** Between tries while the computer boots: its screen appears within seconds. */
-export const BOOT_RETRY_MS = 2000;
+/**
+ * Between tries while the computer boots, by try: quick while it usually
+ * comes up, then every 5 s. Each try mints a ticket: about 12 a minute and
+ * 25 a boot, well under the harness's 30 a minute per person.
+ */
+export const BOOT_RETRY_DELAYS_MS = [2000, 4000, 5000];
+
+/** The server's errors that mean the screen isn't up yet, during a boot. */
+const NOT_UP_YET: ReadonlySet<ScreenErrorCode> = new Set([
+  'tunnelFailed',
+  'sourceUnavailable',
+]);
 
 /**
- * While the computer boots, a failure to reach its screen (a tunnel not up
- * yet, a guest not listening, "off" until it is on) is the boot, not a
- * drop: the viewer keeps saying it is waking and tries again shortly.
- * Anything final (stopped, refused, too many) stands.
+ * While the computer boots, a screen that isn't reachable yet (the tunnel or
+ * the guest not up, "off" until it is on, a socket that drops) is the boot,
+ * not a failure: the viewer keeps saying it is waking and tries again.
+ * `bootTry` counts those tries. Anything else stands: final ends, the rate
+ * limit, and a socket that ended on another error (`lastError`).
  */
 export function whileBooting(
   step: NextStep,
-  waking: Extract<ScreenStatus, { kind: 'waking' }>
+  waking: Extract<ScreenStatus, { kind: 'waking' }>,
+  boot: { bootTry: number; lastError?: ScreenErrorCode }
 ): NextStep {
   const asleep = step.kind === 'show' && step.status.kind === 'asleep';
-  const gaveUp =
-    step.kind === 'show' &&
-    step.status.kind === 'ended' &&
-    step.status.reason === 'failed';
-  if (step.kind !== 'retry' && !asleep && !gaveUp) return step;
-  // A rate limit is waited out as it would be otherwise.
+  if (step.kind !== 'retry' && !asleep) return step;
   if (
     step.kind === 'retry' &&
     step.status.kind === 'reconnecting' &&
     step.status.rateLimited
   )
     return step;
-  return { kind: 'retry', status: waking, delayMs: BOOT_RETRY_MS };
+  if (boot.lastError !== undefined && !NOT_UP_YET.has(boot.lastError))
+    return step;
+  const delayMs =
+    BOOT_RETRY_DELAYS_MS[
+      Math.min(boot.bootTry, BOOT_RETRY_DELAYS_MS.length - 1)
+    ];
+  return { kind: 'retry', status: waking, delayMs };
+}
+
+/**
+ * The boot window passed with no picture: a failure that would have been
+ * ridden out ends as `didNotStart`, the boot's own end, instead of a
+ * reconnect backoff. Anything else stands.
+ */
+export function afterBootWindow(
+  step: NextStep,
+  lastError?: ScreenErrorCode
+): NextStep {
+  const ridden = whileBooting(
+    step,
+    { kind: 'waking' },
+    { bootTry: 0, lastError }
+  );
+  if (ridden === step) return step;
+  return { kind: 'show', status: { kind: 'ended', reason: 'didNotStart' } };
 }
 
 /** Whether the picture is current enough to act on. */

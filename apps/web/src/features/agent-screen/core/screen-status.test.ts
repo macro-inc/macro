@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  afterBootWindow,
   afterConnectFailed,
   afterSessionEnded,
-  BOOT_RETRY_MS,
+  BOOT_RETRY_DELAYS_MS,
   MAX_RECONNECT_ATTEMPTS,
   QUICK_RETRIES,
   TICKET_RATE_WINDOW_MS,
@@ -138,26 +139,78 @@ describe('the ticket rate limit', () => {
 
 describe('while the computer boots', () => {
   const waking = { kind: 'waking', turningOn: true } as const;
-  const keepWaking = { kind: 'retry', status: waking, delayMs: BOOT_RETRY_MS };
+  const keepWaking = (delayMs: number) => ({
+    kind: 'retry',
+    status: waking,
+    delayMs,
+  });
+  const first = { bootTry: 0 };
 
-  it('treats an unreachable screen, and "off" until it is on, as the boot', () => {
-    expect(whileBooting(afterSessionEnded('error', 0), waking)).toEqual(
-      keepWaking
-    );
-    expect(whileBooting(afterConnectFailed('failed', 9), waking)).toEqual(
-      keepWaking
-    );
-    expect(whileBooting(afterSessionEnded('computerOff', 0), waking)).toEqual(
-      keepWaking
-    );
+  it('rides out a screen that is not up yet, backing off 2, 4, then 5 s', () => {
+    expect(
+      whileBooting(afterSessionEnded('error', 0), waking, {
+        bootTry: 0,
+        lastError: 'tunnelFailed',
+      })
+    ).toEqual(keepWaking(2000));
+    expect(
+      whileBooting(afterSessionEnded('error', 0), waking, {
+        bootTry: 1,
+        lastError: 'sourceUnavailable',
+      })
+    ).toEqual(keepWaking(4000));
+    // A socket that drops, a failed connect, "off" until it is on.
+    expect(
+      whileBooting(afterSessionEnded('connectionLost', 0), waking, {
+        bootTry: 2,
+      })
+    ).toEqual(keepWaking(5000));
+    expect(
+      whileBooting(afterConnectFailed('failed', 0), waking, { bootTry: 9 })
+    ).toEqual(keepWaking(5000));
+    expect(
+      whileBooting(afterSessionEnded('computerOff', 0), waking, first)
+    ).toEqual(keepWaking(BOOT_RETRY_DELAYS_MS[0]));
   });
 
-  it('lets a final end and the rate limit stand', () => {
-    const stopped = afterSessionEnded('stopped', 0);
-    expect(whileBooting(stopped, waking)).toBe(stopped);
-    const limited = afterConnectFailed('rateLimited', 0);
-    expect(whileBooting(limited, waking)).toBe(limited);
-    const full = afterConnectFailed('tooManyScreens', 0);
-    expect(whileBooting(full, waking)).toBe(full);
+  it('lets another error, a final end and the rate limit stand', () => {
+    const unknown = afterSessionEnded('error', 0);
+    expect(
+      whileBooting(unknown, waking, { bootTry: 0, lastError: 'unknown' })
+    ).toBe(unknown);
+    expect(
+      whileBooting(unknown, waking, { bootTry: 0, lastError: 'badMessage' })
+    ).toBe(unknown);
+    const tooMany = afterSessionEnded('error', 0, {
+      recentlyLive: false,
+      quickUsed: 0,
+      lastError: 'tooManySockets',
+    });
+    expect(
+      whileBooting(tooMany, waking, { bootTry: 0, lastError: 'tooManySockets' })
+    ).toBe(tooMany);
+    for (const final of [
+      afterSessionEnded('stopped', 0),
+      afterConnectFailed('forbidden', 0),
+      afterConnectFailed('notFound', 0),
+      afterConnectFailed('rateLimited', 0),
+      afterConnectFailed('tooManyScreens', 0),
+    ])
+      expect(whileBooting(final, waking, first)).toBe(final);
+  });
+
+  it('after the window, a screen still not up ends as the boot failing', () => {
+    expect(
+      afterBootWindow(afterSessionEnded('error', 0), 'tunnelFailed')
+    ).toEqual({
+      kind: 'show',
+      status: { kind: 'ended', reason: 'didNotStart' },
+    });
+    expect(afterBootWindow(afterSessionEnded('computerOff', 0))).toEqual({
+      kind: 'show',
+      status: { kind: 'ended', reason: 'didNotStart' },
+    });
+    const unknown = afterSessionEnded('error', 0);
+    expect(afterBootWindow(unknown, 'unknown')).toBe(unknown);
   });
 });

@@ -1604,7 +1604,7 @@ describe('createScreenSession', () => {
     });
   });
 
-  it('after Turn on, says it is turning the computer on and rides out the boot, then is live', async () => {
+  it('after Turn on, says it is turning the computer on and rides out the boot within the ticket budget, then is live', async () => {
     const tickets: number[] = [];
     let up = false;
     const connections: FakeConnection[] = [];
@@ -1647,30 +1647,113 @@ describe('createScreenSession', () => {
       // Turn on: said at once, before the power call answers.
       session.turningOn();
       expect(session.store.status).toEqual({ kind: 'waking', turningOn: true });
+      const turnedOnAt = Date.now();
       session.turnedOn();
-      await vi.advanceTimersByTimeAsync(20_000);
+      await vi.advanceTimersByTimeAsync(60_000);
 
-      // Twenty seconds of boot: still turning on, no reconnect error shown,
-      // tried every 2 s.
+      // A minute of boot: still turning on, no reconnect error shown, and
+      // at most a dozen tickets.
       expect(session.store.status).toEqual({ kind: 'waking', turningOn: true });
       expect(session.store.notice).toBeUndefined();
-      expect(tickets.length).toBeGreaterThanOrEqual(10);
+      // The first ticket was the asleep view's, before Turn on.
+      const inBoot = tickets.slice(1).filter((at) => at >= turnedOnAt);
+      expect(inBoot.length).toBeLessThanOrEqual(13);
+      const waits = inBoot.slice(1).map((at, index) => at - inBoot[index]);
+      expect(waits.slice(0, 3)).toEqual([2000, 4000, 5000]);
 
       up = true;
-      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(5_000);
       expect(session.store.status).toEqual({ kind: 'live' });
       dispose();
     });
   });
 
-  it('gives a boot two minutes, then counts failures as it would otherwise', async () => {
+  it('gives a boot two minutes and about 25 tickets, then says the computer did not come back; Try again starts fresh', async () => {
+    const tickets: number[] = [];
+    let off = true;
     const capabilities: ScreenCapabilities = {
-      requestTicket: async () =>
-        ok({ socketUrl: 'wss://screen.test/ws?ticket=t', expiresAt: '' }),
+      requestTicket: async () => {
+        tickets.push(Date.now());
+        return ok({
+          socketUrl: 'wss://screen.test/ws?ticket=t',
+          expiresAt: '',
+        });
+      },
       transport: () => ({
         kind: 'vnc',
-        connect: async () => {
-          throw new Error('never comes up');
+        connect: async (_element, _ticket, handlers) => {
+          if (off) {
+            handlers.onEnded('computerOff');
+            throw new DOMException('closed', 'AbortError');
+          }
+          handlers.onError({
+            code: 'tunnelFailed',
+            message: "could not reach the computer's screen",
+          });
+          handlers.onEnded('error');
+          throw new DOMException('closed', 'AbortError');
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      expect(session.store.status).toEqual({ kind: 'asleep' });
+      off = false;
+      const turnedOnAt = Date.now();
+      session.turningOn();
+      session.turnedOn();
+      await vi.advanceTimersByTimeAsync(119_000);
+      expect(session.store.status.kind).toBe('waking');
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(session.store.status).toEqual({
+        kind: 'ended',
+        reason: 'didNotStart',
+      });
+      // The boot's own tickets (after the asleep view's first): 25 in its two
+      // minutes, and the one try already due when the window closed.
+      const boot = tickets.slice(1);
+      expect(
+        boot.filter((at) => at < turnedOnAt + 120_000).length
+      ).toBeLessThanOrEqual(25);
+      expect(boot.length).toBeLessThanOrEqual(26);
+      const issued = tickets.length;
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(tickets).toHaveLength(issued);
+
+      // Try again is an ordinary connect, not a boot: "off" shows asleep.
+      off = true;
+      session.retry();
+      await settle();
+      expect(session.store.status).toEqual({ kind: 'asleep' });
+      dispose();
+    });
+  });
+
+  it('during a boot, a socket error that is not the screen being down ends as usual', async () => {
+    let issued = 0;
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () => {
+        issued += 1;
+        return ok({
+          socketUrl: 'wss://screen.test/ws?ticket=t',
+          expiresAt: '',
+        });
+      },
+      transport: () => ({
+        kind: 'vnc',
+        connect: async (_element, _ticket, handlers) => {
+          handlers.onError({ code: 'unknown', message: 'something new' });
+          handlers.onEnded('error');
+          throw new DOMException('closed', 'AbortError');
         },
       }),
     };
@@ -1686,14 +1769,51 @@ describe('createScreenSession', () => {
       session.attach(document.createElement('div'));
       session.turningOn();
       session.turnedOn();
-      await vi.advanceTimersByTimeAsync(119_000);
-      expect(session.store.status.kind).toBe('waking');
-      await vi.advanceTimersByTimeAsync(3_000);
+      await settle();
       expect(session.store.status.kind).toBe('reconnecting');
-      await vi.advanceTimersByTimeAsync(120_000);
-      expect(session.store.status).toEqual({ kind: 'ended', reason: 'failed' });
+      expect(session.store.notice?.code).toBe('unknown');
+      expect(issued).toBeGreaterThan(0);
       dispose();
     });
+  });
+
+  it('during a boot, a refusal or too many screens ends at once', async () => {
+    for (const refusal of ['denied', 'tooManySockets'] as const) {
+      const capabilities: ScreenCapabilities = {
+        requestTicket: async () =>
+          refusal === 'denied'
+            ? err('forbidden' as const)
+            : ok({ socketUrl: 'wss://screen.test/ws?ticket=t', expiresAt: '' }),
+        transport: () => ({
+          kind: 'vnc',
+          connect: async (_element, _ticket, handlers) => {
+            handlers.onError({ code: 'tooManySockets', message: 'full' });
+            handlers.onEnded('error');
+            throw new DOMException('closed', 'AbortError');
+          },
+        }),
+      };
+
+      await createRoot(async (dispose) => {
+        const session = createScreenSession({
+          harnessId: 'harness-1',
+          canDrive: () => true,
+          accessKnown: () => true,
+          transport: () => 'vnc',
+          capabilities,
+        });
+        session.attach(document.createElement('div'));
+        session.turningOn();
+        session.turnedOn();
+        await settle();
+        expect(session.store.status).toEqual(
+          refusal === 'denied'
+            ? { kind: 'denied', reason: 'cannotWatch' }
+            : { kind: 'ended', reason: 'tooManyScreens' }
+        );
+        dispose();
+      });
+    }
   });
 
   it('goes back to asleep when the power call fails', async () => {

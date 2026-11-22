@@ -11,6 +11,7 @@ import {
 import { createStore } from 'solid-js/store';
 import type { ScreenCapabilities } from '../context/screen-context';
 import {
+  afterBootWindow,
   afterConnectFailed,
   afterSessionEnded,
   BOOT_TIMEOUT_MS,
@@ -145,6 +146,21 @@ export function createScreenSession(options: ScreenSessionOptions) {
   const booting = () => bootUntil !== undefined && Date.now() < bootUntil;
   /** Whether this person turned the computer on: the copy says so. */
   let turnedOnHere = false;
+  /** Tries since the boot began (`BOOT_RETRY_DELAYS_MS`). */
+  let bootTries = 0;
+  const startBoot = () => {
+    bootUntil = Date.now() + BOOT_TIMEOUT_MS;
+    bootTries = 0;
+  };
+  const endBoot = (
+    outcome: 'live' | 'boot_timeout' | 'power_failed' | 'ended'
+  ) => {
+    if (bootUntil === undefined) return;
+    if (turnedOnHere) record('computer.screen.turn_on', { outcome });
+    bootUntil = undefined;
+    turnedOnHere = false;
+    bootTries = 0;
+  };
   const wakingStatus = (): Extract<ScreenStatus, { kind: 'waking' }> =>
     turnedOnHere ? { kind: 'waking', turningOn: true } : { kind: 'waking' };
   const retryContext = (lastError?: ScreenErrorCode): RetryContext => ({
@@ -250,15 +266,29 @@ export function createScreenSession(options: ScreenSessionOptions) {
     session.handBack(null);
   };
 
-  const apply = (next: NextStep, nextAttempt: number) => {
-    const boot = booting();
-    const step = boot ? whileBooting(next, wakingStatus()) : next;
-    // A boot's tries don't count towards the reconnect backoff.
-    const attempt = boot && step !== next ? 0 : nextAttempt;
-    if (!boot && bootUntil !== undefined) {
-      bootUntil = undefined;
-      turnedOnHere = false;
+  const apply = (
+    next: NextStep,
+    nextAttempt: number,
+    lastError?: ScreenErrorCode
+  ) => {
+    let step = next;
+    let attempt = nextAttempt;
+    if (booting()) {
+      step = whileBooting(next, wakingStatus(), {
+        bootTry: bootTries,
+        lastError,
+      });
+      // A boot's tries don't count towards the reconnect backoff.
+      if (step !== next) {
+        bootTries += 1;
+        attempt = 0;
+      }
+    } else if (bootUntil !== undefined) {
+      step = afterBootWindow(next, lastError);
+      if (step !== next) endBoot('boot_timeout');
     }
+    // Any final end closes the boot: Try again starts fresh.
+    if (step.kind === 'show') endBoot('ended');
     // Over for good (stopped, revoked, refused, gave up): there is no drive
     // to win back, and the keyboard goes back to the app.
     setStore({
@@ -304,6 +334,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     connectSpan.setAttr('screen.transport', transportKind);
     connectSpan.setAttr('screen.mode', mode);
     connectSpan.setAttr('screen.attempt', attempt);
+    if (booting()) connectSpan.setAttr('screen.booting', true);
 
     const ticket = await options.capabilities.requestTicket(
       {
@@ -373,7 +404,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
                 // Whole values: `setStore('status', …)` would merge into the
                 // previous status and keep its fields.
                 if (state.waking) {
-                  bootUntil ??= Date.now() + BOOT_TIMEOUT_MS;
+                  if (bootUntil === undefined) startBoot();
                   setStore({ status: wakingStatus() });
                 } else if (store.status.kind === 'waking' && !turnedOnHere)
                   // The server's wake is done; one turned on here waits for
@@ -448,7 +479,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
             // in-between of "ended" before "reconnecting".
             batch(() => {
               forgetServer();
-              apply(step, connected ? 1 : attempt + 1);
+              apply(step, connected ? 1 : attempt + 1, lastError);
             });
             reconnectIfShown();
           },
@@ -465,8 +496,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
       liveSince = Date.now();
       hiddenSinceOpen = document.visibilityState !== 'visible';
       dropLastPicture();
-      bootUntil = undefined;
-      turnedOnHere = false;
+      endBoot('live');
       batch(() => {
         setStore({
           status: { kind: 'live' },
@@ -481,7 +511,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
       endConnectionSpan('connect_failed');
       apply(
         afterConnectFailed('failed', attempt, retryContext(lastError)),
-        attempt + 1
+        attempt + 1,
+        lastError
       );
     } finally {
       connectSpan.end();
@@ -698,8 +729,9 @@ export function createScreenSession(options: ScreenSessionOptions) {
      */
     turningOn() {
       clearTimeout(retryTimer);
-      bootUntil = Date.now() + BOOT_TIMEOUT_MS;
+      startBoot();
       turnedOnHere = true;
+      record('computer.screen.turn_on', { outcome: 'requested' });
       setStore({ status: wakingStatus(), notice: undefined });
     },
     /** The computer took the power-on: connect, still showing it waking. */
@@ -709,8 +741,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     },
     /** The power-on failed: back to asleep, with Turn on again. */
     turnOnFailed() {
-      bootUntil = undefined;
-      turnedOnHere = false;
+      endBoot('power_failed');
       setStore({ status: { kind: 'asleep' } });
     },
     sendInput(event: ScreenInputEvent) {

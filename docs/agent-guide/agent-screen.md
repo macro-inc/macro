@@ -45,8 +45,13 @@ Each appears only when the harness list gives the viewer access other than
 - Once the view has ended (stopped, refused, gone), or while the computer is
   asleep or starting, only the overlay's own action shows: no Take over.
 - **Turn on** says "Turning {name}'s computer on…" at once and keeps saying it
-  through the boot: for up to two minutes, an unreachable screen (or "off")
-  is retried every 2 s without a reconnect error, until the picture shows.
+  through the boot: for up to two minutes, a screen that isn't up yet
+  (`tunnelFailed`, `sourceUnavailable`, "off", a dropped socket) is retried
+  after 2, 4, then every 5 s (about 25 tickets), without a reconnect error.
+  Other errors and final ends stand. If no picture came by then, the view
+  ends with "{name}'s computer didn't come back" and **Try again**, which
+  starts an ordinary connect. A wake the server reports (Waking) gets the
+  same ride-out.
 - Members watch only: Take over is disabled with a lock and "Only owners and
   admins can take over". Owners and admins connect with a drive ticket.
 - A hidden tab says so to the server (a heartbeat). After two minutes hidden

@@ -143,6 +143,7 @@ export function ScreenOverlay(props: {
                 notFound: t('agentScreen.endedNotFoundTitle'),
                 tooManyScreens: t('agentScreen.endedTooManyScreensTitle'),
                 rateLimited: t('agentScreen.endedRateLimitedTitle'),
+                didNotStart: t('agentScreen.endedDidNotStartTitle', name()),
                 failed: t('agentScreen.endedFailedTitle'),
               }[ended().reason]
             }
@@ -161,6 +162,7 @@ export function ScreenOverlay(props: {
                 ended().reason === 'accessRevoked' ||
                 ended().reason === 'tooManyScreens' ||
                 ended().reason === 'rateLimited' ||
+                ended().reason === 'didNotStart' ||
                 ended().reason === 'failed'
               }
             >
@@ -171,7 +173,8 @@ export function ScreenOverlay(props: {
               >
                 {ended().reason === 'failed' ||
                 ended().reason === 'tooManyScreens' ||
-                ended().reason === 'rateLimited'
+                ended().reason === 'rateLimited' ||
+                ended().reason === 'didNotStart'
                   ? t('agentScreen.tryAgain')
                   : t('agentScreen.viewAgain')}
               </Button>
