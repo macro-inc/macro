@@ -1,0 +1,47 @@
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_69795600d3e845::t_932071f7fa64e9 766-767,779-780,2239-2240,3294-3295,3577
+packages/sdk/specs/agent-harness.json
+  s_69795600d3e845::t_932071f7fa64e9 5818,5835,7744,9428,9785
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/groupSelection.ts
+  s_e5a79789de1c42::t_20c445146fbab5 13-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsSelection.ts
+  s_e5a79789de1c42::t_d8433fd619cf9d 14-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionGroup.ts
+  s_e5a79789de1c42::t_0d7f8bba455db9 13
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentToolPermissions.ts
+  s_9aaadd038e8bff::t_356e09778e3cf3 24-25,34-35
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_9aaadd038e8bff::t_a1adc157eaf0a5 5818,5835,7744,9428,9785
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "55f09d449070d0b0fff0420b20da644f296c2744",
+  "prompts": {},
+  "sessions": {
+    "s_69795600d3e845": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aa19df4e-f0f8-4e4f-bb24-eb5cbee16e2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9aaadd038e8bff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e05430e7-cb2a-430c-b897-bbb624a22b13",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e5a79789de1c42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01a5ff28-bc3d-44d6-a84c-d414f11373fe",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
