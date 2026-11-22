@@ -97,15 +97,23 @@ stacked start and end date/time rows, then Time zone and Repeat. All-day dates
 collapse to one row: one same-day pill or start/arrow/end across days. Turning
 All day off keeps the chosen dates and restores clock rows. Date/time pickers
 expand inline, and only one picker or menu stays open.
-Start changes keep duration until an end is explicitly chosen. A later valid
-start keeps that chosen end; crossing it preserves the last duration instead.
+Desktop start changes keep duration until an end is explicitly chosen. A later
+valid start keeps that chosen end; crossing it preserves the last duration instead.
 Locked ends cannot move, and loaded-detail resets clear chosen-end intent.
-Clock fields retain width and meridiem while typing. Type `6`, `630`, `6:30p`, or
-`18:30`; arrows step 15 minutes, Enter/Tab commits, and invalid blur or Escape
-reverts. Escape closes a time list before the desktop When popup. Phone's first
-time tap opens a keyboard-free inline list; its second tap starts typing.
-End lists show lengths and valid choices on the selected date. All day hides
-clock and time-zone fields. Time-zone menus retain full and short names.
+Desktop clock fields retain width and meridiem while typing. Type `6`, `630`,
+`6:30p`, or `18:30`; arrows step 15 minutes, Enter/Tab commits, and invalid blur
+or Escape reverts. Escape closes a time list before the desktop When popup.
+
+On phones, tap a time pill to open inline hour/minute wheels (plus AM/PM for a
+12-hour clock). Five 44px rows show around a fixed accent selection band. Values
+apply when scrolling stops; arrow keys change one row. Minutes step by five, with
+an existing off-step minute retained until changed. A start-wheel change always
+keeps the current duration and carries the end date across midnight. The end
+wheel shows the live duration and stops at start plus five minutes. The calendar's
+Time format preference overrides the locale. Tap the same time again, another
+row, or Escape to close; opening one picker closes the other. All day hides the
+wheels and time-zone field and restores the prior clock times when turned off.
+Time-zone menus retain full and short names.
 Custom repeat opens the shared desktop Dialog or a deeper page inside the same
 phone sheet. Edits are staged: Done applies; Back/Cancel leaves the original rule.
 Reminder rows keep their remove control beside the value. Empty labels use tertiary
@@ -166,10 +174,9 @@ calendar retain their locale default unless their host supplies a preference.
 
 Calendar foundation examples are in the UI gallery: `?ui=time-input`,
 `?ui=date-tile`, `?ui=calendar-range`, `?ui=calendar-swatch`, `?ui=busy-indicator`,
-`?ui=value-pill`, `?ui=mobile-time-input`, and `?ui=mobile-sheet-parts` under
-`/app/component/ui`. The phone time-picker example uses the same control as the
-phone composer: its first tap opens a list; tapping the open value enters typing.
-The sheet example keeps its
+`?ui=value-pill`, `?ui=mobile-time-input`, `?ui=wheel-picker`, and `?ui=mobile-sheet-parts`
+under `/app/component/ui`. The legacy mobile-time-input example remains a typed
+list; the phone composer now uses the shared wheel-picker. The sheet example keeps its
 footer outside the scroller and removes the footer fade at the end. Shared
 sheet handles use 12px above and 16px below the 36×4px grabber.
 The busy-indicator example distinguishes a confirmed conflict from free and
@@ -182,8 +189,11 @@ On desktop, click the month title to open the month/year picker. Year arrows
 only browse; choosing a month navigates to its first day. Arrow keys move among
 months, including across years. Press G outside an input to open the picker and
 focus Go to date; enter a local date and press Enter to navigate. Escape closes
-the picker and restores focus. Touch retains its existing drawer until the
-phone-view redesign.
+the picker and restores focus. On phones the month island opens month/year
+wheels over the visible calendar. Month loops independently of the bounded
+1970–2100 year wheel; either applies on scroll stop without closing. Week changes
+retain the visible week's position in the chosen month. Today navigates to today
+and closes; a second island tap, scrim tap, Escape, or downward swipe dismisses.
 
 Today uses a filled accent date marker. Desktop Month rows reserve a six-pixel gap
 below the date, fit 18px event rows, and expose `+N more` in a menu-surface popover.

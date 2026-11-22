@@ -70,7 +70,12 @@ host lives in `../block-calendar/`.
   resets invalidate intent through the controller's `detailsRevision`.
   `WhenMonth` keeps six-week Corvu keyboard semantics at two sizes. Phone dates
   always include the end while timed. All-day phone ranges use one row and hide
-  a same-day end. Phone date/time pickers expand inline. Other phone controls use
+  a same-day end. Phone date/time pickers expand inline. Phone time uses shared
+  `components/date-time-range/time-wheel/TimeWheel.tsx` over the same native wheel
+  columns as the month/year sheet; keep desktop clock inputs unchanged. Preserve
+  off-step minutes until changed, apply five-minute wheel steps, always move the
+  end with a start-wheel change, and clamp end-wheel changes at start plus five
+  minutes. Escape returns focus to the matching date or time trigger. Other phone controls use
   `PhoneComposerMenuRoot`: fixed lists up to five non-wrapping choices expand inline;
   searchable, longer, and multi-step choices use pages inside the same sheet.
   Repeat uses a page with Custom one level deeper, never a second drawer.
@@ -110,7 +115,7 @@ host lives in `../block-calendar/`.
   host; generic fields must not import calendar preferences.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,
   `?ui=calendar-swatch`, `?ui=busy-indicator`, `?ui=value-pill`, and `?ui=time-input`; sheet parts use
-  `?ui=mobile-sheet-parts`.
+  `?ui=mobile-sheet-parts` and `?ui=wheel-picker`.
 - The desktop month picker composes `components/month-picker/` parts and keeps
   its temporary year/date state in `primitives/create-month-picker.ts`; navigation
   uses the workspace navigation context. Keep grid paging and scroll timing in
@@ -125,6 +130,11 @@ host lives in `../block-calendar/`.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
 - Keep the phone Month switch in `../calendar-view/calendar-month.tsx`; render Bars through `views/mobile/month-bars.tsx` over a Sunday-start, five/six-week range, shared span lanes and overflow counts. Keep the old PhoneMonth unwired. Open the picked day's sheet without leaving Month; only its title changes to Day. Let explicit day taps and sheet dismissal retire pending focus requests. Give each day an accessible description of all its event titles, including overflow. Preserve the bounded source and visible-row focus path.
+  The phone month island uses `../calendar-view/views/mobile/month-drawer.tsx` with
+  shared month/year wheels over `primitives/create-month-wheel-picker.ts`: months
+  loop independently, years span 1970–2100, and settling navigates without
+  dismissing. Week selection keeps the first visible week's ordinal; Today
+  navigates to today and dismisses the sheet.
 - Host phone navigation through the shell's `NavigationSheet`, as Email does;
   `views/mobile/calendar-sidebar.tsx` keeps Email's fixed title header above views,
   account calendars, booking links, and a fixed `MobileDrawer.Section` Settings footer.

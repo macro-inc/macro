@@ -1,5 +1,12 @@
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createCalendarEventFormController } from '../../../components/composer/create-calendar-event-form-controller';
 import { defaultEditorInitialValues } from '../../../components/composer/event-form-model';
@@ -58,8 +65,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup(description = '') {
+function setup(
+  description = '',
+  timeFormat: '12-hour' | '24-hour' = '12-hour'
+) {
   const submit = vi.fn();
+  const [pending, setPending] = createSignal(false);
   let controller:
     | ReturnType<typeof createCalendarEventFormController>
     | undefined;
@@ -78,8 +89,11 @@ function setup(description = '') {
     });
     const model = createCalendarComposer({
       controller,
-      pending: false,
+      get pending() {
+        return pending();
+      },
       onSubmit: submit,
+      timeFormat,
     });
     return (
       <ComposerRoot model={model}>
@@ -91,7 +105,7 @@ function setup(description = '') {
     );
   });
   if (!controller) throw new Error('Expected controller');
-  return { controller, submit };
+  return { controller, submit, setPending };
 }
 
 it('adds location in place, focuses it, and submits through the shared model', async () => {
@@ -166,9 +180,7 @@ it('collapses all-day dates and restores the timed fields without losing the ran
   const { controller } = setup();
   controller.setRange('2030-11-11T20:00', '2030-11-13T21:00');
   await userEvent.click(screen.getByText('All day', { exact: true }));
-  expect(
-    screen.queryByRole('combobox', { name: 'event start time' })
-  ).toBeNull();
+  expect(screen.queryByRole('button', { name: 'event start time' })).toBeNull();
   expect(
     screen.getByRole('button', { name: 'Edit event end date' })
   ).toBeTruthy();
@@ -182,9 +194,7 @@ it('collapses all-day dates and restores the timed fields without losing the ran
   await userEvent.click(screen.getByRole('gridcell', { name: /^14$/ }));
   expect(controller.state().end).toBe('2030-11-14');
   await userEvent.click(screen.getByText('All day', { exact: true }));
-  expect(
-    screen.getByRole('combobox', { name: 'event start time' })
-  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'event start time' })).toBeTruthy();
   expect(controller.state().start).toBe('2030-11-11T20:00');
   expect(controller.state().end).toBe('2030-11-14T21:00');
 });
@@ -239,4 +249,67 @@ it('extends a single-day all-day draft with the inline range calendar', async ()
   expect(
     screen.getByRole('button', { name: 'Edit event end date' })
   ).toBeTruthy();
+});
+
+it('keeps one inline time wheel open and preserves duration across start edits', () => {
+  const { controller } = setup();
+  controller.setRange('2030-11-11T11:00', '2030-11-11T11:30');
+  const starts = screen.getByRole('button', { name: 'event start time' });
+  fireEvent.click(starts);
+  expect(screen.getAllByRole('spinbutton')).toHaveLength(3);
+  fireEvent.keyDown(screen.getByRole('spinbutton', { name: 'Hour' }), {
+    key: 'ArrowUp',
+  });
+  expect(controller.state().start).toBe('2030-11-11T00:00');
+  expect(controller.state().end).toBe('2030-11-11T00:30');
+  fireEvent.click(screen.getByRole('button', { name: 'event end time' }));
+  expect(screen.getAllByRole('spinbutton')).toHaveLength(3);
+  expect(starts.getAttribute('aria-expanded')).toBe('false');
+  expect(screen.getByText('30min')).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole('spinbutton', { name: 'Minute' }), {
+    key: 'ArrowUp',
+  });
+  expect(screen.getByText('35min')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'event end time' }));
+  expect(screen.queryAllByRole('spinbutton')).toHaveLength(0);
+});
+
+it('hides time wheels for all-day and restores times with the 24-hour columns', () => {
+  const { controller } = setup('', '24-hour');
+  controller.setRange('2030-11-11T20:05', '2030-11-11T20:35');
+  fireEvent.click(screen.getByRole('button', { name: 'event start time' }));
+  expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
+  fireEvent.click(screen.getByText('All day', { exact: true }));
+  expect(screen.queryAllByRole('spinbutton')).toHaveLength(0);
+  expect(screen.queryByRole('button', { name: 'event start time' })).toBeNull();
+  fireEvent.click(screen.getByText('All day', { exact: true }));
+  expect(controller.state().start).toBe('2030-11-11T20:05');
+  expect(controller.state().end).toBe('2030-11-11T20:35');
+  fireEvent.click(screen.getByRole('button', { name: 'event start time' }));
+  fireEvent.keyDown(screen.getByRole('spinbutton', { name: 'Hour' }), {
+    key: 'Escape',
+  });
+  expect(screen.queryAllByRole('spinbutton')).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: 'event start time' }));
+  fireEvent.pointerDown(screen.getByRole('textbox', { name: 'Title' }));
+  expect(screen.queryAllByRole('spinbutton')).toHaveLength(0);
+});
+
+it('closes an open time wheel when saving disables the draft', () => {
+  const { setPending } = setup();
+  fireEvent.click(screen.getByRole('button', { name: 'event start time' }));
+  expect(screen.getAllByRole('spinbutton')).toHaveLength(3);
+  setPending(true);
+  expect(screen.queryAllByRole('spinbutton')).toHaveLength(0);
+});
+
+it('returns Escape focus to an all-day date trigger rather than a hidden time', () => {
+  setup();
+  fireEvent.click(screen.getByText('All day', { exact: true }));
+  const date = screen.getByRole('button', { name: 'Edit event start date' });
+  fireEvent.click(date);
+  const grid = screen.getByRole('grid');
+  fireEvent.keyDown(grid, { key: 'Escape' });
+  expect(screen.queryByRole('grid')).toBeNull();
+  expect(document.activeElement).toBe(date);
 });

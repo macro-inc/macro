@@ -13,6 +13,7 @@ export function WhenDate(props: { endpoint: 'start' | 'end' }) {
       variant="value"
       size="field"
       class="w-[110px] justify-start px-3 font-normal"
+      data-composer-date={props.endpoint}
       aria-label={t(
         props.endpoint === 'start'
           ? 'common.editStartDate'

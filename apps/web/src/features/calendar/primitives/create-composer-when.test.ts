@@ -127,3 +127,42 @@ it('marks the explicit all-day range end as chosen', () =>
     expect(value.end).toBe('2030-11-15');
     dispose();
   }));
+
+it('moves both wheel endpoints together even after the end was chosen', () =>
+  createRoot((dispose) => {
+    const { model, value } = setup('2030-11-13T11:00', '2030-11-13T11:30');
+    model.end('2030-11-13T12:30');
+    model.chooseWheelTime('start', '14:30');
+    expect(value.start).toBe('2030-11-13T14:30');
+    expect(value.end).toBe('2030-11-13T16:00');
+    model.chooseWheelTime('start', '23:30');
+    expect(value.end).toBe('2030-11-14T01:00');
+    dispose();
+  }));
+it('stops the end wheel at start plus one five-minute step', () =>
+  createRoot((dispose) => {
+    const { model, value } = setup('2030-11-13T11:00', '2030-11-13T11:30');
+    model.chooseWheelTime('end', '10:30');
+    expect(value.end).toBe('2030-11-13T11:05');
+    model.chooseWheelTime('end', '11:00');
+    expect(value.end).toBe('2030-11-13T11:05');
+    model.chooseWheelTime('end', '11:10');
+    expect(value.end).toBe('2030-11-13T11:10');
+    dispose();
+  }));
+it('respects locked endpoints and all-day mode during wheel changes', () =>
+  createRoot((dispose) => {
+    const { model, value, setValue } = setup();
+    setValue('endDisabled', true);
+    model.chooseWheelTime('start', '12:00');
+    expect(value.start).toBe('2030-11-13T12:00');
+    expect(value.end).toBe('2030-11-13T14:00');
+    model.chooseWheelTime('start', '15:00');
+    expect(value.start).toBe('2030-11-13T12:00');
+    model.chooseWheelTime('end', '16:00');
+    expect(value.end).toBe('2030-11-13T14:00');
+    setValue('allDay', true);
+    model.chooseWheelTime('start', '11:00');
+    expect(value.start).toBe('2030-11-13T12:00');
+    dispose();
+  }));

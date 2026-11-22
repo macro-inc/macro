@@ -9,6 +9,7 @@ import {
   type Accessor,
   createEffect,
   createSignal,
+  createUniqueId,
   on,
   onCleanup,
   Show,
@@ -16,18 +17,20 @@ import {
 import { ComposerRangeFeedback } from '../../../components/composer/when/ComposerRangeFeedback';
 import { WhenDate } from '../../../components/composer/when/WhenDate';
 import { WhenMonth } from '../../../components/composer/when/WhenMonth';
-import { WhenTime } from '../../../components/composer/when/WhenTime';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import { useComposerWhen } from '../../../context/composer-when-context';
 import { revealWhenPicker } from '../../../primitives/reveal-when-picker';
 import { MobileComposerRecurrence } from './MobileComposerRecurrence';
 import { MobileComposerTimeZone } from './MobileComposerTimeZone';
+import { PhoneTimePill, PhoneTimeWheels } from './PhoneTime';
 
 export function PhoneWhen(props: {
   scrollElement: Accessor<HTMLElement | undefined>;
 }) {
   const model = useCalendarComposer(),
     when = useComposerWhen();
+  const startId = createUniqueId(),
+    endId = createUniqueId();
   const [startMount, setStartMount] = createSignal<HTMLDivElement>(),
     [endMount, setEndMount] = createSignal<HTMLDivElement>();
   let group: HTMLDivElement | undefined,
@@ -48,13 +51,26 @@ export function PhoneWhen(props: {
     });
   };
   createEffect(on(() => when.state.active, reveal));
+  createEffect(() => {
+    const active = when.state.active;
+    if (active === 'start-time' && model.fieldIsDisabled('start')) when.close();
+    if (active === 'end-time' && model.fieldIsDisabled('end')) when.close();
+  });
   onCleanup(() => {
     if (frame !== undefined) cancelAnimationFrame(frame);
   });
   const outside = (event: PointerEvent) => {
-    if (
+    if (!(event.target instanceof Element)) return;
+    const timeIsOpen =
+      when.state.active === 'start-time' || when.state.active === 'end-time';
+    const inTimeControl =
+      group?.contains(event.target) &&
+      event.target.closest(
+        '[data-phone-time-control], [data-phone-time-wheels]'
+      );
+    if (timeIsOpen && !inTimeControl) when.close();
+    else if (
       group &&
-      event.target instanceof Node &&
       !group.contains(event.target) &&
       (inlineStart() || inlineEnd())
     )
@@ -62,9 +78,22 @@ export function PhoneWhen(props: {
   };
   document.addEventListener('pointerdown', outside);
   onCleanup(() => document.removeEventListener('pointerdown', outside));
+  const closeOnEscape = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || (!inlineStart() && !inlineEnd())) return;
+    const endpoint = inlineStart() ? 'start' : 'end';
+    const control = when.state.active?.endsWith('-date')
+      ? 'data-composer-date'
+      : 'data-phone-time-control';
+    event.preventDefault();
+    event.stopPropagation();
+    when.close();
+    group
+      ?.querySelector<HTMLButtonElement>(`[${control}="${endpoint}"]`)
+      ?.focus({ preventScroll: true });
+  };
   return (
     <>
-      <div ref={group} data-phone-when="">
+      <div ref={group} data-phone-when="" onKeyDown={closeOnEscape}>
         <SheetGroup>
           <SheetRow icon={<ClockIcon class="size-[18px]" />}>
             <ToggleSwitch
@@ -92,18 +121,13 @@ export function PhoneWhen(props: {
                   <WhenDate endpoint="end" />
                 </Show>
                 <Show when={!model.state().allDay}>
-                  <WhenTime
-                    endpoint="start"
-                    inline
-                    listMount={startMount()}
-                    onReveal={reveal}
-                  />
+                  <PhoneTimePill endpoint="start" controls={startId} />
                 </Show>
               </div>
             </SheetRow>
           </div>
           <Show when={inlineStart()}>
-            <div ref={setStartMount} data-when-inline="start">
+            <div ref={setStartMount} id={startId} data-when-inline="start">
               <Show when={when.state.active === 'start-date'}>
                 <div class="pb-2 pl-[42px] pr-3">
                   <WhenMonth
@@ -124,6 +148,13 @@ export function PhoneWhen(props: {
                   />
                 </div>
               </Show>
+              <Show
+                when={
+                  when.state.active === 'start-time' && !model.state().allDay
+                }
+              >
+                <PhoneTimeWheels endpoint="start" />
+              </Show>
             </div>
           </Show>
           <Show when={!model.state().allDay}>
@@ -131,20 +162,13 @@ export function PhoneWhen(props: {
               <SheetRow>
                 <div class="flex items-center gap-2">
                   <WhenDate endpoint="end" />
-                  <Show when={!model.state().allDay}>
-                    <WhenTime
-                      endpoint="end"
-                      inline
-                      listMount={endMount()}
-                      onReveal={reveal}
-                    />
-                  </Show>
+                  <PhoneTimePill endpoint="end" controls={endId} />
                 </div>
               </SheetRow>
             </div>
           </Show>
           <Show when={inlineEnd()}>
-            <div ref={setEndMount} data-when-inline="end">
+            <div ref={setEndMount} id={endId} data-when-inline="end">
               <Show when={when.state.active === 'end-date'}>
                 <div class="pb-2 pl-[42px] pr-3">
                   <WhenMonth
@@ -161,6 +185,11 @@ export function PhoneWhen(props: {
                     }}
                   />
                 </div>
+              </Show>
+              <Show
+                when={when.state.active === 'end-time' && !model.state().allDay}
+              >
+                <PhoneTimeWheels endpoint="end" />
               </Show>
             </div>
           </Show>

@@ -3,14 +3,23 @@ import {
   dayTimeOptions,
   endTimeOptions,
   formatDuration,
+  parseTimeValue,
   splitLocalDateTime,
   type TimeOption,
   withinEndTimeWindow,
   withLocalTime,
 } from '@app/components/date-time-range/time-options';
+import { moveTimedRange } from '@app/components/date-time-range/time-range';
+import { TIME_WHEEL_MINUTE_STEP } from '@app/components/date-time-range/time-wheel';
 import { beginInteraction } from '@app/observability/flow';
 import { formatLocalDate, parseLocalDate } from '@core/util/local-date';
-import { differenceInCalendarDays } from 'date-fns';
+import {
+  addMinutes,
+  differenceInCalendarDays,
+  format,
+  isValid,
+  parseISO,
+} from 'date-fns';
 import { createStore } from 'solid-js/store';
 import type { PhoneMenuId } from './phone-menu-pattern';
 
@@ -139,6 +148,40 @@ export function createComposerWhen(options: {
       end(withLocalTime(formatLocalDate(date), option.value));
     }
   };
+  const chooseWheelTime = (endpoint: 'start' | 'end', time: string) => {
+    const range = options.range;
+    const disabled =
+      endpoint === 'start' ? range.startDisabled : range.endDisabled;
+    if (range.allDay || disabled || parseTimeValue(time) === undefined) return;
+    const currentStart = parseISO(range.start);
+    if (!isValid(currentStart)) return;
+    const interaction = beginInteraction('calendar.composer.time.select');
+    try {
+      if (endpoint === 'start') {
+        const value = withLocalTime(range.start, time);
+        if (range.endDisabled) {
+          start(value);
+          return;
+        }
+        // Wheels always move the range, including after an explicit end edit.
+        // The shared range arithmetic carries the end date across midnight.
+        const next = moveTimedRange(
+          { start: range.start, end: range.end },
+          value
+        );
+        options.setRange(next.start, next.end);
+        return;
+      }
+      const value = withLocalTime(range.end, time);
+      const minimum = format(
+        addMinutes(currentStart, TIME_WHEEL_MINUTE_STEP),
+        "yyyy-MM-dd'T'HH:mm"
+      );
+      end(value < minimum ? minimum : value);
+    } finally {
+      interaction.end();
+    }
+  };
   const allDay = (value: boolean) => {
     close();
     if (options.range.allDay === value) return;
@@ -169,6 +212,7 @@ export function createComposerWhen(options: {
     chooseDate,
     timeOptions,
     chooseTime,
+    chooseWheelTime,
     allDay,
   };
 }
