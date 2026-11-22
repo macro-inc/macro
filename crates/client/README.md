@@ -143,17 +143,31 @@ the next recovery discards the files unopened, so files that never open cannot
 keep the cache from starting. Attempts are counted in a file of their own
 beside the marker (`<name>-adopting-attempts`), written with eight free slots
 before any file moves, so counting overwrites one byte in place, needs no more
-storage, and works while the marker does not read; the marker itself, which
-also records when the adoption began, is never written again. An attempt that
-cannot be counted still decides if it can, but ten minutes after the adoption
-began it discards instead, so those are bounded too. When neither the marker
-nor the count reads, nothing bounds the attempt or says how old the adoption
-is, so it keeps everything. A read that returns fewer bytes than the file holds
-is an error, never a shorter marker or WAL header. The coordinator retries a
-failed recovery a few times at once, so this usually resolves within one page
-load; a version probe that meets a busy sync handle fails as `storage-busy`,
-which stops those retries, and the next page load goes on counting. Files at a
-newer version
+storage, and works while the marker does not read; a count that is not exactly
+its eight slots counts nothing. The marker itself, which also records when the
+adoption began, is never written again. An attempt that cannot be counted
+decides as any other, and only where it would keep the files does it look at
+that time: ten minutes after the adoption began it discards them instead, so
+those are bounded too. The clock can only shorten that wait (a jump back counts
+as time passed), and never discards files that could go back. When the marker
+reads but the files beside it cannot be looked up, the time still comes from
+the marker. When neither the marker nor the count reads, nothing bounds the
+attempt or says how old the adoption is, so it keeps everything. A read that
+returns fewer bytes than the file holds is an error, never a shorter marker or
+WAL header.
+
+A recovery that keeps the files says so (`cacheRecoveryDeferred` on its error,
+`recovery-deferred` to the coordinator). The coordinator retries a failed
+recovery five times at once, so with counting this resolves within one page
+load. When any recovery in that run kept the files, the last failure does not
+end the cache for good, which would quarantine the scope and open a different
+database on the next load, leaving the moved files and their queue behind: the
+coordinator keeps the scope and the pending recovery, refuses queued requests
+with `owner-lock-unavailable`, and the page runs uncached until its cache
+recovery (backoff up to 30 seconds, and on reconnect or return to the tab)
+registers again and runs the same recovery, which goes on counting. A version
+probe that meets a busy sync handle fails as `storage-busy`, which stops the
+coordinator's retries the same way. Files at a newer version
 were upgraded here, so the older build could not open them, and files whose
 older name holds a database again cannot go back over it; both are reset
 (`discarded`). Once the moved files have opened they are this build's own.
@@ -163,9 +177,12 @@ waited there until that build ran again. Each of these narrow windows can now
 lose them instead, and each needs a worker lost or an open failing mid-upgrade:
 
 - the worker is lost between the two renames, the older WAL still held frames
-  (its build was itself lost without closing), and a tab of the older build
-  opens its name before this build opens again: it resets the half it finds,
-  the WAL no longer matches the marker, and the main file is discarded;
+  (its build was itself lost without closing), and before this build opens
+  again a tab of the older build opens its name, or stale cleanup in a tab of
+  this or a newer build finds the lone older WAL: either removes the half it
+  finds, the WAL no longer matches the marker, and the main file is discarded.
+  A WAL move that fails, and whose move of the main file back fails too, leaves
+  the same split;
 - the worker is lost during the first open, before any step committed, and a
   tab of the older build opens its now empty name before the recovery open: the
   files cannot go back over its new ones and are discarded;
@@ -180,7 +197,7 @@ lose them instead, and each needs a worker lost or an open failing mid-upgrade:
   build through all three, or recoveries lost after counting their attempt. The
   next one discards the files unread, though the older build might still have
   opened them. Recoveries whose attempts cannot be counted do the same once ten
-  minutes passed since the adoption began;
+  minutes passed since the adoption began, or the clock moved back as far;
 - the first carry-forward into storage 12 only: a tab of a build from before
   upgrades that is already at storage 12 shares this build's name but knows
   nothing of markers. If it opens that name after the adopting worker was lost
