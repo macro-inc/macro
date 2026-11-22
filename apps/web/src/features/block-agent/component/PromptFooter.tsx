@@ -93,10 +93,14 @@ export function ReplyFooter(props: {
   children?: JSX.Element;
 }) {
   const extra = children(() => props.children);
+  // Controls that render nothing (a feature off) resolve to empty entries;
+  // only content that renders changes the footer's layout.
+  const hasExtra = () =>
+    extra.toArray().some((child) => child != null && child !== false);
   return (
     <div
       class="text-xs text-ink-extra-muted"
-      classList={{ 'flex items-center gap-1': extra() != null }}
+      classList={{ 'flex items-center gap-1': hasExtra() }}
       data-testid="reply-footer"
     >
       <time class="px-1" datetime={props.sentAt}>
