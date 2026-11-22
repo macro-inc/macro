@@ -1,4 +1,7 @@
-import { createFakeFeedbackClient } from '@app/features/agent-feedback/tests/fake-client';
+import {
+  createFakeFeedbackClient,
+  httpFailure,
+} from '@app/features/agent-feedback/tests/fake-client';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,7 +22,8 @@ vi.mock('@app/features/agent-feedback/queries/client', () => ({
   get agentFeedbackClient() {
     return mocks.fake?.client;
   },
-  isRefusal: () => false,
+  isRefusal: (errors: { code: string }[]) =>
+    errors.some((error) => error.code === 'NOT_FOUND'),
 }));
 
 const { ResponseFeedback } = await import(
@@ -33,8 +37,10 @@ const TURN = {
   turn: 2,
 } as const;
 
+let queryClient: QueryClient;
+
 function renderFooter() {
-  const queryClient = new QueryClient({
+  queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   render(() => (
@@ -62,6 +68,19 @@ describe('ReplyFooter with reply feedback', () => {
     expect(footer.classList.contains('flex')).toBe(false);
     expect(footer.className).toBe('text-xs text-ink-extra-muted');
     expect(mocks.fake?.client.mine).not.toHaveBeenCalled();
+  });
+
+  it('keeps the plain footer where the server refuses feedback', async () => {
+    mocks.flag = { enabled: true, loading: false };
+    mocks.fake?.client.mine.mockResolvedValue(httpFailure('NOT_FOUND'));
+    const footer = renderFooter();
+
+    await vi.waitFor(() => {
+      expect(mocks.fake?.client.mine).toHaveBeenCalledTimes(1);
+      expect(queryClient.isFetching()).toBe(0);
+    });
+    expect(screen.queryByRole('button', { name: 'Good response' })).toBeNull();
+    expect(footer.className).toBe('text-xs text-ink-extra-muted');
   });
 
   it('lays the thumbs out beside the time while the flag is on', async () => {

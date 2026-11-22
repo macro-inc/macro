@@ -25,19 +25,21 @@ export function ResponseFeedbackScope(props: {
       {props.children}
       <Show when={props.controller()}>
         {(controller) => (
-          // The dialog is portaled, but Solid still bubbles its events to the
-          // JSX parent: a click in it must not select the message row.
-          <div
-            class="contents"
-            onClick={stopPropagation}
-            onKeyDown={stopPropagation}
-            onPointerDown={stopPropagation}
-            onMouseDown={stopPropagation}
-            onFocusIn={stopPropagation}
-            onFocusOut={stopPropagation}
-          >
-            <Show when={controller().noteDraft()}>
-              {(draft) => (
+          // Nothing renders until a note is drafted, so a host can tell from
+          // its children whether the controls show.
+          <Show when={controller().noteDraft()}>
+            {(draft) => (
+              // The dialog is portaled, but Solid still bubbles its events to
+              // the JSX parent: a click in it must not select the message row.
+              <div
+                class="contents"
+                onClick={stopPropagation}
+                onKeyDown={stopPropagation}
+                onPointerDown={stopPropagation}
+                onMouseDown={stopPropagation}
+                onFocusIn={stopPropagation}
+                onFocusOut={stopPropagation}
+              >
                 <FeedbackNoteDialog
                   open
                   rating={draft().rating}
@@ -47,9 +49,9 @@ export function ResponseFeedbackScope(props: {
                   }
                   onSkip={() => controller().closeNote()}
                 />
-              )}
-            </Show>
-          </div>
+              </div>
+            )}
+          </Show>
         )}
       </Show>
     </ResponseFeedbackProvider>

@@ -33,13 +33,22 @@ vi.mock('@app/features/agent-feedback/queries/client', () => ({
 
 const { SuggestionFeedback } = await import('./suggestion-feedback');
 
+let queryClient: QueryClient;
+
 function renderWithQueries(ui: () => JSX.Element) {
-  const queryClient = new QueryClient({
+  queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(() => (
     <QueryClientProvider client={queryClient}>{ui()}</QueryClientProvider>
   ));
+}
+
+/** The Home priority rows' list items, which carry the row's layout. */
+function priorityItems() {
+  return [...document.querySelectorAll('[data-priority]')].map(
+    (button) => button.parentElement
+  );
 }
 
 function renderPriorities() {
@@ -109,6 +118,7 @@ describe('suggestion feedback', () => {
 
     expect(screen.queryByRole('button', { name: 'Good response' })).toBeNull();
     expect(mocks.fake?.client.mine).not.toHaveBeenCalled();
+    for (const item of priorityItems()) expect(item?.className).toBe('');
   });
 
   it('offers nothing where the server refuses feedback', async () => {
@@ -116,11 +126,20 @@ describe('suggestion feedback', () => {
     mocks.fake?.client.mine.mockResolvedValue(httpFailure('NOT_FOUND'));
     renderPriorities();
 
-    await vi.waitFor(() =>
-      expect(mocks.fake?.client.mine).toHaveBeenCalledTimes(2)
-    );
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(mocks.fake?.client.mine).toHaveBeenCalledTimes(2);
+      expect(queryClient.isFetching()).toBe(0);
+    });
+
+    // The refusal is an answer (null), not a failure to retry.
+    const reads = queryClient.getQueryCache().findAll();
+    expect(reads).toHaveLength(2);
+    for (const read of reads) {
+      expect(read.state.status).toBe('success');
+      expect(read.state.data).toBeNull();
+    }
     expect(screen.queryByRole('button', { name: 'Good response' })).toBeNull();
+    for (const item of priorityItems()) expect(item?.className).toBe('');
   });
 
   it('rates a finished For you row and a reply draft by their surfaces', async () => {

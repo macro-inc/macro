@@ -13,9 +13,15 @@ export function PriorityRow(props: {
   onOpen(): void;
 }) {
   const feedback = children(() => props.feedback);
+  // Without thumbs (feedback off or refused) the row is as it was.
+  const hasFeedback = () => rendersSomething(feedback.toArray());
 
   return (
-    <li class="group/priority flex min-w-0 items-center gap-1">
+    <li
+      classList={{
+        'group/priority flex min-w-0 items-center gap-1': hasFeedback(),
+      }}
+    >
       <button
         type="button"
         class="group flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left outline-none not-touch:hover:bg-hover focus-visible:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
@@ -64,7 +70,7 @@ export function PriorityRow(props: {
           {t('suggestions.openItem')}
         </span>
       </button>
-      <Show when={rendersSomething(feedback.toArray())}>
+      <Show when={hasFeedback()}>
         <span class="shrink-0 opacity-0 transition-opacity group-focus-within/priority:opacity-100 not-touch:group-hover/priority:opacity-100">
           {feedback()}
         </span>

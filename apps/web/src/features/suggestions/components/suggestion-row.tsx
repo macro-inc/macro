@@ -516,6 +516,8 @@ export function DoneRow(props: {
   const line = () =>
     routineSentence(props.suggestion) ?? props.suggestion.summary;
   const feedback = children(() => props.feedback);
+  // Without thumbs (feedback off or refused) the row is as it was.
+  const hasFeedback = () => rendersSomething(feedback.toArray());
 
   return (
     <Item
@@ -524,7 +526,10 @@ export function DoneRow(props: {
       aria-labelledby={titleId()}
       data-suggestion={props.suggestion.id}
       data-suggestion-status="done"
-      class="group/suggestion border-0 has-focus-visible:bg-hover not-touch:hover:bg-hover"
+      class={cn(
+        'border-0 has-focus-visible:bg-hover not-touch:hover:bg-hover',
+        hasFeedback() && 'group/suggestion'
+      )}
     >
       <Item.Icon class="text-success [&>svg]:size-3.5" aria-hidden="true">
         <CheckCircleIcon />
@@ -541,7 +546,7 @@ export function DoneRow(props: {
           </Show>
         </RowText>
       </Item.Content>
-      <Show when={rendersSomething(feedback.toArray())}>
+      <Show when={hasFeedback()}>
         <Item.Actions class="opacity-0 transition-opacity group-focus-within/suggestion:opacity-100 not-touch:group-hover/suggestion:opacity-100">
           {feedback()}
         </Item.Actions>
