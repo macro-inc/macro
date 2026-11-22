@@ -1,6 +1,6 @@
-import type { TaskDependencyRecipe } from '../authority.generated';
 import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import type { TaskDependencyRecipe } from '../authority.generated';
 import type { IdentityBindingWire } from '../protocol';
 /**
  * Typed entry point for durable optimistic GraphQL mutations.

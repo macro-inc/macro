@@ -1,5 +1,5 @@
-import type { TaskDependencyRecipe } from '../authority.generated';
 import type { CacheAuthorityHost } from '../authority';
+import type { TaskDependencyRecipe } from '../authority.generated';
 import type { PeopleCache } from '../people/host';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**

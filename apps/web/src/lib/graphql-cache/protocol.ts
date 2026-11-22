@@ -901,7 +901,7 @@ export type CacheRequest = {
       variables?: Record<string, unknown>;
       data: unknown;
       taskDependencyRecipe?: TaskDependencyRecipe;
-  linkPatches?: OptimisticLinkPatchWire[];
+      linkPatches?: OptimisticLinkPatchWire[];
       revalidations?: QueryRevalidationWire[];
       clientMetadata?: Record<string, unknown>;
       identityBindings?: IdentityBindingWire[];

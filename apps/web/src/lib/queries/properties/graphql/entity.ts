@@ -53,8 +53,8 @@ import { buildPropertyAssignmentLinks } from './assignment-links';
 import { observePropertyMutationSettlements } from './mutation-settlements';
 import {
   isTaskDependencyProperty,
-  taskDependencyRecipe,
   repairTaskDependencies,
+  taskDependencyRecipe,
 } from './task-dependencies';
 
 /** Builds the input used to load one entity's properties. */
@@ -425,7 +425,10 @@ async function executeGraphqlEntityPropertyMutation(
       { setTaskProperty: { property: args.optimisticProperty } },
       {
         ...args.optimisticCache,
-        taskDependencyRecipe: taskDependencyRecipe(input.entityId, args.optimisticProperty),
+        taskDependencyRecipe: taskDependencyRecipe(
+          input.entityId,
+          args.optimisticProperty
+        ),
         authorizationEpoch,
         uuid: entityPropertyOptimisticMutationUuid(args),
         onEnqueued,

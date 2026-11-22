@@ -6,12 +6,8 @@ import {
 } from '@graphql-cache/exchange/record-selection';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
-import {
-  SYSTEM_PROPERTY_IDS,
-} from '@property/identifiers';
-import type {
-  SoupPropertyFieldsFragment,
-} from '@service-storage/graphql/generated/graphql';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import type { SoupPropertyFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import {
   RepairTaskDependenciesDocument,
   TaskDependencyStateFieldsFragmentDoc,
@@ -45,19 +41,27 @@ export function taskDependencyRecipe(
 ): TaskDependencyRecipe {
   const definition = property.propertyDefinitionId;
   if (definition === DEPENDS_ON) {
-    return { taskId, change: { kind: 'dependsOn', targetIds: references(property) } };
+    return {
+      taskId,
+      change: { kind: 'dependsOn', targetIds: references(property) },
+    };
   }
   if (definition === BLOCKING) {
-    return { taskId, change: { kind: 'blocking', targetIds: references(property) } };
+    return {
+      taskId,
+      change: { kind: 'blocking', targetIds: references(property) },
+    };
   }
-  if (definition !== STATUS) throw new TypeError('unsupported task dependency property');
+  if (definition !== STATUS)
+    throw new TypeError('unsupported task dependency property');
   return {
     taskId,
     change: {
       kind: 'status',
-      optionIds: property.value?.__typename === 'GraphqlSelectOptionPropertyValue'
-        ? property.value.optionIds
-        : [],
+      optionIds:
+        property.value?.__typename === 'GraphqlSelectOptionPropertyValue'
+          ? property.value.optionIds
+          : [],
     },
   };
 }
