@@ -882,7 +882,15 @@ pub async fn build(
         authorization_state.clone(),
     )
     .with_importable(importable_apps()?)
-    .with_connected_hook(integration_analytics.hook(IntegrationChange::Connected))
+    .with_connected_hook(connectors::inbound::each_of(
+        std::iter::once(integration_analytics.hook(IntegrationChange::Connected))
+            .chain(
+                granola_sync
+                    .clone()
+                    .map(granola_sync::inbound::connected_hook),
+            )
+            .collect(),
+    ))
     .with_removed_hook(integration_analytics.hook(IntegrationChange::Disconnected));
     let callbacks_state =
         connectors::inbound::callbacks::CallbacksState::new(composed.sign_ins.clone())

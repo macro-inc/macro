@@ -67,6 +67,11 @@ pub trait SyncService: Send + Sync {
     async fn tick(&self) -> Result<bool>;
     /// Start sync for newly connected accounts and stop it for removed ones.
     async fn reconcile(&self) -> Result<()>;
+    /// The user just connected Granola: start their sync over on that
+    /// connection. Reconcile cannot tell one Granola account from another,
+    /// so without this a reconnect to a different account would keep the
+    /// old account's webhook.
+    async fn connected(&self, user: MacroUserIdStr<'static>) -> Result<()>;
 }
 
 pub struct Service<R, G, A, V> {
@@ -274,6 +279,20 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> SyncServic
             }
         }
         Ok(())
+    }
+
+    #[tracing::instrument(name = "granola.restart_sync", skip_all, err(Debug))]
+    async fn connected(&self, user: MacroUserIdStr<'static>) -> Result<()> {
+        // Granola only delivers to public HTTPS endpoints.
+        if !self.public_url.starts_with("https://") {
+            return Ok(());
+        }
+        match self.start(user).await {
+            // Another instance is setting this user up on the same
+            // connection.
+            Ok(()) | Err(SyncError::Conflict) => Ok(()),
+            Err(error) => Err(rootcause::report!("{error}")),
+        }
     }
 }
 

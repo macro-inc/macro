@@ -14,7 +14,10 @@ gets one webhook at the widest scope the key accepts (`All`, falling back to
 `Workspace`), and syncs whose connection went away are stopped. Granola posts
 signed events to the public webhook route; they are stored durably, then
 leased, fetched through `ApiConnectionsService::call`, and ingested through
-`call::domain::imports`.
+`call::domain::imports`. A user connecting Granola starts their sync over at
+once (`inbound::connected_hook`, on the `/connectors` connect hook), and
+reconcile keeps a holder whose connection could not be resolved: `holders`
+fails rather than leave them out, so nothing is stopped on an outage.
 
 ## Start here
 
@@ -47,9 +50,10 @@ leased, fetched through `ApiConnectionsService::call`, and ingested through
 - Never log provider response bodies; webhook registration returns the signing secret.
 - Sync is off for users on Macro Connect: Connect holds Granola as MCP only, so
   their connection gives no API access and they are not holders.
-- The connectors services name no account, so a reconnect to a different
-  Granola account is not seen as a new account; `account_id` on
-  `granola_sync_connections` only keeps older rows' values.
+- The connectors services name no account, so reconcile cannot see a
+  reconnect to a different Granola account; the connect hook restarting the
+  sync is what moves the webhook. `account_id` on `granola_sync_connections`
+  only keeps older rows' values.
 
 ## Related
 

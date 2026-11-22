@@ -147,11 +147,22 @@ impl SyncRepository for FakeRepo {
             })
             .collect())
     }
-    async fn reserve(&self, _connection: &Connection) -> Result<bool> {
-        Ok(false)
+    async fn reserve(&self, connection: &Connection) -> Result<bool> {
+        let mut connections = self.connections.lock().unwrap();
+        connections.retain(|held| held.user_id != connection.user_id);
+        connections.push(connection.clone());
+        Ok(true)
     }
-    async fn activate(&self, _id: Uuid, _webhook: Webhook, _scope: Scope) -> Result<bool> {
-        Ok(false)
+    async fn activate(&self, id: Uuid, webhook: Webhook, scope: Scope) -> Result<bool> {
+        let mut connections = self.connections.lock().unwrap();
+        let Some(connection) = connections.iter_mut().find(|held| held.id == id) else {
+            return Ok(false);
+        };
+        connection.enabled = true;
+        connection.scope = scope;
+        connection.endpoint_id = Some(webhook.id);
+        connection.secret = Some(webhook.secret);
+        Ok(true)
     }
     async fn stop(&self, id: Uuid) -> Result<()> {
         self.stopped.lock().unwrap().push(id);
@@ -171,9 +182,10 @@ impl SyncRepository for FakeRepo {
     }
 }
 
-/// Granola, recording which webhooks were unregistered.
+/// Granola, recording which webhooks were registered and unregistered.
 #[derive(Default)]
 struct FakeGranola {
+    registered: Mutex<Vec<Uuid>>,
     unregistered: Mutex<Vec<Uuid>>,
 }
 
@@ -181,11 +193,15 @@ struct FakeGranola {
 impl Granola for FakeGranola {
     async fn register(
         &self,
-        _connection: &Connection,
+        connection: &Connection,
         _url: &str,
         _scope: Scope,
     ) -> Result<Registration> {
-        Ok(Registration::ScopeRejected)
+        self.registered.lock().unwrap().push(connection.id);
+        Ok(Registration::Registered(Webhook {
+            id: format!("endpoint-{}", connection.id),
+            secret: SigningSecret("secret".to_owned()),
+        }))
     }
     async fn unregister(&self, connection: &Connection) -> Result<()> {
         self.unregistered.lock().unwrap().push(connection.id);
@@ -275,4 +291,40 @@ async fn a_removed_connection_stops_its_sync_and_unregisters_its_webhook() {
 
     assert_eq!(*service.repo.stopped.lock().unwrap(), vec![id]);
     assert_eq!(*service.granola.unregistered.lock().unwrap(), vec![id]);
+}
+
+/// Connecting Granola again, perhaps to another account, moves the sync
+/// onto the new connection at once: the old webhook goes, a new one comes.
+#[tokio::test]
+async fn connecting_granola_restarts_the_sync() {
+    let fake = FakeConnectors::new().with_connection(&user("a"), FakeConnection::app("granola"));
+    let repo = FakeRepo::syncing(user("a"));
+    let old = repo.connections.lock().unwrap()[0].id;
+    let service = service(repo, &fake);
+
+    service.connected(user("a")).await.unwrap();
+
+    assert_eq!(*service.granola.unregistered.lock().unwrap(), vec![old]);
+    let registered = service.granola.registered.lock().unwrap().clone();
+    assert_eq!(registered.len(), 1);
+    assert_ne!(registered[0], old);
+    let current = service.repo.by_user(&user("a")).await.unwrap().unwrap();
+    assert_eq!(current.id, registered[0]);
+    assert!(current.enabled);
+}
+
+/// A user whose Granola connection gives no API access is not synced, even
+/// right after connecting.
+#[tokio::test]
+async fn connecting_granola_without_api_access_starts_nothing() {
+    let flagged = user("flagged");
+    let fake = FakeConnectors::new()
+        .with_connect_app("granola", false)
+        .with_flag_on(&flagged)
+        .with_connection(&flagged, FakeConnection::app("granola"));
+    let service = service(FakeRepo::default(), &fake);
+
+    service.connected(flagged).await.unwrap();
+
+    assert!(service.granola.registered.lock().unwrap().is_empty());
 }

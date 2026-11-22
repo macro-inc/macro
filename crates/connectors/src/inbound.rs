@@ -15,6 +15,9 @@ pub mod toolset;
 #[cfg(test)]
 mod test_support;
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::models::ConnectorKey;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::pin::Pin;
@@ -34,6 +37,20 @@ pub struct ConnectorChange {
 /// It runs before the request answers, so it must be quick or spawn.
 pub type ConnectorHook =
     Arc<dyn Fn(ConnectorChange) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
+
+/// One hook that runs each of `hooks` in turn, for a host with more than
+/// one reaction to the same change.
+pub fn each_of(hooks: Vec<ConnectorHook>) -> ConnectorHook {
+    let hooks: Arc<[ConnectorHook]> = hooks.into();
+    Arc::new(move |change: ConnectorChange| {
+        let hooks = hooks.clone();
+        Box::pin(async move {
+            for hook in hooks.iter() {
+                hook(change.clone()).await;
+            }
+        })
+    })
+}
 
 /// Run `hook`, if any, for each of `keys`.
 async fn fire(hook: Option<&ConnectorHook>, user: &MacroUserIdStr<'static>, keys: &[ConnectorKey]) {
