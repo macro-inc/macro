@@ -52,7 +52,7 @@ impl EngineHandle {
     }
 
     /// A read on this handle that [`Self::abandon`] names by `request_id`
-    /// before it gets the engine fails without reading. Without an id it
+    /// before it starts reading fails without reading. Without an id it
     /// always reads.
     pub fn abandonable(mut self, request_id: Option<String>) -> Self {
         self.abandon = request_id
@@ -94,9 +94,10 @@ impl EngineHandle {
     }
 
     /// [`Self::ready_read`] for a read that registers operation `op_id`'s
-    /// dependencies. An abandoned read still waits its turn, then gives the
-    /// engine back without reading, so whatever was queued behind it finds
-    /// the engine as before. In place of the dependencies it would have
+    /// dependencies. An abandoned read still waits its turn and finishes an
+    /// interrupted retirement, as every read does, so whatever was queued
+    /// behind it finds the engine as before; then it gives the engine back
+    /// without reading. In place of the dependencies it would have
     /// registered, it registers the operation against every change and drops
     /// its retained view: the next write reports the operation, and the
     /// caller's next watch reads it whole, as it would have had to after a
@@ -106,6 +107,7 @@ impl EngineHandle {
         op_id: Option<&str>,
     ) -> Result<AccessGuard<'_, EngineState>, String> {
         let mut state = self.inner.read().await;
+        self.resume_retirement(&mut state).await?;
         if self
             .abandon
             .as_ref()
@@ -116,7 +118,6 @@ impl EngineHandle {
             }
             return Err(super::abandon::ABANDONED.into());
         }
-        self.resume_retirement(&mut state).await?;
         Ok(state)
     }
 

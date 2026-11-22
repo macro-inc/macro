@@ -323,11 +323,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         'graphql_cache.ipc.outcome',
         deadline.timedOut ? 'timeout' : 'error'
       );
-      // A marked read skips its turn natively, unless it already holds the
-      // engine; the native read span records the skip. Older binaries lack
-      // the command, and the read then runs as before. Nothing surfaces.
+      // A marked read skips reading natively unless it had already started;
+      // its native span records the skip, this one only the mark. Older
+      // binaries lack the command, and the read then runs as before.
       if (deadline.timedOut && requestId) {
-        span.setAttr('graphql_cache.ipc.abandoned', true);
         fireAndForget(
           span.span('graphql_cache.ipc.abandon', async (abandon) => {
             let outcome: string;

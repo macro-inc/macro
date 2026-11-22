@@ -1064,3 +1064,34 @@ fn an_abandoned_watch_makes_the_next_watch_read_whole() {
         QueryUpdate::Hit { .. }
     ));
 }
+
+/// An abandoned read registers its operation in its own turn, so a teardown
+/// queued behind it still has the last word, as it had over the read.
+#[test]
+fn a_teardown_queued_behind_an_abandoned_read_still_unregisters_it() {
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), None);
+    let reader = handle.clone().abandonable(Some("read-1".to_owned()));
+    block_on(async {
+        let noop = std::task::Waker::noop();
+        let held = handle.inner.write().await;
+        let mut read = Box::pin(reader.read(
+            Some("client:1".to_owned()),
+            QUERY.to_owned(),
+            Some("Soup".to_owned()),
+            variables(),
+            Vec::new(),
+        ));
+        assert!(poll_once(read.as_mut(), noop).is_pending());
+        let mut teardown = Box::pin(handle.teardown("client:1".to_owned()));
+        assert!(poll_once(teardown.as_mut(), noop).is_pending());
+        assert!(handle.abandon("read-1"));
+        drop(held);
+        // Polled in reverse: only the queue's order decides which runs first.
+        let (torn_down, read) = tokio::join!(teardown, read);
+        torn_down.unwrap();
+        assert_eq!(read.unwrap_err(), abandon::ABANDONED);
+    });
+    let result = write(&handle, Some("client:2"), soup_data(true), None);
+    assert!(result.affected_ops.is_empty());
+}
