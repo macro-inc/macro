@@ -25,6 +25,7 @@ name = "scheduled_action_openapi"
 path = "src/scheduling_openapi.rs"
 
 [dependencies]
+agent_feedback = { path = "../../crates/agent_feedback" }
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 clap = { workspace = true }
 computer_id = { workspace = true }

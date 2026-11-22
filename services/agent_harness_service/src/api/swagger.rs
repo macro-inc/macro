@@ -64,9 +64,18 @@ impl Modify for SecurityAddon {
     }
 }
 
+/// The routes of crates that keep their own OpenAPI document.
+struct CrateRoutes;
+
+impl Modify for CrateRoutes {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        openapi.merge(agent_feedback::swagger::AgentFeedbackApiDoc::openapi());
+    }
+}
+
 #[derive(OpenApi)]
 #[openapi(
-    modifiers(&SecurityAddon),
+    modifiers(&SecurityAddon, &CrateRoutes),
     info(terms_of_service = "https://macro.com/terms"),
     paths(
         crate::voice_gateway::catalog,

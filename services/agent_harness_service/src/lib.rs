@@ -18,6 +18,7 @@ extern crate self as agent_harness_service;
 pub mod cognition;
 pub mod product_analytics;
 
+mod agent_feedback;
 mod agent_git;
 mod agent_runtime_directory;
 mod anthropic_gateway;
@@ -2250,6 +2251,19 @@ pub async fn run() -> anyhow::Result<()> {
         feature_flags.clone(),
     )
     .await?;
+    // Ratings of agent responses, for internal evals; `enable-agent-response-feedback`.
+    let agent_feedback = agent_feedback::router(
+        pool.clone(),
+        session_repo.clone(),
+        scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo::new(
+            pool.clone(),
+            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
+        ),
+        feature_flags.clone(),
+        message_service.clone(),
+        entity_access.clone(),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
     let http_shutdown = service_shutdown.clone();
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -2264,6 +2278,7 @@ pub async fn run() -> anyhow::Result<()> {
             )
             .with_agent_correlation(correlation)
             .with_activity(agent_activity)
+            .with_agent_feedback(agent_feedback)
             .with_sharing(sharing)
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)
