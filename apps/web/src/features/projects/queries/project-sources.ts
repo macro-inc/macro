@@ -168,6 +168,8 @@ export function createProjectSources(
           let pending: PendingProjectTaskHandle | undefined;
           let created: Awaited<ReturnType<typeof createTaskWithProperties>> =
             null;
+          // The server made the task, even if a later step fails.
+          let confirmed = false;
           try {
             created = await createTaskWithProperties(
               title,
@@ -197,6 +199,7 @@ export function createProjectSources(
                   options?.onMutate?.();
                 },
                 onCreated: (task) => {
+                  confirmed = true;
                   span.setAttr('document.id', task.documentId);
                   pending?.confirm(task.documentId);
                   options?.onCreated?.(task);
@@ -211,8 +214,9 @@ export function createProjectSources(
             );
           } finally {
             span.setAttr('task.created', !!created);
-            // The composer tells the user the create was not confirmed.
-            if (!created) pending?.fail();
+            // The composer tells the user the create was not confirmed. A
+            // confirmed task stays until listed or its retention bound.
+            if (!created && !confirmed) pending?.fail();
           }
           if (!created) span.error('Task was not created');
           return created;

@@ -207,6 +207,25 @@ it('removes a created task from its project when the create fails', async () => 
   dispose();
 });
 
+it('keeps a created task when a step after its create fails', async () => {
+  mock.createTask.mockImplementation(
+    async (_title, _content, _properties, _definitions, _history, options) => {
+      options.onMutate();
+      options.onCreated({ documentId: 'task' });
+      throw new Error('project check failed');
+    }
+  );
+  const { sources, commands: project, dispose } = commands();
+  await expect(
+    project.createTask('project', 'Ship it', '', [], new Map(), vi.fn())
+  ).rejects.toThrow('project check failed');
+  // The server made it: it stays under its real id until listed or expired.
+  expect(
+    sources.pendingTasks('project').map(({ entity }) => entity.id)
+  ).toEqual(['task']);
+  dispose();
+});
+
 it('shows no stand-in for a task the composer moved to another project', async () => {
   mock.createTask.mockImplementation(
     async (_title, _content, _properties, _definitions, _history, options) => {
