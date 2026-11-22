@@ -134,6 +134,8 @@ struct Actions {
     fail_import: AtomicBool,
     /// Why a new review cannot be presented, when it cannot.
     refuse_presentation: Mutex<Option<String>>,
+    /// Why a saved review can never be presented, found while presenting it.
+    unpresentable: Mutex<Option<String>>,
 }
 impl Actions {
     async fn act(&self, account_holder: &MacroUserIdStr<'static>, call: String) {
@@ -213,6 +215,9 @@ impl ReviewActions for Actions {
     ) -> Result<(), CodeModeError> {
         assert_eq!(owner, &self.owner);
         self.presentations.lock().unwrap().push(record.id);
+        if let Some(reason) = self.unpresentable.lock().unwrap().clone() {
+            return Err(CodeModeError::Unpresentable(reason));
+        }
         if self.fail_presentation.load(Ordering::SeqCst) {
             return Err(invalid());
         }
@@ -269,6 +274,7 @@ impl Fixture {
             approvable: AtomicBool::new(true),
             fail_import: AtomicBool::new(false),
             refuse_presentation: Mutex::new(None),
+            unpresentable: Mutex::new(None),
         });
         let service = ReviewService::new(
             store.clone(),
@@ -1398,5 +1404,43 @@ async fn a_review_that_cannot_be_presented_is_never_saved() {
     assert_eq!(
         listed.iter().map(|row| row.id).collect::<Vec<_>>(),
         vec![row.id]
+    );
+}
+
+#[tokio::test]
+async fn a_saved_review_that_can_never_be_presented_is_dismissed_and_not_retried() {
+    let f = Fixture::new();
+    // The plan failed after the pre-check, while the review was being saved.
+    *f.actions.unpresentable.lock().unwrap() = Some("the import plan failed".into());
+    let refused = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await;
+    match refused {
+        Err(CodeModeError::Unpresentable(reason)) => assert_eq!(reason, "the import plan failed"),
+        Err(error) => panic!("expected the refusal, got {error:?}"),
+        Ok(_) => panic!("an unpresentable review was presented"),
+    }
+
+    // Reads and lists return it settled instead of presenting it again.
+    *f.actions.unpresentable.lock().unwrap() = None;
+    let listed = f.service.list(&f.view(), f.execution).await.unwrap();
+    let [saved] = listed.as_slice() else {
+        panic!("expected the one saved review");
+    };
+    assert_eq!(saved.presented_at, None);
+    let state = &saved.items.states()[0];
+    assert_eq!(state.status, ReviewItemStatus::Dismissed);
+    assert_eq!(state.error.as_deref(), Some("the import plan failed"));
+    let read = f.service.read(&f.view(), saved.id).await.unwrap();
+    assert_eq!(read.presented_at, None);
+    assert_eq!(
+        f.actions.presentations.lock().unwrap().len(),
+        1,
+        "presented once"
     );
 }

@@ -11,8 +11,8 @@ fn a_review_on_a_failed_plan_is_refused_with_its_reason() {
             error: Some("Notion object not found or not shared with the connection".into()),
         }),
     );
-    let CodeModeError::Invalid(message) = error else {
-        panic!("expected a refusal the agent reads, got {error:?}");
+    let CodeModeError::Unpresentable(message) = error else {
+        panic!("expected a refusal that settles the review, got {error:?}");
     };
     assert_eq!(
         message,
@@ -25,7 +25,7 @@ fn a_review_on_a_failed_plan_is_refused_with_its_reason() {
 #[test]
 fn a_review_without_a_plan_is_refused() {
     let review = uuid::Uuid::now_v7();
-    let CodeModeError::Invalid(message) = attach_error(
+    let CodeModeError::Unpresentable(message) = attach_error(
         review,
         ImportError::RunNotReviewable(UnreviewableRun::Missing),
     ) else {

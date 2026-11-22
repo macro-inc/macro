@@ -440,7 +440,22 @@ impl ReviewService {
         // Presentation writes the session transcript, whose capability belongs
         // to the session owner. The record's immutable actor governs all actions.
         let owner = self.owner(record.session_id).await?;
-        self.actions.present(&owner, &record).await?;
+        match self.actions.present(&owner, &record).await {
+            Ok(()) => {}
+            Err(CodeModeError::Unpresentable(reason)) => {
+                // Settled, so no later read presents it again.
+                for item in record.items.states_mut() {
+                    item.status = ReviewItemStatus::Dismissed;
+                    item.error = Some(reason.clone());
+                }
+                match self.save(&mut record, None).await {
+                    Ok(()) | Err(CodeModeError::Conflict) => {}
+                    Err(error) => return Err(error),
+                }
+                return Err(CodeModeError::Unpresentable(reason));
+            }
+            Err(error) => return Err(error),
+        }
         record.presented_at = Some(chrono::Utc::now().timestamp_millis());
         match self.save(&mut record, None).await {
             Ok(()) => Ok(record),
@@ -471,7 +486,14 @@ impl ReviewService {
         Ok(records)
     }
     async fn refresh(&self, mut record: ReviewRecord) -> Result<ReviewRecord, CodeModeError> {
-        if record.presented_at.is_none() {
+        // A review dismissed before it was presented could never be shown
+        // (`CodeModeError::Unpresentable`); it is returned as it is.
+        let never_shown = record
+            .items
+            .states()
+            .iter()
+            .all(|item| item.status == ReviewItemStatus::Dismissed);
+        if record.presented_at.is_none() && !never_shown {
             record = self.present(record).await?;
         }
         // A killed replica cannot leave a permanent spinner or permit a blind retry.

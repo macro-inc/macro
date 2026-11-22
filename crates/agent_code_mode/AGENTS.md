@@ -137,7 +137,9 @@ review's acting account, and its Submit waits for `ReviewActions::approvable`
 (default: always), the hook a kind uses to refuse until it is ready. Creating a
 review first asks `ReviewActions::presentable` (default: always), so a review
 that cannot be presented (an import whose plan failed) is refused and never
-saved; a saved, unpresented review is presented again on every read. `GetReview`
+saved. A saved, unpresented review is presented again on every read, unless
+presenting it failed with `CodeModeError::Unpresentable`: it is then dismissed
+with the reason and never presented. `GetReview`
 reads final
 drafts and outcomes. Legacy notificationId/notificationAttemptAt fields are no
 longer delivery state.

@@ -40,7 +40,7 @@ fn attach_error(review: uuid::Uuid, error: import::domain::ports::ImportError) -
     match error {
         import::domain::ports::ImportError::RunNotReviewable(refusal) => {
             tracing::info!(refusal = ?refusal, %review, "saved import review refused");
-            CodeModeError::Invalid(format!(
+            CodeModeError::Unpresentable(format!(
                 "Review {review} was not presented: {refusal}. Tell the user why instead of presenting it again."
             ))
         }

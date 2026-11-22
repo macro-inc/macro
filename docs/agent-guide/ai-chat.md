@@ -2811,7 +2811,9 @@ ends; the card shows its final state and the agent's reply follows. A plan
 still being made when it was presented also wakes the agent once it is ready.
 An import review cannot be presented for a plan that failed, finished, or was
 never made: the agent is told why (for example, the source lost access), and
-nothing is saved or shown. A card whose plan fails after it was presented shows
+nothing is saved or shown. If the plan fails while the review is being saved,
+the review stays saved, dismissed with the reason, and is never shown. A card
+whose plan fails after it was presented shows
 **Couldn't plan the import** with the reason and only **Dismiss**.
 These events create no user bubble; events without an existing card use a
 quiet timeline row.
