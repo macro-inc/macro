@@ -91,7 +91,10 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   moved files marks its error `cacheRecoveryDeferred` (`recovery_deferred`),
   which the worker reports as `movedFilesKept` beside its failure code; the
   coordinator then keeps the scope instead of failing for good until an open
-  succeeds, so the page's cache recovery runs it again later. A version probe
+  succeeds, so the page's cache recovery runs it again later. It does the same
+  after an open that reached storage ended without any report, until an open
+  that reaches storage reports; an unmarked failure from such an open is a
+  report that nothing was kept. A version probe
   that meets a busy sync handle fails as `storage-busy` too, which ends the
   coordinator's retries the same way, so the count can span page loads. Mark
   every error such an open returns, the owner's release included.
