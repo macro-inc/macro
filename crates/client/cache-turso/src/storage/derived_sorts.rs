@@ -14,19 +14,25 @@ const META_UPSERT: &str = "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONF
 struct Tables {
     documents: &'static str,
     exact: &'static str,
+    integers: &'static str,
     sorts: &'static str,
+    optimistic: bool,
 }
 
 const AUTHORITATIVE: Tables = Tables {
     documents: "index_documents",
     exact: "exact_facts",
+    integers: "integer_facts",
     sorts: "sort_facts",
+    optimistic: false,
 };
 
 const OPTIMISTIC: Tables = Tables {
     documents: "optimistic_index_documents",
     exact: "optimistic_exact_facts",
+    integers: "optimistic_integer_facts",
     sorts: "optimistic_sort_facts",
+    optimistic: true,
 };
 
 fn fingerprint(derivations: &[SortFactDerivation]) -> String {
@@ -90,6 +96,7 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
             documents,
             exact,
             sorts,
+            ..
         } = tables;
         driver::execute(
             connection,
@@ -112,10 +119,14 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
                 " AND EXISTS (SELECT 1 FROM {exact} AS e WHERE e.document_id = s.document_id AND e.attribute = ?{attribute_parameter} AND e.value = ?{value_parameter})"
             ));
         }
+        let eligible = format!(
+            "FROM {sorts} AS s JOIN {documents} AS d ON d.id = s.document_id WHERE s.attribute = ?2 AND d.profile IN ({after_source}){required}"
+        );
+        mark_over_limit_incomplete(connection, &tables, &eligible, parameters.clone())?;
         driver::execute(
             connection,
             &format!(
-                "INSERT INTO {sorts} (document_id, attribute, value) SELECT s.document_id, ?1, s.value FROM {sorts} AS s JOIN {documents} AS d ON d.id = s.document_id WHERE s.attribute = ?2 AND d.profile IN ({after_source}){required}"
+                "INSERT INTO {sorts} (document_id, attribute, value) SELECT s.document_id, ?1, s.value {eligible}"
             ),
             parameters,
         )?;
@@ -162,6 +173,76 @@ fn derive_uncertainty(
             vec![Value::from_i64(document_id)],
         )?;
         write_optimistic_uncertainty(connection, document_id, derived)?;
+    }
+    Ok(())
+}
+
+/// A document already at `MAX_ATTRIBUTES_PER_DOCUMENT` distinct attributes
+/// cannot take the derived fact: as the projection and composition do for
+/// such a document, it becomes incomplete (Dirty) and its queries fall back.
+/// Row counts bound distinct attributes from above, so SQL selects the few
+/// documents with that many rows and Rust counts their distinct attributes.
+fn mark_over_limit_incomplete(
+    connection: &Db,
+    tables: &Tables,
+    eligible: &str,
+    parameters: Vec<Value>,
+) -> Result<(), TursoStorageError> {
+    let Tables {
+        documents,
+        exact,
+        integers,
+        sorts,
+        optimistic,
+    } = tables;
+    let limit = predicate_index::MAX_ATTRIBUTES_PER_DOCUMENT;
+    let candidates = driver::query(
+        connection,
+        &format!(
+            "SELECT s.document_id, ?1 {eligible} AND (SELECT COUNT(*) FROM {exact} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {integers} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {sorts} AS c WHERE c.document_id = s.document_id) >= {limit}"
+        ),
+        parameters,
+    )?;
+    for row in candidates {
+        let document_id = required_i64(&row, 0)?;
+        let mut attributes = BTreeSet::new();
+        for table in [exact, integers, sorts] {
+            for row in driver::query(
+                connection,
+                &format!("SELECT DISTINCT attribute FROM {table} WHERE document_id = ?1"),
+                vec![Value::from_i64(document_id)],
+            )? {
+                attributes.insert(required_text(&row, 0)?);
+            }
+        }
+        if attributes.len() < limit {
+            continue;
+        }
+        let dirty = projection_state_code(ProjectionIncompleteKind::Dirty);
+        if *optimistic {
+            driver::execute(
+                connection,
+                &format!("UPDATE {documents} SET state = ?2, incomplete_kind = ?3 WHERE id = ?1"),
+                vec![
+                    Value::from_i64(document_id),
+                    Value::from_i64(OptimisticIndexDocumentState::Incomplete as i64),
+                    Value::from_i64(dirty),
+                ],
+            )?;
+        } else {
+            driver::execute(
+                connection,
+                &format!("UPDATE {documents} SET state = ?2 WHERE id = ?1"),
+                vec![Value::from_i64(document_id), Value::from_i64(dirty)],
+            )?;
+        }
+        for table in [exact, integers, sorts] {
+            driver::execute(
+                connection,
+                &format!("DELETE FROM {table} WHERE document_id = ?1"),
+                vec![Value::from_i64(document_id)],
+            )?;
+        }
     }
     Ok(())
 }

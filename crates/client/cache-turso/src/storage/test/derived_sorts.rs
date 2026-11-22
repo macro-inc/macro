@@ -342,3 +342,68 @@ fn all_except_uncertainty_gets_the_derived_rule() {
         );
     });
 }
+
+/// A document already holding the most distinct attributes a document may
+/// have cannot take the derived fact: it becomes incomplete, as a fresh
+/// projection makes it, instead of a document every later load refuses.
+#[test]
+fn a_document_at_the_attribute_limit_becomes_incomplete() {
+    let shape = Shape {
+        other_profile: false,
+        property_profile: true,
+        inbox: Some(true),
+        has_message: Some(true),
+        inbox_ts: Some(30),
+        stale_target: None,
+    };
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("derived-limit").unwrap();
+        let owner = storage.enqueue_mutation(queued("Owner")).await.unwrap();
+        let shapes = [shape.clone(), shape];
+        store(&storage, &shapes, None);
+        store(&storage, &shapes, Some(mutation_id_to_sql(owner).unwrap()));
+        // Three attributes of its own: document 1 reaches the limit, 2 stays
+        // one below it.
+        let limit = predicate_index::MAX_ATTRIBUTES_PER_DOCUMENT;
+        for (document_id, extra) in [(1, limit - 3), (2, limit - 4)] {
+            for index in 0..extra {
+                for table in ["exact_facts", "optimistic_exact_facts"] {
+                    raw_execute(
+                        &storage,
+                        &format!(
+                            "INSERT INTO {table} (document_id, attribute, value) VALUES (?1, ?2, X'01')"
+                        ),
+                        vec![Value::from_i64(document_id), text(&format!("prop-{index}"))],
+                    );
+                }
+            }
+        }
+        forget_version(&storage);
+        crate::storage::derived_sorts::ensure_version(&storage.connection()).unwrap();
+
+        assert_eq!(derived(&storage, "sort_facts"), vec![(2, 30)]);
+        assert_eq!(derived(&storage, "optimistic_sort_facts"), vec![(2, 30)]);
+        let keys = [1, 2].map(|index| document(index - 1, &shapes[0]).record_key);
+        let states = storage.load_projection_states(&keys).await.unwrap();
+        assert!(matches!(
+            states[0],
+            Some(ProjectionState::Incomplete {
+                kind: ProjectionIncompleteKind::Dirty,
+                ..
+            })
+        ));
+        assert!(matches!(states[1], Some(ProjectionState::Complete(_))));
+        let shadows = storage.load_optimistic_projections(&keys).await.unwrap();
+        assert!(matches!(
+            shadows[0].as_ref().map(|shadow| &shadow.state),
+            Some(OptimisticProjectionState::Incomplete {
+                kind: ProjectionIncompleteKind::Dirty,
+                ..
+            })
+        ));
+        assert!(matches!(
+            shadows[1].as_ref().map(|shadow| &shadow.state),
+            Some(OptimisticProjectionState::Complete(_))
+        ));
+    });
+}

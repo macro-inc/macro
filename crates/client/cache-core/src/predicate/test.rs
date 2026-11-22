@@ -363,4 +363,72 @@ mod derived_sort_facts {
         let from_stale_authority = compose(&stale, &[unknown(&stale, &["mail-read"])]);
         assert_eq!(view_of(&from_stale_authority), Some(30));
     }
+
+    /// A document with the most distinct attributes a document may have
+    /// cannot take the derived fact; composing it gives a non-queryable
+    /// state instead of an error, so a later mutation (a deletion) still
+    /// applies.
+    #[test]
+    fn a_document_at_the_attribute_limit_composes_incomplete() {
+        let mut full = thread(false, 30, None);
+        for index in 0..predicate_index::MAX_ATTRIBUTES_PER_DOCUMENT - 3 {
+            full.exact_facts.push(flag(&format!("prop-{index}"), true));
+        }
+        full.canonicalize();
+        full.validate().unwrap();
+        let unarchive = patch(&full, vec![flag("mail-inbox", true)], vec![]);
+        let shadow = compose(&full, std::slice::from_ref(&unarchive));
+        assert!(matches!(
+            shadow.state,
+            OptimisticProjectionState::Incomplete {
+                kind: ProjectionIncompleteKind::Dirty,
+                ..
+            }
+        ));
+        let deleted = compose(
+            &full,
+            &[
+                unarchive,
+                OptimisticProjectionMutation::Delete {
+                    record_key: full.record_key.clone(),
+                    profile: full.profile.clone(),
+                    partition: full.partition.clone(),
+                },
+            ],
+        );
+        assert!(matches!(
+            deleted.state,
+            OptimisticProjectionState::Deleted { .. }
+        ));
+
+        let mut eligible = full.clone();
+        eligible
+            .exact_facts
+            .retain(|fact| fact.attribute.as_str() != "mail-inbox");
+        eligible.exact_facts.push(flag("mail-inbox", true));
+        eligible.canonicalize();
+        let replaced = compose(
+            &full,
+            &[OptimisticProjectionMutation::Replace(eligible.clone())],
+        );
+        assert!(matches!(
+            replaced.state,
+            OptimisticProjectionState::Incomplete { .. }
+        ));
+        let mut states = HashMap::new();
+        apply_authoritative_projection_mutations(
+            &mut states,
+            &[ProjectionMutation::Replace(eligible.clone())],
+        );
+        assert!(matches!(
+            states.get(&eligible.record_key),
+            Some(ProjectionState::Incomplete { .. })
+        ));
+        // An authority stored before the rule starts the shadow incomplete.
+        let started = compose(&eligible, &[unknown(&eligible, &["mail-read"])]);
+        assert!(matches!(
+            started.state,
+            OptimisticProjectionState::Incomplete { .. }
+        ));
+    }
 }

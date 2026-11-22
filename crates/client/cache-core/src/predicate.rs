@@ -296,6 +296,16 @@ fn derive_sort_facts(document: &mut IndexDocument) {
     }
 }
 
+/// The non-queryable state of a document whose composed facts are invalid.
+fn dirty(document: &IndexDocument) -> OptimisticProjectionState {
+    OptimisticProjectionState::Incomplete {
+        record_key: document.record_key.clone(),
+        profile: document.profile.clone(),
+        partition: document.partition.clone(),
+        kind: ProjectionIncompleteKind::Dirty,
+    }
+}
+
 /// Derived facts are exactly as uncertain as the facts they come from.
 fn derive_uncertainty(
     state: Option<&OptimisticProjectionState>,
@@ -333,8 +343,12 @@ fn initial_composition(
             let mut document = document.clone();
             derive_sort_facts(&mut document);
             document.canonicalize();
-            document.validate()?;
-            OptimisticProjectionState::Complete(document)
+            // A derived fact can take a document past its attribute limit.
+            if document.validate().is_err() {
+                dirty(&document)
+            } else {
+                OptimisticProjectionState::Complete(document)
+            }
         }
         ProjectionState::Incomplete {
             record_key,
@@ -361,8 +375,13 @@ fn apply_projection_mutation(
             let mut document = document.clone();
             derive_sort_facts(&mut document);
             document.canonicalize();
-            document.validate()?;
-            *state = Some(OptimisticProjectionState::Complete(document));
+            // The mutation was validated; only a derived fact can take it
+            // past its attribute limit.
+            *state = Some(if document.validate().is_err() {
+                dirty(&document)
+            } else {
+                OptimisticProjectionState::Complete(document)
+            });
             *uncertainty = OptimisticUncertainty::default();
         }
         OptimisticProjectionMutation::Patch {
@@ -392,7 +411,17 @@ fn apply_projection_mutation(
                 *uncertainty = OptimisticUncertainty::default();
                 return Ok(());
             }
-            patch_complete_document(document, exact, integers, sorts)?;
+            // The patch was validated, so only the composed document can be
+            // invalid, for example a derived fact past the attribute limit.
+            if patch_complete_document(document, exact, integers, sorts).is_err() {
+                *state = Some(OptimisticProjectionState::Incomplete {
+                    record_key: record_key.clone(),
+                    profile: profile.clone(),
+                    partition: partition.clone(),
+                    kind: ProjectionIncompleteKind::Dirty,
+                });
+                return Ok(());
+            }
             uncertainty.clear(
                 exact
                     .iter()
@@ -712,9 +741,21 @@ pub fn apply_authoritative_projection_mutations(
         let state = match mutation {
             ProjectionMutation::Replace(document) => {
                 let mut document = document.clone();
+                let valid = document.validate().is_ok();
                 derive_sort_facts(&mut document);
                 document.canonicalize();
-                Some(ProjectionState::Complete(document))
+                // A derived fact can take a valid replacement past its
+                // attribute limit; storage would refuse to write it.
+                if valid && document.validate().is_err() {
+                    Some(ProjectionState::Incomplete {
+                        record_key: document.record_key,
+                        profile: document.profile,
+                        partition: document.partition,
+                        kind: ProjectionIncompleteKind::Dirty,
+                    })
+                } else {
+                    Some(ProjectionState::Complete(document))
+                }
             }
             ProjectionMutation::Patch {
                 record_key,
