@@ -37,6 +37,8 @@ type DatabaseRelationCellProps = GridCellEditorOptions & {
 const CHIP_LIMIT = 2;
 /** An expanded field wraps its chips; past this many it still counts the rest. */
 const EXPANDED_CHIP_LIMIT = 20;
+/** A phone shows this many of an expanded field's chips until asked for the rest. */
+const PHONE_CHIP_LIMIT = 5;
 
 /** The projection stays a set of row identities; names are presentation only. */
 export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
@@ -60,9 +62,17 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
   const name = (id: string) =>
     props.source.rows().find((row) => row.id === id)?.name ??
     (props.source.loading() ? 'Loading…' : 'Unavailable record');
+  const [showingAll, setShowingAll] = createSignal(false);
   /** Chips shown in the cell; each carries an arrow to its record. */
   const shown = () =>
-    ids().slice(0, props.expanded ? EXPANDED_CHIP_LIMIT : CHIP_LIMIT);
+    showingAll()
+      ? ids()
+      : ids().slice(0, props.expanded ? EXPANDED_CHIP_LIMIT : CHIP_LIMIT);
+  /** Expanded chips a phone keeps behind "+N more". */
+  const phoneHidden = () =>
+    props.expanded && !showingAll()
+      ? Math.max(0, ids().length - PHONE_CHIP_LIMIT)
+      : 0;
   const openable = () => shown().filter(available);
   const candidates = () =>
     props.source
@@ -234,12 +244,14 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
               }}
             >
               <For each={shown()}>
-                {(id) => (
+                {(id, index) => (
                   <span
                     class="inline-flex min-w-0 items-center gap-1 rounded border border-edge-muted/60 bg-hover/60 py-0.5 pl-1.5 text-xs text-ink"
                     classList={{
                       'max-w-44': !props.expanded,
                       'max-w-full': props.expanded,
+                      'mobile:hidden':
+                        phoneHidden() > 0 && index() >= PHONE_CHIP_LIMIT,
                     }}
                     title={name(id)}
                   >
@@ -283,9 +295,29 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                 )}
               </For>
               <Show when={ids().length > shown().length}>
-                <span class="shrink-0 text-xs text-ink-muted">
+                <span
+                  class="shrink-0 text-xs text-ink-muted"
+                  classList={{ 'mobile:hidden': phoneHidden() > 0 }}
+                >
                   +{ids().length - shown().length}
                 </span>
+              </Show>
+              <Show when={phoneHidden()}>
+                {(hidden) => (
+                  <button
+                    type="button"
+                    aria-label={`Show ${hidden()} more ${props.source.name()}`}
+                    class={buttonClasses({
+                      variant: 'ghost',
+                      size: 'xs',
+                      class:
+                        'pointer-events-auto hidden basis-full justify-start mobile:inline-flex',
+                    })}
+                    onClick={() => setShowingAll(true)}
+                  >
+                    +{hidden()} more
+                  </button>
+                )}
               </Show>
             </span>
           </Show>
