@@ -208,6 +208,10 @@ impl TeammateRequest {
     }
 }
 
+/// How long an agent has to stop once the machine's credentials are
+/// refused: its own key is revoked with them, so it can't sync anyway.
+pub const CREDENTIALS_REFUSED_GRACE: Duration = Duration::from_secs(10);
+
 /// The teammates this macrod hosts. Requests are handled one at a time, in
 /// order; dropping it stops supervising (the containers keep running).
 pub struct Teammates<EngineImpl: Engine> {
@@ -235,6 +239,7 @@ struct Shared<EngineImpl> {
 enum Work {
     Request(TeammateRequest),
     Resume,
+    CredentialsRefused,
 }
 
 impl<EngineImpl: Engine> Teammates<EngineImpl> {
@@ -450,6 +455,12 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
         let _ = self.requests.send(Work::Request(request));
     }
 
+    /// The service refused this machine's harness credentials (it was
+    /// unpaired or removed): stop every teammate it runs.
+    pub fn credentials_refused(&self) {
+        let _ = self.requests.send(Work::CredentialsRefused);
+    }
+
     /// State changes from now on.
     pub fn subscribe(&self) -> broadcast::Receiver<Status> {
         self.shared.statuses.subscribe()
@@ -544,6 +555,10 @@ async fn manage<EngineImpl: Engine>(
     while let Some(work) = queue.recv().await {
         match work {
             Work::Resume => resume(&shared, &mut supervisors),
+            Work::CredentialsRefused => {
+                let span = tracing::info_span!("teammate.credentials_refused");
+                stop_all(&shared, &mut supervisors).instrument(span).await;
+            }
             Work::Request(TeammateRequest::Run {
                 install,
                 image,
@@ -739,6 +754,41 @@ async fn stop<EngineImpl: Engine>(
     shared.report(&install, TeammateRunState::Stopped);
     if shared.store.read(id).ok().flatten().is_none() {
         lock(&shared.latest).remove(id);
+    }
+}
+
+/// Stop every kept install's agent and holder, keeping its volumes and the
+/// install itself (a later stop deletes them), and report `stopped`. Kept
+/// as asked to stop, so a restarted macrod doesn't start them again.
+async fn stop_all<EngineImpl: Engine>(
+    shared: &Arc<Shared<EngineImpl>>,
+    supervisors: &mut HashMap<TeammateInstallId, AbortOnDropHandle<()>>,
+) {
+    for mut kept in shared.store.installs() {
+        let id = kept.install.install_id.clone();
+        if !supervisors.contains_key(&id) && matches!(kept.lifecycle.policy.phase(), Phase::Stopped)
+        {
+            continue;
+        }
+        end_supervisor(supervisors, &id).await;
+        let stop = ExitEvent {
+            code: None,
+            requested: true,
+        };
+        kept.lifecycle.policy.exited(stop, chrono::Utc::now());
+        if let Err(error) = shared.store.save_lifecycle(&kept.install, &kept.lifecycle) {
+            tracing::warn!(error = ?error, "could not keep the teammate's stop");
+        }
+        for name in [container_name(&id), engine::holder_name(&id)] {
+            let running =
+                matches!(shared.engine.container(&name).await, Ok(Some(state)) if state.running);
+            if running
+                && let Err(error) = shared.engine.stop(&name, CREDENTIALS_REFUSED_GRACE).await
+            {
+                tracing::warn!(install_id = id.as_str(), error = %error, "could not stop a teammate container");
+            }
+        }
+        shared.report(&kept.install, TeammateRunState::Stopped);
     }
 }
 

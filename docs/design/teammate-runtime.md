@@ -414,6 +414,12 @@ addresses, as it gives a local Macro computer. Production never sets it.
   install store and finds each container by its label. One that is still
   running is adopted, never recreated. A container that is gone, or exited
   while macrod was down, is started again.
+- **Unpaired or removed machine.** When the service refuses macrod's
+  harness credentials (the runtime dial, or the bound-agent check every 10
+  seconds, answers 401 or 403), macrod stops every teammate it runs and its
+  holder at once, with 10 seconds' grace (the agent's key went with the
+  machine's), keeps the volumes and the kept install for a later move or
+  stop, and reports `stopped`. A restarted macrod doesn't start them again.
 - **Crash loop.** Failed exits (not 0, not 75) restart with a backoff from
   2 to 60 seconds, for as long as they keep failing; macrod never gives up
   on a generation by itself. `crashLoop` is only the reason an image update

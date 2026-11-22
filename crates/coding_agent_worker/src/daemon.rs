@@ -155,6 +155,7 @@ impl Daemon {
         // may have handled. Every later open resumes from a service id, and
         // `StreamPosition` drops repeats within this process.
         let mut position = StreamPosition::new(std::time::SystemTime::now());
+        let teammates = host_teammates(&config.macro_api, &config.teammates, &credentials);
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
@@ -165,7 +166,7 @@ impl Daemon {
             adopted,
             handoffs,
             computer,
-            host_teammates(&config.macro_api, &config.teammates, &credentials),
+            teammates.clone(),
         );
         let runtime_connected = runtime.connection_state();
         let agents_changed = runtime.agents_changed();
@@ -217,6 +218,12 @@ impl Daemon {
                         health.send_if_modified(TriggerStreamHealth::reopening);
                     }
                     ServeOutcome::Ended { error, lasted } => {
+                        if error
+                            .downcast_current_context::<crate::outbound::stream::CredentialsRefused>()
+                            .is_some()
+                        {
+                            crate::harness::credentials_refused(teammates.as_ref());
+                        }
                         tracing::warn!(error = ?error, "event stream ended; reconnecting");
                         let delay = reconnect_delay(lasted, &mut delays, &mut attempt);
                         health.send_replace(TriggerStreamHealth::Reconnecting {

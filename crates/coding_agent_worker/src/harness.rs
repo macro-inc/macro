@@ -56,6 +56,18 @@ pub type HostTeammates = crate::teammate::HostTeammates;
 #[cfg(not(unix))]
 pub enum HostTeammates {}
 
+/// The service refused this machine's harness credentials (it was unpaired
+/// or removed): stop the teammates it runs, whose keys went with them.
+pub fn credentials_refused(teammates: Option<&std::sync::Arc<HostTeammates>>) {
+    let Some(teammates) = teammates else {
+        return;
+    };
+    #[cfg(unix)]
+    teammates.credentials_refused();
+    #[cfg(not(unix))]
+    match **teammates {}
+}
+
 /// The teammates to serve on one connection, with the engine check made
 /// before its dial.
 pub type TeammateHosting = (Arc<HostTeammates>, TeammateHostReport);

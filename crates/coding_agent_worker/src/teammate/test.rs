@@ -2062,6 +2062,60 @@ async fn a_stop_whose_deletion_failed_is_not_started_by_a_restarted_macrod() {
     assert_eq!(fixture.engine.runs(), 1);
 }
 
+#[tokio::test]
+async fn refused_harness_credentials_stop_every_teammate_and_keep_its_data() {
+    // The machine was unpaired: its agents' keys are revoked, so they stop
+    // now rather than at the service's next (never coming) stop.
+    let mut fixture = fixture().await;
+    fixture.teammates.handle(run_request(1));
+    next_states(&mut fixture.statuses, 3).await;
+    let before = fixture.engine.calls().len();
+
+    fixture.teammates.credentials_refused();
+
+    assert_eq!(
+        next_states(&mut fixture.statuses, 1).await,
+        [TeammateRunState::Stopped]
+    );
+    let calls = fixture.engine.calls()[before..].to_vec();
+    assert_eq!(
+        calls,
+        [
+            Call::Stop(
+                "macro-teammate-install-1".to_owned(),
+                super::CREDENTIALS_REFUSED_GRACE
+            ),
+            Call::Stop(
+                "macro-teammate-install-1-net".to_owned(),
+                super::CREDENTIALS_REFUSED_GRACE
+            ),
+        ]
+    );
+    // The volumes and the kept install stay, for a move or a stop to use.
+    assert!(
+        fixture
+            .store
+            .read(&install(1).install_id)
+            .unwrap()
+            .is_some()
+    );
+
+    let restarted_macrod = Teammates::new(
+        fixture.engine.clone(),
+        fixture.store.clone(),
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    );
+    let mut statuses = restarted_macrod.subscribe();
+    restarted_macrod.detect().await;
+    assert_eq!(
+        next_states(&mut statuses, 1).await,
+        [TeammateRunState::Stopped]
+    );
+    assert_eq!(fixture.engine.runs(), 1);
+}
+
 #[tokio::test(start_paused = true)]
 async fn an_engine_that_refuses_a_start_is_retried_with_backoff() {
     let mut fixture = fixture().await;

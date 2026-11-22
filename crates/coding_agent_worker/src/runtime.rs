@@ -189,6 +189,9 @@ async fn serve(
             }
             Ok(Err(error)) => {
                 if !worth_redialing(&error) {
+                    if credentials_refused(&error) {
+                        harness::credentials_refused(teammates.as_ref());
+                    }
                     tracing::error!(error = ?error, "runtime connection refused; check configuration or re-pair");
                     return;
                 }
@@ -275,6 +278,17 @@ fn worth_redialing(error: &tungstenite::Error) -> bool {
     !status.is_client_error()
         || status == tungstenite::http::StatusCode::REQUEST_TIMEOUT
         || status == tungstenite::http::StatusCode::TOO_MANY_REQUESTS
+}
+
+/// Whether the gateway refused the harness's credentials.
+fn credentials_refused(error: &tungstenite::Error) -> bool {
+    let tungstenite::Error::Http(response) = error else {
+        return false;
+    };
+    matches!(
+        response.status(),
+        tungstenite::http::StatusCode::UNAUTHORIZED | tungstenite::http::StatusCode::FORBIDDEN
+    )
 }
 
 /// How long to wait before the next dial, given how long the last
