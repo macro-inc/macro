@@ -99,9 +99,7 @@ GET /import/state
 GET /import/workspaces/{source}
 GET /mcp/servers
 GET /mcp/servers/auth/client-metadata
-GET /memory
 GET /memory/activity
-GET /memory/explicit
 GET /onboarding
 GET /onboarding/prompts
 GET /pipedream/mcp/catalog

@@ -29,6 +29,8 @@ GET /team/invite-link  # an invite link others redeem
 
 [cognition]
 GET /mcp/servers/auth/callback  # sign-in and OAuth flows
+GET /memory  # enrolls the person in daily memory refresh
+GET /memory/explicit  # enrolls the person in daily memory refresh
 
 [email]
 GET /email/attachments/{id}/document_id  # uploads the attachment as a document when it has none
