@@ -97,8 +97,10 @@ import {
 } from './directory-lane';
 import {
   readableChannelsInput,
+  removeChannelsGoneOnPrimary,
   returnedChannelIds,
 } from './directory-reconcile';
+import { createRemovalWatch } from './directory-removals';
 import { channelKeys } from './keys';
 import {
   createOwnWriteTracker,
@@ -1413,6 +1415,14 @@ type CachedDirectoryDeps = {
   stampView: (channelId: string, viewedAt: string) => Promise<boolean>;
   /** The viewer's own writes, shown until the cache has them. */
   ownWrites: OwnChannelWrites;
+  /** Deletes the cached records of channels the primary no longer shows
+   * the viewer, for a channel the viewer left that came back joined. None
+   * when left out. */
+  removeUnreadable?: (
+    ids: readonly string[],
+    generation: string,
+    signal: AbortSignal
+  ) => Promise<unknown>;
   /** When this page loaded, in epoch milliseconds: records a pass of the
    * lane reread after it show views as current as `ChannelDirectory`
    * promises. `performance.timeOrigin` when left out. */
@@ -1650,14 +1660,25 @@ export function createCachedChannelDirectory(
     userId,
     session: deps.session,
   });
-  const view = createMemo(() => views.apply(own.apply(state())));
+  const controller = new AbortController();
+  onCleanup(() => controller.abort());
+  // Channels the viewer left that came back joined, hidden until the
+  // primary decides them.
+  const removals = createRemovalWatch({
+    userId,
+    generation: () => generation,
+    readFromPrimary: deps.readFromPrimary,
+    removeUnreadable: deps.removeUnreadable ?? (async () => undefined),
+    signal: controller.signal,
+  });
+  const view = createMemo(() =>
+    views.apply(own.apply(removals.apply(state())))
+  );
   // Cached records older than a recorded view that the view was written
   // over again: a soup page read before the view can overwrite it.
   const restamped = new WeakSet<DirectoryChannel>();
   // Shown with the rows it gives once `render` runs.
   let fallback: LaneFallback = { status: 'idle' };
-  const controller = new AbortController();
-  onCleanup(() => controller.abort());
   // The network walk the fallback is waiting on, aborted when it stops.
   let walk: AbortController | undefined;
   onCleanup(() => walk?.abort());
@@ -1779,12 +1800,13 @@ export function createCachedChannelDirectory(
     const nextUnconfirmed = sameIds(current.unconfirmed, unconfirmed)
       ? current.unconfirmed
       : unconfirmed;
-    if (
-      nextState === current.state &&
-      nextUnconfirmed === current.unconfirmed &&
-      current.fallback === fallback.status
-    )
-      return;
+    const moved =
+      nextState !== current.state || nextUnconfirmed !== current.unconfirmed;
+    if (!moved && current.fallback === fallback.status) return;
+    // Before the state is shown, so a channel it hides never shows. A change
+    // of `unconfirmed` alone joins or leaves nothing.
+    if (nextState !== current.state)
+      removals.observe(nextState, nextUnconfirmed);
     setShown({
       state: nextState,
       fallback: fallback.status,
@@ -2080,6 +2102,7 @@ export function createCachedChannelDirectory(
     if (changed)
       batch(() => {
         reader.reset();
+        removals.reset();
         // What was read, and seen since, was of the cache in other hands.
         lastRead = undefined;
         restartFallback();
@@ -2212,6 +2235,8 @@ export function createCachedChannelDirectory(
           // What a by-id read wrote into the old one is gone, and the
           // fallback saw the old one.
           reader.reset();
+          // The leaves it saw were of the old storage.
+          removals.reset();
           // The viewer's writes go too: a reset retires what the session
           // showed (an access change can cause it), and the new storage
           // fills from the server.
@@ -2266,6 +2291,8 @@ export function createCachedChannelDirectory(
   const proven = createMemo(() => {
     const { state: current, fallback: status, unconfirmed } = shown();
     if (!current.complete) return false;
+    // A hidden channel the primary has yet to decide may be the viewer's.
+    if (Object.keys(removals.waiting()).length > 0) return false;
     if (status === 'loaded') return Object.keys(unconfirmed).length === 0;
     const outcomes = reader.outcomes();
     for (const id of Object.keys(current.incomplete)) {
@@ -2295,6 +2322,12 @@ export function createCachedChannelDirectory(
     channels: () => view().joined,
     complete: proven,
     lookup(channelId, trace) {
+      // A channel hidden after the viewer left it: missing once the primary
+      // shows them out, else pending on its read.
+      if (removals.held()[channelId] && !view().records[channelId])
+        return removals.waiting()[channelId]
+          ? { status: 'pending' }
+          : { status: 'missing' };
       const { unconfirmed } = shown();
       const result = lookupChannel(
         view(),
@@ -2542,6 +2575,14 @@ export function createAppChannelDirectory(): ChannelDirectory {
       stampView: (channelId, viewedAt) =>
         stampCachedChannelView(cache, channelId, viewedAt),
       ownWrites: ownChannelWrites(queryClient),
+      removeUnreadable: (ids, generation, signal) =>
+        removeChannelsGoneOnPrimary({
+          host: cache,
+          userId,
+          generation,
+          ids,
+          signal,
+        }),
     });
   });
   return {

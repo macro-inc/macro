@@ -241,7 +241,9 @@ type Reconciliation = {
 
 /** Whether the cache still belongs to the viewer and storage generation the
  * evidence was read for. */
-async function stillInScope(input: Reconciliation): Promise<boolean> {
+async function stillInScope(
+  input: Pick<Reconciliation, 'host' | 'userId' | 'generation' | 'signal'>
+): Promise<boolean> {
   try {
     await assertContactCacheScope(
       input.host,
@@ -430,6 +432,78 @@ async function removeUnreadableChannels(
       );
     }
     return finish(deferred > 0 ? 'deferred' : 'complete');
+  });
+}
+
+export type RemoveGoneInput = {
+  host: ReconcileHost;
+  userId: string;
+  /** The storage generation the caller saw the channels in. */
+  generation: string;
+  ids: readonly string[];
+  session?: () => string;
+  readFromPrimary?: ReadFromPrimary;
+  signal: AbortSignal | undefined;
+};
+
+/**
+ * Deletes the cached records of `ids` the primary shows the viewer can no
+ * longer read, with the checks reconciliation makes: the record the read
+ * decided on is the one deleted (a record rewritten since is kept), only for
+ * the viewer and storage generation it was read for, and each deleted
+ * channel owes a second look on the primary first. Storage that refuses the
+ * second look deletes nothing. Returns the ids deleted. A failed read throws.
+ */
+export async function removeChannelsGoneOnPrimary(
+  input: RemoveGoneInput
+): Promise<string[]> {
+  const read = input.readFromPrimary ?? readChannelOnPrimary;
+  const sessionOf = input.session ?? cacheSessionGeneration.capture;
+  return Telemetry.span('channel_directory.remove_gone', async (span) => {
+    span.setAttr('channel_directory.candidates', input.ids.length);
+    const finish = (removed: readonly string[], outcome: string) => {
+      span.setAttr('channel_directory.removed', removed.length);
+      span.setAttr('channel_directory.remove_gone_outcome', outcome);
+      return [...removed];
+    };
+    // Taken before the evidence, so the cache refuses the delete once the
+    // session it was read in has ended.
+    const session = sessionOf();
+    const before = await span.run(() =>
+      cachedHashes(input.host, input.ids, input.signal)
+    );
+    const cached = input.ids.filter((id) => before.has(id));
+    if (cached.length === 0) return finish([], 'not_cached');
+    const gone = await unreadableOnPrimary(cached, read, input.signal, span);
+    const decided = cached.filter((id) => gone.has(id));
+    if (decided.length === 0) return finish([], 'readable');
+    if (!(await span.run(() => stillInScope(input))))
+      return finish([], 'scope_changed');
+    const after = await span.run(() =>
+      cachedHashes(input.host, decided, input.signal)
+    );
+    const stale = decided.filter((id) => after.get(id) === before.get(id));
+    if (stale.length === 0) return finish([], 'rewritten');
+    // Owed before the delete, so a write that lands between the check and
+    // the delete is read back.
+    if (!addChannelRereads(input.userId, input.generation, stale))
+      return finish([], 'unsaved');
+    await span.run(() =>
+      input.host.deleteRecords(
+        stale.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`),
+        session
+      )
+    );
+    await settleRereads(
+      {
+        userId: input.userId,
+        generation: input.generation,
+        readFromPrimary: read,
+        signal: input.signal,
+      },
+      span
+    );
+    return finish(stale, 'removed');
   });
 }
 

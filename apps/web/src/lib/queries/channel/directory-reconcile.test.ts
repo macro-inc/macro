@@ -10,6 +10,7 @@ import { fromValue } from 'wonka';
 import {
   ChannelDirectoryPassUnproven,
   createChannelDirectoryBackfillFetcher,
+  removeChannelsGoneOnPrimary,
 } from './directory-reconcile';
 import { pendingChannelRereads } from './directory-rereads';
 import { channelName, channelUuid } from './tests/channel-uuid';
@@ -990,5 +991,109 @@ describe('the primary read after a delete', () => {
     expect(pendingChannelRereads('viewer', 'g1')).toEqual([
       channelUuid('readded'),
     ]);
+  });
+});
+
+describe('removing channels the primary shows gone', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const remove = (
+    host: ReturnType<typeof reconcileHost>['host'],
+    names: string[],
+    read: ReadFromPrimary,
+    session: () => string = () => 's1'
+  ) =>
+    removeChannelsGoneOnPrimary({
+      host,
+      userId: 'viewer',
+      generation: 'g1',
+      ids: names.map(channelUuid),
+      session,
+      readFromPrimary: read,
+      signal: undefined,
+    });
+
+  it('deletes the ones the primary shows gone, under the session it read them in, and looks once more', async () => {
+    const { host } = reconcileHost(['gone', 'kept']);
+    let session = 's1';
+    const read = vi.fn<ReadFromPrimary>(async (id) => {
+      session = 's2';
+      return id === channelUuid('gone') ? 'unreadable' : 'readable';
+    });
+
+    const removed = await remove(host, ['gone', 'kept'], read, () => session);
+
+    expect(removed.map(channelName)).toEqual(['gone']);
+    expect(deleted(host)).toEqual(['GraphqlSoupChannel:gone']);
+    expect(host.deleteRecords.mock.calls[0]?.[1]).toBe('s1');
+    // The look after the delete.
+    expect(read.mock.calls.map(([id]) => channelName(id))).toEqual([
+      'gone',
+      'kept',
+      'gone',
+    ]);
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
+  });
+
+  it('reads nothing for a channel the cache no longer holds', async () => {
+    const { host } = reconcileHost([]);
+    const read = vi.fn<ReadFromPrimary>(async () => 'unreadable');
+
+    expect(await remove(host, ['gone'], read)).toEqual([]);
+    expect(read).not.toHaveBeenCalled();
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('keeps a channel the cache rewrote after the primary was read', async () => {
+    const { cache, host } = reconcileHost(['gone']);
+    const read = vi.fn<ReadFromPrimary>(async () => {
+      cache.put(channelRecord('gone'), { sourceHash: 'gone-2' });
+      return 'unreadable';
+    });
+
+    expect(await remove(host, ['gone'], read)).toEqual([]);
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('deletes nothing when storage refuses the second look', async () => {
+    const { host } = reconcileHost(['gone']);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+
+    expect(
+      await remove(
+        host,
+        ['gone'],
+        vi.fn<ReadFromPrimary>(async () => 'unreadable')
+      )
+    ).toEqual([]);
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('deletes nothing once the storage generation changed', async () => {
+    const { host, setGeneration } = reconcileHost(['gone']);
+    const read = vi.fn<ReadFromPrimary>(async () => {
+      setGeneration('g2');
+      return 'unreadable';
+    });
+
+    expect(await remove(host, ['gone'], read)).toEqual([]);
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('throws, deleting nothing, when the primary read fails', async () => {
+    const { host } = reconcileHost(['gone']);
+    const read = vi.fn<ReadFromPrimary>(async () => {
+      throw new Error('primary down');
+    });
+
+    await expect(remove(host, ['gone'], read)).rejects.toThrow('primary down');
+    expect(host.deleteRecords).not.toHaveBeenCalled();
   });
 });

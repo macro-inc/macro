@@ -90,7 +90,7 @@ import {
   staticChannelDirectory,
   walkCurrentJoinedChannels,
 } from './directory';
-import type { DirectoryChannel } from './directory-core';
+import { type DirectoryChannel, toDirectoryChannel } from './directory-core';
 import { CHANNEL_DIRECTORY_CHECKPOINT_ID } from './directory-lane';
 import { OWN_WRITE_HOLD_MS, ownChannelWrites } from './own-writes';
 import { channelName, channelUuid } from './tests/channel-uuid';
@@ -1103,10 +1103,17 @@ function mountCachedDirectory(
     (channelId: string, signal?: AbortSignal) => Promise<PrimaryChannelRead>
   >(
     options.readFromPrimary ??
-      (async (channelId) => ({
-        kind: 'read',
-        channel: lastWalked.find(({ id }) => id === channelId) ?? null,
-      }))
+      (async (channelId) => {
+        // The primary shows what a by-id read would land, else what the
+        // last walk listed.
+        const record = server.find(({ id }) => id === channelId);
+        return {
+          kind: 'read',
+          channel: record
+            ? toDirectoryChannel(record)
+            : (lastWalked.find(({ id }) => id === channelId) ?? null),
+        };
+      })
   );
   const pageAll = vi.fn<
     (signal: AbortSignal) => Promise<readonly DirectoryChannel[]>
@@ -4077,15 +4084,23 @@ describe("the viewer's own channel writes", () => {
         false
       )
     );
+    reopen();
+    await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('missing'));
     soup.land();
     await write;
-
-    // The old answer was dropped and the channel read again.
-    expect(soup.sent).toHaveLength(2);
     expect(cache.records.has(`GraphqlSoupChannel:${channelUuid('a')}`)).toBe(
-      false
+      true
     );
+
+    // The old answer wrote the channel back. The directory keeps it hidden,
+    // reads it on the primary, and deletes the record the primary shows
+    // the viewer out of.
     reopen();
+    await vi.waitFor(() =>
+      expect(cache.records.has(`GraphqlSoupChannel:${channelUuid('a')}`)).toBe(
+        false
+      )
+    );
     await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('missing'));
     await vi.waitFor(() =>
       expect(ownChannelWrites(client).writes()).toEqual({})
@@ -4151,6 +4166,13 @@ describe("the viewer's own channel writes", () => {
     const client = queryClient();
     const { cache, directory, reopen } = mountCachedDirectory([], {
       queryClient: client,
+      // The primary shows the viewer back in once they join again.
+      readFromPrimary: async () => ({
+        kind: 'read',
+        channel: toDirectoryChannel(
+          publicChannel('a', UPDATED_OLD, UPDATED_NEW)
+        ),
+      }),
     });
     cache.put(publicChannel('a', UPDATED_OLD, UPDATED_OLD));
     completeLane('g1');
