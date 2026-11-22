@@ -128,7 +128,9 @@ export function DesktopModelSelector() {
             </Show>
             <Show when={!query().trim() && filtered().allModels.length > 0}>
               <Dropdown.Group>
-                <Dropdown.Sub>
+                {/* With no room beside the menu (a narrow window), the flyout
+                    may overlap it and slides to stay on screen. */}
+                <Dropdown.Sub overlap>
                   <Dropdown.SubTrigger>
                     <Squares class="size-4" />
                     <span class="flex-1">{t('agentControls.allModels')}</span>
