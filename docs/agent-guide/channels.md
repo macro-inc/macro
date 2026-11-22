@@ -694,27 +694,30 @@ message; ordinary Markdown blockquotes remain presentation-only and do not count
 The composer always keeps an editable empty line after a block reference, including after
 the user deletes that line, so clicking below the reference can restore the text caret.
 
-The mention menu offers a single `@Macro`, which opens an agent session. The classic
-in-channel bot, which the menu no longer offers, answers in the thread. Its tool calls execute immediately — there is
-no composer or pending-confirmation card in a channel, so asking it to create a calendar
-event without attendees creates the event right away (unlike an agent session, where
-creation waits for the session owner to review it). For an event with attendees the bot is prompted to
-ask for confirmation in the thread first, since Google sends the invitations the moment the
-event is created — no invitation goes out from the initial request. It cannot draft or send
-email at all. A bot or agent reply posted for a person shares, as that person, the linked items
+The mention menu offers a single `@Macro`, which opens an agent session. It
+filters out the classic bot. API/SDK messages can still name the classic bot
+with its canonical bot mention; older clients or integrations posting as a user
+can use that same path. A human follow-up in an existing classic-bot thread can
+also request an inferred classic reply. Plain typed `@Macro` text alone is not
+an explicit mention. The classic bot answers in the thread using the read-only
+policy below: it cannot create calendar events, send email or change sharing,
+including after a confirmation.
+
+Session-backed agents and other bots may create items while answering. A reply
+posted for a person shares, as that person, the linked items
 (chips, attachments, or forms presented as cards in the reply's steps) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
 the thread before the reply, or, for a bot message that starts its own thread (a poll card
 posted top-level), their latest message in the channel. Forms and databases an agent creates
 through code mode (its SDK token) are attributed to its bot like native tool creations. Activity arrives asynchronously, so missing rows are re-checked
 after 5 and 30 seconds. Existing items it links, plain URLs, and bot posts with no person
-behind them share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
-share an existing item. Private and confidential calendar events stay unshared, and a
-calendar event can only be shared by someone who holds it on their own calendar.
-The bot's prompt carries the current date and time in the mentioning user's
-own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
-"EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
-bot asks before scheduling a specific clock time. Within the rollout, `@Macro` — plus
+behind them share nothing. Sharing an existing item is a separate agent action;
+classic Macro replies do not change sharing. Private and confidential calendar
+events stay unshared, and a calendar event can only be shared by someone who
+holds it on their own calendar. The classic bot's prompt carries the current
+date and time in the mentioning user's primary-calendar time zone, or UTC
+without a connected calendar, for interpreting read requests; it does not permit
+calendar writes. Within the rollout, `@Macro` — plus
 `@cursor` / `@codex` when available — opens
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
