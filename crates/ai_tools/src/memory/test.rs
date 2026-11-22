@@ -138,7 +138,10 @@ async fn an_away_user_with_daily_agent_work_gets_no_memory_and_an_active_one_doe
     assert_eq!(profiles.len(), 2);
     let (ada, bea) = (&profiles[0], &profiles[1]);
     assert_eq!(ada.user_id, ADA);
-    assert_eq!(ada.through_date, bea.through_date, "both moved past the same days");
+    assert_eq!(
+        ada.through_date, bea.through_date,
+        "both moved past the same days"
+    );
     assert_eq!(ada.days, 0, "Ada's days passed without a report");
     assert_eq!(ada.content, "");
     assert!(bea.days >= 2, "each of Bea's due days has a report");

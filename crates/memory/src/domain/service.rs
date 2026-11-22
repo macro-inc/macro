@@ -122,7 +122,7 @@ pub const MAX_REFRESH_ATTEMPTS: u8 = 3;
 /// Bounds one user's model work, inside the 25-minute claim lease.
 const REFRESH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1200);
 /// Bounds passing a day, which can run after a full refresh in the same lease.
-const PASS_TIMEOUT:std::time::Duration = std::time::Duration::from_secs(240);
+const PASS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(240);
 /// A day is generated only this long after it ends, so activity still on its way
 /// into the activity log is counted before the day is judged inactive.
 const ACTIVITY_SETTLE: Duration = Duration::hours(1);
