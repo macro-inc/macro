@@ -1,0 +1,89 @@
+crates/connectors/src/domain.rs
+  s_3d0d2ab631115e::t_fa92b26f311f8a 10,19,20-21
+  s_3d0d2ab631115e::t_ddc1178ec38f5f 5-8
+  s_3d0d2ab631115e::t_8af215198e4517 11-16
+crates/connectors/src/domain/service/test.rs
+  s_3d0d2ab631115e::t_8af215198e4517 59-60,279-282,347-350,487-490,687-688,703-705,709-711,713-716
+  s_3d0d2ab631115e::t_b0b0367b4f6eba 641,643
+  s_3d0d2ab631115e::t_d0eee161c3885b 684-686,689-702,706-708,712,717-722
+  s_3d0d2ab631115e::t_061a28cc8ce564 1-58,61-278,283-346,351-486,491-640,642,644-683
+crates/connectors/src/domain/ports.rs
+  s_6d38dd5c0ade1a::t_832dbdc45ea9e7 11-12,211
+  s_3d0d2ab631115e::t_554d79962562b7 208-210,212-214
+  s_3d0d2ab631115e::t_fa48c273a79996 71-94,196-207,215
+crates/connectors/Cargo.toml
+  s_3d0d2ab631115e::t_7112b7d4204b36 10-12,24,54,56
+crates/connectors/src/domain/catalog.rs
+  s_3d0d2ab631115e::t_044fb73260039b 64-68
+crates/connectors/AGENTS.md
+  s_3d0d2ab631115e::t_230f9f22326e83 30-35,40-42,75,84
+  s_3d0d2ab631115e::t_e5edbc81aa4452 69-70
+  s_3d0d2ab631115e::t_9637db783ab6a3 36-39
+crates/connectors/src/fake/source.rs
+  s_3d0d2ab631115e::t_d9ba5a45443cd8 1-288,292-305,307-416
+  s_3d0d2ab631115e::t_8af215198e4517 289-291
+  s_3d0d2ab631115e::t_2edd9649bf9d56 306
+crates/connectors/src/domain/policy/test.rs
+  s_3d0d2ab631115e::t_2e98a8d3b2ab9b 29
+  s_3d0d2ab631115e::t_f474fd285da94c 1-23,25-28,30-36,39-42,44-46,48-51,53-55,57-60,62-67,69-71
+  s_3d0d2ab631115e::t_9f424e18a80917 24,37-38,43,47,52,56,61,68
+crates/connectors/src/fake.rs
+  s_3d0d2ab631115e::t_8af215198e4517 121-122,224-230
+  s_3d0d2ab631115e::t_327bd8622f9075 1-120,123-154,157-163,173-175,177-223,231-286
+  s_3d0d2ab631115e::t_aef9e2afd9f839 155-156,164-172,176
+crates/connectors/src/test.rs
+  s_3d0d2ab631115e::t_8af215198e4517 215-218,245-248,428-431
+  s_3d0d2ab631115e::t_39cdfedb7291be 156,188
+crates/connectors/src/lib.rs
+  s_3d0d2ab631115e::t_6f4bb65582f2aa 172,174-175,191,202,205,220-222,243-244,257,260,376,378,381,383,389,404,406,419,425
+  s_3d0d2ab631115e::t_8af215198e4517 17,23-24,58-147,161-162,164-168,176,208,245,263
+  s_3d0d2ab631115e::t_e20b4051036f13 21
+crates/connectors/src/domain/policy.rs
+  s_3d0d2ab631115e::t_0faf47d092ee10 1-74
+crates/connectors/src/domain/service.rs
+  s_3d0d2ab631115e::t_d0eee161c3885b 442,502,571,682-684,688-726
+  s_3d0d2ab631115e::t_51198f7c2c2fca 1-4,7,10-11,13-17,19-24
+  s_3d0d2ab631115e::t_dacde85cefab2d 122-441,443-447,450-474,476-485,487-500,503-526,530-539,555-569,572-588,590-630,651-652,655,658-680,727-734,739-743
+  s_3d0d2ab631115e::t_8af215198e4517 448-449,475,486,501,527-529,570,589,631-650,681,735-738
+  s_3d0d2ab631115e::t_ba5eaec4e246d9 540-554
+  s_3d0d2ab631115e::t_e79adfd9171ae5 653-654,656-657,685-687
+Cargo.lock
+  s_3d0d2ab631115e::t_98c296102ab9e6 5303
+crates/connectors/src/domain/resolve.rs
+  s_3d0d2ab631115e::t_e433a6602e5a74 143,162
+.github/workspace-dep-closures.json
+  s_3d0d2ab631115e::t_e82bba94ace725 4837,10947,10989,11031,11073,13150
+crates/connectors/src/outbound/native/source.rs
+  s_3d0d2ab631115e::t_ee82550bca8b1c 189-207
+  s_3d0d2ab631115e::t_3fb0d67a3a4963 94-100
+crates/connectors/src/composition.rs
+  s_3d0d2ab631115e::t_e79adfd9171ae5 17-18,35-37,53-56,100,105-107
+  s_3d0d2ab631115e::t_abe320db33cdd2 94-95
+  s_3d0d2ab631115e::t_4bb13a31dd806b 1-16,19-34,38-52,57-93,96-99,101-104,108-180
+crates/connectors/src/composition/test.rs
+  s_3d0d2ab631115e::t_e81f1843550b18 1-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "db95060bfffff18b10832f19a76e6656c1c3e635",
+  "prompts": {},
+  "sessions": {
+    "s_3d0d2ab631115e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47cbba1b-dd9c-4ec5-856a-6bdc8e70e56c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_6d38dd5c0ade1a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef8c75de-f031-432b-b697-39da1c03913d",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
