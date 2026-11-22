@@ -18,7 +18,8 @@ use macro_auth::{
     middleware::decode_jwt::{JwtToken, JwtValidationArgs},
 };
 use route_policy::{
-    ActiveRollout, Authenticated, Caller, CallerEvidence, ResolvedCaller, Rollout, ScopeEvidence,
+    ActiveRollout, Authenticated, Caller, CallerEvidence, NarrowedRollout, ResolvedCaller, Rollout,
+    ScopeEvidence, UnverifiedHeader,
 };
 use serde::Serialize;
 use std::sync::Arc;
@@ -92,9 +93,10 @@ where
 /// an unscoped token beside a scoped one gains nothing. Tokens of different
 /// users, or credentials that can't be told apart, are refused.
 struct VerifiedTokens {
-    /// What the request authenticates with, as far as verifying it here
-    /// tells.
+    /// What a verified user token authenticates the request with.
     authenticated: Authenticated,
+    /// A credential header nothing here verifies.
+    header: Option<UnverifiedHeader>,
     authenticating: Option<MacroApiToken>,
     others: Vec<MacroApiToken>,
 }
@@ -120,6 +122,7 @@ fn evidence(tokens: &VerifiedTokens, scope: Option<SessionScope>, parts: &Parts)
     };
     CallerEvidence {
         authenticated: tokens.authenticated,
+        header: tokens.header,
         program: tokens.all().any(|token| {
             token.agent_id.is_some()
                 || token.routine_id.is_some()
@@ -147,9 +150,26 @@ fn insert_caller(
     rollout: Option<&Arc<dyn Rollout>>,
 ) -> Option<Caller> {
     let caller = route_policy::resolve_caller(evidence)?;
+    let verified = route_policy::resolve_caller(CallerEvidence {
+        header: None,
+        ..evidence
+    });
     parts.extensions.insert(ResolvedCaller(caller));
-    if let Some(rollout) = rollout {
-        parts.extensions.insert(ActiveRollout(Arc::clone(rollout)));
+    // The rollout the service applies: its own, else an outer layer's.
+    let base = rollout.map(Arc::clone).or_else(|| {
+        parts
+            .extensions
+            .get::<ActiveRollout>()
+            .map(|ActiveRollout(rollout)| Arc::clone(rollout))
+    });
+    if let Some(base) = base {
+        // A header that narrowed the caller also enforces for the caller it
+        // narrowed, so it can't pick the one whose category isn't enforced.
+        let rollout: Arc<dyn Rollout> = match verified {
+            Some(verified) if verified != caller => Arc::new(NarrowedRollout::new(base, verified)),
+            _ => base,
+        };
+        parts.extensions.insert(ActiveRollout(rollout));
     }
     Some(caller)
 }
@@ -165,21 +185,19 @@ fn verified_api_tokens(
         _ => None,
     };
     let mut verified = VerifiedTokens {
-        authenticated: match &credential.kind {
+        authenticated: Authenticated::Nothing,
+        header: match &credential.kind {
             CredentialKind::None
             | CredentialKind::MalformedAuthorization
-            | CredentialKind::UserToken { .. } => Authenticated::Nothing,
-            CredentialKind::UserApiKey => Authenticated::ApiCredential,
-            CredentialKind::Bot => Authenticated::Bot,
-            CredentialKind::Harness => Authenticated::Harness,
-            CredentialKind::Internal => Authenticated::Internal,
+            | CredentialKind::UserToken { .. } => None,
+            CredentialKind::UserApiKey => Some(UnverifiedHeader::UserApiKey),
+            CredentialKind::Bot => Some(UnverifiedHeader::Bot),
+            CredentialKind::Harness => Some(UnverifiedHeader::Harness),
+            CredentialKind::Internal => Some(UnverifiedHeader::Internal),
         },
         authenticating: None,
         others: Vec::new(),
     };
-    // An internal key is checked only where its route reads it, so a user's
-    // token beside one is read instead, the narrowest of them if several.
-    let internal_key = credential.kind == CredentialKind::Internal;
     let mut users: Vec<String> = Vec::new();
     // Authentication remains the route's responsibility. Public webhooks and
     // non-Macro credentials may share the listener; only a verified Macro
@@ -190,9 +208,9 @@ fn verified_api_tokens(
         match macro_auth::middleware::decode_jwt::handler(jwt, token) {
             Ok(JwtToken::MacroApiToken(decoded)) => {
                 users.push(decoded.macro_user_id.clone());
-                if Some(token.as_str()) == authenticating_token || internal_key {
-                    verified.authenticated = Authenticated::ApiCredential;
-                }
+                // An API credential is narrower than a session, so it wins
+                // whichever token is read first.
+                verified.authenticated = Authenticated::ApiCredential;
                 if Some(token.as_str()) == authenticating_token {
                     verified.authenticating = Some(decoded);
                 } else {
@@ -200,11 +218,7 @@ fn verified_api_tokens(
                 }
             }
             Ok(JwtToken::MacroAccessToken(decoded)) => {
-                // A session is wider than an API credential: it never
-                // replaces one read from another token beside the same key.
-                if Some(token.as_str()) == authenticating_token
-                    || (internal_key && verified.authenticated == Authenticated::Internal)
-                {
+                if verified.authenticated == Authenticated::Nothing {
                     verified.authenticated = Authenticated::Session;
                 }
                 users.push(decoded.macro_user_id);

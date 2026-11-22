@@ -96,3 +96,9 @@ the axum route constructors that declare each handler's category.
 - Cells that must not be enforced without a replacement path: `program` x
   `egress`, and `bot` and `harness` x `connect` and `approval_gate` (the
   computers pair and approve through them today).
+- A credential header (bot, harness, user API key, internal key) is never
+  verified by the resolver: alone it resolves no caller, beside a verified
+  token it only narrows it. A route that admits bots, computers or internal
+  services must therefore decide them where it verifies the credential (the
+  way an account manager's key is decided again), or no request of theirs
+  reaches a categorized route: they are refused `no_caller` until it does.

@@ -197,6 +197,31 @@ impl Rollout for NoRollout {
     }
 }
 
+/// The rollout of a caller narrowed by a header nobody verified: the
+/// categories enforced for the narrowed caller and for the verified one it
+/// narrows, so a junk header can't pick the caller whose category isn't
+/// enforced yet.
+#[derive(Clone)]
+pub struct NarrowedRollout {
+    inner: Arc<dyn Rollout>,
+    verified: Caller,
+}
+
+impl NarrowedRollout {
+    /// `inner`, also enforcing for `verified`.
+    pub fn new(inner: Arc<dyn Rollout>, verified: Caller) -> Self {
+        Self { inner, verified }
+    }
+}
+
+impl Rollout for NarrowedRollout {
+    fn enforced(&self, caller: Caller) -> CategorySet {
+        self.inner
+            .enforced(caller)
+            .union(self.inner.enforced(self.verified))
+    }
+}
+
 /// A set of categories.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CategorySet(u32);
@@ -209,6 +234,12 @@ impl CategorySet {
     #[must_use]
     pub fn with(self, category: Category) -> Self {
         Self(self.0 | Self::bit(category))
+    }
+
+    /// The categories in either set.
+    #[must_use]
+    pub fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
     }
 
     /// Whether the set holds `category`.

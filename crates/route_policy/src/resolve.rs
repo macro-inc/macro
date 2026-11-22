@@ -10,8 +10,12 @@ use crate::Caller;
 /// narrows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CallerEvidence {
-    /// The credential the request authenticates with.
+    /// The credential a verified token authenticates the request with.
     pub authenticated: Authenticated,
+    /// A bot, harness, user API key or internal-key header the request
+    /// carries. Nothing here verifies it, so it never picks a caller: beside a
+    /// verified caller it only narrows it, and alone it resolves no caller.
+    pub header: Option<UnverifiedHeader>,
     /// Some verified token in the request signs an agent or a routine, or
     /// carries an agent correlation.
     pub program: bool,
@@ -25,22 +29,28 @@ pub struct CallerEvidence {
     pub code_execution: bool,
 }
 
-/// The credential a request authenticates with.
+/// The credential a verified user token authenticates a request with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Authenticated {
-    /// Nothing that verifies.
+    /// No user token verifies.
     Nothing,
     /// A person's session token.
     Session,
-    /// A Macro API token, or a user API key: a credential the person holds
-    /// outside the app. A manager's key is told apart only where it is
-    /// looked up.
+    /// A Macro API token: a credential the person holds outside the app.
     ApiCredential,
+}
+
+/// A credential header whose secret nothing in the resolver checks: the
+/// route's own extractor does, later.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnverifiedHeader {
+    /// A user API key.
+    UserApiKey,
     /// A bot token.
     Bot,
     /// A harness token.
     Harness,
-    /// The internal API key, when no user token rides beside it.
+    /// The internal API key.
     Internal,
 }
 
@@ -69,8 +79,9 @@ impl ScopeEvidence {
 }
 
 /// Who sent a request, narrowest reading winning: any scope, else any
-/// program, else the credential that authenticates. `None` when nothing
-/// verifies and nothing is signed.
+/// program, else the credential a verified token authenticates, narrowed by a
+/// credential header. `None` when no token verifies, whatever headers ride
+/// along: a header alone never makes a caller.
 pub fn resolve_caller(evidence: CallerEvidence) -> Option<Caller> {
     match evidence.scope {
         ScopeEvidence::NoSend => return Some(Caller::ScopedNoSend),
@@ -88,13 +99,19 @@ pub fn resolve_caller(evidence: CallerEvidence) -> Option<Caller> {
         return Some(Caller::Program);
     }
 
-    let caller = match evidence.authenticated {
+    let verified = match evidence.authenticated {
         Authenticated::Nothing => return None,
         Authenticated::Session => Caller::Person,
         Authenticated::ApiCredential => Caller::ApiCredential,
-        Authenticated::Bot => Caller::Bot,
-        Authenticated::Harness => Caller::Harness,
-        Authenticated::Internal => Caller::Internal,
+    };
+
+    // A header nobody verified may only make the caller narrower: a bot's or
+    // a computer's row refuses more than a person's or an API credential's.
+    let caller = match evidence.header {
+        Some(UnverifiedHeader::Bot) => Caller::Bot,
+        Some(UnverifiedHeader::Harness) => Caller::Harness,
+        Some(UnverifiedHeader::UserApiKey) => Caller::ApiCredential,
+        Some(UnverifiedHeader::Internal) | None => verified,
     };
 
     let narrowed_by_header =
