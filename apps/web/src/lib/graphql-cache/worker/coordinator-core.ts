@@ -721,7 +721,13 @@ export class CoordinatorCore {
       kind: 'waiting-for-tab',
       nextDatabaseAction,
     };
-    actions.push(...this.activateNext(nextDatabaseAction));
+    // Navigation stops the departing engine, so one promised to a newer
+    // build hands over now, as a release or a loss does.
+    actions.push(
+      ...(this.supersedePending
+        ? this.completeSupersede()
+        : this.activateNext(nextDatabaseAction))
+    );
     this.assertInvariants();
     return actions;
   }
