@@ -58,8 +58,12 @@ export function ToastRegion() {
   const [mobilePromptStack, setMobilePromptStack] =
     createSignal<HTMLDivElement>();
   // With no transient toast below it, a prompt sits low enough to reach a
-  // composer on its own, so its stack is measured too.
-  const mobilePromptLift = createToastLift(mobilePromptStack);
+  // composer on its own, so its stack is measured too, again whenever the
+  // transient slot under it grows, empties or rises.
+  const mobilePromptLift = createToastLift(mobilePromptStack, () => [
+    mobileTransientSize.height,
+    mobileLift(),
+  ]);
 
   return (
     <Portal>

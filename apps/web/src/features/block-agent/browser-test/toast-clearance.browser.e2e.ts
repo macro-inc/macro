@@ -85,3 +85,28 @@ test('the toast drops back when the composer it cleared closes', async ({
     .poll(async () => (await toast.boundingBox())?.y ?? 0)
     .toBeGreaterThan(viewport.height - 120);
 });
+
+test('a prompt stays clear of the composer after the toast under it expires', async ({
+  page,
+}) => {
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) =>
+    route.fulfill({ status: 404, json: [] })
+  );
+  await page.goto('/composer.html?prompt&toast=1500');
+
+  const prompt = page
+    .locator('.macro-toast')
+    .filter({ hasText: 'Reconnect your calendar' });
+  await expect(prompt).toBeVisible();
+  await expect(page.getByText("Couldn't send your answer")).toHaveCount(0);
+
+  const composer = page.locator('[data-keep-keyboard]').first();
+  await expect
+    .poll(async () => {
+      const promptBox = await prompt.boundingBox();
+      const composerBox = await composer.boundingBox();
+      if (!promptBox || !composerBox) return Number.NaN;
+      return composerBox.y - (promptBox.y + promptBox.height);
+    })
+    .toBeGreaterThanOrEqual(0);
+});

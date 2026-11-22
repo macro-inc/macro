@@ -9,6 +9,7 @@ import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
 import { UserContextProvider } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntityProvider } from '@entity';
 import { MemoryRouter, Route } from '@solidjs/router';
@@ -39,7 +40,8 @@ const QUICK_ACCESS: QuickAccessContextValue = {
 /**
  * The composer an agent session block mounts, docked at the bottom of the
  * page like a session pane's. `?toast` raises a failure toast over it, as the
- * app does when an answer can't be sent, and keeps it up for a minute; each
+ * app does when an answer can't be sent, and keeps it up for a minute (or
+ * `?toast=<ms>`); `?prompt` adds a persistent prompt above it. Each
  * send is counted on <body>. `?hidden` mounts the composer the way a parked
  * desktop tab keeps it (in place, `invisible` and `inert`), and Close
  * composer unmounts it.
@@ -49,8 +51,19 @@ function Fixture() {
   const [open, setOpen] = createSignal(true);
 
   onMount(() => {
+    if (params.has('prompt')) {
+      toast.custom(
+        { title: 'Reconnect your calendar' },
+        {
+          region: isMobile() ? 'mobile-prompt-region' : 'prompt-region',
+          persistent: true,
+        }
+      );
+    }
     if (params.has('toast')) {
-      toast.failure("Couldn't send your answer", { duration: 60_000 });
+      toast.failure("Couldn't send your answer", {
+        duration: Number(params.get('toast')) || 60_000,
+      });
     }
   });
 

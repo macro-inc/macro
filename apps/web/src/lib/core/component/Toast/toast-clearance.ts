@@ -60,7 +60,12 @@ function isShown(composer: HTMLElement): boolean {
  * Nothing polls.
  */
 export function createToastLift(
-  stack: Accessor<HTMLElement | undefined>
+  stack: Accessor<HTMLElement | undefined>,
+  /**
+   * Anything else that moves the stack without resizing it or a composer,
+   * such as the height of a stack it sits on top of; a change re-measures.
+   */
+  movedBy?: Accessor<unknown>
 ): Accessor<number> {
   const [lift, setLift] = createSignal(0);
 
@@ -116,6 +121,7 @@ export function createToastLift(
 
   createResizeObserver(() => [stack(), ...composers()], measure);
   createEffect(on(composers, measureNextFrame, { defer: true }));
+  if (movedBy) createEffect(on(movedBy, measureNextFrame, { defer: true }));
   makeEventListener(window, 'resize', measure);
   if (window.visualViewport) {
     makeEventListener(window.visualViewport, 'resize', measureNextFrame);
