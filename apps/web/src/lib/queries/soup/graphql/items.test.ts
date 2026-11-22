@@ -2973,74 +2973,127 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
-  it("labels a notified email thread by its own page's updatedAt, not the shared record's", async () => {
-    const fake = makeFakeClient();
-    getGraphqlSoupClientMock.mockReturnValue(fake.client);
-    mapGraphqlSoupItemMock.mockImplementation((item) =>
-      item.__typename === 'GraphqlSoupEmailThread'
-        ? {
-            tag: 'emailThread',
-            data: { id: item.id, updatedAt: item.updatedAt },
-          }
-        : item
-    );
-    const { query, dispose } = createRoot((dispose) => ({
-      dispose,
-      query: createGraphqlSoupAstItemsQuery(
-        () => ({ params: { sort_method: 'notified_at' }, body: {} }),
-        () => ({ enabled: true })
-      ),
-    }));
-    const updatedAtOf = (id: string) =>
-      (
-        query.data()?.entities as
-          | { data: { id: string; updatedAt: string } }[]
-          | undefined
-      )?.find((entity) => entity.data.id === id)?.data.updatedAt;
-    const page = (updatedAt: string) => ({
+  describe('email thread updatedAt on notified pages', () => {
+    const mailPage = (
+      rows: [id: string, updatedAt: string][],
+      nextCursor: string | null = null
+    ) => ({
       user: {
         soup: {
-          items: [
-            {
-              __typename: 'GraphqlSoupEmailThread',
-              id: 'thread',
-              createdAt: '2026-01-01T00:00:00Z',
-              updatedAt,
-            },
-          ],
-          nextCursor: null,
-          notifiedAt: [
-            {
-              graphqlTypeName: 'GraphqlSoupEmailThread',
-              entityId: 'thread',
-              notifiedAt: '2026-11-18T10:00:00Z',
-            },
-          ],
+          items: rows.map(([id, updatedAt]) => ({
+            __typename: 'GraphqlSoupEmailThread',
+            id,
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt,
+          })),
+          nextCursor,
+          notifiedAt: rows.map(([id]) => ({
+            graphqlTypeName: 'GraphqlSoupEmailThread',
+            entityId: id,
+            notifiedAt: '2026-11-18T10:00:00Z',
+          })),
         },
       },
     });
-    try {
-      fake.executions[0].next(page('2026-11-21T09:00:00Z'));
-      expect(updatedAtOf('thread')).toBe('2026-11-21T09:00:00Z');
+    // The Mail backfill reads All Mail, which gives threads their latest
+    // message time, and writes it into each thread's one cached record.
+    const BACKFILL = '2026-11-17T08:00:00Z';
 
-      // Another view (the Mail backfill reads All Mail) writes its own
-      // updatedAt into the thread's one cached record, which this page lists.
-      fake.executions[0].next(page('2026-11-17T08:00:00Z'), {
-        source: 'affected-cache-reread',
-        revision: REVISION_2,
+    function notifiedList() {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      makeGraphqlSoupInputMock.mockReturnValue({
+        initial: { limit: 50, sortMethod: 'NOTIFIED_AT' },
       });
-      expect(updatedAtOf('thread')).toBe('2026-11-21T09:00:00Z');
-
-      // The list's next network read decides again.
-      const refresh = query.refresh();
-      await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
-      fake.executions[1].next(page('2026-11-22T07:00:00Z'));
-      await refresh;
-      expect(updatedAtOf('thread')).toBe('2026-11-22T07:00:00Z');
-    } finally {
-      dispose();
-      mapGraphqlSoupItemMock.mockImplementation((item) => item);
+      mapGraphqlSoupItemMock.mockImplementation((item) =>
+        item.__typename === 'GraphqlSoupEmailThread'
+          ? {
+              tag: 'emailThread',
+              data: { id: item.id, updatedAt: item.updatedAt },
+            }
+          : item
+      );
+      const { query, dispose } = createRoot((dispose) => ({
+        dispose,
+        query: createGraphqlSoupAstItemsQuery(
+          () => ({ params: { sort_method: 'notified_at' }, body: {} }),
+          () => ({ enabled: true })
+        ),
+      }));
+      const updatedAtOf = (id: string) =>
+        (
+          query.data()?.entities as
+            | { data: { id: string; updatedAt: string } }[]
+            | undefined
+        )?.find((entity) => entity.data.id === id)?.data.updatedAt;
+      return {
+        fake,
+        query,
+        updatedAtOf,
+        dispose: () => {
+          dispose();
+          mapGraphqlSoupItemMock.mockImplementation((item) => item);
+        },
+      };
     }
+
+    it("labels a thread by its own page's updatedAt, not the shared record's", async () => {
+      const { fake, query, updatedAtOf, dispose } = notifiedList();
+      try {
+        fake.executions[0].next(mailPage([['thread', '2026-11-21T09:00:00Z']]));
+        expect(updatedAtOf('thread')).toBe('2026-11-21T09:00:00Z');
+
+        // The backfill's write reaches the page through the cache.
+        fake.executions[0].next(mailPage([['thread', BACKFILL]]), {
+          source: 'affected-cache-reread',
+          revision: REVISION_2,
+        });
+        expect(updatedAtOf('thread')).toBe('2026-11-21T09:00:00Z');
+
+        // The list's next network read decides again.
+        const refresh = query.refresh();
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
+        fake.executions[1].next(mailPage([['thread', '2026-11-22T07:00:00Z']]));
+        await refresh;
+        expect(updatedAtOf('thread')).toBe('2026-11-22T07:00:00Z');
+      } finally {
+        dispose();
+      }
+    });
+
+    it("keeps a later page's time while a refresh of the chain fails on it", async () => {
+      const { fake, query, updatedAtOf, dispose } = notifiedList();
+      try {
+        fake.executions[0].next(
+          mailPage([['first', '2026-11-21T09:00:00Z']], 'page-2')
+        );
+        const more = query.fetchNextPage();
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
+        fake.executions[1].next(mailPage([['second', '2026-11-20T09:00:00Z']]));
+        await more;
+        fake.executions[1].next(mailPage([['second', BACKFILL]]), {
+          source: 'affected-cache-reread',
+          revision: REVISION_2,
+        });
+        expect(updatedAtOf('second')).toBe('2026-11-20T09:00:00Z');
+
+        // The first page answers; the second, still on screen, fails.
+        const refresh = query.refresh();
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+        fake.executions[2].next(
+          mailPage([['first', '2026-11-21T09:00:00Z']], 'page-2')
+        );
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+        fake.executions[3].fail(
+          new CombinedError({ networkError: new Error('page unavailable') })
+        );
+        await expect(refresh).rejects.toThrow('page unavailable');
+        expect(updatedAtOf('second')).toBe('2026-11-20T09:00:00Z');
+        expect(updatedAtOf('first')).toBe('2026-11-21T09:00:00Z');
+      } finally {
+        dispose();
+      }
+    });
   });
 
   it('keeps the newest notification time when two loaded pages list an item', async () => {
