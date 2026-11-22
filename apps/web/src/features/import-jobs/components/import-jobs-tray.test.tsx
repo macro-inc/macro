@@ -6,6 +6,7 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ImportJob } from '../core/import-job';
 import { ImportJobsRailButton } from './import-jobs-tray';
@@ -43,6 +44,35 @@ describe('import jobs tray', () => {
     expect(button.querySelector('svg circle')).toBeTruthy();
     expect(button.getAttribute('aria-description')).toBeNull();
     expect(within(button).queryByTestId('imports-failed-dot')).toBeNull();
+  });
+
+  it('tells assistive tech politely when a run fails, with the list closed', () => {
+    const [jobs, setJobs] = createSignal<ImportJob[]>([]);
+    render(() => (
+      <ImportJobsRailButton
+        jobs={jobs()}
+        open={false}
+        onOpenChange={vi.fn()}
+        onOpen={vi.fn()}
+        onDismiss={vi.fn()}
+        onReconnect={vi.fn()}
+      />
+    ));
+    // Mounted before anything fails, so the change is announced.
+    const status = screen.getByRole('status');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    expect(status.textContent).toBe('');
+
+    setJobs([
+      {
+        key: 'jira:failed:1',
+        source: 'jira',
+        phase: { kind: 'failed', errorKind: 'access_lost' },
+        sessionId: undefined,
+        dismissable: true,
+      },
+    ]);
+    expect(status.textContent).toBe('Jira import failed');
   });
 
   it('shows nothing in the rail when there are no imports', () => {

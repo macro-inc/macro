@@ -136,7 +136,13 @@ export const FooterActions = (props: {
       {/* Imports that fail to load leave the rest of the rail alone. */}
       <ErrorBoundary fallback={null}>
         <Suspense>
-          <ImportJobsRailButton />
+          <ImportJobsRailButton
+            onEmptied={() =>
+              document
+                .querySelector<HTMLElement>('[data-sidebar-next-item="help"]')
+                ?.focus()
+            }
+          />
         </Suspense>
       </ErrorBoundary>
       <MobileAppButton />

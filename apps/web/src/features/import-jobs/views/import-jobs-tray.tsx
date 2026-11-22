@@ -2,9 +2,12 @@ import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ResultAsync } from 'neverthrow';
-import { createSignal } from 'solid-js';
+import { createEffect, createSignal, on } from 'solid-js';
 import { match } from 'ts-pattern';
-import { ImportJobsRailButton } from '../components/import-jobs-tray';
+import {
+  ImportJobsCornerTray,
+  ImportJobsRailButton,
+} from '../components/import-jobs-tray';
 import { useImportJobs } from '../context/import-jobs-context';
 import { type ImportJob, isWorkspaceSource } from '../core/import-job';
 import { createImportJobs } from '../primitives/import-jobs';
@@ -12,19 +15,18 @@ import { createImportJobs } from '../primitives/import-jobs';
 // Product names, not translated.
 const SOURCE_NAMES = { notion: 'Notion', linear: 'Linear', jira: 'Jira' };
 
-/** The rail's imports button over the provided sources, opening jobs through the host. */
-export function ImportJobsRailView() {
+/** The jobs over the provided sources, and the actions both layouts share. */
+function useImportJobsActions(onOpened: () => void) {
   const context = useImportJobs();
   const imports = createImportJobs({
     runs: context.createRuns(),
     createReport: context.createReport,
     dismissals: context.createDismissals(),
   });
-  const [listOpen, setListOpen] = createSignal(false);
 
   function open(job: ImportJob) {
     if (!job.sessionId) return;
-    setListOpen(false);
+    onOpened();
     context.openSession(job.sessionId);
   }
 
@@ -53,14 +55,64 @@ export function ImportJobsRailView() {
       .exhaustive();
   }
 
+  return {
+    jobs: imports.jobs,
+    open,
+    dismiss: (job: ImportJob) => imports.dismiss(job.key),
+    reconnect: (job: ImportJob) => fireAndForget(reconnect(job), 'import-jobs'),
+  };
+}
+
+/**
+ * The rail's imports button over the provided sources, opening jobs through
+ * the host. `onEmptied` runs when the owner dismissed the last row, since the
+ * button (and the focus inside its list) goes with it.
+ */
+export function ImportJobsRailView(props: { onEmptied?: () => void }) {
+  const [listOpen, setListOpen] = createSignal(false);
+  const imports = useImportJobsActions(() => setListOpen(false));
+  // The button unmounts with the last job without closing its list, so the
+  // next import would mount it open: close it when the list empties.
+  createEffect(
+    on(
+      () => imports.jobs().length === 0,
+      (empty) => {
+        if (empty) setListOpen(false);
+      },
+      { defer: true }
+    )
+  );
+
+  function dismiss(job: ImportJob) {
+    const last = imports.jobs().length === 1;
+    imports.dismiss(job);
+    if (last) props.onEmptied?.();
+  }
+
   return (
     <ImportJobsRailButton
       jobs={imports.jobs()}
-      open={listOpen() && imports.jobs().length > 0}
+      open={listOpen()}
       onOpenChange={setListOpen}
-      onOpen={open}
-      onDismiss={(job) => imports.dismiss(job.key)}
-      onReconnect={(job) => fireAndForget(reconnect(job), 'import-jobs')}
+      onOpen={imports.open}
+      onDismiss={dismiss}
+      onReconnect={imports.reconnect}
+    />
+  );
+}
+
+/** The corner pill for touch layouts without the rail (tablets). */
+export function ImportJobsCornerView() {
+  const imports = useImportJobsActions(() => undefined);
+  const [expanded, setExpanded] = createSignal(true);
+  return (
+    <ImportJobsCornerTray
+      jobs={imports.jobs()}
+      expanded={expanded()}
+      onExpandedChange={setExpanded}
+      onOpen={imports.open}
+      onDismiss={imports.dismiss}
+      onReconnect={imports.reconnect}
     />
   );
 }

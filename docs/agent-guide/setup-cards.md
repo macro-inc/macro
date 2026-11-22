@@ -80,12 +80,14 @@ run leaves after about five seconds; a failed one stays until **Dismiss the
 <Source> import** or a week; a partly failed one stays until dismissed; a
 plan waiting for approval stays for an hour after its last change.
 Dismissals are kept per user on the device, and dismissing a failed review in
-the thread dismisses its run's entry too. Phones
-never show it. It reads `/import/state` (polling only while something
+the thread dismisses its run's entry too. Touch layouts have no rail: tablets
+keep the older pill in the bottom-right toast corner (`Show imports` / `Hide
+imports`, mounted in `ToastRegion`), and phones never show imports. A newly
+failed run is announced politely (`Notion import failed`). It reads `/import/state` (polling only while something
 is running, otherwise on `import_updated` pushes) and each listed workspace
 run's `/import/workspaces/{source}` report. `src/features/import-jobs/browser-test/`
-covers scanning, writing, done, failure, collapse and dismissal without a
-backend.
+covers scanning, writing, done, failure, opening and closing the list,
+dismissal and the tablet corner pill without a backend.
 
 The connector browser fixture uses in-memory connection responses. Desktop
 and 390-pixel viewport captures show the connected Linear/Jira actions:

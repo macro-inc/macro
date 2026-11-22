@@ -43,8 +43,11 @@ test('follows a Notion import from scanning to done, then dismisses it', async (
   await expect(page.getByRole('status', { name: 'Opened session' })).toHaveText(
     'notion-session'
   );
-  // Opening a session closes the list.
+  // Opening a session closes the list and leaves focus to the session's
+  // split, not the rail button.
   await expect(tray).toHaveCount(0);
+  await page.waitForTimeout(100);
+  await expect(button).not.toBeFocused();
 
   await page.getByRole('button', { name: 'Finish Notion' }).click();
   await button.click();
@@ -54,6 +57,14 @@ test('follows a Notion import from scanning to done, then dismisses it', async (
     .click();
   await expect(tray).toHaveCount(0);
   await expect(button).toHaveCount(0);
+  // The rail's button vanished with its last row, so focus moves to the next
+  // rail control instead of falling to the page.
+  await expect(page.getByRole('button', { name: 'Help' })).toBeFocused();
+
+  // The next import starts closed again.
+  await page.getByRole('button', { name: 'Scan Notion' }).click();
+  await expect(button).toHaveAccessibleName('1 import');
+  await expect(tray).toHaveCount(0);
 });
 
 test('marks a failed import on the rail button and lists it beside a running one', async ({
@@ -88,4 +99,25 @@ test('marks a failed import on the rail button and lists it beside a running one
   await expect(
     page.getByRole('button', { name: '1 import' })
   ).not.toHaveAttribute('aria-description');
+});
+
+test('keeps the corner pill on tablets, where the rail is not shown', async ({
+  page,
+}) => {
+  await page.goto(`${fixture}?layout=corner`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.getByRole('button', { name: 'Fail Jira' }).click();
+  const tray = page.getByRole('region', { name: 'Imports' });
+  await expect(tray.getByRole('listitem', { name: 'Jira' })).toContainText(
+    'Failed: Jira access lost'
+  );
+  await tray.getByRole('button', { name: 'Hide imports' }).click();
+  await expect(tray.getByRole('listitem')).toHaveCount(0);
+  await tray.getByRole('button', { name: 'Show imports' }).click();
+  await tray
+    .getByRole('listitem', { name: 'Jira' })
+    .getByRole('button', { name: 'Dismiss the Jira import' })
+    .click();
+  await expect(tray).toHaveCount(0);
 });

@@ -15,7 +15,10 @@ import {
   readDismissedRuns,
   writeDismissedRuns,
 } from './dismissed-runs';
-import { ImportJobsRailView } from './views/import-jobs-tray';
+import {
+  ImportJobsCornerView,
+  ImportJobsRailView,
+} from './views/import-jobs-tray';
 
 // Product names, not translated.
 const SOURCE_NAMES: Record<WorkspaceSource, string> = {
@@ -73,15 +76,34 @@ function useProductionContext(): ImportJobsContext {
 
 /**
  * Background imports as a button in the rail's footer. Mounted only while
- * signed in to the app shell, where sessions can be opened.
+ * signed in to the app shell, where sessions can be opened. `onEmptied` takes
+ * focus somewhere stable when the last row is dismissed.
  */
-export function ImportJobsRailButton(): JSX.Element {
+export function ImportJobsRailButton(props: {
+  onEmptied?: () => void;
+}): JSX.Element {
   const authenticated = useIsAuthenticated();
 
   return (
     <Show when={authenticated() && globalSplitManager()}>
       <ImportJobsProvider context={useProductionContext()}>
-        <ImportJobsRailView />
+        <ImportJobsRailView onEmptied={props.onEmptied} />
+      </ImportJobsProvider>
+    </Show>
+  );
+}
+
+/**
+ * Background imports in the toast corner, for touch layouts wide enough to
+ * show them but without the rail (tablets), until they get a mobile view.
+ */
+export function ImportJobsCornerTray(): JSX.Element {
+  const authenticated = useIsAuthenticated();
+
+  return (
+    <Show when={authenticated() && globalSplitManager()}>
+      <ImportJobsProvider context={useProductionContext()}>
+        <ImportJobsCornerView />
       </ImportJobsProvider>
     </Show>
   );

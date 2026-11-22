@@ -2,7 +2,10 @@
 export default {
   trayLabel: 'Imports',
   summary: { one: '{{count}} import', other: '{{count}} imports' },
+  showImports: 'Show imports',
+  hideImports: 'Hide imports',
   somethingFailed: 'An import failed',
+  failedAnnouncement: '{{source}} import failed',
   openImport: 'Open the {{source}} import',
   dismissImport: 'Dismiss the {{source}} import',
   scanningPages: {
