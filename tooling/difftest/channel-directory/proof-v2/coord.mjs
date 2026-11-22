@@ -5,6 +5,9 @@
 //                       [--concurrency 8] [--mutant KIND]
 //   node coord.mjs seq  --seed S --out DIR --groups q01,q02 [--sequences 20]
 //                       [--steps 20] [--live-ms 10000] [--mutant KIND]
+//                       [--reload-every 1]  reload and compare strictly after
+//                       every Nth step and always after a sequence's last one;
+//                       the live check still runs after every step
 //
 // read: every viewer's three pages load; their rows are compared field by
 //   field with the primary's REST list and /activity, then seeded specs
@@ -315,7 +318,7 @@ async function readPhase() {
       totals.specs++;
       totals.perIdComparisons += spec.ids.length;
       for (const [pair, raw] of Object.entries(result.contract)) {
-        const { kept: diffs, classified } = await classifyContract(raw, { viewer: entry.session.userId, mainFacts: specSnaps.M.facts?.facts, members: currentMembers });
+        const { kept: diffs, classified } = await classifyContract(raw, { viewer: entry.session.userId, mainFacts: specSnaps.M.facts?.facts, members: currentMembers, branchDmErrors: specSnaps[pair.split('~')[1]]?.diag?.dmErrors });
         if (classified.length) {
           totals.classified += classified.length;
           summarizeClassified(classified, (classifiedSummary[pair] ??= {}), { viewer: entry.label, spec: k });
@@ -351,6 +354,7 @@ function commits() {
 
 // ------------------------------------------------------------------ sequences
 const LIVE_MS = Number(args['live-ms'] ?? 10_000);
+const RELOAD_EVERY = Math.max(1, Number(args['reload-every'] ?? 1));
 const POLL_MS = 300;
 
 // Ops the app itself performs on a writing page; the rest come from outside.
@@ -503,8 +507,19 @@ async function groupRun(label) {
       const liveResult = name === 'role' ? { skipped: 'a role change has no live event' } : await live(others, truths, refreshTruth, t0);
       if (name !== 'role') classifyLive(liveResult, name, totals);
       // 4. once the replica has the write, reload every page and compare strictly
+      const reloads = step % RELOAD_EVERY === RELOAD_EVERY - 1 || step === steps - 1;
+      if (!reloads) {
+        totals.steps++;
+        count('ops', name);
+        count('op outcome', `${name} ${refused ? 'refused' : 'applied'}`);
+        log(`seq-${label}.jsonl`, { group: label, seq: s, step, op: name, actor: `v${actorIndex + 1}`, writer: writer ?? (name === "role" ? "sql" : "rest"), error: res.error, args: a, status: res.status, writeMs: Math.round(res.ms ?? 0), raw, live: liveResult, reloaded: false });
+        continue;
+      }
       const replicaWaitMs = await waitReplica(lsn, 60_000).catch((error) => String(error));
+      const reloadStarted = Date.now();
       await Promise.all(trios.map(reloadTrio));
+      const reloadMs = Date.now() - reloadStarted;
+      totals.reloads = (totals.reloads ?? 0) + 1;
       await refreshTruth();
       const after = await readState(group);
       const touched = [a.id, res.created].filter(Boolean);
@@ -523,7 +538,7 @@ async function groupRun(label) {
         const dataBad = Object.entries(result.data).filter(([, d]) => !dataEqual(d));
         const contractBad = [];
         for (const [pair, raw] of Object.entries(result.contract)) {
-          const { kept, classified } = await classifyContract(raw, { viewer: group.viewers[v], mainFacts: snaps.M.facts?.facts, members: currentMembers });
+          const { kept, classified } = await classifyContract(raw, { viewer: group.viewers[v], mainFacts: snaps.M.facts?.facts, members: currentMembers, branchDmErrors: snaps[pair.split('~')[1]]?.diag?.dmErrors });
           if (classified.length) {
             totals.classified += classified.length;
             summarizeClassified(classified, (classifiedSummary[pair] ??= {}), { group: label, seq: s, step, viewer: `v${v + 1}` });
@@ -542,7 +557,7 @@ async function groupRun(label) {
       totals.steps++;
       count('ops', name);
       count('op outcome', `${name} ${refused ? 'refused' : 'applied'}`);
-      log(`seq-${label}.jsonl`, { group: label, seq: s, step, op: name, actor: `v${actorIndex + 1}`, writer: writer ?? (name === "role" ? "sql" : "rest"), error: res.error, args: a, status: res.status, writeMs: Math.round(res.ms ?? 0), raw, live: liveResult, replicaWaitMs, reload, truthSizes: Object.fromEntries(group.viewers.map((u, i) => [`v${i + 1}`, truths[u].rows.length])) });
+      log(`seq-${label}.jsonl`, { group: label, seq: s, step, op: name, actor: `v${actorIndex + 1}`, writer: writer ?? (name === "role" ? "sql" : "rest"), error: res.error, args: a, status: res.status, writeMs: Math.round(res.ms ?? 0), raw, live: liveResult, replicaWaitMs, reloadMs, reloaded: true, reload, truthSizes: Object.fromEntries(group.viewers.map((u, i) => [`v${i + 1}`, truths[u].rows.length])) });
     }
     totals.sequences++;
     note(`${label} sequence ${s + 1}/${sequences}: ${JSON.stringify(totals)}`);

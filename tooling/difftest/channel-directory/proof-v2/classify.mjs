@@ -9,6 +9,10 @@
 // opening a DM (dmOpen) for the viewer's own id, are compared unclassified.
 
 export const CAUSES = {
+  'member order: people before bots':
+    "The same members in another order. Main's REST list aggregates a channel's active participant rows with ARRAY_AGG and no ORDER BY (pg_channels_repo.rs:570-582 on main), so its order is the scan's; the branch lists the record's participants, then its botParticipants (channelMemberIds, core/context/channels.ts:291; toChannelListItem, queries/channel/directory-core.ts:465-484). Matched only when both sides hold the same ids at the changed positions and the branch has no bot before a person there. Readers that take the list as a set or read DMs only: contact-items.ts:22, channel-icon.tsx:28, work-visibility.ts:15 (callWorkAccounts sorts), ChannelDetail.tsx:405-408 and :547. One reader shows the order: the phone start-call confirmation (use-start-channel-call.tsx:104, CallParticipantAvatars shows the first avatars), which now shows people before bots.",
+  'dm lookup: timed out under load':
+    "The branch's existingDirectMessage gives up after its 5 s deadline ('direct message lookup timed out'); the page's own error, recorded by the probe (dm-errors*.jsonl), is matched to each diff. Its caller opens the DM as pending and sends through the create path, so nothing is lost, but the answer is missing, not different. Seen only with the host's load average above 90.",
   'dm activity: same instant, other spelling':
     "useDmActivityByUserId (core/context/channels.ts) maps a DM peer to the record's updatedAt, which the GraphQL record spells +00:00 and REST spells Z. Every reader parses it to milliseconds: QuickAccessSource.tsx:279 (equalActivityMaps), person-items.ts contactUserItem, rank-command-search-items.ts:201, RecipientSelector.tsx:505 into freshSort.ts:103-130, dmActivity.ts, crm record-adapter.ts:88 and :187. lists.dmActivitySort, the parsed value, stays strict.",
   'favorite: unknown saved type, same icon':
@@ -34,12 +38,13 @@ const DM_ACTIVITY_TIME = /^lists\.dmActivity\[\d+\]\[1\]$/;
  * `members(channelId)` answers the channel's current participants on the
  * primary.
  */
-export async function classifyContract(diffs, { viewer, mainFacts, members }) {
+export async function classifyContract(diffs, { viewer, mainFacts, members, branchDmErrors }) {
   const kept = {};
   const classified = [];
+  const reordered = memberOrderPaths(Object.values(diffs).flat());
   for (const [section, list] of Object.entries(diffs)) {
     for (const d of list) {
-      const found = await classOf(d, { viewer, mainFacts, members });
+      const found = reordered.has(d.path) ? { class: 'member order: people before bots' } : await classOf(d, { viewer, mainFacts, members, branchDmErrors });
       if (found) classified.push({ class: found.class, path: d.path, a: d.a, b: d.b, ...(found.evidence ? { evidence: found.evidence } : {}) });
       else (kept[section] ??= []).push(d);
     }
@@ -47,7 +52,53 @@ export async function classifyContract(diffs, { viewer, mainFacts, members }) {
   return { kept, classified };
 }
 
-async function classOf(d, { viewer, mainFacts, members }) {
+const MEMBER_LIST = /^(.*\.(?:participantIds|detailMemberIds|startCallIds))\[(\d+)\]$/;
+const DM_LOOKUP = /^dm\.(.+)$/;
+const DM_OPEN = /^dmOpen\.(.+)\.(existing|id)$/;
+
+/**
+ * Paths of member-list diffs that only reorder the list: per list, the
+ * changed positions hold the same ids on both sides, and on the branch side
+ * (b) no bot comes before a person among them. A list with any other change
+ * (an id only one side has, a length change) keeps every diff.
+ */
+function memberOrderPaths(all) {
+  const lists = new Map();
+  for (const d of all) {
+    const m = MEMBER_LIST.exec(d.path);
+    if (!m) continue;
+    if (!lists.has(m[1])) lists.set(m[1], []);
+    lists.get(m[1]).push({ index: Number(m[2]), d });
+  }
+  const out = new Set();
+  for (const entries of lists.values()) {
+    if (!entries.every(({ d }) => typeof d.a === 'string' && typeof d.b === 'string')) continue;
+    const a = entries.map(({ d }) => d.a).sort();
+    const b = entries.map(({ d }) => d.b).sort();
+    if (a.join('\n') !== b.join('\n')) continue;
+    const branch = [...entries].sort((x, y) => x.index - y.index).map(({ d }) => d.b);
+    const firstBot = branch.findIndex(isBot);
+    if (firstBot !== -1 && branch.slice(firstBot).some((id) => !isBot(id))) continue;
+    for (const { d } of entries) out.add(d.path);
+  }
+  return out;
+}
+
+async function classOf(d, { viewer, mainFacts, members, branchDmErrors }) {
+  const lookup = DM_LOOKUP.exec(d.path);
+  if (lookup && d.b === 'error' && branchDmErrors?.[lookup[1]]?.message === 'direct message lookup timed out') {
+    return { class: 'dm lookup: timed out under load', evidence: { ms: branchDmErrors[lookup[1]].ms } };
+  }
+  // openDirectMessage runs the same lookup right after; when the snapshot's
+  // own lookup of that peer timed out and this one opened a pending DM where
+  // main opened the existing one, it is the same deadline (the second
+  // lookup's error is not recorded separately).
+  const open = DM_OPEN.exec(d.path);
+  if (open && branchDmErrors?.[open[1]]?.message === 'direct message lookup timed out') {
+    if ((open[2] === 'existing' && d.a === true && d.b === false) || (open[2] === 'id' && typeof d.a === 'string' && d.b === 'pending')) {
+      return { class: 'dm lookup: timed out under load', evidence: { ms: branchDmErrors[open[1]].ms, via: 'openDirectMessage' } };
+    }
+  }
   if (DM_ACTIVITY_TIME.test(d.path)) {
     const a = instant(d.a);
     if (!Number.isNaN(a) && a === instant(d.b)) return { class: 'dm activity: same instant, other spelling' };

@@ -31,6 +31,7 @@ done) '
     groups: [.groups[].label],
     sequences: ([.groups[].totals.sequences] | add),
     steps: ([.groups[].totals.steps] | add),
+    reloads: ([.groups[].totals.reloads // 0] | add),
     refused: ([.groups[].totals.refused] | add),
     rawDiffs: ([.groups[].totals.rawDiffs] | add),
     reloadDataDiffs: ([.groups[].totals.reloadDataDiffs] | add),

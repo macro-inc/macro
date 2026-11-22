@@ -23,7 +23,21 @@ the same moment. Not part of any build or CI job.
   (`compare.mjs`) and classifies every difference (`classify.mjs`).
 - `proof-v2/load.ts`: concurrent writes into the first seed's channels while
   the loaded sequences run.
-- `proof-v2/run.sh`: the whole run; `summarize.sh` prints the totals.
+- `proof-v2/run.sh`: the whole run; `summarize.sh` prints the totals and
+  `reclassify.mjs` reclassifies a finished run's differences after a
+  `classify.mjs` change.
+- `proof-v2/build-clean.sh <name>=<tree>`: a production web bundle of one
+  tree without probes; `side-serve.mjs <port> <bundle>` serves it on its own
+  port in front of the stack, so main's and the branch's builds run against
+  the same services side by side.
+- `browser/`: measurements on those clean bundles. `browser-shadow.mjs` loads
+  the app cold and once more, recording REST list, `/activity`, lane and
+  directory-page requests and the `channel_directory.*` spans;
+  `coldstart.sh` runs it for main, #11829 and #11830 with the cache on and
+  off, and `coldstart-table.sh` tabulates it. `flows.mjs` drives the channel
+  flows (Quick Access, DMs, sections) and records video; `events-cost.mjs`
+  measures the directory's work while another person posts into shared
+  channels.
 
 ## Running
 

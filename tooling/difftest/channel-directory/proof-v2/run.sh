@@ -18,6 +18,7 @@ SEEDS="${SEEDS:-20261121 20261120}"
 SEQUENCES="${SEQUENCES:-10}"
 STEPS="${STEPS:-20}"
 LIVE_MS="${LIVE_MS:-10000}"
+RELOAD_EVERY="${RELOAD_EVERY:-5}"
 QUIET_GROUPS="${QUIET_GROUPS:-q01,q02,q03,q04,q05,q06,q07,q08,q09,q10}"
 LOADED_GROUPS="${LOADED_GROUPS:-l01,l02,l03,l04,l05,l06,l07,l08,l09,l10}"
 MUTANTS="${MUTANTS:-drop swap alter stale skip-live}"
@@ -40,7 +41,7 @@ read_phase() {
 
 quiet() {
   "${node[@]}" coord.mjs seq --seed "${SEEDS%% *}" --out "$OUT/seq-quiet" --groups "$QUIET_GROUPS" \
-    --sequences "$SEQUENCES" --steps "$STEPS" --live-ms "$LIVE_MS"
+    --sequences "$SEQUENCES" --steps "$STEPS" --live-ms "$LIVE_MS" --reload-every "$RELOAD_EVERY"
 }
 
 loaded() {
@@ -49,7 +50,7 @@ loaded() {
   local load=$!
   trap 'kill "$load" 2>/dev/null || true' EXIT
   "${node[@]}" coord.mjs seq --seed "${SEEDS##* }" --out "$OUT/seq-loaded" --groups "$LOADED_GROUPS" \
-    --sequences "$SEQUENCES" --steps "$STEPS" --live-ms "$LIVE_MS"
+    --sequences "$SEQUENCES" --steps "$STEPS" --live-ms "$LIVE_MS" --reload-every "$RELOAD_EVERY"
   kill "$load" 2>/dev/null || true
   wait "$load" 2>/dev/null || true
   trap - EXIT
@@ -59,7 +60,7 @@ mutants() {
   for m in $MUTANTS; do
     "${node[@]}" coord.mjs read --seed "${SEEDS%% *}" --out "$OUT/mutant-$m-read" --viewers small,buckets --mutant "$m"
     "${node[@]}" coord.mjs seq --seed "${SEEDS%% *}" --out "$OUT/mutant-$m-seq" --groups q01 \
-      --sequences 1 --steps "$STEPS" --live-ms "$LIVE_MS" --mutant "$m"
+      --sequences 1 --steps "$STEPS" --live-ms "$LIVE_MS" --reload-every "$RELOAD_EVERY" --mutant "$m"
   done
 }
 
@@ -69,11 +70,12 @@ summary() {
 
 case "${1:-all}" in
   all) bundles; read_phase; quiet; loaded; mutants; summary ;;
+  seqs) quiet; loaded; mutants; summary ;;
   bundles) bundles ;;
   read) read_phase ;;
   quiet) quiet ;;
   loaded) loaded ;;
   mutants) mutants ;;
   summary) summary ;;
-  *) echo "usage: run.sh [all|bundles|read|quiet|loaded|mutants|summary]" >&2; exit 2 ;;
+  *) echo "usage: run.sh [all|seqs|bundles|read|quiet|loaded|mutants|summary]" >&2; exit 2 ;;
 esac

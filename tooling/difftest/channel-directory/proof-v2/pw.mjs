@@ -110,7 +110,7 @@ export async function viewerPage(browser, session, options) {
 }
 
 /** Loads (or reloads) the app and waits for the tree's directory to be complete. */
-export async function load(viewer, { reload = false, timeoutMs = 180_000 } = {}) {
+export async function load(viewer, { reload = false, timeoutMs = Number(process.env.LOAD_TIMEOUT_MS ?? 180_000) } = {}) {
   const started = Date.now();
   if (reload) await viewer.page.reload({ waitUntil: 'load', timeout: timeoutMs });
   else await viewer.page.goto(`${BASE}/app/`, { waitUntil: 'load', timeout: timeoutMs });

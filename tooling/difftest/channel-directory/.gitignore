@@ -2,7 +2,6 @@
 sessions.json
 session-*.json
 proof-v2/sessions-v2.json
-browser/
 # Main's generated GraphQL types (11 MB), written from the merge base.
 before-graphql.ts
 # Run output.
