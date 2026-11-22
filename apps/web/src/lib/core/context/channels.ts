@@ -13,7 +13,6 @@ import {
   type DirectoryChannelType,
 } from '@queries/channel/directory-core';
 import { isLaterView, readChannelViewedAt } from '@queries/channel/viewed-at';
-import { createContextProvider } from '@solid-primitives/context';
 import {
   type Accessor,
   createEffect,
@@ -24,6 +23,7 @@ import {
   onMount,
   untrack,
 } from 'solid-js';
+import { createAssertedContextProvider } from './createContext';
 import { useUserId } from './user';
 
 export type { ChannelDirectory, ChannelLookup, DirectoryChannel };
@@ -157,29 +157,17 @@ type ChannelDirectoryProviderProps = {
 /**
  * The viewer's channels for the app: one directory, read from the GraphQL
  * cache (or the network without one), shared by every reader under it.
+ * `useOptionalChannelDirectory` is undefined outside the provider, for a
+ * reader that has another way to answer (asking the server).
  */
-const [ChannelDirectoryProvider, useProvidedChannelDirectory] =
-  createContextProvider(
-    (props: ChannelDirectoryProviderProps): ChannelDirectory => props.directory
-  );
-
-export { ChannelDirectoryProvider };
-
-/** The directory; throws outside its provider. */
-export function useChannelDirectory(): ChannelDirectory {
-  const directory = useProvidedChannelDirectory();
-  if (!directory)
-    throw new Error(
-      'ChannelDirectory must be used within <ChannelDirectoryProvider />'
-    );
-  return directory;
-}
-
-/** The directory, or undefined outside its provider, for a reader that has
- * another way to answer (asking the server). */
-export function useOptionalChannelDirectory(): ChannelDirectory | undefined {
-  return useProvidedChannelDirectory();
-}
+export const [
+  ChannelDirectoryProvider,
+  useChannelDirectory,
+  useOptionalChannelDirectory,
+] = createAssertedContextProvider(
+  'ChannelDirectory',
+  (props: ChannelDirectoryProviderProps): ChannelDirectory => props.directory
+);
 
 /** One channel the viewer joined: `pending` while a cold directory cannot
  * tell yet, `missing` when it is not one of theirs. */
