@@ -172,8 +172,9 @@ export function summary(markdown: string): string {
   flags plus `--deny-net`, `--allow-read` of its own scratch only, and an
   import map with Handlebars and the allowed Node built-ins but no SDK. Its
   environment and stdin carry no token. It gets the run's CPU limit and
-  heap, its timers are banned like a TypeScript program's, and it is killed
-  and reaped when the run ends, however it ends.
+  heap (so a run with a module may use twice a run's memory: admission
+  counts runs, not processes), its timers are banned like a TypeScript
+  program's, and it is killed and reaped when the run ends, however it ends.
 - `get` and `call` are `@opencode/codemode` extension globals. Each writes a
   `{"type":"module",...}` frame on the program's stdout; the bridge relays
   them one at a time, in order, to the module's stdin and writes each reply
@@ -181,9 +182,12 @@ export function summary(markdown: string): string {
   copies of at most the frame limit less 1 KiB each way; an error in the
   module, an unknown export or an oversized value rejects the program's
   promise with the message. A module that stops or breaks the protocol
-  rejects every later request. What the two exchange has its own 16 MiB
-  budget per run; the module's logs share the run's output budget, prefixed
-  `module: `.
+  rejects every later request, so the module cuts its own log lines and
+  error messages to 32K characters. What the two exchange has its own
+  16 MiB budget per run; the module's logs share the run's output budget,
+  prefixed `module: `. Replies reach the program's stdin through their own
+  writer, and a request reaches the module while its output is read, so
+  neither side waits on a full pipe.
 - The analysis ignores `get` and `call` (they reach no SDK); passing `tools`
   or an operation to them is refused like any other aliasing.
 - Span `code_execution.module` per module process (`execution_id`,

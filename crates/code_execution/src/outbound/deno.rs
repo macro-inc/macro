@@ -784,7 +784,27 @@ async fn bridge(
     // Credentials travel once through the private pipe, never argv or a file.
     // A program with a module keeps reading it for `get` and `call` replies;
     // any other gets nothing more.
-    let mut stdin = module.is_some().then_some(stdin);
+    let has_module = module.is_some();
+    // Replies reach the program's stdin through their own writer, polled
+    // beside the program's output below: a reply larger than the pipe holds
+    // is taken only as the program reads, and the program may be blocked
+    // writing its own output meanwhile. One reply per relay, so the queue is
+    // bounded by the relay budget.
+    let (replies, mut queued_replies) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+    // Any other program's stdin closes here.
+    let stdin = has_module.then_some(stdin);
+    let replying = async move {
+        if let Some(mut stdin) = stdin {
+            while let Some(line) = queued_replies.recv().await {
+                // A program whose stdin is gone is ending; its frames say how.
+                if stdin.write_all(&line).await.is_err() {
+                    break;
+                }
+            }
+        }
+        std::future::pending::<()>().await
+    };
+    tokio::pin!(replying);
     // The module's pipes, here while no relay holds them.
     let mut module = module;
     let mut queued = std::collections::VecDeque::new();
@@ -810,6 +830,7 @@ async fn bridge(
     while stdout_open || stderr_open {
         tokio::select! {
             _ = events.closed() => return Ok(Some(Outcome::Cancelled)),
+            () = &mut replying => {}
             relayed = async {
                 match relaying.as_mut() {
                     Some(relay) => relay.await,
@@ -817,22 +838,21 @@ async fn bridge(
                 }
             }, if relaying.is_some() => {
                 relaying = None;
-                let (pipes, module::Relayed { reply, logs, bytes }) = relayed;
+                let (pipes, module::Relayed { reply, logs }) = relayed;
                 relays.requests += 1;
-                relays.bytes += bytes + reply.len();
-                remaining_relayed = remaining_relayed.checked_sub(bytes).ok_or_else(|| {
+                relays.bytes += reply.len();
+                remaining_relayed = remaining_relayed.checked_sub(reply.len() + 1).ok_or_else(|| {
                     ExecutionFailure::new(FailureCode::Limit, "the module exchanged more data than a run may")
                 })?;
                 for (level, message) in logs {
                     let message = bounded_line(message, &mut remaining)?;
                     events.emit(EventKind::Log { level, message })?;
                 }
-                // A program that already ended reads no reply; one whose
-                // stdin is gone is ending, and its frames say how.
-                if outcome.is_none() && let Some(stdin) = stdin.as_mut() {
+                // A program that already ended reads no reply.
+                if outcome.is_none() {
                     let mut line = reply.into_bytes();
                     line.push(b'\n');
-                    let _ = stdin.write_all(&line).await;
+                    let _ = replies.send(line);
                 }
                 match queued.pop_front() {
                     Some(request) => relaying = Some(Box::pin(module::relay(pipes, request, remaining))),
@@ -872,7 +892,7 @@ async fn bridge(
                     // Only a JS tools program sent with a module asks; one at
                     // a time reaches it, in the order asked.
                     ChildFrame::Module(request) => {
-                        if !js_tools || stdin.is_none() {
+                        if !js_tools || !has_module {
                             return Err(ExecutionFailure::new(FailureCode::Protocol, "a module request without a module"));
                         }
                         match module.take() {

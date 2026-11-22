@@ -281,3 +281,47 @@ async fn without_a_module_get_and_call_reject() {
     let error = data(&outcome).as_str().unwrap();
     assert!(error.contains("sent no module"), "{error}");
 }
+
+/// Values and logs larger than a pipe holds cross both ways while the
+/// program and the module are each busy writing their own: nothing waits on
+/// the other until the deadline.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn large_values_and_logs_cross_without_waiting_on_each_other() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let module = r#"
+for (let i = 0; i < 4; i++) console.log("y".repeat(30_000));
+export function echo(text: string): string {
+  return text;
+}
+"#;
+    let source = r#"
+const big = "x".repeat(200000);
+console.log("z".repeat(100000));
+const echoed = await Promise.all([1, 2, 3, 4].map(() => call("echo", big)));
+return echoed.map((text) => text.length);
+"#;
+    let started = tokio::time::Instant::now();
+    let (events, outcome) = collect(
+        service
+            .execute(
+                with_module(source, module, 20_000),
+                environment(listener.local_addr().unwrap()),
+            )
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(
+        *data(&outcome),
+        serde_json::json!([200000, 200000, 200000, 200000])
+    );
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert_eq!(
+        logs(&events)
+            .iter()
+            .filter(|log| log.starts_with("module: yyy"))
+            .count(),
+        4
+    );
+}

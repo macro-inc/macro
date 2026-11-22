@@ -115,12 +115,10 @@ struct ModuleReply<'a> {
 }
 
 /// One relay's result: the line for the program's stdin and what the module
-/// logged meanwhile.
+/// logged meanwhile, which the run's output budget pays for.
 pub(super) struct Relayed {
     pub(super) reply: String,
     pub(super) logs: Vec<(LogLevel, String)>,
-    /// Bytes the module wrote, logs included.
-    pub(super) bytes: usize,
 }
 
 impl DenoRunner {
@@ -280,12 +278,17 @@ pub(super) async fn relay(
         outcome = tracing::field::Empty,
     );
     let mut logs = Vec::new();
-    let mut bytes = 0;
+    let mut log_bytes = 0;
     let answer = match &pipes.stopped {
         Some(why) => Err(why.clone()),
         None => {
             exchange(
-                &mut pipes, &request, log_budget, &mut logs, &mut bytes, &span,
+                &mut pipes,
+                &request,
+                log_budget,
+                &mut logs,
+                &mut log_bytes,
+                &span,
             )
             .instrument(span.clone())
             .await
@@ -317,7 +320,7 @@ pub(super) async fn relay(
     if let Err(why) = answer {
         pipes.stopped = Some(why);
     }
-    (pipes, Relayed { reply, logs, bytes })
+    (pipes, Relayed { reply, logs })
 }
 
 /// Write one request and read until its reply: `Ok` with the module's answer
@@ -327,7 +330,7 @@ async fn exchange(
     request: &ModuleRequest,
     log_budget: usize,
     logs: &mut Vec<(LogLevel, String)>,
-    bytes: &mut usize,
+    log_bytes: &mut usize,
     span: &tracing::Span,
 ) -> Result<Result<Value, String>, String> {
     let stopped = |why: &str| format!("The module stopped: {why}.");
@@ -335,15 +338,26 @@ async fn exchange(
         serde_json::to_vec(request).map_err(|_| stopped("its request did not encode"))?;
     span.record("request_bytes", line.len());
     line.push(b'\n');
-    pipes
-        .stdin
-        .write_all(&line)
-        .await
-        .map_err(|_| stopped("its process ended"))?;
+    let ModulePipes {
+        stdin,
+        stdout,
+        stderr,
+        ..
+    } = pipes;
+    // The request is written while the module's output is read: a module
+    // writing more than its pipe holds (logs at load, say) reads nothing
+    // until it is read.
+    let write = stdin.write_all(&line);
+    tokio::pin!(write);
+    let mut written = false;
     let mut stderr_open = true;
     loop {
         tokio::select! {
-            frame = pipes.stdout.next() => {
+            sent = &mut write, if !written => {
+                sent.map_err(|_| stopped("its process ended"))?;
+                written = true;
+            }
+            frame = stdout.next() => {
                 let frame = match frame {
                     None | Some(Err(tokio_util::codec::LinesCodecError::Io(_))) => {
                         return Err(stopped("its process ended"));
@@ -353,15 +367,15 @@ async fn exchange(
                     }
                     Some(Ok(frame)) => frame,
                 };
-                *bytes += frame.len() + 1;
                 match serde_json::from_str(&frame) {
                     Ok(ModuleFrame::Log { level, message }) => {
-                        if *bytes > log_budget {
+                        *log_bytes += frame.len() + 1;
+                        if *log_bytes > log_budget {
                             return Err(stopped("it wrote more output than a run may"));
                         }
                         logs.push((level, message));
                     }
-                    Ok(ModuleFrame::Reply { id, value, error }) if id == request.id => {
+                    Ok(ModuleFrame::Reply { id, value, error }) if written && id == request.id => {
                         return Ok(match error {
                             Some(error) => Err(error),
                             None => Ok(value.unwrap_or(Value::Null)),
@@ -372,10 +386,10 @@ async fn exchange(
                     }
                 }
             }
-            line = pipes.stderr.next(), if stderr_open => match line {
+            line = stderr.next(), if stderr_open => match line {
                 Some(Ok(line)) => {
-                    *bytes += line.len() + 1;
-                    if *bytes > log_budget {
+                    *log_bytes += line.len() + 1;
+                    if *log_bytes > log_budget {
                         return Err(stopped("it wrote more output than a run may"));
                     }
                     logs.push((LogLevel::Warn, format!("module: {line}")));

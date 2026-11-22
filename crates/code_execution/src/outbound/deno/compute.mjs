@@ -16,9 +16,14 @@ function emit(frame) {
   let offset = 0;
   while (offset < bytes.length) offset += write(bytes.subarray(offset));
 }
+// A line over the runner's frame limit would end the module for the rest
+// of the run, so logs and error messages are cut well below it. JSON
+// escaping can make text up to six times longer.
+const MAX_TEXT_CHARS = 32 * 1024;
+const fitted = text => text.length <= MAX_TEXT_CHARS ? text : `${text.slice(0, MAX_TEXT_CHARS)}…`;
 const consoleMethod = (level) => (...args) => emit({
   type: "log", level,
-  message: `module: ${args.map(value => typeof value === "string" ? value : inspect(value, {colors: false, depth: 4, customInspect: false})).join(" ")}`,
+  message: fitted(`module: ${args.map(value => typeof value === "string" ? value : inspect(value, {colors: false, depth: 4, customInspect: false})).join(" ")}`),
 });
 globalThis.console = {
   log: consoleMethod("info"), info: consoleMethod("info"),
@@ -101,7 +106,7 @@ for (;;) {
     }
     emit({type: "reply", id, value});
   } catch (error) {
-    emit({type: "reply", id, error: String(error?.message ?? error)});
+    emit({type: "reply", id, error: fitted(String(error?.message ?? error))});
   }
 }
 Deno.exit(0);

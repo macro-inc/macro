@@ -164,6 +164,9 @@ function jsToolsResult(value) {
 // stdin, one line at a time: the run's context, then, for a JS tools
 // program sent with a module, one reply per `get` or `call`.
 const stdinReader = Deno.stdin.readable.getReader();
+// Its own decoder: a streaming decode keeps a split character between reads,
+// which a shared decoder's other calls would flush.
+const stdinDecoder = new TextDecoder();
 let stdinBuffered = "";
 async function nextLine() {
   for (;;) {
@@ -175,7 +178,7 @@ async function nextLine() {
     }
     const {value, done} = await stdinReader.read();
     if (done) return undefined;
-    stdinBuffered += decoder.decode(value, {stream: true});
+    stdinBuffered += stdinDecoder.decode(value, {stream: true});
   }
 }
 // A JS tools program's `get` and `call`: each is one frame to the runner,
