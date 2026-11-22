@@ -331,28 +331,44 @@ fn select(
         .map_err(|error| format!("{table}: {error}"))
 }
 
-/// Drops each `{"attribute":NAME,"value":N}` object, and a comma beside it, for
+/// Drops each `{"attribute":NAME,"value":N}` object and each `"NAME"` array
+/// element (an attribute a layer marks unknown), with a comma beside it, for
 /// each name in `names`.
 fn without_json_facts(mut text: String, names: &[String]) -> String {
     for name in names {
-        let needle = format!(
-            "{{\"attribute\":{},\"value\":",
-            serde_json::Value::from(name.as_str())
-        );
+        let quoted = serde_json::Value::from(name.as_str()).to_string();
+        let needle = format!("{{\"attribute\":{quoted},\"value\":");
         while let Some(start) = text.find(&needle) {
             let Some(length) = text[start..].find('}') else {
                 break;
             };
-            let (mut from, mut to) = (start, start + length + 1);
-            if text[..from].ends_with(',') {
-                from -= 1;
-            } else if text[to..].starts_with(',') {
-                to += 1;
+            drop_element(&mut text, start, start + length + 1);
+        }
+        let mut from = 0;
+        while let Some(found) = text[from..].find(&quoted) {
+            let (start, end) = (from + found, from + found + quoted.len());
+            let element = (text[..start].ends_with(',') || text[..start].ends_with('['))
+                && (text[end..].starts_with(',') || text[end..].starts_with(']'));
+            if element {
+                from = drop_element(&mut text, start, end);
+            } else {
+                from = end;
             }
-            text.replace_range(from..to, "");
         }
     }
     text
+}
+
+/// Removes `text[from..to]` with the comma before it, or else the one after it;
+/// returns where the text after it now starts.
+fn drop_element(text: &mut String, mut from: usize, mut to: usize) -> usize {
+    if text[..from].ends_with(',') {
+        from -= 1;
+    } else if text[to..].starts_with(',') {
+        to += 1;
+    }
+    text.replace_range(from..to, "");
+    from
 }
 
 fn quoted(name: &str, quote: char) -> String {
