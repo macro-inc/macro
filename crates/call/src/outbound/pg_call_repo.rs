@@ -1750,8 +1750,8 @@ impl CallRepository for PgCallRepo {
             .collect();
 
         // Single query across both `calls` (active) and `call_records` (archived).
-        // An id in both tables should be impossible; if it somehow happens the
-        // active row wins by appearing first.
+        // A resumed scheduled meeting is in both while it is live again; the
+        // live row wins below.
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -1786,13 +1786,23 @@ impl CallRepository for PgCallRepo {
 
         let mut found: HashMap<Uuid, Found> = HashMap::with_capacity(rows.len());
         for row in rows {
-            // If the same id ever shows up twice, keep the first (active) hit.
-            found.entry(row.call_id).or_insert(Found {
+            let live = row.ended_at.is_none();
+            let hit = Found {
                 channel_id: row.channel_id,
                 started_at: row.started_at,
                 ended_at: row.ended_at,
                 custom_name: row.custom_name,
-            });
+            };
+            // An id found twice is live again: keep its live row.
+            match found.entry(row.call_id) {
+                std::collections::hash_map::Entry::Occupied(mut entry) if live => {
+                    entry.insert(hit);
+                }
+                std::collections::hash_map::Entry::Occupied(_) => {}
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(hit);
+                }
+            }
         }
 
         let unique_channel_ids: Vec<Uuid> = {

@@ -20,7 +20,9 @@ for a call recording MP4, using ffmpeg/ffprobe.
 ## Scope
 
 - Owns: deciding which uploaded `calls/.../*.mp4` objects need a
-  `PREVIEW.jpg`, and producing it.
+  `PREVIEW.jpg`, and producing it. `src/db.rs` stores the preview on the live
+  call, the call record, or a resumed meeting's later session
+  (`call_record_sessions`) whose recording key matches.
 
 ## Recipes
 
