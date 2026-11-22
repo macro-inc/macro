@@ -81,7 +81,12 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   unsure (an unreadable adoption state or version, a split needing the busy
   older lock, a failed connect, a WAL with frames) fails the open and keeps the
   files for the coordinator's next recovery, which discards them unopened once
-  `RECOVERY_ATTEMPTS` (3) were counted. The result's `outcome` is
+  `RECOVERY_ATTEMPTS` (3) were counted. An attempt that cannot be counted
+  decides if it can and discards where it cannot; a marker that does not read
+  is counted with `count_unreadable_adoption` and discarded past the same
+  limit, its version unknown. A recovery that meets a busy sync handle fails
+  as `storage-busy`, which ends the coordinator's retries for that page load,
+  so the count can span page loads. The result's `outcome` is
   `upgraded-existing` with `fromStorageVersion`;
   `carryForward` (`moved`, `resumed`, `older-in-use`, `unsupported`,
   `unreadable`, `failed`, `returned`, `discarded`) and

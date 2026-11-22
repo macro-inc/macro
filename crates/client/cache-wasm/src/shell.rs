@@ -767,11 +767,13 @@ const MOVED_FILES_KEPT: &str =
     "the upgraded cache failed to open, and the files it moved are kept for recovery";
 
 /// How many recovery opens may keep files an adoption moved here while they
-/// cannot tell whether those files go back to the older build. The next one
-/// discards them without opening them, so files whose every open fails, or
-/// kills the worker, cannot keep the cache from starting. The coordinator
-/// retries a failed recovery at once a few times, so this resolves within one
-/// page load.
+/// cannot tell whether those files go back to the older build, or cannot read
+/// the marker that says. The next one discards them without opening them, so
+/// files whose every open fails, or kills the worker, cannot keep the cache
+/// from starting. The coordinator retries a failed recovery at once a few
+/// times, so this usually resolves within one page load; a recovery that
+/// meets a busy sync handle stops those retries, and the next page load goes
+/// on counting.
 const RECOVERY_ATTEMPTS: u8 = 3;
 
 /// Releases `lock`, if any. Best effort: a lock that fails to release is let go
@@ -1197,7 +1199,10 @@ async fn keep_for_recovery(owner: OpfsOwner, reason: impl std::fmt::Display) -> 
 /// marker stays and nothing is wiped: when the older build holds its lock, the
 /// files cannot be read, or their WAL still holds frames, the open fails and
 /// keeps them. Each recovery counts an attempt in the marker first, and once
-/// [`RECOVERY_ATTEMPTS`] were counted the files are discarded unopened.
+/// [`RECOVERY_ATTEMPTS`] were counted the files are discarded unopened. An
+/// attempt that cannot be counted still decides if it can, and discards
+/// where it cannot, since nothing would bound the next one. A marker that
+/// cannot be read is counted beside it, and discarded the same way.
 async fn recover_adoption(
     scope: &str,
     mut owner: OpfsOwner,
@@ -1205,20 +1210,21 @@ async fn recover_adoption(
     let adoption = match owner.read_adoption().await {
         Ok(Some(adoption)) => adoption,
         Ok(None) => return Ok((owner, None)),
-        Err(error) => return Err(keep_for_recovery(owner, error).await),
+        Err(error) => return unreadable_adoption(owner, error).await,
     };
     let Some(from_version) = upgradable_storage_version(scope, &adoption.previous_identity) else {
         return Ok((owner, None));
     };
     let discarded = Some(CarryForward::new(CarryForwardKind::Discarded, from_version));
-    // An attempt that cannot be counted cannot be bounded, so it is the last.
-    if adoption.attempts >= RECOVERY_ATTEMPTS || owner.record_attempt().await.is_err() {
+    if adoption.attempts >= RECOVERY_ATTEMPTS {
         return Ok((owner, discarded));
     }
+    let last = owner.record_attempt().await.is_err();
+    let undecided = Undecided { last, discarded };
     let previous = match owner.lock_previous(&adoption.previous_identity).await {
         Ok(Some(previous)) => previous,
-        Ok(None) => return Err(keep_for_recovery(owner, OLDER_BUILD_HOLDS_WAL).await),
-        Err(error) => return Err(keep_for_recovery(owner, error).await),
+        Ok(None) => return undecided.end(owner, OLDER_BUILD_HOLDS_WAL).await,
+        Err(error) => return undecided.end(owner, error).await,
     };
     if adoption.state == AdoptionState::Split {
         let kept = match owner.complete_adoption(Some(&previous)).await {
@@ -1232,9 +1238,11 @@ async fn recover_adoption(
         };
         if let Some(reason) = kept {
             release_previous(Some(previous)).await;
-            return Err(keep_for_recovery(owner, reason).await);
+            return undecided.end(owner, reason).await;
         }
     }
+    // A probe that fails gives up the owner, so it fails the open whether or
+    // not the attempt was counted; it fails before any file changes.
     let (mut owner, stored) = match read_storage_version(owner).await {
         Ok(read) => read,
         Err(error) => {
@@ -1277,7 +1285,51 @@ async fn recover_adoption(
         }
     };
     release_previous(Some(previous)).await;
-    Err(keep_for_recovery(owner, kept).await)
+    undecided.end(owner, kept).await
+}
+
+/// How a recovery that cannot tell where the moved files go ends.
+struct Undecided {
+    /// The attempt could not be counted, so a later one could not be bounded.
+    last: bool,
+    discarded: Option<CarryForward>,
+}
+
+impl Undecided {
+    /// Fails the open, keeping files and marker, or, on the last attempt,
+    /// discards them.
+    async fn end(
+        self,
+        owner: OpfsOwner,
+        reason: impl std::fmt::Display,
+    ) -> Result<(OpfsOwner, Option<CarryForward>), JsValue> {
+        if self.last {
+            Ok((owner, self.discarded))
+        } else {
+            Err(keep_for_recovery(owner, reason).await)
+        }
+    }
+}
+
+/// A recovery that cannot read the adoption marker: counts that beside the
+/// marker and fails the open, keeping everything, until [`RECOVERY_ATTEMPTS`]
+/// recoveries were counted or the count cannot be written. Then the files are
+/// discarded with their storage version unknown; the wipe that follows
+/// removes the marker and its count.
+async fn unreadable_adoption(
+    mut owner: OpfsOwner,
+    error: OpfsError,
+) -> Result<(OpfsOwner, Option<CarryForward>), JsValue> {
+    match owner.count_unreadable_adoption().await {
+        Ok(count) if count <= RECOVERY_ATTEMPTS => Err(keep_for_recovery(owner, error).await),
+        _ => Ok((
+            owner,
+            Some(CarryForward {
+                kind: CarryForwardKind::Discarded,
+                from_storage_version: None,
+            }),
+        )),
+    }
 }
 
 /// What [`read_storage_version`] found.

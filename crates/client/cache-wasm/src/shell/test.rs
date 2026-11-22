@@ -3132,6 +3132,36 @@ async fn create_opfs_directory(name: &str) {
     .await;
 }
 
+/// The size of the OPFS file `name`, or `None` when there is none.
+async fn opfs_file_len(name: &str) -> Option<usize> {
+    run_js(
+        "return (async () => {
+          const root = await navigator.storage.getDirectory();
+          try { return (await (await root.getFileHandle(name)).getFile()).size; }
+          catch (error) { if (error.name === 'NotFoundError') return null; throw error; }
+        })()",
+        name,
+    )
+    .await
+    .as_f64()
+    .map(|size| size as usize)
+}
+
+/// Whether anything, a file or a directory, sits at `name` in the OPFS root.
+async fn opfs_entry_exists(name: &str) -> bool {
+    run_js(
+        "return (async () => {
+          const root = await navigator.storage.getDirectory();
+          for await (const key of root.keys()) if (key === name) return true;
+          return false;
+        })()",
+        name,
+    )
+    .await
+    .as_bool()
+    .expect("existence is boolean")
+}
+
 /// Renames one OPFS file.
 async fn rename_opfs_file(from: &str, to: &str) {
     run_js(
@@ -3499,6 +3529,46 @@ async fn an_unreadable_adoption_keeps_the_moved_files_and_fails_the_open() {
     assert_eq!(queue_depth(&engine).await, "1");
     assert_eq!(test_generation(&engine).await, generation);
     resolved(engine.close()).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_marker_that_never_reads_is_discarded_at_the_limit() {
+    const SCOPE: &str = "cache-wasm-carry-never-reads";
+    let own = database_identity(SCOPE);
+    let older = cache_database_name(SCOPE, 11);
+    let marker = format!("{own}-adopting");
+    let unread = format!("{own}-adopting-unread");
+    older_database_with_a_queued_write(SCOPE, false).await;
+    move_without_opening(SCOPE).await;
+    remove_opfs_file(&marker).await;
+    create_opfs_directory(&marker).await;
+    // Each recovery that cannot read the marker counts that beside it and
+    // keeps the files; past the limit the next one discards them, not
+    // knowing the version they moved at, so the cache can start.
+    for count in 1..=RECOVERY_ATTEMPTS {
+        assert!(recovery_open(SCOPE).await.is_err());
+        assert_eq!(opfs_file_len(&unread).await, Some(usize::from(count)));
+        assert!(opfs_file_exists(&own).await);
+    }
+    let (engine, report) = recovery_open(SCOPE)
+        .await
+        .expect("recovery open past the limit");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::ResetStorageUncertain,
+            carry_forward: Some(CarryForward {
+                kind: CarryForwardKind::Discarded,
+                from_storage_version: None,
+            }),
+        }
+    );
+    assert_eq!(queue_depth(&engine).await, "0");
+    resolved(engine.close()).await;
+    assert!(!opfs_entry_exists(&marker).await);
+    assert!(!opfs_file_exists(&unread).await);
+    assert!(!opfs_file_exists(&older).await);
     destroy_cache(SCOPE.into()).await.expect("destroy cache");
 }
 
