@@ -1,0 +1,25 @@
+crates/mcp_toolset/AGENTS.md
+  s_a37ce135bddc8b::t_c5fb0a94547d95 17-18,24-25,31
+crates/agent_egress/AGENTS.md
+  s_a37ce135bddc8b::t_c5fb0a94547d95 123-124
+crates/connectors/AGENTS.md
+  s_a37ce135bddc8b::t_98ed16f23ccf4f 5-9,13-40,44-58,62-68,72-82,86-87
+services/agent_harness_service/AGENTS.md
+  s_a37ce135bddc8b::t_c5fb0a94547d95 201-202,300-301
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b00a2fc9fbe5a9efcf212ba017f6e76820bb4a71",
+  "prompts": {},
+  "sessions": {
+    "s_a37ce135bddc8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "93833ac7-7fb8-4d30-be2e-a077fdc24000",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
