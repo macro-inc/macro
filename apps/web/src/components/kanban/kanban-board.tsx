@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Key } from '@solid-primitives/keyed';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Scroll } from '@ui/components/Scroll';
 import {
   type Accessor,
@@ -306,6 +307,15 @@ function Columns(props: {
   const columnsById = createMemo(
     () => new Map(board.columns().map((column) => [column.id, column]))
   );
+  // Lanes are 21rem, so their width follows the root font size. Every lane is
+  // as wide as the last one measured, which places unvisited lanes and sizes
+  // the scroll range correctly before they mount.
+  let columnWidth = 336;
+  function setColumnWidth(width: number) {
+    if (width <= 0 || width === columnWidth) return;
+    columnWidth = width;
+    virtualizer.measure();
+  }
   const virtualizer = createKanbanVirtualizer({
     direction: 'horizontal',
     keys: () => {
@@ -320,7 +330,7 @@ function Columns(props: {
       return keys;
     },
     getScrollElement: () => viewport,
-    estimateSize: 336,
+    estimateSize: () => columnWidth,
     gap: 16,
     overscan: 1,
     paddingStart: 16,
@@ -370,26 +380,12 @@ function Columns(props: {
         <Key each={virtualItems()} by="key">
           {(item) => {
             const key = item().key;
-            let slot: HTMLDivElement | undefined;
-
-            createEffect(
-              on(
-                () => item().index,
-                () => {
-                  // Lanes are sized in rem, so a larger root font widens them.
-                  queueMicrotask(() => {
-                    if (slot?.isConnected) {
-                      virtualizer.measureElement(slot);
-                    }
-                  });
-                }
-              )
-            );
+            const [slot, setSlot] = createSignal<HTMLDivElement>();
+            createResizeObserver(slot, ({ width }) => setColumnWidth(width));
 
             return (
               <div
-                ref={slot}
-                data-index={item().index}
+                ref={setSlot}
                 class="absolute top-0 h-full w-84"
                 data-kanban-board-column={key}
                 style={{ left: `${item().start}px` }}

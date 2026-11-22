@@ -126,34 +126,39 @@ test('moves through the card menu on a narrow screen', async ({ page }) => {
   );
 });
 
-test('keeps lanes apart and scrolls to the last one with a larger text size', async ({
+test('keeps lanes apart and scrolls to the end in one move with a larger text size', async ({
   page,
 }) => {
   // Chrome's "Large" font size setting; iOS Dynamic Type also moves rem.
   // The override lasts only while this session stays attached.
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Page.setFontSizes', { fontSizes: { standard: 20 } });
-  await page.reload();
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
   expect(
     await page.evaluate(
       () => getComputedStyle(document.documentElement).fontSize
     )
   ).toBe('20px');
-  const lanes = page.locator('[data-kanban-lane]');
-  await expect(lanes).toHaveCount(3);
-  const edges = await lanes.evaluateAll((nodes) =>
+  const edges = await page.locator('[data-kanban-lane]').evaluateAll((nodes) =>
     nodes.map((node) => {
       const box = node.getBoundingClientRect();
       return { left: box.left, right: box.right };
     })
   );
+  expect(edges.length).toBeGreaterThan(1);
   for (let index = 1; index < edges.length; index++) {
     expect(edges[index]!.left).toBeGreaterThan(edges[index - 1]!.right);
   }
+  // Lanes not mounted yet must already count toward the scroll range.
   await page.locator('[data-kanban-board-viewport]').evaluate((element) => {
     element.scrollLeft = element.scrollWidth;
   });
-  await expect(lanes.last()).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('region', { name: 'New group' })).toBeInViewport({
+    ratio: 1,
+  });
   await cdp.detach();
 });
 
