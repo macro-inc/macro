@@ -1010,6 +1010,7 @@ async function settleFullReadOnPrimary(
     const reading = [...disputed];
     let sent = 0;
     let changed = 0;
+    let failed = 0;
     try {
       for (
         let at = 0;
@@ -1023,6 +1024,9 @@ async function settleFullReadOnPrimary(
         const reads = await span.run(() =>
           Promise.all(batch.map((id) => readFromPrimary(id, signal)))
         );
+        failed = reads.filter((read) => read.kind === 'failed').length;
+        if (failed > 0)
+          throw new ChannelDirectoryReadUnsettled('primary_failed');
         for (const [index, id] of batch.entries()) {
           const read = reads[index];
           if (!read || read.kind === 'failed')
@@ -1036,6 +1040,7 @@ async function settleFullReadOnPrimary(
     } finally {
       span.setAttr('channel_directory.primary_reads', sent);
       span.setAttr('channel_directory.primary_changed', changed);
+      span.setAttr('channel_directory.primary_failed', failed);
     }
     return [...settled.values()];
   });

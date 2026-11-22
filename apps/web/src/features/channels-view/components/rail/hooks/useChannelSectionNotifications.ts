@@ -151,7 +151,6 @@ export function useChannelSectionNotifications(
           return;
         }
 
-        span.setAttr('channel.ids', channelIds);
         span.setAttr('notification.count', channelIds.length);
 
         if (action === 'read') {

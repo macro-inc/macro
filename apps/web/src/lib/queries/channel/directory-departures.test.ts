@@ -7,6 +7,7 @@ import {
 import type { DirectoryChannel } from './directory-core';
 import {
   createDepartureRecheck,
+  DEPARTURE_CHECK_DEADLINE_MS,
   DEPARTURE_RETRY_MS,
   DEPARTURE_ROUND_DEADLINE_MS,
   DEPARTURES_LIMIT,
@@ -15,31 +16,62 @@ import {
 import { channelName, channelUuid } from './tests/channel-uuid';
 import { directoryChannel } from './tests/directory-channel';
 
-const spans = vi.hoisted(
-  () => [] as { name: string; attrs: Record<string, unknown> }[]
-);
+const trace = vi.hoisted(() => ({
+  spans: [] as {
+    name: string;
+    parent: string | undefined;
+    attrs: Record<string, unknown>;
+  }[],
+  /** The context spans start in: a label in place of a real one. */
+  active: undefined as string | undefined,
+  enter<T>(label: string | undefined, work: () => T): T {
+    const previous = trace.active;
+    trace.active = label;
+    try {
+      return work();
+    } finally {
+      trace.active = previous;
+    }
+  },
+}));
+const spans = trace.spans;
 vi.mock('@macro-inc/observability', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   Telemetry: {
     error: vi.fn(),
+    captureContext: () => {
+      const captured = trace.active;
+      return { run: <T>(work: () => T) => trace.enter(captured, work) };
+    },
     span: async (
       name: string,
       operation: (span: {
         setAttr: (key: string, value: unknown) => void;
         run: <T>(work: () => T) => T;
+        error: (error: unknown) => void;
+        traceparent: () => string;
       }) => Promise<unknown>
     ) => {
       const attrs: Record<string, unknown> = {};
-      spans.push({ name, attrs });
+      spans.push({ name, parent: trace.active, attrs });
       return operation({
         setAttr: (key, value) => {
           attrs[key] = value;
         },
-        run: (work) => work(),
+        run: (work) => trace.enter(name, work),
+        error: () => {
+          attrs.error = true;
+        },
+        traceparent: () => `traceparent-of-${name}`,
       });
     },
   },
 }));
+
+const ROUND = 'channel_directory.departure_recheck';
+const CHECK = 'channel_directory.departure_check';
+const rounds = () => spans.filter(({ name }) => name === ROUND);
+const checks = () => spans.filter(({ name }) => name === CHECK);
 
 const RECHECKS = [1_000, 5_000];
 
@@ -138,10 +170,8 @@ describe('checking a channel the viewer left again', () => {
         'g1',
         expect.any(AbortSignal)
       );
-      expect(spans.map(({ name }) => name)).toEqual([
-        'channel_directory.departure_recheck',
-      ]);
-      expect(spans[0]?.attrs).toMatchObject({
+      expect(spans.map(({ name }) => name)).toEqual([ROUND, CHECK]);
+      expect(rounds()[0]?.attrs).toMatchObject({
         'channel_directory.departures_due': 1,
         'channel_directory.departures_started': 1,
         'channel_directory.departures_outcome': 'complete',
@@ -215,7 +245,7 @@ describe('checking a channel the viewer left again', () => {
     expect(h.readIds()).toEqual(['gone', 'gone', 'gone']);
     expect(h.removeUnreadable).not.toHaveBeenCalled();
     expect(
-      spans.map(({ attrs }) => attrs['channel_directory.departures_failed'])
+      rounds().map(({ attrs }) => attrs['channel_directory.departures_failed'])
     ).toEqual([1, 1, 1]);
   });
 
@@ -274,7 +304,7 @@ describe('checking a channel the viewer left again', () => {
     });
     await vi.advanceTimersByTimeAsync(0);
     expect(h.removeUnreadable).not.toHaveBeenCalled();
-    expect(spans[0]?.attrs['channel_directory.departures_joined']).toBe(1);
+    expect(rounds()[0]?.attrs['channel_directory.departures_joined']).toBe(1);
   });
 
   it('keeps a newer leave when an older check finds the viewer joined', async () => {
@@ -319,7 +349,7 @@ describe('checking a channel the viewer left again', () => {
     await vi.advanceTimersByTimeAsync(RECHECKS[1] - RECHECKS[0]);
     expect(h.readIds()).toEqual(['gone', 'gone']);
     expect(h.removeUnreadable).toHaveBeenCalledTimes(2);
-    expect(spans[0]?.attrs).toMatchObject({
+    expect(rounds()[0]?.attrs).toMatchObject({
       'channel_directory.departures_unconfirmed': 1,
       'channel_directory.departures_failed': 1,
     });
@@ -339,7 +369,7 @@ describe('checking a channel the viewer left again', () => {
 
     await vi.advanceTimersByTimeAsync(RECHECKS[1]);
     expect(h.removeUnreadable).toHaveBeenCalledTimes(2);
-    expect(spans[0]?.attrs['channel_directory.departures_failed']).toBe(1);
+    expect(rounds()[0]?.attrs['channel_directory.departures_failed']).toBe(1);
   });
 
   it('deletes nothing once the directory goes while a read is out', async () => {
@@ -382,7 +412,7 @@ describe('checking a channel the viewer left again', () => {
     await vi.advanceTimersByTimeAsync(
       RECHECKS[0] + DEPARTURE_ROUND_DEADLINE_MS + 1_000
     );
-    expect(spans[0]?.attrs).toMatchObject({
+    expect(rounds()[0]?.attrs).toMatchObject({
       'channel_directory.departures_due': 20,
       'channel_directory.departures_started': 16,
       'channel_directory.departures_outcome': 'deferred',
@@ -390,7 +420,7 @@ describe('checking a channel the viewer left again', () => {
     });
     // The next round reads the four it did not start.
     await vi.advanceTimersByTimeAsync(READ_MS + 1_000);
-    expect(spans[1]?.attrs).toMatchObject({
+    expect(rounds()[1]?.attrs).toMatchObject({
       'channel_directory.departures_due': 4,
       'channel_directory.departures_outcome': 'complete',
     });
@@ -407,7 +437,7 @@ describe('checking a channel the viewer left again', () => {
 
     await vi.advanceTimersByTimeAsync(RECHECKS[0]);
     expect(h.readIds()).toEqual(['gone']);
-    expect(spans[0]?.attrs['channel_directory.departures_failed']).toBe(1);
+    expect(rounds()[0]?.attrs['channel_directory.departures_failed']).toBe(1);
   });
 
   it('decides a joined channel that went missing while the directory was incomplete once it is complete', async () => {
@@ -486,5 +516,137 @@ describe('checking a channel the viewer left again', () => {
     await vi.advanceTimersByTimeAsync(RECHECKS[0]);
     expect(h.readFromPrimary).toHaveBeenCalledTimes(DEPARTURES_LIMIT);
     expect(most).toBe(4);
+  });
+});
+
+describe('tracing each check', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    spans.length = 0;
+    trace.active = undefined;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Follows `gone`, then lands it joined again so its first check reads. */
+  const departFrom = (h: Harness, origin: string) => {
+    h.show(complete(channel('kept'), channel('gone')));
+    trace.enter(origin, () => h.recheck.depart(channelUuid('gone')));
+    comeBack(h);
+  };
+
+  it('parents a check on the live update that saw the leave, and runs its reads in it', async () => {
+    const contexts: (string | undefined)[] = [];
+    const h = setup(
+      async () => {
+        contexts.push(trace.active);
+        return { kind: 'read', channel: null };
+      },
+      async () => {
+        contexts.push(trace.active);
+        return { unconfirmed: [] };
+      }
+    );
+    departFrom(h, 'live update');
+
+    await vi.advanceTimersByTimeAsync(RECHECKS[0]);
+    expect(checks()).toEqual([
+      {
+        name: CHECK,
+        parent: 'live update',
+        attrs: {
+          'channel.id': channelUuid('gone'),
+          'channel_directory.recheck_traceparent': `traceparent-of-${ROUND}`,
+          'channel_directory.departure_outcome': 'unreadable_cleared',
+        },
+      },
+    ]);
+    expect(contexts).toEqual([CHECK, CHECK]);
+  });
+
+  it('keeps the scan that saw the leave as the parent of a retried check', async () => {
+    let reads = 0;
+    const h = setup(async (id) => {
+      reads += 1;
+      if (reads === 1) return { kind: 'failed' };
+      return { kind: 'read', channel: directoryChannel(id) };
+    });
+    trace.enter('scan', () => leave(h, 'deletion'));
+    comeBack(h);
+
+    await vi.advanceTimersByTimeAsync(RECHECKS[1]);
+    expect(
+      checks().map(({ parent, attrs }) => [
+        parent,
+        attrs['channel_directory.departure_outcome'],
+      ])
+    ).toEqual([
+      ['scan', 'read_failed'],
+      ['scan', 'joined'],
+    ]);
+  });
+
+  it.each([
+    [
+      'left',
+      async (id: string): Promise<PrimaryChannelRead> => ({
+        kind: 'read',
+        channel: directoryChannel(id, { isParticipant: false }),
+      }),
+      undefined,
+    ],
+    [
+      'remove_failed',
+      undefined,
+      async (): Promise<RemoveUnreadableResult> => {
+        throw new Error('storage busy');
+      },
+    ],
+    [
+      'removed_unconfirmed',
+      undefined,
+      async (ids: readonly string[]): Promise<RemoveUnreadableResult> => ({
+        unconfirmed: ids,
+      }),
+    ],
+  ] as const)('records %s as the outcome', async (outcome, read, remove) => {
+    const h = setup(read, remove);
+    departFrom(h, 'live update');
+
+    await vi.advanceTimersByTimeAsync(RECHECKS[0]);
+    expect(checks()[0]?.attrs['channel_directory.departure_outcome']).toBe(
+      outcome
+    );
+    if (outcome === 'remove_failed')
+      expect(checks()[0]?.attrs.error).toBe(true);
+  });
+
+  it('ends a check whose read never answers at its deadline', async () => {
+    const h = setup(() => new Promise<PrimaryChannelRead>(() => {}));
+    departFrom(h, 'live update');
+
+    await vi.advanceTimersByTimeAsync(
+      RECHECKS[0] + DEPARTURE_CHECK_DEADLINE_MS
+    );
+    expect(checks()[0]?.attrs['channel_directory.departure_outcome']).toBe(
+      'timed_out'
+    );
+    expect(rounds()[0]?.attrs).toMatchObject({
+      'channel_directory.departures_outcome': 'complete',
+      'channel_directory.departures_failed': 1,
+    });
+  });
+
+  it('records a check the directory stopped as cancelled', async () => {
+    const h = setup(() => new Promise<PrimaryChannelRead>(() => {}));
+    departFrom(h, 'live update');
+    await vi.advanceTimersByTimeAsync(RECHECKS[0]);
+
+    h.controller.abort();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(checks()[0]?.attrs['channel_directory.departure_outcome']).toBe(
+      'cancelled'
+    );
   });
 });

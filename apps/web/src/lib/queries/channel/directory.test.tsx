@@ -1788,6 +1788,21 @@ describe('cached channel directory', () => {
     expect(ids(await directory.readComplete())).toEqual(['a', 'b']);
     expect(readFromPrimary).not.toHaveBeenCalled();
 
+    const settles: Record<string, unknown>[] = [];
+    const span = vi.spyOn(Telemetry, 'span').mockImplementation(((
+      name: string,
+      operation: (span: unknown) => Promise<unknown>
+    ) => {
+      const attrs: Record<string, unknown> = {};
+      if (name === 'channel_directory.full_read_settle') settles.push(attrs);
+      return operation({
+        setAttr: (key: string, value: unknown) => {
+          attrs[key] = value;
+        },
+        run: <T,>(work: () => T) => work(),
+      });
+    }) as never);
+    onTestFinished(() => span.mockRestore());
     walked = [directoryChannel('a')];
     // The primary read of 'b' fails: neither the walk nor the cache is
     // known to be current, so the read fails rather than act on either.
@@ -1795,6 +1810,14 @@ describe('cached channel directory', () => {
       reason: 'primary_failed',
     });
     expect(readFromPrimary).toHaveBeenCalledOnce();
+    expect(settles).toEqual([
+      {
+        'channel_directory.disputed': 1,
+        'channel_directory.primary_reads': 1,
+        'channel_directory.primary_changed': 0,
+        'channel_directory.primary_failed': 1,
+      },
+    ]);
   });
 
   it('fails without reading the primary when there are more than 200 disagreements', async () => {

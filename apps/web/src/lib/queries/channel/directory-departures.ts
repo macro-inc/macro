@@ -1,6 +1,10 @@
-import { anyAbortSignal } from '@core/util/abort-signal';
+import { anyAbortSignal, untilAborted } from '@core/util/abort-signal';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type Span, Telemetry } from '@macro-inc/observability';
+import {
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
 import type { ChannelDirectoryState, PrimaryChannelRead } from './directory';
 
 /** When a channel the viewer was seen leaving is checked again, after the
@@ -23,6 +27,27 @@ export const DEPARTURE_RETRY_MS = 30_000;
 export const DEPARTURE_RETRIES = 2;
 /** Primary reads in flight at once. */
 const READ_CONCURRENCY = 4;
+
+/** Aborts after `ms`, on the page's own timers (which tests drive, unlike
+ * `AbortSignal.timeout`'s). `release` ends it early once the work is done,
+ * aborting it too so the signals combined with it drop their listeners. */
+function deadlineAfter(ms: number): {
+  signal: AbortSignal;
+  release: () => void;
+} {
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new DOMException('deadline', 'TimeoutError')),
+    ms
+  );
+  return {
+    signal: controller.signal,
+    release: () => {
+      clearTimeout(timer);
+      controller.abort();
+    },
+  };
+}
 
 /** What the cleanup of unreadable channels reports back. */
 export type RemoveUnreadableResult = {
@@ -78,6 +103,30 @@ type Departure = {
    * check even though the cache no longer shows it. */
   repair: boolean;
   retries: number;
+  /** What saw the leave: its scan or live update parents the checks. */
+  origin: TraceContext;
+};
+
+/** How one check ended, recorded on its span. */
+type DepartureCheckOutcome =
+  | 'joined'
+  | 'left'
+  | 'unreadable_cleared'
+  | 'removed_unconfirmed'
+  | 'read_failed'
+  | 'remove_failed'
+  | 'cancelled'
+  | 'timed_out'
+  | 'unfinished';
+
+type CheckJob = {
+  id: string;
+  departure: Departure;
+  generation: string;
+  tally: Tally;
+  /** Ends the check: the directory, the round's scope, or its deadline. */
+  signal: AbortSignal;
+  deadline: AbortSignal;
 };
 
 /** A check in flight, and whether a live update showed the viewer back in
@@ -153,6 +202,8 @@ export function createDepartureRecheck(
       at: Date.now(),
       repair: existing?.repair ?? false,
       retries: 0,
+      // Taken while the scan or live update that saw it is still active.
+      origin: Telemetry.captureContext(),
     });
   };
 
@@ -175,28 +226,50 @@ export function createDepartureRecheck(
   const readPrimary = async (
     id: string,
     tally: Tally,
+    span: Span,
     signal: AbortSignal
   ): Promise<PrimaryChannelRead> => {
     tally.read += 1;
     try {
-      return await tally.span.run(() => deps.readFromPrimary(id, signal));
+      return await span.run(() => deps.readFromPrimary(id, signal));
     } catch {
       return { kind: 'failed' };
     }
   };
 
-  const check = async (
-    id: string,
-    departure: Departure,
-    generation: string,
-    tally: Tally,
-    signal: AbortSignal
-  ) => {
+  const check = (job: CheckJob) =>
+    // Parented on what saw the leave, so its trace shows the check that
+    // followed it; the round is named on the span.
+    job.departure.origin.run(() =>
+      Telemetry.span('channel_directory.departure_check', async (span) => {
+        span.setAttr('channel.id', job.id);
+        const round = job.tally.span.traceparent();
+        if (round) span.setAttr('channel_directory.recheck_traceparent', round);
+        let outcome: DepartureCheckOutcome = 'unfinished';
+        try {
+          // A check that ignores its signal still ends, and frees its batch,
+          // when the signal aborts.
+          outcome = await untilAborted(settle(job, span), job.signal);
+        } catch (error) {
+          if (!job.signal.aborted) throw error;
+        } finally {
+          if (outcome === 'unfinished' && job.signal.aborted)
+            outcome = job.deadline.aborted ? 'timed_out' : 'cancelled';
+          span.setAttr('channel_directory.departure_outcome', outcome);
+        }
+      })
+    );
+
+  /** Reads the channel on the primary and acts on what it shows. */
+  const settle = async (
+    { id, departure, generation, tally, signal }: CheckJob,
+    span: Span
+  ): Promise<DepartureCheckOutcome> => {
     const flight: Flight = { rejoined: false };
     flights.set(id, flight);
     try {
-      let read = await readPrimary(id, tally, signal);
-      if (signal.aborted) return;
+      let read = await readPrimary(id, tally, span, signal);
+      if (signal.aborted) return 'unfinished';
       // A rejoin seen while the read was out can be newer than the answer,
       // and a left answer writes over it: read once more.
       if (
@@ -204,47 +277,49 @@ export function createDepartureRecheck(
         read.kind === 'read' &&
         !read.channel?.isParticipant
       ) {
-        read = await readPrimary(id, tally, signal);
-        if (signal.aborted) return;
+        read = await readPrimary(id, tally, span, signal);
+        if (signal.aborted) return 'unfinished';
       }
       if (read.kind === 'failed') {
         tally.failed += 1;
         retry(id, departure, departure.repair);
-        return;
+        return 'read_failed';
       }
       if (read.channel?.isParticipant) {
         // In it again: nothing left to check, unless a newer leave came in.
         tally.joined += 1;
         if (departures.get(id) === departure) departures.delete(id);
-        return;
+        return 'joined';
       }
       if (read.channel) {
         // The read wrote the record that shows them out.
         tally.left += 1;
         departure.repair = false;
-        return;
+        return 'left';
       }
       tally.unreadable += 1;
       let removed: RemoveUnreadableResult | undefined;
       try {
-        removed = await tally.span.run(() =>
+        removed = await span.run(() =>
           deps.removeUnreadable([id], generation, signal)
         );
       } catch (error) {
-        if (signal.aborted) return;
+        if (signal.aborted) return 'unfinished';
         tally.failed += 1;
+        span.error(error);
         Telemetry.error(error, { surface: 'channel-directory-departures' });
         retry(id, departure, departure.repair);
-        return;
+        return 'remove_failed';
       }
-      if (signal.aborted) return;
+      if (signal.aborted) return 'unfinished';
       if (removed?.unconfirmed.includes(id)) {
         tally.unconfirmed += 1;
         tally.failed += 1;
         retry(id, departure, true);
-        return;
+        return 'removed_unconfirmed';
       }
       departure.repair = false;
+      return 'unreadable_cleared';
     } finally {
       if (flights.get(id) === flight) flights.delete(id);
     }
@@ -321,7 +396,7 @@ export function createDepartureRecheck(
                         departures.get(id) === departure
                       )
                         departures.delete(id);
-                      const deadline = AbortSignal.timeout(
+                      const { signal: deadline, release } = deadlineAfter(
                         DEPARTURE_CHECK_DEADLINE_MS
                       );
                       const signal = anyAbortSignal([
@@ -330,16 +405,14 @@ export function createDepartureRecheck(
                         deadline,
                       ]);
                       try {
-                        // A check that ignores its signal still frees the
-                        // batch at its deadline.
-                        await Promise.race([
-                          check(id, departure, generation, tally, signal),
-                          new Promise<void>((resolve) =>
-                            signal.addEventListener('abort', () => resolve(), {
-                              once: true,
-                            })
-                          ),
-                        ]);
+                        await check({
+                          id,
+                          departure,
+                          generation,
+                          tally,
+                          signal,
+                          deadline,
+                        });
                         if (deadline.aborted) {
                           tally.failed += 1;
                           retry(id, departure, departure.repair);
@@ -349,6 +422,8 @@ export function createDepartureRecheck(
                           Telemetry.error(error, {
                             surface: 'channel-directory-departures',
                           });
+                      } finally {
+                        release();
                       }
                     })
                   );
