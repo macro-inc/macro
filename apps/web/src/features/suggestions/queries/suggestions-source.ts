@@ -107,22 +107,22 @@ export function useSuggestionsSource(): SuggestionsSource {
     latestRead = read;
     // Home's rows read their own entry: every reader follows a change.
     await Promise.all([
-      read.done,
+      followReplacingReads(read),
       queryClient.invalidateQueries({ queryKey: suggestionsKeys.top._def }),
     ]);
-    await followReplacingReads(read);
   };
   // A later write's read replaces this one's, and a write after that can
-  // replace it again: wait for the write read that is out last, so a write
-  // isn't let go on a feed from before it.
+  // replace it again: wait until the read followed settles with no newer
+  // write read started while it was out, so a write isn't let go on a feed
+  // from before it. A read started after it settled replaced nothing.
   const followReplacingReads = async (own: WriteRead) => {
     let followed = own;
     // Bounded: reads that keep replacing each other must not hold the row.
-    for (let turn = 0; turn < 3; turn++) {
+    for (let turn = 0; turn < 4; turn++) {
+      await followed.done;
       const last = latestRead;
       if (!last || last === followed) return;
       followed = last;
-      await last.done;
     }
   };
   // Each write to a suggestion, counted, so a write's late follow-up can

@@ -89,9 +89,11 @@ only, behind `enable-suggestions`.
   suggestion was written to again meanwhile; it resolves once the feed's
   readers have the restored row, without waiting for the read after it.
   Don't cancel the feed's reads there: another write waiting on its read
-  would be let go on a feed from before it. Each write waits for the feed
-  read the last write started (`followReplacingReads`), since a later
-  write's read replaces its own; a poll that starts meanwhile doesn't hold it. A dismissed routine suggestion has no Undo: its idea goes
+  would be let go on a feed from before it. Each write also waits for
+  the reads later writes started while its own was out, and the ones that
+  replaced those (`followReplacingReads`), since a later write's read
+  replaces its own; a poll, or a read started after its own answered,
+  doesn't hold it. A dismissed routine suggestion has no Undo: its idea goes
   with it, which the server can't bring back. A dismissal also reads the
   routine ideas again, for the sidebar's Ideas count, dropping a read already
   out (it may predate the dismissal); the row doesn't wait for it. A failed
