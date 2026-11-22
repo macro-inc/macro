@@ -19,8 +19,6 @@ GET /attachments/{attachment_id}/chats
 GET /chats/history/{chat_id}
 GET /chats/{chat_id}
 GET /citations/{id}
-GET /memory
-GET /memory/explicit
 GET /skills
 GET /skills/{id}
 
@@ -75,8 +73,6 @@ GET /documents/{document_id}
 GET /documents/{document_id}/design
 GET /documents/{document_id}/github_prs
 GET /documents/{document_id}/illustrator
-GET /documents/{document_id}/location
-GET /documents/{document_id}/location_v3
 GET /documents/{document_id}/markdown
 GET /documents/{document_id}/photoshop
 GET /documents/{document_id}/presentation

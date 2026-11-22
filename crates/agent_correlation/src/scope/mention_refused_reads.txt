@@ -101,7 +101,9 @@ GET /import/workspaces/{source}  # outside mention context reads
 GET /mcp/servers  # outside mention context reads
 GET /mcp/servers/auth/callback  # outside mention context reads
 GET /mcp/servers/auth/client-metadata  # outside mention context reads
+GET /memory  # enrolls the caller in daily background memory refresh
 GET /memory/activity  # outside mention context reads
+GET /memory/explicit  # enrolls the caller in daily background memory refresh
 GET /onboarding  # outside mention context reads
 GET /onboarding/prompts  # outside mention context reads
 GET /pipedream/mcp/catalog  # outside mention context reads
@@ -229,6 +231,8 @@ GET /documents/starter_docs  # outside mention context reads
 GET /documents/system_skills  # outside mention context reads
 GET /documents/{document_id}/branch_name  # outside mention context reads
 GET /documents/{document_id}/export  # outside mention context reads
+GET /documents/{document_id}/location  # exports signed document download capabilities
+GET /documents/{document_id}/location_v3  # exports signed document download capabilities
 GET /documents/{document_id}/processing/{job_id}  # outside mention context reads
 GET /documents/{document_id}/team_share  # outside mention context reads
 GET /documents/{document_id}/views  # outside mention context reads
