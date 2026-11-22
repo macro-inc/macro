@@ -17,6 +17,15 @@ use uuid::Uuid;
 
 pub use system_properties::CRM_TEAM_STAGE_DEFINITION_NAME;
 
+/// A committed property assignment and its exact reciprocal task endpoints.
+#[derive(Debug)]
+pub struct EntityPropertyMutation {
+    /// Canonical primary assignment returned by the write.
+    pub property:
+        models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition,
+    /// Task IDs changed by the relationship transaction, including removed neighbors.
+    pub affected_task_ids: Vec<Uuid>,
+}
 /// Map an internal properties storage type to its canonical entity type.
 pub fn canonical_entity_type(entity_type: EntityType) -> AccessEntityType {
     match entity_type {

@@ -43,6 +43,14 @@ impl EntityPropertyWriter for DeleteWriter {
         Err(rootcause::report!("unexpected assignment write"))
     }
 
+    async fn set_task_property(
+        &self,
+        _task_id: Uuid,
+        _property_definition_id: Uuid,
+        _value: Option<SetPropertyValue>,
+    ) -> Result<properties::domain::model::EntityPropertyMutation, rootcause::Report> {
+        Err(rootcause::report!("unexpected task assignment write"))
+    }
     async fn update_entity_property_options(
         &self,
         _entity_type: model_entity::EntityType,

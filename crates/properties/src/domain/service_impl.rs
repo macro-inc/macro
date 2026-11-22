@@ -644,7 +644,7 @@ where
     }
 
     #[tracing::instrument(
-        skip(self, access, source),
+        skip(self, access, value, source),
         fields(
             entity_id = %access.entity_id(),
             entity_type = ?access.entity_type(),
@@ -660,6 +660,20 @@ where
         value: Option<SetPropertyValue>,
         source: Option<PropertyChangeSource>,
     ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
+        Ok(self
+            .set_entity_property_with_effects(access, property_definition_id, value, source)
+            .await?
+            .property)
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn set_entity_property_with_effects(
+        &self,
+        access: &EditReceipt,
+        property_definition_id: Uuid,
+        value: Option<SetPropertyValue>,
+        source: Option<PropertyChangeSource>,
+    ) -> Result<super::model::EntityPropertyMutation, PropertiesErr> {
         require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let entity_id = access.entity_id();
@@ -747,6 +761,14 @@ where
             let change = self
                 .handle_task_relationship_property(access, property_definition_id, value)
                 .await?;
+            let mut affected_task_ids = change
+                .reciprocal
+                .iter()
+                .filter_map(|snapshot| Uuid::parse_str(&snapshot.property.entity_id).ok())
+                .collect::<Vec<_>>();
+            affected_task_ids.extend(Uuid::parse_str(entity_id).ok());
+            affected_task_ids.sort_unstable();
+            affected_task_ids.dedup();
             for reciprocal in &change.reciprocal {
                 self.publish_property_event(Self::entity_property_updated_event(
                     &reciprocal.property,
@@ -765,11 +787,14 @@ where
                 source.as_ref(),
                 None,
             ));
-            return Ok(EntityPropertyWithDefinition {
-                property: change.property,
-                definition: property_definition,
-                value: property_value,
-                options: None,
+            return Ok(super::model::EntityPropertyMutation {
+                property: EntityPropertyWithDefinition {
+                    property: change.property,
+                    definition: property_definition,
+                    value: property_value,
+                    options: None,
+                },
+                affected_task_ids,
             });
         }
 
@@ -832,11 +857,14 @@ where
             None,
         ));
 
-        Ok(EntityPropertyWithDefinition {
-            property: snapshot.property,
-            definition: property_definition,
-            value: property_value,
-            options: None,
+        Ok(super::model::EntityPropertyMutation {
+            property: EntityPropertyWithDefinition {
+                property: snapshot.property,
+                definition: property_definition,
+                value: property_value,
+                options: None,
+            },
+            affected_task_ids: Vec::new(),
         })
     }
 

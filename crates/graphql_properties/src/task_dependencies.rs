@@ -32,7 +32,7 @@ pub struct GraphqlTaskDependencyState {
     pub id: ID,
     /// Whether any existing blocker is unfinished.
     pub is_blocked: bool,
-    /// Identifiers of unfinished blockers. Names require separate view access.
+    /// Unfinished IDs from the readable task's relationships; names/content need separate view access.
     pub open_blocker_ids: Vec<ID>,
     /// Canonical Status, Depends On, and Blocking assignments.
     pub properties: Vec<GraphqlProperty>,

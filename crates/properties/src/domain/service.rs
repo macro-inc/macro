@@ -97,6 +97,15 @@ pub trait PropertiesService: Send + Sync + 'static {
         source: Option<PropertyChangeSource>,
     ) -> impl Future<Output = Result<EntityPropertyWithDefinition, PropertiesErr>> + Send;
 
+    /// Set one assignment and retain the exact reciprocal endpoints from its transaction.
+    fn set_entity_property_with_effects(
+        &self,
+        access: &EditReceipt,
+        property_definition_id: Uuid,
+        value: Option<SetPropertyValue>,
+        source: Option<PropertyChangeSource>,
+    ) -> impl Future<Output = Result<super::model::EntityPropertyMutation, PropertiesErr>> + Send;
+
     /// Append the project's agent assignees to a newly added task, preserving
     /// existing assignees and concurrent edits. Both capabilities must belong
     /// to the same actor. Publishes assignment changes with the task's attribution.
