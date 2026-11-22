@@ -36,6 +36,10 @@ Midnight remains fully visible at scroll zero. The current-time line crosses the
 card with an accent time in its gutter. Only the timed card has the shared 32px top
 fade past the opening scroll position; the hour gutter never fades. Bottom clearance
 is limited to the floating New row and a small gap.
+Calendar grid boundaries use the theme's semantic secondary border; half-hour
+lines use its divider token. This covers day columns, month cells, and retained
+all-day boundaries without restoring deliberately hidden chrome. The hover-time
+guide uses the same secondary border, not a locally dimmed text color.
 Day, 3 days, Week, and Month page with a shared five-page native scroll-snap ring
 on phone and desktop. A single unhurried arrow animates through native scrolling.
 Rapid arrows accumulate without dropping presses and jump to the latest target;
@@ -61,6 +65,9 @@ Desktop event creation and editing use one 384px composer, not a second split.
 Anchored, pinned, and agent-draft placements have separate view components over
 shared fields and setup; pinning retains the field tree. The registered legacy
 split route also uses the new composer views, not the preserved old form files.
+Composer containers have a semantic secondary border in dark themes, including
+floating/pinned panels, agent cards, and the phone sheet. Light-theme frames stay
+unchanged.
 A selected grid range or event anchors the floating composer beside that selection.
 **Pin event composer** and **Pin event details** replace the calendar's left sidebar;
 unpinning restores navigation without changing the mounted draft. Drag the empty

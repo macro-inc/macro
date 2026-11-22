@@ -8,7 +8,7 @@
 	--fc-page-bg-color: transparent;
 	--fc-neutral-bg-color: transparent;
 	--fc-neutral-text-color: var(--color-ink-muted);
-	--fc-border-color: var(--color-edge-muted);
+	--fc-border-color: var(--color-border-secondary);
 	--fc-event-bg-color: color-mix(
 		in oklch,
 		var(--color-calendar) 5%,
@@ -770,7 +770,7 @@
 }
 
 .calendar-view .fc .fc-timegrid-slot-minor {
-	border-top-color: transparent;
+	border-top-color: var(--color-divider);
 }
 
 .calendar-view .fc .fc-timegrid-axis-cushion,
@@ -986,8 +986,7 @@
 	right: 0;
 	left: 0;
 	z-index: 4;
-	border-top: 1px dashed
-		color-mix(in oklch, var(--color-ink-extra-muted) 40%, transparent);
+	border-top: 1px dashed var(--color-border-secondary);
 	pointer-events: none;
 	content: "";
 }

@@ -1,0 +1,11 @@
+@reference "../../../../../index.css";
+
+/* Border the placement owner, not the scrolling form or its nested menus. */
+.menu-surface:has(.calendar-composer),
+.elevated-surface:has(.calendar-composer),
+.mobile-sheet:has(.calendar-composer),
+[data-calendar-tool-composer] {
+  @variant dark-mode {
+    border: 1px solid var(--color-border-secondary);
+  }
+}
