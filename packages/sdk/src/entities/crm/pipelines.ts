@@ -80,7 +80,9 @@ export class PipelineNamespace {
 
   /**
    * Every entry (deal) tracking one of these companies or contacts, across
-   * the caller's pipelines; pipelines without one are left out.
+   * the caller's pipelines.
+   *
+   * Pipelines without one are left out.
    *
    * @readonly
    */

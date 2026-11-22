@@ -303,7 +303,7 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
   }
 
   /**
-   * Query pipeline rows, optionally restricting the query to typed row handles; `maxItems` caps the total.
+   * Query pipeline rows, optionally as typed row handles; `maxItems` caps the total.
    *
    * @readonly
    */

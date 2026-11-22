@@ -12427,6 +12427,7 @@ export const ListCompaniesResponse = z.object({
       revenue: z.union([z.number(), z.null()]).optional(),
     })
   ),
+  totalMatching: z.number().int().gte(0),
   summary: z.string(),
 });
 

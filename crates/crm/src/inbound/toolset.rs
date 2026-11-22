@@ -10,7 +10,7 @@
 mod create_company;
 mod create_contact;
 mod get_company;
-mod list_companies;
+pub mod list_companies;
 pub mod pipelines;
 pub mod transfer;
 
@@ -23,8 +23,8 @@ use std::sync::Arc;
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use entity_access::domain::{
     models::{
-        AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole,
-        TeamRole, ViewAccessLevel,
+        AccessError, AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+        EntityType, MemberTeamRole, TeamRole, ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
@@ -115,7 +115,7 @@ where
 
 /// A company's own Stage property: the select option id currently set plus its
 /// human-readable label.
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCompanyStage {
     /// The stage property option id (usable with SetEntityProperty).
@@ -316,21 +316,27 @@ pub(crate) fn extract_company_crm_props(
 }
 
 /// Properties view receipts for a batch of company ids
-/// (`entity_type = company`). Asserted rather than minted: callers only pass
+/// (`entity_type = company`), carrying the caller's own `auth` (a user, or a
+/// team bot with its scope). Asserted rather than looked up: callers only pass
 /// company ids whose access was already verified through the CRM seam (the
 /// caller's own team listing, or a company permission check) — re-checking
 /// each company here would repeat that lookup per company.
 pub(crate) fn company_view_receipts(
-    user_id: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    auth: &EntityAccessAuth,
     company_ids: impl IntoIterator<Item = Uuid>,
-) -> Vec<properties::ViewReceipt> {
+) -> Result<Vec<properties::ViewReceipt>, AccessError> {
     company_ids
         .into_iter()
         .map(|id| {
-            EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
-                user_id.clone(),
-                &id.to_string(),
-                EntityType::CrmCompany,
+            EntityAccessReceipt::<ViewAccessLevel>::try_new(
+                auth.clone(),
+                Entity {
+                    entity_id: id.to_string(),
+                    entity_type: EntityType::CrmCompany,
+                },
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::View,
+                },
             )
         })
         .collect()

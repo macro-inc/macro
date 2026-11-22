@@ -757,6 +757,7 @@ use email_policy::EmailPolicySchemas;
         crm::inbound::axum_router::get_contact_by_email::handler,
         crm::inbound::axum_router::get_company_by_domain::handler,
         crm::inbound::axum_router::search_contacts::handler,
+        crm::inbound::company_list::handler,
         crm::inbound::axum_router::get_company::handler,
         crm::inbound::axum_router::previews::handler,
         crm::inbound::axum_router::create_company::handler,
