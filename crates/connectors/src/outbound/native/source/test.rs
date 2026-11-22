@@ -561,6 +561,14 @@ async fn a_sign_in_that_never_finished_needs_reauth() {
 /// `WWW-Authenticate` challenge a server that needs sign-in sends when it is
 /// 401, and counting the requests it got.
 async fn endpoint(status: http::StatusCode) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+    endpoint_challenging(status, true).await
+}
+
+/// [`endpoint`], with a 401 that carries a challenge only when `challenge`.
+async fn endpoint_challenging(
+    status: http::StatusCode,
+    challenge: bool,
+) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
     use axum::response::IntoResponse as _;
     let hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let router = axum::Router::new().route(
@@ -570,7 +578,7 @@ async fn endpoint(status: http::StatusCode) -> (String, Arc<std::sync::atomic::A
             move || async move {
                 hits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 let mut headers = http::HeaderMap::new();
-                if status == http::StatusCode::UNAUTHORIZED {
+                if challenge && status == http::StatusCode::UNAUTHORIZED {
                     headers.insert(
                         http::header::WWW_AUTHENTICATE,
                         http::HeaderValue::from_static(
@@ -708,4 +716,77 @@ async fn a_reported_401_marks_only_a_server_without_a_grant() {
         .map(|row| row.requires_sign_in)
         .collect();
     assert_eq!(marks, [true, false]);
+}
+
+/// A 401 without a `WWW-Authenticate` challenge is a server asking for a
+/// sign-in all the same, as the add-time probe and the proxy count it.
+#[tokio::test]
+async fn a_dial_answered_a_bare_401_marks_the_server() {
+    let (url, _) = endpoint_challenging(http::StatusCode::UNAUTHORIZED, false).await;
+    let fixture = holding(vec![row(&url, true)]);
+    let connection = fixture.source.connections(&user()).await.unwrap().remove(0);
+
+    let error = connection
+        .mcp
+        .unwrap()
+        .dial()
+        .await
+        .map(|_| ())
+        .unwrap_err();
+
+    assert_eq!(
+        refusal(&error),
+        Some(&SourceRefusal::NeedsReauth(server(&url)))
+    );
+    assert!(fixture.store.rows()[0].requires_sign_in);
+}
+
+/// An add whose mark failed to store leaves the row unmarked and without a
+/// grant; adding it again asks the server again and stores the answer.
+#[tokio::test]
+async fn adding_a_held_unmarked_server_again_retries_its_check() {
+    let (url, hits) = endpoint(http::StatusCode::UNAUTHORIZED).await;
+    let fixture = holding(vec![row(&url, true)]);
+
+    let added = fixture
+        .source
+        .add_server(
+            &user(),
+            &ServerUrl::parse(&url).unwrap(),
+            "Tracker",
+            AddedBy::User,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(added.grant, GrantState::Dead);
+    assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
+    let rows = fixture.store.rows();
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].requires_sign_in);
+}
+
+/// A held server with a grant isn't asked again.
+#[tokio::test]
+async fn adding_a_held_signed_in_server_again_sends_nothing() {
+    let (url, hits) = endpoint(http::StatusCode::UNAUTHORIZED).await;
+    let fixture = holding(vec![McpServerRecord {
+        credentials: Some(granted("token")),
+        ..row(&url, true)
+    }]);
+
+    let added = fixture
+        .source
+        .add_server(
+            &user(),
+            &ServerUrl::parse(&url).unwrap(),
+            "Tracker",
+            AddedBy::User,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(added.grant, GrantState::Working);
+    assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert!(!fixture.store.rows()[0].requires_sign_in);
 }

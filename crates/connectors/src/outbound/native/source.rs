@@ -61,11 +61,13 @@ where
 
     /// Add `url` to the user's servers under `name`, enabled and not yet
     /// signed in to. A URL the user already has, in any spelling, is
-    /// returned as it stands: saving over it would wipe its grant.
+    /// returned as stored: saving over it would wipe its grant.
     ///
-    /// A new server is asked once, without a token, whether it takes
-    /// requests like that: one that answers HTTP 401 is stored as needing a
-    /// sign-in, so it reads as such instead of connected.
+    /// A server without a grant or a mark, new or held, is asked once,
+    /// without a token, whether it takes requests like that: one that
+    /// answers HTTP 401 is stored as needing a sign-in, so it reads as such
+    /// instead of connected. Adding a held URL again retries an answer an
+    /// earlier add failed to store.
     ///
     /// An agent may only add a public `https` server
     /// ([`SourceRefusal::NonPublic`]); an empty name is
@@ -84,6 +86,9 @@ where
             .into_iter()
             .find(|(held, _)| held == url)
         {
+            // Asked again: an earlier add may have failed to store its
+            // answer, and adding again is how a caller retries that.
+            let record = self.classify(user, record).await?;
             return Ok(self.connection(url, record));
         }
 
@@ -103,7 +108,19 @@ where
                 AddServerError::Store(error) => error.into_rootcause(),
             })?;
 
-        let mut record = added.record().clone();
+        let record = self.classify(user, added.record().clone()).await?;
+        Ok(self.connection(url.clone(), record))
+    }
+
+    /// `record` with whether it needs a sign-in found out, when it holds no
+    /// grant and isn't marked yet: the server is asked once without a token,
+    /// and a 401 is stored. A grant stored meanwhile keeps the row unmarked,
+    /// since the store's mark is conditional on there being none.
+    async fn classify(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        mut record: McpServerRecord,
+    ) -> Result<McpServerRecord, Report> {
         if record.credentials.is_none()
             && !record.requires_sign_in
             && needs_sign_in(&self.http, &record.url).await
@@ -114,8 +131,7 @@ where
                 .map_err(|error| anyhow::Error::from(error).into_rootcause())?;
             record.requires_sign_in = true;
         }
-
-        Ok(self.connection(url.clone(), record))
+        Ok(record)
     }
 
     /// The user's rows with their normalized address, leaving out rows whose
@@ -508,9 +524,11 @@ async fn needs_sign_in(http: &McpHttp, url: &str) -> bool {
     }
 }
 
-/// Whether a failed dial failed because the server answered HTTP 401 with
-/// a challenge, as the MCP authorization spec has a server that needs a
-/// sign-in do.
+/// Whether a failed dial failed because the server answered HTTP 401, as
+/// the MCP authorization spec has a server that needs a sign-in do. rmcp
+/// 3.9 says `AuthRequired` for a 401 with a `WWW-Authenticate` challenge,
+/// and `UnexpectedServerResponse("HTTP 401 ...")` for one without; the
+/// add-time probe and the proxy count both, so a dial does too.
 fn answered_unauthorized(error: &anyhow::Error) -> bool {
     error.chain().any(|cause| {
         let transport = match cause.downcast_ref::<ClientInitializeError>() {
@@ -523,6 +541,12 @@ fn answered_unauthorized(error: &anyhow::Error) -> bool {
                 .downcast_ref::<StreamableHttpError<reqwest::Error>>(),
             None => cause.downcast_ref::<StreamableHttpError<reqwest::Error>>(),
         };
-        matches!(http, Some(StreamableHttpError::AuthRequired(_)))
+        match http {
+            Some(StreamableHttpError::AuthRequired(_)) => true,
+            Some(StreamableHttpError::UnexpectedServerResponse(message)) => {
+                message.starts_with("HTTP 401 ")
+            }
+            _ => false,
+        }
     })
 }
