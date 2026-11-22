@@ -31,7 +31,7 @@ pub enum DialectGuide {
     Permissions,
     /// The optional TypeScript module, read with `get` and `call`.
     Module,
-    /// Searching and browsing the workspace.
+    /// Searching the workspace and listing its items (tasks, documents) by kind.
     Search,
     /// Worked examples.
     Examples,
