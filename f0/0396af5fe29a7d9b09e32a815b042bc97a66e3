@@ -1,0 +1,31 @@
+apps/web/src/features/block-agent/component/Block.tsx
+  s_5cea741b7a82ae::t_b465676d130217 216-219
+apps/web/src/features/agents-view/components/AgentSessionPane.tsx
+  s_5cea741b7a82ae::t_ca7d9e337d4f2f 382-384
+  s_5cea741b7a82ae::t_b465676d130217 381
+apps/web/src/features/block-agent/component/PromptFooter.tsx
+  s_5cea741b7a82ae::t_5f9b565d35bef3 4
+  s_5cea741b7a82ae::t_b9e9094552be24 92-93,96-99,103
+apps/web/src/features/block-agent/component/AgentMessage.tsx
+  s_5cea741b7a82ae::t_ca7d9e337d4f2f 474-476,580-585
+  s_5cea741b7a82ae::t_b9e9094552be24 12-16,454-473,477-480,485-486,577-579,586-595
+apps/web/src/features/block-agent/component/Transcript.tsx
+  s_5cea741b7a82ae::t_ca7d9e337d4f2f 2-3
+  s_5cea741b7a82ae::t_b465676d130217 32-36,221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f00396af5fe29a7d9b09e32a815b042bc97a66e3",
+  "prompts": {},
+  "sessions": {
+    "s_5cea741b7a82ae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d43a0945-1df5-435d-8ea8-695ab0be7f08",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
