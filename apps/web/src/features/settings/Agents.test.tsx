@@ -1085,6 +1085,30 @@ describe('Agents', () => {
       ).toBe('Draft instructions');
     });
 
+    it('closes the permissions page first on a phone Back', () => {
+      device.touch = true;
+      setPermissionsFlag(true);
+      agentMocks.query.data = [ownAgent];
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+      fireEvent.input(screen.getByLabelText('Instructions'), {
+        target: { value: 'Draft instructions' },
+      });
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Manage permissions of agent-1' })
+      );
+
+      const goBack = vi.fn();
+      expect(runSplitBack({ canGoBack: () => true, goBack })).toBe(true);
+      expect(
+        screen.queryByRole('heading', { name: /Permissions page of/ })
+      ).toBeNull();
+      expect(
+        (screen.getByLabelText('Instructions') as HTMLTextAreaElement).value
+      ).toBe('Draft instructions');
+      expect(goBack).not.toHaveBeenCalled();
+    });
+
     it('is not in the editor while the flag is off or when creating', () => {
       agentMocks.query.data = [ownAgent];
       render(() => <Agents {...agentsPageProps} />);

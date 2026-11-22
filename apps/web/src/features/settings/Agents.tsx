@@ -1358,7 +1358,10 @@ function AgentEditorPage(props: {
     useSplitBackInterceptor(() => {
       if (panel && !panel.isPanelActive()) return false;
       if (busy()) return true;
-      if (setup()) finishSetup();
+      // The permissions subpage closes first, back to the unsaved form.
+      if (permissionsFlag() && permissionsOpen() && props.agent) {
+        setPermissionsOpen(false);
+      } else if (setup()) finishSetup();
       else close();
       return true;
     });
