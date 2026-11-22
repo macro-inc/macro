@@ -4,6 +4,7 @@ import {
   SoupSharedMailBackfillDocument,
 } from '@service-storage/graphql/generated/graphql';
 import fc from 'fast-check';
+import { Tab } from 'tab-election';
 import { describe, expect, it, vi } from 'vitest';
 import {
   AUXILIARY_SOUP_BACKFILL_LANE,
@@ -16,7 +17,10 @@ import {
   soupBackfillCheckpointKey,
   soupBackfillCoordinatorKey,
   soupBackfillLaneContract,
+  soupBackfillLaneLocks,
+  soupBackfillLeadershipLock,
 } from './backfill-contract';
+import { installBrowserLocks } from './browser-locks.test-helpers';
 
 vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
 vi.mock('../contacts/top-up', () => ({ useContactTopUp: () => {} }));
@@ -229,5 +233,54 @@ describe('soup backfill lane contracts', () => {
       }),
       { numRuns: 500 }
     );
+  });
+
+  it('locks only the checkpoint while the build leads the v19 coordinator', () => {
+    for (const lane of DEFAULT_SOUP_BACKFILL_LANES) {
+      expect(
+        soupBackfillLaneLocks('user-1', DEFAULT_SOUP_BACKFILL_LANES, lane)
+      ).toEqual([soupBackfillCheckpointKey('user-1', lane)]);
+    }
+  });
+
+  it('also takes the v19 leadership lock for v19 lanes once any lane changes', () => {
+    const lanes = DEFAULT_SOUP_BACKFILL_LANES.map((lane) =>
+      lane === CORE_SOUP_BACKFILL_LANE ? withExtraFilter(lane) : lane
+    );
+    const v19Leadership = soupBackfillLeadershipLock(
+      soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES)
+    );
+    for (const lane of lanes) {
+      const checkpoint = soupBackfillCheckpointKey('user-1', lane);
+      expect(soupBackfillLaneLocks('user-1', lanes, lane)).toEqual(
+        lane ===
+          lanes[DEFAULT_SOUP_BACKFILL_LANES.indexOf(CORE_SOUP_BACKFILL_LANE)]
+          ? [checkpoint]
+          : [v19Leadership, checkpoint]
+      );
+    }
+  });
+
+  it('names the leadership lock as the tab-election release of v19 builds does', async () => {
+    const locks = installBrowserLocks();
+    const requested = vi.spyOn(navigator.locks, 'request');
+    const coordinator = soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES);
+    const tab = new Tab(coordinator);
+    try {
+      let leads = () => {};
+      const led = new Promise<void>((resolve) => {
+        leads = resolve;
+      });
+      const leadership = tab.waitForLeadership(() => leads());
+      await led;
+      expect(requested.mock.calls.map(([name]) => name)).toContain(
+        soupBackfillLeadershipLock(coordinator)
+      );
+      tab.relinquishLeadership();
+      await leadership;
+    } finally {
+      tab.close();
+      locks.restore();
+    }
   });
 });
