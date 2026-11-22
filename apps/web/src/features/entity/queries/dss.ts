@@ -47,7 +47,7 @@ import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
-import { partialMatchKey, useMutation } from '@tanstack/solid-query';
+import { useMutation } from '@tanstack/solid-query';
 import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
 import { BulkDeleteFailure } from './bulk-delete-result';
@@ -71,14 +71,12 @@ function invalidateDeletedDssItems(
     if (!writer || isCurrentQueryAccount(writer))
       queryClient.invalidateQueries({
         queryKey: channelKeys._def,
-        // The deleted channels' own reads, and the REST lists that hold them.
-        // The directory refresh below reads the directory again itself, and
-        // Quick Access rereads its cached channels when the cache drops them:
-        // both are account-wide reads one deletion should not repeat.
+        // The deleted channels' own reads. The directory refresh below reads
+        // the directory again itself, and Quick Access rereads its cached
+        // channels when the cache drops them: both are account-wide reads one
+        // deletion should not repeat.
         predicate: ({ queryKey }) =>
-          partialMatchKey(queryKey, channelKeys.listChannels._def) ||
-          partialMatchKey(queryKey, channelKeys.activity._def) ||
-          (typeof queryKey[2] === 'string' && deleted.has(queryKey[2])),
+          typeof queryKey[2] === 'string' && deleted.has(queryKey[2]),
       });
     // The channel directory rereads its pages, or waits for the soup update:
     // the deleted channels come out at once, with no read of each.

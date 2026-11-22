@@ -824,7 +824,6 @@ describe('channel deletion', () => {
     const attachments = channelKeys.attachments('second', 'image').queryKey;
     const refused = channelKeys.withID('refused').queryKey;
     const other = channelKeys.participants('other').queryKey;
-    const list = channelKeys.listChannels('macro|viewer@example.com').queryKey;
     const directory = channelKeys.directory(
       'macro|viewer@example.com'
     ).queryKey;
@@ -838,7 +837,6 @@ describe('channel deletion', () => {
       attachments,
       refused,
       other,
-      list,
       directory,
       quickAccess,
     ])
@@ -859,7 +857,6 @@ describe('channel deletion', () => {
     });
     expect(client.getQueryState(open)?.isInvalidated).toBe(true);
     expect(client.getQueryState(attachments)?.isInvalidated).toBe(true);
-    expect(client.getQueryState(list)?.isInvalidated).toBe(true);
     // A channel that was not deleted keeps its reads.
     expect(client.getQueryState(refused)?.isInvalidated).toBe(false);
     expect(client.getQueryState(other)?.isInvalidated).toBe(false);
@@ -884,10 +881,9 @@ describe('channel deletion', () => {
       id: 'macro|other@example.com',
       authenticated: true,
     });
-    const otherList = channelKeys.listChannels(
-      'macro|other@example.com'
-    ).queryKey;
-    client.setQueryData(otherList, {});
+    // The new sign-in's read of the same channel.
+    const otherRead = channelKeys.withID('gone').queryKey;
+    client.setQueryData(otherRead, {});
     deleting.resolve();
     await deleted;
 
@@ -896,6 +892,6 @@ describe('channel deletion', () => {
       writer: expect.objectContaining({ userId: 'macro|viewer@example.com' }),
     });
     // The new sign-in's channel reads are its own.
-    expect(client.getQueryState(otherList)?.isInvalidated).toBe(false);
+    expect(client.getQueryState(otherRead)?.isInvalidated).toBe(false);
   });
 });

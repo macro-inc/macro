@@ -79,32 +79,29 @@ export function releaseAccountSources() {
 export function waitForReleasedSources() {
   return sourceRefresh ?? Promise.resolve();
 }
-export const storageServiceClient = {
-  async getActivity() {
-    return ok([]);
-  },
-  async getChannels() {
-    const owner = activeViewer();
-    const name =
-      activeViewer() === link.macro_id ? 'First channel' : 'Second channel';
-    await holdSourceResponse();
-    return ok({
-      items: [
-        {
-          id: '00000000-0000-4000-8000-000000000001',
-          name,
-          channel_type: 'direct_message',
-          updated_at: '2026-01-01T00:00:00Z',
-          participants: [
-            { user_id: owner },
-            { user_id: 'macro|peer@example.com' },
-          ],
-        },
-      ],
-      next_cursor: null,
-    });
-  },
+export const storageServiceClient = {};
+export type FixtureChannel = {
+  id: string;
+  name: string;
+  updated_at: string;
+  viewed_at?: string | null;
+  participants: { user_id: string }[];
 };
+/** The account's channels, as one held read: the fixture's stand-in directory. */
+export async function fixtureChannels(): Promise<FixtureChannel[]> {
+  const owner = activeViewer();
+  const name =
+    activeViewer() === link.macro_id ? 'First channel' : 'Second channel';
+  await holdSourceResponse();
+  return [
+    {
+      id: '00000000-0000-4000-8000-000000000001',
+      name,
+      updated_at: '2026-01-01T00:00:00Z',
+      participants: [{ user_id: owner }, { user_id: 'macro|peer@example.com' }],
+    },
+  ];
+}
 export const useIsAuthenticated = () => () => true;
 export const useNonPrimaryEmailLinkIdHeader = () => (id: string) => id;
 export function useEmailLinksQuery() {

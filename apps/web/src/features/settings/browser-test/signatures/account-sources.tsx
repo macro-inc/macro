@@ -1,9 +1,9 @@
 import { unsupportedContactSync } from '@graphql-cache/people/test-support';
+import { useQuery } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
 import { createNoopCacheHost } from '../../../../lib/graphql-cache/host/noop-host';
 import type { PeopleContextState } from '../../../../lib/graphql-cache/people/generated';
 import { createPeopleCache } from '../../../../lib/graphql-cache/people/host';
-import { useListChannelsQuery } from '../../../../lib/queries/channel/channels';
 import type {
   ContextChannel,
   PersonFacts,
@@ -17,6 +17,7 @@ import {
   SettingsSection,
 } from '../../primitives';
 import {
+  fixtureChannels,
   link,
   queryClient,
   refreshHeldAccountSources,
@@ -31,8 +32,11 @@ export function AccountSources() {
     queryKey: emailKeys.links(link.macro_id).queryKey,
   });
   const links = useEmailLinksQuery();
-  const channels = useListChannelsQuery();
   const viewer = useUserId();
+  const channels = useQuery(() => ({
+    queryKey: ['signature-fixture-channels', viewer()],
+    queryFn: fixtureChannels,
+  }));
   let owner: string | undefined;
   let state: PeopleContextState = { kind: 'missing' };
   let revision = 0;
@@ -69,8 +73,8 @@ export function AccountSources() {
       search: async () => ({ kind: 'contextPending' }),
     }),
   };
-  // The app passes its channel directory; this fixture's directory is the
-  // account's REST list, so its in-flight responses can be held.
+  // The app passes its channel directory; this fixture's directory is one
+  // held read per account, so its in-flight responses can be held.
   const directory = (): ContextChannel[] | undefined =>
     channels.isSuccess
       ? channels.data.map((channel) => ({

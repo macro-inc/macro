@@ -4,13 +4,11 @@ import { recordChannelActivity } from '@service-storage/graphql-channel-activity
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { authKeys } from '../auth/keys';
 import { recordChannelViewWhenIdle } from './activity';
-import { channelKeys } from './keys';
 
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
 });
-vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('@service-storage/graphql-channel-activity', () => ({
   recordChannelActivity: vi.fn(),
 }));
@@ -68,30 +66,6 @@ it('sends one request for views of a channel that are still pending', async () =
   expect(recordActivity.mock.calls.map(([args]) => args.channelId)).toEqual([
     'a',
     'b',
-  ]);
-});
-
-it('writes the recorded row into the activity list instead of refetching it', async () => {
-  queryClient.setQueryData<ApiActivity[]>(
-    channelKeys.activity('user').queryKey,
-    [
-      activity('a', '2026-01-01T00:00:00Z'),
-      activity('c', '2026-01-01T00:00:00Z'),
-    ]
-  );
-
-  recordChannelViewWhenIdle('a', directory);
-  recordChannelViewWhenIdle('b', directory);
-  await flushIdle();
-
-  expect(
-    queryClient.getQueryData<ApiActivity[]>(
-      channelKeys.activity('user').queryKey
-    )
-  ).toEqual([
-    activity('a', '2026-02-01T00:00:00Z'),
-    activity('c', '2026-01-01T00:00:00Z'),
-    activity('b', '2026-02-01T00:00:00Z'),
   ]);
 });
 

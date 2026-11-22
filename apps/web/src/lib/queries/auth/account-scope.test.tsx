@@ -4,8 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { type Ok, ok } from 'neverthrow';
 import { batch, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useListChannelsQuery } from '../channel/channels';
-import { channelKeys } from '../channel/keys';
 import { ownChannelWrites } from '../channel/own-writes';
 import { emailKeys } from '../email/keys';
 import {
@@ -19,7 +17,6 @@ import { authKeys } from './keys';
 
 const api = vi.hoisted(() => ({
   links: vi.fn(),
-  channels: vi.fn(),
   patch: vi.fn(),
   remove: vi.fn(),
   refresh: vi.fn(),
@@ -44,7 +41,7 @@ vi.mock('@service-email/client', () => ({
   SIGNATURE_IMAGES_UNRESOLVED_CODE: 'SIGNATURE_IMAGES_UNRESOLVED',
 }));
 vi.mock('@service-storage/client', () => ({
-  storageServiceClient: { getChannels: api.channels },
+  storageServiceClient: {},
 }));
 vi.mock('../email/mail-accounts', () => ({ refreshMailAccounts: api.refresh }));
 vi.mock('./user-info', () => ({ invalidateUserInfo: vi.fn() }));
@@ -69,40 +66,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('switches mounted lists without exposing legacy or previous-account rows', async () => {
+it('switches a mounted list without exposing legacy or previous-account rows', async () => {
   const lateLinks =
     Promise.withResolvers<Ok<{ links: { id: string }[] }, unknown>>();
-  const lateChannels =
-    Promise.withResolvers<
-      Ok<{ items: { id: string }[]; next_cursor: null }, unknown>
-    >();
   api.links
     .mockResolvedValueOnce(ok({ links: [{ id: 'one-inbox' }] }))
     .mockReturnValueOnce(lateLinks.promise)
     .mockResolvedValueOnce(ok({ links: [{ id: 'two-inbox' }] }));
-  api.channels
-    .mockResolvedValueOnce(
-      ok({ items: [{ id: 'one-channel' }], next_cursor: null })
-    )
-    .mockReturnValueOnce(lateChannels.promise)
-    .mockResolvedValueOnce(
-      ok({ items: [{ id: 'two-channel' }], next_cursor: null })
-    );
   client.setQueryData(emailKeys.links._def, {
     links: [{ id: 'legacy-inbox' }],
   });
-  client.setQueryData(channelKeys.listChannels._def, [
-    { id: 'legacy-channel' },
-  ]);
   function Lists() {
     const links = useEmailLinksQuery();
-    const channels = useListChannelsQuery();
     return (
       <output>
-        {JSON.stringify([
-          links.isPending ? [] : links.data?.links.map((link) => link.id),
-          channels.isPending ? [] : channels.data?.map((channel) => channel.id),
-        ])}
+        {JSON.stringify(
+          links.isPending ? [] : links.data?.links.map((link) => link.id)
+        )}
       </output>
     );
   }
@@ -111,9 +91,9 @@ it('switches mounted lists without exposing legacy or previous-account rows', as
       <Lists />
     </QueryClientProvider>
   ));
-  await view.findByText('[["one-inbox"],["one-channel"]]');
+  await view.findByText('["one-inbox"]');
   const oldRefresh = client.refetchQueries();
-  await vi.waitFor(() => expect(api.channels).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(api.links).toHaveBeenCalledTimes(2));
   batch(() => {
     client.setQueryData(authKeys.userInfo.queryKey, {
       id: 'macro|two@example.com',
@@ -121,13 +101,10 @@ it('switches mounted lists without exposing legacy or previous-account rows', as
     });
     setViewer('macro|two@example.com');
   });
-  await view.findByText('[["two-inbox"],["two-channel"]]');
+  await view.findByText('["two-inbox"]');
   lateLinks.resolve(ok({ links: [{ id: 'late-private-inbox' }] }));
-  lateChannels.resolve(
-    ok({ items: [{ id: 'late-private-channel' }], next_cursor: null })
-  );
   await oldRefresh;
-  expect(view.container.textContent).toBe('[["two-inbox"],["two-channel"]]');
+  expect(view.container.textContent).toBe('["two-inbox"]');
   expect(client.getQueryData(emailKeys.links(viewer()).queryKey)).toEqual({
     links: [{ id: 'two-inbox' }],
   });
