@@ -299,6 +299,7 @@ impl Engine {
         owner: Option<(Uuid, tokio_util::sync::CancellationToken)>,
     ) -> Result<Value, Error> {
         let synchronizing = matches!(operation, Operation::Sync);
+        let reading = operation.access() == OperationAccess::Read;
         let submission_deadline = tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET;
         let stopped = owner
             .as_ref()
@@ -321,7 +322,11 @@ impl Engine {
             let selection = sync::selection(&operation)?;
             // Drain acquisition before observing owner cancellation, so a command
             // lease returned by the repository always reaches fenced cleanup.
-            account = Some(self.repository.acquire_scoped(binding, selection).await?);
+            account = Some(if reading {
+                self.repository.read_scoped(binding, selection).await?
+            } else {
+                self.repository.acquire_scoped(binding, selection).await?
+            });
             let account = account.as_mut().ok_or(Error::ConnectionUnavailable)?;
             if account.state.needs_reauth {
                 return Err(Error::CredentialsRejected);
@@ -354,6 +359,12 @@ impl Engine {
         let Some(account) = account else {
             return result;
         };
+        if reading {
+            // The snapshot/connection is already released before MIME IO. Check
+            // authorization again before exposing the settled result.
+            self.repository.validate_read(&account).await?;
+            return result;
+        }
         let release = self.repository.release(&account).await;
         match result {
             Ok(value) => {

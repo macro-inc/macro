@@ -546,6 +546,7 @@ impl PgRepository {
         Ok(())
     }
     pub(super) async fn save_entries(&self, a: &mut Account) -> Result<(), Error> {
+        a.lease_id.ok_or(Error::Conflict)?;
         let rows = entries(&a.state)?;
         let mut next = BTreeMap::new();
         let mut changed = Vec::new();
@@ -670,6 +671,7 @@ impl PgRepository {
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         a: &Account,
     ) -> Result<i64, Error> {
+        let lease = a.lease_id.ok_or(Error::Conflict)?;
         let health = serde_json::to_value(a.state.small_state()).map_err(|_| Error::Invalid)?;
         let r = sqlx::query!(
             r#"
@@ -706,7 +708,7 @@ impl PgRepository {
             a.binding.link_id,
             a.binding.sync_generation,
             a.binding.grant_generation,
-            a.lease_id,
+            lease,
             a.revision,
             health,
         )

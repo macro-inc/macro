@@ -10,7 +10,7 @@ use tokio_rustls::rustls::{
 
 const MIME: &[u8] = b"From: owner@example.net\r\nSubject: synthetic retry\r\n\r\nbody\r\n.line\r\n";
 
-fn tls_config() -> (Arc<ServerConfig>, String) {
+pub(in crate::outbound::protocol) fn tls_config() -> (Arc<ServerConfig>, String) {
     // Use the dev shell/CI's OpenSSL, without storing a private key in fixtures.
     let directory = std::env::temp_dir().join(format!("smtp-retry-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir(&directory).unwrap();

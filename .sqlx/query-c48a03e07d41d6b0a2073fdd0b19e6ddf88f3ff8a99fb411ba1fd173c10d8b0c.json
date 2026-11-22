@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_links\n            SET\n                is_sync_active = $2,\n                needs_reauth = $3,\n                sync_generation = $4,\n                grant_generation = $5,\n                macro_id = $6\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c48a03e07d41d6b0a2073fdd0b19e6ddf88f3ff8a99fb411ba1fd173c10d8b0c"
+}

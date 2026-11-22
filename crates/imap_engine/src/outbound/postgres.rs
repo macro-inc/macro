@@ -1,5 +1,6 @@
 //! Compile-time checked, fenced persistence for the IMAP engine's own tables.
 mod acquisition;
+mod reads;
 mod settings;
 use crate::domain::{models::*, ports::*};
 use sqlx::PgPool;
@@ -449,6 +450,46 @@ impl Repository for PgRepository {
             .map_err(|_| Error::ConnectionUnavailable)?;
         Ok(account)
     }
+    async fn read_scoped(
+        &self,
+        binding: Binding,
+        selection: StateSelection,
+    ) -> Result<Account, Error> {
+        if matches!(selection, StateSelection::Sync) {
+            return Err(Error::Invalid);
+        }
+        let _loading = self
+            .loading_capacity
+            .acquire()
+            .await
+            .map_err(|_| Error::ConnectionUnavailable)?;
+        let (mut tx, mut account) = self.begin_read(binding).await?;
+        self.hydrate(&mut tx, &mut account, selection).await?;
+        tx.commit()
+            .await
+            .map_err(|_| Error::ConnectionUnavailable)?;
+        Ok(account)
+    }
+    async fn validate_read(&self, account: &Account) -> Result<(), Error> {
+        let _loading = self
+            .loading_capacity
+            .acquire()
+            .await
+            .map_err(|_| Error::ConnectionUnavailable)?;
+        let mut connection = self
+            .pool
+            .acquire()
+            .await
+            .map_err(|_| Error::ConnectionUnavailable)?;
+        let current = Self::read_account(&mut connection, account.binding).await?;
+        if current.user_id != account.user_id {
+            return Err(Error::Conflict);
+        }
+        if current.state.needs_reauth {
+            return Err(Error::CredentialsRejected);
+        }
+        Ok(())
+    }
     async fn save(&self, a: &mut Account) -> Result<(), Error> {
         self.save_entries(a).await
     }
@@ -456,6 +497,7 @@ impl Repository for PgRepository {
         self.save_small_state(a).await
     }
     async fn renew(&self, a: &Account) -> Result<(), Error> {
+        let lease = a.lease_id.ok_or(Error::Conflict)?;
         let renewed = sqlx::query!(
             r#"
             UPDATE
@@ -482,7 +524,7 @@ impl Repository for PgRepository {
             a.binding.link_id,
             a.binding.sync_generation,
             a.binding.grant_generation,
-            a.lease_id,
+            lease,
             a.revision,
         )
         .execute(&self.pool)
@@ -495,6 +537,7 @@ impl Repository for PgRepository {
         Ok(())
     }
     async fn release(&self, a: &Account) -> Result<(), Error> {
+        let lease = a.lease_id.ok_or(Error::Conflict)?;
         sqlx::query!(
             r#"
             UPDATE
@@ -507,7 +550,7 @@ impl Repository for PgRepository {
                 AND lease_id = $2
             "#,
             a.binding.link_id,
-            a.lease_id,
+            lease,
         )
         .execute(&self.pool)
         .await

@@ -730,6 +730,39 @@ pub enum Operation {
     Sync,
 }
 
+/// Whether an operation may mutate durable mailbox state.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OperationAccess {
+    Read,
+    Command,
+}
+impl Operation {
+    pub(crate) fn access(&self) -> OperationAccess {
+        match self {
+            Self::Folders
+            | Self::Changes { .. }
+            | Self::Message { .. }
+            | Self::Organization { .. }
+            | Self::RecentInbox { .. }
+            | Self::Attachment { .. } => OperationAccess::Read,
+            Self::Apply { .. }
+            | Self::GetDraft { .. }
+            | Self::FindDrafts { .. }
+            | Self::CreateDraft { .. }
+            | Self::UpdateDraft { .. }
+            | Self::DeleteDraft { .. }
+            | Self::Attachments { .. }
+            | Self::AddAttachment { .. }
+            | Self::DeleteAttachment { .. }
+            | Self::CreateUpload { .. }
+            | Self::InspectUpload { .. }
+            | Self::UploadRange { .. }
+            | Self::Submit { .. }
+            | Self::Sync => OperationAccess::Command,
+        }
+    }
+}
+
 /// Capabilities selected for one physical server connection.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

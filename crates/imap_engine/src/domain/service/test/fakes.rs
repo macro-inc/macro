@@ -75,10 +75,25 @@ impl Repository for MemoryRepository {
             state: self.state.lock().unwrap().clone(),
             checkpoint: Default::default(),
             revision: 0,
-            lease_id: Uuid::now_v7(),
+            lease_id: Some(Uuid::now_v7()),
         })
     }
+    async fn read_scoped(&self, binding: Binding, _: StateSelection) -> Result<Account, Error> {
+        let mut account = self.acquire(binding).await?;
+        account.lease_id = None;
+        Ok(account)
+    }
+    async fn validate_read(&self, _: &Account) -> Result<(), Error> {
+        if !self.owner_available.load(Ordering::Acquire) {
+            return Err(Error::Conflict);
+        }
+        if self.state.lock().unwrap().needs_reauth {
+            return Err(Error::CredentialsRejected);
+        }
+        Ok(())
+    }
     async fn save(&self, account: &mut Account) -> Result<(), Error> {
+        account.lease_id.ok_or(Error::Conflict)?;
         if account
             .state
             .drafts
@@ -91,7 +106,12 @@ impl Repository for MemoryRepository {
         account.revision += 1;
         Ok(())
     }
-    async fn release(&self, _: &Account) -> Result<(), Error> {
+    async fn renew(&self, account: &Account) -> Result<(), Error> {
+        account.lease_id.ok_or(Error::Conflict)?;
+        Ok(())
+    }
+    async fn release(&self, account: &Account) -> Result<(), Error> {
+        account.lease_id.ok_or(Error::Conflict)?;
         self.releases.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
@@ -140,6 +160,7 @@ impl CredentialCipher for TestCipher {
     }
 }
 pub(crate) struct ProviderWorkControl {
+    pub(crate) source: Option<Vec<u8>>,
     pub(crate) started: tokio::sync::mpsc::UnboundedSender<Uuid>,
     pub(crate) released: tokio::sync::Semaphore,
 }
@@ -192,6 +213,9 @@ impl MailTransport for UncertainTransport {
     ) -> Result<Vec<u8>, Error> {
         if let Some(control) = &self.provider_work {
             control.wait(credentials).await?;
+            if let Some(source) = &control.source {
+                return Ok(source.clone());
+            }
         }
         Err(Error::NotFound)
     }

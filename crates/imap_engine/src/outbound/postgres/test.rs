@@ -1,3 +1,4 @@
+mod reads;
 use super::*;
 use chrono::{Duration, Utc};
 
@@ -97,6 +98,25 @@ async fn two_replicas_serialize_commands_and_reject_stale_or_other_provider_bind
         second.acquire(binding).await,
         Err(Error::Throttled)
     ));
+    let reader = crate::domain::service::Engine::new(
+        std::sync::Arc::new(PgRepository::new(pool.clone())),
+        std::sync::Arc::new(crate::domain::service::test::TestCipher),
+        std::sync::Arc::new(crate::outbound::protocol::ProtocolTransport::new(
+            crate::outbound::network::Connector::new(Default::default()).unwrap(),
+        )),
+    );
+    assert_eq!(
+        reader
+            .execute(
+                binding,
+                Operation::Organization {
+                    id: "absent".into()
+                }
+            )
+            .await
+            .unwrap(),
+        serde_json::Value::Null
+    );
     first.renew(&command).await.unwrap();
     command.state.sends_today = 7;
     first.save(&mut command).await.unwrap();

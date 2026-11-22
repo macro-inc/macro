@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                a.user_id,\n                a.credential_ciphertext,\n                a.state,\n                a.revision\n            FROM\n                imap_accounts a\n                JOIN email_links l ON l.id = a.link_id\n            WHERE\n                a.link_id = $1\n                AND a.sync_generation = $2\n                AND a.grant_generation = $3\n                AND l.macro_id = a.user_id\n                AND l.provider = 'IMAP'\n                AND l.is_sync_active\n                AND NOT l.needs_reauth\n                AND l.sync_generation = a.sync_generation\n                AND l.grant_generation = a.grant_generation\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "credential_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 2,
+        "name": "state",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d476fb222f1e40b3bf45df60703299cbae6c2334af9fab920222ef4a5e2f029e"
+}

@@ -30,6 +30,9 @@ pub struct ProtocolTransport {
     connector: Connector,
     smtp_pool: tokio::sync::Mutex<smtp::Pool>,
     command_pool: tokio::sync::Mutex<commands::Pool>,
+    command_capacity: std::sync::Mutex<
+        std::collections::BTreeMap<String, std::sync::Weak<tokio::sync::Semaphore>>,
+    >,
     settings: Option<std::sync::Arc<dyn crate::domain::account_settings::SettingsRepository>>,
 }
 impl ProtocolTransport {
@@ -39,6 +42,7 @@ impl ProtocolTransport {
             connector,
             smtp_pool: Default::default(),
             command_pool: Default::default(),
+            command_capacity: Default::default(),
             settings: None,
         }
     }

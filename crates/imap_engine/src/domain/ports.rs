@@ -3,7 +3,7 @@ use super::models::*;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-/// A fenced lease over one persisted account. The service never exposes ciphertext.
+/// A scoped snapshot, optionally carrying a fenced command lease. The service never exposes ciphertext.
 pub struct Account {
     /// Exact access binding.
     pub binding: Binding,
@@ -17,8 +17,8 @@ pub struct Account {
     pub checkpoint: std::collections::BTreeMap<(String, String), [u8; 32]>,
     /// Current compare-and-swap revision.
     pub revision: i64,
-    /// Distributed lease fence.
-    pub lease_id: Uuid,
+    /// Distributed write lease; None is a read-only snapshot.
+    pub lease_id: Option<Uuid>,
 }
 
 /// The bounded facts needed by one use case; only synchronization loads the full index.
@@ -108,6 +108,15 @@ pub trait Repository: Send + Sync {
     ) -> Result<Account, Error> {
         self.acquire(binding).await
     }
+    /// Read one consistent snapshot without taking a command lease. Release the
+    /// database transaction before returning; remote content IO happens later.
+    async fn read_scoped(
+        &self,
+        binding: Binding,
+        selection: StateSelection,
+    ) -> Result<Account, Error>;
+    /// Recheck the original owner, active state and generations after remote IO.
+    async fn validate_read(&self, account: &Account) -> Result<(), Error>;
     /// Persist under the lease and increment the expected revision.
     async fn save(&self, account: &mut Account) -> Result<(), Error>;
     /// Persist only health and admission scalars, without revisiting the loaded index.
@@ -115,9 +124,7 @@ pub trait Repository: Send + Sync {
         self.save(account).await
     }
     /// Renew a long-running remote operation without rewriting mailbox state.
-    async fn renew(&self, _account: &Account) -> Result<(), Error> {
-        Ok(())
-    }
+    async fn renew(&self, account: &Account) -> Result<(), Error>;
     /// Release this exact lease without overwriting a successor's work.
     async fn release(&self, account: &Account) -> Result<(), Error>;
     /// Idempotently delete the account when its binding still matches.

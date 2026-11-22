@@ -1,0 +1,458 @@
+{
+  "version": "18.6 (Debian 18.6-1.pgdg12+2)",
+  "rowsPerTable": 1100000,
+  "largestSyntheticOwnerLinks": 100000,
+  "scope": "one exact binding per request; integration table assumption is deliberately conservative",
+  "runs": [
+    {
+      "returnedRows": 1.0,
+      "stale": false,
+      "mode": "force_custom_plan",
+      "case": "present",
+      "repeat": 1,
+      "executionMs": 0.442,
+      "sharedHits": 0,
+      "sharedReads": 8,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "stale": false,
+      "mode": "force_custom_plan",
+      "case": "present",
+      "repeat": 2,
+      "executionMs": 0.037,
+      "sharedHits": 8,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "stale": false,
+      "mode": "force_custom_plan",
+      "case": "missing",
+      "repeat": 1,
+      "executionMs": 0.07,
+      "sharedHits": 1,
+      "sharedReads": 2,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "stale": false,
+      "mode": "force_custom_plan",
+      "case": "missing",
+      "repeat": 2,
+      "executionMs": 0.013,
+      "sharedHits": 3,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "stale": false,
+      "mode": "force_generic_plan",
+      "case": "present",
+      "repeat": 1,
+      "executionMs": 0.027,
+      "sharedHits": 8,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "stale": false,
+      "mode": "force_generic_plan",
+      "case": "present",
+      "repeat": 2,
+      "executionMs": 0.016,
+      "sharedHits": 8,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "stale": false,
+      "mode": "force_generic_plan",
+      "case": "missing",
+      "repeat": 1,
+      "executionMs": 0.032,
+      "sharedHits": 3,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "stale": false,
+      "mode": "force_generic_plan",
+      "case": "missing",
+      "repeat": 2,
+      "executionMs": 0.01,
+      "sharedHits": 3,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "stale": true,
+      "mode": "force_custom_plan",
+      "case": "present",
+      "repeat": 1,
+      "executionMs": 0.41,
+      "sharedHits": 0,
+      "sharedReads": 8,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "stale": true,
+      "mode": "force_custom_plan",
+      "case": "present",
+      "repeat": 2,
+      "executionMs": 0.025,
+      "sharedHits": 8,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "stale": true,
+      "mode": "force_custom_plan",
+      "case": "missing",
+      "repeat": 1,
+      "executionMs": 0.048,
+      "sharedHits": 1,
+      "sharedReads": 2,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "stale": true,
+      "mode": "force_custom_plan",
+      "case": "missing",
+      "repeat": 2,
+      "executionMs": 0.013,
+      "sharedHits": 3,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "stale": true,
+      "mode": "force_generic_plan",
+      "case": "present",
+      "repeat": 1,
+      "executionMs": 0.022,
+      "sharedHits": 8,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "stale": true,
+      "mode": "force_generic_plan",
+      "case": "present",
+      "repeat": 2,
+      "executionMs": 0.01,
+      "sharedHits": 8,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "stale": true,
+      "mode": "force_generic_plan",
+      "case": "missing",
+      "repeat": 1,
+      "executionMs": 0.006,
+      "sharedHits": 3,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "stale": true,
+      "mode": "force_generic_plan",
+      "case": "missing",
+      "repeat": 2,
+      "executionMs": 0.007,
+      "sharedHits": 3,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0
+        }
+      ]
+    }
+  ],
+  "query": "PgRepository::read_account; link+both generations with current active IMAP owner join. Called once for the snapshot and once after provider IO.",
+  "limitations": "Synthetic local PostgreSQL18; small health documents, not full MIME bodies. Does not establish production latency or throughput. Existing/missing keys, generic/custom plans, fresh/stale statistics, twice each. Snapshot isolation and authorization changes are covered separately by real-Postgres tests."
+}

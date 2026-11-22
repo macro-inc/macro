@@ -126,3 +126,15 @@ is observed so its returned lease can be released.
 Keep command claims uncommitted through state hydration, with local statement
 and idle-transaction deadlines. Lock the account with NOWAIT so peers fail fast;
 limit simultaneous loads below the pool size to reserve heartbeat/cleanup slots.
+
+Read Changes, Message, Organization, Attachment, Folders and RecentInbox through
+read_scoped without a command lease. Keep scalar state and selected rows in one
+REPEATABLE READ READ ONLY transaction, commit before provider/MIME IO, then
+validate the original owner, active state, reauth and both generations again.
+A read Account has no lease_id; save, save_health, renew and release must reject
+it. Draft reads remain leased because they may reconcile an uncertain send.
+
+Limit command sessions to three per binding per replica, keeping the permit
+through pool publication or drop. Sync and IDLE retain independent owner sockets;
+this command limit does not bound the cross-replica total. Give read transactions
+local statement/idle deadlines and gate post-IO validation with other loads.

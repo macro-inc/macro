@@ -126,7 +126,7 @@ impl PgRepository {
             ciphertext: r.credential_ciphertext,
             state: serde_json::from_value(r.state).map_err(|_| Error::ConnectionUnavailable)?,
             revision: r.revision,
-            lease_id: lease,
+            lease_id: Some(lease),
         };
         Ok((tx, account))
     }

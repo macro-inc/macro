@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_setting('statement_timeout') AS \"timeout!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "timeout!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7d68f441e78c8a2b4012fbb2be75d5c0948a8e86d19e5c4530964db4405c4707"
+}

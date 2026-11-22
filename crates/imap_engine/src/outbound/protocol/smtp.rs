@@ -77,7 +77,7 @@ mod authentication_test;
 mod reuse_test;
 
 #[cfg(test)]
-mod retry_test;
+pub(in crate::outbound::protocol) mod retry_test;
 
 #[cfg(test)]
 mod telemetry_test;

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_links (id, macro_id, provider)\n        VALUES ($1, 'owner', 'IMAP')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "94793bfbc295daaf7fc59f0c90ff37331038bb02808e8cfa59fe54dabb45d984"
+}

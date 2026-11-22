@@ -21,6 +21,7 @@ async fn an_owner_lost_during_sync_queue_never_starts_provider_work() {
             sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
             submission_deadline: std::sync::Mutex::new(None),
             provider_work: Some(Arc::new(ProviderWorkControl {
+                source: None,
                 started,
                 released: tokio::sync::Semaphore::new(1),
             })),
@@ -114,6 +115,7 @@ async fn failed_heartbeat_keeps_inflight_work_alive_until_its_lease_is_released(
     });
     let (started, mut observed) = tokio::sync::mpsc::unbounded_channel();
     let control = Arc::new(ProviderWorkControl {
+        source: None,
         started,
         released: tokio::sync::Semaphore::new(0),
     });
@@ -170,6 +172,7 @@ async fn real_owner_loss_aborts_provider_work_and_releases_the_command_lease() {
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
         provider_work: Some(Arc::new(ProviderWorkControl {
+            source: None,
             started,
             released: tokio::sync::Semaphore::new(0),
         })),
@@ -212,6 +215,7 @@ async fn ownership_loss_drains_acquisition_before_releasing_without_provider_wor
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
         provider_work: Some(Arc::new(ProviderWorkControl {
+            source: None,
             started,
             released: tokio::sync::Semaphore::new(0),
         })),
@@ -248,6 +252,7 @@ async fn a_stalled_heartbeat_does_not_suspend_the_round_or_its_cleanup() {
     });
     let (started, mut observed) = tokio::sync::mpsc::unbounded_channel();
     let control = Arc::new(ProviderWorkControl {
+        source: None,
         started,
         released: tokio::sync::Semaphore::new(0),
     });
