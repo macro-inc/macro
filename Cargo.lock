@@ -13524,6 +13524,7 @@ name = "memory"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "agent_correlation",
  "ai_billing",
  "ai_toolset",
  "ai_usage",
@@ -21176,6 +21177,7 @@ name = "task_templates"
 version = "0.1.0"
 dependencies = [
  "agent_correlation",
+ "bot_id",
  "chrono",
  "macro_uuid",
  "models_properties",

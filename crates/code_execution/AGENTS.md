@@ -67,7 +67,8 @@ the ones the program set, follows no redirects and records a
 `code_execution.egress` span per request. It stops when the run ends, is
 cancelled or times out. The agent harness picks it per user with the
 fail-closed `enable-code-execution-egress-proxy` flag, and always proxies a
-scoped run; `Egress::Direct` (the default) is the old path.
+scoped run. A forwarder that can't start fails the run with
+`FailureCode::Egress` (never a direct fallback); `Egress::Direct` (the default) is the old path.
 
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of

@@ -907,10 +907,15 @@ async fn a_job_credential_through_propagate_reaches_only_its_lists() {
             unreachable!()
         }
         async fn find(&self, id: Uuid) -> Result<Option<Correlation>, CorrelationError> {
-            Ok((id == Uuid::from_u128(0x10b)).then_some(Correlation {
+            let scope = match id.as_u128() {
+                0x10b => crate::scope::SessionScope::Job,
+                0x50 => crate::scope::SessionScope::NoSend,
+                _ => return Ok(None),
+            };
+            Ok(Some(Correlation {
                 session_id: Uuid::from_u128(0xa),
                 agent_id: Uuid::from_u128(3),
-                scope: Some(crate::scope::SessionScope::Job),
+                scope: Some(scope),
             }))
         }
     }
@@ -947,6 +952,10 @@ async fn a_job_credential_through_propagate_reaches_only_its_lists() {
             axum::routing::get(handler.clone()),
         )
         .route("/memory", axum::routing::get(handler.clone()))
+        .route(
+            "/agent-sessions/{session}/name",
+            axum::routing::put(handler.clone()),
+        )
         .route("/team/join/{invite}", axum::routing::get(handler.clone()))
         .route(
             "/documents/permissions_token/{document}",
@@ -967,6 +976,12 @@ async fn a_job_credential_through_propagate_reaches_only_its_lists() {
         Some("job"),
     );
     let uncorrelated = mint(None, None, None, Some("job"));
+    let no_send = mint(
+        Some(Uuid::from_u128(0x50)),
+        Some(Uuid::from_u128(3)),
+        None,
+        Some("no_send"),
+    );
     let cases = [
         (
             &job,
@@ -1011,6 +1026,25 @@ async fn a_job_credential_through_propagate_reaches_only_its_lists() {
             format!("/properties/entities/task/{id}/{id}"),
             StatusCode::FORBIDDEN,
         ),
+        // A run that sends nothing renames its own session, not another.
+        (
+            &no_send,
+            "PUT",
+            format!("/agent-sessions/{own}/name"),
+            StatusCode::OK,
+        ),
+        (
+            &no_send,
+            "PUT",
+            format!("/agent-sessions/{other}/name"),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            &no_send,
+            "POST",
+            format!("/agent-sessions/{other}/views"),
+            StatusCode::FORBIDDEN,
+        ),
     ];
     for (bearer, method, path, expected) in cases {
         let response = app
@@ -1029,8 +1063,8 @@ async fn a_job_credential_through_propagate_reaches_only_its_lists() {
     }
     assert_eq!(
         reached.load(Ordering::SeqCst),
-        2,
-        "only the two allowed requests ran"
+        3,
+        "only the three allowed requests ran"
     );
 }
 

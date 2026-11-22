@@ -48,14 +48,17 @@ code, not in its prompt. The harness also signs the scope into the credential
   No scope shares, and none puts an agent to work
   (`may_assign_agents`, checked by `properties` on assignment and project
   filing, `create_task` and `task_templates`; `agent_trigger` also starts
-  no session for an event whose `agent_scope` is set, which
-  `macro_event_broker::Event` records from the request). Every scope is
-  refused the GETs that write (`GET_WRITES`, `is_get_write`: joining a team,
-  verifying, turning an attachment into a document, memory enrollment).
+  no session for a property event whose `agent_scope` is set, which
+  `macro_event_broker::Event` records from the request; message triggers
+  are in `SENDS`). Every scope is refused the GETs that write
+  (`GET_WRITES`, `is_get_write`: joining a team, verifying, turning an
+  attachment into a document, recording an open); memory reads, which
+  enroll, are refused only by the allowlists.
   Plain `enforce_signed_scope` binds no specs, so it refuses an allowlisted
   scope everything. The unfurl service validates no attribution: a scoped
-  run gets no unfurl host and always goes through the egress proxy
-  (harness `run_endpoints`, `EgressRollout::egress_for`). Under a scope whose
+  run gets no unfurl host (harness `run_endpoints`) and always goes through
+  the egress proxy (`EgressRollout::egress_for`), so `--allow-net` names
+  only the forwarder. Under a scope whose
   `caps_document_tokens_to_view` is true (`job`), document tokens
   (`documents::encode_permission_token`, which also signs `agent_scope`)
   and collab-surface tokens (`encode_surface_token`) grant view only; the

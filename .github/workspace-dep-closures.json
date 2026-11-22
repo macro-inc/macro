@@ -16576,6 +16576,7 @@
     ],
     "task_templates": [
       "crates/agent_correlation",
+      "crates/bot_id",
       "crates/cowlike",
       "crates/document_sub_type",
       "crates/macro_auth",

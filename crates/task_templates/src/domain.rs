@@ -405,5 +405,5 @@ impl<R: Repository, M: Membership> Service<R, M> {
 
 /// Whether an entity reference names an agent or bot.
 fn is_agent(entity_id: &str) -> bool {
-    entity_id.starts_with("bot|")
+    bot_id::BotIdStr::parse_from_str(entity_id).is_ok()
 }

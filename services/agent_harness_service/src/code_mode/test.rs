@@ -757,6 +757,23 @@ async fn the_egress_flag_fails_closed_to_direct() {
     let flag =
         |on: bool| FlagSnapshot::new([(EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(on))]);
     assert_eq!(flags(Ok(flag(true))).egress(&user).await, Egress::Proxied);
+    // A scoped run is proxied whatever the flag; an unscoped one follows it.
+    assert_eq!(
+        flags(Ok(flag(false)))
+            .egress_for(&user, Some(SessionScope::Job))
+            .await,
+        Egress::Proxied
+    );
+    assert_eq!(
+        flags(Ok(flag(false)))
+            .egress_for(&user, Some(SessionScope::NoSend))
+            .await,
+        Egress::Proxied
+    );
+    assert_eq!(
+        flags(Ok(flag(false))).egress_for(&user, None).await,
+        Egress::Direct
+    );
     assert_eq!(flags(Ok(flag(false))).egress(&user).await, Egress::Direct);
     assert_eq!(
         flags(Err("PostHog is down".into())).egress(&user).await,

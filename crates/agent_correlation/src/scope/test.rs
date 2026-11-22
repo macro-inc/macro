@@ -955,17 +955,16 @@ fn a_job_writes_only_into_its_own_session() {
 }
 
 /// A GET that writes (joining a team, turning an attachment into a
-/// document, enrolling memory refresh) is refused to every scope, a newer
-/// one included, though they otherwise read by method.
+/// document, recording an open) is refused to every scope, a newer one
+/// included, though they otherwise read by method.
 #[test]
 fn no_scope_makes_a_get_that_writes() {
     let id = "0192f1a0-0000-7000-8000-000000000001";
     for path in [
         format!("/auth/team/join/{id}"),
         format!("/email/attachments/{id}/document_id"),
-        "/cognition/memory".to_owned(),
-        "/memory/explicit".to_owned(),
-        format!("/dss/call/join/{id}"),
+        // A token that doesn't look like an id is refused too.
+        "/email/opens/abc".to_owned(),
     ] {
         for scope in [
             SessionScope::Generation,
@@ -980,6 +979,79 @@ fn no_scope_makes_a_get_that_writes() {
         }
         assert!(!SignedScope::Unknown.allows("GET", &path), "{path}");
     }
-    assert!(SessionScope::NoSend.allows("GET", "/memory/activity"));
+    // Suggestion generation reads memory; only allowlisted scopes may not.
+    assert!(SessionScope::Generation.allows("GET", "/cognition/memory/explicit"));
+    assert!(!SessionScope::Job.allows_on(Some(ALL_SPECS), "GET", "/cognition/memory/explicit"));
     assert!(SessionScope::NoSend.allows("GET", "/dss/call/meetings"));
+    assert!(SessionScope::NoSend.allows("GET", &format!("/dss/call/join/{id}")));
+}
+
+/// Under every scope, a write to an agent session goes only into the
+/// credential's own session: no review card, view, app command, rename,
+/// archive, task link or delete in another session its person can edit.
+#[test]
+fn every_scope_writes_only_into_its_own_session() {
+    let own = uuid::Uuid::from_u128(0xa);
+    let other = uuid::Uuid::from_u128(0xb);
+    for scope in [
+        SessionScope::NoSend,
+        SessionScope::Generation,
+        SessionScope::DryRun,
+        SessionScope::Job,
+    ] {
+        for (method, route) in [
+            ("POST", "reviews"),
+            ("POST", "views"),
+            ("POST", "ui-commands"),
+            ("PUT", "name"),
+            ("PUT", "archived"),
+            ("PUT", "task"),
+        ] {
+            let path = format!("/agent-harness/agent-sessions/{other}/{route}");
+            assert!(
+                !scope.allows_within(Some(ALL_SPECS), OwnSession::Is(own), method, &path),
+                "{scope:?} {method} {path}"
+            );
+            assert!(
+                !scope.allows_within(Some(ALL_SPECS), OwnSession::Unknown, method, &path),
+                "{scope:?} {method} {path} with no session"
+            );
+        }
+        let delete = format!("/agent-harness/agent-sessions/{other}");
+        assert!(!scope.allows_within(Some(ALL_SPECS), OwnSession::Is(own), "DELETE", &delete));
+    }
+    // Its own session's: a NoSend run may rename its own session.
+    let rename = format!("/agent-sessions/{own}/name");
+    assert!(SessionScope::NoSend.allows_within(None, OwnSession::Is(own), "PUT", &rename));
+    // Reads are not bound.
+    let read = format!("/agent-sessions/{other}");
+    assert!(SessionScope::NoSend.allows_within(None, OwnSession::Is(own), "GET", &read));
+}
+
+/// Every `GET_WRITES` entry refuses a GET some spec really declares, so none
+/// is a stale or misspelled entry that refuses nothing.
+#[test]
+fn every_get_write_names_a_real_route() {
+    let gets: Vec<String> = SPECS
+        .iter()
+        .flat_map(|(_, spec)| {
+            let spec: serde_json::Value = serde_json::from_str(spec).unwrap();
+            spec["paths"]
+                .as_object()
+                .unwrap()
+                .iter()
+                .filter(|(_, operations)| operations.get("get").is_some())
+                .map(|(path, _)| path.clone())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    for (method, template) in GET_WRITES {
+        assert_eq!(*method, "GET");
+        assert!(
+            gets.iter()
+                .any(|path| is_get_write("GET", &concrete(path))
+                    && matches(&concrete(path), template)),
+            "GET_WRITES names {template}, which no spec declares"
+        );
+    }
 }

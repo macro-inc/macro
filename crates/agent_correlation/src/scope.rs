@@ -417,7 +417,9 @@ const ANY_WRITE: &[(&str, &str)] = &[
 
 /// GETs that write: they join, verify, create or record something. Every
 /// scope is refused them, though a scope otherwise reads by method. Paths as
-/// the SDK's specs name them.
+/// the SDK's specs name them. Memory reads, which enroll the person in
+/// memory refresh, are refused only to allowlisted scopes (their lists):
+/// suggestion generation reads memory.
 const GET_WRITES: &[(&str, &str)] = &[
     ("GET", "/team/join/{id}"),
     ("GET", "/email/attachments/{id}/document_id"),
@@ -426,20 +428,14 @@ const GET_WRITES: &[(&str, &str)] = &[
     ("GET", "/merge/verify/{id}"),
     ("GET", "/opens/{id}"),
     ("GET", "/github/install-sync"),
-    ("GET", "/call/{id}"),
-    ("GET", "/call/join/{id}"),
-    ("GET", "/memory"),
-    ("GET", "/memory/explicit"),
 ];
 
 /// Whether a GET with `path` writes ([`GET_WRITES`]), so no scope makes it.
-/// Placeholders are typed ([`typed_matches`]), so `/call/{id}` doesn't take
-/// `/call/meetings`.
+/// A placeholder takes any segment, so a refusal never fails open on a
+/// token that doesn't look like an id.
 pub fn is_get_write(method: &str, path: &str) -> bool {
     let method = if method == "HEAD" { "GET" } else { method };
-    GET_WRITES.iter().any(|(listed, template)| {
-        *listed == method && typed_matches(path, template, OwnSession::Unchecked)
-    })
+    listed(GET_WRITES, method, path)
 }
 
 /// Requests a generation session may make besides reads by method: its own
@@ -551,6 +547,9 @@ impl SessionScope {
         path: &str,
     ) -> bool {
         if listed(ANY_WRITE, method, path) || is_get_write(method, path) {
+            return false;
+        }
+        if !reads_by_method(method) && !in_own_session(own, path) {
             return false;
         }
         // A default-deny scope reads only what its lists name, like any
@@ -678,6 +677,41 @@ impl SignedScope {
 }
 
 /// Requests whose method says they only read.
+/// Whether a write to `path` stays in the credential's `own` session: under
+/// any scope, a write to `/agent-sessions/{session}/…` (a review card, a
+/// view, a command to the app, renaming, archiving, linking a task, deleting)
+/// names the session the credential was issued for, and is refused when no
+/// session is known. A literal route word in the session's place (such as
+/// `batch`) is no session.
+fn in_own_session(own: OwnSession, path: &str) -> bool {
+    let segments: Vec<std::borrow::Cow<'_, str>> = path
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| urlencoding::decode(segment).unwrap_or(segment.into()))
+        .collect();
+    let Some(at) = segments
+        .iter()
+        .position(|segment| segment == "agent-sessions")
+    else {
+        return true;
+    };
+    // At most a service prefix and a version before it.
+    if at > 2 {
+        return true;
+    }
+    let Some(session) = segments
+        .get(at + 1)
+        .and_then(|segment| segment.parse::<uuid::Uuid>().ok())
+    else {
+        return true;
+    };
+    match own {
+        OwnSession::Unchecked => true,
+        OwnSession::Is(own) => own == session,
+        OwnSession::Unknown => false,
+    }
+}
+
 fn reads_by_method(method: &str) -> bool {
     matches!(method, "GET" | "HEAD" | "OPTIONS")
 }

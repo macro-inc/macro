@@ -15,6 +15,7 @@ struct Data {
     released: Vec<u8>,
     retried: Vec<(u8, Duration)>,
     staged: Vec<(NaiveDate, Piece)>,
+    enrolled: usize,
 }
 impl MemoryRepo for Repo {
     async fn save_memory(&self, _: &Memory, _: MacroUserIdStr<'_>) -> Result<Uuid> {
@@ -29,6 +30,7 @@ impl MemoryRepo for Repo {
 }
 impl ComposedMemoryRepo for Repo {
     async fn enroll(&self, _: &MacroUserIdStr<'_>) -> Result<()> {
+        self.0.lock().unwrap().enrolled += 1;
         Ok(())
     }
     async fn claim_refresh(&self, _: NaiveDate) -> Result<Option<RefreshClaim>> {
@@ -594,4 +596,46 @@ fn retry_delay_grows_and_is_bounded() {
     let delays: Vec<_> = (1..=7).map(|a| retry_delay(a).num_hours()).collect();
     assert_eq!(delays, vec![1, 2, 4, 8, 16, 16, 16]);
     assert_eq!(retry_delay(0).num_hours(), 1);
+}
+
+/// A person's own memory read enrolls them in daily refresh; a program's
+/// read, scoped or not, only reads.
+#[tokio::test]
+async fn a_programs_memory_read_enrolls_no_one() {
+    let repo = Repo::default();
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        Arc::new(Generator::default()),
+        Arc::new(Judge::default()),
+        no_teams(),
+        active(),
+    );
+    let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    for attribution in [
+        agent_correlation::context::Attribution {
+            correlation_id: Some(Uuid::from_u128(1)),
+            ..Default::default()
+        },
+        agent_correlation::context::Attribution {
+            scope: Some(agent_correlation::scope::SessionScope::NoSend),
+            ..Default::default()
+        },
+        agent_correlation::context::Attribution {
+            routine_id: Some(Uuid::from_u128(2)),
+            ..Default::default()
+        },
+    ] {
+        agent_correlation::context::scope_attribution(attribution, async {
+            service.explicit(&user).await.unwrap();
+            service.get_memory(user.clone()).await.unwrap();
+        })
+        .await;
+    }
+    assert_eq!(repo.0.lock().unwrap().enrolled, 0);
+    service.explicit(&user).await.unwrap();
+    assert_eq!(
+        repo.0.lock().unwrap().enrolled,
+        1,
+        "a person's own read enrolls"
+    );
 }

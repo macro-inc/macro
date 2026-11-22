@@ -45,3 +45,11 @@ fn a_path_never_leaves_its_sdk_host() {
         assert_eq!(confined(base, rest), None, "{rest}");
     }
 }
+
+/// A proxied run whose forwarder can't start fails with its own code, so it
+/// is never mistaken for a runner fault or retried as a direct run.
+#[test]
+fn a_forwarder_that_cannot_start_fails_the_run() {
+    let failure = crate::outbound::deno::forwarder_unavailable();
+    assert_eq!(failure.code, crate::domain::FailureCode::Egress);
+}

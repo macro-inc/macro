@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 agent_correlation = { path = "../agent_correlation" }
+bot_id = { path = "../bot_id" }
 chrono = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 models_properties = { path = "../models_properties" }

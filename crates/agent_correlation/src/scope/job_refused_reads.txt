@@ -48,7 +48,7 @@ GET /foreign_entity/by_source/{source}/{foreign_entity_id}  # its id is a wildca
 GET /github/install-sync  # syncs a GitHub installation
 GET /call/{channel_id}  # creates a call
 GET /bots/{bot_id}/tokens  # bot credentials
-GET /call/join/{token}  # joins a call
+GET /call/join/{token}  # a meeting join token
 GET /call/join/{token}/participants  # call join tokens
 GET /call/meetings/invite/{token}  # meeting invite tokens
 GET /call/meetings/join/{token}/participants  # meeting join tokens
