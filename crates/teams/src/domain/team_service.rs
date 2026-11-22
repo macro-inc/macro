@@ -1298,10 +1298,9 @@ where
 
     /// Deletes the legacy contact edges team joins used to write for pairs
     /// who are no longer teammates, so a membership's contacts end with it.
-    /// Joins write none now: teammates come from the live roster. The edge
-    /// may also stand for something else (an inbox, a shared channel); those
-    /// sources write it again the next time they see the pair. Best-effort,
-    /// like the other contacts side effects.
+    /// Joins write none now: teammates come from the live roster. A contact
+    /// the viewer's own inbox or invite names stays listed through those
+    /// rows. Best-effort, like the other contacts side effects.
     async fn enqueue_ended_contacts(
         &self,
         team_id: &uuid::Uuid,
