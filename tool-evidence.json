@@ -1,0 +1,9 @@
+{
+  "sessionPath": "/app/home/agent/01a2008f-701b-744c-b6dd-68a0df55680f",
+  "internalToolNames": [
+    "mcp__macro_internal__ExecuteCode",
+    "mcp__macro_internal__ReadCodeDocs"
+  ],
+  "observedResult": "Private task created, markdown updated, read back Verified through code",
+  "scope": "real Macro agent and local services; test data; no vendor stand-in in this flow"
+}

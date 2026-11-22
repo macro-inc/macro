@@ -1,0 +1,17 @@
+{
+  "duration": 44.343,
+  "captions": [
+    {
+      "at": 1,
+      "text": "PR #10634 \u00b7 Real Macro session on local integration 48ba8bfee7c \u00b7 SDK create, edit and read"
+    },
+    {
+      "at": 7.141,
+      "text": "Submit one request: create a private task, edit its content, then read the saved document"
+    },
+    {
+      "at": 37.427,
+      "text": "Saved text read back. Rows name SDK operations; ACP confirms ReadCodeDocs + ExecuteCode."
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "pr": 10634,
+  "head": "3c931d78b7977d5a3c636566cce6ed14970310d9",
+  "integration": "48ba8bfee7c9214164dd9aa9fe82556d180f47e4",
+  "recordedUtc": "2026-11-22",
+  "real": [
+    "Macro in-process agent (Gemini 3.8 Flash)",
+    "local Macro services",
+    "TypeScript SDK"
+  ],
+  "testDataOnly": true,
+  "verified": "Create a private task, edit its markdown, and read back Verified through code",
+  "standIns": [],
+  "limitations": [
+    "Shared integration includes other PRs; not an isolated PR build",
+    "Integration includes stacked #10966 native-tool restrictions",
+    "Does not exercise every removed native tool"
+  ],
+  "pricedUsdIncludingRehearsal": "0.0498",
+  "unpricedCalls": 0,
+  "files": {
+    "after.png": "f4e9e64084680d670658e33547d1bc9de6d40d020d3b28e2182a3991b626f7f5",
+    "before.png": "7fd1c01c8412df27ae1c69b0a171c8ddca621b5e189b0509bacd94c3cea06c4a",
+    "captions.json": "98ca2befb6c65c2d83b82f81c37c52e6e28febf91ee9c4dbf4c00ddebeeb88e0",
+    "proof.mp4": "ccc4beedc2014f86b64b4170683a3d15f399fddbb41c4efc66eee2de598d3986",
+    "tool-evidence.json": "047bff353a5302ba6198b4243aac94dfa1cde37623c2acfb9eacbf9719452074"
+  }
+}
