@@ -643,16 +643,16 @@ export function TeamMembers(props: { team: TeamSummary }) {
                           : undefined
                       }
                       retrying={retryAgent.pending()}
+                      statusLabel={
+                        selfHosted() && movingToName(agent)
+                          ? t('teammateHosts.movingTo', {
+                              host: movingToName(agent),
+                            })
+                          : undefined
+                      }
                       runsOn={
-                        <Show
-                          when={selfHosted() && movingToName(agent)}
-                          fallback={
-                            <Show when={selfHosted() && hostedName(agent)}>
-                              {(host) => <TeammateRunsOn host={host()} />}
-                            </Show>
-                          }
-                        >
-                          {(host) => <TeammateRunsOn host={host()} moving />}
+                        <Show when={selfHosted() && hostedName(agent)}>
+                          {(host) => <TeammateRunsOn host={host()} />}
                         </Show>
                       }
                       claude={

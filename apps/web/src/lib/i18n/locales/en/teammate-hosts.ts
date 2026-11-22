@@ -14,7 +14,7 @@ export default {
   hostOffline: 'Offline',
   hostNotReported: 'Update macrod to host agents',
   hostNoEngine: 'Install Podman or Docker to host agents here',
-  hostEngineUnreachable: "Can't reach {{engine}} on {{host}} right now",
+  hostEngineUnreachable: "Can't reach {{engine}} right now",
   engineEither: 'Docker or Podman',
   checkAgain: 'Check again',
   hostUnsupportedPlatform:
@@ -52,7 +52,7 @@ export default {
   moving: 'Moving…',
   moveFailed: "Couldn't move {{name}}. Try again.",
   runsOn: '· on {{host}}',
-  movingTo: 'to {{host}}',
+  movingTo: 'Moving to {{host}}',
   hostFailed: "{{name}} didn't start on {{host}}. To see why, run this there:",
   removeBodyOwn:
     "It stops on {{host}}, and its files there are deleted. Its memory stays in its repository. This can't be undone.",

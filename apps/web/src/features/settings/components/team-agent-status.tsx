@@ -41,7 +41,11 @@ function dotState(
 }
 
 /** Where an agent teammate is, from its computer and its own online report: a dot and a word. */
-export function TeamAgentStatusLabel(props: { status: TeamAgentStatus }) {
+export function TeamAgentStatusLabel(props: {
+  status: TeamAgentStatus;
+  /** In place of the status's own word. */
+  label?: string;
+}) {
   return (
     <span
       role="status"
@@ -59,7 +63,7 @@ export function TeamAgentStatusLabel(props: { status: TeamAgentStatus }) {
         <Spinner size="sm" decorative />
       </Show>
       <span classList={{ 'text-failure': props.status === 'failed' }}>
-        {statusLabel(props.status)}
+        {props.label ?? statusLabel(props.status)}
       </span>
     </span>
   );

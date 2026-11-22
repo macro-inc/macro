@@ -78,9 +78,9 @@ function refusalText(reason: AddRefusal): string {
  * Add an agent teammate: a name, its picture, and the computer it runs on,
  * priced the way Buy a computer prices it. The dialog stays open while the
  * agent is added and started, and every failure is shown here, with the name
- * and size kept. Add is enabled unless neither the sizes nor the inviter's
- * computers loaded: with no name it marks the field and moves the caret
- * there. Renders the dialog's body and footer through a
+ * and size kept. Add is enabled once there is something to add the agent
+ * on (a computer picked, or sizes loaded): with no name it marks the field
+ * and moves the caret there. Renders the dialog's body and footer through a
  * layout (`AgentInviteLayoutA`).
  */
 export function InviteAgentForm(props: {
@@ -517,11 +517,12 @@ export function InviteAgentForm(props: {
         <Button
           type="button"
           variant="primary"
-          // Always pressable: with no name it marks the field instead. While
-          // adding it keeps focus, so a phone sheet's focus trap doesn't move
-          // it to the name field when a refusal arrives; `submit` ignores
+          // Disabled only until there is something to add it on (a computer
+          // picked, or sizes loaded); with no name it marks the field instead.
+          // While adding it keeps focus, so a phone sheet's focus trap doesn't
+          // move it to the name field when a refusal arrives; `submit` ignores
           // presses meanwhile.
-          disabled={nothingLoaded()}
+          disabled={nothingLoaded() || (!host() && !offers())}
           aria-disabled={adding() || undefined}
           aria-busy={adding() || undefined}
           data-disabled={adding() ? '' : undefined}

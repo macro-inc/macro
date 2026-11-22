@@ -288,3 +288,39 @@ it('names the agent in the trust warning once it has a name', () => {
     screen.getByText('Anything running as you on demo-laptop can act as Ada')
   ).toBeTruthy();
 });
+
+it('offers Add only once a computer is picked when the sizes did not load', () => {
+  const noop = () => {};
+  render(() => (
+    <InviteAgentForm
+      offers={undefined}
+      offersFailed
+      onRetryOffers={noop}
+      state={{ kind: 'editing' }}
+      purchaseKey="example"
+      onCancel={noop}
+      onSubmit={noop}
+      onRetryStart={noop}
+      onEdit={noop}
+      onBilling={noop}
+      hosts={(choice) => (
+        <label>
+          <input
+            type="radio"
+            name={AGENT_COMPUTER_CHOICE}
+            checked={choice.selected() === 'harness-1'}
+            onChange={() =>
+              choice.onSelect({ harnessId: 'harness-1', name: 'my-laptop' })
+            }
+          />
+          my-laptop
+        </label>
+      )}
+    />
+  ));
+  const add = () =>
+    screen.getByRole('button', { name: /^Add Agent/ }) as HTMLButtonElement;
+  expect(add().disabled).toBe(true);
+  fireEvent.click(screen.getByRole('radio', { name: 'my-laptop' }));
+  expect(add().disabled).toBe(false);
+});

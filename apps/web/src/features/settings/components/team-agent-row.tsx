@@ -16,6 +16,8 @@ export function TeamAgentRow(props: {
   menu?: JSX.Element;
   /** Which of its owner's machines it runs on, if it runs on one. */
   runsOn?: JSX.Element;
+  /** Its status in words, in place of the status's own (e.g. "Moving to laptop"). */
+  statusLabel?: string;
   /** Why its own machine couldn't run it, under its status. */
   problem?: string;
   /** A problem the owner caused on purpose (a parked agent) reads muted, not as a failure. */
@@ -50,7 +52,10 @@ export function TeamAgentRow(props: {
           {/* Its summary line, where a person's role and plan are: its
               status, then the machine it runs on. */}
           <div class="flex min-w-0 items-center gap-1.5">
-            <TeamAgentStatusLabel status={props.agent.status} />
+            <TeamAgentStatusLabel
+              status={props.agent.status}
+              label={props.statusLabel}
+            />
             {props.runsOn}
           </div>
           <Show when={props.problem}>

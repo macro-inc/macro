@@ -18,7 +18,6 @@ export function hostUnavailableReason(host: TeammateHost): string | undefined {
       .with('engineUnreachable', () =>
         t('teammateHosts.hostEngineUnreachable', {
           engine: unreachableEngineName(host),
-          host: host.name,
         })
       )
       .with('unsupportedPlatform', () =>

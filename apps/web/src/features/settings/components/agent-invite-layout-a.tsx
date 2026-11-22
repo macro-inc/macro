@@ -33,7 +33,8 @@ export function AgentInviteLayoutA(props: AgentInviteParts) {
           {props.notice}
         </div>
       </Panel.Body>
-      <Panel.Footer class="flex-wrap justify-end gap-2 px-5 py-3">
+      {/* When Add's label needs a row of its own, it goes above Cancel. */}
+      <Panel.Footer class="flex-wrap-reverse justify-end gap-2 px-5 py-3">
         {props.cancel}
         {props.submit}
       </Panel.Footer>
