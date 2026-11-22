@@ -236,7 +236,10 @@ impl OpfsOwner {
     /// Pre-opens exactly this owner's bound main and WAL paths.
     ///
     /// A one-sided pre-existing pair returns [`OpenResult::ResetRequired`], a
-    /// type that exposes no Turso I/O and can only be physically reset.
+    /// type that exposes no Turso I/O and can only be physically reset. A
+    /// split adoption, an adoption marker beside a main file and no WAL,
+    /// fails instead and creates nothing: its WAL is still at the older
+    /// identity, for [`Self::complete_adoption`] to move.
     pub async fn open(mut self) -> Result<OpenResult, OpenFailure> {
         let deadline = BusyDeadline::start();
         let paths = self.paths.clone();
@@ -268,9 +271,25 @@ impl OpfsOwner {
                 return Err(open_failure_after_cleanup(error, self));
             }
 
+            // An adoption stopped between its moves left the WAL holding the
+            // moved database's frames at the older identity. Creating an
+            // empty WAL here would make the pair read as whole without them,
+            // and the reset a one-sided pair needs would remove the main file:
+            // either loses them. Only `complete_adoption` finishes such a
+            // pair. Only a missing WAL beside an existing main file looks for
+            // the marker, so the usual open costs no extra lookup.
+            let guard_split = matches!(role, FileRole::Wal) && !created[FileRole::Main.index()];
             let (handle, was_created) =
-                match open_sync_handle(&root, paths.get(role), deadline).await {
-                    Ok(value) => value,
+                match open_pair_handle(&root, &paths, role, guard_split, deadline).await {
+                    Ok(Some(value)) => value,
+                    Ok(None) => {
+                        let error = OpfsError::new(
+                            OpfsErrorKind::Open,
+                            "an unfinished adoption left this owner's WAL at the older identity",
+                        );
+                        cleanup_failed_open(self.id, session, &error);
+                        return Err(open_failure_after_cleanup(error, self));
+                    }
                     Err(error) => {
                         let adapter_error =
                             entry_error(OpfsErrorKind::Open, "OPFS sync handle open", &error);
@@ -2930,22 +2949,64 @@ async fn open_sync_handle(
 ) -> Result<(FileSystemSyncAccessHandle, bool), JsValue> {
     let (file, created) = match JsFuture::from(root.get_file_handle(path)).await {
         Ok(file) => (file.dyn_into::<FileSystemFileHandle>()?, false),
+        Err(error) if is_not_found(&error) => (create_file_handle(root, path).await?, true),
+        Err(error) => return Err(error),
+    };
+    Ok((sync_access_handle(&file, deadline).await?, created))
+}
+
+/// Opens this owner's file for `role` as [`open_sync_handle`] does, except
+/// that with `guard_split`, a missing file is not created while an adoption
+/// marker sits beside the pair, and `Ok(None)` says so: the WAL of a split
+/// adoption is still at the older identity.
+async fn open_pair_handle(
+    root: &FileSystemDirectoryHandle,
+    paths: &Paths,
+    role: FileRole,
+    guard_split: bool,
+    deadline: BusyDeadline,
+) -> Result<Option<(FileSystemSyncAccessHandle, bool)>, JsValue> {
+    let path = paths.get(role);
+    let (file, created) = match JsFuture::from(root.get_file_handle(path)).await {
+        Ok(file) => (file.dyn_into::<FileSystemFileHandle>()?, false),
         Err(error) if is_not_found(&error) => {
-            let options = FileSystemGetFileOptions::new();
-            options.set_create(true);
-            (
-                JsFuture::from(root.get_file_handle_with_options(path, &options))
-                    .await?
-                    .dyn_into::<FileSystemFileHandle>()?,
-                true,
-            )
+            if guard_split {
+                match JsFuture::from(root.get_file_handle(&marker_path(paths))).await {
+                    Ok(_) => return Ok(None),
+                    Err(error) if is_not_found(&error) => {}
+                    Err(error)
+                        if dom_exception_name(&error).as_deref() == Some("TypeMismatchError") =>
+                    {
+                        return Ok(None);
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            (create_file_handle(root, path).await?, true)
         }
         Err(error) => return Err(error),
     };
-    let handle = retry_busy_entry(deadline, || file.create_sync_access_handle())
+    Ok(Some((sync_access_handle(&file, deadline).await?, created)))
+}
+
+async fn create_file_handle(
+    root: &FileSystemDirectoryHandle,
+    path: &str,
+) -> Result<FileSystemFileHandle, JsValue> {
+    let options = FileSystemGetFileOptions::new();
+    options.set_create(true);
+    JsFuture::from(root.get_file_handle_with_options(path, &options))
         .await?
-        .dyn_into::<FileSystemSyncAccessHandle>()?;
-    Ok((handle, created))
+        .dyn_into::<FileSystemFileHandle>()
+}
+
+async fn sync_access_handle(
+    file: &FileSystemFileHandle,
+    deadline: BusyDeadline,
+) -> Result<FileSystemSyncAccessHandle, JsValue> {
+    retry_busy_entry(deadline, || file.create_sync_access_handle())
+        .await?
+        .dyn_into::<FileSystemSyncAccessHandle>()
 }
 
 fn open_turso_database(

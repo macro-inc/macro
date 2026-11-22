@@ -814,6 +814,33 @@ async fn a_split_adoption_completes_only_with_the_wal_it_recorded() {
 }
 
 #[wasm_bindgen_test]
+async fn an_open_of_a_split_adoption_creates_nothing_and_fails() {
+    // An open before the split completed, as a build that never read the
+    // marker would run: it creates no WAL, so the adoption still reads as
+    // split, and the owner comes back unchanged.
+    let (old, new) = identities("split-open");
+    write_pair_with_live_wal(&old, 23).await;
+    clean_pair(&new).await;
+    adopt_and_stop(&old, &new).await;
+    let owner = OpfsOwner::acquire(&new).await.expect("owner");
+    let failure = owner.open().await.expect_err("an open of a split");
+    assert_eq!(failure.error().kind(), OpfsErrorKind::Open);
+    failure
+        .into_owner()
+        .expect("the owner comes back")
+        .release()
+        .await
+        .expect("release");
+    assert_eq!(present(&new).await, [true, false]);
+    assert_eq!(moved(&new).await, Some((old.clone(), AdoptionState::Split)));
+    // It still completes with the WAL it recorded and keeps its rows.
+    assert_eq!(complete(&old, &new, true).await, CompleteOutcome::Completed);
+    assert_eq!(open_and_finish(&new).await, 23);
+    clean_pair(&old).await;
+    clean_pair(&new).await;
+}
+
+#[wasm_bindgen_test]
 async fn stale_and_malformed_markers_read_as_no_adoption() {
     let (old, new) = identities("markers");
     let recorded = |identity: &str| {
