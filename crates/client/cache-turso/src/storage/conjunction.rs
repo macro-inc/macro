@@ -85,10 +85,14 @@ fn exists(
     )
 }
 
+const MAX_JOINED_FACTS: usize = 16;
+
 /// Single exact facts tested through `LEFT JOIN`s on the fact primary key
 /// instead of one `EXISTS` subprogram each. The key is (document, attribute,
 /// value), so each join matches at most one row and never repeats a document.
-/// A fact tested twice reuses its join.
+/// A fact tested twice reuses its join. Past `MAX_JOINED_FACTS` distinct facts
+/// the rest use `EXISTS`: Turso joins at most 63 tables, and every join is
+/// probed for every candidate while an `EXISTS` can be skipped.
 pub(super) struct ExactJoins {
     source: FactSource,
     facts: Vec<(Token, ExactValue)>,
@@ -112,14 +116,14 @@ impl ExactJoins {
         (self.sql, self.parameters)
     }
 
-    fn test(&mut self, attribute: &Token, value: &ExactValue) -> String {
+    fn test(&mut self, attribute: &Token, value: &ExactValue) -> Option<String> {
         let index = match self
             .facts
             .iter()
             .position(|(known, known_value)| known == attribute && known_value == value)
         {
             Some(index) => index,
-            None => {
+            None if self.facts.len() < MAX_JOINED_FACTS => {
                 let index = self.facts.len();
                 let (table, key) = self.source.table(FactKind::Exact);
                 self.sql.push_str(&format!(
@@ -132,8 +136,9 @@ impl ExactJoins {
                 self.facts.push((attribute.clone(), value.clone()));
                 index
             }
+            None => return None,
         };
-        format!("x{index}.document_id IS NOT NULL")
+        Some(format!("x{index}.document_id IS NOT NULL"))
     }
 }
 
@@ -178,8 +183,11 @@ fn condition_with(
     match expr {
         PredicateExpr::All => "1".into(),
         PredicateExpr::None => "0".into(),
-        PredicateExpr::Exact { attribute, value } => match joins {
-            Some(joins) => joins.test(attribute, value),
+        PredicateExpr::Exact { attribute, value } => match joins
+            .as_mut()
+            .and_then(|joins| joins.test(attribute, value))
+        {
+            Some(test) => test,
             None => exists(
                 source,
                 FactKind::Exact,
