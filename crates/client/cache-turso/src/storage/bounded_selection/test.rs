@@ -279,6 +279,34 @@ fn complete_cutoff_ties_use_record_keys_not_internal_document_ids() {
     });
 }
 
+/// A complete document in scope always has a facts blob. Without one the
+/// window fails as a load by key would, instead of returning a page that
+/// silently leaves the document out.
+#[test]
+fn an_in_scope_document_without_its_blob_fails_the_window() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("bounded-missing-blob").unwrap();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                (0..3)
+                    .map(|n| ProjectionMutation::Replace(document(n, i64::from(n))))
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let query = query(owner("owner"), SortDirection::Desc, SortDirection::Asc);
+        assert_eq!(hits(&storage.connection(), &query, &[]).len(), 3);
+        driver::execute(
+            &storage.connection(),
+            "DELETE FROM index_document_facts WHERE document_id = (SELECT id FROM index_documents WHERE record_key = 'Thing:00001')",
+            Vec::new(),
+        )
+        .unwrap();
+        assert!(try_select(&storage.connection(), &query, &[]).is_err());
+    });
+}
+
 /// The shadow probe and the optimistic window run exactly while a pending
 /// write holds optimistic documents, and the page follows the layer both ways.
 #[test]

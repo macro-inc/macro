@@ -225,7 +225,9 @@ fn candidate_sql(
         // of a fact-table seek per fact the predicate names. A join, unlike a
         // correlated subquery, opens the facts cursor once per statement. Every
         // candidate seeks its facts row, but the blob column is read only
-        // behind the CASE, for a candidate in scope.
+        // behind the CASE, for a candidate in scope. An in-scope document
+        // with no blob reads as an empty one, which fails to decode, so the
+        // read fails as a load by key does instead of skipping the document.
         conjunction::FactSource::Authority => {
             let partitions = searched_partitions(query)
                 .map(|partition| {
@@ -235,7 +237,7 @@ fn candidate_sql(
                 .collect::<Vec<_>>()
                 .join(", ");
             format!(
-                "{candidates} SELECT d.record_key, s.value, s.document_id, d.partition, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND d.partition IN ({partitions}) THEN f.facts END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id LEFT JOIN index_document_facts AS f ON f.document_id = d.id"
+                "{candidates} SELECT d.record_key, s.value, s.document_id, d.partition, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND d.partition IN ({partitions}) THEN coalesce(f.facts, X'') END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id LEFT JOIN index_document_facts AS f ON f.document_id = d.id"
             )
         }
         conjunction::FactSource::Optimistic => {
