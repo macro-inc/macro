@@ -153,7 +153,7 @@ async fn unconfigured_pipedream_preserves_native_connector_selection() {
 
     assert!(matches!(
         selector.user_toolset(&user()).await,
-        UserMcpTools::Pipedream(_)
+        UserMcpTools(Tools::Legacy(LegacyMcpTools::Pipedream(_)))
     ));
     for connector in connectors {
         assert!(matches!(
@@ -185,7 +185,7 @@ async fn configured_optional_pipedream_remains_available() {
 
     assert!(matches!(
         selector.connector_toolset(&user(), SLACK).await.unwrap(),
-        Some(UserMcpTools::Pipedream(_))
+        Some(UserMcpTools(Tools::Legacy(LegacyMcpTools::Pipedream(_))))
     ));
     assert!(selector.connector_connected(&user(), SLACK).await.unwrap());
 }
@@ -212,7 +212,10 @@ async fn either_slack_alias_is_connected_and_selected() {
         let selector = selector(&["linear", slug]);
         assert!(selector.connector_connected(&user(), SLACK).await.unwrap());
         let tools = selector.connector_toolset(&user(), SLACK).await.unwrap();
-        assert!(matches!(tools, Some(UserMcpTools::Pipedream(_))));
+        assert!(matches!(
+            tools,
+            Some(UserMcpTools(Tools::Legacy(LegacyMcpTools::Pipedream(_))))
+        ));
         assert_eq!(
             *selector.pipedream_connection.attempts.lock().unwrap(),
             [*slug]
@@ -239,7 +242,10 @@ async fn selects_only_first_preferred_alias_regardless_of_store_order() {
                 .connector_toolset(&user(), connector)
                 .await
                 .unwrap();
-            assert!(matches!(tools, Some(UserMcpTools::Pipedream(_))));
+            assert!(matches!(
+                tools,
+                Some(UserMcpTools(Tools::Legacy(LegacyMcpTools::Pipedream(_))))
+            ));
             assert_eq!(
                 *selector.pipedream_connection.attempts.lock().unwrap(),
                 [preference[0]],
@@ -419,7 +425,10 @@ async fn mixed_stack_discovers_and_dispatches_both_and_deduplicates_names() {
                 Arc::new(HttpConnection(url.clone())),
             );
             let tools = selector.user_toolset(&user()).await;
-            assert!(matches!(tools, UserMcpTools::Mixed { .. }));
+            assert!(matches!(
+                tools,
+                UserMcpTools(Tools::Legacy(LegacyMcpTools::Mixed { .. }))
+            ));
             let catalog = tools.catalog();
             assert_eq!(catalog.len(), if hosted_name == "Hosted" { 2 } else { 1 });
             assert_eq!(

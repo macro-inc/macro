@@ -5300,6 +5300,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "connect_client",
+ "feature_flags",
  "futures",
  "http 1.4.0",
  "macro_authorization",

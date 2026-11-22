@@ -14,10 +14,13 @@ use ai_toolset::{
     ToolSet, ToolSetError,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_toolset::RemoteMcpToolSet;
 use std::collections::HashSet;
 use std::pin::Pin;
 
 pub mod domain;
+#[cfg(any(test, feature = "test-fakes"))]
+pub mod fake;
 /// The adapters for each source of connections.
 pub mod outbound;
 mod overlay;
@@ -51,8 +54,96 @@ impl ConnectorRef<'_> {
     }
 }
 
-/// The MCP tools loaded for a user, composed across both connection stacks.
-pub enum UserMcpTools {
+/// The MCP tools loaded for a user: one toolset over the servers their
+/// usable connections dialed, built by
+/// [`McpConnectionsService::toolset`](domain::service::McpConnectionsService::toolset).
+pub struct UserMcpTools(Tools);
+
+enum Tools {
+    /// Dialed from the handles the resolver gave out.
+    Connected(RemoteMcpToolSet),
+    /// Built by the per-stack [`McpToolSelector`], which goes away once its
+    /// consumers move onto the services.
+    Legacy(LegacyMcpTools),
+}
+
+impl UserMcpTools {
+    /// The tools of servers already dialed.
+    pub(crate) fn connected(tools: RemoteMcpToolSet) -> Self {
+        Self(Tools::Connected(tools))
+    }
+
+    /// Returns `true` when no tools were discovered.
+    pub fn is_empty(&self) -> bool {
+        match &self.0 {
+            Tools::Connected(tools) => tools.is_empty(),
+            Tools::Legacy(tools) => tools.is_empty(),
+        }
+    }
+
+    /// The full catalog of MCP tools for on-demand loading via tool search.
+    pub fn catalog(&self) -> Vec<SearchableTool> {
+        match &self.0 {
+            Tools::Connected(tools) => tools.searchable_catalog(),
+            Tools::Legacy(tools) => tools.catalog(),
+        }
+    }
+}
+
+impl From<LegacyMcpTools> for UserMcpTools {
+    fn from(tools: LegacyMcpTools) -> Self {
+        Self(Tools::Legacy(tools))
+    }
+}
+
+impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
+    fn dispatch_tool_call<'a>(
+        &'a self,
+        context: Context,
+        request_context: RequestContext,
+        tool_name: &'a str,
+        json: &'a serde_json::Value,
+    ) -> Pin<
+        Box<dyn Future<Output = Result<ToolResult<serde_json::Value>, ToolSetError>> + 'a + Send>,
+    > {
+        match &self.0 {
+            Tools::Connected(tools) => {
+                tools.dispatch_tool_call(context, request_context, tool_name, json)
+            }
+            Tools::Legacy(tools) => {
+                tools.dispatch_tool_call(context, request_context, tool_name, json)
+            }
+        }
+    }
+
+    fn request_schemas(&self) -> Option<Vec<RequestSchema>> {
+        match &self.0 {
+            Tools::Connected(tools) => ToolSet::<Context>::request_schemas(tools),
+            Tools::Legacy(tools) => ToolSet::<Context>::request_schemas(tools),
+        }
+    }
+
+    fn searchable_catalog(&self) -> Vec<SearchableTool> {
+        self.catalog()
+    }
+
+    fn searchable_toolset_names(&self) -> Vec<String> {
+        match &self.0 {
+            Tools::Connected(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
+            Tools::Legacy(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
+        }
+    }
+
+    fn routing_description<'a>(&'a self, tool_name: &'a str) -> Option<ToolInfo> {
+        match &self.0 {
+            Tools::Connected(tools) => ToolSet::<Context>::routing_description(tools, tool_name),
+            Tools::Legacy(tools) => ToolSet::<Context>::routing_description(tools, tool_name),
+        }
+    }
+}
+
+/// The tools the per-stack selector loads, composed across both stacks.
+enum LegacyMcpTools {
     /// Tools served by Pipedream's remote MCP server.
     Pipedream(PipedreamToolSet),
     /// Tools served by directly-connected (native) MCP servers.
@@ -66,22 +157,22 @@ pub enum UserMcpTools {
     },
 }
 
-impl UserMcpTools {
-    /// Returns `true` when no tools were discovered.
-    pub fn is_empty(&self) -> bool {
+impl LegacyMcpTools {
+    fn is_empty(&self) -> bool {
         match self {
-            UserMcpTools::Pipedream(tools) => tools.is_empty(),
-            UserMcpTools::Native(tools) => tools.is_empty(),
-            UserMcpTools::Mixed { native, pipedream } => native.is_empty() && pipedream.is_empty(),
+            LegacyMcpTools::Pipedream(tools) => tools.is_empty(),
+            LegacyMcpTools::Native(tools) => tools.is_empty(),
+            LegacyMcpTools::Mixed { native, pipedream } => {
+                native.is_empty() && pipedream.is_empty()
+            }
         }
     }
 
-    /// The full catalog of MCP tools for on-demand loading via tool search.
-    pub fn catalog(&self) -> Vec<SearchableTool> {
+    fn catalog(&self) -> Vec<SearchableTool> {
         match self {
-            UserMcpTools::Pipedream(tools) => tools.searchable_catalog(),
-            UserMcpTools::Native(tools) => tools.searchable_catalog(),
-            UserMcpTools::Mixed { native, pipedream } => {
+            LegacyMcpTools::Pipedream(tools) => tools.searchable_catalog(),
+            LegacyMcpTools::Native(tools) => tools.searchable_catalog(),
+            LegacyMcpTools::Mixed { native, pipedream } => {
                 let mut catalog = native.searchable_catalog();
                 let names: HashSet<_> = catalog.iter().map(|tool| tool.name.clone()).collect();
                 catalog.extend(
@@ -96,7 +187,7 @@ impl UserMcpTools {
     }
 }
 
-impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
+impl<Context: Send + Sync + 'static> ToolSet<Context> for LegacyMcpTools {
     fn dispatch_tool_call<'a>(
         &'a self,
         context: Context,
@@ -107,13 +198,13 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
         Box<dyn Future<Output = Result<ToolResult<serde_json::Value>, ToolSetError>> + 'a + Send>,
     > {
         match self {
-            UserMcpTools::Pipedream(tools) => {
+            LegacyMcpTools::Pipedream(tools) => {
                 tools.dispatch_tool_call(context, request_context, tool_name, json)
             }
-            UserMcpTools::Native(tools) => {
+            LegacyMcpTools::Native(tools) => {
                 tools.dispatch_tool_call(context, request_context, tool_name, json)
             }
-            UserMcpTools::Mixed { native, pipedream } => {
+            LegacyMcpTools::Mixed { native, pipedream } => {
                 if native.contains_tool(tool_name) {
                     native.dispatch_tool_call(context, request_context, tool_name, json)
                 } else {
@@ -125,9 +216,9 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
 
     fn request_schemas(&self) -> Option<Vec<RequestSchema>> {
         match self {
-            UserMcpTools::Pipedream(tools) => ToolSet::<Context>::request_schemas(tools),
-            UserMcpTools::Native(tools) => ToolSet::<Context>::request_schemas(tools),
-            UserMcpTools::Mixed { .. } => {
+            LegacyMcpTools::Pipedream(tools) => ToolSet::<Context>::request_schemas(tools),
+            LegacyMcpTools::Native(tools) => ToolSet::<Context>::request_schemas(tools),
+            LegacyMcpTools::Mixed { .. } => {
                 let schemas: Vec<_> = self
                     .catalog()
                     .into_iter()
@@ -148,9 +239,9 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
 
     fn searchable_toolset_names(&self) -> Vec<String> {
         match self {
-            UserMcpTools::Pipedream(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
-            UserMcpTools::Native(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
-            UserMcpTools::Mixed { native, pipedream } => {
+            LegacyMcpTools::Pipedream(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
+            LegacyMcpTools::Native(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
+            LegacyMcpTools::Mixed { native, pipedream } => {
                 let mut names = ToolSet::<Context>::searchable_toolset_names(native);
                 names.extend(ToolSet::<Context>::searchable_toolset_names(pipedream));
                 names.sort();
@@ -162,13 +253,13 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
 
     fn routing_description<'a>(&'a self, tool_name: &'a str) -> Option<ToolInfo> {
         match self {
-            UserMcpTools::Pipedream(tools) => {
+            LegacyMcpTools::Pipedream(tools) => {
                 ToolSet::<Context>::routing_description(tools, tool_name)
             }
-            UserMcpTools::Native(tools) => {
+            LegacyMcpTools::Native(tools) => {
                 ToolSet::<Context>::routing_description(tools, tool_name)
             }
-            UserMcpTools::Mixed { native, pipedream } => {
+            LegacyMcpTools::Mixed { native, pipedream } => {
                 if native.contains_tool(tool_name) {
                     ToolSet::<Context>::routing_description(native, tool_name)
                 } else {
@@ -281,20 +372,20 @@ where
             .unwrap_or_default();
         let (native, pipedream) = select_connections(native, pipedream);
         if native.is_empty() {
-            return UserMcpTools::Pipedream(
+            return UserMcpTools::from(LegacyMcpTools::Pipedream(
                 PipedreamToolSet::new(&pipedream, self.pipedream_connection.clone()).await,
-            );
+            ));
         }
         if pipedream.is_empty() {
-            return UserMcpTools::Native(
+            return UserMcpTools::from(LegacyMcpTools::Native(
                 McpToolSet::new(&native, &self.native_http, self.native_store.clone()).await,
-            );
+            ));
         }
         let (native, pipedream) = futures::join!(
             McpToolSet::new(&native, &self.native_http, self.native_store.clone()),
             PipedreamToolSet::new(&pipedream, self.pipedream_connection.clone()),
         );
-        UserMcpTools::Mixed { native, pipedream }
+        UserMcpTools::from(LegacyMcpTools::Mixed { native, pipedream })
     }
 
     #[tracing::instrument(skip(self, user), err)]
@@ -309,9 +400,9 @@ where
             .await
             .map_err(|e| anyhow::anyhow!("mcp store: {e:?}"))?;
         if let Some(record) = native.into_iter().find(|r| native_matches(r, connector)) {
-            return Ok(Some(UserMcpTools::Native(
+            return Ok(Some(UserMcpTools::from(LegacyMcpTools::Native(
                 McpToolSet::new(&[record], &self.native_http, self.native_store.clone()).await,
-            )));
+            ))));
         }
         let pipedream = self.pipedream_connections(user).await;
         let matching = pipedream
@@ -324,13 +415,13 @@ where
                     .position(|slug| *slug == r.app_slug)
             });
         match matching {
-            Some(record) => Ok(Some(UserMcpTools::Pipedream(
+            Some(record) => Ok(Some(UserMcpTools::from(LegacyMcpTools::Pipedream(
                 PipedreamToolSet::new(
                     std::slice::from_ref(record),
                     self.pipedream_connection.clone(),
                 )
                 .await,
-            ))),
+            )))),
             None => Ok(None),
         }
     }

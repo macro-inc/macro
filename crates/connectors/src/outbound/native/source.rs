@@ -179,6 +179,25 @@ where
     }
 }
 
+/// Object-safe (`#[async_trait]`): the service holds it as a trait object.
+#[async_trait::async_trait]
+impl<S, O> crate::domain::ports::ServerDirectory for NativeSource<S, O>
+where
+    S: McpServerStore,
+    O: OAuthClient,
+    anyhow::Error: From<S::Err>,
+{
+    async fn add_server(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        url: &ServerUrl,
+        name: &str,
+        added_by: AddedBy,
+    ) -> Result<SourceConnection, Report> {
+        NativeSource::add_server(self, user, url, name, added_by).await
+    }
+}
+
 #[async_trait::async_trait]
 impl<S, O> Source for NativeSource<S, O>
 where

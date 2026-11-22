@@ -8,7 +8,8 @@
 
 use crate::domain::catalog::Overlays;
 use crate::domain::models::{
-    ApiRequest, ApiResponse, ConnectStep, ConnectorId, ConnectorKey, ServerUrl, Surfaces, Upstream,
+    AddedBy, ApiRequest, ApiResponse, ConnectStep, ConnectorId, ConnectorKey, ServerUrl, Surfaces,
+    Upstream,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_toolset::McpServer;
@@ -191,4 +192,24 @@ pub(crate) trait ConnectFlag: Send + Sync + 'static {
 pub(crate) trait OverlayCatalog: Send + Sync + 'static {
     /// Every overlaid app with its server.
     fn overlays(&self) -> impl Future<Output = Result<Overlays, rootcause::Report>> + Send;
+}
+
+/// Adding servers by URL. Only the native source holds them.
+///
+/// Object-safe (`#[async_trait]`): the service holds it as
+/// `Arc<dyn ServerDirectory>` so its type names no adapter.
+#[async_trait::async_trait]
+pub(crate) trait ServerDirectory: Send + Sync {
+    /// Add `url` for the user, enabled and not yet signed in to, or return
+    /// the row the user already has there. An agent may add only public
+    /// `https` destinations; refusing one answers
+    /// [`SourceRefusal::NonPublic`], and an empty name
+    /// [`SourceRefusal::EmptyName`].
+    async fn add_server(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        url: &ServerUrl,
+        name: &str,
+        added_by: AddedBy,
+    ) -> Result<SourceConnection, rootcause::Report>;
 }

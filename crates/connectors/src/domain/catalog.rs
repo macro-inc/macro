@@ -61,6 +61,11 @@ impl Overlays {
         self.servers.contains_key(app)
     }
 
+    /// The server `app` is overlaid at, if it is overlaid.
+    pub(crate) fn server_of(&self, app: &ConnectorId) -> Option<&ServerUrl> {
+        self.servers.get(app)
+    }
+
     /// Every overlaid app whose server is exactly `url`, in slug order;
     /// empty for a server added by URL, whatever it points at.
     pub(crate) fn apps_at(&self, url: &ServerUrl) -> impl Iterator<Item = &ConnectorId> {

@@ -140,7 +140,7 @@ pub(crate) fn resolve(
 /// that app's overlay server (rule 5), and then it is every app overlaid at
 /// that server, never also a server added by URL. A native row anywhere
 /// else is a server added by URL.
-fn identify(connection: &SourceConnection, overlays: &Overlays) -> Vec<ConnectorKey> {
+pub(crate) fn identify(connection: &SourceConnection, overlays: &Overlays) -> Vec<ConnectorKey> {
     let (SourceKind::Native, ConnectorKey::Server(url)) = (&connection.source, &connection.key)
     else {
         return vec![connection.key.clone()];
@@ -159,7 +159,7 @@ fn identify(connection: &SourceConnection, overlays: &Overlays) -> Vec<Connector
 }
 
 /// The one source whose connection counts for `app` (the table above).
-fn counted_source(
+pub(crate) fn counted_source(
     app: &ConnectorId,
     flag: Flag,
     overlays: &Overlays,

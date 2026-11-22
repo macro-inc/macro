@@ -7,6 +7,9 @@ publish = false
 [features]
 default = ["providers"]
 providers = ["macro_env_var"]
+# `fake::FakeConnectors`: the real services over in-memory sources, for
+# consumers' tests.
+test-fakes = ["rmcp/server", "tokio/io-util"]
 
 [dependencies]
 aes-gcm = "0.10"
@@ -18,6 +21,7 @@ axum.workspace = true
 base64.workspace = true
 chrono.workspace = true
 connect_client = { path = "../connect_client" }
+feature_flags = { path = "../feature_flags" }
 futures.workspace = true
 http.workspace = true
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
@@ -47,6 +51,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
 proptest.workspace = true
+rmcp = { workspace = true, features = ["server"] }
 regex.workspace = true
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["io-util", "test-util"] }
 tower = { workspace = true }

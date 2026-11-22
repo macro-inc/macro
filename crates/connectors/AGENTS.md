@@ -27,6 +27,15 @@ and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
 
 ## Start here
 
+- `src/domain/service.rs`: the three service traits and `Connectors`, their
+  one implementation over every `Source`, the flag and the overlay table; it
+  asks `resolve.rs` for every answer. `src/domain/policy.rs` is the only
+  reader of the `macro-connect` flag (one per-user cache; a failed read is
+  off). Tool loading answers without a source whose store is down; listing
+  and API lookups fail instead.
+- `src/fake.rs` (feature `test-fakes`): `FakeConnectors`, the real services
+  over in-memory sources, for consumers' tests. Use it instead of a
+  hand-written fake store.
 - `src/lib.rs`, `src/selection.rs`, `src/overlay.rs`: the per-provider
   selection, the seven-app list, and overlay status over the native store.
 - `src/outbound/native/domain/service/`: tool execution (`toolset.rs`,
@@ -53,12 +62,13 @@ and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
 - `src/outbound/pipedream/outbound/connect.rs`: the old ports over
   `macro_connect`'s client; `dispatch.rs`: `ConnectorBackends`, which holds
   the host's `ConnectRollout` (the `macro-connect` flag, read by
-  `ai_tools::macro_connect_rollout`).
+  `ai_tools::macro_connect_rollout` until its consumers move onto the
+  services).
 
 ## Boundaries
 
 - Depends on: `ai_toolset`, `mcp_toolset`, `authentication_service_client`,
-  `connect_client` (the only Connect crate Macro may use),
+  `connect_client` (the only Connect crate Macro may use), `feature_flags`,
   `macro_authorization` (feature `axum`), `macro_user_id`, `rmcp`.
 - Used by: `agent_egress`, `agent_harness`, `agent_inmem`, `agent_code_mode`,
   `ai_tools`, `import*`, `granola_sync`, `onboarding`,
@@ -67,6 +77,7 @@ and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
 ## Checks
 
 - `cargo test -p connectors` (`SQLX_OFFLINE` unset; requires local MacroDB).
+- `cargo clippy -p connectors --features test-fakes` as well as without it.
 
 ## Gotchas
 
