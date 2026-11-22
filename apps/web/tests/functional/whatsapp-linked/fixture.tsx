@@ -214,7 +214,9 @@ render(
               <EmailLinksContextProvider>
                 {/* The app root provides Macro's items; the composer's `@` menu
                     reads them. An external chat offers only its people. */}
-                <ChannelDirectoryProvider directory={staticChannelDirectory(() => [])}>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <QuickAccessContextProvider value={noQuickAccess}>
                     <Router
                       root={(props) => (
