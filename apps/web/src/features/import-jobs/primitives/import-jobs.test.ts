@@ -1,4 +1,5 @@
-import { createRoot } from 'solid-js';
+import type { ImportRun } from '@service-cognition/import';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createImportJobs } from './import-jobs';
 
@@ -239,4 +240,48 @@ it('hides an entry the review card dismissed, now and after a reload', () => {
   }));
   expect(reloaded.jobs()).toEqual([]);
   reloaded.dispose();
+});
+
+it('shows a new failure after a replan even though the old one was dismissed', () => {
+  // The run row is reused per source; each attempt changes its updated_at,
+  // which the dismissal key includes.
+  const [runs, setRuns] = createSignal<ImportRun[]>([
+    {
+      source: 'notion',
+      status: 'failed',
+      error_kind: 'unreachable',
+      updated_at: '2026-11-06T11:00:00Z',
+    },
+  ]);
+  let stored: readonly string[] = [];
+  const { jobs, dismiss, dispose } = createRoot((dispose) => ({
+    dispose,
+    ...createImportJobs({
+      runs: { runs, slackChannelsImporting: () => 0 },
+      createReport: () => () => undefined,
+      dismissals: {
+        restore: () => stored,
+        save: (keys) => {
+          stored = keys;
+        },
+      },
+    }),
+  }));
+  const [failed] = jobs();
+  dismiss(failed.key);
+  expect(jobs()).toEqual([]);
+
+  // Planned again, and failed again.
+  setRuns([
+    {
+      source: 'notion',
+      status: 'failed',
+      error_kind: 'access_lost',
+      updated_at: '2026-11-06T11:40:00Z',
+    },
+  ]);
+  expect(jobs().map((job) => job.phase)).toEqual([
+    { kind: 'failed', errorKind: 'access_lost' },
+  ]);
+  dispose();
 });
