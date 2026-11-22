@@ -1,6 +1,8 @@
 use super::*;
-use item_filter_index::mail::INBOX_VIEW_DERIVATION;
-use predicate_index::{ExactFact, ExactValue, IndexDocument, IntegerFact, Profile, Token};
+use item_filter_index::mail::{IMPORTANT_VIEW_DERIVATION, INBOX_VIEW_DERIVATION};
+use predicate_index::{
+    ExactFact, ExactValue, IndexDocument, IntegerFact, Profile, SortFactDerivation, Token,
+};
 use proptest::prelude::*;
 
 const SOURCE: &str = "mail-inbox-ts";
@@ -13,6 +15,7 @@ struct Shape {
     property_profile: bool,
     inbox: Option<bool>,
     has_message: Option<bool>,
+    signal: Option<bool>,
     inbox_ts: Option<i64>,
     stale_target: Option<i64>,
 }
@@ -23,15 +26,25 @@ fn shape() -> impl Strategy<Value = Shape> {
         any::<bool>(),
         prop::option::of(any::<bool>()),
         prop::option::of(any::<bool>()),
+        prop::option::of(any::<bool>()),
         prop::option::of(-1_000i64..1_000),
         prop::option::of(-1_000i64..1_000),
     )
         .prop_map(
-            |(other_profile, property_profile, inbox, has_message, inbox_ts, stale_target)| Shape {
+            |(
                 other_profile,
                 property_profile,
                 inbox,
                 has_message,
+                signal,
+                inbox_ts,
+                stale_target,
+            )| Shape {
+                other_profile,
+                property_profile,
+                inbox,
+                has_message,
+                signal,
                 inbox_ts,
                 stale_target,
             },
@@ -53,6 +66,7 @@ fn document(id: usize, shape: &Shape) -> IndexDocument {
     for (attribute, value) in [
         ("mail-inbox", shape.inbox),
         ("mail-has-message", shape.has_message),
+        ("mail-signal", shape.signal),
     ] {
         if let Some(value) = value {
             exact_facts.push(ExactFact {
@@ -154,12 +168,16 @@ fn store(storage: &TursoStorage, shapes: &[Shape], optimistic_owner: Option<i64>
 }
 
 fn derived(storage: &TursoStorage, sorts: &str) -> Vec<(i64, i64)> {
+    derived_of(storage, sorts, INBOX_VIEW_DERIVATION.target)
+}
+
+fn derived_of(storage: &TursoStorage, sorts: &str, target: &str) -> Vec<(i64, i64)> {
     driver::query(
         &storage.connection(),
         &format!(
             "SELECT document_id, value FROM {sorts} WHERE attribute = ?1 ORDER BY document_id"
         ),
-        vec![text(INBOX_VIEW_DERIVATION.target)],
+        vec![text(target)],
     )
     .unwrap()
     .iter()
@@ -168,16 +186,24 @@ fn derived(storage: &TursoStorage, sorts: &str) -> Vec<(i64, i64)> {
 }
 
 fn expected(shapes: &[Shape]) -> Vec<(i64, i64)> {
+    expected_of(shapes, &INBOX_VIEW_DERIVATION)
+}
+
+/// What the projection derives with `derivation`. Documents of another profile
+/// keep whatever they had: a stale copy of the Inbox view fact.
+fn expected_of(shapes: &[Shape], derivation: &SortFactDerivation) -> Vec<(i64, i64)> {
     shapes
         .iter()
         .enumerate()
         .filter_map(|(index, shape)| {
             let id = i64::try_from(index).unwrap() + 1;
-            // Documents of another profile keep whatever they had.
             if shape.other_profile {
-                return shape.stale_target.map(|value| (id, value));
+                return shape
+                    .stale_target
+                    .filter(|_| derivation.target == INBOX_VIEW_DERIVATION.target)
+                    .map(|value| (id, value));
             }
-            INBOX_VIEW_DERIVATION
+            derivation
                 .derive(&document(index, shape))
                 .map(|fact| (id, fact.value))
         })
@@ -212,6 +238,12 @@ proptest! {
             assert_eq!(derived(&storage, "sort_facts"), expected(&shapes));
             assert_facts_blobs_match(&storage);
             assert_eq!(derived(&storage, "optimistic_sort_facts"), expected(&shapes));
+            for sorts in ["sort_facts", "optimistic_sort_facts"] {
+                assert_eq!(
+                    derived_of(&storage, sorts, IMPORTANT_VIEW_DERIVATION.target),
+                    expected_of(&shapes, &IMPORTANT_VIEW_DERIVATION)
+                );
+            }
             // Once recorded, a reopen changes nothing.
             raw_execute(&storage, "DELETE FROM sort_facts WHERE attribute = ?1", vec![text(INBOX_VIEW_DERIVATION.target)]);
             crate::storage::derived_sorts::ensure_version(&storage.connection()).unwrap();
@@ -229,6 +261,7 @@ fn reopening_an_older_cache_derives_facts_and_keeps_queued_writes() {
             property_profile: true,
             inbox: Some(true),
             has_message: Some(true),
+            signal: None,
             inbox_ts: Some(30),
             stale_target: None,
         },
@@ -237,6 +270,7 @@ fn reopening_an_older_cache_derives_facts_and_keeps_queued_writes() {
             property_profile: true,
             inbox: Some(false),
             has_message: Some(true),
+            signal: None,
             inbox_ts: Some(20),
             stale_target: None,
         },
@@ -292,6 +326,7 @@ fn all_except_uncertainty_gets_the_derived_rule() {
         property_profile: true,
         inbox: Some(true),
         has_message: Some(true),
+        signal: None,
         inbox_ts: Some(30),
         stale_target: None,
     };
@@ -343,10 +378,14 @@ fn all_except_uncertainty_gets_the_derived_rule() {
         ];
         expected.sort();
         assert_eq!(uncertainty_rows(&storage, 2), expected);
-        assert_eq!(
-            uncertainty_rows(&storage, 3),
-            vec![SOURCE.to_owned(), INBOX_VIEW_DERIVATION.target.to_owned()]
-        );
+        // Every rule copying the uncertain source is uncertain with it.
+        let mut expected = vec![
+            SOURCE.to_owned(),
+            INBOX_VIEW_DERIVATION.target.to_owned(),
+            IMPORTANT_VIEW_DERIVATION.target.to_owned(),
+        ];
+        expected.sort();
+        assert_eq!(uncertainty_rows(&storage, 3), expected);
     });
 }
 
@@ -360,6 +399,7 @@ fn a_document_at_the_attribute_limit_becomes_incomplete() {
         property_profile: true,
         inbox: Some(true),
         has_message: Some(true),
+        signal: None,
         inbox_ts: Some(30),
         stale_target: None,
     };
@@ -424,4 +464,41 @@ fn a_document_at_the_attribute_limit_becomes_incomplete() {
             Some(OptimisticProjectionState::Complete(_))
         ));
     });
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(32))]
+
+    /// A cache last written with only the Inbox view rule gets the Important
+    /// view facts, and the Inbox view facts it holds are left as they are:
+    /// the stale copies a patch left behind stay until a full projection,
+    /// as they would have without the new rule.
+    #[test]
+    fn a_new_rule_does_not_rerun_the_rules_already_applied(
+        shapes in prop::collection::vec(shape(), 0..24),
+    ) {
+        block_on(async {
+            let mut storage = TursoStorage::open_in_memory("derived-sorts-new-rule").unwrap();
+            let owner = storage.enqueue_mutation(queued("Owner")).await.unwrap();
+            store(&storage, &shapes, None);
+            store(&storage, &shapes, Some(mutation_id_to_sql(owner).unwrap()));
+            raw_execute(
+                &storage,
+                "INSERT INTO meta (key, value) VALUES ('sort_fact_derivations', ?1) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                vec![text(&INBOX_VIEW_DERIVATION.fingerprint())],
+            );
+            let inbox_before = derived(&storage, "sort_facts");
+            let optimistic_inbox_before = derived(&storage, "optimistic_sort_facts");
+            crate::storage::derived_sorts::ensure_version(&storage.connection()).unwrap();
+            assert_eq!(derived(&storage, "sort_facts"), inbox_before);
+            assert_eq!(derived(&storage, "optimistic_sort_facts"), optimistic_inbox_before);
+            for sorts in ["sort_facts", "optimistic_sort_facts"] {
+                assert_eq!(
+                    derived_of(&storage, sorts, IMPORTANT_VIEW_DERIVATION.target),
+                    expected_of(&shapes, &IMPORTANT_VIEW_DERIVATION)
+                );
+            }
+            assert_facts_blobs_match(&storage);
+        });
+    }
 }
