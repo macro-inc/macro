@@ -216,6 +216,7 @@ impl Faker {
             // change cross the limit. No draw when the option is off.
             let stable = id
                 .as_deref()
+                .or(explicit_id)
                 .map(|id| mix(0, &format!("wide-properties:{id}")));
             ctx.wide = stable.filter(|&seed| Rng::new(seed).chance(plan.wide_properties));
         }
@@ -489,18 +490,27 @@ impl Faker {
                     // Date ranges never project in the cache; the bench models
                     // the values the cache can index.
                     pool.retain(|candidate| property_data_type(candidate).is_some());
-                    if ctx.plain {
-                        pool.retain(|candidate| {
+                    let attribute_free: Vec<&Name> = pool
+                        .iter()
+                        .copied()
+                        .filter(|candidate| {
                             !matches!(
                                 property_data_type(candidate),
                                 Some("SELECT_STRING" | "ENTITY")
                             )
-                        });
+                        })
+                        .collect();
+                    if ctx.plain && !attribute_free.is_empty() {
+                        pool = attribute_free;
                     }
                 }
                 let concrete = pool[rng.below(pool.len() as u64) as usize].clone();
+                // The member is chosen: what made a thread wide or a value plain
+                // stays with them.
                 let child = EntityCtx {
                     seed: rng.next_u64(),
+                    wide: None,
+                    plain: false,
                     ..ctx
                 };
                 self.object(document, &concrete, sets, child, None, plan)
