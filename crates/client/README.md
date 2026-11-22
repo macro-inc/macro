@@ -156,7 +156,9 @@ keep the cache from starting. Attempts are counted in a file of their own
 beside the marker (`<name>-adopting-attempts`), written with eight free slots
 before any file moves, so counting overwrites one byte in place, needs no more
 storage, and works while the marker does not read; a count that is not exactly
-its eight slots counts nothing. The marker itself, which also records when the
+its eight slots counts nothing, nor does one left without its marker, so a
+count goes with its marker only as cleanup, never waited on. The marker
+itself, which also records when the
 adoption began, is never written again. An attempt that cannot be counted
 decides as any other, and only where it would keep the files does it look at
 that time: ten minutes after the adoption began it discards them instead, so
@@ -239,11 +241,16 @@ lose them instead, and each needs a worker lost or an open failing mid-upgrade:
   leaves the same split;
 - the worker is lost during the first open, before any step committed, and a
   tab of the older build opens its now empty name before the recovery open: the
-  files cannot go back over its new ones and are discarded. On a later storage
-  bump that tab may instead start moving an even older pair into its name and
-  lose its worker before the move: a hand-back that lands before that tab's
-  recovery open puts the files back, and that recovery, finding no adoption,
-  wipes them;
+  files cannot go back over its new ones and are discarded. That tab may
+  instead lose its own worker before its open creates any file (after its
+  storage grant, which its coordinator answers with a wipe before the next
+  open; on a later storage bump also while moving an even older pair into its
+  name, before the move): a hand-back that lands before that tab's next open
+  puts the files back, and that open wipes them. Landing after it, the
+  hand-back finds a database there and discards them, and refusing it would
+  discard them the same way, so no order keeps them once that wipe is
+  pending; returning still keeps them whenever the older build's next open is
+  an ordinary one;
 - the first open commits the upgrade and then fails (its queue checks or a
   projection rebuild), or is lost, before it is ready: the file is already the
   newer version, so it is discarded. An open slower than the coordinator's

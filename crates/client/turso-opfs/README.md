@@ -56,8 +56,7 @@ moves a self-contained database (empty WAL, which a close leaves;
 `WalNotEmpty` otherwise) back to an older identity that holds no database
 (`Occupied` otherwise), first removing a marker there beside no main file (an
 adoption into it stopped before its main file moved, or a wipe stopped after
-removing it; the count beside it goes too, but a failure to remove the count
-never holds the pair back, as a later adoption writes its own), and reports it `Returned` once the main file is back,
+removing it), and reports it `Returned` once the main file is back,
 even when removing the leftovers fails; `discard_adoption` makes the files
 this owner's own. `record_attempt` counts a caller attempt and returns the count, so a
 caller can bound how often it retries a decision. The count is a file of its
@@ -67,14 +66,19 @@ adoption never inherits an earlier count, counting overwrites one byte in place
 and needs no more storage, and it works while the marker does not read. Once
 every slot is used the count stays at eight without writing; a count that is
 not exactly its eight slots fails (`Write`), so a file cut short never counts
-attempts nobody made. The marker is written once and never changed; it also
+attempts nobody made, and so does a count with no marker beside it. Removing
+a marker removes its count only as cleanup: one try that never waits on a
+busy entry, so a count held open never holds back the return, wipe or
+removal around it nor spends their busy wait, and the count it leaves counts
+nothing. The marker is written once and never changed; it also
 records when the adoption began (`Adoption::adopted_at_ms`), so a caller can
 bound attempts it cannot count by age. `read_adoption_time` reads that time from
 the marker alone, for when `read_adoption` fails on the files beside it. A read
 that returns fewer bytes than the file holds is an error, never a shorter
 marker or WAL header. A failed WAL move moves the main file back; when that
 fails too, the marker stays and the adoption reads as `Split`.
-Wiping or resetting an identity removes its pair, then its marker and count, so
+Wiping or resetting an identity removes its pair, then its marker (and tries
+its count), so
 a stop between leaves a marker beside no main file, which the next read removes,
 never moved files without their marker. A
 `lock_previous` request dropped before it returns lets the lock go as soon as
@@ -82,7 +86,8 @@ the browser grants it. `src/browser/test/adopt.rs` covers each outcome, the
 lock and a dropped request for it, Turso-invalid headers, both stops, splits
 with a matching and a changed WAL, stale and malformed markers, attempt counts
 (fresh per adoption, in place, saturating, a count of the wrong length, while
-the marker does not read), the adoption time while the files do not read,
+the marker does not read, left without its marker, held open through a wipe,
+a removal and a return), the adoption time while the files do not read,
 short reads, wipes stopped partway, a return onto a stale marker, and refused
 returns in a real DedicatedWorker.
 

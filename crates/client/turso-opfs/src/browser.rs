@@ -504,13 +504,21 @@ impl OpfsOwner {
     /// before any file moved, so counting overwrites one byte in place, needs
     /// no more storage, works while the marker cannot be read, and never
     /// touches the marker. Once every slot is used it stays at eight without
-    /// writing. Fails when there is no count, when it is not exactly its
-    /// eight slots (so a count cut short never counts attempts nobody made),
-    /// or when it cannot be read or written.
+    /// writing. Fails when nothing sits at the marker's name (a count left
+    /// after its marker went belongs to no adoption) or there is no count,
+    /// when the count is not
+    /// exactly its eight slots (so a count cut short never counts attempts
+    /// nobody made), or when it cannot be read or written.
     pub async fn record_attempt(&mut self) -> Result<u8, OpfsError> {
         let to = self.paths.clone();
         self.in_adoption_phase(async move {
             let root = adoption_root().await?;
+            if !entry_present(&root, &marker_path(&to)).await? {
+                return Err(OpfsError::new(
+                    OpfsErrorKind::Write,
+                    "no adoption marker beside this owner's paths",
+                ));
+            }
             let file = existing_file(&root, &attempts_path(&to))
                 .await?
                 .ok_or_else(|| {
@@ -808,6 +816,18 @@ async fn existing_file(
     }
 }
 
+/// Whether anything sits at `path`, a directory included.
+async fn entry_present(root: &FileSystemDirectoryHandle, path: &str) -> Result<bool, OpfsError> {
+    match JsFuture::from(root.get_file_handle(path)).await {
+        Ok(_) => Ok(true),
+        Err(error) if is_not_found(&error) => Ok(false),
+        Err(error) if dom_exception_name(&error).as_deref() == Some("TypeMismatchError") => {
+            Ok(true)
+        }
+        Err(error) => Err(js_error(OpfsErrorKind::Read, "OPFS entry lookup", &error)),
+    }
+}
+
 /// Creates `path` as an empty file if it does not exist.
 async fn create_empty(root: &FileSystemDirectoryHandle, path: &str) -> Result<(), OpfsError> {
     let options = FileSystemGetFileOptions::new();
@@ -1040,11 +1060,8 @@ async fn return_pair(to: Paths, from: Paths) -> Result<ReturnOutcome, OpfsError>
     // identity stopped before its main file moved, or a wipe stopped after
     // removing it. It goes first, as the next read there would remove it, so
     // the pair coming back is never taken for the files that adoption was
-    // moving. Its attempt count goes only as cleanup: an adoption writes a
-    // fresh count before its marker, so a count left without a marker never
-    // labels the pair, and failing to remove it never holds the pair back.
-    remove_if_present(&root, &marker_path(&from), true, deadline).await?;
-    let _ = remove_if_present(&root, &attempts_path(&from), true, deadline).await;
+    // moving.
+    remove_marker(&root, &from, deadline).await?;
     if previous_wal.is_none() {
         // The pair is whole the moment the main file arrives.
         create_empty(&root, from.get(FileRole::Wal)).await?;
@@ -1386,17 +1403,27 @@ fn attempts_path(paths: &Paths) -> String {
     format!("{}{ATTEMPTS_SUFFIX}", paths.get(FileRole::Main))
 }
 
-/// Removes the marker beside `to`, then its attempt count, which means
-/// nothing once the marker is gone and is written afresh with the next one.
-/// Both names are this adapter's own, so whatever sits there goes, a
-/// directory included.
+/// Removes the marker beside `to`, then tries its attempt count once (see
+/// [`remove_count`]). The marker's name is this adapter's own, so whatever
+/// sits there goes, a directory included.
 async fn remove_marker(
     root: &FileSystemDirectoryHandle,
     to: &Paths,
     deadline: BusyDeadline,
 ) -> Result<(), OpfsError> {
     remove_if_present(root, &marker_path(to), true, deadline).await?;
-    remove_if_present(root, &attempts_path(to), true, deadline).await
+    remove_count(root, to).await;
+    Ok(())
+}
+
+/// Removes the attempt count beside `paths`, whatever sits at its name, as
+/// cleanup only: one try, without waiting on a busy entry, so it never
+/// spends the busy wait of the step around it, and a failure is ignored. A
+/// count left without its marker counts nothing, as
+/// [`OpfsOwner::record_attempt`] counts only beside a marker, and the next
+/// adoption writes a fresh count before its marker.
+async fn remove_count(root: &FileSystemDirectoryHandle, paths: &Paths) {
+    let _ = remove_if_present(root, &attempts_path(paths), true, BusyDeadline::passed()).await;
 }
 
 /// Records a fresh attempt count, then `marker`, beside `to`, flushing both
@@ -2840,6 +2867,11 @@ impl BusyDeadline {
     fn start() -> Self {
         Self(performance_now() + BUSY_ENTRY_WAIT_MS)
     }
+
+    /// A deadline already past, so a busy entry is tried once.
+    fn passed() -> Self {
+        Self(f64::NEG_INFINITY)
+    }
 }
 
 /// Runs an idempotent OPFS entry operation, retrying only a busy entry until
@@ -3137,18 +3169,17 @@ async fn reset_paths(paths: &Paths, recursive: bool) -> Result<(), OpfsError> {
 }
 
 /// Removes both approved paths and any adoption marker beside them,
-/// attempting each even if another fails.
+/// attempting each even if another fails, and tries the attempt count once.
 async fn remove_paths(paths: &Paths) -> Result<(), OpfsError> {
     let deadline = BusyDeadline::start();
     let root = worker_root()
         .await
         .map_err(|error| js_error(OpfsErrorKind::Remove, "OPFS remove root open", &error))?;
     let mut first_error = None;
-    for path in [marker_path(paths), attempts_path(paths)] {
-        if let Err(error) = remove_if_present(&root, &path, true, deadline).await {
-            first_error.get_or_insert(error);
-        }
+    if let Err(error) = remove_if_present(&root, &marker_path(paths), true, deadline).await {
+        first_error.get_or_insert(error);
     }
+    remove_count(&root, paths).await;
     for role in FileRole::ALL {
         if let Err(error) = remove_if_present(&root, paths.get(role), true, deadline).await {
             first_error.get_or_insert(error);

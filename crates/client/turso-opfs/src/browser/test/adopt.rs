@@ -916,7 +916,8 @@ async fn a_return_clears_a_marker_its_older_identity_was_left_with() {
     clean_pair(&new).await;
 
     // The count beside that marker cannot be removed: the pair still goes
-    // back, and the count left alone labels nothing.
+    // back without waiting on it, so the moves keep the whole busy wait, and
+    // the count left alone labels nothing.
     let (old, new) = identities("return-marked-count");
     write_pair(&old, 18).await;
     clean_pair(&new).await;
@@ -927,8 +928,11 @@ async fn a_return_clears_a_marker_its_older_identity_was_left_with() {
     let (held, _) = open_sync_handle(&root, &attempts_name(&old), BusyDeadline::start())
         .await
         .expect("hold the count open");
+    let started = performance_now();
     assert_eq!(give_back(&old, &new).await, ReturnOutcome::Returned);
+    let took = performance_now() - started;
     close_sync_handle(&held).expect("close the count");
+    assert!(took < BUSY_ENTRY_WAIT_MS, "the return took {took} ms");
     assert!(!marker_exists(&old).await);
     assert_eq!(read_adoption(&old).await, None);
     assert_eq!(read_pair(&old).await, 18);
@@ -1167,6 +1171,55 @@ async fn attempts_are_counted_beside_the_marker_until_the_adoption_ends() {
     );
     assert!(!marker_exists(&new).await);
     owner.release().await.expect("release");
+
+    // Nor in a count its marker left behind, whatever it says.
+    write_file(&attempts_name(&new), b"+++-----").await;
+    let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
+    assert_eq!(
+        owner.record_attempt().await.map_err(|error| error.kind()),
+        Err(OpfsErrorKind::Write)
+    );
+    assert_eq!(owner.read_adoption().await.expect("read"), None);
+    owner.release().await.expect("release");
+    assert_eq!(
+        read_file(&attempts_name(&new)).await.as_deref(),
+        Some(&b"+++-----"[..])
+    );
+    clean_pair(&new).await;
+}
+
+#[wasm_bindgen_test]
+async fn a_count_that_cannot_be_removed_holds_no_wipe_or_removal_back() {
+    // The count beside a marker stays open somewhere. A wipe still removes
+    // the pair and the marker and recreates the pair, a removal still
+    // removes everything else, and the count left behind counts nothing.
+    let (old, new) = identities("held-count-wipe");
+    write_pair(&old, 21).await;
+    clean_pair(&new).await;
+    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
+    let root = worker_root().await.expect("root");
+    let (held, _) = open_sync_handle(&root, &attempts_name(&new), BusyDeadline::start())
+        .await
+        .expect("hold the count open");
+    let owner = OpfsOwner::acquire(&new).await.expect("owner");
+    let owner = owner.recovery_wipe().await.expect("wipe");
+    assert!(!marker_exists(&new).await);
+    assert_eq!(present(&new).await, [true, true]);
+    owner.remove_and_release().await.expect("remove");
+    assert_eq!(present(&new).await, [false, false]);
+    close_sync_handle(&held).expect("close the count");
+    assert_eq!(
+        read_file(&attempts_name(&new)).await.as_deref(),
+        Some(&FREE_ATTEMPTS[..])
+    );
+    let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
+    assert_eq!(
+        owner.record_attempt().await.map_err(|error| error.kind()),
+        Err(OpfsErrorKind::Write)
+    );
+    assert_eq!(owner.read_adoption().await.expect("read"), None);
+    owner.release().await.expect("release");
+    clean_pair(&old).await;
     clean_pair(&new).await;
 }
 
