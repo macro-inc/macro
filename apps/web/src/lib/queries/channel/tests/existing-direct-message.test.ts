@@ -34,6 +34,7 @@ import {
   DM_LOOKUP_DEADLINE_MS,
   existingDirectMessage,
 } from '../get-or-create-dm';
+import { directoryChannel, directoryParticipant } from './directory-channel';
 
 const VIEWER = 'macro|viewer@example.com';
 const PERSON = 'macro|person@example.com';
@@ -61,7 +62,10 @@ beforeEach(() => {
 it('asks the server for the DM with a person, skipping every cache', async () => {
   answers({ data: { user: { id: VIEWER, directMessageChannelId: 'dm-1' } } });
   const found = await existingDirectMessage(VIEWER, PERSON);
-  expect(found._unsafeUnwrap()).toBe('dm-1');
+  expect(found._unsafeUnwrap()).toEqual({
+    channelId: 'dm-1',
+    source: 'server',
+  });
   expect(mocks.query).toHaveBeenCalledWith(
     expect.anything(),
     { userId: PERSON },
@@ -72,7 +76,7 @@ it('asks the server for the DM with a person, skipping every cache', async () =>
 it('answers none when the server has no DM with that person', async () => {
   answers({ data: { user: { id: VIEWER, directMessageChannelId: null } } });
   const found = await existingDirectMessage(VIEWER, PERSON);
-  expect(found._unsafeUnwrap()).toBeUndefined();
+  expect(found._unsafeUnwrap().channelId).toBeUndefined();
 });
 
 it.each([
@@ -80,7 +84,7 @@ it.each([
   ['an agent', 'bot|0190f0a0-0000-7000-8000-000000000001'],
 ])('answers none for %s without asking', async (_, recipient) => {
   const found = await existingDirectMessage(VIEWER, recipient);
-  expect(found._unsafeUnwrap()).toBeUndefined();
+  expect(found._unsafeUnwrap().channelId).toBeUndefined();
   expect(mocks.query).not.toHaveBeenCalled();
 });
 
@@ -144,4 +148,74 @@ it('gives up on a lookup that never answers at its deadline, ending the request'
   } finally {
     timeout.mockRestore();
   }
+});
+
+function directoryWith(
+  members: string[],
+  { complete = true, viewsCurrent = true } = {}
+) {
+  return {
+    complete: () => complete,
+    viewsCurrent: () => viewsCurrent,
+    channels: () => [
+      directoryChannel('dm-cached', {
+        channelType: 'direct_message',
+        participants: members.map((userId) => directoryParticipant(userId)),
+      }),
+    ],
+  };
+}
+
+it('answers from a settled directory that holds the DM, without asking', async () => {
+  const found = await existingDirectMessage(
+    VIEWER,
+    PERSON,
+    directoryWith([VIEWER, PERSON])
+  );
+  expect(found._unsafeUnwrap()).toEqual({
+    channelId: 'dm-cached',
+    source: 'directory',
+  });
+  expect(mocks.query).not.toHaveBeenCalled();
+});
+
+it('asks the server while the directory is incomplete', async () => {
+  answers({ data: { user: { id: VIEWER, directMessageChannelId: 'dm-1' } } });
+  const found = await existingDirectMessage(
+    VIEWER,
+    PERSON,
+    directoryWith([VIEWER, PERSON], { complete: false })
+  );
+  expect(found._unsafeUnwrap()).toEqual({
+    channelId: 'dm-1',
+    source: 'server',
+  });
+});
+
+it('asks the server until a pass of this page reconciled the cached records', async () => {
+  // A DM deleted while no tab was open stays cached until that pass.
+  answers({ data: { user: { id: VIEWER, directMessageChannelId: 'dm-1' } } });
+  const found = await existingDirectMessage(
+    VIEWER,
+    PERSON,
+    directoryWith([VIEWER, PERSON], { viewsCurrent: false })
+  );
+  expect(found._unsafeUnwrap()).toEqual({
+    channelId: 'dm-1',
+    source: 'server',
+  });
+});
+
+it('asks the server when a settled directory has no DM it can rank', async () => {
+  answers({ data: { user: { id: VIEWER, directMessageChannelId: 'dm-1' } } });
+  const found = await existingDirectMessage(
+    VIEWER,
+    PERSON,
+    directoryWith([VIEWER])
+  );
+  expect(found._unsafeUnwrap()).toEqual({
+    channelId: 'dm-1',
+    source: 'server',
+  });
+  expect(mocks.query).toHaveBeenCalledOnce();
 });

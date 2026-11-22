@@ -330,7 +330,9 @@ it('preserves the search after a failed person lookup and on return from a succe
       },
     },
   ];
-  mocks.directMessage.mockReturnValue(okAsync('direct-message'));
+  mocks.directMessage.mockReturnValue(
+    okAsync({ channelId: 'direct-message', source: 'server' })
+  );
   mocks.open.mockImplementationOnce(() => {
     throw new Error('Unavailable');
   });
@@ -654,7 +656,7 @@ it.each(['before navigation', 'while away'])(
     };
     mocks.directMessage.mockImplementation(() => {
       if (arrival === 'before navigation') publishConversation();
-      return okAsync('new-dm');
+      return okAsync({ channelId: 'new-dm', source: 'server' });
     });
     SearchState.setQuery('Person');
     const view = render(() => <MobileSearchResults />);

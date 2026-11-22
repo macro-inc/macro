@@ -94,7 +94,9 @@ beforeEach(() => {
   mocks.crmFlagEnabled = false;
   mocks.openWithSplit.mockReset();
   mocks.popoverSplit.mockReset();
-  mocks.existingDm.mockReset().mockReturnValue(okAsync(undefined));
+  mocks.existingDm
+    .mockReset()
+    .mockReturnValue(okAsync({ channelId: undefined, source: 'server' }));
   mocks.toastSuccess.mockReset();
   mocks.toastFailure.mockReset();
 });
@@ -135,7 +137,8 @@ describe('UserCardDrawer', () => {
 
     expect(mocks.existingDm).toHaveBeenCalledWith(
       'macro|current@example.com',
-      'macro|jane.doe@example.com'
+      'macro|jane.doe@example.com',
+      undefined
     );
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
       { type: 'channel', id: expect.stringMatching(/^pending-dm-/) },
@@ -145,7 +148,9 @@ describe('UserCardDrawer', () => {
   });
 
   it('opens the existing DM with a person', async () => {
-    mocks.existingDm.mockReturnValue(okAsync('chan-1'));
+    mocks.existingDm.mockReturnValue(
+      okAsync({ channelId: 'chan-1', source: 'server' })
+    );
     const user = userEvent.setup({ skipHover: true });
     render(() => <UserCardDrawer />);
     openJane();

@@ -25,7 +25,8 @@ import {
   QueryAccountChangedError,
 } from '../auth/account-scope';
 import { useQueryAccount } from '../auth/use-query-account';
-import { refreshChannelDirectory } from './directory';
+import { type ChannelDirectory, refreshChannelDirectory } from './directory';
+import { directMessageWithPerson } from './directory-core';
 
 type GetOrCreateDmResponse = GetOrCreateChannelResponse;
 
@@ -139,27 +140,48 @@ export function getOrCreateDirectMessageChannel(
   });
 }
 
+/** Where an existing DM was found: the viewer's complete channel directory,
+ * or the server. */
+export type DirectMessageSource = 'directory' | 'server';
+
 /**
  * The viewer's existing DM with a person, without creating one: among the
  * DMs the viewer is still in, the one the server's get-or-create would reuse,
  * as the joined channel list it replaces showed it. A DM the viewer left is
- * not answered, though get-or-create may still reuse it. Asked of the server
- * each time, since the DM may be one the viewer's directory has not loaded
- * yet. The server looks up people only; agents are opened through their own
- * DM flow (`openTeamAgentDirectMessage`), so a bot answers none without
- * asking. Fails with `DirectMessageLookupTimedOut` once the server has
- * not answered within `DM_LOOKUP_DEADLINE_MS`.
+ * not answered, though get-or-create may still reuse it. A `directory` that
+ * is complete and current (a pass of this page reread every cached record,
+ * so a DM deleted while no tab was open is gone from it) answers when one of
+ * its DMs has just the two of them in it, which the server would rank first
+ * (`directMessageWithPerson`); otherwise the server is asked, since the DM
+ * may be one the directory cannot rank (only the other person is left in it)
+ * or has not received yet. The server
+ * looks up people only; agents are opened through their own DM flow
+ * (`openTeamAgentDirectMessage`), so a bot answers none without asking.
+ * Fails with `DirectMessageLookupTimedOut` once the server has not answered
+ * within `DM_LOOKUP_DEADLINE_MS`.
  */
 export function existingDirectMessage(
   viewerId: string,
-  recipientId: string
-): ResultAsync<string | undefined, unknown> {
+  recipientId: string,
+  directory?: Pick<ChannelDirectory, 'channels' | 'complete' | 'viewsCurrent'>
+): ResultAsync<
+  { channelId: string | undefined; source: DirectMessageSource | undefined },
+  unknown
+> {
   if (recipientId === viewerId || isBotPrincipalId(recipientId))
-    return okAsync(undefined);
+    return okAsync({ channelId: undefined, source: undefined });
+  if (directory?.complete() && directory.viewsCurrent()) {
+    const channelId = directMessageWithPerson(
+      directory.channels(),
+      viewerId,
+      recipientId
+    );
+    if (channelId) return okAsync({ channelId, source: 'directory' });
+  }
   return ResultAsync.fromPromise(
     lookupDirectMessage(viewerId, recipientId),
     (error) => error
-  );
+  ).map((channelId) => ({ channelId, source: 'server' as const }));
 }
 
 /** How long opening a person's DM waits for the server to say whether one
