@@ -91,8 +91,11 @@ and `return`, no classes, getters, imports or `require`, and no `fetch`,
 `Deno`, `globalThis`, timers or `eval`. Its only way out is a tool call,
 `tools.<service>.<operationId>({ path?, query?, body? })`: the spec name with
 `-` written `_`, then the raw operationId, so the path is the permission
-registry's key. The return value becomes the result's `data`, and
-`context` holds `sessionId`, `executionId` and `webAppUrl`:
+registry's key. The return value becomes the result's `data`, unless it is
+code mode's result shape, `{data, reviews?, images?}` with no other keys: then
+it is the result, as a TypeScript program's would be, so its reviews become
+review cards and its images reach the model. `context` holds `sessionId`,
+`executionId` and `webAppUrl`:
 
 ```js
 const task = await tools.storage.create_task_handler({

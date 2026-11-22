@@ -148,7 +148,17 @@ async function runJsTools(context, limits, allowedOperations, callTool) {
     if (kind === "TimeoutExceeded") throw new ProgramTimedOut(message);
     throw new Error(`${kind}: ${message}`);
   }
-  return {data: result.value};
+  return jsToolsResult(result.value);
+}
+// What a JS tools program returns becomes the result's data, unless it returns
+// code mode's result shape, {data, reviews?, images?}: then it is the result
+// as a TypeScript program's would be, so its reviews become review cards and
+// its images reach the model.
+const RESULT_KEYS = new Set(["data", "reviews", "images"]);
+function jsToolsResult(value) {
+  const shaped = value !== null && typeof value === "object" && !isArray(value) &&
+    hasOwn(value, "data") && Object.keys(value).every(key => RESULT_KEYS.has(key));
+  return shaped ? value : {data: value};
 }
 try {
   const {maxResultBytes, maxCallsPerOperation, remainingMs, operations, unattended, language, allowedOperations, jsTools, ...context} = await new Response(Deno.stdin.readable).json();

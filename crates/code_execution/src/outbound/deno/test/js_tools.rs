@@ -465,6 +465,46 @@ async fn a_program_reaches_nothing_but_its_tools() {
     service.shutdown().await;
 }
 
+/// A program that returns code mode's result shape, `{data, reviews?,
+/// images?}`, gets it as the result, as a TypeScript program would; any
+/// other value is the result's data.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_program_can_return_code_modes_result_shape() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    for (source, expected) in [
+        (
+            r#"return { data: { posted: 1 }, reviews: [{ kind: "email", id: "r1" }], images: [{ id: "f1" }] }"#,
+            serde_json::json!({ "data": { "posted": 1 }, "reviews": [{ "kind": "email", "id": "r1" }], "images": [{ "id": "f1" }] }),
+        ),
+        (
+            r#"return { data: 1 }"#,
+            serde_json::json!({ "data": 1 }),
+        ),
+        // Any other key means the object is the data.
+        (
+            r#"return { data: 1, more: 2 }"#,
+            serde_json::json!({ "data": { "data": 1, "more": 2 } }),
+        ),
+        (
+            r#"return { reviews: [] }"#,
+            serde_json::json!({ "data": { "reviews": [] } }),
+        ),
+        (r#"return [1, 2]"#, serde_json::json!({ "data": [1, 2] })),
+        (r#"return null"#, serde_json::json!({ "data": null })),
+    ] {
+        let (_, outcome) =
+            run_js_tools(&service, source, 10_000, environment(address, vec![])).await;
+        let Outcome::Succeeded { value } = &outcome else {
+            panic!("{source}: {outcome:?}");
+        };
+        assert_eq!(*value, expected, "{source}");
+    }
+    service.shutdown().await;
+}
+
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
 async fn a_program_that_cannot_be_analyzed_fails_to_compile_where_it_goes_wrong() {
