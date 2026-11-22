@@ -1,10 +1,15 @@
 import { groupChatName } from '@channel/group-chat-name';
 import {
+  type ChannelPlaceContent,
+  channelPlace,
+} from '@notifications/channel-place';
+import {
   getNotificationAction,
   getNotificationContent,
   getNotificationTargetName,
   pingedBy,
   pingPlace,
+  reactionText,
 } from '@notifications/notification-metadata';
 import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
 import type { UnifiedNotification } from '@notifications/types';
@@ -68,19 +73,6 @@ function actorName(
 const join = (...parts: (string | undefined)[]) =>
   parts.filter((part) => part !== undefined && part !== '').join(' ');
 
-type ChannelContent = { channelType?: string; channelName?: string };
-
-/** Where a channel event happened; a DM says nothing, a channel names itself. */
-const channelPlace = (content: ChannelContent) => {
-  if (content.channelType === 'directMessage' || !content.channelName) return;
-  if (content.channelType === 'private') {
-    return groupChatName(content.channelName);
-  }
-  return content.channelType === 'public' || content.channelType === 'team'
-    ? `#${content.channelName}`
-    : content.channelName;
-};
-
 /**
  * Whether a row is messages in a group chat: a private channel, named or not.
  * Its card speaks for the chat, not for the people who wrote in it. A reaction
@@ -115,7 +107,7 @@ const groupChatRowName = (row: NotificationInboxRow, place: string) => {
 function channelAction(
   actor: string | undefined,
   notification: UnifiedNotification,
-  content: ChannelContent
+  content: ChannelPlaceContent
 ) {
   const place = channelPlace(content);
   if (place) return join(actor, getNotificationAction(notification), place);
@@ -352,6 +344,30 @@ const spokenText = (notification: UnifiedNotification) =>
     )
     .otherwise(() => getNotificationContent(notification));
 
+/**
+ * A row of reactions to one message, laid out as Slack's Activity lays out a
+ * reaction: who reacted, "Reacted 👍 🎉 to: …", then where. Any other row,
+ * reactions mixed with replies included, has no reaction card.
+ */
+function reactionCard(row: NotificationInboxRow, who: string) {
+  const reactions = row.content.notifications.flatMap(
+    ({ notification_metadata: metadata }) =>
+      metadata.tag === 'channel_message_reaction' ? [metadata.content] : []
+  );
+  const [latest] = reactions;
+  if (!latest || reactions.length !== row.content.notifications.length) return;
+  if (reactions.some(({ messageId }) => messageId !== latest.messageId)) return;
+  const emoji = [...new Set(reactions.map((reaction) => reaction.emoji))];
+  return {
+    who,
+    what: reactionText({
+      emoji: emoji.join(' '),
+      messageContent: latest.messageContent,
+    }),
+    body: channelPlace(latest),
+  };
+}
+
 /** Drops a line that repeats one above it, and never leaves the first empty. */
 const withoutRepeats = (
   card: { who: string; what?: string; body?: string },
@@ -394,7 +410,7 @@ export function describeInboxCard(
     spoken && sender && new Set(senders).size > 1
       ? `${sender}: ${spoken}`
       : spoken;
-  const place = channelPlace(metadata.content as ChannelContent);
+  const place = channelPlace(metadata.content as ChannelPlaceContent);
   const target = getNotificationTargetName(latest);
   const inPlace = (text: string) => (place ? `${text} in ${place}` : text);
   // A message says itself, and its badge says when it is a mention.
@@ -407,6 +423,9 @@ export function describeInboxCard(
   // A ping is its sender's own words about the row's entity, whichever row it
   // joined: the entity is the middle line. A stack that mixes pings with
   // other things names only its people, since no one verb fits them all.
+  const reaction = reactionCard(row, who);
+  if (reaction) return withoutRepeats(reaction, entityName);
+
   if (metadata.tag === 'ping') {
     const onlyPings = row.content.notifications.every(
       (notification) => notification.notification_metadata.tag === 'ping'
@@ -502,7 +521,7 @@ export function describeInboxCard(
 export function inboxCardKind(row: NotificationInboxRow): InboxCardKind {
   const metadata = row.content.notifications[0]?.notification_metadata;
   const isDirect =
-    (metadata?.content as ChannelContent | undefined)?.channelType ===
+    (metadata?.content as ChannelPlaceContent | undefined)?.channelType ===
     'directMessage';
   const isPing = metadata?.tag === 'ping';
   return match(row.type)
@@ -548,10 +567,11 @@ export function describeStackItem(
   const sender = senderOf(row, notification, names);
   return {
     id: notification.id,
-    by:
-      notification.notification_metadata.tag === 'ping'
-        ? pingedBy(sender)
-        : join(sender, stackVerb(notification)),
+    by: match(notification.notification_metadata.tag)
+      .with('ping', () => pingedBy(sender))
+      // Its text already says "Reacted 👍 to: …".
+      .with('channel_message_reaction', () => sender ?? '')
+      .otherwise(() => join(sender, stackVerb(notification))),
     text: describeNotification(row, notification, sender).subject,
     at: new Date(notification.created_at),
   };

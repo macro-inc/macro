@@ -21,6 +21,17 @@ export function stoppedAgentsText(
   return `${first} and ${rest.length + 1} others have stopped.`;
 }
 
+/**
+ * What a reaction did, as Slack's Activity words it: "Reacted 👍 to: …".
+ * The reaction leads, so it is never cut off behind the message.
+ */
+export function reactionText(content: {
+  emoji: string;
+  messageContent: string;
+}): string {
+  return `Reacted ${content.emoji} to: ${content.messageContent}`;
+}
+
 export function getNotificationAction(n: UnifiedNotification): string {
   return (
     match(n.notification_metadata.tag)
@@ -225,10 +236,7 @@ export function getNotificationContent(
     match(m)
       .with({ tag: 'channel_mention' }, (m) => m.content.messageContent)
       .with({ tag: 'channel_message_send' }, (m) => m.content.messageContent)
-      .with(
-        { tag: 'channel_message_reaction' },
-        (m) => `${m.content.emoji} · ${m.content.messageContent}`
-      )
+      .with({ tag: 'channel_message_reaction' }, (m) => reactionText(m.content))
       .with({ tag: 'ai_response' }, (m) => m.content.summary)
       .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent)
       .with({ tag: 'call_started' }, () => undefined)

@@ -48,7 +48,12 @@ import SmileyIcon from '@icon/system/regular/smiley.svg?component-solid';
 import AgentIcon from '@icon/system/regular/sparkle.svg?component-solid';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg?component-solid';
 import { formatCalendarReminderTime } from '@notifications';
-import { pingedBy, pingPlace } from '@notifications/notification-metadata';
+import { channelPlace } from '@notifications/channel-place';
+import {
+  pingedBy,
+  pingPlace,
+  reactionText,
+} from '@notifications/notification-metadata';
 import {
   getNotificationAgentSender,
   getNotificationSenderFallbackName,
@@ -1622,6 +1627,56 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
  * A ping, whatever it is about: who pinged, then what about, then what they
  * wrote, under the icon of what it is about.
  */
+/**
+ * A reaction reads like Slack's: who reacted, then "Reacted 👍 to: …", then
+ * where (nothing for a DM).
+ */
+export function ReactionCardLayout(props: InboxCardLayoutProps) {
+  const reaction = () => {
+    const metadata = props.item.notification?.notification_metadata;
+    return metadata?.tag === 'channel_message_reaction'
+      ? metadata.content
+      : undefined;
+  };
+  const senderId = () =>
+    props.item.notification
+      ? getNotificationUserSenderId(props.item.notification)
+      : undefined;
+  const senderName = createSenderDisplayName(senderId, () =>
+    props.item.notification
+      ? getNotificationSenderFallbackName(props.item.notification)
+      : undefined
+  );
+
+  return (
+    <BaseCard
+      {...props}
+      icon={<InboxAvatar senderId={senderId()} />}
+      title={senderName() ?? ''}
+    >
+      <Show when={reaction()}>
+        {(content) => (
+          <>
+            <CardMarkdownLine
+              text={reactionText({
+                emoji: content().emoji,
+                messageContent: content().messageContent,
+              })}
+            />
+            <Show when={channelPlace(content())}>
+              {(place) => (
+                <InboxCard.Content class="truncate">
+                  {place()}
+                </InboxCard.Content>
+              )}
+            </Show>
+          </>
+        )}
+      </Show>
+    </BaseCard>
+  );
+}
+
 export function PingCardLayout(props: InboxCardLayoutProps) {
   const userName = createSenderDisplayName(() =>
     props.item.notification
@@ -1712,6 +1767,9 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
     <Switch>
       <Match when={notificationTag() === 'ping'}>
         <PingCardLayout {...props} />
+      </Match>
+      <Match when={notificationTag() === 'channel_message_reaction'}>
+        <ReactionCardLayout {...props} />
       </Match>
       <Match when={props.item.entity.type === 'email'}>
         <EmailCardLayout {...props} />

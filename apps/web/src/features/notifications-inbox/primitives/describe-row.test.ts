@@ -309,10 +309,76 @@ describe('describeInboxCard', () => {
       what: 'Can we ship Friday?',
       body: 'Ana: On it',
     });
-    expect(itemsOf(row).map((item) => item.by)).toEqual([
-      'Ana replied',
-      'Leo reacted',
+    expect(itemsOf(row)).toMatchObject([
+      { by: 'Ana replied', text: 'On it' },
+      { by: 'Leo', text: 'Reacted +1 to: Can we ship Friday?' },
     ]);
+  });
+
+  it('lays out a reaction as who reacted, the reaction and message, then where', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('1', 'channel_message_reaction', 'Leo', {
+          ...channel,
+          messageId: 'root',
+          messageContent: 'Can we ship Friday?',
+          emoji: '🧑🏽‍💻',
+        }),
+      ]),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Leo',
+      what: 'Reacted 🧑🏽‍💻 to: Can we ship Friday?',
+      body: '#launch',
+    });
+  });
+
+  it('names no place for a reaction in a direct message', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('1', 'channel_message_reaction', 'Leo', {
+          channelType: 'directMessage',
+          channelName: 'Leo',
+          messageId: 'root',
+          messageContent: 'Lunch?',
+          emoji: '❤️',
+        }),
+      ]),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Leo',
+      what: 'Reacted ❤️ to: Lunch?',
+      body: undefined,
+    });
+  });
+
+  it('gathers reactions to one message into one line of every emoji', () => {
+    const reaction = (id: string, by: string, emoji: string) =>
+      sent(id, 'channel_message_reaction', by, {
+        ...channel,
+        messageId: 'root',
+        messageContent: 'Can we ship Friday?',
+        emoji,
+      });
+    const card = describeInboxCard(
+      stack(
+        'channel_thread',
+        [
+          reaction('3', 'Ana', '🎉'),
+          reaction('2', 'Leo', '👍'),
+          reaction('1', 'Sam', '🎉'),
+        ],
+        'root'
+      ),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Ana, Leo and Sam',
+      what: 'Reacted 🎉 👍 to: Can we ship Friday?',
+      body: '#launch',
+    });
   });
 
   it('skips the middle line when no notification carries the root', () => {

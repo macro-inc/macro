@@ -475,6 +475,53 @@ describe('platform notification sender and conversation', () => {
     expect(resolveUserAvatar).not.toHaveBeenCalled();
   });
 
+  function reaction(
+    channelType: 'public' | 'directMessage'
+  ): UnifiedNotification {
+    return baseNotification({
+      entity_id: 'channel-1',
+      sender_id: 'macro|ada@example.com',
+      notification_event_type: 'channel_message_reaction',
+      notification_metadata: {
+        tag: 'channel_message_reaction',
+        content: {
+          messageId: 'message-1',
+          messageContent: 'Ship it\n\non Friday',
+          emoji: '🧑🏽‍💻',
+          channelType,
+          channelName: 'design',
+        },
+      },
+    } as Partial<UnifiedNotification>);
+  }
+
+  it('shows a reaction as who reacted, the reaction and message, then where', async () => {
+    const result = await toPlatformNotificationData(
+      reaction('public'),
+      async () => 'Ada',
+      async () => 'design',
+      async () => undefined
+    );
+
+    expect(result).toMatchObject({
+      title: 'Ada',
+      options: { body: 'Reacted 🧑🏽‍💻 to: Ship it on Friday\n#design' },
+      conversation: { id: 'channel-1', name: undefined },
+    });
+  });
+
+  it('names no place for a reaction in a direct message', async () => {
+    const result = await toPlatformNotificationData(
+      reaction('directMessage'),
+      async () => 'Ada',
+      async () => 'Ada',
+      async () => undefined
+    );
+
+    expect(result?.title).toBe('Ada');
+    expect(result?.options?.body).toBe('Reacted 🧑🏽‍💻 to: Ship it on Friday');
+  });
+
   it('names the bot and the channel for a bot reply', async () => {
     const result = await toPlatformNotificationData(
       baseNotification({

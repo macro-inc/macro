@@ -2,6 +2,7 @@ import { getFaviconUrl } from '@app/util/favicon';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { markdownToPlainText } from '@macro-inc/lexical-core';
 import { committedThemeAccent } from '../theme/signals/themeSignals';
+import { channelPlace } from './channel-place';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import {
@@ -9,6 +10,7 @@ import {
   getNotificationContent,
   getNotificationTargetName,
   pingedBy,
+  reactionText,
   shouldShowNotificationTarget,
 } from './notification-metadata';
 import { openNotification } from './notification-navigation';
@@ -150,6 +152,26 @@ export async function toPlatformNotificationData(
       // beneath, so the sender says what they did.
       sender: sender && { ...sender, name: deed },
       conversation: { id: notification.entity_id, name: about },
+    };
+  }
+
+  // A reaction reads like Slack's: who reacted, then "Reacted 👍 to: …" and
+  // where. The channel stays out of the conversation, which macOS would put
+  // above the reaction.
+  if (metadata.tag === 'channel_message_reaction') {
+    const reacted = reactionText({
+      emoji: metadata.content.emoji,
+      messageContent: markdownToPlainText(metadata.content.messageContent)
+        .split(/\s+/)
+        .filter(Boolean)
+        .join(' '),
+    });
+    const place = channelPlace(metadata.content);
+    return {
+      title: actor,
+      options: { body: place ? `${reacted}\n${place}` : reacted, icon },
+      sender,
+      conversation: { id: notification.entity_id, name: undefined },
     };
   }
 
