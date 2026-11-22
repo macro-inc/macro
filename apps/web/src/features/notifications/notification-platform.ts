@@ -22,7 +22,10 @@ import {
   type UserAvatarResolver,
   type UserNameResolver,
 } from './notification-resolvers';
-import { getNotificationSenderAvatarUrl } from './notification-sender';
+import {
+  getNotificationSenderAvatarUrl,
+  UNKNOWN_SENDER_NAME,
+} from './notification-sender';
 import type { UnifiedNotification } from './types';
 
 /// the interface for a singular notification on this device
@@ -49,20 +52,21 @@ export interface PlatformNotificationData {
   conversation?: { id: string; name?: string };
 }
 
-const USER_NAME_FALLBACK = 'Someone';
-
 /** As in the push: long enough to recognize, short enough that the
  * channel line under it stays on screen. */
 const REACTION_EXCERPT_MAX_CHARS = 80;
 
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/** The message cut to whole characters, so a flag or skin tone never splits. */
 function reactionExcerpt(messageContent: string) {
   const text = markdownToPlainText(messageContent)
     .split(/\s+/)
     .filter(Boolean)
     .join(' ');
-  const chars = [...text];
-  return chars.length > REACTION_EXCERPT_MAX_CHARS
-    ? `${chars.slice(0, REACTION_EXCERPT_MAX_CHARS).join('')}…`
+  const graphemes = Array.from(GRAPHEMES.segment(text), (part) => part.segment);
+  return graphemes.length > REACTION_EXCERPT_MAX_CHARS
+    ? `${graphemes.slice(0, REACTION_EXCERPT_MAX_CHARS).join('')}…`
     : text;
 }
 
@@ -144,7 +148,7 @@ export async function toPlatformNotificationData(
     resolveActorName(notification, resolveUserName),
     resolveSenderAvatarUrl(notification, resolveUserAvatar),
   ]);
-  const actor = actorName ?? USER_NAME_FALLBACK;
+  const actor = actorName ?? UNKNOWN_SENDER_NAME;
   const sender = actorName
     ? {
         id: notification.sender_id ?? actorName,

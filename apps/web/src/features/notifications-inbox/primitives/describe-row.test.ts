@@ -381,6 +381,65 @@ describe('describeInboxCard', () => {
     });
   });
 
+  it('shows the newest of reactions to several messages, in the same layout', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('2', 'channel_message_reaction', 'Ana', {
+          ...channel,
+          messageId: 'second',
+          messageContent: 'Design review moved to 3pm',
+          emoji: '👀',
+        }),
+        sent('1', 'channel_message_reaction', 'Leo', {
+          ...channel,
+          messageId: 'first',
+          messageContent: 'Can we ship Friday?',
+          emoji: '🎉',
+        }),
+      ]),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Ana',
+      what: 'Reacted 👀 to: Design review moved to 3pm',
+      body: '#launch',
+    });
+  });
+
+  it('speaks only for the newest reaction when older notifications are not loaded', () => {
+    const reaction = (id: string, by: string, emoji: string) =>
+      sent(id, 'channel_message_reaction', by, {
+        ...channel,
+        messageId: 'root',
+        messageContent: 'Can we ship Friday?',
+        emoji,
+      });
+    const row = stack(
+      'channel_thread',
+      [reaction('3', 'Ana', '🎉'), reaction('2', 'Leo', '👍')],
+      'root'
+    );
+    // An older reply sits beyond the loaded notifications.
+    const card = describeInboxCard({ ...row, count: 3 }, people);
+    expect(card).toEqual({
+      who: 'Ana',
+      what: 'Reacted 🎉 to: Can we ship Friday?',
+      body: '#launch',
+    });
+  });
+
+  it('names someone for a reaction without a sender', () => {
+    const row = stack('channel_messages', [
+      sent('1', 'channel_message_reaction', null as never, {
+        ...channel,
+        messageId: 'root',
+        messageContent: 'Can we ship Friday?',
+        emoji: '👍',
+      }),
+    ]);
+    expect(itemsOf(row).map((item) => item.by)).toEqual(['Someone']);
+  });
+
   it('skips the middle line when no notification carries the root', () => {
     const card = describeInboxCard(
       stack(

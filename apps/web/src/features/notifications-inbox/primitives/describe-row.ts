@@ -11,7 +11,10 @@ import {
   pingPlace,
   reactionText,
 } from '@notifications/notification-metadata';
-import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
+import {
+  getNotificationSenderFallbackName,
+  UNKNOWN_SENDER_NAME,
+} from '@notifications/notification-sender';
 import type { UnifiedNotification } from '@notifications/types';
 import { match, P } from 'ts-pattern';
 import type {
@@ -345,25 +348,34 @@ const spokenText = (notification: UnifiedNotification) =>
     .otherwise(() => getNotificationContent(notification));
 
 /**
- * A row of reactions to one message, laid out as Slack's Activity lays out a
- * reaction: who reacted, "Reacted 👍 🎉 to: …", then where. Any other row,
- * reactions mixed with replies included, has no reaction card.
+ * A row of reactions, laid out as Slack's Activity lays out a reaction: who
+ * reacted, "Reacted 👍 🎉 to: …", then where. Reactions to one message gather
+ * everyone and every emoji; reactions to several messages show the newest, and
+ * the stack lists the rest. Any other row, reactions mixed with replies
+ * included, has no reaction card.
  */
-function reactionCard(row: NotificationInboxRow, who: string) {
+function reactionCard(
+  row: NotificationInboxRow,
+  who: string,
+  latestSender: string | undefined
+) {
   const reactions = row.content.notifications.flatMap(
     ({ notification_metadata: metadata }) =>
       metadata.tag === 'channel_message_reaction' ? [metadata.content] : []
   );
   const [latest] = reactions;
   if (!latest || reactions.length !== row.content.notifications.length) return;
-  if (reactions.some(({ messageId }) => messageId !== latest.messageId)) return;
-  const emoji = [...new Set(reactions.map((reaction) => reaction.emoji))];
+  // A row loads only its newest notifications; older ones it can't see may be
+  // replies, so a part-loaded row speaks only for its newest reaction.
+  const oneMessage =
+    row.count === reactions.length &&
+    reactions.every(({ messageId }) => messageId === latest.messageId);
+  const emoji = oneMessage
+    ? [...new Set(reactions.map((reaction) => reaction.emoji))].join(' ')
+    : latest.emoji;
   return {
-    who,
-    what: reactionText({
-      emoji: emoji.join(' '),
-      messageContent: latest.messageContent,
-    }),
+    who: oneMessage ? who : (latestSender ?? who),
+    what: reactionText({ emoji, messageContent: latest.messageContent }),
     body: channelPlace(latest),
   };
 }
@@ -423,7 +435,7 @@ export function describeInboxCard(
   // A ping is its sender's own words about the row's entity, whichever row it
   // joined: the entity is the middle line. A stack that mixes pings with
   // other things names only its people, since no one verb fits them all.
-  const reaction = reactionCard(row, who);
+  const reaction = reactionCard(row, who, sender);
   if (reaction) return withoutRepeats(reaction, entityName);
 
   if (metadata.tag === 'ping') {
@@ -570,7 +582,7 @@ export function describeStackItem(
     by: match(notification.notification_metadata.tag)
       .with('ping', () => pingedBy(sender))
       // Its text already says "Reacted 👍 to: …".
-      .with('channel_message_reaction', () => sender ?? '')
+      .with('channel_message_reaction', () => sender ?? UNKNOWN_SENDER_NAME)
       .otherwise(() => join(sender, stackVerb(notification))),
     text: describeNotification(row, notification, sender).subject,
     at: new Date(notification.created_at),

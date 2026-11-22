@@ -1271,12 +1271,16 @@ function normalizeChannelType(channelType: string) {
 function notificationChannelType(
   channelType: GraphqlNotificationChannelType
 ): ChannelType {
-  return match(channelType)
-    .with('PUBLIC', () => 'public' as const)
-    .with('PRIVATE', () => 'private' as const)
-    .with('DIRECT_MESSAGE', () => 'directMessage' as const)
-    .with('TEAM', () => 'team' as const)
-    .exhaustive(() => 'public' as const);
+  return (
+    match(channelType)
+      .with('PUBLIC', () => 'public' as const)
+      .with('PRIVATE', () => 'private' as const)
+      .with('DIRECT_MESSAGE', () => 'directMessage' as const)
+      .with('TEAM', () => 'team' as const)
+      // A kind this client doesn't know reads as private, its bare name, never
+      // claiming to be a `#channel` it may not be.
+      .exhaustive(() => 'private' as const)
+  );
 }
 
 function toNotificationDocumentSubType(

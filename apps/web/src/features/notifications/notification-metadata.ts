@@ -23,12 +23,16 @@ export function stoppedAgentsText(
 
 /**
  * What a reaction did, as Slack's Activity words it: "Reacted 👍 to: …".
- * The reaction leads, so it is never cut off behind the message.
+ * The reaction leads, so it is never cut off behind the message. A message
+ * with no text (only attachments) is "your message".
  */
 export function reactionText(content: {
   emoji: string;
   messageContent: string;
 }): string {
+  if (!content.messageContent.trim()) {
+    return `Reacted ${content.emoji} to your message`;
+  }
   return `Reacted ${content.emoji} to: ${content.messageContent}`;
 }
 

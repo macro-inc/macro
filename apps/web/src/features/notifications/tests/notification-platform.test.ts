@@ -536,6 +536,32 @@ describe('platform notification sender and conversation', () => {
     );
   });
 
+  it('never cuts a flag in half when shortening the message', async () => {
+    const result = await toPlatformNotificationData(
+      reaction('public', `${'a'.repeat(79)}🇨🇦 and more`),
+      async () => 'Ada',
+      async () => 'design',
+      async () => undefined
+    );
+
+    expect(result?.options?.body).toBe(
+      `Reacted 🧑🏽‍💻 to: ${'a'.repeat(79)}🇨🇦…\n#design`
+    );
+  });
+
+  it('names a message with no text as your message', async () => {
+    const result = await toPlatformNotificationData(
+      reaction('public', ''),
+      async () => 'Ada',
+      async () => 'design',
+      async () => undefined
+    );
+
+    expect(result?.options?.body).toBe(
+      'Reacted 🧑🏽‍💻 to your message\n#design'
+    );
+  });
+
   it('names the bot and the channel for a bot reply', async () => {
     const result = await toPlatformNotificationData(
       baseNotification({

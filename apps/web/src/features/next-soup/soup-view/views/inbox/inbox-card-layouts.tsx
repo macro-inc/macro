@@ -58,6 +58,7 @@ import {
   getNotificationAgentSender,
   getNotificationSenderFallbackName,
   getNotificationUserSenderId,
+  UNKNOWN_SENDER_NAME,
 } from '@notifications/notification-sender';
 import {
   PropertiesProvider,
@@ -622,7 +623,11 @@ function BaseCard(props: {
  * A single truncating body line of markdown, rendered only when the text has
  * content — the standard middle/bottom line of a BaseCard.
  */
-function CardMarkdownLine(props: { text?: string; class?: string }) {
+function CardMarkdownLine(props: {
+  text?: string;
+  class?: string;
+  inert?: boolean;
+}) {
   return (
     <Show when={props.text?.trim()}>
       {(value) => (
@@ -631,6 +636,7 @@ function CardMarkdownLine(props: { text?: string; class?: string }) {
             markdown={value()}
             singleLine
             theme={unifiedListMarkdownTheme}
+            inert={props.inert}
           />
         </InboxCard.Content>
       )}
@@ -1652,12 +1658,16 @@ export function ReactionCardLayout(props: InboxCardLayoutProps) {
     <BaseCard
       {...props}
       icon={<InboxAvatar senderId={senderId()} />}
-      title={senderName() ?? ''}
+      // A name still loading is blank; only a reaction with no sender is
+      // from someone unnamed.
+      title={senderName() ?? (senderId() ? '' : UNKNOWN_SENDER_NAME)}
     >
       <Show when={reaction()}>
         {(content) => (
           <>
             <CardMarkdownLine
+              // The message is a preview: the card opens it, its links don't.
+              inert
               text={reactionText({
                 emoji: content().emoji,
                 messageContent: content().messageContent,
