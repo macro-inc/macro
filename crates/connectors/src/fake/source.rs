@@ -19,7 +19,7 @@ use rmcp::model::{
     ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
 };
 use rmcp::service::{RequestContext, RoleServer};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 /// Bytes buffered each way between a fake MCP server and its client.
@@ -38,8 +38,10 @@ pub(crate) struct FakeRow {
     pub(crate) api: bool,
     /// The tools its MCP server lists.
     pub(crate) tools: Vec<String>,
-    /// What every API call through it answers.
+    /// What every API call through it answers once `in_turn` is empty.
     pub(crate) response: (http::StatusCode, String),
+    /// Answers given one per API call, in order, before `response`.
+    pub(crate) in_turn: Arc<Mutex<VecDeque<ApiResponse>>>,
 }
 
 impl FakeRow {
@@ -61,6 +63,7 @@ impl FakeRow {
             api,
             tools: Vec::new(),
             response: (http::StatusCode::OK, "{}".to_owned()),
+            in_turn: Arc::default(),
         }
     }
 }
@@ -74,6 +77,10 @@ pub struct ApiCall {
     pub method: http::Method,
     /// The request's URL.
     pub url: String,
+    /// The request's headers.
+    pub headers: http::HeaderMap,
+    /// The request's JSON body.
+    pub body: Option<serde_json::Value>,
 }
 
 /// The rows every fake source reads, and the API calls they received.
@@ -108,6 +115,7 @@ impl FakeSource {
             Arc::new(FakeApi {
                 key: row.key.clone(),
                 response: row.response.clone(),
+                in_turn: row.in_turn.clone(),
                 store: self.store.clone(),
             }) as Arc<dyn ApiConnection>
         });
@@ -391,10 +399,12 @@ impl rmcp::ServerHandler for FakeServer {
     }
 }
 
-/// An API connection that records each call and answers the same way.
+/// An API connection that records each call and answers with the next
+/// queued response, or else the same way every time.
 struct FakeApi {
     key: ConnectorKey,
     response: (http::StatusCode, String),
+    in_turn: Arc<Mutex<VecDeque<ApiResponse>>>,
     store: SharedStore,
 }
 
@@ -405,12 +415,20 @@ impl ApiConnection for FakeApi {
             key: self.key.clone(),
             method: request.method,
             url: request.url,
+            headers: request.headers,
+            body: request.body,
         });
 
-        Ok(ApiResponse {
+        let queued = self
+            .in_turn
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .pop_front();
+
+        Ok(queued.unwrap_or_else(|| ApiResponse {
             status: self.response.0,
             headers: http::HeaderMap::new(),
             body: self.response.1.clone(),
-        })
+        }))
     }
 }

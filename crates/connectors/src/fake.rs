@@ -8,7 +8,7 @@
 //! rename, remove) land in the same store and show in the next answer.
 
 use crate::domain::catalog::Overlays;
-use crate::domain::models::{ConnectorId, ConnectorKey, ServerUrl, Surfaces};
+use crate::domain::models::{ApiResponse, ConnectorId, ConnectorKey, ServerUrl, Surfaces};
 use crate::domain::ports::{ConnectFlag, OverlayCatalog, Source, SourceKind};
 use crate::domain::service::Connectors;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -29,6 +29,7 @@ pub struct FakeConnection {
     authorized: bool,
     tools: Vec<String>,
     response: (http::StatusCode, String),
+    in_turn: Vec<ApiResponse>,
 }
 
 #[derive(Clone, Debug)]
@@ -59,6 +60,7 @@ impl FakeConnection {
             authorized: true,
             tools: Vec::new(),
             response: (http::StatusCode::OK, "{}".to_owned()),
+            in_turn: Vec::new(),
         }
     }
 
@@ -89,6 +91,14 @@ impl FakeConnection {
     /// What every call to its API answers, where it has one.
     pub fn answering(mut self, status: http::StatusCode, body: &str) -> Self {
         self.response = (status, body.to_owned());
+        self
+    }
+
+    /// Answer its API calls with `responses`, one per call in order, before
+    /// falling back to what [`answering`](Self::answering) set: for a test of
+    /// a vendor client's paging or retries.
+    pub fn answering_in_turn(mut self, responses: impl IntoIterator<Item = ApiResponse>) -> Self {
+        self.in_turn = responses.into_iter().collect();
         self
     }
 }
@@ -250,6 +260,9 @@ impl FakeConnectors {
         row.authorized = connection.authorized;
         row.tools = connection.tools.clone();
         row.response = connection.response.clone();
+        row.in_turn = Arc::new(std::sync::Mutex::new(
+            connection.in_turn.iter().cloned().collect(),
+        ));
 
         row
     }
