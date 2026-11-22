@@ -87,6 +87,19 @@ const policies = {
   DeleteEntitiesPermanently:
     'authoritative: irreversible deletion requires server confirmation',
   DuplicateEntities: 'authoritative: server assigns the copy identity',
+  UpdatePropertyOption: 'resolver',
+  DeletePropertyOption: 'resolver',
+  DeletePropertyDefinition: 'resolver',
+  AddPropertyOption:
+    'custom: client option identity and catalog list links; resolves on commit',
+  CreatePropertyDefinition:
+    'authoritative: server orders definitions by collated name; lists refresh after success',
+  EnsureTagSet:
+    'authoritative: server provisions the tag definition; tag sets refresh when it is new',
+  PromoteTag:
+    'authoritative: name conflicts are found by the server; catalog refreshes after success',
+  MergeTag:
+    'authoritative: server retags entities and removes the label; catalog refreshes after success',
   SetEntityFavorite: 'inactive: UI uses SetFavorite',
   LogTime:
     'custom: client entry id, the task entry list link, and Time logged on the task',

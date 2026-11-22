@@ -1,111 +1,129 @@
 import { useIsAuthenticated } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
-import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
+import type { EnsureTagSetRequest } from '@service-properties/generated/schemas/ensureTagSetRequest';
+import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
+import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
+import type { TagPromotionConflictResponse } from '@service-properties/generated/schemas/tagPromotionConflictResponse';
+import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
+import type { UpdatePropertyOptionRequest } from '@service-properties/generated/schemas/updatePropertyOptionRequest';
+import { PropertyCatalogTagSetsDocument } from '@service-storage/graphql/generated/graphql';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import {
-  parseTagNameConflict,
-  propertiesServiceClient,
-} from '../../service-clients/service-properties/client';
-import type { AddPropertyOptionRequest } from '../../service-clients/service-properties/generated/schemas/addPropertyOptionRequest';
-import type { EnsureTagSetRequest } from '../../service-clients/service-properties/generated/schemas/ensureTagSetRequest';
-import type { PropertyOption } from '../../service-clients/service-properties/generated/schemas/propertyOption';
-import type { PropertyOptionResponse } from '../../service-clients/service-properties/generated/schemas/propertyOptionResponse';
-import type { TagSetResponse } from '../../service-clients/service-properties/generated/schemas/tagSetResponse';
-import type { UpdatePropertyOptionRequest } from '../../service-clients/service-properties/generated/schemas/updatePropertyOptionRequest';
-import { queryClient } from '../client';
-import { type MutationCallbacks, withCallbacks } from '../utils';
-import { propertiesKeys } from './keys';
+  type CatalogListResult,
+  catalogListResult,
+  createListedAt,
+} from './catalog/list-result';
+import { toTagSet } from './catalog/map';
+import {
+  type CatalogMutationCallbacks,
+  createCatalogMutation,
+} from './catalog/mutation';
+import { registerCatalogReader } from './catalog/readers';
+import {
+  addPropertyOption,
+  cachedTagSet,
+  deletePropertyOption,
+  ensureTagSet,
+  isCatalogErrorCode,
+  mergeTag,
+  promoteTag,
+  refreshPropertyCatalog,
+  refreshTagSets,
+  TagNameConflictError,
+  updatePropertyOption,
+} from './catalog/writes';
 
 const EMPTY_TAG_SETS: TagSetResponse[] = [];
 
-function fetchTags() {
-  return throwOnErr(() => propertiesServiceClient.listTags());
-}
-
 /** The caller's tag sets: their personal set, plus their team's set when on a team. */
-export function useTagsQuery() {
+export function useTagsQuery(): CatalogListResult<TagSetResponse> {
   const isAuthenticated = useIsAuthenticated();
-  return useQuery(() => ({
-    queryKey: propertiesKeys.tags.queryKey,
-    queryFn: fetchTags,
-    staleTime: 1000 * 60 * 5,
-    enabled: isAuthenticated() === true,
-    placeholderData: EMPTY_TAG_SETS,
-  }));
+  const stamp = createListedAt();
+  const query = createLiveQuery(
+    PropertyCatalogTagSetsDocument,
+    () => (isAuthenticated() === true ? {} : undefined),
+    () => ({
+      client: getGraphqlSoupClient(),
+      requestPolicy: 'cache-and-network',
+      keepPreviousData: false,
+      select: (data) => data.user.tagSets.flatMap((set) => toTagSet(set) ?? []),
+      onResult: stamp.onResult,
+    })
+  );
+  registerCatalogReader({
+    kind: 'tags',
+    definitions: () =>
+      (query.data ?? []).flatMap((set) =>
+        set.definition
+          ? [
+              {
+                scope: set.scope === 'team' ? 'TEAM' : 'USER',
+                definitionId: set.definition.id,
+              } as const,
+            ]
+          : []
+      ),
+    refresh: () => query.refetch({ requestPolicy: 'network-only' }),
+  });
+  return catalogListResult(query, stamp.listedAt, EMPTY_TAG_SETS);
 }
 
+/** Reload the tag sets on screen from the server. */
 export function invalidateTags() {
-  queryClient.invalidateQueries({
-    queryKey: propertiesKeys.tags.queryKey,
-  });
+  refreshTagSets();
 }
 
 /**
- * Invalidate the whole properties namespace — tag sets, definitions, options,
- * and cached entity values. For backend-originated bulk changes (signup
- * seeding applies tags and priorities server-side) where per-key invalidation
- * would have to enumerate ids the client doesn't know.
+ * Reload every catalog list on screen and the cached entity values. For
+ * backend-originated bulk changes (signup seeding applies tags and priorities
+ * server-side) that no client write described.
  */
 export function invalidateAllProperties() {
-  queryClient.invalidateQueries({ queryKey: propertiesKeys._def });
+  return refreshPropertyCatalog();
 }
 
-function invalidatePropertyOptions(propertyDefinitionId: string) {
-  queryClient.invalidateQueries({
-    queryKey: propertiesKeys.options({ propertyDefinitionId }).queryKey,
-  });
-}
-
-function propertyOptionToResponse(
-  option: PropertyOption
-): PropertyOptionResponse {
-  return {
-    id: option.id,
-    propertyDefinitionId: option.property_definition_id,
-    displayOrder: option.display_order,
-    value: option.value,
-    color: option.color,
-  };
-}
-
-function updateTagsCache(update: (sets: TagSetResponse[]) => TagSetResponse[]) {
-  queryClient.setQueryData<TagSetResponse[]>(
-    propertiesKeys.tags.queryKey,
-    (current) => (current ? update(current) : current)
-  );
+/**
+ * Recover the colliding team label from a failed share, or `null` when the
+ * failure was something else.
+ */
+export function parseTagNameConflict(
+  error: unknown
+): TagPromotionConflictResponse | null {
+  return error instanceof TagNameConflictError
+    ? { message: error.message, conflicting_option: error.conflictingOption }
+    : null;
 }
 
 type EnsureTagSetParams = { scope: EnsureTagSetRequest['scope'] };
 
-/** Provision (get-or-create) the caller's tag definition for a scope. */
+const quietEnsureFailure = (error: unknown) =>
+  ['UNAUTHORIZED', 'UNAUTHENTICATED', 'FORBIDDEN'].some((code) =>
+    isCatalogErrorCode(error, code)
+  );
+
+/**
+ * Provision (get-or-create) the caller's tag definition for a scope. A set the
+ * cache already holds as provisioned answers at once, offline included.
+ */
+async function provisionTagSet(scope: EnsureTagSetParams['scope']) {
+  return (await cachedTagSet(scope)) ?? (await ensureTagSet(scope));
+}
+
 export function useEnsureTagSetMutation(
-  callbacks?: MutationCallbacks<TagSetResponse, Error, EnsureTagSetParams>
+  callbacks?: CatalogMutationCallbacks<TagSetResponse, EnsureTagSetParams>
 ) {
-  return useMutation(() => ({
-    mutationFn: async (vars: EnsureTagSetParams) =>
-      await throwOnErr(
-        async () =>
-          await propertiesServiceClient.ensureTagSet({
-            body: { scope: vars.scope },
-          })
-      ),
-    ...withCallbacks<TagSetResponse, Error, EnsureTagSetParams>(
-      {
-        onError(error) {
-          if (
-            thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
-            thrownResultErrorHasCode(error, 'FORBIDDEN')
-          ) {
-            return;
-          }
-          console.error('Failed to provision tag set', error);
-          toast.failure('Failed to set up tags');
-        },
-        onSuccess: () => invalidateTags(),
+  return createCatalogMutation(
+    (vars: EnsureTagSetParams) => provisionTagSet(vars.scope),
+    {
+      onError(error) {
+        if (quietEnsureFailure(error)) return;
+        console.error('Failed to provision tag set', error);
+        toast.failure('Failed to set up tags');
       },
-      callbacks
-    ),
-  }));
+    },
+    callbacks
+  );
 }
 
 type UpdatePropertyOptionParams = {
@@ -114,103 +132,28 @@ type UpdatePropertyOptionParams = {
   body: UpdatePropertyOptionRequest;
 };
 
-type TagsMutationContext = {
-  previousTags?: TagSetResponse[];
-  optimisticOptionId?: string;
-};
+const updateLabelFailed = () => toast.failure('Failed to update label');
 
 /** Rename / recolor a label in place. The option id is preserved so the change propagates. */
 export function useUpdatePropertyOptionMutation(
-  callbacks?: MutationCallbacks<
-    PropertyOption,
-    Error,
-    UpdatePropertyOptionParams,
-    TagsMutationContext
-  >
+  callbacks?: CatalogMutationCallbacks<void, UpdatePropertyOptionParams>
 ) {
-  return useMutation(() => ({
-    onMutate: async (vars): Promise<TagsMutationContext> => {
-      await queryClient.cancelQueries({
-        queryKey: propertiesKeys.tags.queryKey,
-      });
-      const previousTags = queryClient.getQueryData<TagSetResponse[]>(
-        propertiesKeys.tags.queryKey
-      );
-
-      updateTagsCache((sets) =>
-        sets.map((set) => ({
-          ...set,
-          options: set.options.map((option) => {
-            if (
-              option.id !== vars.optionId ||
-              option.propertyDefinitionId !== vars.propertyDefinitionId
-            ) {
-              return option;
-            }
-
-            return {
-              ...option,
-              displayOrder: vars.body.display_order ?? option.displayOrder,
-              color:
-                vars.body.color === undefined ? option.color : vars.body.color,
-              value:
-                vars.body.value == null
-                  ? option.value
-                  : { type: 'string', value: vars.body.value },
-            };
-          }),
-        }))
-      );
-
-      return { previousTags };
-    },
-    mutationFn: async (vars: UpdatePropertyOptionParams) =>
-      await throwOnErr(
-        async () =>
-          await propertiesServiceClient.updatePropertyOption({
-            definition_id: vars.propertyDefinitionId,
-            option_id: vars.optionId,
-            body: vars.body,
-          })
+  return createCatalogMutation(
+    (vars: UpdatePropertyOptionParams) =>
+      updatePropertyOption(
+        vars.propertyDefinitionId,
+        vars.optionId,
+        vars.body,
+        updateLabelFailed
       ),
-    ...withCallbacks<
-      PropertyOption,
-      Error,
-      UpdatePropertyOptionParams,
-      TagsMutationContext
-    >(
-      {
-        onError(error, _variables, context) {
-          if (context?.previousTags) {
-            queryClient.setQueryData(
-              propertiesKeys.tags.queryKey,
-              context.previousTags
-            );
-          }
-          console.error('Failed to update label', error);
-          toast.failure('Failed to update label');
-        },
-        onSuccess: (data, variables) => {
-          const updated = propertyOptionToResponse(data);
-          updateTagsCache((sets) =>
-            sets.map((set) =>
-              set.definition?.id === variables.propertyDefinitionId
-                ? {
-                    ...set,
-                    options: set.options.map((option) =>
-                      option.id === variables.optionId ? updated : option
-                    ),
-                  }
-                : set
-            )
-          );
-          invalidatePropertyOptions(variables.propertyDefinitionId);
-          invalidateTags();
-        },
+    {
+      onError(error) {
+        console.error('Failed to update label', error);
+        updateLabelFailed();
       },
-      callbacks
-    ),
-  }));
+    },
+    callbacks
+  );
 }
 
 type CreateTagParams = {
@@ -225,144 +168,49 @@ export type CreateTagResult = {
   option: PropertyOption;
 };
 
+/** The next display order after a set's options: new tags go last. */
+export function nextTagDisplayOrder(set: Pick<TagSetResponse, 'options'>) {
+  return (
+    set.options.reduce(
+      (max, option) => Math.max(max, option.displayOrder),
+      -1
+    ) + 1
+  );
+}
+
 /** Create a tag in the caller's personal or team set. */
+export async function createTag(
+  vars: CreateTagParams
+): Promise<CreateTagResult> {
+  const tagSet = await provisionTagSet(vars.scope);
+  const definition = tagSet.definition;
+  if (!definition) {
+    throw new Error(`Tag set for scope "${vars.scope}" has no definition`);
+  }
+  const option = await addPropertyOption(definition.id, {
+    type: 'select_string',
+    option: {
+      value: vars.value,
+      color: vars.color,
+      display_order: nextTagDisplayOrder(tagSet),
+    },
+  });
+  return { scope: vars.scope, tagSet, option };
+}
+
 export function useCreateTagMutation(
-  callbacks?: MutationCallbacks<
-    CreateTagResult,
-    Error,
-    CreateTagParams,
-    TagsMutationContext
-  >
+  callbacks?: CatalogMutationCallbacks<CreateTagResult, CreateTagParams>
 ) {
-  return useMutation(() => ({
-    onMutate: async (vars): Promise<TagsMutationContext> => {
-      await queryClient.cancelQueries({
-        queryKey: propertiesKeys.tags.queryKey,
-      });
-      const previousTags = queryClient.getQueryData<TagSetResponse[]>(
-        propertiesKeys.tags.queryKey
-      );
-      const optimisticOptionId = `optimistic-${crypto.randomUUID()}`;
-
-      updateTagsCache((sets) =>
-        sets.map((set) => {
-          if (set.scope !== vars.scope || !set.definition) return set;
-
-          return {
-            ...set,
-            options: [
-              ...set.options,
-              {
-                id: optimisticOptionId,
-                propertyDefinitionId: set.definition.id,
-                displayOrder:
-                  set.options.reduce(
-                    (max, option) => Math.max(max, option.displayOrder),
-                    -1
-                  ) + 1,
-                value: { type: 'string', value: vars.value },
-                color: vars.color,
-              },
-            ],
-          };
-        })
-      );
-
-      return { previousTags, optimisticOptionId };
-    },
-    mutationFn: async (vars): Promise<CreateTagResult> => {
-      const tagSet = await throwOnErr(
-        async () =>
-          await propertiesServiceClient.ensureTagSet({
-            body: { scope: vars.scope },
-          })
-      );
-
-      if (!tagSet.definition) {
-        throw new Error(`Tag set for scope "${vars.scope}" has no definition`);
-      }
-
-      const body: AddPropertyOptionRequest = {
-        type: 'select_string',
-        option: {
-          value: vars.value,
-          color: vars.color,
-          display_order:
-            tagSet.options.reduce(
-              (max, option) => Math.max(max, option.displayOrder),
-              -1
-            ) + 1,
-        },
-      };
-
-      const option = await throwOnErr(
-        async () =>
-          await propertiesServiceClient.addPropertyOption({
-            definition_id: tagSet.definition!.id,
-            body,
-          })
-      );
-
-      return { scope: vars.scope, tagSet, option };
-    },
-    ...withCallbacks<
-      CreateTagResult,
-      Error,
-      CreateTagParams,
-      TagsMutationContext
-    >(
-      {
-        onError(error, _variables, context) {
-          if (context?.previousTags) {
-            queryClient.setQueryData(
-              propertiesKeys.tags.queryKey,
-              context.previousTags
-            );
-          }
-          console.error('Failed to create tag', error);
-          toast.failure('Failed to create tag');
-        },
-        onSuccess(data, _variables, context) {
-          const created = propertyOptionToResponse(data.option);
-          updateTagsCache((sets) => {
-            const hasScope = sets.some((set) => set.scope === data.scope);
-            const nextSets = hasScope
-              ? sets
-              : [
-                  ...sets,
-                  {
-                    scope: data.scope,
-                    definition: data.tagSet.definition,
-                    options: [],
-                  },
-                ];
-
-            return nextSets.map((set) => {
-              if (set.scope !== data.scope) return set;
-
-              const withoutOptimistic = context?.optimisticOptionId
-                ? set.options.filter(
-                    (option) => option.id !== context.optimisticOptionId
-                  )
-                : set.options;
-
-              return {
-                ...set,
-                definition: set.definition ?? data.tagSet.definition,
-                options: [...withoutOptimistic, created].sort(
-                  (a, b) => a.displayOrder - b.displayOrder
-                ),
-              };
-            });
-          });
-
-          invalidatePropertyOptions(data.option.property_definition_id);
-          invalidateTags();
-        },
+  return createCatalogMutation(
+    createTag,
+    {
+      onError(error) {
+        console.error('Failed to create tag', error);
+        toast.failure('Failed to create tag');
       },
-      callbacks
-    ),
-  }));
+    },
+    callbacks
+  );
 }
 
 type DeletePropertyOptionParams = {
@@ -370,72 +218,27 @@ type DeletePropertyOptionParams = {
   optionId: string;
 };
 
+const deleteLabelFailed = () => toast.failure('Failed to delete label');
+
 /** Delete a label. */
 export function useDeletePropertyOptionMutation(
-  callbacks?: MutationCallbacks<
-    { success: boolean },
-    Error,
-    DeletePropertyOptionParams,
-    TagsMutationContext
-  >
+  callbacks?: CatalogMutationCallbacks<void, DeletePropertyOptionParams>
 ) {
-  return useMutation(() => ({
-    onMutate: async (vars): Promise<TagsMutationContext> => {
-      await queryClient.cancelQueries({
-        queryKey: propertiesKeys.tags.queryKey,
-      });
-      const previousTags = queryClient.getQueryData<TagSetResponse[]>(
-        propertiesKeys.tags.queryKey
-      );
-
-      updateTagsCache((sets) =>
-        sets.map((set) =>
-          set.definition?.id === vars.propertyDefinitionId
-            ? {
-                ...set,
-                options: set.options.filter(
-                  (option) => option.id !== vars.optionId
-                ),
-              }
-            : set
-        )
-      );
-
-      return { previousTags };
-    },
-    mutationFn: async (vars: DeletePropertyOptionParams) =>
-      await throwOnErr(
-        async () =>
-          await propertiesServiceClient.deletePropertyOption({
-            definition_id: vars.propertyDefinitionId,
-            option_id: vars.optionId,
-          })
+  return createCatalogMutation(
+    (vars: DeletePropertyOptionParams) =>
+      deletePropertyOption(
+        vars.propertyDefinitionId,
+        vars.optionId,
+        deleteLabelFailed
       ),
-    ...withCallbacks<
-      { success: boolean },
-      Error,
-      DeletePropertyOptionParams,
-      TagsMutationContext
-    >(
-      {
-        onError(error, _variables, context) {
-          if (context?.previousTags) {
-            queryClient.setQueryData(
-              propertiesKeys.tags.queryKey,
-              context.previousTags
-            );
-          }
-          console.error('Failed to delete label', error);
-          toast.failure('Failed to delete label');
-        },
-        onSuccess: (_data, variables) => {
-          invalidatePropertyOptions(variables.propertyDefinitionId);
-          invalidateTags();
-        },
+    {
+      onError(error) {
+        console.error('Failed to delete label', error);
+        deleteLabelFailed();
       },
-      callbacks
-    ),
-  }));
+    },
+    callbacks
+  );
 }
 
 type PromoteTagParams = {
@@ -447,36 +250,26 @@ type PromoteTagParams = {
  * Share a personal label with the caller's team.
  *
  * The option id survives the move, so entities already carrying the label keep
- * it — only its owning definition changes. Rejects with a
- * `TAG_NAME_CONFLICT` error carrying the colliding team label when the team
- * already has one by that name; read it with `parseTagNameConflict` and offer
- * {@link useMergeTagMutation} instead.
+ * it — only its owning definition changes. Fails with a conflict carrying the
+ * colliding team label when the team already has one by that name; read it
+ * with `parseTagNameConflict` and offer {@link useMergeTagMutation} instead.
  */
 export function usePromoteTagMutation(
-  callbacks?: MutationCallbacks<PropertyOptionResponse, Error, PromoteTagParams>
+  callbacks?: CatalogMutationCallbacks<PropertyOptionResponse, PromoteTagParams>
 ) {
-  return useMutation(() => ({
-    mutationFn: async (vars: PromoteTagParams) =>
-      await throwOnErr(
-        async () =>
-          await propertiesServiceClient.promoteTag({
-            body: { option_id: vars.optionId },
-          })
-      ),
-    ...withCallbacks<PropertyOptionResponse, Error, PromoteTagParams>(
-      {
-        onError(error) {
-          // A name collision is a prompt, not a failure — the caller turns it
-          // into the "replace with the team label?" confirmation.
-          if (parseTagNameConflict(error)) return;
-          console.error('Failed to share label with team', error);
-          toast.failure('Failed to share label with team');
-        },
-        onSuccess: (option) => onTagRemapped(option),
+  return createCatalogMutation(
+    (vars: PromoteTagParams) => promoteTag(vars.optionId),
+    {
+      onError(error) {
+        // A name collision is a prompt, not a failure — the caller turns it
+        // into the "replace with the team label?" confirmation.
+        if (parseTagNameConflict(error)) return;
+        console.error('Failed to share label with team', error);
+        toast.failure('Failed to share label with team');
       },
-      callbacks
-    ),
-  }));
+    },
+    callbacks
+  );
 }
 
 type MergeTagParams = {
@@ -491,42 +284,16 @@ type MergeTagParams = {
  * that carried the personal one. The team label's name and color win.
  */
 export function useMergeTagMutation(
-  callbacks?: MutationCallbacks<PropertyOptionResponse, Error, MergeTagParams>
+  callbacks?: CatalogMutationCallbacks<PropertyOptionResponse, MergeTagParams>
 ) {
-  return useMutation(() => ({
-    mutationFn: async (vars: MergeTagParams) =>
-      await throwOnErr(
-        async () =>
-          await propertiesServiceClient.mergeTag({
-            body: {
-              option_id: vars.optionId,
-              target_option_id: vars.targetOptionId,
-            },
-          })
-      ),
-    ...withCallbacks<PropertyOptionResponse, Error, MergeTagParams>(
-      {
-        onError(error) {
-          console.error('Failed to replace label with the team label', error);
-          toast.failure('Failed to replace label');
-        },
-        onSuccess: (option) => onTagRemapped(option),
+  return createCatalogMutation(
+    (vars: MergeTagParams) => mergeTag(vars.optionId, vars.targetOptionId),
+    {
+      onError(error) {
+        console.error('Failed to replace label with the team label', error);
+        toast.failure('Failed to replace label');
       },
-      callbacks
-    ),
-  }));
-}
-
-/**
- * Refresh everything a promote or merge moved.
- *
- * Both rewrite which definition owns the label AND the values stored on every
- * entity that carried it (a merge also swaps the option id), so the cached
- * entity properties behind tag chips, filters and `TagsRow` are stale too —
- * not just the tag sets. There are no WS events for this, so the whole
- * properties namespace is refetched rather than reconciled by hand.
- */
-function onTagRemapped(option: PropertyOptionResponse) {
-  invalidatePropertyOptions(option.propertyDefinitionId);
-  invalidateAllProperties();
+    },
+    callbacks
+  );
 }
