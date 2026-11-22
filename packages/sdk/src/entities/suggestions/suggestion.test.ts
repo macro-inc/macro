@@ -235,4 +235,20 @@ describe('Suggestion facts', () => {
 
     expect(requests).toEqual([{ path: { id: 'suggestion' } }]);
   });
+
+  test('stopRun stops the run and keeps the suggestion', async () => {
+    const requests: unknown[] = [];
+    const client = {
+      scheduledAction: {
+        stopSuggestionRun: async (request: unknown) => {
+          requests.push(request);
+          return { data: undefined };
+        },
+      },
+    } as unknown as MacroClient;
+
+    await Suggestion.from(client, REPLY_SUGGESTION).stopRun();
+
+    expect(requests).toEqual([{ path: { id: 'suggestion' } }]);
+  });
 });

@@ -283,16 +283,31 @@ export class Suggestion {
   }
 
   /**
-   * Take back the user's dismissal of this suggestion: it is open again. Only
-   * within five minutes of the dismissal, by the same user; fails with 409
-   * later, and for a routine suggestion. A background run the dismissal
-   * stopped stays stopped: the suggestion shows `running` until it has, then
-   * the user runs it again from the app. For the user's own agent; a
+   * Take back the user's dismissal of this suggestion, or their marking it
+   * done by acting on it: it is open again. Only within five minutes, by the
+   * same user; fails with 409 later, for a routine suggestion, and for one a
+   * finished run or the user's reply made done. A background run the
+   * dismissal stopped stays stopped: the suggestion shows `running` until it
+   * has, then the user runs it again from the app. For the user's own agent; a
    * generation session gets a 403.
    */
   async restore(): Promise<void> {
     unwrap(
       await this.client.scheduledAction.restoreSuggestion({
+        path: { id: this.id },
+      }),
+    );
+  }
+
+  /**
+   * Stop this open suggestion's background run without dismissing it: it
+   * shows `running` until the run has stopped, then `open`, with nothing made,
+   * for the user to run again from the app. With no run under way nothing
+   * changes. For the user's own agent; a generation session gets a 403.
+   */
+  async stopRun(): Promise<void> {
+    unwrap(
+      await this.client.scheduledAction.stopSuggestionRun({
         path: { id: this.id },
       }),
     );

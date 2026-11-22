@@ -107,6 +107,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     approved: 'acceptSuggestion',
     rejected: 'dismissSuggestion',
     restored: 'restoreSuggestion',
+    cancelled: 'stopSuggestionRun',
   },
   unfurl: { read: 'getUnfurl getUnfurlBulk' },
   auth: {
