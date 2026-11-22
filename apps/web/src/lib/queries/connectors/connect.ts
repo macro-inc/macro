@@ -75,8 +75,10 @@ export async function connectConnector(
   args: ConnectArgs
 ): Promise<ConnectOutcome> {
   if (args.key === GITHUB_CONNECTOR_KEY) return await connectGithub();
-  // A server's sign-in always opens a page; reserve its tab inside the click.
-  const popup = args.key.startsWith('server/') ? reserveOauthPopup() : null;
+  // The server may answer with a page to open, which Safari only allows from
+  // a tab opened inside the click: reserve one now (none in the native apps),
+  // and close it again unless the answer needs it.
+  const popup = reserveOauthPopup();
   return await Telemetry.span('connector.connect', async (span) => {
     // An app's slug is public catalog data; a server's key holds its URL.
     span.setAttr('connector.kind', args.key.split('/')[0] ?? '');
@@ -121,13 +123,12 @@ async function followStep(
   return await match(step)
     .with({ type: 'openUrl' }, async (page) => {
       span.setAttr('connector.step', 'openUrl');
-      // Opened after the server answered: browsers allow it this soon after
-      // the click, and the handle tells the poll when the user closes it.
-      const tab = popup ?? reserveOauthPopup();
-      assignOauthUrl(tab, page.url);
+      // Without a reserved tab (native apps, or a blocked popup) the page
+      // opens in the system browser or a new window.
+      assignOauthUrl(popup, page.url);
       return await span.span(
         'connector.consent',
-        async () => await pollCompletion(args.key, tab, userId)
+        async () => await pollCompletion(args.key, popup, userId)
       );
     })
     .with({ type: 'embeddedDialog' }, async (dialog) => {

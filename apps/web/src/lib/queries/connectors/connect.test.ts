@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   open: vi.fn(),
   openNative: vi.fn(),
   closeDialog: vi.fn(),
+  closeTab: vi.fn(),
   reservePopup: vi.fn(),
   assignUrl: vi.fn(),
   linkGithub: vi.fn(),
@@ -90,6 +91,7 @@ beforeEach(() => {
   mocks.native = false;
   mocks.userId = 'user-one';
   mocks.complete.mockResolvedValue(NOT_FOUND);
+  mocks.reservePopup.mockReturnValue({ closed: false, close: mocks.closeTab });
 });
 
 describe('connecting through an embedded dialog', () => {
@@ -98,7 +100,9 @@ describe('connecting through an embedded dialog', () => {
     const { pending, options } = await openDialog('app/slack');
     expect(mocks.start).toHaveBeenCalledWith({ key: 'app/slack' });
     expect(options).toMatchObject({ token: 'ctok_fixture', app: 'slack_v2' });
-    expect(mocks.reservePopup).not.toHaveBeenCalled();
+    // The tab reserved in the click is not needed for a dialog.
+    expect(mocks.closeTab).toHaveBeenCalledOnce();
+    expect(mocks.assignUrl).not.toHaveBeenCalled();
     options.onEvent({ type: 'success', accountId: 'apn_fixture' });
     expect(await pending).toBe('connected');
     expect(mocks.complete).toHaveBeenCalledWith({ key: 'app/slack' });
@@ -157,9 +161,9 @@ describe('connecting through an embedded dialog', () => {
 });
 
 describe('connecting on a page', () => {
-  it('opens the page after the server answers and polls until the connection exists', async () => {
+  it('opens the page in the tab reserved in the click and polls until the connection exists', async () => {
     vi.useFakeTimers();
-    const tab = { closed: false };
+    const tab = { closed: false, close: mocks.closeTab };
     mocks.reservePopup.mockReturnValue(tab);
     mocks.start.mockResolvedValue(
       ok({ type: 'openUrl', url: 'https://consent.example/linear' })
@@ -175,17 +179,20 @@ describe('connecting on a page', () => {
       'https://consent.example/linear'
     );
     expect(mocks.complete).toHaveBeenCalledTimes(2);
+    expect(mocks.reservePopup).toHaveBeenCalledOnce();
+    expect(mocks.closeTab).not.toHaveBeenCalled();
   });
 
-  it('reserves the tab inside the click for a server sign-in', () => {
-    mocks.reservePopup.mockReturnValue({ closed: false });
-    mocks.start.mockReturnValue(new Promise(() => {}));
-    // The server never answers here: the tab must already be open.
-    expect(connectConnector({ key: 'server/aHR0cHM6Ly94' })).toBeInstanceOf(
-      Promise
-    );
-    expect(mocks.reservePopup).toHaveBeenCalledOnce();
-  });
+  it.each(['app/linear', 'server/aHR0cHM6Ly94'])(
+    'reserves the tab inside the click for %s, before the server answers',
+    (key) => {
+      mocks.start.mockReturnValue(new Promise(() => {}));
+      // The server never answers here: Safari only allows a tab opened in the
+      // click, so it must already be open.
+      expect(connectConnector({ key })).toBeInstanceOf(Promise);
+      expect(mocks.reservePopup).toHaveBeenCalledOnce();
+    }
+  );
 
   it('stops when the user closes the page without connecting', async () => {
     mocks.reservePopup.mockReturnValue({ closed: true });
@@ -196,16 +203,25 @@ describe('connecting on a page', () => {
     expect(mocks.complete).toHaveBeenCalledOnce();
   });
 
-  it('fails without opening anything when the server refuses', async () => {
-    const tab = { closed: false, close: vi.fn() };
-    mocks.reservePopup.mockReturnValue(tab);
-    mocks.start.mockResolvedValue(
-      err([{ code: 'NOT_FOUND', message: 'Resource not found' }])
-    );
-    await expect(
-      connectConnector({ key: 'server/aHR0cHM6Ly94' })
-    ).rejects.toThrow();
-    expect(tab.close).toHaveBeenCalled();
+  it.each(['app/linear', 'server/aHR0cHM6Ly94'])(
+    'closes the reserved tab when the server refuses %s',
+    async (key) => {
+      mocks.start.mockResolvedValue(
+        err([{ code: 'NOT_FOUND', message: 'Resource not found' }])
+      );
+      await expect(connectConnector({ key })).rejects.toThrow();
+      expect(mocks.closeTab).toHaveBeenCalled();
+      expect(mocks.assignUrl).not.toHaveBeenCalled();
+    }
+  );
+
+  it('closes the reserved tab when another user signs in meanwhile', async () => {
+    mocks.start.mockImplementation(async () => {
+      mocks.userId = 'user-two';
+      return ok({ type: 'openUrl', url: 'https://consent.example/linear' });
+    });
+    expect(await connectConnector({ key: 'app/linear' })).toBe('closed');
+    expect(mocks.closeTab).toHaveBeenCalledOnce();
     expect(mocks.assignUrl).not.toHaveBeenCalled();
   });
 });
@@ -215,6 +231,8 @@ describe('connecting GitHub', () => {
     mocks.linkGithub.mockResolvedValue(true);
     expect(await connectConnector({ key: 'app/github' })).toBe('connected');
     expect(mocks.start).not.toHaveBeenCalled();
+    // The account link opens its own way; no tab is reserved for it.
+    expect(mocks.reservePopup).not.toHaveBeenCalled();
     expect(mocks.invalidate).toHaveBeenCalled();
   });
 
