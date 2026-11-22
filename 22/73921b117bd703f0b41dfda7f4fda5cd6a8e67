@@ -1,0 +1,32 @@
+crates/call/src/outbound/pg_call_repo/lifecycle.rs
+  s_e4dab6ab069ba5::t_1a45c808432130 321
+crates/call/src/domain/service/test.rs
+  s_e4dab6ab069ba5::t_1a45c808432130 1185
+crates/call/src/domain/service.rs
+  s_e4dab6ab069ba5::t_c694e747faf46b 1672-1680,1683-1687,1728,1775,1817,1883,2829-2831
+  s_e4dab6ab069ba5::t_1a45c808432130 404,412
+  s_e4dab6ab069ba5::t_c531333445b596 2832-2833
+crates/call/src/domain/models.rs
+  s_e4dab6ab069ba5::t_1a45c808432130 87-90
+crates/call/src/domain/service/meetings.rs
+  s_e4dab6ab069ba5::t_c694e747faf46b 655,698-702
+  s_e4dab6ab069ba5::t_1a45c808432130 682-684
+crates/call/src/outbound/pg_call_repo/test.rs
+  s_e4dab6ab069ba5::t_978852d8bf997b 709,765
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2273921b117bd703f0b41dfda7f4fda5cd6a8e67",
+  "prompts": {},
+  "sessions": {
+    "s_e4dab6ab069ba5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cd9cc4b6-e475-4672-bb0c-d61b5198aec2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
