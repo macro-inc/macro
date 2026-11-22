@@ -392,4 +392,18 @@ describe('opening a related record from its chip', () => {
     });
     expect(navigate).toHaveBeenCalledWith(1);
   });
+
+  it('counts the related records past twenty, and a phone opens the ones past five', () => {
+    const many = Array.from({ length: 21 }, (_, index) => `task-${index}`);
+    setup({ value: JSON.stringify(many), expanded: true });
+    expect(screen.getAllByRole('button', { name: /^Open / })).toHaveLength(20);
+    expect(screen.getByText('+1')).toBeTruthy();
+    // CSS keeps this to phones; it opens every chip.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Show 16 more Customers' })
+    );
+    expect(screen.getAllByRole('button', { name: /^Open / })).toHaveLength(21);
+    expect(screen.queryByText('+1')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Show \d+ more/ })).toBeNull();
+  });
 });

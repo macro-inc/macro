@@ -932,6 +932,54 @@ describe('database table view', () => {
     expect(await screen.findByRole('dialog')).toBeTruthy();
   });
 
+  it('expands a relation field in the record panel but not in the grid', async () => {
+    const tasks: DatabaseViewColumn = {
+      id: 'tasks',
+      name: 'Tasks',
+      dataType: 'STRING',
+      isMultiSelect: false,
+      options: [],
+      writable: true,
+      relation: { databaseId: 'work', tableId: 'tasks' },
+    };
+    const fixture = createFakeRowsSource({
+      columns: [...columns, tasks],
+      table: {
+        version: 1,
+        rows: [
+          {
+            rowId: 'row',
+            cells: { title: 'Plan launch', status: 'To do', tasks: '["a"]' },
+          },
+        ],
+      },
+      view: allRecords,
+    });
+    render(() => (
+      <DatabaseRecordsView
+        name="Projects"
+        source={fixture.source}
+        canEdit
+        view={allRecords}
+        stored={false}
+        addColumn={() => null}
+        boardPositions={unplacedCards}
+        renderRelationCell={(cell) => (
+          <span>{cell.expanded ? 'Expanded tasks' : 'Compact tasks'}</span>
+        )}
+      />
+    ));
+    expect(
+      (await screen.findAllByText('Compact tasks')).length
+    ).toBeGreaterThan(0);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Open Plan launch' })
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Expanded tasks')).toBeTruthy();
+    expect(within(dialog).queryByText('Compact tasks')).toBeNull();
+  });
+
   it('keeps a record created on a board in place when the host opens records elsewhere', async () => {
     const fixture = createFakeRowsSource({
       columns,
