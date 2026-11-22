@@ -527,14 +527,18 @@ pub trait CallRepository: Send + Sync + 'static {
         viewer_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, String>, Self::Err>> + Send;
 
-    /// Delete a row from `call_records` by id. Participants and transcript
-    /// segments are removed via `ON DELETE CASCADE`. No-op if no row matches.
-    /// Returns the deleted row's storage object keys so the caller can clean
-    /// up the associated recording and preview objects.
+    /// Delete a row from `call_records` by id. Participants, transcript
+    /// segments and later sessions are removed via `ON DELETE CASCADE`. No-op
+    /// if no row matches. Returns the storage object keys of every session of
+    /// the deleted record so the caller can clean up the associated recording
+    /// and preview objects.
+    ///
+    /// Refuses with [`CallError::Conflict`] while the call has a live session
+    /// (a resumed scheduled meeting): its archive would bring the record back.
     fn delete_call_record(
         &self,
         call_record_id: &Uuid,
-    ) -> impl Future<Output = Result<Option<DeletedCallRecordStorageKeys>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<Vec<DeletedCallRecordStorageKeys>>, CallError>> + Send;
 
     /// Patches a call record (link/channel sharing, team sharing, display name)
     /// in one transaction.
@@ -1179,7 +1183,9 @@ pub trait CallService: Send + Sync + 'static {
     /// `CallAccessLevelExtractor`; the entity on the receipt must be
     /// `EntityType::Call` and its `entity_id` must be the call's UUID.
     /// Only `call_records` rows are affected — active calls in the `calls`
-    /// table are untouched. Idempotent.
+    /// table are untouched, and a call with a live session (including a
+    /// resumed scheduled meeting) is refused with [`CallError::Conflict`].
+    /// Idempotent.
     fn delete_call_record(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,

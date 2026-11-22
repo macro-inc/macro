@@ -2069,11 +2069,7 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?
             .map(|r| r.channel_id);
 
-        let storage_keys = self
-            .repo
-            .delete_call_record(&call_id)
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?;
+        let storage_keys = self.repo.delete_call_record(&call_id).await?;
 
         if storage_keys.is_some()
             && let Some(channel_id) = channel_id
@@ -2085,7 +2081,7 @@ impl<
             }));
         }
 
-        if let Some(storage_keys) = storage_keys {
+        for storage_keys in storage_keys.into_iter().flatten() {
             if let Some(key) = storage_keys.recording_key.as_deref() {
                 self.recording_storage
                     .delete_recording(key)

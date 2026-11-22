@@ -1917,9 +1917,41 @@ impl CallRepository for PgCallRepo {
     async fn delete_call_record(
         &self,
         call_record_id: &Uuid,
-    ) -> Result<Option<DeletedCallRecordStorageKeys>, Self::Err> {
+    ) -> Result<Option<Vec<DeletedCallRecordStorageKeys>>, CallError> {
         let mut tx = self.pool.begin().await?;
 
+        // Lock the record first: a resume locks it before inserting the live
+        // session, so either the resume sees no record and starts a new call,
+        // or this sees the live session and refuses.
+        sqlx::query_scalar!(
+            "SELECT id FROM call_records WHERE id = $1 FOR UPDATE",
+            call_record_id,
+        )
+        .fetch_optional(tx.as_mut())
+        .await?;
+        let live = sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM calls WHERE id = $1) AS "live!""#,
+            call_record_id,
+        )
+        .fetch_one(tx.as_mut())
+        .await?;
+        if live {
+            return Err(CallError::Conflict(format!(
+                "call {call_record_id} is live; delete it once it has ended"
+            )));
+        }
+
+        // Later sessions' objects; their rows go with the record.
+        let later_sessions = sqlx::query!(
+            r#"
+            SELECT recording_key, preview_url FROM call_record_sessions
+            WHERE call_record_id = $1
+            ORDER BY started_at ASC
+            "#,
+            call_record_id,
+        )
+        .fetch_all(tx.as_mut())
+        .await?;
         let row = sqlx::query!(
             r#"
             DELETE FROM call_records WHERE id = $1 RETURNING recording_key, preview_url
@@ -1937,9 +1969,20 @@ impl CallRepository for PgCallRepo {
         .await?;
 
         tx.commit().await?;
-        Ok(row.map(|r| DeletedCallRecordStorageKeys {
-            recording_key: r.recording_key,
-            preview_key: r.preview_url,
+        Ok(row.map(|first| {
+            std::iter::once(DeletedCallRecordStorageKeys {
+                recording_key: first.recording_key,
+                preview_key: first.preview_url,
+            })
+            .chain(
+                later_sessions
+                    .into_iter()
+                    .map(|later| DeletedCallRecordStorageKeys {
+                        recording_key: later.recording_key,
+                        preview_key: later.preview_url,
+                    }),
+            )
+            .collect()
         }))
     }
 

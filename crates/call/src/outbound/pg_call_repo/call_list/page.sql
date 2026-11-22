@@ -69,32 +69,35 @@ granted AS (
     ) g
     GROUP BY g.entity_id
 ),
--- Each granted call's row: archived, live, or imported. The lateral join
+-- Each granted call's row: live, archived, or imported. The lateral join
 -- reads the tables by primary key once per granted call, so its cost follows
--- the viewer's calls whatever the planner estimates for them. A call is in
--- exactly one table (archiving moves the live row in one transaction, and
--- imports get their own ids), so the first row found ends the lookup.
+-- the viewer's calls whatever the planner estimates for them. Archiving moves
+-- a live row in one transaction and imports get their own ids, so a call is
+-- in one table, except a resumed scheduled meeting: it is live again while its
+-- earlier sessions are archived, and the live row must win. The first row
+-- found ends the lookup, so the live arm comes first.
 candidates AS (
     SELECT x.*, g.own_grant
     FROM granted g
     CROSS JOIN LATERAL (
-        SELECT cr.id AS call_id, cr.channel_id, cr.room_name, cr.created_by,
-               cr.started_at, cr.ended_at, cr.duration_ms, cr.egress_id,
-               cr.recording_key, cr.preview_url, cr.recording_started_at,
-               NULL::uuid AS meeting_id, cr.custom_name, cr.summary,
-               NULL::bool AS share_with_team, cr.share_permission_id,
-               false AS is_active, false AS is_imported
-        FROM call_records cr
-        WHERE cr.id = g.call_id
-        UNION ALL
-        SELECT c.id, c.channel_id, c.room_name, c.created_by,
-               c.created_at, NULL::timestamptz, NULL::bigint, c.egress_id,
+        SELECT c.id AS call_id, c.channel_id, c.room_name, c.created_by,
+               c.created_at AS started_at, NULL::timestamptz AS ended_at,
+               NULL::bigint AS duration_ms, c.egress_id,
                c.recording_key, c.preview_url, c.recording_started_at,
-               c.meeting_id, NULL::text, NULL::text,
+               c.meeting_id, NULL::text AS custom_name, NULL::text AS summary,
                c.share_with_team, c.share_permission_id,
-               true, false
+               true AS is_active, false AS is_imported
         FROM calls c
         WHERE c.id = g.call_id
+        UNION ALL
+        SELECT cr.id, cr.channel_id, cr.room_name, cr.created_by,
+               cr.started_at, cr.ended_at, cr.duration_ms, cr.egress_id,
+               cr.recording_key, cr.preview_url, cr.recording_started_at,
+               NULL::uuid, cr.custom_name, cr.summary,
+               NULL::bool, cr.share_permission_id,
+               false, false
+        FROM call_records cr
+        WHERE cr.id = g.call_id
         UNION ALL
         -- Imported calls (e.g. Granola) exist only as call entities; native
         -- calls are mirrored there too, so exclude them.
@@ -157,6 +160,7 @@ sorted AS (
 ),
 -- The viewer attended a call they joined (an import's importer attended
 -- it), missed a call in a channel they're in, and otherwise didn't attend.
+-- A resumed meeting's earlier sessions count while it is live again.
 with_status AS (
     SELECT sorted.*,
         CASE
@@ -166,7 +170,7 @@ with_status AS (
                 SELECT 1 FROM call_participants cp
                 WHERE cp.call_id = sorted.call_id AND cp.user_id = $1
             ) THEN 'ATTENDED'::text
-            WHEN NOT is_active AND EXISTS (
+            WHEN EXISTS (
                 SELECT 1 FROM call_record_participants crp
                 WHERE crp.call_record_id = sorted.call_id AND crp.user_id = $1
             ) THEN 'ATTENDED'::text
