@@ -24,11 +24,18 @@ import {
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { toPropertyDefinitionDomain } from '@property/utils/transforms';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
+import { soupEntityKey } from '@queries/soup/graphql/entity-input';
+import {
+  usePendingGraphqlSoupDeleteKeys,
+  withoutPendingSoupEntities,
+} from '@queries/soup/graphql/optimistic-deletions';
 import {
   computeGroupKeysForProperties,
   DATE_GROUP_BUCKETS,
+  makeGroupComparator,
 } from '@queries/soup/grouped/api';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
+import type { GroupMeta } from '@queries/soup/grouped/types';
 import {
   type SoupApiItemFilter,
   useSoupAstItemsQuery,
@@ -90,7 +97,17 @@ export type UseTasksDataSourceOptions = {
   calendar?: Accessor<DateBucketBoundaries>;
   /** Tasks created here that the query may not list yet, shown in place. */
   optimisticTasks?: Accessor<readonly OptimisticTask[]>;
-  /** Confirmed optimistic tasks the query now lists itself. */
+  /**
+   * False where a task still being created can't be shown (board and Gantt
+   * cards open and drag); it shows there once created.
+   */
+  showsPendingTasks?: Accessor<boolean>;
+  /**
+   * Whether the host knows a confirmed task too (a project's own task list);
+   * its stand-in stays until then, even once the query lists it.
+   */
+  isOptimisticTaskKnown?: (taskId: string) => boolean;
+  /** Confirmed optimistic tasks the query now lists itself, or deleted. */
   onOptimisticTasksListed?: (taskIds: string[]) => void;
 };
 
@@ -175,39 +192,73 @@ function taskInsertFilter(
   };
 }
 
+type ServerTasks =
+  | { kind: 'flat'; tasks: TaskEntityWithProperties[] }
+  | { kind: 'grouped'; groups: SoupGroup<TaskEntityWithProperties>[] };
+
+function hasServerTasks(server: ServerTasks): boolean {
+  return server.kind === 'flat'
+    ? server.tasks.length > 0
+    : server.groups.length > 0;
+}
+
+type OptimisticPlacement = {
+  groupKeys: (task: TaskEntityWithProperties) => readonly string[];
+  groupLabel: (key: string) => string;
+  /** The server's group order, for a group no loaded page has. */
+  compareGroups: (a: string, b: string) => number;
+  sort: (entities: TaskEntityWithProperties[]) => TaskEntityWithProperties[];
+};
+
 /**
- * Adds each optimistic task the groups don't list to the groups its keys name,
- * opening a group no loaded page has, and to the first group when its keys
- * are unknown. Counts include it, since the server's do not yet.
+ * The groups with each optimistic task they don't list added to the groups its
+ * keys name, opening a group no loaded page has where the server would put it,
+ * and to the first group when its keys are unknown. Counts include it, since
+ * the server's do not yet. Leaves `groups` as it was.
  */
-function placeOptimisticTasks(
-  groups: SoupGroup<TaskEntityWithProperties>[],
+export function placeOptimisticTasks(
+  serverGroups: readonly SoupGroup<TaskEntityWithProperties>[],
   optimistic: readonly TaskEntityWithProperties[],
-  groupKeys: (task: TaskEntityWithProperties) => readonly string[],
-  groupLabel: (key: string) => string,
-  sort: (entities: TaskEntityWithProperties[]) => TaskEntityWithProperties[]
-) {
-  const touched = new Set<SoupGroup<TaskEntityWithProperties>>();
+  placement: OptimisticPlacement
+): SoupGroup<TaskEntityWithProperties>[] {
+  const groups = [...serverGroups];
+  const touched = new Set<string>();
   const listed = new Set(
     groups.flatMap((group) => group.entities.map((task) => task.id))
   );
   for (const task of optimistic) {
     if (listed.has(task.id)) continue;
     listed.add(task.id);
-    const keys = groupKeys(task);
+    const keys = placement.groupKeys(task);
     const targets = keys.length > 0 ? keys : groups[0] ? [groups[0].id] : [];
     for (const key of targets) {
-      let group = groups.find((candidate) => candidate.id === key);
-      if (!group) {
-        group = { id: key, label: groupLabel(key), entities: [], count: 0 };
-        groups.push(group);
+      let index = groups.findIndex((candidate) => candidate.id === key);
+      if (index === -1) {
+        index = groups.findIndex(
+          (group) => placement.compareGroups(key, group.id) < 0
+        );
+        if (index === -1) index = groups.length;
+        groups.splice(index, 0, {
+          id: key,
+          label: placement.groupLabel(key),
+          entities: [],
+          count: 0,
+        });
       }
-      group.entities = [task, ...group.entities];
-      if (group.count !== undefined) group.count += 1;
-      touched.add(group);
+      const group = groups[index];
+      groups[index] = {
+        ...group,
+        entities: [task, ...group.entities],
+        count: group.count === undefined ? undefined : group.count + 1,
+      };
+      touched.add(key);
     }
   }
-  for (const group of touched) group.entities = sort(group.entities);
+  return groups.map((group) =>
+    touched.has(group.id)
+      ? { ...group, entities: placement.sort(group.entities) }
+      : group
+  );
 }
 
 /** Query, service search, and row assembly owned by the production Tasks view. */
@@ -413,17 +464,29 @@ export function useTasksDataSource(
   }, []);
 
   // Created tasks the query has not listed yet. Search results come from
-  // another source, so they show only the tasks it finds.
+  // another source, so they show only the tasks it finds. A task deleted
+  // before the query lists it stays gone.
+  const pendingDeleteKeys = usePendingGraphqlSoupDeleteKeys();
+  const isDeletedTask = (taskId: string) =>
+    pendingDeleteKeys().has(
+      soupEntityKey({ type: 'document', id: taskId }) ?? taskId
+    );
   const optimisticTasks = createMemo<TaskEntityWithProperties[]>(() => {
     const optimistic = options.optimisticTasks?.() ?? [];
     if (optimistic.length === 0 || search.isSearching()) return [];
+    const showsPending = options.showsPendingTasks?.() ?? true;
     const reference = options.reference?.();
     const context = viewContext();
-    return optimistic.flatMap(({ entity }) =>
-      (!reference || referencesEntity(entity, reference)) &&
-      taskMatchesView(entity, context)
-        ? [entity]
-        : []
+    return withoutPendingSoupEntities(
+      optimistic.flatMap(({ entity, pending }) =>
+        (showsPending || !pending) &&
+        (!reference || referencesEntity(entity, reference)) &&
+        taskMatchesView(entity, context)
+          ? [entity]
+          : []
+      ),
+      pendingDeleteKeys(),
+      (entity) => soupEntityKey({ type: 'document', id: entity.id })
     );
   });
   const optimisticGroupKeys = (task: TaskEntityWithProperties) => {
@@ -443,27 +506,68 @@ export function useTasksDataSource(
       return DATE_GROUP_BUCKETS.find(([id]) => id === key)?.[1] ?? key;
     return key;
   };
+  // Orders a group no page has as the server would: by the option's display
+  // order for a select property, by its bucket for dates.
+  const optimisticGroupMeta = (key: string): GroupMeta => {
+    const groupBy = queryArgs().groupBy;
+    const loaded = !query.isPending
+      ? query.data?.groups?.find((group) => group.key === key)
+      : undefined;
+    if (loaded) return loaded;
+    const propertyId =
+      groupBy?.type === 'property' ? groupBy.propertyDefinitionId : undefined;
+    const option = propertyId
+      ? propertyDefinitions()
+          .get(propertyId)
+          ?.options?.find((candidate) => candidate.id === key)
+      : undefined;
+    const dateOrder =
+      groupBy?.type === 'date'
+        ? DATE_GROUP_BUCKETS.findIndex(([id]) => id === key)
+        : -1;
+    return {
+      key,
+      label: optimisticGroupLabel(key),
+      displayOrder:
+        option?.display_order ?? (dateOrder === -1 ? null : dateOrder),
+      totalCount: 0,
+      itemIds: [],
+      nextCursor: null,
+    };
+  };
+  const compareOptimisticGroups = (a: string, b: string) =>
+    makeGroupComparator(queryArgs().groupBy)(
+      optimisticGroupMeta(a),
+      optimisticGroupMeta(b)
+    );
   const isPendingTask = (taskId: string) =>
     (options.optimisticTasks?.() ?? []).some(
       ({ entity, pending }) => pending && entity.id === taskId
     );
 
-  // Confirmed tasks the query lists itself no longer need their stand-in.
+  // A confirmed stand-in goes once the query lists the task itself (and the
+  // host knows it), or once the task is deleted.
   const listedOptimisticTaskIds = createMemo<string[]>(
     () => {
       const confirmed = (options.optimisticTasks?.() ?? []).filter(
         ({ pending }) => !pending
       );
-      if (confirmed.length === 0 || search.isSearching() || query.isLoading)
-        return [];
+      if (confirmed.length === 0) return [];
+      const deleted = confirmed.flatMap(({ entity }) =>
+        isDeletedTask(entity.id) ? [entity.id] : []
+      );
+      if (search.isSearching() || query.isPending) return deleted;
       const listed = new Set(baseTasks().map((task) => task.id));
       for (const group of query.data?.groups ?? []) {
         for (const task of continuations.entities(group.key)) {
           listed.add(task.id);
         }
       }
+      const known = options.isOptimisticTaskKnown ?? (() => true);
       return confirmed.flatMap(({ entity }) =>
-        listed.has(entity.id) ? [entity.id] : []
+        isDeletedTask(entity.id) || (listed.has(entity.id) && known(entity.id))
+          ? [entity.id]
+          : []
       );
     },
     [],
@@ -478,27 +582,22 @@ export function useTasksDataSource(
     })
   );
 
-  const builtRows = createMemo<SoupRow<TaskEntityWithProperties>[]>(
+  // What the server lists, kept while a new page loads; created tasks are
+  // added on top of it, so they follow the store even while it loads.
+  const serverTasks = createMemo<ServerTasks>(
     (previous) => {
       if (
         !search.isSearching() &&
-        (query.isLoading || (query.isPlaceholderData && previous.length > 0))
+        (query.isLoading ||
+          (query.isPlaceholderData && hasServerTasks(previous)))
       ) {
         return previous;
       }
 
       const groups = search.isSearching() ? undefined : query.data?.groups;
       const currentTasks = tasks();
-      const optimistic = optimisticTasks();
       if (!groups || state.groupBy === 'none') {
-        if (optimistic.length === 0) return buildFlatSoupRows(currentTasks);
-        return buildFlatSoupRows(
-          sortTasks(
-            deduplicateSoupEntities([...currentTasks, ...optimistic]),
-            state.sort,
-            propertyDefinitions()
-          )
-        );
+        return { kind: 'flat', tasks: currentTasks };
       }
 
       const tasksById = new Map(currentTasks.map((task) => [task.id, task]));
@@ -543,20 +642,43 @@ export function useTasksDataSource(
         taskGroups.push(taskGroup);
       }
 
-      if (optimistic.length > 0) {
-        placeOptimisticTasks(
-          taskGroups,
-          optimistic,
-          optimisticGroupKeys,
-          optimisticGroupLabel,
-          (entities) => sortTasks(entities, state.sort, propertyDefinitions())
-        );
-      }
-
-      return buildGroupedSoupRows(taskGroups);
+      return { kind: 'grouped', groups: taskGroups };
     },
-    []
+    { kind: 'flat', tasks: [] }
   );
+
+  const builtRows = createMemo<SoupRow<TaskEntityWithProperties>[]>(() => {
+    const server = serverTasks();
+    const optimistic = optimisticTasks();
+    const sort = (entities: TaskEntityWithProperties[]) =>
+      sortTasks(entities, state.sort, propertyDefinitions());
+    // Before the first page, a grouped view shows a created task in its group.
+    const groups =
+      server.kind === 'grouped'
+        ? server.groups
+        : server.tasks.length === 0 &&
+            optimistic.length > 0 &&
+            state.groupBy !== 'none' &&
+            !search.isSearching()
+          ? []
+          : undefined;
+    if (!groups) {
+      const listed = server.kind === 'flat' ? server.tasks : [];
+      if (optimistic.length === 0) return buildFlatSoupRows(listed);
+      return buildFlatSoupRows(
+        sort(deduplicateSoupEntities([...listed, ...optimistic]))
+      );
+    }
+    if (optimistic.length === 0) return buildGroupedSoupRows(groups);
+    return buildGroupedSoupRows(
+      placeOptimisticTasks(groups, optimistic, {
+        groupKeys: optimisticGroupKeys,
+        groupLabel: optimisticGroupLabel,
+        compareGroups: compareOptimisticGroups,
+        sort,
+      })
+    );
+  });
   const rows = createSoupRowStore(builtRows);
 
   const items = createMemo(() => {
@@ -622,21 +744,15 @@ export function useTasksDataSource(
       return [];
     }
 
-    // Boards and timelines drag and open cards: a temporary id has neither.
-    const settledRows = () =>
-      rows().filter(
-        (row) => row.kind !== 'entity' || !isPendingTask(row.entity.id)
-      );
-
     if (search.isSearching()) {
-      return settledRows();
+      return rows();
     }
 
     if (query.isPending || query.isPlaceholderData) {
       return [];
     }
 
-    return settledRows();
+    return rows();
   };
 
   const boardLoading = () => {

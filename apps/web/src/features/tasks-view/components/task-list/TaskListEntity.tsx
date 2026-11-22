@@ -152,6 +152,8 @@ export function TaskListEntity(props: TaskListEntityProps) {
       aria-selected={props.rowId ? props.checked : undefined}
       aria-disabled={props.pending || undefined}
       aria-busy={props.pending || undefined}
+      // Its property controls would edit a task the server has not created.
+      inert={props.pending || undefined}
       tabIndex={props.rowId ? -1 : undefined}
       entity={props.entity}
       onClick={(e) => {

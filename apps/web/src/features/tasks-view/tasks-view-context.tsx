@@ -558,6 +558,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         return kind !== 'loading' && kind !== 'unavailable';
       },
       board: () => state.layout === 'board',
+      showsPendingTasks: () => state.layout === 'list',
       calendar,
     })
   );

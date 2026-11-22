@@ -11,7 +11,17 @@ const fixture = vi.hoisted(() => ({
   calls: [] as { args: () => unknown; options?: () => unknown }[],
   searchState: vi.fn(),
   mapItem: vi.fn(),
+  deletedKeys: (() => new Set()) as () => ReadonlySet<string>,
 }));
+vi.mock(
+  '@queries/soup/graphql/optimistic-deletions',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@queries/soup/graphql/optimistic-deletions')
+    >()),
+    usePendingGraphqlSoupDeleteKeys: () => () => fixture.deletedKeys(),
+  })
+);
 vi.mock('@queries/properties/definitions', () => ({
   useListPropertiesQuery: () => ({ isSuccess: false, data: [] }),
 }));
@@ -690,13 +700,12 @@ it('pauses task reads across project views and resumes when returning to tasks',
   });
 });
 
-it('shows created tasks in their group until the query lists them', async () => {
+async function createdTaskFixture(initiallyLoading = false) {
   const { buildOptimisticTask } = await import('../core/optimistic-task');
   const { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } = await import(
     '@property/constants'
   );
-  const notStarted = PROPERTY_OPTION_IDS.STATUS.NOT_STARTED;
-  const inProject = (id: string, projectId: string) =>
+  const inProject = (id: string, projectId = 'project') =>
     buildOptimisticTask({
       id,
       title: id,
@@ -713,16 +722,23 @@ it('shows created tasks in their group until the query lists them', async () => 
       definitions: new Map(),
       now: new Date('2026-11-22T12:00:00Z'),
     });
-  const listed = inProject('listed', 'project');
-  const [entities, setEntities] = createSignal([listed]);
-  const [optimistic, setOptimistic] = createSignal([
-    { entity: inProject('temp', 'project'), pending: true },
-    { entity: inProject('elsewhere', 'other'), pending: true },
-  ]);
+  const [entities, setEntities] = createSignal<TaskEntityWithProperties[]>([]);
+  const [loading, setLoading] = createSignal(initiallyLoading);
+  const [optimistic, setOptimistic] = createSignal<
+    { entity: TaskEntityWithProperties; pending: boolean }[]
+  >([]);
+  const [showsPending, setShowsPending] = createSignal(true);
+  const [known, setKnown] = createSignal<string[] | undefined>();
+  const [deleted, setDeleted] = createSignal<ReadonlySet<string>>(new Set());
+  fixture.deletedKeys = deleted;
   const onListed = vi.fn();
   fixture.query = {
-    isLoading: false,
-    isPending: false,
+    get isLoading() {
+      return loading();
+    },
+    get isPending() {
+      return loading();
+    },
     isPlaceholderData: false,
     get data() {
       return {
@@ -760,6 +776,8 @@ it('shows created tasks in their group until the query lists them', async () => 
           entityId: 'project',
         }),
         optimisticTasks: optimistic,
+        showsPendingTasks: showsPending,
+        isOptimisticTaskKnown: (id) => known()?.includes(id) ?? true,
         onOptimisticTasksListed: onListed,
       }
     );
@@ -774,32 +792,173 @@ it('shows created tasks in their group until the query lists them', async () => 
             ? `#${row.groupId}:${row.count}`
             : row.kind
       );
+  return {
+    notStarted: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+    inProject,
+    source,
+    shape,
+    onListed,
+    cleanup,
+    setEntities,
+    setLoading,
+    setOptimistic,
+    setShowsPending,
+    setKnown,
+    setDeleted,
+  };
+}
+
+it('shows created tasks in their group until the query lists them', async () => {
+  const f = await createdTaskFixture();
+  const listed = f.inProject('listed');
+  f.setEntities([listed]);
+  f.setOptimistic([
+    { entity: f.inProject('temp'), pending: true },
+    { entity: f.inProject('elsewhere', 'other'), pending: true },
+  ]);
   try {
     // A Not started group no page had opens for it; another project's task stays out.
-    expect(shape()).toEqual(['#done:1', 'listed', `#${notStarted}:1`, 'temp']);
-    expect(source.isPendingTask?.('temp')).toBe(true);
-    expect(source.isPendingTask?.('listed')).toBe(false);
-    expect(
-      source
-        .boardRows?.()
-        .some((row) => row.kind === 'entity' && row.entity.id === 'temp')
-    ).toBe(false);
+    expect(f.shape()).toEqual([
+      '#done:1',
+      'listed',
+      `#${f.notStarted}:1`,
+      'temp',
+    ]);
+    expect(f.source.isPendingTask?.('temp')).toBe(true);
+    expect(f.source.isPendingTask?.('listed')).toBe(false);
 
     // The server created it: the row takes its real id and can be opened.
-    setOptimistic([
-      {
-        entity: { ...inProject('temp', 'project'), id: 'task' },
-        pending: false,
-      },
+    f.setOptimistic([
+      { entity: { ...f.inProject('temp'), id: 'task' }, pending: false },
     ]);
-    expect(shape()).toEqual(['#done:1', 'listed', `#${notStarted}:1`, 'task']);
-    expect(source.isPendingTask?.('task')).toBe(false);
-    expect(onListed).not.toHaveBeenCalled();
+    expect(f.shape()).toEqual([
+      '#done:1',
+      'listed',
+      `#${f.notStarted}:1`,
+      'task',
+    ]);
+    expect(f.source.isPendingTask?.('task')).toBe(false);
+    expect(f.onListed).not.toHaveBeenCalled();
 
     // The query lists it itself: the stand-in is released.
-    setEntities([listed, { ...inProject('task', 'project') }]);
-    expect(onListed).toHaveBeenCalledWith(['task']);
+    f.setEntities([listed, f.inProject('task')]);
+    expect(f.onListed).toHaveBeenCalledWith(['task']);
   } finally {
-    cleanup();
+    f.cleanup();
   }
+});
+
+it('keeps tasks being created off layouts that open and drag cards', async () => {
+  const f = await createdTaskFixture();
+  f.setEntities([f.inProject('listed')]);
+  f.setShowsPending(false);
+  f.setOptimistic([
+    { entity: f.inProject('temp'), pending: true },
+    { entity: f.inProject('created'), pending: false },
+  ]);
+  try {
+    // Board and Gantt get only the created task; counts leave out the other.
+    expect(f.source.boardRows?.().map((row) => row.id)).toEqual(
+      f.source.items().map((row) => row.id)
+    );
+    expect(f.shape()).toEqual([
+      '#done:1',
+      'listed',
+      `#${f.notStarted}:1`,
+      'created',
+    ]);
+  } finally {
+    f.cleanup();
+  }
+});
+
+it('shows a task created before the first page loads, in its group', async () => {
+  const f = await createdTaskFixture(true);
+  f.setOptimistic([{ entity: f.inProject('temp'), pending: true }]);
+  try {
+    expect(f.shape()).toEqual([`#${f.notStarted}:1`, 'temp']);
+    expect(f.source.isLoading()).toBe(false);
+  } finally {
+    f.cleanup();
+  }
+});
+
+it('follows a create that settles while a new page loads', async () => {
+  const f = await createdTaskFixture();
+  f.setEntities([f.inProject('listed')]);
+  f.setOptimistic([{ entity: f.inProject('temp'), pending: true }]);
+  try {
+    // The query reloads (a filter or sort change) and keeps its last rows.
+    f.setLoading(true);
+    f.setOptimistic([
+      { entity: { ...f.inProject('temp'), id: 'task' }, pending: false },
+    ]);
+    expect(f.shape()).toContain('task');
+    expect(f.shape()).not.toContain('temp');
+
+    // A failed create leaves no row behind under its temporary id.
+    f.setOptimistic([{ entity: f.inProject('other'), pending: true }]);
+    f.setOptimistic([]);
+    expect(f.shape()).toEqual(['#done:1', 'listed']);
+  } finally {
+    f.cleanup();
+  }
+});
+
+it('keeps a stand-in until the host knows the task as well', async () => {
+  const f = await createdTaskFixture();
+  f.setKnown([]);
+  f.setOptimistic([
+    { entity: { ...f.inProject('temp'), id: 'task' }, pending: false },
+  ]);
+  try {
+    f.setEntities([f.inProject('task')]);
+    expect(f.onListed).not.toHaveBeenCalled();
+    expect(f.shape()).toEqual(['#done:1', 'task']);
+
+    f.setKnown(['task']);
+    expect(f.onListed).toHaveBeenCalledWith(['task']);
+  } finally {
+    f.cleanup();
+  }
+});
+
+it('drops a created task deleted before the query lists it', async () => {
+  const f = await createdTaskFixture();
+  f.setEntities([f.inProject('listed')]);
+  f.setOptimistic([
+    { entity: { ...f.inProject('temp'), id: 'task' }, pending: false },
+  ]);
+  try {
+    expect(f.shape()).toContain('task');
+    f.setDeleted(new Set(['GraphqlSoupDocument:task']));
+    expect(f.shape()).toEqual(['#done:1', 'listed']);
+    expect(f.onListed).toHaveBeenCalledWith(['task']);
+  } finally {
+    f.cleanup();
+  }
+});
+
+it('opens a created task’s group where the server orders it', async () => {
+  const { placeOptimisticTasks } = await import('./use-tasks-query');
+  const f = await createdTaskFixture();
+  f.cleanup();
+  const order = ['high', 'medium', 'low'];
+  const server = [
+    { id: 'high', label: 'High', entities: [f.inProject('a')], count: 1 },
+    { id: 'low', label: 'Low', entities: [f.inProject('b')], count: 1 },
+  ];
+  const placed = placeOptimisticTasks(server, [f.inProject('temp')], {
+    groupKeys: () => ['medium'],
+    groupLabel: (key) => key,
+    compareGroups: (a, b) => order.indexOf(a) - order.indexOf(b),
+    sort: (entities) => entities,
+  });
+  expect(placed.map((group) => [group.id, group.count])).toEqual([
+    ['high', 1],
+    ['medium', 1],
+    ['low', 1],
+  ]);
+  // The server's groups are left as they were.
+  expect(server.map((group) => group.id)).toEqual(['high', 'low']);
 });
