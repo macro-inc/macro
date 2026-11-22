@@ -64,6 +64,14 @@ for (const provider of PROVIDERS) {
       page,
       mailbox,
     }) => {
+      // Keep the scheduled toast under the pointer until Undo asks the service.
+      // Live updates could otherwise dismiss it as soon as the forced send lands.
+      await page.routeWebSocket(/\/dss\/items\/soup\/graphql\/ws/, () => {});
+      await page.routeWebSocket(/\/connection-gateway(\/|\?|$)/, (socket) => {
+        socket.onMessage((message) => {
+          if (message === 'ping') socket.send('pong');
+        });
+      });
       const storage = await draftStorage(page);
       await chooseTomorrow(page, mailbox, 'Quarterly');
       const refused = await refuse(page, scheduleRequest('PUT'));
@@ -106,6 +114,8 @@ for (const provider of PROVIDERS) {
           { timeout: 30_000 }
         )
         .toBe(1);
+      await held.hover();
+      await expect(held).toBeVisible();
       await held.getByRole('button', { name: 'Undo' }).click();
       await expect(
         notice(

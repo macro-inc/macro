@@ -3,6 +3,7 @@
 // and an Outlook inbox; the email service holds the block list and the
 // sender filters.
 
+import { createHash } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
@@ -66,7 +67,7 @@ for (const provider of PROVIDERS) {
     test('unchanged live refreshes keep the sender menu and row stable', async ({
       page,
       mailbox,
-    }) => {
+    }, testInfo) => {
       await mailbox.deliver({
         from: 'Grace <grace@example.com>',
         subject: 'Agenda',
@@ -91,20 +92,36 @@ for (const provider of PROVIDERS) {
         .poll(() => senderFilters(mailbox))
         .toEqual([{ address: 'hal@example.com', signal: false }]);
       await expect.poll(() => rowIds(page)).toEqual([agenda.id]);
+      const noiseRequest = page.waitForRequest(
+        (request) =>
+          request.method() === 'POST' &&
+          new URL(request.url()).pathname.endsWith('/dss/items/soup/graphql') &&
+          /\bquery\s+Soup\s*[( {]/.test(request.postDataJSON()?.query ?? '') &&
+          JSON.stringify(request.postDataJSON()?.variables).includes(
+            '"importance":false'
+          )
+      );
       await page
         .getByRole('radiogroup', { name: 'Inbox view' })
         .getByText('Noise', { exact: true })
         .click();
+      const noise = await noiseRequest;
+      const noiseResponse = await noise.response();
+      expect(noiseResponse?.status()).toBe(200);
+      await noiseResponse?.finished();
       await expect.poll(() => rowIds(page)).toEqual([photos.id]);
-      const original = await row(page, photos.id).elementHandle();
-      if (!original)
-        throw new Error('Expected the Noise row before opening its menu');
       await row(page, photos.id).click({ button: 'right' });
       const signal = page.getByRole('menuitem', {
         name: 'Sender → Signal',
         exact: true,
       });
       await expect(signal).toBeVisible();
+      // The tab may replace its first rows while settling. Start the unchanged-
+      // refresh baseline on the row whose menu is now open.
+      const original = await row(page, photos.id).elementHandle();
+      if (!original)
+        throw new Error('Expected the Noise row with its menu open');
+      const wakeFacts: object[] = [];
       const wakes = [
         () =>
           mailbox.emitRefresh({
@@ -124,31 +141,76 @@ for (const provider of PROVIDERS) {
             document.dispatchEvent(new Event('visibilitychange'))
           ),
       ];
-      for (const wake of wakes) {
-        const refreshed = page.waitForResponse(
-          (response) =>
-            response.request().method() === 'POST' &&
-            new URL(response.url()).pathname.endsWith(
-              '/dss/items/soup/graphql'
-            ) &&
-            /\bquery\s+Soup\s*[( {]/.test(
-              response.request().postDataJSON()?.query ?? ''
+      try {
+        for (const [wakeIndex, wake] of wakes.entries()) {
+          wakeFacts.push({
+            wakeIndex,
+            phase: 'before-wake',
+            connected: await original.evaluate(
+              (element) => element.isConnected
+            ),
+            sameNode: await row(page, photos.id).evaluate(
+              (element, reference) => element === reference,
+              original
+            ),
+          });
+          // Match a request started after this listener, never an in-flight
+          // response from the tab change. The first hint may wait up to 5 s.
+          const refreshed = page
+            .waitForRequest(
+              (request) =>
+                request.method() === 'POST' &&
+                new URL(request.url()).pathname.endsWith(
+                  '/dss/items/soup/graphql'
+                ) &&
+                request.postData() === noise.postData(),
+              { timeout: 15_000 }
             )
-        );
-        await wake();
-        const response = await refreshed;
-        expect(response.status()).toBe(200);
-        await response.finished();
-        expect(await original.evaluate((element) => element.isConnected)).toBe(
-          true
-        );
-        expect(
-          await row(page, photos.id).evaluate(
-            (element, reference) => element === reference,
-            original
-          )
-        ).toBe(true);
-        await expect(signal).toBeVisible();
+            .catch((cause: unknown) => {
+              throw new Error(
+                `Wake ${wakeIndex} did not request the Noise list`,
+                { cause }
+              );
+            });
+          await wake();
+          const request = await refreshed;
+          const response = await request.response();
+          expect(response?.status()).toBe(200);
+          if (!response) throw new Error(`Wake ${wakeIndex} had no response`);
+          await response.finished();
+          wakeFacts.push({
+            wakeIndex,
+            phase: 'after-wake',
+            connected: await original.evaluate(
+              (element) => element.isConnected
+            ),
+            sameNode: await row(page, photos.id).evaluate(
+              (element, reference) => element === reference,
+              original
+            ),
+            requestHash: createHash('sha256')
+              .update(request.postData() ?? '')
+              .digest('hex'),
+            responseHash: createHash('sha256')
+              .update(await response.body())
+              .digest('hex'),
+          });
+          expect(
+            await original.evaluate((element) => element.isConnected)
+          ).toBe(true);
+          expect(
+            await row(page, photos.id).evaluate(
+              (element, reference) => element === reference,
+              original
+            )
+          ).toBe(true);
+          await expect(signal).toBeVisible();
+        }
+      } finally {
+        await testInfo.attach('sender-menu-wakes', {
+          body: JSON.stringify(wakeFacts),
+          contentType: 'application/json',
+        });
       }
       await signal.click();
       await expect

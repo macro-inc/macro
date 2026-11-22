@@ -83,7 +83,11 @@ upgrades. Those counts measure client frame handling, not live Kafka delivery.
 The per-test gateway exposes `mailbox.emitRefresh` for typed, synthetic refresh
 frames while real server state stays unchanged. It is unavailable on the
 full-stack tier. The sender-menu suite keeps first-retry traces and records menu/row state in
-attachments and report annotations. Retry counts remain visible in the JSON
+attachments and report annotations. Its unchanged-refresh baseline starts after
+Noise loads and the menu opens; each wake waits for a newly started matching
+Noise query and records before/after node facts and request/response hashes.
+Scheduled-Undo failure cases silence live updates while holding the toast, so
+Undo itself observes that the forced send has completed. Retry counts remain visible in the JSON
 report; the suite follows the shared retry policy.
 
 ## Writing a test
