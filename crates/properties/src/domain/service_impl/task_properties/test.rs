@@ -260,6 +260,7 @@ async fn a_scoped_request_assigns_no_agent() {
     for scope in [
         agent_correlation::scope::SessionScope::NoSend,
         agent_correlation::scope::SessionScope::Job,
+        agent_correlation::scope::SessionScope::ChannelMention,
         agent_correlation::scope::SessionScope::Generation,
     ] {
         let refused = agent_correlation::context::scope_attribution(

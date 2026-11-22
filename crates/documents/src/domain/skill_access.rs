@@ -7,8 +7,13 @@ use document_sub_type::DocumentSubType;
 pub(crate) fn ensure_skill_write(sub_type: Option<DocumentSubType>) -> Result<(), DocumentError> {
     if sub_type == Some(DocumentSubType::Skill)
         && (agent_correlation::context::current_channel_mention().is_some()
-            || agent_correlation::context::current_scope()
-                == Some(agent_correlation::scope::SessionScope::NoSend))
+            || matches!(
+                agent_correlation::context::current_scope(),
+                Some(
+                    agent_correlation::scope::SessionScope::NoSend
+                        | agent_correlation::scope::SessionScope::ChannelMention
+                )
+            ))
     {
         return Err(DocumentError::Forbidden(
             "Saved skill instructions cannot be changed from this restricted run. Edit the skill from Macro.".into(),

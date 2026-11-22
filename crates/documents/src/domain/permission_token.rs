@@ -30,6 +30,9 @@ pub(crate) struct PermissionTokenClaims {
     /// was narrowed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) agent_scope: Option<String>,
+    /// Original verified mention attribution, retained in the signed grant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) channel_mention_id: Option<uuid::Uuid>,
 }
 
 /// Sign a document permission token for the given user and document.
@@ -45,6 +48,7 @@ pub fn encode_permission_token(
         .transpose()
         .map_err(|e| DocumentError::Internal(anyhow::anyhow!("invalid user id: {e}")))?;
 
+    let mention = agent_correlation::context::current_channel_mention();
     let scope = agent_correlation::context::current_scope();
     let access_level = if agent_correlation::context::caps_document_tokens_to_view() {
         AccessLevel::View
@@ -67,6 +71,7 @@ pub fn encode_permission_token(
             iss: ISSUER.to_string(),
             actor,
             agent_scope: scope.map(|scope| scope.as_str().to_owned()),
+            channel_mention_id: mention,
         },
         jwt_secret,
     )?)

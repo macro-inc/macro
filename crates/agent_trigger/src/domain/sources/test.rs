@@ -221,6 +221,7 @@ async fn a_scoped_requests_assignment_starts_no_session() {
     for scope in [
         agent_correlation::scope::SessionScope::NoSend,
         agent_correlation::scope::SessionScope::Job,
+        agent_correlation::scope::SessionScope::ChannelMention,
     ] {
         let event = agent_correlation::context::scope_attribution(
             agent_correlation::context::Attribution {

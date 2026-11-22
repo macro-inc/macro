@@ -211,7 +211,6 @@ DELETE /saved_views/definitions/{saved_view_id}
 DELETE /saved_views/{saved_view_id}
 DELETE /task_templates/{id}
 DELETE /user_document_view_location/{document_id}
-DELETE /webhook/webhooks/{webhook_id}
 PATCH /annotations/anchors
 PATCH /call/record/{call_id}
 PATCH /call/record/{call_id}/transcript

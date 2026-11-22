@@ -49,6 +49,21 @@ impl UsageRecorder for NoUsage {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_responder_runs_code_for_the_original_user_and_mention(pool: sqlx::PgPool) {
+    let user = macro_db_client::user::create_user::create_user(
+        &pool,
+        "00000000-0000-4000-8000-00000000ad01",
+        "admission@example.com",
+        "admission@example.com",
+        true,
+        "fixture-account",
+        None,
+        None,
+        Default::default(),
+        false,
+    )
+    .await
+    .unwrap();
+    assert_eq!(user, ADMISSION_TEST_USER);
     let ctx = test_api_context(pool.clone()).await;
     let programs = Arc::new(Programs::default());
     let source = "export async function main() { return {data: 'found the document'}; }";

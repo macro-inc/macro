@@ -201,12 +201,13 @@ async fn documents_that_are_not_markdown_and_empty_revisions_never_reach_the_wor
 async fn audit_skill_instructions_are_not_rewritten_by_mentions_or_no_send_runs() {
     use agent_correlation::context::{Attribution, scope_attribution};
     use agent_correlation::scope::SessionScope;
-    for (skill, mention, no_send, allowed) in [
-        (true, false, false, true),
-        (true, true, false, false),
-        (true, true, true, false),
-        (true, false, true, false),
-        (false, true, true, true),
+    for (skill, mention, scope, allowed) in [
+        (true, false, None, true),
+        (true, true, None, false),
+        (true, true, Some(SessionScope::NoSend), false),
+        (true, false, Some(SessionScope::NoSend), false),
+        (true, false, Some(SessionScope::ChannelMention), false),
+        (false, false, Some(SessionScope::NoSend), true),
     ] {
         let mut metadata = document("md");
         if skill {
@@ -216,7 +217,7 @@ async fn audit_skill_instructions_are_not_rewritten_by_mentions_or_no_send_runs(
             correlation_id: Some(uuid::Uuid::from_u128(701)),
             session_id: Some(uuid::Uuid::from_u128(702)),
             channel_mention_id: mention.then_some(uuid::Uuid::from_u128(703)),
-            scope: no_send.then_some(SessionScope::NoSend),
+            scope,
             ..Default::default()
         };
         let writes = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));

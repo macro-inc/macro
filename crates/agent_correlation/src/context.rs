@@ -58,9 +58,15 @@ pub fn current_session() -> Option<Uuid> {
 
 /// The scope the current request is held to: the one stored with its
 /// invocation, else the one its credential signs. It may be set when
-/// `current_session` is not.
+/// `current_session` is not. Verified mention attribution always adds the
+/// ChannelMention restriction, including older contexts with no signed scope.
 pub fn current_scope() -> Option<SessionScope> {
-    attribution().scope
+    let accepted = attribution();
+    if accepted.channel_mention_id.is_some() {
+        Some(SessionScope::ChannelMention)
+    } else {
+        accepted.scope
+    }
 }
 
 /// Whether this request is restricted by a stored or signed scope, including

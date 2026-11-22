@@ -405,8 +405,9 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/gtm-invite/redeem"),
     ("DELETE", "/gtm-invite/links/{id}"),
     ("PATCH", "/user/ai_consent"),
-    // A webhook's filters and status decide what an outside endpoint hears.
+    // A webhook's filters, status and lifetime decide what an outside endpoint hears.
     ("PATCH", "/webhook/webhooks/{id}"),
+    ("DELETE", "/webhook/webhooks/{id}"),
     // Secrets in the team's password vault, shown or handed elsewhere.
     ("POST", "/passwords/agent/teams/{id}/items/{id}/disclose"),
     ("POST", "/passwords/agent/teams/{id}/items/{id}/totp/code"),
