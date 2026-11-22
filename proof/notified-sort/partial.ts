@@ -23,7 +23,7 @@ const steps = lines('steps.jsonl');
 for (const s of steps)
   for (const [k, v] of Object.entries<any>(s.checks ?? {})) {
     const classes: string[] = Array.isArray(v) && typeof v[0] === 'string' ? v : (v?.classes ?? []);
-    if (k === 'live' || k === 'liveMisses') continue;
+    if (k === 'live' || k === 'liveMisses' || k === 'domRereads' || k === 'domRows' || /errors$/.test(k)) continue;
     for (const c of classes) add(c);
   }
 console.log(JSON.stringify({ run, reads: reads.length, dom: dom.length, steps: steps.length, open: Object.fromEntries(open), closed: Object.fromEntries(closed) }, null, 1));
