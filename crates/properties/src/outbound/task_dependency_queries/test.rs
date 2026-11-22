@@ -312,12 +312,19 @@ async fn inverse_capacity_is_atomic_and_oversized_snapshots_can_clear(
                 .await
                 .is_err()
         );
+        // The failed request rolls back asynchronously. Serialize before checking
+        // capacity so the fail-fast contention error is not the tested outcome.
+        let mut legacy_tx = pool.begin().await?;
+        sqlx::query_scalar!("SELECT pg_advisory_xact_lock(747847177) IS NULL")
+            .fetch_one(&mut *legacy_tx)
+            .await?;
         let legacy = sqlx::query!(
             "UPDATE entity_properties SET values = $1 WHERE entity_id = $2 AND entity_type = 'TASK' AND property_definition_id = $3",
             serde_json::json!({"type":"EntityReference","value":[{"entity_type":"TASK","entity_id":root.to_string()}]}),
             leaves[1000].to_string(),
             leaf_property
-        ).execute(&pool).await.unwrap_err();
+        ).execute(&mut *legacy_tx).await.unwrap_err();
+        legacy_tx.rollback().await?;
         assert_eq!(
             legacy.as_database_error().unwrap().code().as_deref(),
             Some("22023")
