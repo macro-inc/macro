@@ -6,7 +6,7 @@ use entity_access::domain::models::ViewAccessLevel;
 
 use super::*;
 use crate::domain::model::{AgentKind, SubjectKind};
-use crate::domain::ports::{RunFacts, SessionFacts};
+use crate::domain::ports::{RunFacts, SessionFacts, SuggestionFacts};
 use crate::test_support::{
     FLAG_OFF, FLAGS_DOWN, PERSON, RATER, TEAMMATE, World, message, receipt, user,
 };
@@ -54,6 +54,7 @@ fn run_of(routine: Uuid, run_id: Uuid) -> RatedResponse {
 
 fn up(id: u128) -> RateRequest {
     RateRequest {
+        rater: Rater::Person,
         id: Uuid::from_u128(id),
         rating: Rating::Up,
         note: None,
@@ -64,6 +65,7 @@ fn up(id: u128) -> RateRequest {
 
 fn down(id: u128, note: &str) -> RateRequest {
     RateRequest {
+        rater: Rater::Person,
         id: Uuid::from_u128(id),
         rating: Rating::Down,
         note: Some(note.to_owned()),
@@ -74,10 +76,16 @@ fn down(id: u128, note: &str) -> RateRequest {
 
 fn retraction(id: u128) -> RetractRequest {
     RetractRequest {
+        rater: Rater::Person,
         id: Uuid::from_u128(id),
         surface: Surface::AgentsView,
         trace_id: None,
     }
+}
+
+/// `request`, from where `surface` shows the response.
+fn seen_in(request: RateRequest, surface: Surface) -> RateRequest {
+    RateRequest { surface, ..request }
 }
 
 /// A session run by the in-process Macro bot.
@@ -371,7 +379,10 @@ async fn a_bots_message_records_the_bot_and_its_linked_session() {
     let (service, repo) = world_with_channel().service();
 
     service
-        .rate(in_channel(RATER, BOT_MESSAGE), up(1))
+        .rate(
+            in_channel(RATER, BOT_MESSAGE),
+            seen_in(up(1), Surface::MessageTimeline),
+        )
         .await
         .unwrap();
 
@@ -392,7 +403,10 @@ async fn a_teammates_message_records_the_teammate() {
     let (service, repo) = world_with_channel().service();
 
     service
-        .rate(in_channel(RATER, TEAMMATE_MESSAGE), up(1))
+        .rate(
+            in_channel(RATER, TEAMMATE_MESSAGE),
+            seen_in(up(1), Surface::MessageThread),
+        )
         .await
         .unwrap();
 
@@ -406,7 +420,12 @@ async fn a_teammates_message_records_the_teammate() {
 async fn a_persons_message_or_one_outside_the_parent_is_refused() {
     let (service, repo) = world_with_channel().service();
 
-    let person = service.rate(in_channel(RATER, PERSON_MESSAGE), up(1)).await;
+    let person = service
+        .rate(
+            in_channel(RATER, PERSON_MESSAGE),
+            seen_in(up(1), Surface::MessageTimeline),
+        )
+        .await;
     let elsewhere = service
         .rate(
             RatedResponse::Message {
@@ -414,7 +433,7 @@ async fn a_persons_message_or_one_outside_the_parent_is_refused() {
                 access: receipt(RATER, &OTHER_CHANNEL.to_string(), EntityType::Channel),
                 message_id: BOT_MESSAGE,
             },
-            up(2),
+            seen_in(up(2), Surface::MessageTimeline),
         )
         .await;
 
@@ -437,8 +456,16 @@ async fn a_run_records_its_session_and_a_run_of_another_routine_is_refused() {
     )]));
     let (service, repo) = world.service();
 
-    service.rate(run_of(ROUTINE, RUN), up(1)).await.unwrap();
-    let elsewhere = service.rate(run_of(OTHER_ROUTINE, RUN), up(2)).await;
+    service
+        .rate(run_of(ROUTINE, RUN), seen_in(up(1), Surface::RoutineRun))
+        .await
+        .unwrap();
+    let elsewhere = service
+        .rate(
+            run_of(OTHER_ROUTINE, RUN),
+            seen_in(up(2), Surface::RoutineRun),
+        )
+        .await;
 
     assert!(matches!(
         elsewhere,
@@ -473,4 +500,129 @@ async fn export_pages_say_where_the_next_starts_until_the_last() {
     assert_eq!(second.items.len(), 1);
     assert_eq!(second.next, None);
     assert_eq!(second.items[0].turn, Some(3));
+}
+
+#[tokio::test]
+async fn a_program_never_writes() {
+    let (service, repo) = world_with_session().service();
+
+    let rated = service
+        .rate(
+            turn(RATER, 0),
+            RateRequest {
+                rater: Rater::Program,
+                ..up(1)
+            },
+        )
+        .await;
+    let retracted = service
+        .retract(
+            turn(RATER, 0),
+            RetractRequest {
+                rater: Rater::Program,
+                ..retraction(2)
+            },
+        )
+        .await;
+
+    assert!(matches!(rated, Err(FeedbackError::ProgramRun)));
+    assert!(matches!(retracted, Err(FeedbackError::ProgramRun)));
+    assert!(repo.rows().is_empty());
+}
+
+#[tokio::test]
+async fn a_surface_that_does_not_show_the_response_is_invalid() {
+    let (service, repo) = world_with_channel().service();
+
+    let rated = service
+        .rate(
+            in_channel(RATER, BOT_MESSAGE),
+            seen_in(up(1), Surface::RoutineRun),
+        )
+        .await;
+
+    assert!(matches!(rated, Err(FeedbackError::Invalid(_))));
+    assert!(repo.rows().is_empty());
+}
+
+const SUGGESTION: Uuid = Uuid::from_u128(0x5066);
+const OTHER_SUGGESTION: Uuid = Uuid::from_u128(0x5067);
+
+fn suggestion(user_id: &str) -> RatedResponse {
+    RatedResponse::Suggestion {
+        user: user(user_id),
+        suggestion_id: SUGGESTION,
+    }
+}
+
+/// RATER's suggestion, made by a session the Macro bot ran.
+fn world_with_suggestion() -> World {
+    World {
+        suggestions: crate::test_support::FakeSuggestions(HashMap::from([(
+            (RATER.to_owned(), SUGGESTION),
+            SuggestionFacts {
+                agent_session_id: Some(AgentSessionId::new_from_uuid(SESSION)),
+            },
+        )])),
+        ..world_with_session()
+    }
+}
+
+#[tokio::test]
+async fn a_suggestion_records_the_session_that_made_it_and_lists_by_id() {
+    let (service, repo) = world_with_suggestion().service();
+
+    service
+        .rate(suggestion(RATER), seen_in(up(1), Surface::SuggestionTile))
+        .await
+        .unwrap();
+    let mine = service
+        .mine(FeedbackContainer::Suggestions {
+            user: user(RATER),
+            ids: vec![SUGGESTION, OTHER_SUGGESTION, SUGGESTION],
+        })
+        .await
+        .unwrap();
+
+    let event = &repo.rows()[0].event;
+    assert_eq!(event.subject_kind, SubjectKind::Suggestion);
+    assert_eq!(event.container_id, SUGGESTION.to_string());
+    assert_eq!(event.subject_id, SUGGESTION);
+    assert_eq!(event.turn, None);
+    assert_eq!(event.agent_session_id, Some(SESSION));
+    assert_eq!(event.model.as_deref(), Some("claude-opus-5-5"));
+    assert_eq!(mine.len(), 1);
+    assert_eq!(mine[0].subject_id, SUGGESTION);
+}
+
+#[tokio::test]
+async fn someone_elses_suggestion_is_forbidden_and_too_many_ids_invalid() {
+    let mut world = world_with_suggestion();
+    world.suggestions.0.insert(
+        (PERSON.to_owned(), OTHER_SUGGESTION),
+        SuggestionFacts {
+            agent_session_id: None,
+        },
+    );
+    let (service, repo) = world.service();
+
+    let theirs = service
+        .rate(
+            RatedResponse::Suggestion {
+                user: user(RATER),
+                suggestion_id: OTHER_SUGGESTION,
+            },
+            seen_in(up(1), Surface::SuggestionRow),
+        )
+        .await;
+    let too_many = service
+        .mine(FeedbackContainer::Suggestions {
+            user: user(RATER),
+            ids: (0..101).map(Uuid::from_u128).collect(),
+        })
+        .await;
+
+    assert!(matches!(theirs, Err(FeedbackError::Forbidden)));
+    assert!(matches!(too_many, Err(FeedbackError::Invalid(_))));
+    assert!(repo.rows().is_empty());
 }

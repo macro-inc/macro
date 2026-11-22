@@ -1,6 +1,7 @@
 //! The feedback service: the rollout gate, which responses can be rated by
 //! whom, the context recorded with a rating, and safe-to-repeat writes.
 
+use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use agent_fold::domain::log::AgentSessionId;
@@ -12,15 +13,19 @@ use mention_utils::parse::{ParsedXmlText, TextSegment, XmlTag};
 use messages::domain::api::MessageReader;
 use messages::domain::models::MessageParent;
 use messages::domain::ports::MessageError;
+use tracing::Level;
 use tracing::field::Empty;
 use uuid::Uuid;
 
 use super::model::{
     AGENT_RESPONSE_FEEDBACK_FLAG, AgentKind, AppendOutcome, ExportCursor, ExportLimit, ExportPage,
-    FeedbackContainer, FeedbackError, FeedbackState, FeedbackSubject, FeedbackWrite, MyFeedback,
-    Note, RateRequest, RatedResponse, Rating, ResponseContext, RetractRequest, Surface,
+    FeedbackContainer, FeedbackError, FeedbackState, FeedbackSubject, FeedbackWrite,
+    MAX_SUGGESTIONS_LISTED, MyFeedback, Note, RateRequest, RatedResponse, Rater, Rating,
+    ResponseContext, RetractRequest, SubjectKind, Surface,
 };
-use super::ports::{AgentAccounts, AgentSessions, FeedbackApi, FeedbackRepo, RoutineRuns};
+use super::ports::{
+    AgentAccounts, AgentSessions, FeedbackApi, FeedbackRepo, RoutineRuns, Suggestions,
+};
 
 #[cfg(test)]
 mod test;
@@ -32,23 +37,26 @@ const FLAG_KEPT_FOR_SECS: u64 = 60;
 const PEOPLE_REMEMBERED: usize = 10_000;
 
 /// Records ratings of agent responses for people with the rollout flag.
-pub struct FeedbackService<Repo, Flags, Sessions, Runs, Accounts> {
+pub struct FeedbackService<Repo, Flags, Sessions, Runs, Accounts, Suggs> {
     repo: Repo,
     flags: Option<Flags>,
     flag_kept: Mutex<TimedSizedCache<String, bool>>,
     sessions: Sessions,
     runs: Runs,
     accounts: Accounts,
+    suggestions: Suggs,
     messages: Arc<dyn MessageReader>,
 }
 
-impl<Repo, Flags, Sessions, Runs, Accounts> FeedbackService<Repo, Flags, Sessions, Runs, Accounts>
+impl<Repo, Flags, Sessions, Runs, Accounts, Suggs>
+    FeedbackService<Repo, Flags, Sessions, Runs, Accounts, Suggs>
 where
     Repo: FeedbackRepo,
     Flags: FeatureFlags + 'static,
     Sessions: AgentSessions,
     Runs: RoutineRuns,
     Accounts: AgentAccounts,
+    Suggs: Suggestions,
 {
     /// Build the service. Without `flags` the feature is off for everyone.
     pub fn new(
@@ -57,6 +65,7 @@ where
         sessions: Sessions,
         runs: Runs,
         accounts: Accounts,
+        suggestions: Suggs,
         messages: Arc<dyn MessageReader>,
     ) -> Self {
         Self {
@@ -69,12 +78,13 @@ where
             sessions,
             runs,
             accounts,
+            suggestions,
             messages,
         }
     }
 
     /// Refuse, as if the routes did not exist, a person the flag leaves out.
-    #[tracing::instrument(name = "agent_feedback.flag", err, skip_all, fields(
+    #[tracing::instrument(name = "agent_feedback.flag", err(level = Level::DEBUG), skip_all, fields(
         agent_feedback.flag.cached = Empty,
     ))]
     async fn require_flag(&self, user: &MacroUserIdStr<'_>) -> Result<(), FeedbackError> {
@@ -119,18 +129,32 @@ where
 
     /// Check the response is rated by a person through access to its own
     /// container, append the row, and say what it made of the person's state.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one write's fields, shared by rate and retract"
+    )]
     async fn write(
         &self,
         response: RatedResponse,
+        rater: Rater,
         id: Uuid,
         rating: Option<Rating>,
         note: Option<String>,
         surface: Surface,
         trace_id: Option<String>,
     ) -> Result<FeedbackState, FeedbackError> {
+        // A program never writes, whatever else is wrong with the request.
+        if rater == Rater::Program {
+            return Err(FeedbackError::ProgramRun);
+        }
         let (user, subject) = rated_subject(&response)?;
         record_subject(&subject);
         self.require_flag(&user).await?;
+        if !surface.shows(subject.kind()) {
+            return Err(FeedbackError::Invalid(
+                "surface does not show this kind of response",
+            ));
+        }
 
         let note = Note::parse(note)?;
         if let Some(note) = &note {
@@ -214,6 +238,22 @@ where
                 }
                 Ok(context)
             }
+            RatedResponse::Suggestion {
+                user,
+                suggestion_id,
+            } => {
+                // Only the person a suggestion was made for sees it.
+                let suggestion = self
+                    .suggestions
+                    .suggestion(&user, suggestion_id)
+                    .await
+                    .map_err(FeedbackError::Unavailable)?
+                    .ok_or(FeedbackError::Forbidden)?;
+                match suggestion.agent_session_id {
+                    Some(session_id) => self.session_context(session_id).await,
+                    None => Ok(ResponseContext::default()),
+                }
+            }
             RatedResponse::RoutineRun { routine, run_id } => {
                 let routine_id = routine_id_of(&routine)?;
                 let run = self
@@ -254,27 +294,29 @@ where
     }
 }
 
-impl<Repo, Flags, Sessions, Runs, Accounts> FeedbackApi
-    for FeedbackService<Repo, Flags, Sessions, Runs, Accounts>
+impl<Repo, Flags, Sessions, Runs, Accounts, Suggs> FeedbackApi
+    for FeedbackService<Repo, Flags, Sessions, Runs, Accounts, Suggs>
 where
     Repo: FeedbackRepo,
     Flags: FeatureFlags + 'static,
     Sessions: AgentSessions,
     Runs: RoutineRuns,
     Accounts: AgentAccounts,
+    Suggs: Suggestions,
 {
-    #[tracing::instrument(name = "agent_feedback.rate", err, skip_all, fields(
+    #[tracing::instrument(name = "agent_feedback.rate", err(level = Level::INFO), skip_all, fields(
         agent_feedback.subject_kind = Empty,
         agent_feedback.surface = request.surface.as_ref(),
         agent_feedback.rating = request.rating.as_ref(),
         agent_feedback.note_len = Empty,
         agent_feedback.outcome = Empty,
-        agent_session.id = Empty,
+        agent.session.id = Empty,
         agent.turn = Empty,
         message.id = Empty,
         message.parent_id = Empty,
         routine.id = Empty,
         routine.run.id = Empty,
+        suggestion.id = Empty,
     ))]
     async fn rate(
         &self,
@@ -283,6 +325,7 @@ where
     ) -> Result<FeedbackState, FeedbackError> {
         self.write(
             response,
+            request.rater,
             request.id,
             Some(request.rating),
             request.note,
@@ -292,16 +335,17 @@ where
         .await
     }
 
-    #[tracing::instrument(name = "agent_feedback.retract", err, skip_all, fields(
+    #[tracing::instrument(name = "agent_feedback.retract", err(level = Level::INFO), skip_all, fields(
         agent_feedback.subject_kind = Empty,
         agent_feedback.surface = request.surface.as_ref(),
         agent_feedback.outcome = Empty,
-        agent_session.id = Empty,
+        agent.session.id = Empty,
         agent.turn = Empty,
         message.id = Empty,
         message.parent_id = Empty,
         routine.id = Empty,
         routine.run.id = Empty,
+        suggestion.id = Empty,
     ))]
     async fn retract(
         &self,
@@ -310,6 +354,7 @@ where
     ) -> Result<(), FeedbackError> {
         self.write(
             response,
+            request.rater,
             request.id,
             None,
             None,
@@ -320,40 +365,55 @@ where
         .map(|_| ())
     }
 
-    #[tracing::instrument(name = "agent_feedback.mine", err, skip_all, fields(
+    #[tracing::instrument(name = "agent_feedback.mine", err(level = Level::INFO), skip_all, fields(
         agent_feedback.subject_kind = Empty,
-        agent_feedback.container_id = Empty,
+        agent_feedback.containers = Empty,
         count = Empty,
     ))]
     async fn mine(&self, container: FeedbackContainer) -> Result<Vec<MyFeedback>, FeedbackError> {
-        let (user, kind, container_id) = match &container {
+        let (user, kind, container_ids) = match &container {
             FeedbackContainer::AgentSession(session) => (
                 user_of(session)?,
-                super::model::SubjectKind::AgentSessionTurn,
-                session_id_of(session)?.as_uuid().to_string(),
+                SubjectKind::AgentSessionTurn,
+                vec![session_id_of(session)?.as_uuid().to_string()],
             ),
             FeedbackContainer::MessageParent { parent, access } => {
                 ensure_parent(parent, access)?;
                 (
                     user_of(access)?,
-                    super::model::SubjectKind::Message,
-                    parent.entity_id(),
+                    SubjectKind::Message,
+                    vec![parent.entity_id()],
                 )
             }
             FeedbackContainer::Routine(routine) => (
                 user_of(routine)?,
-                super::model::SubjectKind::RoutineRun,
-                routine_id_of(routine)?.to_string(),
+                SubjectKind::RoutineRun,
+                vec![routine_id_of(routine)?.to_string()],
             ),
+            // The person's own rows only, and a person rates only their own
+            // suggestions: another person's suggestion has no rows to list.
+            FeedbackContainer::Suggestions { user, ids } => {
+                // Each suggestion once, so a repeated id neither repeats its
+                // rating nor counts twice against the limit.
+                let ids: BTreeSet<&Uuid> = ids.iter().collect();
+                if ids.len() > MAX_SUGGESTIONS_LISTED {
+                    return Err(FeedbackError::Invalid("at most 100 suggestion ids"));
+                }
+                (
+                    user.clone(),
+                    SubjectKind::Suggestion,
+                    ids.into_iter().map(Uuid::to_string).collect(),
+                )
+            }
         };
         let span = tracing::Span::current();
         span.record("agent_feedback.subject_kind", kind.as_ref());
-        span.record("agent_feedback.container_id", container_id.as_str());
+        span.record("agent_feedback.containers", container_ids.len());
         self.require_flag(&user).await?;
 
         let mine = self
             .repo
-            .current_in_container(&user, kind, &container_id)
+            .current_in_containers(&user, kind, &container_ids)
             .await
             .map_err(FeedbackError::Unavailable)?;
         span.record("count", mine.len());
@@ -420,6 +480,15 @@ fn rated_subject(
                 },
             ))
         }
+        RatedResponse::Suggestion {
+            user,
+            suggestion_id,
+        } => Ok((
+            user.clone(),
+            FeedbackSubject::Suggestion {
+                suggestion_id: *suggestion_id,
+            },
+        )),
         RatedResponse::RoutineRun { routine, run_id } => Ok((
             user_of(routine)?,
             FeedbackSubject::RoutineRun {
@@ -436,7 +505,7 @@ fn record_subject(subject: &FeedbackSubject) {
     span.record("agent_feedback.subject_kind", subject.kind().as_ref());
     match subject {
         FeedbackSubject::AgentSessionTurn { session_id, turn } => {
-            span.record("agent_session.id", session_id.as_uuid().to_string());
+            span.record("agent.session.id", session_id.as_uuid().to_string());
             span.record("agent.turn", turn);
         }
         FeedbackSubject::Message { parent, message_id } => {
@@ -446,6 +515,9 @@ fn record_subject(subject: &FeedbackSubject) {
         FeedbackSubject::RoutineRun { routine_id, run_id } => {
             span.record("routine.id", routine_id.to_string());
             span.record("routine.run.id", run_id.to_string());
+        }
+        FeedbackSubject::Suggestion { suggestion_id } => {
+            span.record("suggestion.id", suggestion_id.to_string());
         }
     }
 }

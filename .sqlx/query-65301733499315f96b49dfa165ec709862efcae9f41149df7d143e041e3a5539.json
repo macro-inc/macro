@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT latest.subject_id AS \"subject_id!\", latest.turn,\n                      latest.rating::text AS \"rating!\", latest.note,\n                      latest.created_at AS \"created_at!\"\n               FROM unnest($3::text[]) AS container(id)\n               CROSS JOIN LATERAL (\n                   SELECT DISTINCT ON (subject_id, turn) subject_id, turn, rating, note, created_at\n                   FROM agent_response_feedback\n                   WHERE user_id = $1\n                     AND subject_kind = $2::text::agent_response_feedback_subject\n                     AND container_id = container.id\n                   ORDER BY subject_id, turn, created_at DESC, id DESC\n               ) latest\n               WHERE latest.rating IS NOT NULL\n               ORDER BY latest.subject_id, latest.turn",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "turn",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "rating!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      true,
+      false
+    ]
+  },
+  "hash": "65301733499315f96b49dfa165ec709862efcae9f41149df7d143e041e3a5539"
+}

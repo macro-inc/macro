@@ -28,8 +28,13 @@ const STRANGER: &str = "macro|stranger@example.com";
 const SESSION: Uuid = Uuid::from_u128(0x5E55);
 const CHANNEL: Uuid = Uuid::from_u128(0xC4A7);
 const BOT_MESSAGE: Uuid = Uuid::from_u128(0xB0B0);
+const SUGGESTION: Uuid = Uuid::from_u128(0x5066);
 
-/// A bearer token is the user id it stands for.
+/// The prefix of a bearer token signed for an agent (`BotId::TEST_A`).
+const AGENT_SIGNED: &str = "agent:";
+
+/// A bearer token is the user id it stands for, or `agent:<user id>` for a
+/// Macro API token signed for an agent acting as that user.
 #[derive(Clone)]
 struct BearerIsUser;
 
@@ -38,13 +43,21 @@ impl JwtValidator for BearerIsUser {
         &self,
         jwt: &str,
     ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        let (origin, agent_id, user_id) = match jwt.strip_prefix(AGENT_SIGNED) {
+            Some(user_id) => (
+                macro_authorization::CredentialOrigin::MacroApiJwt,
+                Some(BotId::TEST_A),
+                user_id,
+            ),
+            None => (macro_authorization::CredentialOrigin::Session, None, jwt),
+        };
         Ok(macro_authorization::ValidatedCredential {
-            origin: macro_authorization::CredentialOrigin::Session,
+            origin,
             identity: ValidatedIdentity {
-                agent_id: None,
+                agent_id,
                 agent_via: None,
                 routine_id: None,
-                user_id: jwt.to_string(),
+                user_id: user_id.to_string(),
                 fusion_user_id: "fusion-user".to_string(),
                 organization_id: None,
                 permissions: None,
@@ -199,6 +212,12 @@ fn app() -> (Router, crate::test_support::FakeRepo) {
                 "Done.",
             ),
         )])),
+        suggestions: crate::test_support::FakeSuggestions(HashMap::from([(
+            (RATER.to_owned(), SUGGESTION),
+            crate::domain::ports::SuggestionFacts {
+                agent_session_id: None,
+            },
+        )])),
         ..World::default()
     };
     let (service, repo) = world.service();
@@ -239,6 +258,14 @@ fn request(
         .header(header::CONTENT_TYPE, "application/json");
     let body = body.map_or_else(Body::empty, |body| Body::from(body.to_string()));
     builder.body(body).unwrap()
+}
+
+fn rating_seen_in(id: u128, rating: &str, surface: &str) -> serde_json::Value {
+    serde_json::json!({
+        "id": Uuid::from_u128(id),
+        "rating": rating,
+        "surface": surface,
+    })
 }
 
 fn rating(id: u128, rating: &str) -> serde_json::Value {
@@ -407,7 +434,7 @@ async fn rate_an_agents_message_in_a_channel() {
             "PUT",
             &format!("/agent-feedback/messages/channel/{CHANNEL}/items/{BOT_MESSAGE}"),
             RATER,
-            Some(rating(1, "up")),
+            Some(rating_seen_in(1, "up", "message_timeline")),
         ))
         .await
         .unwrap();
@@ -499,4 +526,143 @@ async fn the_export_takes_the_internal_key_and_refuses_a_person() {
     assert_eq!(page["items"][0]["userId"], RATER);
     assert_eq!(page["items"][0]["model"], "claude-opus-5-5");
     assert_eq!(page["next"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn an_agents_program_is_refused_every_write() {
+    let (app, repo) = app();
+    let mut from_code = request("PUT", &turn_uri(0), RATER, Some(rating(1, "up")));
+    from_code.headers_mut().insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+
+    let code_run = app.clone().oneshot(from_code).await.unwrap();
+    let agent_signed = app
+        .clone()
+        .oneshot(request(
+            "PUT",
+            &turn_uri(0),
+            &format!("{AGENT_SIGNED}{RATER}"),
+            Some(rating(2, "up")),
+        ))
+        .await
+        .unwrap();
+    let agent_retract = app
+        .oneshot(request(
+            "DELETE",
+            &format!(
+                "{}?id={}&surface=agents_view",
+                turn_uri(0),
+                Uuid::from_u128(3)
+            ),
+            &format!("{AGENT_SIGNED}{RATER}"),
+            None,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(code_run.status(), StatusCode::FORBIDDEN);
+    assert_eq!(json(code_run).await["code"], "program_run");
+    assert_eq!(agent_signed.status(), StatusCode::FORBIDDEN);
+    assert_eq!(agent_retract.status(), StatusCode::FORBIDDEN);
+    assert!(repo.rows().is_empty());
+}
+
+#[tokio::test]
+async fn a_surface_that_does_not_show_the_response_is_400() {
+    let (app, repo) = app();
+
+    let rated = app
+        .oneshot(request(
+            "PUT",
+            &turn_uri(0),
+            RATER,
+            Some(rating_seen_in(1, "up", "routine_run")),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(rated.status(), StatusCode::BAD_REQUEST);
+    assert!(repo.rows().is_empty());
+}
+
+#[tokio::test]
+async fn rate_list_and_retract_the_callers_suggestion() {
+    let (app, repo) = app();
+    let uri = format!("/agent-feedback/suggestions/{SUGGESTION}");
+    let mine_uri = format!(
+        "/agent-feedback/suggestions/mine?ids={SUGGESTION},{}",
+        Uuid::from_u128(0x5067)
+    );
+
+    let rated = app
+        .clone()
+        .oneshot(request(
+            "PUT",
+            &uri,
+            RATER,
+            Some(rating_seen_in(1, "down", "suggestion_row")),
+        ))
+        .await
+        .unwrap();
+    let not_theirs = app
+        .clone()
+        .oneshot(request(
+            "PUT",
+            &uri,
+            FLAG_OFF,
+            Some(rating_seen_in(2, "up", "suggestion_row")),
+        ))
+        .await
+        .unwrap();
+    let mine = app
+        .clone()
+        .oneshot(request("GET", &mine_uri, RATER, None))
+        .await
+        .unwrap();
+    let mine = json(mine).await;
+    let retracted = app
+        .clone()
+        .oneshot(request(
+            "DELETE",
+            &format!("{uri}?id={}&surface=suggestion_draft", Uuid::from_u128(3)),
+            RATER,
+            None,
+        ))
+        .await
+        .unwrap();
+    let mine_after = app
+        .oneshot(request("GET", &mine_uri, RATER, None))
+        .await
+        .unwrap();
+
+    assert_eq!(rated.status(), StatusCode::OK);
+    // FLAG_OFF doesn't have the flag: refused before ownership is read.
+    assert_eq!(not_theirs.status(), StatusCode::NOT_FOUND);
+    assert_eq!(mine["items"].as_array().map(Vec::len), Some(1));
+    assert_eq!(mine["items"][0]["subjectId"], SUGGESTION.to_string());
+    assert_eq!(mine["items"][0]["turn"], serde_json::Value::Null);
+    assert_eq!(mine["items"][0]["rating"], "down");
+    assert_eq!(retracted.status(), StatusCode::NO_CONTENT);
+    assert_eq!(json(mine_after).await["items"], serde_json::json!([]));
+    assert_eq!(repo.rows().len(), 2);
+}
+
+#[tokio::test]
+async fn a_suggestion_that_isnt_the_callers_is_403() {
+    let (app, repo) = app();
+
+    let rated = app
+        .oneshot(request(
+            "PUT",
+            &format!("/agent-feedback/suggestions/{}", Uuid::from_u128(0x5067)),
+            RATER,
+            Some(rating_seen_in(1, "up", "suggestion_tile")),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(rated.status(), StatusCode::FORBIDDEN);
+    assert!(repo.rows().is_empty());
 }

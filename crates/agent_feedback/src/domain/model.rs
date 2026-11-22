@@ -65,6 +65,27 @@ pub enum Surface {
     MessageThread,
     /// A routine run's detail.
     RoutineRun,
+    /// A suggestion's row in For you or Home priorities.
+    SuggestionRow,
+    /// A suggestion's tile.
+    SuggestionTile,
+    /// A suggestion's reply draft, where the draft is opened.
+    SuggestionDraft,
+}
+
+impl Surface {
+    /// Whether a response of `kind` is shown here.
+    pub fn shows(self, kind: SubjectKind) -> bool {
+        match kind {
+            SubjectKind::AgentSessionTurn => matches!(self, Self::AgentsView | Self::AgentBlock),
+            SubjectKind::Message => matches!(self, Self::MessageTimeline | Self::MessageThread),
+            SubjectKind::RoutineRun => self == Self::RoutineRun,
+            SubjectKind::Suggestion => matches!(
+                self,
+                Self::SuggestionRow | Self::SuggestionTile | Self::SuggestionDraft
+            ),
+        }
+    }
 }
 
 /// What kind of response was rated.
@@ -90,6 +111,9 @@ pub enum SubjectKind {
     Message,
     /// One run of a routine.
     RoutineRun,
+    /// A suggestion an agent made the person (For you, Home priorities,
+    /// reply drafts).
+    Suggestion,
 }
 
 /// What produced the response.
@@ -151,6 +175,11 @@ pub enum FeedbackSubject {
         /// The run (`action_execution_record`).
         run_id: Uuid,
     },
+    /// A suggestion.
+    Suggestion {
+        /// The suggestion.
+        suggestion_id: Uuid,
+    },
 }
 
 impl FeedbackSubject {
@@ -160,25 +189,29 @@ impl FeedbackSubject {
             Self::AgentSessionTurn { .. } => SubjectKind::AgentSessionTurn,
             Self::Message { .. } => SubjectKind::Message,
             Self::RoutineRun { .. } => SubjectKind::RoutineRun,
+            Self::Suggestion { .. } => SubjectKind::Suggestion,
         }
     }
 
     /// The container one person's feedback is listed by: the session, the
-    /// message's parent, or the routine.
+    /// message's parent, the routine, or the suggestion itself.
     pub fn container_id(&self) -> String {
         match self {
             Self::AgentSessionTurn { session_id, .. } => session_id.as_uuid().to_string(),
             Self::Message { parent, .. } => parent.entity_id(),
             Self::RoutineRun { routine_id, .. } => routine_id.to_string(),
+            Self::Suggestion { suggestion_id } => suggestion_id.to_string(),
         }
     }
 
-    /// The rated thing's own id: the session, the message, or the run.
+    /// The rated thing's own id: the session, the message, the run, or the
+    /// suggestion.
     pub fn subject_id(&self) -> Uuid {
         match self {
             Self::AgentSessionTurn { session_id, .. } => session_id.as_uuid(),
             Self::Message { message_id, .. } => *message_id,
             Self::RoutineRun { run_id, .. } => *run_id,
+            Self::Suggestion { suggestion_id } => *suggestion_id,
         }
     }
 
@@ -186,7 +219,7 @@ impl FeedbackSubject {
     pub fn turn(&self) -> Option<u32> {
         match self {
             Self::AgentSessionTurn { turn, .. } => Some(*turn),
-            Self::Message { .. } | Self::RoutineRun { .. } => None,
+            Self::Message { .. } | Self::RoutineRun { .. } | Self::Suggestion { .. } => None,
         }
     }
 }
@@ -218,6 +251,13 @@ pub enum RatedResponse {
         /// The run.
         run_id: Uuid,
     },
+    /// One of the person's own suggestions; the service checks they own it.
+    Suggestion {
+        /// Who rates.
+        user: MacroUserIdStr<'static>,
+        /// The suggestion.
+        suggestion_id: Uuid,
+    },
 }
 
 /// A container whose responses one person rated, with their view access to it.
@@ -234,6 +274,28 @@ pub enum FeedbackContainer {
     },
     /// A routine.
     Routine(EntityAccessReceipt<ViewAccessLevel>),
+    /// Some of the person's own suggestions, each its own container.
+    Suggestions {
+        /// Whose.
+        user: MacroUserIdStr<'static>,
+        /// At most [`MAX_SUGGESTIONS_LISTED`] suggestion ids.
+        ids: Vec<Uuid>,
+    },
+}
+
+/// The most suggestions one `mine` request names.
+pub const MAX_SUGGESTIONS_LISTED: usize = 100;
+
+/// Who sent a write: the person in the app, or a program (an agent's code
+/// run, or a credential signed for an agent or a routine) acting with their
+/// credential. Only the person rates: a program's ratings would be agents
+/// grading themselves under the person's name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Rater {
+    /// The person.
+    Person,
+    /// A program using the person's credential.
+    Program,
 }
 
 /// A note on a rating: at most [`NOTE_MAX_CHARS`] characters, never empty.
@@ -266,6 +328,8 @@ impl Note {
 /// A rating the caller asks for.
 #[derive(Debug, Clone)]
 pub struct RateRequest {
+    /// Who sent it.
+    pub rater: Rater,
     /// Minted by the client per action; a retry sends the same id.
     pub id: Uuid,
     /// Up or down.
@@ -281,6 +345,8 @@ pub struct RateRequest {
 /// A retraction the caller asks for.
 #[derive(Debug, Clone)]
 pub struct RetractRequest {
+    /// Who sent it.
+    pub rater: Rater,
     /// Minted by the client per action; a retry sends the same id.
     pub id: Uuid,
     /// Where the response was seen.
@@ -485,6 +551,9 @@ pub enum FeedbackError {
     /// The access shown does not cover the request.
     #[error("forbidden")]
     Forbidden,
+    /// A program, not the person, sent a write.
+    #[error("only the person rates agent responses, not an agent's program")]
+    ProgramRun,
     /// The response is not in the container the route names.
     #[error("the response is not in this container")]
     SubjectNotInContainer,

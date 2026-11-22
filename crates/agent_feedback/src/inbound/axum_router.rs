@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRef, Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, put};
 use axum::{Json, Router};
@@ -19,7 +19,7 @@ use entity_access::inbound::axum_extractors::{
 };
 use macro_authorization::{
     InternalOnly, MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, UserOnly,
+    MacroAuthorizationState, MacroUserAuthentication, UserOnly,
 };
 use messages::domain::models::MessageParent;
 use messages::domain::service::MessageView;
@@ -29,7 +29,7 @@ use uuid::Uuid;
 
 use crate::domain::model::{
     ExportCursor, ExportLimit, ExportPage, FeedbackContainer, FeedbackError, FeedbackState,
-    MyFeedback, RateRequest, RatedResponse, Rating, RetractRequest, Surface,
+    MyFeedback, RateRequest, RatedResponse, Rater, Rating, RetractRequest, Surface,
 };
 use crate::domain::ports::FeedbackApi;
 
@@ -119,6 +119,14 @@ where
             get(my_run_feedback::<S, Access, Auth>),
         )
         .route(
+            "/agent-feedback/suggestions/mine",
+            get(my_suggestion_feedback::<S, Access, Auth>),
+        )
+        .route(
+            "/agent-feedback/suggestions/{suggestion_id}",
+            put(rate_suggestion::<S, Access, Auth>).delete(retract_suggestion::<S, Access, Auth>),
+        )
+        .route(
             "/internal/agent-feedback/events",
             get(export_feedback::<S, Access, Auth>),
         )
@@ -195,13 +203,28 @@ pub(crate) struct RunPath {
     run_id: Uuid,
 }
 
+#[derive(Debug, Deserialize)]
+pub(crate) struct SuggestionPath {
+    suggestion_id: Uuid,
+}
+
+/// Which of the caller's suggestions to list ratings of.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct MySuggestionFeedbackQuery {
+    /// Comma-separated suggestion ids, at most 100. Ids that aren't the
+    /// caller's suggestions, or that they haven't rated, are absent from the
+    /// answer.
+    pub ids: String,
+}
+
 /// A failed feedback request's body.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct FeedbackErrorBody {
     /// What went wrong.
     pub message: String,
     /// A stable code for refusals a client handles: `subject_not_in_container`,
-    /// `not_agent_authored`, `id_taken`.
+    /// `not_agent_authored`, `id_taken`, `program_run`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<&'static str>,
 }
@@ -239,6 +262,7 @@ impl IntoResponse for FeedbackHttpError {
         let (status, code) = match &error {
             FeedbackError::NotFound => (StatusCode::NOT_FOUND, None),
             FeedbackError::Forbidden => (StatusCode::FORBIDDEN, None),
+            FeedbackError::ProgramRun => (StatusCode::FORBIDDEN, Some("program_run")),
             FeedbackError::SubjectNotInContainer => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 Some("subject_not_in_container"),
@@ -267,7 +291,7 @@ impl IntoResponse for FeedbackHttpError {
 /// View access to a message parent's messages, minted for the caller.
 async fn parent_access<Access: EntityAccessService>(
     access: &Access,
-    user: &macro_authorization::MacroUserAuthentication,
+    user: &MacroUserAuthentication,
     parent: &MessageParent,
 ) -> Result<EntityAccessReceipt<MessageView>, FeedbackHttpError> {
     principal_entity_access_receipt::<MessageView>(
@@ -293,11 +317,24 @@ fn parse_parent(parent_type: &str, parent_id: &str) -> Result<MessageParent, Fee
         .map_err(|_| FeedbackError::Invalid("invalid message parent").into())
 }
 
+/// Whether the person or one of their agents' programs sent the request: a
+/// code-mode run, or a credential signed for an agent or a routine.
+fn rater(user: &MacroUserAuthentication, headers: &HeaderMap) -> Rater {
+    if macro_authorization::is_program_run(user.attribution(), headers) {
+        Rater::Program
+    } else {
+        Rater::Person
+    }
+}
+
 fn rate_request(
     body: Result<Json<RateFeedbackBody>, JsonRejection>,
+    user: &MacroUserAuthentication,
+    headers: &HeaderMap,
 ) -> Result<RateRequest, FeedbackHttpError> {
     let Json(body) = body.map_err(FeedbackHttpError::InvalidBody)?;
     Ok(RateRequest {
+        rater: rater(user, headers),
         id: body.id,
         rating: body.rating,
         note: body.note,
@@ -306,8 +343,13 @@ fn rate_request(
     })
 }
 
-fn retract_request(query: RetractFeedbackQuery) -> RetractRequest {
+fn retract_request(
+    query: RetractFeedbackQuery,
+    user: &MacroUserAuthentication,
+    headers: &HeaderMap,
+) -> RetractRequest {
     RetractRequest {
+        rater: rater(user, headers),
         id: query.id,
         surface: query.surface,
         trace_id: macro_tower_layers::current_trace_id(),
@@ -338,12 +380,13 @@ pub(crate) async fn rate_turn<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<AgentFeedbackRouterState<S, Access, Auth>>,
-    _user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     session: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
     Path(path): Path<TurnPath>,
     body: Result<Json<RateFeedbackBody>, JsonRejection>,
 ) -> Result<Json<FeedbackState>, FeedbackHttpError> {
-    let request = rate_request(body)?;
+    let request = rate_request(body, &user.authorization, &headers)?;
     let response = RatedResponse::AgentSessionTurn {
         session: session.entity_access_receipt,
         turn: path.turn,
@@ -374,7 +417,8 @@ pub(crate) async fn retract_turn<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<AgentFeedbackRouterState<S, Access, Auth>>,
-    _user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     session: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
     Path(path): Path<TurnPath>,
     Query(query): Query<RetractFeedbackQuery>,
@@ -385,7 +429,10 @@ pub(crate) async fn retract_turn<
     };
     state
         .service
-        .retract(response, retract_request(query))
+        .retract(
+            response,
+            retract_request(query, &user.authorization, &headers),
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -453,12 +500,13 @@ pub(crate) async fn rate_message<
 >(
     State(state): State<AgentFeedbackRouterState<S, Access, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     Path(path): Path<MessagePath>,
     body: Result<Json<RateFeedbackBody>, JsonRejection>,
 ) -> Result<Json<FeedbackState>, FeedbackHttpError> {
     let parent = parse_parent(&path.parent_type, &path.parent_id)?;
     let access = parent_access(state.entity_access.as_ref(), &user.authorization, &parent).await?;
-    let request = rate_request(body)?;
+    let request = rate_request(body, &user.authorization, &headers)?;
     let response = RatedResponse::Message {
         parent,
         access,
@@ -497,6 +545,7 @@ pub(crate) async fn retract_message<
 >(
     State(state): State<AgentFeedbackRouterState<S, Access, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     Path(path): Path<MessagePath>,
     Query(query): Query<RetractFeedbackQuery>,
 ) -> Result<StatusCode, FeedbackHttpError> {
@@ -509,7 +558,10 @@ pub(crate) async fn retract_message<
     };
     state
         .service
-        .retract(response, retract_request(query))
+        .retract(
+            response,
+            retract_request(query, &user.authorization, &headers),
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -573,12 +625,13 @@ pub(crate) async fn rate_run<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<AgentFeedbackRouterState<S, Access, Auth>>,
-    _user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     routine: ScheduledActionAccessExtractor<ViewAccessLevel, Access, Auth>,
     Path(path): Path<RunPath>,
     body: Result<Json<RateFeedbackBody>, JsonRejection>,
 ) -> Result<Json<FeedbackState>, FeedbackHttpError> {
-    let request = rate_request(body)?;
+    let request = rate_request(body, &user.authorization, &headers)?;
     let response = RatedResponse::RoutineRun {
         routine: routine.entity_access_receipt,
         run_id: path.run_id,
@@ -610,7 +663,8 @@ pub(crate) async fn retract_run<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<AgentFeedbackRouterState<S, Access, Auth>>,
-    _user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     routine: ScheduledActionAccessExtractor<ViewAccessLevel, Access, Auth>,
     Path(path): Path<RunPath>,
     Query(query): Query<RetractFeedbackQuery>,
@@ -621,7 +675,10 @@ pub(crate) async fn retract_run<
     };
     state
         .service
-        .retract(response, retract_request(query))
+        .retract(
+            response,
+            retract_request(query, &user.authorization, &headers),
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -696,4 +753,122 @@ pub(crate) async fn export_feedback<
         None => ExportLimit::DEFAULT,
     };
     Ok(Json(state.service.export(after, limit).await?))
+}
+
+/// Rate one of the caller's suggestions.
+#[utoipa::path(
+    put,
+    path = "/agent-feedback/suggestions/{suggestion_id}",
+    operation_id = "agent_feedback_rate_suggestion",
+    tag = "agent_feedback",
+    params(("suggestion_id" = Uuid, Path)),
+    request_body = RateFeedbackBody,
+    responses(
+        (status = 200, body = FeedbackState),
+        (status = 400, body = FeedbackErrorBody),
+        (status = 401),
+        (status = 403, body = FeedbackErrorBody, description = "Not the caller's suggestion, or sent by a program"),
+        (status = 404, description = "Agent feedback is off for the caller"),
+        (status = 409, body = FeedbackErrorBody),
+        (status = 503, body = FeedbackErrorBody),
+    ),
+    security(("bearerAuth" = []))
+)]
+pub(crate) async fn rate_suggestion<
+    S: FeedbackApi,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentFeedbackRouterState<S, Access, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
+    Path(path): Path<SuggestionPath>,
+    body: Result<Json<RateFeedbackBody>, JsonRejection>,
+) -> Result<Json<FeedbackState>, FeedbackHttpError> {
+    let request = rate_request(body, &user.authorization, &headers)?;
+    let response = RatedResponse::Suggestion {
+        user: user.authorization.macro_user_id.clone(),
+        suggestion_id: path.suggestion_id,
+    };
+    Ok(Json(state.service.rate(response, request).await?))
+}
+
+/// Retract the caller's rating of one of their suggestions.
+#[utoipa::path(
+    delete,
+    path = "/agent-feedback/suggestions/{suggestion_id}",
+    operation_id = "agent_feedback_retract_suggestion",
+    tag = "agent_feedback",
+    params(("suggestion_id" = Uuid, Path), RetractFeedbackQuery),
+    responses(
+        (status = 204),
+        (status = 400, body = FeedbackErrorBody),
+        (status = 401),
+        (status = 403, body = FeedbackErrorBody, description = "Not the caller's suggestion, or sent by a program"),
+        (status = 404, description = "Agent feedback is off for the caller"),
+        (status = 409, body = FeedbackErrorBody),
+        (status = 503, body = FeedbackErrorBody),
+    ),
+    security(("bearerAuth" = []))
+)]
+pub(crate) async fn retract_suggestion<
+    S: FeedbackApi,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentFeedbackRouterState<S, Access, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
+    Path(path): Path<SuggestionPath>,
+    Query(query): Query<RetractFeedbackQuery>,
+) -> Result<StatusCode, FeedbackHttpError> {
+    let request = retract_request(query, &user.authorization, &headers);
+    let response = RatedResponse::Suggestion {
+        user: user.authorization.macro_user_id.clone(),
+        suggestion_id: path.suggestion_id,
+    };
+    state.service.retract(response, request).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// The caller's current ratings of some of their suggestions.
+#[utoipa::path(
+    get,
+    path = "/agent-feedback/suggestions/mine",
+    operation_id = "agent_feedback_my_suggestion_feedback",
+    tag = "agent_feedback",
+    params(MySuggestionFeedbackQuery),
+    responses(
+        (status = 200, body = MyFeedbackResponse),
+        (status = 400, body = FeedbackErrorBody),
+        (status = 401),
+        (status = 404, description = "Agent feedback is off for the caller"),
+        (status = 503, body = FeedbackErrorBody),
+    ),
+    security(("bearerAuth" = []))
+)]
+pub(crate) async fn my_suggestion_feedback<
+    S: FeedbackApi,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentFeedbackRouterState<S, Access, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(query): Query<MySuggestionFeedbackQuery>,
+) -> Result<Json<MyFeedbackResponse>, FeedbackHttpError> {
+    let ids = query
+        .ids
+        .split(',')
+        .filter(|id| !id.is_empty())
+        .map(str::parse)
+        .collect::<Result<Vec<Uuid>, _>>()
+        .map_err(|_| FeedbackError::Invalid("ids must be comma-separated suggestion ids"))?;
+    let items = state
+        .service
+        .mine(FeedbackContainer::Suggestions {
+            user: user.authorization.macro_user_id.clone(),
+            ids,
+        })
+        .await?;
+    Ok(Json(MyFeedbackResponse { items }))
 }

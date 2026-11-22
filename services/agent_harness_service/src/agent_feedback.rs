@@ -3,7 +3,9 @@
 
 use std::sync::Arc;
 
-use agent_feedback::domain::ports::{AgentSessions, RoutineRuns, RunFacts, SessionFacts};
+use agent_feedback::domain::ports::{
+    AgentSessions, RoutineRuns, RunFacts, SessionFacts, SuggestionFacts, Suggestions,
+};
 use agent_feedback::domain::service::FeedbackService;
 use agent_feedback::inbound::axum_router::{AgentFeedbackRouterState, agent_feedback_router};
 use agent_feedback::outbound::pg::PgFeedbackRepo;
@@ -13,11 +15,13 @@ use axum::Router;
 use entity_access::domain::ports::EntityAccessService;
 use feature_flags::FeatureFlags;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::api::MessageReader;
 use rootcause::Report;
 use scheduled_action::domain::models::ExecutionResourceType;
 use scheduled_action::domain::ports::ExecutionRecords;
 use sqlx::PgPool;
+use suggestions::domain::ports::SuggestionRepo;
 use uuid::Uuid;
 
 /// A session's agent, harness and model, through the session repository.
@@ -66,6 +70,27 @@ impl<Records: ExecutionRecords> RoutineRuns for RoutineRunRecords<Records> {
     }
 }
 
+/// A person's own suggestion, and the session that made it, through the
+/// suggestions repository.
+pub(crate) struct OwnSuggestions<Repo>(pub(crate) Repo);
+
+impl<Repo: SuggestionRepo> Suggestions for OwnSuggestions<Repo> {
+    async fn suggestion(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> Result<Option<SuggestionFacts>, Report> {
+        let session = self
+            .0
+            .proposing_session(user, id)
+            .await
+            .map_err(|error| rootcause::report!("suggestion lookup failed: {error}"))?;
+        Ok(session.map(|session| SuggestionFacts {
+            agent_session_id: Some(AgentSessionId::new_from_uuid(session)),
+        }))
+    }
+}
+
 /// The feedback routes over the shared pool.
 pub(crate) fn router<Sessions, Records, Flags, Access, Auth>(
     pool: PgPool,
@@ -83,13 +108,14 @@ where
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let repo = PgFeedbackRepo::new(pool);
+    let repo = PgFeedbackRepo::new(pool.clone());
     let service = FeedbackService::new(
         repo.clone(),
         flags,
         SessionRepoFacts(sessions),
         RoutineRunRecords(runs),
         repo,
+        OwnSuggestions(suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo::new(pool)),
         messages,
     );
     agent_feedback_router(AgentFeedbackRouterState::new(

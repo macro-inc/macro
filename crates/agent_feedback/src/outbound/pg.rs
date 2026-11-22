@@ -218,34 +218,38 @@ impl FeedbackRepo for PgFeedbackRepo {
         }))
     }
 
-    async fn current_in_container(
+    async fn current_in_containers(
         &self,
         user: &MacroUserIdStr<'static>,
         kind: SubjectKind,
-        container_id: &str,
+        container_ids: &[String],
     ) -> Result<Vec<MyFeedback>, Report> {
-        // One person's ratings in one container: small, but read on every
-        // render of a transcript or channel.
+        // One person's ratings in a few containers: small, but read on every
+        // render of a transcript, channel or suggestion list.
         let mut transaction = self.pool.begin().await?;
         sqlx::query!("SET LOCAL statement_timeout = '5s'")
             .execute(&mut *transaction)
             .await?;
+        // Each container on its own, so every one is read in index order and
+        // needs no sort before DISTINCT ON.
         let rows = sqlx::query!(
-            r#"SELECT subject_id AS "subject_id!", turn, rating::text AS "rating!", note,
-                      created_at AS "created_at!"
-               FROM (
+            r#"SELECT latest.subject_id AS "subject_id!", latest.turn,
+                      latest.rating::text AS "rating!", latest.note,
+                      latest.created_at AS "created_at!"
+               FROM unnest($3::text[]) AS container(id)
+               CROSS JOIN LATERAL (
                    SELECT DISTINCT ON (subject_id, turn) subject_id, turn, rating, note, created_at
                    FROM agent_response_feedback
                    WHERE user_id = $1
                      AND subject_kind = $2::text::agent_response_feedback_subject
-                     AND container_id = $3
+                     AND container_id = container.id
                    ORDER BY subject_id, turn, created_at DESC, id DESC
                ) latest
-               WHERE rating IS NOT NULL
-               ORDER BY subject_id, turn"#,
+               WHERE latest.rating IS NOT NULL
+               ORDER BY latest.subject_id, latest.turn"#,
             user.as_ref(),
             kind.as_ref(),
-            container_id,
+            container_ids,
         )
         .fetch_all(&mut *transaction)
         .await?;

@@ -27,6 +27,7 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{
     AgentAccounts, AgentSessions, FeedbackRepo, RoutineRuns, RunFacts, SessionFacts,
+    SuggestionFacts, Suggestions,
 };
 use crate::domain::service::FeedbackService;
 
@@ -170,18 +171,18 @@ impl FeedbackRepo for FakeRepo {
         Ok(AppendOutcome::Created(state))
     }
 
-    async fn current_in_container(
+    async fn current_in_containers(
         &self,
         user: &MacroUserIdStr<'static>,
         kind: SubjectKind,
-        container_id: &str,
+        container_ids: &[String],
     ) -> Result<Vec<MyFeedback>, Report> {
         let rows = self.rows.lock().expect("rows");
         let mut latest: Vec<&StoredRow> = Vec::new();
         for row in rows.iter().filter(|row| {
             row.write.user == *user
                 && row.write.subject.kind() == kind
-                && row.write.subject.container_id() == container_id
+                && container_ids.contains(&row.write.subject.container_id())
         }) {
             latest.retain(|kept| !same_response(&kept.write, &row.write));
             latest.push(row);
@@ -237,6 +238,20 @@ pub(crate) struct FakeRuns(pub(crate) HashMap<(Uuid, Uuid), RunFacts>);
 impl RoutineRuns for FakeRuns {
     async fn run(&self, routine_id: Uuid, run_id: Uuid) -> Result<Option<RunFacts>, Report> {
         Ok(self.0.get(&(routine_id, run_id)).cloned())
+    }
+}
+
+/// Suggestions by (owner, id).
+#[derive(Clone, Default)]
+pub(crate) struct FakeSuggestions(pub(crate) HashMap<(String, Uuid), SuggestionFacts>);
+
+impl Suggestions for FakeSuggestions {
+    async fn suggestion(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> Result<Option<SuggestionFacts>, Report> {
+        Ok(self.0.get(&(user.as_ref().to_owned(), id)).cloned())
     }
 }
 
@@ -340,8 +355,14 @@ pub(crate) fn message(
 }
 
 /// The service under test, over fakes.
-pub(crate) type TestService =
-    FeedbackService<FakeRepo, FakeFeatureFlags, FakeSessions, FakeRuns, FakeAccounts>;
+pub(crate) type TestService = FeedbackService<
+    FakeRepo,
+    FakeFeatureFlags,
+    FakeSessions,
+    FakeRuns,
+    FakeAccounts,
+    FakeSuggestions,
+>;
 
 /// What a test can see of the service's world.
 pub(crate) struct World {
@@ -349,6 +370,7 @@ pub(crate) struct World {
     pub(crate) sessions: FakeSessions,
     pub(crate) runs: FakeRuns,
     pub(crate) accounts: FakeAccounts,
+    pub(crate) suggestions: FakeSuggestions,
     pub(crate) messages: FakeMessages,
     pub(crate) flags: Option<FakeFeatureFlags>,
 }
@@ -360,6 +382,7 @@ impl Default for World {
             sessions: FakeSessions::default(),
             runs: FakeRuns::default(),
             accounts: FakeAccounts::default(),
+            suggestions: FakeSuggestions::default(),
             messages: FakeMessages::default(),
             flags: Some(flags()),
         }
@@ -377,6 +400,7 @@ impl World {
                 self.sessions,
                 self.runs,
                 self.accounts,
+                self.suggestions,
                 Arc::new(self.messages),
             ),
             repo,

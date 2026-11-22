@@ -173,10 +173,10 @@ async fn current_ratings_are_the_newest_unretracted_rows(pool: PgPool) {
     .unwrap();
 
     let mine = repo
-        .current_in_container(
+        .current_in_containers(
             &rater(),
             SubjectKind::AgentSessionTurn,
-            &SESSION.to_string(),
+            &[SESSION.to_string()],
         )
         .await
         .unwrap();
@@ -305,4 +305,45 @@ async fn agent_accounts_are_the_users_marked_as_agents(pool: PgPool) {
     assert!(!person);
     assert!(agent);
     assert!(!unknown);
+}
+
+/// Suggestions are their own containers; `mine` reads several at once and
+/// leaves out ones the person never rated.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn current_ratings_span_several_containers(pool: PgPool) {
+    insert_user(&pool, RATER, false).await;
+    let repo = PgFeedbackRepo::new(pool);
+    let (first, second, unrated) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+    for (suggestion_id, rating) in [
+        (first, Some(Rating::Up)),
+        (second, Some(Rating::Up)),
+        (second, Some(Rating::Down)),
+    ] {
+        let mut rated = write(
+            Uuid::now_v7(),
+            FeedbackSubject::Suggestion { suggestion_id },
+            rating,
+            None,
+        );
+        rated.surface = Surface::SuggestionRow;
+        repo.append_if_changed(&rated).await.unwrap();
+    }
+
+    let mine = repo
+        .current_in_containers(
+            &rater(),
+            SubjectKind::Suggestion,
+            &[first.to_string(), second.to_string(), unrated.to_string()],
+        )
+        .await
+        .unwrap();
+
+    let mut rated: Vec<_> = mine
+        .iter()
+        .map(|item| (item.subject_id, item.rating))
+        .collect();
+    rated.sort_by_key(|(id, _)| *id);
+    let mut expected = vec![(first, Rating::Up), (second, Rating::Down)];
+    expected.sort_by_key(|(id, _)| *id);
+    assert_eq!(rated, expected);
 }

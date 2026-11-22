@@ -16,6 +16,9 @@ use utoipa::OpenApi;
         crate::inbound::axum_router::rate_run,
         crate::inbound::axum_router::retract_run,
         crate::inbound::axum_router::my_run_feedback,
+        crate::inbound::axum_router::rate_suggestion,
+        crate::inbound::axum_router::retract_suggestion,
+        crate::inbound::axum_router::my_suggestion_feedback,
         crate::inbound::axum_router::export_feedback,
     ),
     components(schemas(

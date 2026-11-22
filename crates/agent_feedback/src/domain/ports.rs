@@ -62,12 +62,12 @@ pub trait FeedbackRepo: Send + Sync + 'static {
         write: &FeedbackWrite,
     ) -> impl Future<Output = Result<AppendOutcome, Report>> + Send;
 
-    /// One person's current, unretracted ratings in one container.
-    fn current_in_container(
+    /// One person's current, unretracted ratings in these containers.
+    fn current_in_containers(
         &self,
         user: &MacroUserIdStr<'static>,
         kind: SubjectKind,
-        container_id: &str,
+        container_ids: &[String],
     ) -> impl Future<Output = Result<Vec<MyFeedback>, Report>> + Send;
 
     /// Up to `limit` rows after `after`, in `(created_at, id)` order.
@@ -124,4 +124,21 @@ pub trait AgentAccounts: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<bool, Report>> + Send;
+}
+
+/// What a suggestion says about the agent that made it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SuggestionFacts {
+    /// The generation session that proposed or last changed it.
+    pub agent_session_id: Option<AgentSessionId>,
+}
+
+/// The person's suggestions, which only they can see.
+pub trait Suggestions: Send + Sync + 'static {
+    /// `user`'s suggestion `id`, or `None` when they have no such suggestion.
+    fn suggestion(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<SuggestionFacts>, Report>> + Send;
 }
