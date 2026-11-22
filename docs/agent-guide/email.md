@@ -1988,3 +1988,5 @@ the view and confirm results stay within it.
 Opening a row clears its unread state immediately; direct details mark read when
 ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
 mobile, and email inbox checks.
+
+IMAP size limits: an oversized monitored folder pauses the whole account snapshot, including new Inbox mail. The inbox list and selected empty-inbox view show "Mailbox too large to sync yet" while previously indexed mail stays readable; the empty view must not claim Inbox zero while sync is blocked. Automatic retries grow from one hour to twenty-four hours; a successful round or manual reconnect resets that delay. Changing folder settings allows one immediate attempt; the warning suggests unselecting large folders and shows the next retry time when available. This is separate from sign-in rejection; do not reconnect automatically or promise older mail has imported.

@@ -266,3 +266,5 @@ repeatable-read races that an ordinary parent trigger cannot see. Provider-prefi
 claim indexes retain the older unprefixed indexes during rolling updates. If a
 concurrent build is interrupted, inspect `pg_index.indisvalid` and remove only
 that invalid index before retrying its migration.
+
+email_links.mailbox_issue and mailbox_retry_at are nullable additive sync-health projections. Keep it separate from needs_reauth and permit old binaries to ignore it.

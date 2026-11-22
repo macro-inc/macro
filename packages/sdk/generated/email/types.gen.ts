@@ -1708,6 +1708,11 @@ export type Link = {
     is_primary: boolean;
     is_sync_active: boolean;
     macro_id: string;
+    mailbox_issue?: null | MailboxIssue;
+    /**
+     * Next automatic retry for a paused mailbox sync.
+     */
+    mailbox_retry_at?: string | null;
     /**
      * Whether the link's Google grant is missing the calendar scope. True for
      * inboxes connected before the calendar capability existed (and for
@@ -1839,6 +1844,11 @@ export type MailboxAction = {
 };
 
 /**
+ * Sanitized mailbox health independent of provider authentication.
+ */
+export type MailboxIssue = 'snapshot_too_large' | 'unknown';
+
+/**
  * Durable outcome of an accepted organization action.
  */
 export type MailboxOperation = {
@@ -1952,6 +1962,11 @@ export type Notification = {
      * A confirmed credential refusal; false is a normal journal wakeup.
      */
     credentialsRejected: boolean;
+    mailboxIssue?: null | MailboxIssue;
+    /**
+     * Durable retry guidance; absent on normal wakeups and older notifications.
+     */
+    syncRetryAt?: string | null;
 };
 
 export type ParsedMessage = {

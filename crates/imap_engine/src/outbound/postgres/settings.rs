@@ -131,6 +131,7 @@ impl SettingsRepository for PgRepository {
                     folder_role_overrides = $5,
                     excluded_folder_ids = $6,
                     watched_folder_ids = $7,
+                    state = imap_accounts.state - 'sync_retry_at',
                     updated_at = now()
                 FROM
                     email_links l

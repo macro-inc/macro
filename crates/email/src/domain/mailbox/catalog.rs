@@ -9,6 +9,8 @@ use models_email::service::{
 };
 
 pub struct InboxCatalogFacts {
+    pub mailbox_issue: Option<models_email::service::link::MailboxIssue>,
+    pub mailbox_retry_at: Option<chrono::DateTime<chrono::Utc>>,
     pub link: Link,
     pub settings: Settings,
     pub latest_backfill_status: Option<EmailBackfillStatus>,
@@ -60,12 +62,18 @@ impl<R: InboxCatalogRepository> InboxCatalogService<R> {
             .await?
             .into_iter()
             .map(|facts| {
-                let sync_status = EmailSyncStatus::derive(
+                let mut sync_status = EmailSyncStatus::derive(
                     facts.link.is_sync_active,
                     facts.link.needs_reauth,
                     facts.mailbox_unavailable,
                     facts.latest_backfill_status,
                 );
+                if facts.mailbox_issue.is_some()
+                    && facts.link.is_sync_active
+                    && !facts.link.needs_reauth
+                {
+                    sync_status = EmailSyncStatus::Error;
+                }
                 let has_calendar = match facts.link.provider {
                     UserProvider::Gmail => {
                         calendar_events::domain::models::GoogleScopeSet::from_scopes(

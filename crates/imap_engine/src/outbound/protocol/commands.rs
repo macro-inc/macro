@@ -114,7 +114,8 @@ impl ProtocolTransport {
                 return Ok(previous);
             }
         }
-        let session = self.imap(&c.imap).await?;
+        let mut session = self.imap(&c.imap).await?;
+        session.get_mut().enable_pooling();
         let now = Instant::now();
         Ok(Command {
             session,

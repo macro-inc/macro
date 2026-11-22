@@ -286,3 +286,121 @@ async fn an_all_busy_recent_batch_retries_only_deferred_items_and_reports_busy()
     assert!(matches!(result, Err(Error::AccountBusy)));
     assert_eq!(std::iter::from_fn(|| observed.try_recv().ok()).count(), 2);
 }
+
+#[tokio::test]
+async fn oversized_sync_preserves_the_complete_index_and_projects_health_without_reauth() {
+    let ReadFixture {
+        engine,
+        repository,
+        control,
+        binding,
+        observed: _observed,
+        message_id,
+        ..
+    } = read_fixture(
+        Vec::new(),
+        BTreeMap::from([(0, Error::SnapshotTooLarge)]),
+        None,
+    );
+    control.released.add_permits(1);
+    let mut account = repository.acquire(binding).await.unwrap();
+    let before = serde_json::to_value(&account.state.messages).unwrap();
+    assert_eq!(
+        engine.refresh(&mut account).await,
+        Err(Error::SnapshotTooLarge)
+    );
+    let state = repository.state.lock().unwrap();
+    assert_eq!(
+        state.mailbox_issue,
+        Some(models_email::service::link::MailboxIssue::SnapshotTooLarge)
+    );
+    assert!(!state.needs_reauth);
+    assert!(state.notification_pending);
+    assert_eq!(serde_json::to_value(&state.messages).unwrap(), before);
+    assert!(state.messages.contains_key(&message_id));
+}
+
+#[tokio::test]
+async fn a_complete_sync_clears_the_previous_size_issue() {
+    let ReadFixture {
+        engine,
+        repository,
+        control,
+        binding,
+        observed: _observed,
+        ..
+    } = read_fixture(Vec::new(), BTreeMap::new(), None);
+    {
+        let mut state = repository.state.lock().unwrap();
+        state.mailbox_issue = Some(models_email::service::link::MailboxIssue::SnapshotTooLarge);
+        state.sync_size_failures = 5;
+        state.sync_retry_at = Some(Utc::now() - chrono::Duration::seconds(1));
+    }
+    control.released.add_permits(1);
+    let mut account = repository.acquire(binding).await.unwrap();
+    engine.refresh(&mut account).await.unwrap();
+    let state = repository.state.lock().unwrap();
+    assert_eq!(state.mailbox_issue, None);
+    assert_eq!(state.sync_retry_at, None);
+    assert_eq!(state.sync_size_failures, 0);
+}
+
+#[tokio::test]
+async fn oversized_snapshots_transfer_once_per_growing_durable_backoff_window() {
+    let ReadFixture {
+        engine,
+        repository,
+        control,
+        binding,
+        mut observed,
+        ..
+    } = read_fixture(
+        Vec::new(),
+        BTreeMap::from([(0, Error::SnapshotTooLarge)]),
+        None,
+    );
+    control.released.add_permits(10);
+    let start = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
+    let mut next = start;
+    for hours in [1, 2, 4, 8, 16, 24, 24] {
+        // Re-acquire persisted state as a fresh actor/replica would do.
+        let mut account = repository.acquire(binding).await.unwrap();
+        assert_eq!(
+            engine.refresh_at(&mut account, next).await,
+            Err(Error::SnapshotTooLarge)
+        );
+        assert_eq!(observed.try_recv().unwrap(), binding.link_id);
+        let deadline = next + chrono::Duration::hours(hours);
+        assert_eq!(
+            repository.state.lock().unwrap().sync_retry_at,
+            Some(deadline)
+        );
+        for offset in [1, hours * 1800, hours * 3600 - 1] {
+            let mut reloaded = repository.acquire(binding).await.unwrap();
+            assert_eq!(
+                engine
+                    .refresh_at(&mut reloaded, next + chrono::Duration::seconds(offset))
+                    .await,
+                Err(Error::SnapshotTooLarge)
+            );
+            assert!(observed.try_recv().is_err());
+        }
+        next = deadline;
+    }
+    // The fenced preference write clears only the deadline. A wake may make
+    // one new attempt, then repeated wakeups use its next durable window.
+    repository.state.lock().unwrap().sync_retry_at = None;
+    let changed_at = next - chrono::Duration::hours(12);
+    let mut changed = repository.acquire(binding).await.unwrap();
+    assert_eq!(
+        engine.refresh_at(&mut changed, changed_at).await,
+        Err(Error::SnapshotTooLarge)
+    );
+    assert_eq!(observed.try_recv().unwrap(), binding.link_id);
+    let mut woken_again = repository.acquire(binding).await.unwrap();
+    assert_eq!(
+        engine.refresh_at(&mut woken_again, changed_at).await,
+        Err(Error::SnapshotTooLarge)
+    );
+    assert!(observed.try_recv().is_err());
+}

@@ -107,6 +107,12 @@ pub struct Link {
     pub provider: UserProvider,
     pub is_sync_active: bool,
     pub sync_status: SyncStatus,
+    /// Sync issue independent of rejected credentials.
+    #[serde(default)]
+    pub mailbox_issue: Option<service::link::MailboxIssue>,
+    /// Next automatic retry for a paused mailbox sync.
+    #[serde(default)]
+    pub mailbox_retry_at: Option<DateTime<Utc>>,
     /// Whether the link's Google grant needs to be reconnected. Drives the
     /// per-inbox reconnect prompt independently of the sync-status badge.
     pub needs_reauth: bool,
@@ -151,6 +157,8 @@ impl Link {
             provider: UserProvider::from(source.provider),
             is_sync_active: source.is_sync_active,
             sync_status,
+            mailbox_issue: None,
+            mailbox_retry_at: None,
             needs_reauth: source.needs_reauth,
             needs_calendar_permission,
             calendar_disabled,

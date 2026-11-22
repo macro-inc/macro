@@ -62,16 +62,21 @@ impl Plan {
         folders: &mut [RemoteFolder],
         prefs: &crate::domain::account_settings::FolderPreferences,
         selected: &std::collections::BTreeSet<String>,
-    ) {
-        let Some(all) = folders.iter().find(|f| f.path == self.all && f.monitored) else {
-            return;
+        retained: &mut super::snapshot::SnapshotBudget,
+    ) -> Result<(), Error> {
+        let Some(all_index) = folders
+            .iter()
+            .position(|f| f.path == self.all && f.monitored)
+        else {
+            return Ok(());
         };
+        let all = &folders[all_index];
         let epoch = all.uid_validity;
         let next = all.uid_next;
         let watermark = all.highest_modseq;
         let tier = all.sync_tier;
-        let messages = all.messages.clone();
-        for folder in folders {
+        let messages = std::mem::take(&mut folders[all_index].messages);
+        for folder in folders.iter_mut() {
             let Some(label) = self.labels.get(&folder.folder.id) else {
                 continue;
             };
@@ -94,17 +99,21 @@ impl Plan {
             folder.sync_tier = tier;
             folder.monitored = true;
             folder.folder.sync_enabled = true;
-            folder.messages = messages
-                .iter()
-                .filter(|m| {
-                    m.gmail_labels
-                        .as_ref()
-                        .is_some_and(|ls| ls.iter().any(|l| l == label))
-                })
-                .cloned()
-                .collect();
+            let mut projected = Vec::new();
+            for message in messages.iter().filter(|message| {
+                message
+                    .gmail_labels
+                    .as_ref()
+                    .is_some_and(|labels| labels.iter().any(|value| value == label))
+            }) {
+                retained.retain(message, false)?;
+                projected.push(message.clone());
+            }
+            folder.messages = projected;
             folder.folder.total_items = Some(folder.messages.len().try_into().unwrap_or(u32::MAX));
         }
+        folders[all_index].messages = messages;
+        Ok(())
     }
 }
 

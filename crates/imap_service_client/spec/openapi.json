@@ -511,6 +511,7 @@
           "send_unavailable",
           "throttled",
           "account_busy",
+          "snapshot_too_large",
           "message_too_large"
         ],
         "type": "string"

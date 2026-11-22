@@ -73,6 +73,14 @@ export default {
   folders: 'Folders',
   foldersPending: 'Folders will appear after the first sync.',
   outsideSync: 'Outside the latest sync',
+  mailboxTooLargeTitle: 'Mailbox too large to sync yet',
+  mailboxSizeRetry:
+    'Unselect large folders in Mail settings, or Macro will retry at {{time}}. Previously synced messages remain available.',
+  mailboxSizePaused:
+    'Unselect large folders in Mail settings to try syncing again. Previously synced messages remain available.',
+  mailboxIssueDetails: 'Open mailbox settings for details before trying again.',
+  mailboxIssue:
+    'Mailbox sync needs attention. Open server settings for details.',
   inboxAlwaysSynced: 'Inbox · Always synced',
   role: 'Role',
   syncFolder: 'Sync folder',

@@ -7,12 +7,16 @@ impl ImapNotificationRepository for PgMailboxSync {
         &self,
         mailbox: MailboxKey,
         credentials_rejected: bool,
+        mailbox_issue: Option<models_email::service::link::MailboxIssue>,
+        retry_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<(), MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         let current = sqlx::query!(
             r#"
             SELECT
-                needs_reauth
+                needs_reauth,
+                mailbox_issue,
+                mailbox_retry_at
             FROM
                 email_links
             WHERE
@@ -57,6 +61,47 @@ impl ImapNotificationRepository for PgMailboxSync {
                 r#"
                 INSERT INTO email_projection_outbox (id, link_id, generation, payload)
                     VALUES ($1, $2, $3, $4)
+                "#,
+                macro_uuid::generate_uuid_v7(),
+                mailbox.link_id,
+                mailbox.sync_generation,
+                event,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        }
+        let retry_at = mailbox_issue.and(retry_at);
+        let issue = mailbox_issue.map(|issue| issue.as_ref().to_owned());
+        // PostgreSQL stores microseconds; a repeated nanosecond timestamp must
+        // not create another health edge after the database round-trip.
+        let retry_changed = current.mailbox_retry_at.map(|at| at.timestamp_micros())
+            != retry_at.map(|at| at.timestamp_micros());
+        if current.mailbox_issue != issue || retry_changed {
+            sqlx::query!(
+                r#"
+                UPDATE
+                    email_links
+                SET
+                    mailbox_issue = $2,
+                    mailbox_retry_at = $3,
+                    updated_at = now()
+                WHERE
+                    id = $1
+                "#,
+                mailbox.link_id,
+                issue,
+                retry_at,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+            let event = serde_json::to_value(ProjectionEvent::LinkChanged)
+                .map_err(|_| MailboxError::Persistence)?;
+            sqlx::query!(
+                r#"
+                INSERT INTO email_projection_outbox (id, link_id, generation, payload)
+                VALUES ($1, $2, $3, $4)
                 "#,
                 macro_uuid::generate_uuid_v7(),
                 mailbox.link_id,

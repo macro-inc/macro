@@ -275,6 +275,9 @@ impl MailTransport for UncertainTransport {
     ) -> Result<Vec<RemoteFolder>, Error> {
         if let Some(control) = &self.provider_work {
             control.wait(credentials).await?;
+            if let Some(error) = control.failures.get(&0) {
+                return Err(*error);
+            }
         }
         Ok(Vec::new())
     }

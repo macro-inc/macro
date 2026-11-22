@@ -11,6 +11,8 @@ const fixture = vi.hoisted(() => ({
     is_sync_active: boolean;
     needs_reauth: boolean;
     sync_status: string;
+    mailbox_issue?: string;
+    mailbox_retry_at?: string;
   }[],
 }));
 vi.mock('@queries/email/focus', () => ({ FOCUS_WINDOW_DAYS: 30 }));
@@ -81,16 +83,49 @@ it('shows first-sync progress instead of Inbox zero and settles without remounti
   expect(await screen.findByText('Inbox zero')).toBeDefined();
 });
 
-it('does not let an unselected syncing inbox hide the selected empty inbox', () => {
-  fixture.selected = ['selected'];
+it.each([
+  { status: 'SYNCING', issue: undefined },
+  { status: 'ERROR', issue: 'snapshot_too_large' },
+])(
+  'keeps an unselected $status inbox from hiding the selected empty inbox',
+  ({ status, issue }) => {
+    fixture.selected = ['selected'];
+    fixture.links = [
+      {
+        id: 'other',
+        is_sync_active: true,
+        needs_reauth: false,
+        sync_status: status,
+        mailbox_issue: issue,
+      },
+    ];
+    render(() => <EmailEmptyState />);
+    expect(screen.getByText('Inbox zero')).toBeDefined();
+  }
+);
+
+it('does not claim an oversized selected inbox is caught up and recovers without remounting', async () => {
+  const [issue, setIssue] = createSignal<string | undefined>(
+    'snapshot_too_large'
+  );
   fixture.links = [
     {
-      id: 'other',
+      id: 'oversized',
       is_sync_active: true,
       needs_reauth: false,
-      sync_status: 'SYNCING',
+      sync_status: 'ERROR',
+      mailbox_retry_at: '2030-01-01T12:00:00Z',
+      get mailbox_issue() {
+        return issue();
+      },
     },
   ];
   render(() => <EmailEmptyState />);
-  expect(screen.getByText('Inbox zero')).toBeDefined();
+  expect(screen.queryByText('Inbox zero')).toBeNull();
+  expect(
+    screen.getByRole('heading', { name: 'Mailbox too large to sync yet' })
+  ).toBeDefined();
+  expect(screen.getByText(/Macro will retry at/)).toBeDefined();
+  setIssue(undefined);
+  expect(await screen.findByText('Inbox zero')).toBeDefined();
 });

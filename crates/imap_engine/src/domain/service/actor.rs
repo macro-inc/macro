@@ -209,6 +209,28 @@ impl Engine {
                         failures = 0;
                     }
                 }
+                Err(Error::SnapshotTooLarge) => {
+                    // The persisted deadline also protects provider bandwidth if
+                    // this owner expires or another replica starts an actor.
+                    let retry_at = self
+                        .repository
+                        .read_scoped(binding, StateSelection::Catalog)
+                        .await
+                        .ok()
+                        .and_then(|account| account.state.sync_retry_at);
+                    let delay = retry_at
+                        .and_then(|retry_at| (retry_at - Utc::now()).to_std().ok())
+                        .unwrap_or(Duration::from_secs(3600));
+                    tracing::warn!(link_id = %binding.link_id, retry_after_seconds = delay.as_secs_f64(),
+                        "Mailbox exceeds sync budget; waiting before retry");
+                    tokio::select! {
+                        biased;
+                        _ = cancellation.cancelled() => return Ok(()),
+                        _ = wake.notified() => {},
+                        _ = tokio::time::sleep(delay) => {},
+                    }
+                    continue;
+                }
                 Err(Error::CredentialsRejected) => {
                     credential_refusals = credential_refusals.saturating_add(1);
                     if credential_refusals >= 2 {

@@ -853,3 +853,5 @@ effects run. A websocket outage must not suppress those projections.
 
 Preserve ContentTooLarge through message-source and attachment ports; unsupported
 content is a client limit, never an infrastructure outage or automatic retry.
+
+IMAP notifications project optional mailbox health and retry time under the existing active-link and two-generation fence. Emit LinkChanged only on a health edge; sync limits never imply rejected credentials.

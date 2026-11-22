@@ -91,7 +91,8 @@ impl IntoResponse for ConnectionError {
                 | Error::ConnectionUnavailable
                 | Error::SendRejected
                 | Error::SendUnavailable
-                | Error::MessageTooLarge,
+                | Error::MessageTooLarge
+                | Error::SnapshotTooLarge,
             ) => (StatusCode::BAD_GATEWAY, "connection_unavailable"),
             ImapConnectionError::Provider(Error::DnsUnavailable) => {
                 (StatusCode::BAD_GATEWAY, "dns_unavailable")

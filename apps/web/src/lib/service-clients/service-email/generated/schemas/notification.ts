@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Binding } from './binding';
+import type { NotificationMailboxIssue } from './notificationMailboxIssue';
+import type { NotificationSyncRetryAt } from './notificationSyncRetryAt';
 
 /**
  * Fenced wakeup or credential-health update for the email domain.
@@ -14,4 +16,7 @@ export interface Notification {
   binding: Binding;
   /** A confirmed credential refusal; false is a normal journal wakeup. */
   credentialsRejected: boolean;
+  mailboxIssue?: NotificationMailboxIssue;
+  /** Durable retry guidance; absent on normal wakeups and older notifications. */
+  syncRetryAt?: NotificationSyncRetryAt;
 }

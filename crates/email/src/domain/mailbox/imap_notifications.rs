@@ -9,6 +9,8 @@ pub trait ImapNotificationRepository: Send + Sync + 'static {
         &self,
         mailbox: MailboxKey,
         credentials_rejected: bool,
+        mailbox_issue: Option<models_email::service::link::MailboxIssue>,
+        retry_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
 }
 pub struct ImapNotificationService<R>(pub R);
@@ -30,6 +32,8 @@ impl<R: ImapNotificationRepository> ImapNotificationService<R> {
                     grant_generation: binding.grant_generation,
                 },
                 notification.credentials_rejected,
+                notification.mailbox_issue,
+                notification.sync_retry_at,
             )
             .await
     }

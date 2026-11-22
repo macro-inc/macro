@@ -358,7 +358,10 @@ impl Repository for PgRepository {
                     sync_generation = EXCLUDED.sync_generation,
                     grant_generation = EXCLUDED.grant_generation,
                     credential_ciphertext = EXCLUDED.credential_ciphertext,
-                    state = jsonb_set(imap_accounts.state, '{needs_reauth}', 'false'::jsonb),
+                    state = jsonb_set(
+                        imap_accounts.state - 'mailbox_issue' - 'sync_retry_at' - 'sync_size_failures',
+                        '{needs_reauth}',
+                        'false'::jsonb),
                     lease_id = NULL,
                     lease_until = NULL,
                     revision = imap_accounts.revision + 1,

@@ -156,7 +156,8 @@ impl ProtocolTransport {
     }
 
     async fn open_smtp(&self, credentials: &Credentials) -> Result<Pooled, Error> {
-        let (stream, extensions) = self.smtp_with_features(&credentials.smtp).await?;
+        let (mut stream, extensions) = self.smtp_with_features(&credentials.smtp).await?;
+        stream.enable_pooling();
         let now = Instant::now();
         Ok(Pooled {
             stream,

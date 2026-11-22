@@ -2141,3 +2141,6 @@ a generic HTTP fault. Retry an email mutation 429 once after Retry-After, capped
 at five seconds; submission is excluded because its outcome may be uncertain.
 Selective fetch error filters return undefined to preserve default status and
 server retry behavior for responses they do not handle.
+
+Account mailbox issues render independently of the generic sync-badge flag and
+never imply a rejected app password. Size failures keep the last complete index.

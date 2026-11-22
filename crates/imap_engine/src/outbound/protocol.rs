@@ -1,5 +1,7 @@
 //! Real IMAP and SMTP protocol adapters; all connections use pinned verified TLS.
-use super::network::{Connector, ResponseLimit, ResponseReader, Stream};
+use super::network::{
+    Connector, MAX_SESSION_BYTES, ResponseLimit, ResponseReader, Stream, TransferBudget,
+};
 mod commands;
 mod folder_roles;
 mod gmail;
@@ -8,6 +10,7 @@ mod login;
 mod message;
 mod sent;
 mod smtp;
+mod snapshot;
 mod wire;
 use crate::domain::{models::*, ports::*, server_features::ServerFeatures};
 use async_imap::Session;
@@ -66,8 +69,18 @@ impl ProtocolTransport {
         self
     }
     async fn imap(&self, login: &Login) -> Result<Session<Stream>, Error> {
+        self.imap_with_budget(login, None).await
+    }
+    async fn imap_with_budget(
+        &self,
+        login: &Login,
+        budget: Option<std::sync::Arc<TransferBudget>>,
+    ) -> Result<Session<Stream>, Error> {
         Connector::validate(&login.endpoint, true)?;
-        let socket = self.connector.tcp(&login.endpoint).await?;
+        let mut socket = self.connector.tcp(&login.endpoint).await?;
+        if let Some(budget) = budget {
+            socket.attach_sync_budget(budget)?;
+        }
         let stream = if login.endpoint.tls == TlsMode::StartTls {
             let mut plain = socket;
             plain.begin_response(ResponseLimit::Reply);
@@ -236,349 +249,7 @@ impl MailTransport for ProtocolTransport {
         c: &Credentials,
         known: &AccountState,
     ) -> Result<Vec<RemoteFolder>, Error> {
-        timeout(SYNC_ROUND_BUDGET, async {
-            let mut session = self.imap(&c.imap).await?;
-            let mut catalog = self.folders(&mut session).await?;
-            let mut preferences = match (&self.settings, c.binding) {
-                (Some(settings), Some(binding)) => settings.preferences(binding).await?,
-                _ => crate::domain::account_settings::FolderPreferences::default(),
-            };
-            preferences.retain_listed(catalog.iter().map(|(folder, _)| folder.id.as_str()));
-            let capabilities = session
-                .limit_response(ResponseLimit::Metadata)
-                .capabilities()
-                .await
-                .map_err(|e| imap_error(e, false))?;
-            let gmail = capabilities.has_str("X-GM-EXT-1");
-            let gmail_plan = if gmail {
-                gmail::all_path(&mut session)
-                    .await?
-                    .map(|path| gmail::Plan::new(&catalog, path))
-            } else {
-                None
-            };
-            if let Some(plan) = &gmail_plan {
-                for (folder, path) in &mut catalog {
-                    if plan.is_all(path) {
-                        folder.role = FolderRole::Archive;
-                    }
-                }
-            }
-            let selected_folders = folder_roles::monitored_ids(&catalog, &preferences);
-            let condstore = capabilities.has_str("CONDSTORE");
-            let objectid = capabilities.has_str("OBJECTID");
-            let mut result = Vec::new();
-            let mut total = 0;
-            let known_locations = known
-                .locations
-                .iter()
-                .map(|location| {
-                    (
-                        (
-                            location.folder_id.as_str(),
-                            location.uid_validity,
-                            location.uid,
-                        ),
-                        location,
-                    )
-                })
-                .collect::<std::collections::BTreeMap<_, _>>();
-            for (mut folder, path) in catalog {
-                if gmail_plan.as_ref().is_some_and(|p| p.is_all(&path)) {
-                    folder.role = FolderRole::Archive;
-                }
-                let detected_role = Some(folder.role);
-                folder.role = preferences.role(&folder);
-                let virtual_label = gmail_plan.as_ref().and_then(|p| p.label(&folder.id));
-                folder.sync_enabled = preferences.syncs(&folder.id)
-                    && selected_folders.contains(&folder.id)
-                    && folder.role != FolderRole::Drafts;
-                if (!preferences.syncs(&folder.id)
-                    && !gmail_plan.as_ref().is_some_and(|p| p.is_all(&path)))
-                    || folder.role == FolderRole::Drafts
-                    || gmail_plan.as_ref().is_some_and(|p| !p.physical(&folder.id))
-                    || (!selected_folders.contains(&folder.id)
-                        && !gmail_plan.as_ref().is_some_and(|p| p.physical(&folder.id)))
-                {
-                    folder.sync_enabled = false;
-                    let previous = known.folders.get(&folder.id);
-                    let path = if gmail_plan.as_ref().is_some_and(|p| !p.physical(&folder.id)) {
-                        previous.map(|f| f.path.clone()).unwrap_or(path)
-                    } else {
-                        path
-                    };
-                    result.push(RemoteFolder {
-                        virtual_label,
-                        uid_next: previous.and_then(|f| f.uid_next),
-                        phantom: previous.and_then(|f| f.phantom.clone()),
-                        detected_role,
-                        monitored: false,
-                        uid_validity: previous.map(|f| f.uid_validity).unwrap_or(0),
-                        highest_modseq: previous.and_then(|f| f.highest_modseq),
-                        sync_tier: SyncTier::Full,
-                        folder,
-                        path,
-                        messages: Vec::new(),
-                    });
-                    continue;
-                }
-                use crate::domain::folder_health::{FolderStatus, PhantomFolder};
-                let previous = known.folders.get(&folder.id);
-                let status = session
-                    .limit_response(ResponseLimit::Metadata)
-                    .status(&path, "(UIDVALIDITY UIDNEXT MESSAGES)")
-                    .await;
-                let status = match status {
-                    Ok(status) => FolderStatus {
-                        uid_validity: status.uid_validity,
-                        uid_next: status.uid_next,
-                        messages: status.exists,
-                    },
-                    Err(async_imap::error::Error::No(_)) => FolderStatus::default(),
-                    Err(error) => return Err(imap_error(error, false)),
-                };
-                let now = Utc::now().timestamp_millis();
-                let marker = previous.and_then(|f| f.phantom.as_ref());
-                let skip = marker.is_some_and(|p| p.skip(status, now));
-                let selected = if skip {
-                    None
-                } else {
-                    match if condstore {
-                        session
-                            .limit_response(ResponseLimit::Metadata)
-                            .select_condstore(&path)
-                            .await
-                    } else {
-                        session
-                            .limit_response(ResponseLimit::Metadata)
-                            .select(&path)
-                            .await
-                    } {
-                        Ok(selected) => Some(selected),
-                        Err(async_imap::error::Error::No(_)) => None,
-                        Err(error) => return Err(imap_error(error, false)),
-                    }
-                };
-                let Some(selected) = selected else {
-                    folder.sync_enabled = false;
-                    result.push(RemoteFolder {
-                        virtual_label,
-                        uid_next: previous.and_then(|f| f.uid_next),
-                        phantom: if skip {
-                            marker.cloned()
-                        } else {
-                            Some(PhantomFolder::failed(marker, status, now))
-                        },
-                        detected_role,
-                        monitored: false,
-                        uid_validity: previous.map(|f| f.uid_validity).unwrap_or(0),
-                        highest_modseq: previous.and_then(|f| f.highest_modseq),
-                        sync_tier: SyncTier::Full,
-                        folder,
-                        path,
-                        messages: Vec::new(),
-                    });
-                    continue;
-                };
-                folder.total_items = Some(selected.exists);
-                let epoch = selected.uid_validity.ok_or(Error::ConnectionUnavailable)?;
-                let mut uids = session
-                    .limit_response(ResponseLimit::Metadata)
-                    .uid_search("ALL")
-                    .await
-                    .map_err(|e| imap_error(e, false))?
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                uids.sort_unstable();
-                total += uids.len();
-                if total > MAX_MESSAGES {
-                    return Err(Error::Throttled);
-                }
-                let previous = known
-                    .folders
-                    .get(&folder.id)
-                    .filter(|f| f.uid_validity == epoch);
-                let watermark = previous
-                    .and_then(|f| f.highest_modseq)
-                    .filter(|_| selected.highest_modseq.is_some());
-                let tier = if watermark.is_some() {
-                    SyncTier::Condstore
-                } else {
-                    SyncTier::Full
-                };
-                let mut messages = Vec::new();
-                for chunk in uids.chunks(1000) {
-                    let set = chunk
-                        .iter()
-                        .map(u32::to_string)
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    let native =
-                        identity::fetch_native(&mut session, &set, gmail, objectid).await?;
-                    let mut fields = String::from("UID FLAGS INTERNALDATE RFC822.SIZE");
-                    if gmail {
-                        fields.push_str(" X-GM-MSGID");
-                    }
-                    if selected.highest_modseq.is_some() {
-                        fields.push_str(" MODSEQ");
-                    }
-                    let new_uids = chunk.iter().any(|uid| {
-                        !known_locations.contains_key(&(folder.id.as_str(), epoch, *uid))
-                    });
-                    if new_uids {
-                        fields.push_str(" BODY.PEEK[HEADER]");
-                    }
-                    let query = match watermark {
-                        Some(n) => format!("({fields}) (CHANGEDSINCE {n})"),
-                        None => format!("({fields})"),
-                    };
-                    let mut fetched = timeout(
-                        IO_TIMEOUT,
-                        session
-                            .limit_response(ResponseLimit::Metadata)
-                            .uid_fetch(set, &query),
-                    )
-                    .await
-                    .map_err(|_| Error::ConnectionUnavailable)?
-                    .map_err(|e| imap_error(e, false))?
-                    .take(1001)
-                    .try_collect::<Vec<_>>()
-                    .await
-                    .map_err(|e| imap_error(e, false))?;
-                    if fetched.len() > chunk.len() {
-                        return Err(Error::Throttled);
-                    }
-                    let fetched_uids = fetched
-                        .iter()
-                        .filter_map(|f| f.uid)
-                        .collect::<std::collections::BTreeSet<_>>();
-                    for uid in chunk.iter().filter(|uid| !fetched_uids.contains(uid)) {
-                        let cached = known_locations
-                            .get(&(folder.id.as_str(), epoch, *uid))
-                            .and_then(|l| known.messages.get(&l.message_id));
-                        if let Some(cached) = cached {
-                            use nom::{
-                                IResult, Parser, bytes::complete::tag,
-                                character::complete::u64 as number, sequence::preceded,
-                            };
-                            let parsed: IResult<&str, u64> =
-                                preceded(tag("v1:"), number).parse(&cached.version);
-                            messages.push(RemoteMessage {
-                                gmail_labels: native
-                                    .get(uid)
-                                    .and_then(|(_, _, labels)| labels.clone()),
-                                uid: *uid,
-                                native_message_id: native.get(uid).and_then(|(m, _, _)| m.clone()),
-                                native_thread_id: native.get(uid).and_then(|(_, t, _)| t.clone()),
-                                flags: cached.flags.clone(),
-                                size: cached.size,
-                                mime: STANDARD
-                                    .decode(&cached.mime_base64)
-                                    .map_err(|_| Error::ConnectionUnavailable)?
-                                    .into(),
-                                received_at: cached.received_at,
-                                modseq: parsed.ok().map(|(_, n)| n),
-                                gmail_message_id: cached
-                                    .id
-                                    .strip_prefix("g:")
-                                    .and_then(|s| u64::from_str_radix(s, 16).ok()),
-                            });
-                        } else {
-                            // A new UID is always read, even if a broken server omits it from CHANGEDSINCE.
-                            fetched.extend(
-                                session
-                                    .limit_response(ResponseLimit::Metadata)
-                                    .uid_fetch(uid.to_string(), format!("({fields})"))
-                                    .await
-                                    .map_err(|e| imap_error(e, false))?
-                                    .take(1001)
-                                    .try_collect::<Vec<_>>()
-                                    .await
-                                    .map_err(|e| imap_error(e, false))?,
-                            );
-                        }
-                    }
-                    if fetched.len() > chunk.len() {
-                        return Err(Error::Throttled);
-                    }
-                    for item in fetched {
-                        let uid = item.uid.ok_or(Error::ConnectionUnavailable)?;
-                        if chunk.binary_search(&uid).is_err() {
-                            return Err(Error::ConnectionUnavailable);
-                        }
-                        let cached = known_locations
-                            .get(&(folder.id.as_str(), epoch, uid))
-                            .and_then(|l| known.messages.get(&l.message_id));
-                        let mime = if let Some(header) = item.header() {
-                            header.to_vec()
-                        } else if let Some(cached) = cached {
-                            STANDARD
-                                .decode(&cached.mime_base64)
-                                .map_err(|_| Error::ConnectionUnavailable)?
-                        } else {
-                            let source = session
-                                .limit_response(ResponseLimit::Metadata)
-                                .uid_fetch(uid.to_string(), "BODY.PEEK[HEADER]")
-                                .await
-                                .map_err(|e| imap_error(e, false))?
-                                .take(1001)
-                                .try_collect::<Vec<_>>()
-                                .await
-                                .map_err(|e| imap_error(e, false))?;
-                            source
-                                .first()
-                                .and_then(|f| f.header())
-                                .ok_or(Error::ConnectionUnavailable)?
-                                .to_vec()
-                        };
-                        if mime.len() > 25 * 1024 * 1024 {
-                            return Err(Error::Throttled);
-                        }
-                        messages.push(RemoteMessage {
-                            gmail_labels: native
-                                .get(&uid)
-                                .and_then(|(_, _, labels)| labels.clone()),
-                            uid: item.uid.ok_or(Error::ConnectionUnavailable)?,
-                            native_message_id: native.get(&uid).and_then(|(m, _, _)| m.clone()),
-                            native_thread_id: native.get(&uid).and_then(|(_, t, _)| t.clone()),
-                            flags: item.flags().map(flag_name).collect(),
-                            size: item.size.ok_or(Error::ConnectionUnavailable)?,
-                            mime: mime.into(),
-                            received_at: item
-                                .internal_date()
-                                .map(|d| d.with_timezone(&Utc))
-                                .unwrap_or(chrono::DateTime::UNIX_EPOCH),
-                            modseq: item.modseq,
-                            gmail_message_id: item.gmail_msg_id().copied(),
-                        });
-                    }
-                }
-                result.push(RemoteFolder {
-                    virtual_label,
-                    uid_next: selected.uid_next,
-                    phantom: None,
-                    detected_role,
-                    monitored: true,
-                    folder,
-                    path,
-                    uid_validity: epoch,
-                    highest_modseq: selected.highest_modseq,
-                    sync_tier: tier,
-                    messages,
-                });
-            }
-            if let Some(plan) = gmail_plan {
-                plan.project(&mut result, &preferences, &selected_folders);
-            }
-            session
-                .limit_response(ResponseLimit::Metadata)
-                .logout()
-                .await
-                .map_err(|e| imap_error(e, false))?;
-            Ok(result)
-        })
-        .await
-        .map_err(|_| Error::ConnectionUnavailable)?
+        self.snapshot_inner(c, known).await
     }
     #[tracing::instrument(skip_all, fields(mail.response.bytes = tracing::field::Empty, mail.connection.read_bytes = tracing::field::Empty), err)]
     async fn message(

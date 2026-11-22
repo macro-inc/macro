@@ -39,6 +39,20 @@ pub(super) fn imap_error(e: async_imap::error::Error, login: bool) -> Error {
             }
         }
         async_imap::error::Error::Bad(_) => Error::Invalid,
+        async_imap::error::Error::Io(error)
+            if error
+                .get_ref()
+                .and_then(|error| error.downcast_ref::<crate::outbound::network::ReadLimitError>())
+                .is_some_and(|error| {
+                    matches!(
+                        error,
+                        crate::outbound::network::ReadLimitError::Connection
+                            | crate::outbound::network::ReadLimitError::Sync
+                    )
+                }) =>
+        {
+            Error::SnapshotTooLarge
+        }
         _ => Error::ConnectionUnavailable,
     }
 }

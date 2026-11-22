@@ -266,7 +266,7 @@ idle timeout and other unavailability; database text and row content are omitted
 
 The stream meters bytes per explicitly armed protocol response, rather than
 closing a healthy pooled connection after 512 MiB of lifetime reads. IMAP
-commands declare a 16 MiB metadata, 4 MiB catalog, or 26 MiB full-source budget;
+commands declare a 16 MiB metadata, 4 MiB catalog, or 26 MiB full-source/header-batch budget;
 SMTP framing arms a 4 MiB reply budget. IDLE and plaintext STARTTLS boundaries
 are explicit too. No credentials or outgoing command payloads are inspected.
 The 25 MiB literal and 32 MiB line guards remain independent. Source spans
@@ -276,3 +276,52 @@ A synthetic TLS regression reads thirty 20 MiB sources over one pooled socket;
 separate stream tests reject a single oversized response, literal, or line.
 Lifetime accounting is not a daily transfer budget or resumable backfill. Those
 remain in the stacked synchronization follow-up.
+
+### Snapshot safety and oversized folders
+
+Fresh sync, IDLE and verification sockets retain the 512 MiB connection ceiling.
+Sync also shares a 512 MiB application-byte allowance across replacement sockets,
+including discarded oversized responses. Pooled command sockets use per-command
+limits instead. The snapshot retains at most 256 MiB of MIME/header and message
+metadata, and refuses a folder with more than 250,000 UIDs before fetching headers.
+The UID count is a defensive allocation bound, not a promised mailbox capacity or
+a value derived from average header size; the number remains subject to review.
+Header batches target 4 MiB using observed header sizes. An unexpectedly larger
+response discards its socket and halves the batch down to one header, preserving
+the cumulative sync budget. The literal and line limits remain independent.
+
+An oversized monitored folder aborts the complete account snapshot: publish
+nothing and retain the last complete index, including the previous inbox view.
+The visible issue is "Mailbox too large to sync yet"; new Inbox mail also waits
+when another monitored folder exceeds the bound. Gmail All Mail supplies derived
+feeds and is subject to the same limit. Gmail is offered its API integration
+first, while app-password access remains a user choice. The 250,000-UID cap is
+pending confirmation; this does not claim large-mailbox paging is complete.
+
+Size failures persist a growing retry deadline: one, two, four, eight, sixteen,
+then twenty-four hours (capped there). Repeated sync wakeups, restarts and other
+replicas check that deadline before decrypting or opening a provider connection.
+Successful sync and manual reconnect reset it. A fenced folder-preference change
+clears only the deadline, allowing one immediate attempt while preserving the
+failure count if the new scope still exceeds the limit. Actors wait for the remaining
+window; ordinary requests may still read the last complete index. Folder parking
+is deferred to the stacked incremental-sync work: it must charge retained old
+indexes to an account-wide persisted-state budget and preserve progress when the
+shared wire allowance is exhausted. Resumable paging and backfill remain there.
+
+Size health is independent of authentication. An optional typed issue is carried
+with its optional retry timestamp in the generation-fenced engine notification,
+projected to nullable email_links columns and an
+edge-triggered LinkChanged outbox event. Unknown future codes receive generic
+health guidance. Successful complete sync clears the account issue. The inbox list and selected empty-inbox view show account issues even when
+generic sync badges are disabled. Retry guidance uses the projected timestamp
+formatted in the interface locale; older notifications without one make no
+timing promise. Neither condition implies a rejected password.
+
+[Sync-health query plans](../design/imap-sync-health-query-plans.json) measure
+exact projection/catalog/reconnect/preference statements against synthetic
+10-million-contact, 1.1-million-outbox and 110,000-link tables. Custom and generic
+plans with stale and analyzed statistics use selective indexes, including real
+conflict updates. The largest measured owned inbox set is 32; the fixture does
+not claim an unbounded inbox catalog is paginated. PostgreSQL 18 results do not
+replace compatibility checks on the production database version.

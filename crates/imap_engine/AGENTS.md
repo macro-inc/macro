@@ -158,8 +158,18 @@ error into a retry. RecentInbox retries only deferred bodies once outside global
 admission and reports AccountBusy when the whole requested batch remains busy.
 
 Arm transport response budgets explicitly at every command: metadata 16 MiB,
-catalog/SMTP reply 4 MiB, full source 26 MiB. Lifetime read bytes are telemetry,
-not a socket lifetime cap. Keep the independent 25 MiB literal and 32 MiB line
-guards. IMAP borrowing commands use limit_response; IDLE arms before moving the
+catalog/SMTP reply 4 MiB, full source/header batch 26 MiB. Pooled command
+sockets retain per-response limits; fresh sync, IDLE and verify sockets retain
+a 512 MiB connection ceiling. Synchronization shares a 512 MiB wire budget
+across reconnects and bounds retained metadata to 256 MiB and each folder to
+250,000 UIDs. Target header batches at 4 MiB, shrinking on overflow down to one.
+Keep the independent 25 MiB literal and 32 MiB line guards. IMAP borrowing commands use limit_response; IDLE arms before moving the
 session, and plaintext STARTTLS exchanges arm each reply. Never infer boundaries
 by inspecting outgoing login or authentication payloads.
+
+Abort an oversized snapshot without publishing a partial index. Preserve the
+last complete account view, publish the separate size issue, and persist an
+exponential retry deadline from one hour to twenty-four hours. Check it before
+provider work across wakeups/restarts; successful sync or manual reconnect clears
+it. Fenced folder-preference changes clear only the deadline, allowing one fresh
+attempt without forgetting repeated failures. Folder parking belongs to the stacked paging work and must budget old indexes.

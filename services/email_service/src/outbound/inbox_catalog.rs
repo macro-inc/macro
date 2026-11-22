@@ -18,6 +18,8 @@ impl InboxCatalogRepository for PgInboxCatalog {
                 .into_iter()
                 .map(|inbox| InboxCatalogFacts {
                     link: inbox.link,
+                    mailbox_issue: inbox.mailbox_issue,
+                    mailbox_retry_at: inbox.mailbox_retry_at,
                     settings: inbox.settings,
                     latest_backfill_status: inbox.latest_backfill_status.map(
                         |status| match status {

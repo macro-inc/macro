@@ -143,3 +143,5 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 
 - Scheduled-message reads and upserts preserve nullable agent correlation across delivery claims and retries.
 - Delivery, sent-identity and retained-deletion queries expose facts and statement outcomes to `email::domain::scheduled_delivery`; call that domain for claim, completion, adoption and deletion decisions. Keep SQL predicates and lock order in these query files; dormant legacy attachment mutation and schedule helpers remain unchanged.
+
+Accessible inbox details include the nullable mailbox_issue and mailbox_retry_at projections, decoding unknown future codes to generic health rather than failing the catalog.

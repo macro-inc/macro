@@ -442,3 +442,5 @@ Map engine MessageTooLarge through ContentTooLarge to coded HTTP413
 (message_too_large) on original-source and attachment downloads. Provider-backed
 message/settings errors use the same content-limit response; keep sign-in and
 mailbox health classifications separate.
+
+The inbox catalog exposes mailbox_issue independently of needs_reauth. Oversized sync is visible as sync health; do not map it to a rejected password.

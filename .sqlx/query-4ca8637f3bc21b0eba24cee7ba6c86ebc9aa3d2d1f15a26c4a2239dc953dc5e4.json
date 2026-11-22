@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            mailbox_issue,\n            mailbox_retry_at,\n            needs_reauth\n        FROM\n            email_links\n        WHERE\n            id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mailbox_issue",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "mailbox_retry_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "needs_reauth",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "4ca8637f3bc21b0eba24cee7ba6c86ebc9aa3d2d1f15a26c4a2239dc953dc5e4"
+}

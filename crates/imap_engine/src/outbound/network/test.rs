@@ -49,3 +49,39 @@ async fn literal_and_line_guards_remain_independent_of_response_rearming() {
     let error = stream.read_to_end(&mut Vec::new()).await.unwrap_err();
     assert_eq!(error.to_string(), "mail line limit");
 }
+
+#[test]
+fn fresh_sessions_keep_a_total_ceiling_across_response_boundaries() {
+    let mut meter = ReadMeter::default();
+    for _ in 0..32 {
+        meter.arm(ResponseLimit::Metadata);
+        meter.charge(16 * 1024 * 1024).unwrap();
+    }
+    meter.arm(ResponseLimit::Metadata);
+    let error = meter.charge(1).unwrap_err();
+    assert!(matches!(
+        error.get_ref().unwrap().downcast_ref::<ReadLimitError>(),
+        Some(ReadLimitError::Connection)
+    ));
+}
+
+#[test]
+fn sync_transfer_budget_survives_reconnects() {
+    let shared = Arc::new(TransferBudget::new(MAX_SESSION_BYTES));
+    for _ in 0..32 {
+        let mut meter = ReadMeter {
+            sync_budget: Some(shared.clone()),
+            ..ReadMeter::default()
+        };
+        meter.charge(16 * 1024 * 1024).unwrap();
+    }
+    let mut reconnected = ReadMeter {
+        sync_budget: Some(shared),
+        ..ReadMeter::default()
+    };
+    let error = reconnected.charge(1).unwrap_err();
+    assert!(matches!(
+        error.get_ref().unwrap().downcast_ref::<ReadLimitError>(),
+        Some(ReadLimitError::Sync)
+    ));
+}

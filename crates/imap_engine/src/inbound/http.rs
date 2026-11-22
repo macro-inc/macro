@@ -106,7 +106,7 @@ impl IntoResponse for ApiError {
             | Error::ConnectionTimedOut => StatusCode::SERVICE_UNAVAILABLE,
             Error::SendRejected => StatusCode::UNPROCESSABLE_ENTITY,
             Error::Throttled | Error::AccountBusy => StatusCode::TOO_MANY_REQUESTS,
-            Error::MessageTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+            Error::MessageTooLarge | Error::SnapshotTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         };
         let mut response = (
             status,

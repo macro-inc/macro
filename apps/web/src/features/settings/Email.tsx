@@ -2,6 +2,7 @@ import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
 } from '@app/features/calendar/components/TurnOffCalendarDialog';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_INBOX_RESYNC,
@@ -17,6 +18,7 @@ import {
   calendarConsentScopes,
   reconnectScopes,
 } from '@core/email-link/consent';
+import { mailboxSizeGuidance } from '@core/email-link/mailbox-health';
 import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
 import type { EmailProvider } from '@core/email-link/ProviderDialog';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -536,7 +538,25 @@ function InboxRow(props: {
               <OutlookBetaBadge />
             </span>
           </Show>
-          <Show when={ENABLE_INBOX_SYNC_STATUS}>
+          <Show when={!props.link.needs_reauth && props.link.mailbox_issue}>
+            {(issue) => (
+              <span class="text-xs text-failure">
+                {match(issue())
+                  .with('snapshot_too_large', () => (
+                    <>
+                      <span class="block">
+                        {t('imap.mailboxTooLargeTitle')}
+                      </span>
+                      <span class="block">
+                        {mailboxSizeGuidance(props.link.mailbox_retry_at)}
+                      </span>
+                    </>
+                  ))
+                  .otherwise(() => t('imap.mailboxIssue'))}
+              </span>
+            )}
+          </Show>
+          <Show when={ENABLE_INBOX_SYNC_STATUS && !props.link.mailbox_issue}>
             <Switch
               fallback={
                 <Show when={props.link.sync_status !== SyncStatus.UP_TO_DATE}>

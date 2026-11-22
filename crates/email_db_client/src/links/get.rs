@@ -210,6 +210,8 @@ pub async fn fetch_search_inboxes_for_macro_id(
 /// renders: settings, latest backfill job status, and the self-contact photo.
 #[derive(Debug, Clone)]
 pub struct InboxDetails {
+    pub mailbox_issue: Option<link::MailboxIssue>,
+    pub mailbox_retry_at: Option<DateTime<Utc>>,
     pub link: link::Link,
     pub settings: service::settings::Settings,
     pub latest_backfill_status: Option<service::backfill::BackfillJobStatus>,
@@ -232,6 +234,8 @@ pub struct InboxDetails {
 }
 
 struct DbInboxDetailsRow {
+    mailbox_issue: Option<String>,
+    mailbox_retry_at: Option<DateTime<Utc>>,
     id: Uuid,
     macro_id: String,
     fusionauth_user_id: String,
@@ -278,6 +282,8 @@ pub async fn fetch_inbox_details_for_macro_id(
             l.is_primary as "is_primary!",
             l.needs_reauth as "needs_reauth!",
             l.mailbox_unavailable_at IS NOT NULL as "mailbox_unavailable!",
+            l.mailbox_issue,
+            l.mailbox_retry_at,
             l.last_sync_error_at,
             l.created_at as "created_at!",
             l.updated_at as "updated_at!",
@@ -356,6 +362,8 @@ pub async fn fetch_inbox_details_for_macro_id(
                 el.updated_at,
                 el.sync_generation,
                 el.grant_generation,
+                el.mailbox_issue,
+                el.mailbox_retry_at,
                 el.mailbox_unavailable_at
             FROM
                 email_links el
@@ -376,6 +384,8 @@ pub async fn fetch_inbox_details_for_macro_id(
                 el.updated_at,
                 el.sync_generation,
                 el.grant_generation,
+                el.mailbox_issue,
+                el.mailbox_retry_at,
                 el.mailbox_unavailable_at
             FROM
                 email_links el
@@ -430,6 +440,10 @@ pub async fn fetch_inbox_details_for_macro_id(
                 updated_at: row.updated_at,
             })?;
             Ok(InboxDetails {
+                mailbox_retry_at: row.mailbox_retry_at,
+                mailbox_issue: row
+                    .mailbox_issue
+                    .map(|issue| issue.parse().unwrap_or(link::MailboxIssue::Unknown)),
                 link,
                 settings,
                 latest_backfill_status: row.latest_backfill_status.map(Into::into),

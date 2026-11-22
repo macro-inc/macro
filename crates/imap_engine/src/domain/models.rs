@@ -375,6 +375,9 @@ pub enum Error {
     /// The account command quota refused admission before this provider call.
     #[error("account busy")]
     AccountBusy,
+    /// A full synchronization snapshot exceeds its bounded safe working set.
+    #[error("snapshot too large")]
+    SnapshotTooLarge,
     /// The full message source exceeds the supported content limit.
     #[error("message too large")]
     MessageTooLarge,
@@ -490,6 +493,15 @@ pub struct AccountState {
     /// Parked after a permanent provider credential refusal.
     #[serde(default)]
     pub needs_reauth: bool,
+    /// Sync health independent of authentication.
+    #[serde(default)]
+    pub mailbox_issue: Option<models_email::service::link::MailboxIssue>,
+    /// Consecutive size failures; only a real provider snapshot advances this count.
+    #[serde(default)]
+    pub sync_size_failures: u8,
+    /// Durable delay shared by actors, replicas, restarts and manual sync wakeups.
+    #[serde(default)]
+    pub sync_retry_at: Option<DateTime<Utc>>,
     /// A callback still needs delivery; journal polling remains a recovery path.
     #[serde(default)]
     pub notification_pending: bool,
@@ -789,6 +801,12 @@ pub struct Notification {
     pub binding: Binding,
     /// A confirmed credential refusal; false is a normal journal wakeup.
     pub credentials_rejected: bool,
+    /// Separate sync health, cleared after a complete successful snapshot.
+    #[serde(default)]
+    pub mailbox_issue: Option<models_email::service::link::MailboxIssue>,
+    /// Durable retry guidance; absent on normal wakeups and older notifications.
+    #[serde(default)]
+    pub sync_retry_at: Option<DateTime<Utc>>,
 }
 
 impl AccountState {
@@ -796,6 +814,9 @@ impl AccountState {
     pub fn small_state(&self) -> Self {
         Self {
             needs_reauth: self.needs_reauth,
+            mailbox_issue: self.mailbox_issue,
+            sync_size_failures: self.sync_size_failures,
+            sync_retry_at: self.sync_retry_at,
             notification_pending: self.notification_pending,
             send_day: self.send_day,
             sends_today: self.sends_today,

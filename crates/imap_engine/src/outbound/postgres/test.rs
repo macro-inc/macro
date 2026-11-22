@@ -223,6 +223,53 @@ async fn connection_owner_takeover_is_fenced_and_old_owner_cannot_release_succes
     repo.connect(binding, "owner", vec![2], verification)
         .await
         .unwrap();
+    let mut size_limited = repo.acquire(binding).await.unwrap();
+    size_limited.state.mailbox_issue =
+        Some(models_email::service::link::MailboxIssue::SnapshotTooLarge);
+    size_limited.state.sync_size_failures = 6;
+    size_limited.state.sync_retry_at = Some(Utc::now() + Duration::hours(24));
+    repo.save_health(&mut size_limited).await.unwrap();
+    repo.release(&size_limited).await.unwrap();
+    // A manual reconnect advances the binding and clears the durable delay
+    // without deleting the mailbox index or logging in to a provider here.
+    let reconnect = Uuid::now_v7();
+    repo.put_verification(VerifiedAccount {
+        verification: Verification {
+            id: reconnect,
+            expires_at: Utc::now() + Duration::minutes(15),
+        },
+        user_id: "owner".into(),
+        ciphertext: vec![3],
+        consumed_by: None,
+    })
+    .await
+    .unwrap();
+    let binding = Binding {
+        sync_generation: 2,
+        ..binding
+    };
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            sync_generation = 2
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    repo.connect(binding, "owner", vec![3], reconnect)
+        .await
+        .unwrap();
+    let reconnected = repo.acquire(binding).await.unwrap();
+    assert_eq!(reconnected.state.mailbox_issue, None);
+    assert_eq!(reconnected.state.sync_size_failures, 0);
+    assert_eq!(reconnected.state.sync_retry_at, None);
+    repo.release(&reconnected).await.unwrap();
     // Cancellation during hydration drops the still-uncommitted claim. A peer
     // fails fast on its row lock and can acquire immediately after rollback.
     let (tx, staged) = repo.begin_acquisition(binding).await.unwrap();
@@ -710,6 +757,12 @@ async fn owner_settings_survive_refusal_and_reconnect_fences_stale_edit(pool: Pg
         repo.connect(b, "settings-owner", vec![3], v).await.unwrap();
     }
     promote(&repo, binding).await;
+    let mut limited = repo.acquire(binding).await.unwrap();
+    limited.state.mailbox_issue = Some(models_email::service::link::MailboxIssue::SnapshotTooLarge);
+    limited.state.sync_size_failures = 6;
+    limited.state.sync_retry_at = Some(Utc::now() + Duration::hours(24));
+    repo.save_health(&mut limited).await.unwrap();
+    repo.release(&limited).await.unwrap();
     sqlx::query!(
         r#"
         INSERT INTO imap_state_entries (link_id, kind, key, document)
@@ -744,6 +797,23 @@ async fn owner_settings_survive_refusal_and_reconnect_fences_stale_edit(pool: Pg
         watched_folder_ids: Default::default(),
     };
     assert_eq!(repo.update(binding, &prefs).await.unwrap(), 1);
+    let state = sqlx::query_scalar!(
+        r#"
+        SELECT
+            state
+        FROM
+            imap_accounts
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let state: AccountState = serde_json::from_value(state).unwrap();
+    assert_eq!(state.sync_retry_at, None);
+    assert_eq!(state.sync_size_failures, 6);
     assert!(matches!(
         repo.update(binding, &prefs).await,
         Err(Error::Conflict)

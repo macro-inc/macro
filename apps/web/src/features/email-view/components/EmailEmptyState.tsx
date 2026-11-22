@@ -1,5 +1,7 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
+import { t } from '@app/lib/i18n';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
+import { mailboxSizeGuidance } from '@core/email-link/mailbox-health';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
 import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
@@ -97,6 +99,17 @@ export function EmailEmptyState() {
         (state.inboxIds === undefined || state.inboxIds.includes(link.id)) &&
         (!state.aliasFilter || state.aliasFilter.inboxId === link.id)
     );
+  const blockedInbox = () => {
+    if (!queryReadyGate(links)) return;
+    return links.data.links.find(
+      (link) =>
+        link.is_sync_active &&
+        !link.needs_reauth &&
+        link.mailbox_issue &&
+        (state.inboxIds === undefined || state.inboxIds.includes(link.id)) &&
+        (!state.aliasFilter || state.aliasFilter.inboxId === link.id)
+    );
+  };
   const startAddInbox = useAddInboxFlow();
   const suggestion = useInboxSuggestion(() => !emailActive());
   const offer = () => {
@@ -168,6 +181,27 @@ export function EmailEmptyState() {
             onClick: () => setInboxIds(undefined),
           }}
         />
+      </Match>
+
+      <Match when={blockedInbox()}>
+        {(inbox) => (
+          <div class="h-full w-full" role="status" aria-live="polite">
+            <EmptyStatePanel
+              centered
+              graphic={EmptyStateInboxTrayGraphic}
+              title={match(inbox().mailbox_issue)
+                .with('snapshot_too_large', () =>
+                  t('imap.mailboxTooLargeTitle')
+                )
+                .otherwise(() => t('imap.mailboxIssue'))}
+              description={match(inbox().mailbox_issue)
+                .with('snapshot_too_large', () =>
+                  mailboxSizeGuidance(inbox().mailbox_retry_at)
+                )
+                .otherwise(() => t('imap.mailboxIssueDetails'))}
+            />
+          </div>
+        )}
       </Match>
 
       <Match when={syncing()}>

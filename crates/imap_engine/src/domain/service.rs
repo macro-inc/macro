@@ -1,7 +1,7 @@
 //! Link ownership, credential promotion, journal sync and exactly-once send admission.
 use super::{models::*, ports::*};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use email_api_client::domain::models::{MessageAction, SendRequest};
 use macro_user_id::{cowlike::ArcCowStr, email::Email};
 use mailparse::MailHeaderMap;
@@ -410,11 +410,38 @@ impl Engine {
             .await
     }
     async fn refresh(&self, a: &mut Account) -> Result<(), Error> {
+        self.refresh_at(a, Utc::now()).await
+    }
+
+    async fn refresh_at(&self, a: &mut Account, now: DateTime<Utc>) -> Result<(), Error> {
+        if a.state.sync_retry_at.is_some_and(|retry_at| retry_at > now) {
+            self.notify(a).await?;
+            return Err(Error::SnapshotTooLarge);
+        }
         let c = self
             .cipher
             .decrypt(a.binding.link_id, &a.user_id, &a.ciphertext)
             .await?;
-        let remote = self.transport.snapshot(&c, &a.state).await?;
+        let remote = match self.transport.snapshot(&c, &a.state).await {
+            Ok(remote) => remote,
+            Err(Error::SnapshotTooLarge) => {
+                // A truncated snapshot would make omitted mail look deleted.
+                // Persist only health; retain the last complete index for reads.
+                a.state.mailbox_issue =
+                    Some(models_email::service::link::MailboxIssue::SnapshotTooLarge);
+                a.state.sync_size_failures = a.state.sync_size_failures.saturating_add(1);
+                let hours = 1i64 << u32::from(a.state.sync_size_failures.saturating_sub(1).min(5));
+                a.state.sync_retry_at = Some(now + Duration::hours(hours.min(24)));
+                a.state.notification_pending = true;
+                self.repository.save_health(a).await?;
+                self.notify(a).await?;
+                return Err(Error::SnapshotTooLarge);
+            }
+            Err(error) => return Err(error),
+        };
+        a.state.mailbox_issue = None;
+        a.state.sync_retry_at = None;
+        a.state.sync_size_failures = 0;
         merge_snapshot(&mut a.state, remote)?;
         a.state.notification_pending = true;
         self.repository.save(a).await?;
@@ -475,6 +502,8 @@ impl Engine {
                 .notify(Notification {
                     binding: a.binding,
                     credentials_rejected: a.state.needs_reauth,
+                    mailbox_issue: a.state.mailbox_issue,
+                    sync_retry_at: a.state.sync_retry_at,
                 })
                 .await
             {

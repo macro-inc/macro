@@ -56,3 +56,5 @@ rolling upgrades; decoding old payloads must never attach a current generation.
 - Scheduled-message models retain optional agent correlation for delayed delivery; older rows decode without attribution.
 
 - `sign_in_email` recognises Macro's own sign-in emails by sender: the addresses FusionAuth and the auth service send sign-in mail from, which send nothing else. Its tests read the FusionAuth stack's per-environment config and the local kickstart, so a changed sender fails them; update `SIGN_IN_SENDERS` with it.
+
+Optional MailboxIssue is sync health independent of authentication; retain a generic unknown fallback at deployed boundaries. API links expose it without widening the service Link database row.

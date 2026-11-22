@@ -6,7 +6,10 @@ use std::{
     fmt, io,
     net::{IpAddr, SocketAddr},
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
     task::{Context, Poll},
 };
 use tokio::{
@@ -33,6 +36,7 @@ pub(crate) enum ResponseLimit {
     Metadata,
     Catalog,
     Source,
+    Headers,
     Reply,
 }
 impl ResponseLimit {
@@ -40,8 +44,48 @@ impl ResponseLimit {
         match self {
             Self::Metadata => 16 * 1024 * 1024,
             Self::Catalog | Self::Reply => 4 * 1024 * 1024,
-            Self::Source => 26 * 1024 * 1024,
+            Self::Source | Self::Headers => 26 * 1024 * 1024,
         }
+    }
+}
+
+/// Fresh non-pooled sessions retain the former connection-wide ceiling.
+pub(crate) const MAX_SESSION_BYTES: usize = 512 * 1024 * 1024;
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum ReadLimitError {
+    #[error("mail response limit")]
+    Response,
+    #[error("mail connection limit")]
+    Connection,
+    #[error("mail sync transfer limit")]
+    Sync,
+}
+
+/// One cumulative application-byte budget shared across sync reconnects.
+pub(crate) struct TransferBudget {
+    used: AtomicUsize,
+    limit: usize,
+}
+impl TransferBudget {
+    pub(crate) fn new(limit: usize) -> Self {
+        Self {
+            used: AtomicUsize::new(0),
+            limit,
+        }
+    }
+    fn charge(&self, bytes: usize) -> io::Result<()> {
+        let used = self
+            .used
+            .fetch_add(bytes, Ordering::Relaxed)
+            .saturating_add(bytes);
+        if used > self.limit {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                ReadLimitError::Sync,
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -49,6 +93,8 @@ struct ReadMeter {
     limit: usize,
     used: usize,
     lifetime: usize,
+    lifetime_limit: Option<usize>,
+    sync_budget: Option<Arc<TransferBudget>>,
 }
 impl Default for ReadMeter {
     fn default() -> Self {
@@ -56,6 +102,8 @@ impl Default for ReadMeter {
             limit: ResponseLimit::Metadata.bytes(),
             used: 0,
             lifetime: 0,
+            lifetime_limit: Some(MAX_SESSION_BYTES),
+            sync_budget: None,
         }
     }
 }
@@ -67,10 +115,22 @@ impl ReadMeter {
     fn charge(&mut self, bytes: usize) -> io::Result<()> {
         self.used = self.used.saturating_add(bytes);
         self.lifetime = self.lifetime.saturating_add(bytes);
+        if let Some(budget) = &self.sync_budget {
+            budget.charge(bytes)?;
+        }
+        if self
+            .lifetime_limit
+            .is_some_and(|limit| self.lifetime > limit)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                ReadLimitError::Connection,
+            ));
+        }
         if self.used > self.limit {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "mail response limit",
+                ReadLimitError::Response,
             ));
         }
         Ok(())
@@ -260,6 +320,7 @@ impl Connector {
             inner,
             permit,
             attempt,
+            meter,
             ..
         } = socket;
         let name = ServerName::try_from(e.host.clone()).map_err(|_| Error::Invalid)?;
@@ -279,7 +340,7 @@ impl Connector {
             permit,
             line: Vec::new(),
             literal: 0,
-            meter: ReadMeter::default(),
+            meter,
         })
     }
 }
@@ -296,6 +357,17 @@ pub struct Stream {
     meter: ReadMeter,
 }
 impl Stream {
+    pub(crate) fn attach_sync_budget(&mut self, budget: Arc<TransferBudget>) -> Result<(), Error> {
+        budget
+            .charge(self.meter.lifetime)
+            .map_err(|_| Error::SnapshotTooLarge)?;
+        self.meter.sync_budget = Some(budget);
+        Ok(())
+    }
+    pub(crate) fn enable_pooling(&mut self) {
+        self.meter.lifetime_limit = None;
+        self.meter.sync_budget = None;
+    }
     pub(crate) fn response_bytes(&self) -> usize {
         self.meter.used
     }

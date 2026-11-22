@@ -328,6 +328,9 @@ pub(crate) fn error(error: models::Error) -> EmailApiError {
             origin: RateLimitOrigin::Local,
         },
         models::Error::MessageTooLarge => EmailApiError::ContentTooLarge,
+        models::Error::SnapshotTooLarge => EmailApiError::Permanent {
+            message: "Mailbox sync exceeds the current size limit".into(),
+        },
         models::Error::Throttled => EmailApiError::RateLimited {
             retry_after: Some(std::time::Duration::from_secs(60)),
             origin: RateLimitOrigin::Provider { concurrency: false },

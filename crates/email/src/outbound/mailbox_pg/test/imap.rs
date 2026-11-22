@@ -224,6 +224,8 @@ async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPo
                 grant_generation: 1,
             },
             credentials_rejected: true,
+            mailbox_issue: None,
+            sync_retry_at: None,
         })
         .await
         .unwrap();
@@ -250,6 +252,8 @@ async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPo
                 grant_generation: 1,
             },
             credentials_rejected: false,
+            mailbox_issue: None,
+            sync_retry_at: None,
         })
         .await
         .unwrap();
@@ -277,6 +281,8 @@ async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPo
                     grant_generation: 1,
                 },
                 credentials_rejected: true,
+                mailbox_issue: None,
+                sync_retry_at: None,
             })
             .await
             .unwrap();
@@ -562,4 +568,163 @@ async fn imap_excluded_trash_and_ancestors_preserve_roles_without_scheduling_bod
         .unwrap();
         assert_eq!(state, Some(true));
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn size_health_is_fenced_edge_triggered_and_cleared_without_reauth(db: PgPool) {
+    use crate::domain::mailbox::imap_notifications::ImapNotificationService;
+    use imap_engine::domain::models::{Binding, Notification};
+    use models_email::service::link::MailboxIssue;
+    let (_, link) = fixture(&db).await;
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP',
+            sync_generation = 2
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let service = ImapNotificationService(
+        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap),
+    );
+    let binding = Binding {
+        link_id: link,
+        sync_generation: 2,
+        grant_generation: 1,
+    };
+    let count_before = sqlx::query_scalar!(
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_projection_outbox
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    let retry_at = chrono::Utc::now() + chrono::Duration::hours(1);
+    for _ in 0..2 {
+        service
+            .receive(Notification {
+                binding,
+                credentials_rejected: false,
+                mailbox_issue: Some(MailboxIssue::SnapshotTooLarge),
+                sync_retry_at: Some(retry_at),
+            })
+            .await
+            .unwrap();
+    }
+    service
+        .receive(Notification {
+            binding: Binding {
+                sync_generation: 1,
+                ..binding
+            },
+            credentials_rejected: false,
+            mailbox_issue: None,
+            sync_retry_at: None,
+        })
+        .await
+        .unwrap();
+    let current = sqlx::query!(
+        r#"
+        SELECT
+            mailbox_issue,
+            mailbox_retry_at,
+            needs_reauth
+        FROM
+            email_links
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(current.mailbox_issue.as_deref(), Some("snapshot_too_large"));
+    assert!(!current.needs_reauth);
+    assert_eq!(
+        current.mailbox_retry_at.map(|value| value.timestamp()),
+        Some(retry_at.timestamp())
+    );
+    let count_after = sqlx::query_scalar!(
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_projection_outbox
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(count_after, count_before + 1);
+    service
+        .receive(Notification {
+            binding,
+            credentials_rejected: false,
+            mailbox_issue: Some(MailboxIssue::SnapshotTooLarge),
+            sync_retry_at: Some(retry_at + chrono::Duration::hours(1)),
+        })
+        .await
+        .unwrap();
+    let later_deadline_event = sqlx::query_scalar!(
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_projection_outbox
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(later_deadline_event, count_before + 2);
+
+    service
+        .receive(Notification {
+            binding,
+            credentials_rejected: false,
+            mailbox_issue: None,
+            sync_retry_at: None,
+        })
+        .await
+        .unwrap();
+    let cleared = sqlx::query!(
+        r#"
+        SELECT
+            mailbox_issue,
+            mailbox_retry_at,
+            needs_reauth
+        FROM
+            email_links
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(cleared.mailbox_issue.is_none());
+    assert!(cleared.mailbox_retry_at.is_none());
+    assert!(!cleared.needs_reauth);
 }

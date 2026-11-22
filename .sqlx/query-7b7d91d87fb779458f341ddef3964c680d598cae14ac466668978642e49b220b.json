@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            email_links\n        SET\n            sync_generation = 2\n        WHERE\n            id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b7d91d87fb779458f341ddef3964c680d598cae14ac466668978642e49b220b"
+}
