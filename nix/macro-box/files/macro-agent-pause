@@ -15,7 +15,8 @@
 #                      | superseded (another drive froze it) | failed
 #   thaw <drive>    the drive ended: thaw, unless a newer drive froze it,
 #                   and never freeze it again -> running | superseded | failed
-#   autothaw <drive> the timer ran out without a keep: thaw as above
+#   autothaw <drive> <timer>  the timer ran out without a keep: thaw as
+#                   above, unless a newer timer replaced it (a keep came)
 #   restart -       restart the agent, or once thawed if it is frozen
 #                   -> restarted | deferred
 #
@@ -40,8 +41,10 @@ lock_wait=${MACRO_AGENT_PAUSE_LOCK_WAIT:-20}
 if [ $# -ge 2 ]; then
   verb=$1
   drive=$2
+  timer_name=${3:-}
 else
   IFS=' ' read -r -t 5 verb drive || exit 0
+  timer_name=
 fi
 case "$verb:$drive" in
   restart:-) ;;
@@ -62,7 +65,10 @@ paused_by() { cat "$dir/paused" 2>/dev/null || true; }
 # Drives the harness thawed: they ended, so they never freeze again.
 ended() { grep -qx "$1" "$dir/ended" 2>/dev/null; }
 remember_ended() {
-  { cat "$dir/ended" 2>/dev/null || true; printf '%s\n' "$1"; } | tail -n 64 >"$dir/ended.new"
+  if ended "$1"; then
+    return 0
+  fi
+  { cat "$dir/ended" 2>/dev/null || true; printf '%s\n' "$1"; } | tail -n 1024 >"$dir/ended.new"
   mv -f "$dir/ended.new" "$dir/ended"
 }
 # Point the fence at $1 (empty: none).
@@ -75,7 +81,7 @@ arm() {
   local name
   name="$timer-$(date +%s%N)"
   "$systemd_run" --quiet --collect --unit="$name" --on-active="$after" \
-    "$self" autothaw "$1" >/dev/null 2>&1 || return 1
+    "$self" autothaw "$1" "$name" >/dev/null 2>&1 || return 1
   disarm
   printf '%s\n' "$name" >"$dir/timer"
 }
@@ -130,6 +136,11 @@ case "$verb" in
     fi
     ;;
   thaw | autothaw)
+    # A timer a keep replaced may already have fired and waited on the lock.
+    if [ "$verb" = autothaw ] && [ "$timer_name" != "$(cat "$dir/timer" 2>/dev/null || true)" ]; then
+      echo superseded
+      exit 0
+    fi
     current=$(paused_by)
     if [ "$verb" = thaw ]; then
       remember_ended "$drive"
@@ -141,7 +152,10 @@ case "$verb" in
     "$systemctl" thaw "$unit" >/dev/null 2>&1 || true
     if [ "$(state FreezerState)" = frozen ]; then
       # Still frozen: the fence and the timer stay, so it is retried, and
-      # the timer bounds it meanwhile.
+      # the timer bounds it meanwhile; a timer that fired is armed again.
+      if [ "$verb" = autothaw ]; then
+        arm "$drive" || true
+      fi
       echo failed
       exit 0
     fi

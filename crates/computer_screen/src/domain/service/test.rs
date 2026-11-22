@@ -610,6 +610,34 @@ async fn a_thaw_failing_past_the_guests_timer_settles(pool: PgPool) {
     assert_eq!(settled.as_deref(), Some("deadMan"));
 }
 
+/// The guest's timer stops while its computer sleeps, so a round that finds
+/// it asleep starts the failures over: only failures while it runs count.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_sleep_starts_the_thaw_failures_over(pool: PgPool) {
+    let (service, signal, _) = service(pool.clone()).await;
+    let driver = grant(Mode::Drive);
+    let session = service.open_session(&driver).await.unwrap();
+    service.take_over(&driver, session).await.unwrap();
+    *signal.2.lock().unwrap() = Some(ThawFailed::Failed);
+    service
+        .hand_back(COMPUTER, driver.user_id.clone(), None)
+        .await
+        .unwrap();
+    service.reap().await.unwrap();
+    service.reap().await.unwrap();
+
+    *signal.2.lock().unwrap() = Some(ThawFailed::NotRunning);
+    service.reap().await.unwrap();
+
+    let row =
+        sqlx::query!("SELECT thaw_failures, thaw_first_failed_at FROM computer_screen_drives")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(row.thaw_failures, 0);
+    assert_eq!(row.thaw_first_failed_at, None);
+}
+
 /// A thaw owed for over a week settles without asking the guest.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_owed_thaw_expires(pool: PgPool) {

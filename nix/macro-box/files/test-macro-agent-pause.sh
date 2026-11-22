@@ -36,7 +36,7 @@ cat >"$work/systemd-run" <<'EOF'
 for arg in "$@"; do
   case "$arg" in --unit=*) printf '%s' "${arg#--unit=}" >"$FAKE/armed-unit" ;; esac
 done
-printf '%s\n' "${@: -2}" | tr '\n' ' ' >"$FAKE/armed"
+printf '%s\n' "${@: -3:2}" | tr '\n' ' ' >"$FAKE/armed"
 EOF
 # This bash, not /usr/bin/env's: the nix build sandbox has no /usr/bin/env.
 sed -i "1s|.*|#!$BASH|" "$work/systemctl" "$work/systemd-run"
@@ -90,13 +90,13 @@ expect "the newer drive's thaw thaws it" "$(ask thaw bb)" running
 
 reset
 ask freeze aa >/dev/null
-expect "the dead-man timer thaws a drive nobody kept" "$(ask autothaw aa)" running
+expect "the dead-man timer thaws a drive nobody kept" "$(ask autothaw aa "$(cat "$work/fake/armed-unit")")" running
 expect "the agent runs again after the timer" "$(frozen)" running
 
 reset
 ask freeze aa >/dev/null
 ask freeze bb >/dev/null
-expect "the older drive's timer is superseded" "$(ask autothaw aa)" superseded
+expect "the older drive's timer is superseded" "$(ask autothaw aa "$(cat "$work/fake/armed-unit")")" superseded
 expect "and leaves the newer freeze" "$(frozen)" frozen
 
 reset
@@ -117,7 +117,7 @@ expect "a request on stdin works like arguments" "$(echo 'freeze aa' | ask)" fro
 
 reset
 ask freeze aa >/dev/null
-ask autothaw aa >/dev/null
+ask autothaw aa "$(cat "$work/fake/armed-unit")" >/dev/null
 expect "a keep after the timer fired says the agent thawed" "$(ask keep aa)" thawed
 
 reset
@@ -191,6 +191,25 @@ reset
 ask freeze aa >/dev/null
 echo running >"$work/fake/FreezerState"
 expect "a keep finds a unit that was thawed or restarted under its drive" "$(ask keep aa)" thawed
+
+reset
+ask freeze aa >/dev/null
+spent=$(cat "$work/fake/armed-unit")
+ask keep aa >/dev/null
+expect "a timer a keep replaced does nothing when it fires late" "$(ask autothaw aa "$spent")" superseded
+expect "and the drive stays frozen" "$(frozen)" frozen
+expect "under the newer timer" "$(cat "$work/fake/armed")" "autothaw aa "
+
+reset
+for _ in 1 2 3; do ask freeze aa >/dev/null; ask thaw aa >/dev/null; done
+expect "a drive is remembered as ended once" "$(grep -c '^aa$' "$work/run/ended")" 1
+
+reset
+ask freeze aa >/dev/null
+first=$(cat "$work/fake/armed-unit")
+touch "$work/fake/cannot-thaw"
+expect "a timer whose thaw doesn't take fails" "$(ask autothaw aa "$first")" failed
+expect "and arms another, so the guest keeps trying" "$([ "$(cat "$work/fake/armed-unit")" != "$first" ] && cat "$work/fake/armed")" "autothaw aa "
 
 # A slow late thaw racing a newer freeze, twenty times: whatever the order, the
 # newer drive stays frozen.

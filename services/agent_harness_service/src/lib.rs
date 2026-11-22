@@ -1509,6 +1509,10 @@ pub async fn run() -> anyhow::Result<()> {
     if let Some(mut unfrozen_drives) = unfrozen_drives {
         let screens = Arc::clone(&screens);
         let shutdown = service_shutdown.clone();
+        let tasks = computer_tasks.clone();
+        let in_flight: Arc<
+            std::sync::Mutex<std::collections::HashSet<hosted_runtimes::domain::ids::ComputerId>>,
+        > = Arc::default();
         computer_tasks.spawn(async move {
             loop {
                 let unfrozen = tokio::select! {
@@ -1518,9 +1522,27 @@ pub async fn run() -> anyhow::Result<()> {
                 let Some(unfrozen) = unfrozen else {
                     return;
                 };
-                if let Err(error) = screens.refreeze(unfrozen.computer_id, &unfrozen.drive).await {
-                    tracing::warn!(error = ?error, "could not freeze an unfrozen drive's agent again");
+                // Each in its own task (a wedged guest takes up to 30 s), one
+                // at a time per computer.
+                let computer = unfrozen.computer_id;
+                if !in_flight
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(computer)
+                {
+                    continue;
                 }
+                let screens = Arc::clone(&screens);
+                let in_flight = Arc::clone(&in_flight);
+                tasks.spawn(async move {
+                    if let Err(error) = screens.refreeze(computer, &unfrozen.drive).await {
+                        tracing::warn!(error = ?error, "could not freeze an unfrozen drive's agent again");
+                    }
+                    in_flight
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .remove(&computer);
+                });
             }
         });
     }

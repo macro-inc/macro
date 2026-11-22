@@ -713,9 +713,9 @@ impl ScreenRepo for PgScreenRepo {
             r#"
             UPDATE computer_screen_drives
             SET thaw_tried_at = now(),
-                thaw_failures = thaw_failures + CASE WHEN $2 THEN 1 ELSE 0 END,
+                thaw_failures = CASE WHEN $2 THEN thaw_failures + 1 ELSE 0 END,
                 thaw_first_failed_at = CASE WHEN $2 THEN coalesce(thaw_first_failed_at, now())
-                                            ELSE thaw_first_failed_at END
+                                            ELSE NULL END
             WHERE id = $1
             "#,
             row,
