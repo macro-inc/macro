@@ -832,7 +832,10 @@ async fn open_storage(
             // Files that may have just moved here could hold the only copy of
             // the older build's queue, and opening half of a pair can only
             // reset it: keep them for the recovery open to resolve.
-            owner.release().await.map_err(err_js)?;
+            owner
+                .release()
+                .await
+                .map_err(|failure| recovery_deferred(err_js(failure)))?;
             return Err(recovery_deferred(err_js(reason)));
         }
     };
@@ -913,9 +916,10 @@ async fn open_storage(
                                 HandBack::Kept => {
                                     // The marker stays, so the recovery open
                                     // decides before it wipes anything.
-                                    owner.release().await.map_err(|failure| {
-                                        recovery_deferred(err_js(failure))
-                                    })?;
+                                    owner
+                                        .release()
+                                        .await
+                                        .map_err(|failure| recovery_deferred(err_js(failure)))?;
                                     return Err(recovery_deferred(err_js(MOVED_FILES_KEPT)));
                                 }
                             };
@@ -1293,7 +1297,10 @@ async fn read_adoption_for_recovery(owner: &mut OpfsOwner) -> Result<Option<Adop
     if ADOPTION_READ_FAILURES.with(|left| left.replace(left.get().saturating_sub(1)) > 0) {
         return Err("injected adoption read failure".to_owned());
     }
-    owner.read_adoption().await.map_err(|error| error.to_string())
+    owner
+        .read_adoption()
+        .await
+        .map_err(|error| error.to_string())
 }
 
 /// Decides a readable adoption for a recovery open whose attempt is
