@@ -20,7 +20,7 @@ fn contact_reads_use_both_covering_indexes_without_a_sort_or_limit() {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(
-            plan.contains("SEARCH s USING INTEGER PRIMARY KEY"),
+            plan.contains("SEARCH s USING INDEX search_rows_browse_idx (slot=?)"),
             "{plan}"
         );
         assert!(
@@ -145,5 +145,53 @@ fn covering_contact_payloads_follow_updates_deletes_and_reopen() {
             .await
             .unwrap();
         assert_eq!(visits, 1);
+    });
+}
+
+/// Reference resolution keeps the first witnesses it visits, so contacts are
+/// visited most recent first, then by key, whatever order they were written in.
+#[test]
+fn contacts_are_visited_most_recent_first() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("contact-order").unwrap();
+        let contact = |id: &str| {
+            (
+                key(&format!("GraphqlContact:{id}")),
+                Record {
+                    fields: [
+                        ("id".into(), CacheValue::String(id.into())),
+                        ("userId".into(), CacheValue::String(format!("macro|{id}"))),
+                        ("name".into(), CacheValue::String("Same Name".into())),
+                    ]
+                    .into(),
+                },
+            )
+        };
+        for id in ["a", "b", "c", "d"] {
+            storage.put_batch(vec![contact(id)]).await.unwrap();
+        }
+        for (id, timestamp) in [("a", 1), ("b", 3), ("c", 3), ("d", 2)] {
+            raw_execute(
+                &storage,
+                "UPDATE search_rows SET timestamp_ms = ?1 WHERE __typename = 'GraphqlContact' AND id = ?2",
+                vec![Value::from_i64(timestamp), text(id)],
+            );
+        }
+        let mut visited = Vec::new();
+        storage
+            .visit_contact_records(&SearchQuery::new(""), |key, _| {
+                visited.push(key.as_ref().to_owned())
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            visited,
+            [
+                "GraphqlContact:b",
+                "GraphqlContact:c",
+                "GraphqlContact:d",
+                "GraphqlContact:a"
+            ]
+        );
     });
 }

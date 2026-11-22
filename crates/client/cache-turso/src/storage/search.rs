@@ -326,16 +326,16 @@ pub(super) fn may_match(query: &SearchQuery, text: &str) -> bool {
     })
 }
 
-/// `base`, whose first two parameters are a slot's first and last row ids,
-/// with the query's tokens as LIKE filters on `search_text`.
+/// `base`, whose first parameter is a slot, with the query's tokens as LIKE
+/// filters on `search_text`.
 pub(super) fn statement_with_base(
     base: &str,
     slot: i64,
     query: &SearchQuery,
 ) -> Result<(String, driver::Values), TursoStorageError> {
-    let (first, last) = slot_range(slot)?;
+    slot_range(slot)?;
     let mut sql = base.to_owned();
-    let mut values = vec![Value::from_i64(first), Value::from_i64(last)];
+    let mut values = vec![Value::from_i64(slot)];
     let mut tokens = query.tokens().peekable();
     if tokens.peek().is_some() {
         sql.push_str(" AND ((");

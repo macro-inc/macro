@@ -1333,7 +1333,7 @@ impl Storage for TursoStorage {
                     Some(Value::Text(typename)),
                     Some(Value::Text(id)),
                     Some(Value::Blob(blob)),
-                    Some(Value::Numeric(Numeric::Integer(row_slot))),
+                    Some(Value::Numeric(Numeric::Integer(rowid))),
                     Some(Value::Numeric(Numeric::Integer(row_profile))),
                     None,
                 ) = (
@@ -1347,7 +1347,7 @@ impl Storage for TursoStorage {
                 else {
                     return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
                 };
-                if *row_slot != slot
+                if *rowid >> search::SLOT_SHIFT != slot
                     || *row_profile != search::profile_code(SearchProfile::QuickAccessV1)
                 {
                     return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
