@@ -1,0 +1,74 @@
+crates/connectors/src/outbound/native/source.rs
+  s_6f6438cd1f195c::t_e86cd0563308ee 1-9,11-128,130-232,234-352,357-372
+  s_3d0d2ab631115e::t_ef0ea88116405c 10,129,233,353-356
+crates/connectors/src/outbound/native/outbound/pg_server_repo.rs
+  s_6f6438cd1f195c::t_d9061d54ab8d8f 190-192
+crates/connectors/src/outbound/github_link.rs
+  s_6f6438cd1f195c::t_040219f520ee09 1-17,19-133,135-339
+  s_6f6438cd1f195c::t_ed9f3e06ab0130 18,134
+crates/connectors/src/outbound/native/source/test.rs
+  s_6f6438cd1f195c::t_b75c37a16e9aa4 1-258,260-299,301-514
+  s_3d0d2ab631115e::t_a5c67201dc209e 259,300
+crates/connectors/src/outbound/native.rs
+  s_6f6438cd1f195c::t_2f9ea8a810fdac 14-20
+  s_6f6438cd1f195c::t_8d4f121022cc55 12-13,21-33
+crates/connectors/src/domain.rs
+  s_6f6438cd1f195c::t_b05d309f3b7c7a 28
+crates/connectors/src/outbound/github_link/auth_service.rs
+  s_6f6438cd1f195c::t_ae632469dbd908 1-38
+crates/connectors/src/outbound/github_link/test.rs
+  s_6f6438cd1f195c::t_088af90094b549 1-75,77-381
+  s_6f6438cd1f195c::t_e7835f98f30ddd 76
+crates/connectors/src/outbound/native/outbound/pg_server_repo/test.rs
+  s_6f6438cd1f195c::t_29c4ada6093626 1-55,58-62,65-75,77-109,111-131,133-183,185-227
+  s_6f6438cd1f195c::t_ef7b2464907706 56-57,63-64,76,110,132,184
+crates/connectors/src/domain/ports.rs
+  s_6f6438cd1f195c::t_441adf0d620236 11,70-91
+  s_6f6438cd1f195c::t_396f65e7956eb7 92-93,162,166-167
+crates/authentication_service_client/AGENTS.md
+  s_6d38dd5c0ade1a::t_b45667bf654d84 13-15
+crates/authentication_service_client/src/github_access_token.rs
+  s_6d38dd5c0ade1a::t_c1fc0aa1ae6803 5-19,29-41,53-59,61-70,72-93
+crates/connectors/AGENTS.md
+  s_6f6438cd1f195c::t_01930a6c8a60a6 32-38
+crates/connectors/src/outbound.rs
+  s_6f6438cd1f195c::t_5500fd4a411f14 6-15
+crates/connectors/src/outbound/native/domain/models/mod.rs
+  s_6d38dd5c0ade1a::t_8bbcbdb7f457e2 18
+crates/connectors/src/outbound/native/domain/models/server.rs
+  s_6d38dd5c0ade1a::t_f8dbcabb34684f 96-109
+crates/connectors/src/outbound/native/memory_store.rs
+  s_3d0d2ab631115e::t_f2ec51bd0fbefc 1-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3ce7811a8febdc173c57821324de3dc143be8036",
+  "prompts": {},
+  "sessions": {
+    "s_3d0d2ab631115e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47cbba1b-dd9c-4ec5-856a-6bdc8e70e56c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_6d38dd5c0ade1a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef8c75de-f031-432b-b697-39da1c03913d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_6f6438cd1f195c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d9eb7d59-7a2f-4ee1-a54c-f444a95de2e5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

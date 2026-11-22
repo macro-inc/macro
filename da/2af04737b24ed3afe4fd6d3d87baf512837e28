@@ -1,0 +1,74 @@
+rules/ast-grep/rust-no-transport-in-domain.yml
+  s_57e1c74013b228::t_84d7060ce351ae 24-25,28
+  s_57e1c74013b228::t_9c4fff0f761c5a 26-27
+crates/connectors/src/domain/ports.rs
+  s_5d42f0dc11f02e::t_9f873f8cbca331 153
+  s_57e1c74013b228::t_27f4ba4bba9344 1-152,154-168
+crates/connectors/src/domain.rs
+  s_57e1c74013b228::t_627b2084babc03 1-8,18,23,28,36-37
+  s_57e1c74013b228::t_5323a569426e1e 9-17,19-22,24-27,29-35
+crates/connectors/src/domain/resolve/test/properties.rs
+  s_57e1c74013b228::t_558be03e927b42 1-2
+  s_57e1c74013b228::t_9d9372906e5f2b 3-374
+crates/connectors/src/domain/resolve/test.rs
+  s_57e1c74013b228::t_6606681cbb1e72 1-3,5-12,15-36,38-53,55,58-61,67-69,72-77,79-377,382-450,459-528,533-593,595-596,663-685,691,696-732,737-752,754,759-834,839-876
+  s_57e1c74013b228::t_ae33fbf942687e 4
+  s_57e1c74013b228::t_b3a7eafd374b5c 54,56-57,62-66,70-71,78,598-662
+  s_57e1c74013b228::t_70a60d802b3bc1 597
+  s_57e1c74013b228::t_9d9372906e5f2b 13-14
+  s_57e1c74013b228::t_5323a569426e1e 37,378-381,451-458,529-532,594,686-690,692-695,733-736,753,755-758,835-838
+crates/connectors/src/lib.rs
+  s_5d42f0dc11f02e::t_2066a96b7bafaa 20
+crates/workspace-hack/Cargo.toml
+  s_57e1c74013b228::t_7cad44b7c3799f 124,297
+Cargo.lock
+  s_57e1c74013b228::t_b1392b082ab2de 24290
+  s_57e1c74013b228::t_a8278b51c64c22 5313,5318
+crates/connectors/src/domain/catalog.rs
+  s_57e1c74013b228::t_568df74481df1f 1-5,7-26,30-32,34-36,38-39,41,43-53,58-80
+  s_57e1c74013b228::t_306640ca6e6da1 6,27-29,33,37,40,42,54-57
+crates/connectors/src/domain/models.rs
+  s_57e1c74013b228::t_932fd3fcfa5129 1-632
+crates/connectors/src/domain/resolve.rs
+  s_57e1c74013b228::t_de812cfdecf27d 1-71,81-82,90-139,158-209,211-213
+  s_57e1c74013b228::t_5323a569426e1e 210
+  s_57e1c74013b228::t_306640ca6e6da1 72-80,83-89,140-157
+crates/connectors/src/domain/models/test.rs
+  s_57e1c74013b228::t_ae33fbf942687e 1
+  s_57e1c74013b228::t_5323a569426e1e 17,32-65
+  s_57e1c74013b228::t_2c0547ab523fa2 2-16,18-31,66
+crates/connectors/src/domain/catalog/test.rs
+  s_5d42f0dc11f02e::t_7c69fe7f11bdeb 2-16,23,26,28-30,32-39,45-46
+  s_57e1c74013b228::t_306640ca6e6da1 17-22,24-25,27,31,40-44
+  s_57e1c74013b228::t_ae33fbf942687e 1
+crates/connectors/Cargo.toml
+  s_57e1c74013b228::t_9c4fff0f761c5a 49
+  s_57e1c74013b228::t_ad96af0c475395 35
+crates/connectors/src/domain/service.rs
+  s_57e1c74013b228::t_5323a569426e1e 7-8
+  s_57e1c74013b228::t_893e28d136d313 1-6,9-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "da2af04737b24ed3afe4fd6d3d87baf512837e28",
+  "prompts": {},
+  "sessions": {
+    "s_57e1c74013b228": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa6029da-d45a-45b0-b22c-f1996be6c27d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_5d42f0dc11f02e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "28ceb712-beab-4ed6-9edf-e5c817833544",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

@@ -1,0 +1,314 @@
+crates/connectors/src/lib.rs
+  s_5d42f0dc11f02e::t_2a3089c8815d1d 7-11,254
+  s_5d42f0dc11f02e::t_44c1bf81aa1509 20-21
+services/agent_harness_service/src/lib.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 144-150,584-588
+crates/connectors/src/selection/test.rs
+  s_5d42f0dc11f02e::t_2a3089c8815d1d 23
+crates/connectors/src/outbound/pipedream/inbound/mod.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-10
+crates/agent_egress/src/outbound/mcp_credentials/test.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 4,20
+services/agent_harness_service/src/config.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 294-296,299-301,398-400
+  s_5d42f0dc11f02e::t_ad5d8613021334 402
+crates/ai_tools/src/mcp_app_catalog/test.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 2
+crates/import_linear/Cargo.toml
+  s_5d42f0dc11f02e::t_22530be641245a 12
+crates/connectors/src/outbound/pipedream.rs
+  s_5d42f0dc11f02e::t_8d1e7bbdaad290 1-17
+crates/agent_code_mode/Cargo.toml
+  s_5d42f0dc11f02e::t_22530be641245a 28
+services/agent_harness_service/src/cognition/api/context.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 99-103,116,122-124
+crates/import_notion/AGENTS.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 30,34
+crates/connectors/src/outbound/native/inbound/axum_router.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-599
+crates/connectors/src/outbound/pipedream/outbound/pg_connection_repo/test.rs
+  s_5d42f0dc11f02e::t_52f1305bb26d0f 22,65,84,104,129
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-21,23-64,66-83,85-103,105-128,130-156
+crates/import_linear/src/outbound/client.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 8
+crates/connectors/src/outbound/pipedream/outbound/api/capabilities.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-47
+crates/agent_egress/Cargo.toml
+  s_5d42f0dc11f02e::t_22530be641245a 53
+crates/connectors/src/outbound/native/inbound/toolset/test.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-141
+crates/connectors/AGENTS.md
+  s_5d42f0dc11f02e::t_4766bdbc2baae0 1-84
+crates/connectors/src/outbound/native/domain/service/server_access.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-122
+crates/ai_tools/src/mcp_app_catalog.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 9-10,13,17-18
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 14-15
+crates/granola_sync/src/outbound/api/test.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 97-99,108-109,113-114
+  s_5d42f0dc11f02e::t_ad5d8613021334 129
+services/agent_harness_service/src/cognition/api/swagger.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 31-36
+  s_5d42f0dc11f02e::t_ad5d8613021334 21,25
+crates/connectors/src/outbound/native/domain/models/server/test.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-135
+crates/import_tracker/src/outbound/pipedream.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 7-8
+crates/connect_client/AGENTS.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 18,32
+crates/agent_egress/src/outbound/forwarder.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 8
+crates/import_tracker/AGENTS.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 15
+crates/connectors/src/outbound/pipedream/inbound/toolset.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-105
+crates/import_jira/Cargo.toml
+  s_5d42f0dc11f02e::t_22530be641245a 11
+crates/granola_sync/src/outbound/accounts.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 6
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 10
+services/agent_harness_service/src/cognition/service/integration_analytics.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 10
+tooling/just/rust.just
+  s_5d42f0dc11f02e::t_52f1305bb26d0f 159
+crates/connectors/src/outbound/native/domain/service/server_directory.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-157
+crates/connectors/src/outbound/pipedream/outbound/dispatch.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-254
+crates/agent_egress/src/outbound/mcp_credentials.rs
+  s_5d42f0dc11f02e::t_36fc47df7c6176 12
+  s_5d42f0dc11f02e::t_ad5d8613021334 17-19,118
+crates/agent_harness/src/outbound/connected_apps.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 7-9
+  s_5d42f0dc11f02e::t_ad5d8613021334 6
+crates/connectors/Cargo.toml
+  s_5d42f0dc11f02e::t_44c1bf81aa1509 7-10,12,15-27,29-36,38-40,42-43,47-51
+crates/onboarding/AGENTS.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 25
+crates/ai_tools/src/import_channels/test.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 12
+crates/connectors/src/outbound/pipedream/domain/service/connect.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-13,20-315
+  s_5d42f0dc11f02e::t_96a9169aaaa3dc 14-19
+services/agent_harness_service/src/cognition/api/context/test.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 610,809,823,831,837,842,844,858-860
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 608-609,611-614,637-639,810-812,820-822,824-827,832-836
+services/agent_harness_service/src/cognition/config/test.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 6
+crates/connectors/src/outbound/native/outbound/oauth/test.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-181,184-240
+  s_5d42f0dc11f02e::t_96a9169aaaa3dc 182-183
+crates/connectors/src/outbound/native/domain/service/linked_github.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-154
+crates/connectors/src/outbound/native/domain/service/server_access/test.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-157
+services/agent_harness_service/src/scheduling/routine_suggestions.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 31-32
+crates/import_jira/AGENTS.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 15
+crates/connectors/src/outbound/pipedream/outbound/connect/test.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-308
+crates/import/src/outbound/mcp_slack_source.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 9
+crates/connectors/src/outbound/pipedream/outbound/api.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-635
+crates/granola_sync/AGENTS.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 25,29
+crates/connectors/src/outbound/native/outbound/mod.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-13
+  s_5d42f0dc11f02e::t_96a9169aaaa3dc 14-15
+crates/connectors/src/outbound/pipedream/domain/service/discovery/test.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1,5-317
+  s_5d42f0dc11f02e::t_96a9169aaaa3dc 2-4
+crates/connectors/src/outbound/pipedream/domain/service/catalog.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-33
+crates/connectors/src/outbound/pipedream/outbound/mod.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-9
+crates/agent_egress/AGENTS.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 113
+crates/import/src/domain/service/notion_workspace/personal.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 10
+crates/import/src/domain/service.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 23
+crates/connectors/src/outbound/native/outbound/redis_state_store.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-49
+crates/connectors/src/overlay.rs
+  s_5d42f0dc11f02e::t_2a3089c8815d1d 3-6
+crates/import_jira/src/outbound/client.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 8
+crates/connectors/src/outbound/pipedream/outbound/connect.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-369
+crates/import/src/domain/service/notion_workspace/object.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 6
+crates/import/src/domain/service/slack_discovery.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 14
+crates/import_notion/src/outbound/pipedream/test.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 4-7
+  s_5d42f0dc11f02e::t_ad5d8613021334 100,149
+crates/ai_tools/src/build_context.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 230,672-673
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 648-658,660,666-668,737-739
+crates/connectors/src/test.rs
+  s_5d42f0dc11f02e::t_96a9169aaaa3dc 404-405,450-451
+  s_5d42f0dc11f02e::t_2a3089c8815d1d 2-3,102,375
+crates/agent_harness/src/outbound/egress.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 16-17
+crates/agent_harness/src/outbound/connected_apps/test.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 2,64,71
+crates/connectors/src/outbound/pipedream/domain/service/toolset.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-103
+crates/onboarding/Cargo.toml
+  s_5d42f0dc11f02e::t_22530be641245a 17
+services/agent_harness_service/src/cognition/api/tool_selection.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 4
+crates/ai_tools/src/lib.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 319,349
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 42
+crates/connectors/src/outbound/pipedream/outbound/api/test.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-170
+crates/onboarding/src/domain/service.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 6
+crates/onboarding/src/domain/service/test.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 3
+crates/connectors/src/outbound/native/inbound/toolset.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-3,7-176
+  s_5d42f0dc11f02e::t_96a9169aaaa3dc 4-6
+services/agent_harness_service/src/cognition/server.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 106,597,602-603,605,637-638,653,658,697,1024,1034,1059,1069,1071,1080,1082,1091
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 616-618,707-709,936-938,1012-1016,1018-1020,1022-1023,1035-1037,1039-1040,1042-1058
+services/agent_harness_service/src/routine_sessions/test.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 3
+crates/agent_egress/src/outbound/actor_mcp.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 7,116
+.github/workspace-dep-closures.json
+  s_5d42f0dc11f02e::t_96a9169aaaa3dc 600,2587,2591,2673,8273,8284,10934-10935,10937-10939,10943,10945,10955,10958,10960-10961,10963-10964,10966-10970,10975-10976,10978-10980,10984,10986,10996,10999,11001-11002,11004-11005,11007-11011,11016-11017,11019-11021,11025,11027,11036,11041-11042,11044-11045,11047,11049-11052,11057-11058,11060-11062,11066,11068,11077,11080,11082-11083,11085-11086,11088-11092,13141-13142,13154,13157
+crates/connectors/src/outbound/native/domain/service/persisting_credential_store/test.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-145
+crates/import_tracker/test_support.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 1-4,25-26
+crates/import_linear/AGENTS.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 15
+crates/import/src/domain/service/tracker_workspace.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 4
+crates/granola_sync/Cargo.toml
+  s_5d42f0dc11f02e::t_22530be641245a 18
+crates/import_notion/Cargo.toml
+  s_5d42f0dc11f02e::t_22530be641245a 15
+infra/stacks/monitoring/monitors/oauth.ts
+  s_5d42f0dc11f02e::t_36fc47df7c6176 1-3,13
+  s_5d42f0dc11f02e::t_a40007a3bd0480 24
+services/document_storage_service/src/server.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 1693
+crates/agent_egress/src/outbound/custom_mcp.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 15-18
+  s_5d42f0dc11f02e::t_36fc47df7c6176 5,10
+crates/connectors/src/outbound/native/domain/service/persisting_credential_store.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-87
+docs/runbooks/slack-live-channel-import.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 129
+crates/import_tracker/Cargo.toml
+  s_5d42f0dc11f02e::t_22530be641245a 11
+crates/connectors/src/outbound/pipedream/outbound/pg_connection_repo.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-3,7-215
+  s_5d42f0dc11f02e::t_96a9169aaaa3dc 4-6
+services/agent_harness_service/src/scheduling.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 865,931
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 558-560
+services/agent_harness_service/src/routine_sessions.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 13-16
+crates/import/src/domain/service/workspace/run.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 14
+crates/connectors/src/outbound/native/outbound/guarded_http.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-226
+crates/connectors/src/outbound/native/outbound/pg_server_repo.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-189
+crates/connectors/src/outbound/pipedream/domain/service/connect/test.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1,5-725
+  s_5d42f0dc11f02e::t_96a9169aaaa3dc 2-4
+docs/architecture/cursor-agent-transport.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 317
+crates/import_notion/src/outbound/pipedream.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 7-8
+infra/stacks/monitoring/README.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 240
+crates/agent_harness/src/outbound/egress/test.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 25-28,43-44,53-60,66-67,115-118
+  s_5d42f0dc11f02e::t_ad5d8613021334 3,9,16,119,125
+crates/connectors/src/outbound/native/domain/service/toolset.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 4-502
+  s_5d42f0dc11f02e::t_96a9169aaaa3dc 1-3
+crates/connectors/src/outbound/native/domain/models/server.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-125
+crates/agent_code_mode/src/domain/connected_apps.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 12-14
+crates/mcp_toolset/src/lib.rs
+  s_5d42f0dc11f02e::t_36fc47df7c6176 9
+crates/connectors/src/outbound/pipedream/domain/service/discovery.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-190
+crates/agent_egress/src/outbound/custom_mcp/test.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 4,272-274
+crates/agent_code_mode/src/inbound/axum_router.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 410-411,442-443
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 422-425,454-457
+crates/granola_sync/src/outbound/api.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 9-11,47-48
+crates/connectors/src/outbound/native/domain/service/server_directory/test.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-209
+crates/connectors/src/outbound/native/domain/models/consts.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-6
+crates/connectors/src/outbound/native/outbound/auth_service_github_tokens.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-35
+crates/mcp_toolset/AGENTS.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 23,29
+services/document_storage_service/Cargo.toml
+  s_5d42f0dc11f02e::t_22530be641245a 215
+services/agent_harness_service/src/cognition/service/integration_analytics/test.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 32,45
+services/agent_harness_service/src/cognition/api.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 199,204
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 183-184,186-190,207-209
+crates/import/src/domain/service/workspace.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 5
+crates/import/src/domain/service/workspace/events.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 15
+crates/connectors/src/outbound/pipedream/inbound/axum_router.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-998
+services/agent_harness_service/src/code_mode/connected_apps.rs
+  s_5d42f0dc11f02e::t_ad5d8613021334 25-30
+crates/connectors/src/outbound/native.rs
+  s_5d42f0dc11f02e::t_8d1e7bbdaad290 1-11
+crates/ai_tools/src/tool_context.rs
+  s_5d42f0dc11f02e::t_d5ffaab4782b3b 2197-2199,2337-2344
+  s_5d42f0dc11f02e::t_ad5d8613021334 191,205,2171,2177-2178,2189-2190,2352-2353,2355,2357,2359
+crates/agent_harness/AGENTS.md
+  s_5d42f0dc11f02e::t_36fc47df7c6176 56
+crates/connectors/src/selection.rs
+  s_5d42f0dc11f02e::t_2a3089c8815d1d 3-4
+crates/connectors/src/outbound/pipedream/domain/service/catalog/test.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-117
+crates/connectors/src/outbound/native/outbound/oauth.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-169,172-322
+  s_5d42f0dc11f02e::t_96a9169aaaa3dc 170-171
+crates/connectors/src/outbound.rs
+  s_5d42f0dc11f02e::t_8d1e7bbdaad290 1-5
+crates/connectors/src/outbound/pipedream/outbound/api/capabilities/test.rs
+  s_5d42f0dc11f02e::t_6e7dc10ed208fb 1-73
+Cargo.lock
+  s_5d42f0dc11f02e::t_174e6599e0560c 353,452,5294,5297-5298,5300-5302,5304-5308,5310-5315,5317-5318,5320-5321,5323,5325-5327,6923,9609,11413,11430,11448,11472,15106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "69acc55f28d6a9888146dc8e5a2c16deb726738c",
+  "prompts": {},
+  "sessions": {
+    "s_5d42f0dc11f02e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "28ceb712-beab-4ed6-9edf-e5c817833544",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

@@ -1,0 +1,59 @@
+crates/mcp_toolset/AGENTS.md
+  s_a37ce135bddc8b::t_c5fb0a94547d95 17-18,24-25,31
+crates/agent_egress/AGENTS.md
+  s_a37ce135bddc8b::t_c5fb0a94547d95 123-124
+crates/connectors/AGENTS.md
+  s_a37ce135bddc8b::t_98ed16f23ccf4f 5-9,13-40,44-58,62-68,72-82,86-87
+services/agent_harness_service/AGENTS.md
+  s_a37ce135bddc8b::t_c5fb0a94547d95 201-202,300-301
+crates/agent_egress/src/outbound/mcp_credentials/test.rs
+  s_a37ce135bddc8b::t_6928665d26dbd5 48,285-286
+crates/granola_sync/src/outbound/pg_repo/test.rs
+  s_a37ce135bddc8b::t_6928665d26dbd5 117
+crates/agent_harness/src/outbound/egress/test.rs
+  s_a37ce135bddc8b::t_6928665d26dbd5 15
+crates/agent_egress/src/outbound/mcp_credentials.rs
+  s_a37ce135bddc8b::t_daaea90f2b00dc 16-17
+crates/agent_harness/src/outbound/connected_apps.rs
+  s_a37ce135bddc8b::t_32fade77f0b33f 6
+crates/agent_harness/src/outbound/egress.rs
+  s_a37ce135bddc8b::t_5559fbf4ef9e37 16
+crates/ai_tools/src/mcp_app_catalog.rs
+  s_a37ce135bddc8b::t_4e4d5948c5d639 4
+crates/granola_sync/src/outbound/accounts.rs
+  s_a37ce135bddc8b::t_fb5a2877954ebd 6
+crates/granola_sync/src/outbound/api.rs
+  s_a37ce135bddc8b::t_42ca5e538a8f1e 10
+crates/granola_sync/src/outbound/api/test.rs
+  s_a37ce135bddc8b::t_de3e7f7378382a 3
+crates/import/src/domain/service.rs
+  s_a37ce135bddc8b::t_99a577ffce656b 23
+crates/import/src/outbound/mcp_slack_source.rs
+  s_a37ce135bddc8b::t_c89775e1890771 8
+crates/import_notion/src/outbound/connected.rs
+  s_a37ce135bddc8b::t_0971f647455929 8
+crates/import_tracker/src/outbound/connection.rs
+  s_a37ce135bddc8b::t_f45bca9b4f8cb3 8
+crates/import_tracker/test_support.rs
+  s_a37ce135bddc8b::t_f789dbbee07cb3 5
+crates/onboarding/src/domain/service.rs
+  s_a37ce135bddc8b::t_8ac9172bc16672 6
+services/agent_harness_service/src/cognition/api/tool_selection.rs
+  s_a37ce135bddc8b::t_3dd74fa858077b 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5fe34213fae3bfa357c73000f101cb6303b46ddb",
+  "prompts": {},
+  "sessions": {
+    "s_a37ce135bddc8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "93833ac7-7fb8-4d30-be2e-a077fdc24000",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

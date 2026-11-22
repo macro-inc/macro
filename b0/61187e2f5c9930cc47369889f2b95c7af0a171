@@ -1,0 +1,21 @@
+crates/connectors/src/fake/source.rs
+  s_f41d1322fdaf56::t_810a800ae9a28c 22,41,43-44,66,80-83,118,402-403,407,418-419,422-428,432
+crates/connectors/src/fake.rs
+  s_f41d1322fdaf56::t_810a800ae9a28c 11,32,63,96-103,263-265
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b061187e2f5c9930cc47369889f2b95c7af0a171",
+  "prompts": {},
+  "sessions": {
+    "s_f41d1322fdaf56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d3f18eae-353e-4bf4-9772-680eff8ef594",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

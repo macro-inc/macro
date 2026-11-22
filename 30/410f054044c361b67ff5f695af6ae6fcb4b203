@@ -1,0 +1,172 @@
+crates/import/src/domain/service/workspace/run/test/reimport.rs
+  s_f41d1322fdaf56::t_2e60b4553972fd 53,185,271,328,402
+crates/import_notion/src/lib.rs
+  s_f41d1322fdaf56::t_0bf9000e903852 6
+crates/import_linear/Cargo.toml
+  s_f41d1322fdaf56::t_4b74fd6ce152df 20
+crates/import_tracker/src/domain/model.rs
+  s_f41d1322fdaf56::t_0bf9000e903852 183
+crates/import/src/domain/service/workspace/run.rs
+  s_f41d1322fdaf56::t_4a653aeed8f518 14,127
+crates/onboarding/src/domain/service.rs
+  s_f41d1322fdaf56::t_88523b1c61f9c7 6-7,55-56,59,63-65,72,74-75,80-81,84-85,87-91,100
+crates/import/src/domain/service/workspace.rs
+  s_f41d1322fdaf56::t_4a653aeed8f518 5,110,172
+crates/import/src/outbound/mcp_slack_source.rs
+  s_f41d1322fdaf56::t_99e253500c4330 17,23-24,26,30-32,43
+  s_f41d1322fdaf56::t_4a653aeed8f518 8-9,25,29,36
+docs/agent-guide/calls.md
+  s_f41d1322fdaf56::t_d46a375cb0c3c8 235
+crates/import/src/domain/service/test/admission.rs
+  s_f41d1322fdaf56::t_2e60b4553972fd 371-375,430,480,585,619
+crates/import/src/domain/service/notion_workspace.rs
+  s_f41d1322fdaf56::t_4a653aeed8f518 37,162,365
+crates/import/AGENTS.md
+  s_f41d1322fdaf56::t_d46a375cb0c3c8 21
+  s_f41d1322fdaf56::t_c2b8a4335f9498 89-93
+crates/granola_sync/src/outbound/pg_repo/test.rs
+  s_f41d1322fdaf56::t_d2b7d0aee22e22 231-234
+  s_f41d1322fdaf56::t_6f5d6f0b67d633 110-111,116-119,121-139,142,174-179,211,213-217,230,237,248-266
+  s_f41d1322fdaf56::t_8bc03740c0992c 267
+crates/import_jira/src/lib.rs
+  s_f41d1322fdaf56::t_0bf9000e903852 6
+crates/import/src/domain/service/slack_discovery.rs
+  s_f41d1322fdaf56::t_4a653aeed8f518 13,127,234,338
+crates/import/src/domain/models/test.rs
+  s_f41d1322fdaf56::t_563a171579d478 2,157-165,167-168
+crates/import_jira/Cargo.toml
+  s_f41d1322fdaf56::t_4b74fd6ce152df 19
+crates/import_linear/src/outbound/client/test.rs
+  s_f41d1322fdaf56::t_7fa457b6300b00 2-3,8-12,26,28-41,43,50,61,63-65,67,76,78-80,82,90-117,123
+  s_f41d1322fdaf56::t_d2b7d0aee22e22 118-122
+crates/granola_sync/src/domain/service.rs
+  s_f41d1322fdaf56::t_10d42ce84bd545 24-26,28,34,38,43,84,89,91,161,258,260
+crates/granola_sync/src/outbound/api.rs
+  s_f41d1322fdaf56::t_f5b996a32e8371 6,10-11,18-22,36-44,47,54-61,63,79,84,133,140,143,172,174,184,187,215
+crates/import_tracker/src/outbound/connection/test.rs
+  s_f41d1322fdaf56::t_e9c3e919fac87e 63-64
+  s_f41d1322fdaf56::t_6a45ad9415e506 7-8
+  s_f41d1322fdaf56::t_4307a15090197c 85-92,140
+  s_f41d1322fdaf56::t_452ff59869a972 1-6,9-62,65-84,93-139
+crates/import/src/domain/service/workspace/events.rs
+  s_f41d1322fdaf56::t_4a653aeed8f518 15,36
+crates/import_notion/src/outbound/connected/test.rs
+  s_f41d1322fdaf56::t_3b204febd80a27 1,4-5,10,14,16-17,20-21,25-30,33-34,43-49,51-82,91-133
+  s_f41d1322fdaf56::t_1d8d62d6972aec 2-3,6-9,11-13,15,18-19,22-24,31-32,35-42,50,83-90,134
+crates/granola_sync/src/outbound/accounts/test.rs
+  s_f41d1322fdaf56::t_ac6231651e2692 1-42
+crates/granola_sync/src/domain/service/test.rs
+  s_f41d1322fdaf56::t_505cc1681889ef 37-39
+  s_f41d1322fdaf56::t_2b989c263ede63 9,23,30,35-36,40,46,49,64,66,82,84
+crates/import/src/domain/models.rs
+  s_f41d1322fdaf56::t_563a171579d478 6
+  s_f41d1322fdaf56::t_485f7a2196beef 76-85
+crates/ai_tools/src/import_channels/test.rs
+  s_f41d1322fdaf56::t_fc7ba2a5550738 38-41,191,227
+crates/onboarding/src/domain/models.rs
+  s_f41d1322fdaf56::t_88523b1c61f9c7 42-43,46,48,50-51,61
+crates/import_tracker/AGENTS.md
+  s_f41d1322fdaf56::t_2b8c8b9bad0a21 5
+crates/granola_sync/src/outbound/accounts.rs
+  s_f41d1322fdaf56::t_ac6231651e2692 6-7,9-12,14-20,22-24,28-30,32-33,36-37,39
+crates/import/src/domain/service.rs
+  s_f41d1322fdaf56::t_a9e2e283950703 637,1394-1396,1398-1401,1403-1405,1407-1408
+  s_f41d1322fdaf56::t_4a653aeed8f518 23,25,489,895,992,1083,1175,1311
+  s_f41d1322fdaf56::t_d9fd0ee50e25bc 24,1397,1402,1406
+crates/import/src/domain/service/notion_workspace/personal.rs
+  s_f41d1322fdaf56::t_4a653aeed8f518 10,46
+crates/import/src/domain/service/slack_discovery/test.rs
+  s_f41d1322fdaf56::t_2e60b4553972fd 4,184
+crates/import_linear/src/lib.rs
+  s_f41d1322fdaf56::t_0bf9000e903852 6
+crates/granola_sync/src/outbound/api/test.rs
+  s_f41d1322fdaf56::t_2e6d01ac3183f4 2-4,88-111,114,118,121-137,139,147,166,172,191
+crates/import/src/domain/service/notion_workspace/object.rs
+  s_f41d1322fdaf56::t_4a653aeed8f518 6,40
+crates/import/src/domain/service/test.rs
+  s_f41d1322fdaf56::t_d2b7d0aee22e22 348-359,373-375
+  s_f41d1322fdaf56::t_d90d0ef66a6a9d 327-347,360-372,376-378
+crates/import/src/domain/service/workspace/run/test/events.rs
+  s_f41d1322fdaf56::t_2e60b4553972fd 63,121,151,184,242,297
+crates/import_notion/Cargo.toml
+  s_f41d1322fdaf56::t_1d8d62d6972aec 27
+crates/import_tracker/src/outbound/mod.rs
+  s_f41d1322fdaf56::t_c2beae587ce6e3 1-2
+crates/import_jira/src/outbound/client.rs
+  s_f41d1322fdaf56::t_0cf55dceab6b49 1,8,13,127-128,130-133,135,137-138,145,165,167
+crates/granola_sync/src/outbound/pg_repo.rs
+  s_f41d1322fdaf56::t_ac6231651e2692 14-19
+  s_f41d1322fdaf56::t_10d42ce84bd545 136
+crates/import/src/domain/service/workspace/run/test/root.rs
+  s_f41d1322fdaf56::t_2e60b4553972fd 41,109
+crates/import_tracker/src/lib.rs
+  s_f41d1322fdaf56::t_c2beae587ce6e3 1,6
+crates/import_tracker/src/outbound/connection.rs
+  s_f41d1322fdaf56::t_d2b7d0aee22e22 66-67
+  s_f41d1322fdaf56::t_6a45ad9415e506 52
+  s_f41d1322fdaf56::t_8d71d996db501c 3-7,11-46,53-55,60,62-65,77,79-83,85-87,90-94,100-103,105-115,134-142,146-219
+  s_f41d1322fdaf56::t_cdf6a644ed1521 10
+  s_f41d1322fdaf56::t_881a8186c4572f 1-2,8-9,47-51,56-59,61,68-76,78,84,88-89,95-99,104,116-133,143-145
+crates/import/src/domain/service/workspace/run/test/dates.rs
+  s_f41d1322fdaf56::t_2e60b4553972fd 15
+crates/granola_sync/Cargo.toml
+  s_f41d1322fdaf56::t_505cc1681889ef 33
+crates/import/src/domain/service/tracker_workspace.rs
+  s_f41d1322fdaf56::t_4a653aeed8f518 4,58
+crates/import_notion/AGENTS.md
+  s_f41d1322fdaf56::t_2b8c8b9bad0a21 22-23,30,34-35,47-48
+crates/onboarding/src/domain/service/test.rs
+  s_f41d1322fdaf56::t_d2b7d0aee22e22 151-152,182-183
+  s_f41d1322fdaf56::t_34ed459e951b1f 3-4,86-87,90,94-102,105,109-123,129
+  s_f41d1322fdaf56::t_4ae2e51fcc4d24 91-92
+crates/import_notion/src/outbound/connected.rs
+  s_f41d1322fdaf56::t_d9b3999b0db1b4 1-3,8-9,19,25,27,30-32,35-37,39,44,46,51,56-57,64-70,74-76,78,85-90,93,103-111,114
+  s_f41d1322fdaf56::t_d265c9707b5db0 4-7,10-18,20-24,26,28-29,33-34,38,40-43,45,47-50,52-55,58-63,71-73,77,79-84,91-92,94-102,112-113,115-116,120-121
+crates/granola_sync/AGENTS.md
+  s_f41d1322fdaf56::t_b773c18eccb38a 6-7,11-17,27,31,48-52
+crates/import_linear/src/outbound/client.rs
+  s_f41d1322fdaf56::t_a0313013647d33 1,8,13,79-80,82-86,90,92,100,255-256,260-261
+  s_f41d1322fdaf56::t_6a45ad9415e506 93
+crates/granola_sync/src/domain/models.rs
+  s_f41d1322fdaf56::t_10d42ce84bd545 6,109
+crates/import_tracker/Cargo.toml
+  s_f41d1322fdaf56::t_4b74fd6ce152df 21
+crates/granola_sync/src/domain/ports.rs
+  s_f41d1322fdaf56::t_10d42ce84bd545 25,39-40,43-46
+crates/import/src/outbound/mcp_slack_source/test.rs
+  s_f41d1322fdaf56::t_d2b7d0aee22e22 582-585,588-590,602-605,612-618,621-624
+  s_f41d1322fdaf56::t_528cd9b2f51edc 4,569-573,575-581,586-587,591-601,610-611,619-620,625-631,633-638,640-649
+crates/onboarding/Cargo.toml
+  s_f41d1322fdaf56::t_34ed459e951b1f 28
+crates/import_jira/src/outbound/client/test.rs
+  s_f41d1322fdaf56::t_0cf55dceab6b49 2,52,54-63,65-66,82,92-97,100-120
+  s_f41d1322fdaf56::t_d2b7d0aee22e22 98-99
+  s_f41d1322fdaf56::t_50ec9b2ded7cd4 121
+crates/import/Cargo.toml
+  s_f41d1322fdaf56::t_528cd9b2f51edc 51
+crates/onboarding/AGENTS.md
+  s_f41d1322fdaf56::t_4ae2e51fcc4d24 7
+crates/import_notion/src/outbound.rs
+  s_f41d1322fdaf56::t_d265c9707b5db0 3
+crates/import_tracker/test_support.rs
+  s_f41d1322fdaf56::t_d2b7d0aee22e22 33-36
+  s_f41d1322fdaf56::t_452ff59869a972 1-7,10,12-13,16-18,20-26,29-32,37-43
+crates/import/src/domain/service/workspace/run/test.rs
+  s_f41d1322fdaf56::t_2e60b4553972fd 36,195,389,554,649,720
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "30410f054044c361b67ff5f695af6ae6fcb4b203",
+  "prompts": {},
+  "sessions": {
+    "s_f41d1322fdaf56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d3f18eae-353e-4bf4-9772-680eff8ef594",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
