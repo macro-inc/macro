@@ -1,0 +1,66 @@
+crates/agent_code_mode/src/domain/documentation.rs
+  s_cd2738b611e99b::t_f89d0bdd436239 2,329-330,333,340-342
+crates/agent_inmem/src/rig_engine.rs
+  s_cd2738b611e99b::t_18ab787aec018a 723,725
+crates/agent_code_mode/Cargo.toml
+  s_cd2738b611e99b::t_49f8e5113a2b1c 61
+crates/agent_code_mode/src/domain/documentation/test.rs
+  s_cd2738b611e99b::t_18ab787aec018a 85-113
+  s_cd2738b611e99b::t_799d97d0bc3061 60,123,136,160,174,193,339,414,499,529,641
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_cd2738b611e99b::t_9fa8161ace21ee 421-422,462-489
+crates/agent_code_mode/src/inbound/toolset/dialect/examples.md
+  s_cd2738b611e99b::t_0c8209c022ad2c 8-22
+  s_cd2738b611e99b::t_b315fe149c3f41 1-7,23-29
+crates/agent_code_mode/src/inbound/toolset/dialect/test.rs
+  s_cd2738b611e99b::t_49f8e5113a2b1c 1-128,132-236
+  s_cd2738b611e99b::t_9fa8161ace21ee 129-131
+crates/agent_code_mode/AGENTS.md
+  s_cd2738b611e99b::t_ff905a6bf2bf75 123-133,138-139
+docs/architecture/agent-sdk-guidance.md
+  s_cd2738b611e99b::t_ff905a6bf2bf75 41-48
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_801d204a6cbbe1::t_cbc5a0af401ac5 24-29
+crates/agent_code_mode/src/inbound/toolset/dialect.rs
+  s_cd2738b611e99b::t_6b64873cd5dee0 1-203
+crates/agent_code_mode/src/inbound/toolset/dialect/discovery.md
+  s_801d204a6cbbe1::t_ab47ef57b4b44d 1
+crates/agent_code_mode/src/inbound/toolset/dialect/module.md
+  s_801d204a6cbbe1::t_aca7a326f7bfc8 1-5
+crates/agent_code_mode/src/inbound/toolset/dialect/overview.md
+  s_801d204a6cbbe1::t_b9778c30ece2d1 1
+crates/agent_code_mode/src/inbound/toolset/dialect/permissions.md
+  s_801d204a6cbbe1::t_8c391117561f11 1-9
+crates/agent_code_mode/src/inbound/toolset/dialect/program.md
+  s_801d204a6cbbe1::t_c0c6a7fa0c208f 1-20
+crates/agent_code_mode/src/inbound/toolset/dialect/results.md
+  s_801d204a6cbbe1::t_c771a3483c66ca 1-21
+crates/agent_code_mode/src/inbound/toolset/dialect/search.md
+  s_801d204a6cbbe1::t_03ffaeb006b678 1-7
+crates/agent_code_mode/src/inbound/toolset/test/without_js_tools.json
+  s_cd2738b611e99b::t_075bac8a37f76e 135-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "da2597651254920e552e48c8b8693ee457f98ea5",
+  "prompts": {},
+  "sessions": {
+    "s_801d204a6cbbe1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "53eed665-e109-41ff-bb4b-138a29669adc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_cd2738b611e99b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "160aae60-b056-44b3-9de2-02a74d7f232d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
