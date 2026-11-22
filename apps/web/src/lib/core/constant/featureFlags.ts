@@ -903,6 +903,14 @@ export const enableSuggestions = defineFlag({
   default: onInDev,
 });
 
+// Thumbs up/down and a note on agent responses, for internal evals. Off in dev
+// too: it is for a named set of employees, so PostHog decides everywhere, and
+// the backend gates every agent-feedback route on the same flag.
+export const enableAgentResponseFeedback = defineFlag({
+  key: 'enable-agent-response-feedback',
+  env: 'ENABLE_AGENT_RESPONSE_FEEDBACK',
+});
+
 // Templates are not ready for general use. Follow PostHog even in development
 // so the UI and the server's per-user rollout agree.
 export const enableRoutineSharing = defineFlag({
