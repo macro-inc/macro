@@ -16,7 +16,6 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 aes = { version = "0.9", default-features = false, features = ["zeroize"] }
-aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
@@ -184,7 +183,6 @@ zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip
 
 [build-dependencies]
 aes = { version = "0.9", default-features = false, features = ["zeroize"] }
-aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }

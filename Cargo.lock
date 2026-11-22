@@ -24174,7 +24174,6 @@ name = "workspace-hack"
 version = "0.1.0"
 dependencies = [
  "aes 0.9.3",
- "aes-gcm 0.10.3",
  "ahash",
  "aho-corasick",
  "anyhow",

@@ -12,7 +12,7 @@ providers = ["macro_env_var"]
 test-fakes = ["rmcp/server", "tokio/io-util"]
 
 [dependencies]
-aes-gcm = "0.10"
+aes-gcm.workspace = true
 ai_toolset = { path = "../ai_toolset" }
 anyhow.workspace = true
 async-trait.workspace = true
