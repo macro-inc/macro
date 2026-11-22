@@ -354,6 +354,7 @@ where
                         Release::HandBack {
                             user_id: grant.user_id.clone(),
                             note: None,
+                            drive: None,
                         }
                     } else {
                         span.record("screen.take_over", "refused");
@@ -399,13 +400,15 @@ where
     }
 
     /// Hand the computer back to the agent, if `user` drives it, from
-    /// whichever of their sockets.
+    /// whichever of their sockets; with `drive`, only while that is the
+    /// drive under way (`None` when it isn't: a stale tab ends nothing).
     #[tracing::instrument(skip_all, fields(computer.id = %computer, screen.handed_back = tracing::field::Empty), err)]
     pub async fn hand_back(
         &self,
         computer: ComputerId,
         user: MacroUserIdStr<'static>,
         note: Option<String>,
+        drive: Option<DriveId>,
     ) -> Result<Option<Lease>, ScreenError> {
         let released = self
             .repo
@@ -414,6 +417,7 @@ where
                 Release::HandBack {
                     user_id: user,
                     note,
+                    drive,
                 },
             )
             .await

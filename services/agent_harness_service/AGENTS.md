@@ -202,6 +202,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   socket marked seen every 30 s and on every take-over (three failed lookups
   in a row end it, as do three failed touches or a row another socket ended
   as `lost`); a driver who loses access releases the lease at once.
+  `handBack` may name its `leaseId`: a tab that missed a newer drive of the
+  same person's gets `staleHandBack` and a fresh `state`, and nothing is
+  handed back (an idle socket's hand-back names its own drive too).
   `state.driver` is `{name, isYou}`, never a user id; `state.leaseId` is an
   opaque id per drive. A socket with no `visibility` `visible: true` (the
   viewer repeats it) and no input for 10 minutes, or 2 minutes after

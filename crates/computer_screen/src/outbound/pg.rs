@@ -467,7 +467,32 @@ impl ScreenRepo for PgScreenRepo {
         let mut tx = self.pool.begin().await?;
         let end = DriveEnd::from(&release);
         let (row, note) = match release {
-            Release::HandBack { user_id, note } => {
+            Release::HandBack {
+                user_id,
+                note,
+                drive,
+            } => {
+                // A hand-back for a drive that is no longer the one under
+                // way (its tab missed a newer take-over) ends nothing. The
+                // row is locked so no take-over moves it between the check
+                // and the delete.
+                if let Some(drive) = drive {
+                    let started_at = sqlx::query_scalar!(
+                        r#"
+                        SELECT started_at FROM computer_screen_driver_leases
+                        WHERE computer_id = $1 AND user_id = $2
+                        FOR UPDATE
+                        "#,
+                        computer.as_uuid(),
+                        user_id.as_ref(),
+                    )
+                    .fetch_optional(&mut *tx)
+                    .await?;
+                    let current = started_at.map(|started_at| DriveId::of(computer, started_at));
+                    if current.as_ref() != Some(&drive) {
+                        return Ok(None);
+                    }
+                }
                 let row = sqlx::query_as!(
                     LeaseRow,
                     r#"

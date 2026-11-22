@@ -126,6 +126,7 @@ async fn one_user_drives_until_hand_back(pool: PgPool) {
             Release::HandBack {
                 user_id: bob.user_id.clone(),
                 note: None,
+                drive: None,
             },
         )
         .await
@@ -137,6 +138,7 @@ async fn one_user_drives_until_hand_back(pool: PgPool) {
             Release::HandBack {
                 user_id: alice.user_id.clone(),
                 note: Some("signed in for you".to_owned()),
+                drive: None,
             },
         )
         .await
@@ -231,6 +233,7 @@ async fn the_same_user_moves_the_lease_to_a_new_tab(pool: PgPool) {
             Release::HandBack {
                 user_id: alice.user_id.clone(),
                 note: Some("from the first tab".to_owned()),
+                drive: None,
             },
         )
         .await
@@ -510,6 +513,47 @@ async fn a_notice_stays_pending_until_it_is_delivered(pool: PgPool) {
             .unwrap()
             .is_empty()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_hand_back_for_an_older_drive_ends_nothing(pool: PgPool) {
+    let repo = PgScreenRepo::new(pool);
+    let alice = grant("alice", Mode::Drive);
+    let first = session(&repo, &alice).await;
+    let TakeOver::Taken(older) = repo
+        .take_over(&alice, first, None, TWO_MINUTES)
+        .await
+        .unwrap()
+    else {
+        panic!("alice could not take over");
+    };
+    let hand_back = |drive| Release::HandBack {
+        user_id: alice.user_id.clone(),
+        note: None,
+        drive,
+    };
+    repo.release(COMPUTER, hand_back(None)).await.unwrap();
+    let second = session(&repo, &alice).await;
+    let TakeOver::Taken(newer) = repo
+        .take_over(&alice, second, None, TWO_MINUTES)
+        .await
+        .unwrap()
+    else {
+        panic!("alice could not take over again");
+    };
+
+    let stale = repo
+        .release(COMPUTER, hand_back(Some(older.drive_id())))
+        .await
+        .unwrap();
+
+    assert_eq!(stale, None);
+    assert_eq!(repo.lease(COMPUTER).await.unwrap(), Some(newer.clone()));
+    let current = repo
+        .release(COMPUTER, hand_back(Some(newer.drive_id())))
+        .await
+        .unwrap();
+    assert_eq!(current, Some(newer));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

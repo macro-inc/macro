@@ -567,6 +567,59 @@ mod over_the_wire {
         assert_eq!(notices[1].notice.note.as_deref(), Some("signed you in"));
     }
 
+    /// The next `state` naming a driver, skipping the take-over's own
+    /// lease notifications and states without one.
+    async fn driven_state(client: &mut Client) -> serde_json::Value {
+        loop {
+            let state = control_of(client, "state").await;
+            if !state["driver"].is_null() {
+                return state;
+            }
+        }
+    }
+
+    /// A tab that missed a newer drive of the same person, and hands back
+    /// the drive it knew, ends nothing: the newer drive goes on.
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_stale_tab_cannot_hand_back_a_newer_drive(pool: PgPool) {
+        let rig = rig(pool, grant("alice", Mode::Drive)).await;
+        let mut stale = connect(&rig).await;
+        control_of(&mut stale, "state").await;
+        send(&mut stale, serde_json::json!({ "type": "takeOver" })).await;
+        let first_lease = driven_state(&mut stale).await["leaseId"].clone();
+        rig.screens
+            .hand_back(COMPUTER, grant("alice", Mode::Drive).user_id, None, None)
+            .await
+            .unwrap();
+        let mut newer = connect(&rig).await;
+        control_of(&mut newer, "state").await;
+        send(&mut newer, serde_json::json!({ "type": "takeOver" })).await;
+        let second_lease = driven_state(&mut newer).await["leaseId"].clone();
+        assert_ne!(first_lease, second_lease);
+        // The stale tab has seen the newer drive, so it may hand back.
+        loop {
+            if driven_state(&mut stale).await["leaseId"] == second_lease {
+                break;
+            }
+        }
+
+        send(
+            &mut stale,
+            serde_json::json!({ "type": "handBack", "leaseId": first_lease }),
+        )
+        .await;
+
+        let refused = tokio::time::timeout(Duration::from_secs(5), control_of(&mut stale, "error"))
+            .await
+            .expect("the stale hand-back was taken");
+        assert_eq!(refused["code"], "staleHandBack");
+        let still = rig.screens.lease(COMPUTER).await.unwrap().unwrap();
+        assert_eq!(
+            serde_json::Value::String(still.drive_id().as_str().to_owned()),
+            second_lease
+        );
+    }
+
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn a_viewer_cannot_take_over_or_type(pool: PgPool) {
         let rig = rig(pool, grant("alice", Mode::View)).await;

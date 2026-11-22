@@ -360,6 +360,9 @@ pub enum Release {
         user_id: MacroUserIdStr<'static>,
         /// The note for the agent.
         note: Option<String>,
+        /// The drive the hand-back is for, when the driver's tab named one:
+        /// a tab that missed a newer drive of theirs never ends it.
+        drive: Option<DriveId>,
     },
     /// Nobody touched it for the idle limit, or its socket closed and the
     /// grace ran out.
@@ -443,6 +446,15 @@ impl DriveId {
     /// Its hex.
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// A drive id a viewer sent back, if it has a drive id's shape.
+    pub fn parse(value: &str) -> Option<Self> {
+        let hex = value.len() == 24
+            && value
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'));
+        hex.then(|| Self(value.to_owned()))
     }
 }
 

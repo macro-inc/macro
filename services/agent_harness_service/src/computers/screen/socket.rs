@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
 use computer_screen::domain::models::{
-    DriveEnd, EndReason, Lease, Mode, ScreenGrant, SessionId, Surface, TakeOver, Transport,
+    DriveEnd, DriveId, EndReason, Lease, Mode, ScreenGrant, SessionId, Surface, TakeOver, Transport,
 };
 use computer_screen::domain::service::ScreenError;
 use futures::{SinkExt as _, StreamExt as _};
@@ -60,6 +60,10 @@ enum ClientMessage {
     HandBack {
         #[serde(default)]
         note: Option<String>,
+        /// The drive (`state.leaseId`) this tab hands back: a tab that
+        /// missed a newer drive of the same person's never ends it.
+        #[serde(default)]
+        lease_id: Option<String>,
     },
     Input {
         event: InputEvent,
@@ -98,6 +102,9 @@ pub enum ErrorCode {
     /// Whether this viewer may still drive couldn't be checked, so this
     /// take-over was refused; a later one may work.
     TakeOverUnavailable,
+    /// A hand-back named a drive that is no longer the one under way;
+    /// nothing was handed back.
+    StaleHandBack,
 }
 
 /// Who drives, as viewers see it: a name, never their user id (an email).
@@ -714,9 +721,13 @@ impl Connection {
 
                 () = tokio::time::sleep_until(idle_at) => {
                     // A forgotten take-over gives the agent back.
-                    if may_hand_back(lease.as_ref(), &self.grant.user_id)
-                        && drives_here(lease.as_ref(), self.session)
-                        && let Err(error) = self.deps.screens.hand_back(computer, self.grant.user_id.clone(), None).await
+                    if let Some(idle_lease) = lease.as_ref().filter(|lease| {
+                        may_hand_back(Some(lease), &self.grant.user_id) && drives_here(Some(lease), self.session)
+                    }) && let Err(error) = self
+                        .deps
+                        .screens
+                        .hand_back(computer, self.grant.user_id.clone(), None, Some(idle_lease.drive_id()))
+                        .await
                     {
                         tracing::warn!(error = ?error, "could not release an idle driver's lease");
                     }
@@ -839,14 +850,31 @@ impl Connection {
                             ).await,
                             Err(error) => return internal(&error),
                         },
-                        ClientMessage::HandBack { note } => {
+                        ClientMessage::HandBack { note, lease_id } => {
                             // Any of the driver's sockets hands back, also
-                            // after the lease moved to another of their tabs.
+                            // after the lease moved to another of their tabs;
+                            // with a lease id, only that drive.
                             if !may_hand_back(lease.as_ref(), &self.grant.user_id) {
                                 Self::error(sender, ErrorCode::NotDriver, "you are not driving").await
                             } else {
                                 let note = note.map(|note| note.chars().take(MAX_NOTE_CHARS).collect());
-                                match self.deps.screens.hand_back(computer, self.grant.user_id.clone(), note).await {
+                                let named = lease_id.is_some();
+                                let handed_back = match lease_id.as_deref().map(DriveId::parse) {
+                                    // A malformed id names no drive: nothing ends.
+                                    Some(None) => Ok(None),
+                                    drive => self.deps.screens.hand_back(computer, self.grant.user_id.clone(), note, drive.flatten()).await,
+                                };
+                                match handed_back {
+                                    Ok(None) if named => {
+                                        lease = match self.deps.screens.lease(computer).await {
+                                            Ok(lease) => lease,
+                                            Err(error) => return internal(&error),
+                                        };
+                                        match Self::error(sender, ErrorCode::StaleHandBack, "That drive already ended; nothing was handed back.").await {
+                                            Ok(()) => self.state(sender, lease.as_ref(), surface).await,
+                                            Err(stalled) => Err(stalled),
+                                        }
+                                    }
                                     Ok(_) => {
                                         lease = None;
                                         injector = None;
@@ -971,7 +999,7 @@ impl Connection {
                         // A driver who lost access stops holding the agent now,
                         // not when the lease lapses.
                         if lease.as_ref().is_some_and(|lease| may_hand_back(Some(lease), &self.grant.user_id))
-                            && let Err(error) = self.deps.screens.hand_back(computer, self.grant.user_id.clone(), None).await
+                            && let Err(error) = self.deps.screens.hand_back(computer, self.grant.user_id.clone(), None, None).await
                         {
                             tracing::warn!(error = ?error, "could not release a revoked driver's lease");
                         }

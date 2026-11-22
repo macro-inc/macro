@@ -83,6 +83,9 @@ agent's brain waiting while a person drives.
 - `hold_agent`'s bound covers its reads too, and a lapsed lease that a
   take-over replaced before its release ran holds the agent: `live` reads
   the replacement when the release removes nothing.
+- `Release::HandBack` with a `drive` releases only while that is the
+  lease's drive (the row locked `FOR UPDATE` for the check), so a stale tab
+  never ends a newer drive of the same person's.
 - `touch_session` says whether the socket's row is still open; a socket
   whose row another socket ended as `lost` ends.
 - Tickets are stored as SHA-256 only; the secret exists in one HTTP response.

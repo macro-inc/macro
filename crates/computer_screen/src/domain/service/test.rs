@@ -434,7 +434,12 @@ async fn the_agent_waits_for_the_hand_back(pool: PgPool) {
     // The hold has seen the live lease; the hand-back's NOTIFY wakes it.
     agent_lease_read.notified().await;
     service
-        .hand_back(COMPUTER, driver.user_id.clone(), Some("done".to_owned()))
+        .hand_back(
+            COMPUTER,
+            driver.user_id.clone(),
+            Some("done".to_owned()),
+            None,
+        )
         .await
         .unwrap();
 
@@ -536,7 +541,7 @@ async fn a_thaw_that_never_landed_is_retried_however_long_ago(pool: PgPool) {
     service.take_over(&driver, session).await.unwrap();
     *signal.2.lock().unwrap() = Some(ThawFailed::Failed);
     service
-        .hand_back(COMPUTER, driver.user_id.clone(), None)
+        .hand_back(COMPUTER, driver.user_id.clone(), None, None)
         .await
         .unwrap();
     service.reap().await.unwrap();
@@ -563,7 +568,7 @@ async fn a_computer_asleep_while_frozen_is_thawed_once_it_runs(pool: PgPool) {
     service.take_over(&driver, session).await.unwrap();
     *signal.2.lock().unwrap() = Some(ThawFailed::NotRunning);
     service
-        .hand_back(COMPUTER, driver.user_id.clone(), None)
+        .hand_back(COMPUTER, driver.user_id.clone(), None, None)
         .await
         .unwrap();
     service
@@ -598,7 +603,7 @@ async fn a_thaw_failing_past_the_guests_timer_settles(pool: PgPool) {
     service.take_over(&driver, session).await.unwrap();
     *signal.2.lock().unwrap() = Some(ThawFailed::Failed);
     service
-        .hand_back(COMPUTER, driver.user_id.clone(), None)
+        .hand_back(COMPUTER, driver.user_id.clone(), None, None)
         .await
         .unwrap();
 
@@ -634,7 +639,7 @@ async fn a_sleep_starts_the_thaw_failures_over(pool: PgPool) {
     service.take_over(&driver, session).await.unwrap();
     *signal.2.lock().unwrap() = Some(ThawFailed::Failed);
     service
-        .hand_back(COMPUTER, driver.user_id.clone(), None)
+        .hand_back(COMPUTER, driver.user_id.clone(), None, None)
         .await
         .unwrap();
     service.reap().await.unwrap();
@@ -661,7 +666,7 @@ async fn an_owed_thaw_expires(pool: PgPool) {
     service.take_over(&driver, session).await.unwrap();
     *signal.2.lock().unwrap() = Some(ThawFailed::NotRunning);
     service
-        .hand_back(COMPUTER, driver.user_id.clone(), None)
+        .hand_back(COMPUTER, driver.user_id.clone(), None, None)
         .await
         .unwrap();
     sqlx::query!("UPDATE computer_screen_drives SET ended_at = now() - interval '8 days'")
@@ -717,7 +722,7 @@ async fn a_backlog_of_dead_thaws_never_starves_a_new_one(pool: PgPool) {
     let live = service.open_session(&driver).await.unwrap();
     service.take_over(&driver, live).await.unwrap();
     service
-        .hand_back(COMPUTER, driver.user_id.clone(), None)
+        .hand_back(COMPUTER, driver.user_id.clone(), None, None)
         .await
         .unwrap();
 
@@ -752,7 +757,7 @@ async fn an_unfrozen_drive_is_frozen_again_only_while_live(pool: PgPool) {
     assert!(service.lease(COMPUTER).await.unwrap().is_some());
 
     service
-        .hand_back(COMPUTER, driver.user_id.clone(), None)
+        .hand_back(COMPUTER, driver.user_id.clone(), None, None)
         .await
         .unwrap();
     let told = signal.0.lock().unwrap().len();
