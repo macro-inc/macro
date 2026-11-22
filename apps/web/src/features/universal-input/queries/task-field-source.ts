@@ -7,7 +7,10 @@ import {
 } from '@property/constants';
 import type { PropertyApiValues } from '@property/types';
 import { useContactReferences } from '@queries/contacts/use-references';
-import { useListPropertiesQuery } from '@queries/properties/definitions';
+import {
+  loadPropertyDefinitionsWithOptions,
+  useListPropertiesQuery,
+} from '@queries/properties/definitions';
 import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
 import { type Accessor, createMemo } from 'solid-js';
 import { CUSTOMER_CONTACT_PROPERTY_IDS } from '../../task-composer/customer-contact';
@@ -59,20 +62,16 @@ export function createTaskFieldSource(
   );
   const inferredFields = createMemo(() => fields().properties);
   const manualFields = createMemo(() => fields().taskProperties);
-  // One load at a time: a second refetch would cancel the first.
+  // A one-shot read of the same list, so a refresh of the live reader cannot
+  // cancel it; concurrent loads share it.
   let loading: Promise<PropertyDefinitionResponse[]> | undefined;
   const loadRows = (): Promise<PropertyDefinitionResponse[]> => {
     if (query.isSuccess && query.data) return Promise.resolve(query.data);
-    loading ??= query
-      .refetch({ requestPolicy: 'cache-first' })
-      .then((result) => {
-        if (!result.data)
-          throw result.error ?? new Error('Could not load task fields');
-        return result.data;
-      })
-      .finally(() => {
+    loading ??= loadPropertyDefinitionsWithOptions({ scope: 'system' }).finally(
+      () => {
         loading = undefined;
-      });
+      }
+    );
     return loading;
   };
   const people = useContactReferences(

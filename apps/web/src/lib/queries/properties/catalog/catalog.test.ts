@@ -9,6 +9,7 @@ import {
   type PropertyCatalogOptionFieldsFragment,
   UpdatePropertyOptionDocument,
 } from '@service-storage/graphql/generated/graphql';
+import { CombinedError } from '@urql/core';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { CatalogMutationError, isCatalogErrorCode } from './errors';
@@ -287,6 +288,33 @@ describe('catalog list results', () => {
       false,
     ]);
   });
+
+  it('reads an offline failure over a list it has as a paused success', () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      const offline = new CombinedError({ networkError: new Error('offline') });
+      const state: { data?: string[]; error?: Error } = {
+        data: ['a'],
+        error: offline,
+      };
+      const list = catalogListResult(fakeQuery(state), () => 0, EMPTY);
+      expect([list.data, list.error, list.isSuccess]).toEqual([
+        ['a'],
+        null,
+        true,
+      ]);
+      // With nothing to show, or a refusal from the server, it still fails.
+      state.data = undefined;
+      expect(list.isError).toBe(true);
+      state.data = ['a'];
+      state.error = new CombinedError({
+        graphQLErrors: [{ message: 'forbidden' }],
+      });
+      expect(list.isError).toBe(true);
+    } finally {
+      online.mockRestore();
+    }
+  });
 });
 
 describe('catalog mutations', () => {
@@ -297,13 +325,23 @@ describe('catalog mutations', () => {
       const mutation = createCatalogMutation(
         () => new Promise<number>((resolve) => (finish = resolve)),
         {
-          onSuccess: () => void calls.push('default'),
-          onSettled: () => void calls.push('default settled'),
+          onSuccess: () => {
+            calls.push('default');
+          },
+          onSettled: () => {
+            calls.push('default settled');
+          },
         },
-        { onSuccess: () => void calls.push('hook') }
+        {
+          onSuccess: () => {
+            calls.push('hook');
+          },
+        }
       );
       const done = mutation.mutateAsync(1, {
-        onSuccess: () => void calls.push('call'),
+        onSuccess: () => {
+          calls.push('call');
+        },
       });
       expect(mutation.isPending).toBe(true);
       finish(7);
@@ -329,5 +367,35 @@ describe('catalog mutations', () => {
       expect(isCatalogErrorCode(refused, 'CONFLICT')).toBe(true);
       dispose();
     });
+  });
+
+  it("drops a call's callbacks once its component is gone, keeping the hook's", async () => {
+    const calls: string[] = [];
+    let finish: (value: number) => void = () => {};
+    const done = createRoot((dispose) => {
+      const mutation = createCatalogMutation(
+        () => new Promise<number>((resolve) => (finish = resolve)),
+        {
+          onSuccess: () => {
+            calls.push('default');
+          },
+        },
+        {
+          onSuccess: () => {
+            calls.push('hook');
+          },
+        }
+      );
+      const pending = mutation.mutateAsync(1, {
+        onSuccess: () => {
+          calls.push('call');
+        },
+      });
+      dispose();
+      return pending;
+    });
+    finish(7);
+    await expect(done).resolves.toBe(7);
+    expect(calls).toEqual(['default', 'hook']);
   });
 });

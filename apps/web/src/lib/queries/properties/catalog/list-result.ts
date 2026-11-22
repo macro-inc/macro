@@ -41,11 +41,50 @@ export function createListedAt() {
   };
 }
 
+/**
+ * A read that failed because the browser is offline, over a list it already
+ * has. TanStack paused such reads and kept their success; the cache answers
+ * them with a network error, which readers would show as a failure.
+ */
+export function isOfflineFailure(
+  error: CombinedError | null,
+  hasData: boolean
+): boolean {
+  return (
+    !!error &&
+    hasData &&
+    !!error.networkError &&
+    error.graphQLErrors.length === 0 &&
+    typeof navigator !== 'undefined' &&
+    navigator.onLine === false
+  );
+}
+
+/** A query result that reports an offline failure over its data as success. */
+export function offlineAsSuccess<D, V extends AnyVariables, Q>(
+  query: UrqlQueryResult<D, V, Q>
+): UrqlQueryResult<D, V, Q> {
+  const paused = () => isOfflineFailure(query.error, query.data !== undefined);
+  const overrides: Partial<Record<string | symbol, () => unknown>> = {
+    error: () => null,
+    isError: () => false,
+    isSuccess: () => true,
+    status: () => 'success',
+  };
+  return new Proxy(query, {
+    get(target, key) {
+      const override = overrides[key];
+      return override && paused() ? override() : Reflect.get(target, key);
+    },
+  });
+}
+
 export function catalogListResult<T, V extends AnyVariables, Q>(
-  query: UrqlQueryResult<T[], V, Q>,
+  source: UrqlQueryResult<T[], V, Q>,
   listedAt: () => number,
   empty: T[]
 ): CatalogListResult<T> {
+  const query = offlineAsSuccess(source);
   return {
     get data() {
       return query.data ?? empty;
