@@ -194,6 +194,15 @@ pub(crate) trait McpConnection: Send + Sync {
     /// request, refreshed if it was about to expire. A grant that no longer
     /// works fails with [`SourceRefusal::NeedsReauth`].
     async fn upstream(&self) -> Result<Upstream, rootcause::Report>;
+
+    /// The server answered HTTP 401 to what [`McpConnection::upstream`] or
+    /// [`McpConnection::dial`] gave it. A source whose connection can need a
+    /// sign-in it does not hold (a server added by URL, called without a
+    /// token) records it, so the connection stops counting as connected;
+    /// every other source's grant is judged by its own vendor, and ignores it.
+    async fn unauthorized(&self) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
 }
 
 /// A connection that can call its app's REST API.

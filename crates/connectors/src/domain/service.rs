@@ -41,6 +41,17 @@ pub trait McpConnectionsService: Send + Sync + 'static {
     /// must not be sent a call; [`ConnectorsError::NotFound`] when that
     /// source cannot address them.
     fn upstream(&self, permitted: Permitted<'_>) -> impl Future<Output = Result<Upstream>> + Send;
+
+    /// The server behind the user's connection to `key` answered HTTP 401 to
+    /// the upstream it was given. Recorded where it means a sign-in the user
+    /// never finished (a server added by URL, called without a token), so it
+    /// reads as needing sign-in and stops being offered to agents until they
+    /// sign in. A key the user holds no usable connection to is ignored.
+    fn unauthorized(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        key: &ConnectorKey,
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// API access to connected apps.
@@ -581,6 +592,19 @@ impl McpConnectionsService for Connectors {
             Some(handle) => handle.connection().upstream().await.map_err(refusal_error),
             None => self.address_unconnected(&permitted).await,
         }
+    }
+
+    #[tracing::instrument(name = "connectors.unauthorized", skip(self, user), err)]
+    async fn unauthorized(&self, user: &MacroUserIdStr<'static>, key: &ConnectorKey) -> Result<()> {
+        let connections = self.connections(user).await?;
+        let Some(handle) = connections.handles().find(|handle| handle.key() == key) else {
+            return Ok(());
+        };
+        handle
+            .connection()
+            .unauthorized()
+            .await
+            .map_err(refusal_error)
     }
 }
 
