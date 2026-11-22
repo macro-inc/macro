@@ -19,6 +19,7 @@ function sessionThreadRepliesQueryOptions(sessionId: string | undefined) {
     // Every message the session posted shares this record; someone else in
     // the thread may pause or resume it meanwhile.
     staleTime: 30_000,
+    refetchOnWindowFocus: true,
   });
 }
 

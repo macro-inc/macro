@@ -90,8 +90,9 @@ export function AgentSessionLink(props: AgentSessionLinkProps) {
 function ThreadRepliesToggle(props: { sessionId: string; compact: boolean }) {
   const replies = useSessionThreadRepliesQuery(() => props.sessionId);
   const setReplies = useSetSessionThreadRepliesMutation();
-  // Gate every data read on success: a pending read would suspend the message.
-  const state = () => (replies.isSuccess ? replies.data : undefined);
+  // Gate the data read on pending, which would suspend the message; a failed
+  // refetch keeps the cached state on screen.
+  const state = () => (replies.isPending ? undefined : replies.data);
   const paused = () => state()?.paused ?? false;
 
   const toggle = (event: MouseEvent) => {
