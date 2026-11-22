@@ -1,0 +1,31 @@
+apps/web/src/features/agent-feedback/queries/client.ts
+  s_ab1058a732cc69::t_1e4948c66e25d1 21,90,99,115,117,143-144,146,252-253,256-257,262-279,282,291-298,302,307
+  s_ab1058a732cc69::t_4a9aa9aefc346d 2-13,17,33-60,83-87,94-98,101-103,105-107,109,113-114,119-121,123-126,128-134,145,156,167-169,175-179,185,189,195,224-251,254-255,258-261,280-281,283-290,299,303,314
+  s_ab1058a732cc69::t_7bf090984a4a78 116
+packages/sdk/generated/agent-harness/index.ts
+  s_ab1058a732cc69::t_5165a4c809a764 4
+apps/web/src/features/agent-feedback/queries/client.test.ts
+  s_ab1058a732cc69::t_3c9fd779f28713 224-225
+  s_ab1058a732cc69::t_ef6a4deaed3714 4,141-223,226-245
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_ab1058a732cc69::t_5165a4c809a764 5
+apps/web/src/features/agent-feedback/core/subject.ts
+  s_ab1058a732cc69::t_609484df03a56b 16-19,29-30,32-36,40-41,87,97
+  s_ab1058a732cc69::t_eb02ea2e1cb8a1 71-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8ec61192d722326dfd2618d497a09b1d390db285",
+  "prompts": {},
+  "sessions": {
+    "s_ab1058a732cc69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3744eaac-6a23-4a13-8470-3dfc1e7728a7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
