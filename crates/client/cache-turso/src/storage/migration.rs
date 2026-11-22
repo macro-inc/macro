@@ -354,11 +354,11 @@ fn upgrade_13_to_14(connection: &Db) -> Result<(), TursoStorageError> {
                 .get_mut(&(profile, required_text(row, 4)?))
                 .ok_or_else(invariant)?;
             let rowid = *next;
-            // A slot holds 2^44 row ids.
+            // A slot holds 2^44 row ids; past the last one the id wraps out of it.
             if rowid >> 44 != *slot {
                 return Err(invariant());
             }
-            *next += 1;
+            *next = next.wrapping_add(1);
             require_changed(
                 driver::execute_prepared(
                     &mut insert_row,

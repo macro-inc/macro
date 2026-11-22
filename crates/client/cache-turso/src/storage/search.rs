@@ -139,7 +139,9 @@ impl Slots {
         if !(first..=last).contains(&next) {
             return Err(invariant());
         }
-        self.next_row.insert(slot, next + 1);
+        // Past the last row id this wraps out of the range, which the check above
+        // refuses on the next call.
+        self.next_row.insert(slot, next.wrapping_add(1));
         Ok(next)
     }
 }

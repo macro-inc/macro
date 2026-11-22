@@ -212,3 +212,31 @@ fn a_row_outside_its_slots_range_is_corruption_for_every_read() {
         );
     });
 }
+
+#[test]
+fn the_last_slot_ends_at_the_largest_row_id_without_overflow() {
+    let full = |name: &str| {
+        let storage = TursoStorage::open_in_memory(name).unwrap();
+        raw_execute(
+            &storage,
+            "INSERT INTO search_slots (slot, profile, bucket) VALUES (524287, 1, 'task')",
+            vec![],
+        );
+        raw_execute(
+            &storage,
+            "INSERT INTO search_rows (rowid, slot, profile, __typename, id, search_text, timestamp_ms, source_hash) VALUES (9223372036854775806, 524287, 1, 'GraphqlSoupDocument', 'old', 'old', 0, 'old')",
+            vec![],
+        );
+        storage
+    };
+    let storage = full("search-slot-last");
+    write(&storage, &[document("a", "task", 1)]);
+    assert_eq!(rows(&storage).last().unwrap().0, i64::MAX);
+    let storage = full("search-slot-past-last");
+    let documents = [document("a", "task", 1), document("b", "task", 1)];
+    let pairs = documents
+        .iter()
+        .map(|(key, document)| (key, document))
+        .collect::<Vec<_>>();
+    assert!(search::upsert(&storage.connection(), &pairs).is_err());
+}
