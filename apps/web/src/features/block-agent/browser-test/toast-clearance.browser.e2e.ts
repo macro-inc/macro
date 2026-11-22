@@ -42,3 +42,46 @@ test('a toast never covers the session composer’s Send button', async ({
   );
   await expect(page.locator('body')).toHaveAttribute('data-sent', '1');
 });
+
+test('a hidden composer, as in a parked tab, leaves the toast at its usual spot', async ({
+  page,
+}) => {
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) =>
+    route.fulfill({ status: 404, json: [] })
+  );
+  await page.goto('/composer.html?toast&hidden');
+
+  const toast = page.locator('.macro-toast').first();
+  await expect(toast).toHaveCSS('opacity', '1');
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('No viewport');
+
+  // Unlifted, the toast sits within about 20px of the window's bottom edge.
+  await expect
+    .poll(async () => (await toast.boundingBox())?.y ?? 0)
+    .toBeGreaterThan(viewport.height - 120);
+});
+
+test('the toast drops back when the composer it cleared closes', async ({
+  page,
+}) => {
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) =>
+    route.fulfill({ status: 404, json: [] })
+  );
+  await page.goto('/composer.html?toast');
+
+  const toast = page.locator('.macro-toast').first();
+  await expect(toast).toHaveCSS('opacity', '1');
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('No viewport');
+  const composerTop =
+    (await page.getByRole('textbox').first().boundingBox())?.y ?? 0;
+  const lifted = await toast.boundingBox();
+  if (!lifted) throw new Error('Toast not laid out');
+  expect(lifted.y + lifted.height).toBeLessThan(composerTop);
+
+  await page.getByRole('button', { name: 'Close composer' }).click();
+  await expect
+    .poll(async () => (await toast.boundingBox())?.y ?? 0)
+    .toBeGreaterThan(viewport.height - 120);
+});

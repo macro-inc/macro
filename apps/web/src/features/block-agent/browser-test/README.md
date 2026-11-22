@@ -10,7 +10,12 @@ bunx playwright test --config src/features/block-agent/browser-test/playwright.c
 
 `composer.html?toast` raises a failure toast over the session composer;
 `toast-clearance.browser.e2e.ts` checks on desktop and phone that the toast
-sits clear of Send and that a click at Send's centre sends.
+sits clear of Send and that a click at Send's centre sends, that a hidden
+composer (`?hidden`, as a parked tab keeps it) leaves the toast at its usual
+spot, and that the toast drops back when the composer closes. The phone run
+docks the composer in the page, as in-pane and tablet composers are; the
+phone app's agent and channel composers float above the dock, which already
+places toasts above them.
 
 `queued.html` renders the queued-message rows over the real composer
 (`?count=N` entries, `?light` for the light theme) with an in-page log of

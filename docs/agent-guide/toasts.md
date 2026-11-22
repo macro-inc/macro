@@ -17,7 +17,9 @@ Toasts never cover a composer's send and stop controls. A composer docked at
 the bottom of a pane (agent session and new-conversation composers, the phone
 agent composer, channel composers) registers with `keepToastsClearOf`; while a
 toast stack would overlap one, the stack rises to just above it, on desktop and
-phone. Register any new bottom-docked composer the same way. Backend-free
+phone, never past the top of the window. Composers in hidden panes (a parked
+tab, the pane behind on a phone) don't count. Register any new bottom-docked
+composer the same way. Backend-free
 desktop/phone regression over the real `AgentInput` and `ToastRegion`:
 `bunx playwright test --config
 src/features/block-agent/browser-test/playwright.config.ts

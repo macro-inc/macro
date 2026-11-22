@@ -13,7 +13,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntityProvider } from '@entity';
 import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { onMount } from 'solid-js';
+import { createSignal, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { AgentInput } from '../ui/AgentInput';
 
@@ -39,28 +39,49 @@ const QUICK_ACCESS: QuickAccessContextValue = {
 /**
  * The composer an agent session block mounts, docked at the bottom of the
  * page like a session pane's. `?toast` raises a failure toast over it, as the
- * app does when an answer can't be sent; each send is counted on <body>.
+ * app does when an answer can't be sent, and keeps it up for a minute; each
+ * send is counted on <body>. `?hidden` mounts the composer the way a parked
+ * desktop tab keeps it (in place, `invisible` and `inert`), and Close
+ * composer unmounts it.
  */
 function Fixture() {
+  const params = new URLSearchParams(location.search);
+  const [open, setOpen] = createSignal(true);
+
   onMount(() => {
-    if (new URLSearchParams(location.search).has('toast')) {
-      toast.failure("Couldn't send your answer");
+    if (params.has('toast')) {
+      toast.failure("Couldn't send your answer", { duration: 60_000 });
     }
   });
 
   return (
-    <main class="flex min-h-screen flex-col justify-end bg-page p-4 text-ink">
+    <main class="relative flex min-h-screen flex-col justify-end bg-page p-4 text-ink">
       <ToastRegion />
-      <div class="mx-auto w-full max-w-2xl">
-        <AgentInput
-          onSend={() => {
-            const sent = Number(document.body.dataset.sent ?? 0);
-            document.body.dataset.sent = String(sent + 1);
+      <button
+        type="button"
+        class="absolute left-4 top-4 rounded border border-edge px-2 py-1 text-sm"
+        onClick={() => setOpen(false)}
+      >
+        Close composer
+      </button>
+      <Show when={open()}>
+        <div
+          class="mx-auto w-full max-w-2xl"
+          classList={{
+            'absolute inset-x-4 bottom-4 invisible': params.has('hidden'),
           }}
-          onAttachFiles={() => {}}
-          commands={() => []}
-        />
-      </div>
+          inert={params.has('hidden') || undefined}
+        >
+          <AgentInput
+            onSend={() => {
+              const sent = Number(document.body.dataset.sent ?? 0);
+              document.body.dataset.sent = String(sent + 1);
+            }}
+            onAttachFiles={() => {}}
+            commands={() => []}
+          />
+        </div>
+      </Show>
     </main>
   );
 }
