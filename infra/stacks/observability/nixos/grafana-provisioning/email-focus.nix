@@ -18,6 +18,10 @@
 #   Each query's period is the window and its range a minute shorter, so
 #   CloudWatch returns one datapoint covering the window: a longer range would
 #   add a partial bucket for the current minute.
+# - A window with no datapoints (a percentile with no samples, or a sample
+#   not yet published) gives no value and fires nothing, except the critical
+#   rule of a check with `noData = "Alerting"`. A check's optional `floor`, a
+#   math expression over its inputs, must hold too for either rule to fire.
 # - A panel draws `expression`, the same value in CloudWatch metric math over
 #   the inputs' ids, one point per window. A one-input check draws the input.
 let
@@ -140,8 +144,10 @@ let
         }
       ];
       value = "100 * ($unavailable + $rejected) / ($calls + ($calls == 0))";
+      # One failed call in a quiet hour reads as 100%.
+      floor = "$unavailable + $rejected >= 3";
       expression = "IF(calls > 0, 100 * (unavailable + rejected) / calls, 0)";
-      description = "{{ humanize $values.B.Value }}% of classifier calls in the last hour found it unavailable or were rejected. The go/stop number is under 1%. Unavailable threads are retried by the next sweep.";
+      description = "{{ humanize $values.B.Value }}% of classifier calls in the last hour found it unavailable or were rejected, at least 3 of them. The go/stop number is under 1%. Unavailable threads are retried by the next sweep.";
     }
     {
       panelId = 3;
@@ -165,8 +171,10 @@ let
         }
       ];
       value = "100 * $failures / ($calls + ($calls == 0))";
+      # One failed ask in a quiet hour reads as 100%.
+      floor = "$failures >= 3";
       expression = "IF(calls > 0, 100 * failures / calls, 0)";
-      description = "{{ humanize $values.B.Value }}% of due date asks to the agent harness failed or timed out in the last hour. The go/stop number is under 5%. A thread whose ask failed is stored without a date.";
+      description = "{{ humanize $values.B.Value }}% of due date asks to the agent harness failed or timed out in the last hour, at least 3 of them. The go/stop number is under 5%. A thread whose ask failed is stored without a date.";
     }
     {
       panelId = 4;
