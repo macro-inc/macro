@@ -414,6 +414,9 @@ struct Outbox {
     queue: mpsc::UnboundedSender<Outgoing>,
     media: Arc<std::sync::atomic::AtomicUsize>,
     control: Arc<std::sync::atomic::AtomicUsize>,
+    /// Notified each time a media frame left the queue, so media waiting on
+    /// a full outbox resumes as soon as the viewer reads again.
+    room: Arc<Notify>,
     stalled: CancellationToken,
 }
 
@@ -427,18 +430,30 @@ impl Outbox {
         let (queue, mut pending) = mpsc::unbounded_channel::<Outgoing>();
         let media = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let control = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let room = Arc::new(Notify::new());
         let stalled = CancellationToken::new();
-        let (writer_media, writer_control, writer_stalled) =
-            (Arc::clone(&media), Arc::clone(&control), stalled.clone());
+        let (writer_media, writer_control, writer_room, writer_stalled) = (
+            Arc::clone(&media),
+            Arc::clone(&control),
+            Arc::clone(&room),
+            stalled.clone(),
+        );
         let writer = tokio::spawn(
             async move {
                 while let Some(outgoing) = pending.recv().await {
-                    let (message, count) = match outgoing {
-                        Outgoing::Media(message) => (message, &writer_media),
-                        Outgoing::Control(message) => (message, &writer_control),
+                    let (message, is_media) = match outgoing {
+                        Outgoing::Media(message) => (message, true),
+                        Outgoing::Control(message) => (message, false),
                     };
                     let sent = tokio::time::timeout(SEND_TIMEOUT, sink.send(message)).await;
-                    count.fetch_sub(1, Ordering::SeqCst);
+                    if is_media {
+                        writer_media.fetch_sub(1, Ordering::SeqCst);
+                        // A stored permit wakes a media branch that starts
+                        // waiting only after this.
+                        writer_room.notify_one();
+                    } else {
+                        writer_control.fetch_sub(1, Ordering::SeqCst);
+                    }
                     match sent {
                         Ok(Ok(())) => {}
                         Ok(Err(_)) => {
@@ -461,6 +476,7 @@ impl Outbox {
                 queue,
                 media,
                 control,
+                room,
                 stalled,
             },
             writer,
@@ -653,6 +669,11 @@ impl Connection {
         let mut injector: Option<RfbInjector> = None;
         let mut last_renew = tokio::time::Instant::now();
         let mut failed_checks: u8 = 0;
+        let mut failed_touches: u8 = 0;
+        // Raw RFB from the viewer that media had no room for yet: it waits
+        // here, in order, while the loop keeps running media (which frees
+        // the room), and reading the viewer stops until it went in.
+        let mut waiting_input: Option<(axum::body::Bytes, tokio::time::Instant)> = None;
         let mut reauthorize = tokio::time::interval_at(
             tokio::time::Instant::now() + self.deps.reauthorize_every,
             self.deps.reauthorize_every,
@@ -681,6 +702,7 @@ impl Connection {
             let idle_at = hidden_at.map_or(visible_at + idle.after, |hidden| {
                 (hidden + idle.hidden_for).min(visible_at + idle.after)
             });
+            let input_due = waiting_input.as_ref().map(|(_, due)| *due);
             let MediaSlot {
                 run,
                 to_viewer,
@@ -714,6 +736,9 @@ impl Connection {
                     };
                 }
 
+                // The viewer read media again: the branch below runs again.
+                () = sender.room.notified(), if !sender.has_room_for_media() => {}
+
                 out = to_viewer.recv(), if sender.has_room_for_media() => {
                     let message = match out {
                         Some(ToViewer::Binary(bytes)) => {
@@ -727,21 +752,31 @@ impl Connection {
                     }
                 }
 
-                incoming = receiver.next() => {
+                room = from_viewer.reserve(), if waiting_input.is_some() => {
+                    if let (Ok(room), Some((bytes, _))) = (room, waiting_input.take()) {
+                        room.send(FromViewer::Binary(bytes));
+                    }
+                    // A media path that ended is reported by its own branch.
+                }
+
+                // A guest that stopped reading the viewer's bytes must not
+                // keep the socket.
+                () = sleep_until_some(input_due) => {
+                    return Ending {
+                        reason: EndReason::Error,
+                        error: Some((ErrorCode::TunnelFailed, "the computer's screen stopped taking input".to_owned())),
+                    };
+                }
+
+                incoming = receiver.next(), if waiting_input.is_none() => {
                     let text = match incoming {
                         None | Some(Err(_)) | Some(Ok(Message::Close(_))) => return Ending::plain(EndReason::Stopped),
                         Some(Ok(Message::Binary(bytes))) => {
                             self.bytes_from_viewer += bytes.len() as u64;
-                            // A guest that stopped reading the viewer's bytes must
-                            // not hold the loop.
-                            match tokio::time::timeout(SEND_TIMEOUT, from_viewer.send(FromViewer::Binary(bytes))).await {
-                                Ok(_) => {}
-                                Err(_) => {
-                                    return Ending {
-                                        reason: EndReason::Error,
-                                        error: Some((ErrorCode::TunnelFailed, "the computer's screen stopped taking input".to_owned())),
-                                    };
-                                }
+                            if let Err(mpsc::error::TrySendError::Full(FromViewer::Binary(bytes))) =
+                                from_viewer.try_send(FromViewer::Binary(bytes))
+                            {
+                                waiting_input = Some((bytes, tokio::time::Instant::now() + SEND_TIMEOUT));
                             }
                             continue;
                         }
@@ -828,12 +863,15 @@ impl Connection {
                                 Self::error(sender, ErrorCode::NotDriver, "input is dropped while you are not driving").await
                             } else {
                                 visible_at = tokio::time::Instant::now();
-                                match self.inject(&mut injector, &event).await {
+                                match inject(self.deps.tunnel.as_ref(), computer, &mut injector, &event, &driving).await {
                                     Ok(()) => {
                                         activity.notify_one();
                                         Ok(())
                                     }
-                                    Err(error) => {
+                                    Err(Injection::NotDriving) => {
+                                        Self::error(sender, ErrorCode::NotDriver, "input is dropped while you are not driving").await
+                                    }
+                                    Err(Injection::Failed(error)) => {
                                         injector = None;
                                         // The fleet's words stay in the log.
                                         tracing::warn!(error = %error, "could not type a driver's input");
@@ -939,32 +977,76 @@ impl Connection {
                         }
                         return Ending::plain(EndReason::AccessRevoked);
                     }
-                    // Still here: keeps the computer from hibernating.
-                    if let Err(error) = self.deps.screens.touch_session(self.session).await {
-                        tracing::warn!(error = ?error, "could not mark the screen socket as open");
+                    // Still here: keeps the computer from hibernating. A row
+                    // another socket ended as lost no longer does, and a
+                    // socket that can't say it's here soon stops counting:
+                    // either way it ends, rather than stream to a computer
+                    // that may hibernate under it.
+                    match self.deps.screens.touch_session(self.session).await {
+                        Ok(true) => failed_touches = 0,
+                        Ok(false) => {
+                            tracing::warn!("the screen socket's row was ended as lost while it was open");
+                            return Ending::plain(EndReason::Error);
+                        }
+                        Err(error) => {
+                            tracing::warn!(error = ?error, "could not mark the screen socket as open");
+                            failed_touches += 1;
+                            if failed_touches >= MAX_FAILED_ACCESS_CHECKS {
+                                return Ending::plain(EndReason::Error);
+                            }
+                        }
                     }
                 }
             }
         }
     }
+}
 
-    /// Type `event` into the guest, connecting the injector on first use.
-    async fn inject(
-        &self,
-        injector: &mut Option<RfbInjector>,
-        event: &InputEvent,
-    ) -> Result<(), String> {
-        if injector.is_none() {
-            *injector =
-                Some(connect_injector(self.deps.tunnel.as_ref(), self.grant.computer_id).await?);
-        }
-        let Some(connected) = injector.as_mut() else {
-            return Err("the computer's display is not connected".to_owned());
-        };
-        tokio::time::timeout(INJECTOR_HANDSHAKE_TIMEOUT, connected.send(event))
-            .await
-            .map_err(|_| "the computer's display did not take the input in time".to_owned())?
-            .map_err(|error| error.to_string())
+/// Why typed input didn't reach the guest.
+#[derive(Debug)]
+enum Injection {
+    /// The drive ended before the input could go in; the injector stays.
+    NotDriving,
+    /// The injector failed; the next input connects a new one.
+    Failed(String),
+}
+
+/// Type `event` into the guest, connecting the injector on first use. The
+/// drive is checked again once the injector is connected, and the input
+/// goes in only before the drive's end: a lease that ends while the
+/// handshake runs lets nothing through.
+async fn inject(
+    tunnel: &dyn GuestTunnel,
+    computer: ComputerId,
+    injector: &mut Option<RfbInjector>,
+    event: &InputEvent,
+    driving: &watch::Receiver<DrivingUntil>,
+) -> Result<(), Injection> {
+    if injector.is_none() {
+        *injector = Some(
+            connect_injector(tunnel, computer)
+                .await
+                .map_err(Injection::Failed)?,
+        );
+    }
+    let DrivingUntil(Some(until)) = *driving.borrow() else {
+        return Err(Injection::NotDriving);
+    };
+    if tokio::time::Instant::now() >= until {
+        return Err(Injection::NotDriving);
+    }
+    let Some(connected) = injector.as_mut() else {
+        return Err(Injection::Failed(
+            "the computer's display is not connected".to_owned(),
+        ));
+    };
+    let bound = until.min(tokio::time::Instant::now() + INJECTOR_HANDSHAKE_TIMEOUT);
+    match tokio::time::timeout_at(bound, connected.send(event)).await {
+        Ok(sent) => sent.map_err(|error| Injection::Failed(error.to_string())),
+        // Part of it may have gone: this injector's stream can't be trusted.
+        Err(_) => Err(Injection::Failed(
+            "the computer's display did not take the input in time".to_owned(),
+        )),
     }
 }
 

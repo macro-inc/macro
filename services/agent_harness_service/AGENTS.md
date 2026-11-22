@@ -85,8 +85,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   last in its last user message, after its `tool_result` blocks, as
   `<macro-runtime-notice>{json}</macro-runtime-notice>` text blocks with `<`,
   `>` and `&` escaped (`anthropic_gateway/screen_notices.rs`); each is
-  claimed by one request at a time, deleted when upstream answered 2xx and
-  given back otherwise. A subagent's requests carry the same mark and may
+  claimed by one request at a time, deleted once upstream's answer finished
+  (a 2xx JSON body read whole, or a stream that reached `message_stop` with
+  no broken chunk) and given back otherwise, an SSE `error` after the 200
+  included. A subagent's requests carry the same mark and may
   take them, and they are not kept in the agent's history: a hint for its
   next turn, not a record. An agent on its owner's own Claude plan never
   reaches this gateway, so it gets no notices.
@@ -198,7 +200,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   control (`takeOver`, `handBack`, `input`, `visibility`, `stop`; server
   `state`/`error`/`ended`), with access (rollout included) re-checked and the
   socket marked seen every 30 s and on every take-over (three failed lookups
-  in a row end it); a driver who loses access releases the lease at once.
+  in a row end it, as do three failed touches or a row another socket ended
+  as `lost`); a driver who loses access releases the lease at once.
   `state.driver` is `{name, isYou}`, never a user id; `state.leaseId` is an
   opaque id per drive. A socket with no `visibility` `visible: true` (the
   viewer repeats it) and no input for 10 minutes, or 2 minutes after
@@ -206,8 +209,11 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   computer, and a computer 16 watching sockets (`tooManySockets`; driving
   sockets don't count against it). Its own task writes the WebSocket
   through a bounded outbox, so a viewer that stops reading never stalls the
-  loop: media waits when the outbox fills, and a write that takes 10 s ends
-  the socket. The `viewers` count in `state` is this replica's. An open
+  loop: media waits when the outbox fills and resumes as soon as a frame
+  leaves it, and a write that takes 10 s ends the socket. Raw RFB from the
+  viewer that media has no room for waits in the loop (reading the viewer
+  pauses meanwhile, so order holds) while media keeps running; 10 s of no
+  room ends the socket `tunnelFailed`. The `viewers` count in `state` is this replica's. An open
   socket, watching or driving, keeps the computer awake (`in_use.rs`).
   Before the first frame the socket wakes a hibernated computer
   (`state.waking`). One driver lease per computer, renewed by driver input at
@@ -223,14 +229,20 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Xvnc's side without decoding pixels and drops ServerCutText unless this
   socket drives (Xvnc runs with `-SendPrimary=0`); typed `input` goes through
   `RfbInjector`'s own RFB connection (handshake and each input bounded to
-  10 s). Xvnc is reached only by a `socat`
+  10 s; the drive is checked again after the handshake and the input is
+  bounded by the lease's end, so a lease that lapsed while connecting lets
+  nothing through). A drive that ends in the middle of the guest's
+  clipboard ends the socket rather than pass the rest. Xvnc is reached only by a `socat`
   tunnel over `tunnel.rs` `GuestExec` (the operator's `Fleet::exec`,
   implemented in `computers.rs`): nothing before its ready line is media,
   and a tunnel still running 2 s after its session closed is killed (on the
   computer tasks' tracker, only if the pid is still that socat). When
   media stops short, the operator says whether the computer runs, which
   picks `computerOff` or a named error (`tunnelFailed`, `sourceUnavailable`).
-  Screens count as in use for hibernation (`in_use.rs`). `guest_files.rs`
+  Screens count as in use for hibernation (`in_use.rs`); relief reads that
+  before it suspends, with no lock against a screen opening meanwhile, so a
+  screen opened in that window sees the computer go off and wakes it when
+  opened again. `guest_files.rs`
   freezes the agent for a drive before a take-over counts (`freeze <drive>`
   through `socat` to the guest's root-owned `/run/macro-agent-pause/sock`,
   `nix/macro-box/files/macro-agent-pause`; `frozen`/`idle` let it start,

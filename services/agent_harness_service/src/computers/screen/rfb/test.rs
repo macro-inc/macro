@@ -325,6 +325,33 @@ fn the_server_side_frames_bytes_however_they_are_split() {
     assert_eq!(passed, expected);
 }
 
+#[test]
+fn a_drive_that_ends_mid_clipboard_passes_none_of_the_rest() {
+    let mut server = RfbGate::new().server_filter();
+    let mut stream = server_greeting();
+    let clipboard = cut_text(b"secret");
+    let (start, rest) = clipboard.split_at(10);
+    stream.extend(start);
+    let passed = server.filter(&stream, true).unwrap();
+    assert_eq!(passed, stream);
+
+    assert_eq!(server.filter(rest, false), Err(GateError::ClipboardCut));
+}
+
+#[test]
+fn a_clipboard_split_across_reads_passes_whole_while_the_drive_lasts() {
+    let mut server = RfbGate::new().server_filter();
+    let mut stream = server_greeting();
+    stream.extend(cut_text(b"secret"));
+
+    let mut passed = Vec::new();
+    for byte in &stream {
+        passed.extend(server.filter(std::slice::from_ref(byte), true).unwrap());
+    }
+
+    assert_eq!(passed, stream);
+}
+
 /// noVNC's SetPixelFormat: 32 bits per pixel, depth 24, true colour.
 const PIXEL_FORMAT_32: [u8; 20] = [
     0, 0, 0, 0, 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0,
