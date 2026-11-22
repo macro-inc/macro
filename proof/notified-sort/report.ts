@@ -5,7 +5,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLOSURES, closureOf } from './lib/closed.ts';
-import { heldApartFromShared, type CompactDom } from './lib/dom-held.ts';
+import { heldApartFromShared, type CompactDom, onlyStaleTimeLabels } from './lib/dom-held.ts';
 
 type ClassEntry = { n: number; example: unknown };
 type RefEntry = { 'ref-agrees': number; 'ref-disagrees': number; 'ref-absent': number; example: unknown };
@@ -18,11 +18,15 @@ type StepRecord = { lane: string; step: number; checks?: { dom?: { classes: stri
  * lag open. Applies today's rule to the rows each such step recorded and moves
  * its open Home classes to `dom:old-behind-reload`, as run.ts now does live.
  * A run made with the rule already finds nothing to move.
+ *
+ * It also moves a Home check whose mounted sides differ only in relative-time
+ * labels, each no older than its reload's (lib/dom-held.ts onlyStaleTimeLabels),
+ * to `dom:stale-time-label` (closure L1).
  */
-function reclassifyHeldDom(run: string, classes: Record<string, ClassEntry>): { lane: string; step: number; from: string[]; shared: string[] }[] {
+function reclassifyHeldDom(run: string, classes: Record<string, ClassEntry>): { lane: string; step: number; from: string[]; to: string; shared: string[] }[] {
   const path = join(outDir, run, 'steps.jsonl');
   if (!existsSync(path)) return [];
-  const moved: { lane: string; step: number; from: string[]; shared: string[] }[] = [];
+  const moved: { lane: string; step: number; from: string[]; to: string; shared: string[] }[] = [];
   for (const line of readFileSync(path, 'utf8').split('\n').filter(Boolean)) {
     const step = JSON.parse(line) as StepRecord;
     const c = step.checks;
@@ -30,17 +34,20 @@ function reclassifyHeldDom(run: string, classes: Record<string, ClassEntry>): { 
     const open = c.dom.classes.filter((cls) => !closureOf(cls));
     if (!open.length || !c.domReload.sides.every((cls) => closureOf(cls))) continue;
     const held = heldApartFromShared(c.domRows);
-    if (!held.newHeld) continue;
+    // The mounted sides differ only in when each last rendered a row's
+    // relative-time label (closure L1): no row, order or text apart.
+    const labels = !held.newHeld && open.every((cls) => cls.endsWith(' dom:text')) && onlyStaleTimeLabels(c.domRows);
+    if (!held.newHeld && !labels) continue;
     for (const cls of open) {
       const entry = classes[cls];
       if (!entry) continue;
       entry.n -= 1;
       if (entry.n <= 0) delete classes[cls];
     }
-    const to = open[0].replace(/ dom:.*$/, ' dom:old-behind-reload');
+    const to = open[0].replace(/ dom:.*$/, labels ? ' dom:stale-time-label' : ' dom:old-behind-reload');
     classes[to] ??= { n: 0, example: { lane: step.lane, step: step.step, from: open } };
     classes[to].n += 1;
-    moved.push({ lane: step.lane, step: step.step, from: open, shared: held.shared });
+    moved.push({ lane: step.lane, step: step.step, from: open, to, shared: held.shared });
   }
   return moved;
 }

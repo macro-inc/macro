@@ -52,3 +52,42 @@ export function heldApartFromShared(e: CompactDom): { newHeld: boolean; oldHeld:
     shared: [...shared],
   };
 }
+
+/** A row's trailing relative-time label (`now`, `5m`, `2h`, `3d`, `1w`, `2mo`, `1y`) and its age in minutes. */
+const LABEL = /(now|\d+(?:mo|m|h|d|w|y))$/;
+const UNIT_MINUTES: Record<string, number> = { m: 1, h: 60, d: 1440, w: 10080, mo: 43200, y: 525600 };
+function splitLabel(row: string): { base: string; age: number | null } {
+  if (row.startsWith('# ')) return { base: row, age: null };
+  const m = LABEL.exec(row);
+  if (!m) return { base: row, age: null };
+  const label = m[1];
+  const unit = label.replace(/^\d+/, '');
+  return { base: row.slice(0, m.index), age: label === 'now' ? 0 : Number.parseInt(label, 10) * UNIT_MINUTES[unit] };
+}
+
+/**
+ * Whether the two mounted Homes show the same rows, in the same order, with
+ * the same text but for relative-time labels, and every mounted label is no
+ * older than the same row's label on that side's reload: each label is the
+ * row's age when it was last rendered (the label does not tick), so a
+ * mounted side is behind only in when it last rendered the row.
+ */
+export function onlyStaleTimeLabels(e: CompactDom): boolean {
+  const om = e.oldMounted.map(splitLabel), nm = e.newMounted.map(splitLabel);
+  if (om.length !== nm.length || om.some((r, i) => r.base !== nm[i].base)) return false;
+  if (om.every((r, i) => r.age === nm[i].age)) return false;
+  for (const [mounted, reload] of [[e.oldMounted, e.oldReload], [e.newMounted, e.newReload]] as const) {
+    const reloadAge = new Map<string, number | null>();
+    for (const row of reload) {
+      const k = keyOf(row);
+      if (k) reloadAge.set(k, splitLabel(row).age);
+    }
+    for (const row of mounted) {
+      const k = keyOf(row);
+      if (!k || !reloadAge.has(k)) continue;
+      const a = splitLabel(row).age, b = reloadAge.get(k) ?? null;
+      if (a !== null && b !== null && a > b) return false;
+    }
+  }
+  return true;
+}

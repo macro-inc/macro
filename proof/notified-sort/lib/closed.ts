@@ -163,6 +163,15 @@ export const CLOSURES: Closure[] = [
     outcome:
       "Visible, not fixed: in a grouped view sorted by notification, that row shows its real notification time and sorts first in its group (soup-view.tsx:1289-1294, sort-options.tsx:38, soup-view-context.tsx:1141-1149) until the row changes or the page reloads. Main shows the same stamp and order from the same floor until a refetch of the list happens to run. The value is the entity's real latest notification time.",
   },
+  {
+    id: 'L1',
+    match: /(^|\s)dom:stale-time-label$/,
+    title: "Home's relative time labels show a row's age when it last rendered, and the branch re-renders unchanged rows less often",
+    cause:
+      "The Home card's time label is formatCompactRelativeTimestamp(props.timestamp) (features/next-soup/soup-view/views/inbox/inbox-card-layouts.tsx:415-419), which reads new Date() (features/entity/utils/timestamp.ts:88) outside any signal, so the label is computed when the row renders and never ticks, on main and on the branch alike. Main's REST notified lists refetch when a notification touches an entity in them (lib/queries/soup/normalized-cache/operations.ts:256 invalidateSoupEntity) and map every row again, so every label is recomputed at once. The branch's GraphQL list keeps a row object while its record, baseline and page stamp are unchanged (lib/queries/soup/graphql/items.ts:103-121), so an unchanged row keeps the label it was rendered with. The harness moves a Home check here only when the two mounted Homes show the same rows, order, unread state and text but for these labels, every mounted label is no older than the same row's label after that side's reload, and the two reloads agree (report.ts, lib/dom-held.ts onlyStaleTimeLabels). Instance: quiet seed 3401, lane v0, sequence 1 step 9: main's mounted labels 5m, 24m, 3h and the branch's now, 5m, 2h, for three mail rows whose reloads both read 11m, 30m, 3h; main's three labels lag the reload by the same 6 minutes (rendered together), the branch's by 11 and 25 (rendered apart).",
+    outcome:
+      "Visible, not a data difference: both sides show the same rows, order, buckets and unread state, and the same labels after a reload; only how stale a label can be differs. Main's labels are stale too (5m for an 11-minute-old notification) and refresh only when some notification makes its list refetch; the branch's refresh when that row changes. A ticking label is a fix for the card, not for this PR.",
+  },
 ];
 
 export function closureOf(cls: string): Closure | undefined {

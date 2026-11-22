@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { classify, sameInstant } from './classify.ts';
 import { closureOf } from './closed.ts';
 import { compareSnapshots, refCheck, type Snapshot } from './compare.ts';
-import { heldApartFromShared } from './dom-held.ts';
+import { heldApartFromShared, onlyStaleTimeLabels } from './dom-held.ts';
 import { parseRowId } from './dom.ts';
 import { generateReads } from './gen.ts';
 import { MUTANTS } from './mutants.ts';
@@ -224,5 +224,29 @@ describe('heldApartFromShared', () => {
   it('keeps the branch not held when its text differs from both', () => {
     const e = { oldMounted: [base.c], newMounted: ['email/c/today/u Other'], oldReload: ['email/c/today/u New'], newReload: ['email/c/today/u New'] };
     expect(heldApartFromShared(e).newHeld).toBe(false);
+  });
+});
+
+describe('onlyStaleTimeLabels', () => {
+  const row = (id: string, label: string) => `email/${id}/today/u Mail ${id}new mail${label}`;
+  const reload = [ '# Today', row('a', '11m'), row('b', '30m'), row('c', '3h') ];
+  it('takes mounted sides that differ only in labels no older than their reload', () => {
+    const e = { oldMounted: ['# Today', row('a', '5m'), row('b', '24m'), row('c', '3h')], newMounted: ['# Today', row('a', 'now'), row('b', '5m'), row('c', '2h')], oldReload: reload, newReload: reload };
+    expect(onlyStaleTimeLabels(e)).toBe(true);
+  });
+  it('refuses a label older than the reload shows', () => {
+    const e = { oldMounted: ['# Today', row('a', '5m'), row('b', '24m'), row('c', '3h')], newMounted: ['# Today', row('a', '40m'), row('b', '24m'), row('c', '3h')], oldReload: reload, newReload: reload };
+    expect(onlyStaleTimeLabels(e)).toBe(false);
+  });
+  it('refuses a row, order or text apart', () => {
+    const base = ['# Today', row('a', '5m'), row('b', '24m'), row('c', '3h')];
+    expect(onlyStaleTimeLabels({ oldMounted: base, newMounted: [base[0], base[2], base[1], base[3]], oldReload: reload, newReload: reload })).toBe(false);
+    expect(onlyStaleTimeLabels({ oldMounted: base, newMounted: base.slice(0, 3), oldReload: reload, newReload: reload })).toBe(false);
+    expect(onlyStaleTimeLabels({ oldMounted: base, newMounted: [base[0], 'email/a/today/u Other name5m', base[2], base[3]], oldReload: reload, newReload: reload })).toBe(false);
+    expect(onlyStaleTimeLabels({ oldMounted: base, newMounted: [base[0], row('a', '5m').replace('/u ', '/u* '), base[2], base[3]], oldReload: reload, newReload: reload })).toBe(false);
+  });
+  it('refuses sides that agree outright', () => {
+    const base = ['# Today', row('a', '5m')];
+    expect(onlyStaleTimeLabels({ oldMounted: base, newMounted: base, oldReload: reload, newReload: reload })).toBe(false);
   });
 });
