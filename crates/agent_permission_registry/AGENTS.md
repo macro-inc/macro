@@ -4,7 +4,8 @@
 
 Agent permissions: the one checked-in registry that gives every Macro SDK
 operation a JS tools program can call (service + operationId, the key the
-JS tools analyzer reports) a permission group, an action (create, read, update, destroy, send) and a label.
+JS tools analyzer reports) a permission group, an action (create, read,
+update, destroy, send) and a label.
 Rust reads it through this crate; the web app imports the same
 `registry.json` as `@agent-permission-registry` (`apps/web/tsconfig.json`)
 through `apps/web/src/features/agent-permissions/core/registry.ts`.
@@ -47,7 +48,8 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
   labels are consistent.
 - `bun run test` in `packages/code-mode-sdk`: generating the JS tools catalog
   fails on a tool without a line here, and `catalog.test.ts` fails on a
-  line for an operation that is not a tool (skipped or gone). A JS tools program calls an operation as
+  line for an operation that is not a tool (skipped or gone). A JS tools
+  program calls an operation as
   `tools.<service with - written _>.<operationId>`.
 
 ## Gotchas
