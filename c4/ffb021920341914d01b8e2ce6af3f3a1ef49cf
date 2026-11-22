@@ -1,0 +1,14 @@
+crates/connectors/src/lib.rs
+  h_659b58cf3b37bf 26-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c4ffb021920341914d01b8e2ce6af3f3a1ef49cf",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
