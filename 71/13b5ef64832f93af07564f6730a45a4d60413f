@@ -1,0 +1,29 @@
+crates/agent_permission_registry/src/test.rs
+  s_fd0d322c9b4e9f::t_4c1102c68e4807 126-129
+  s_fd0d322c9b4e9f::t_e4b766d4fddbb8 95-125,130-172
+apps/web/src/features/agent-permissions/components/group-icon.ts
+  s_fd0d322c9b4e9f::t_6d2b75924e4165 11
+  s_fd0d322c9b4e9f::t_0e84201018cb1d 32
+crates/agent_permission_registry/registry.json
+  s_fd0d322c9b4e9f::t_b2ced7435fea42 7-8,310,314,322,336,363,425,427,482,505,507,514,559,587,596,598,609
+crates/agent_permission_registry/AGENTS.md
+  s_fd0d322c9b4e9f::t_3d199acaaaaea0 43-51
+docs/agent-guide/settings.md
+  s_fd0d322c9b4e9f::t_3d199acaaaaea0 1264-1266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7113b5ef64832f93af07564f6730a45a4d60413f",
+  "prompts": {},
+  "sessions": {
+    "s_fd0d322c9b4e9f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "835aca54-afd4-44ad-a861-de4bd1504df1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
