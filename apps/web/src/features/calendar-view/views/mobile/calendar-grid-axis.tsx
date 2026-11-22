@@ -14,17 +14,8 @@ export function MobileCalendarGridAxis(props: {
   return (
     <>
       <div
-        class="pointer-events-none absolute left-0 z-10 w-[var(--calendar-phone-axis-width)] text-right text-[10px] font-medium text-ink-extra-muted"
-        style={{
-          top: `${axis.state.allDayTop}px`,
-          'padding-right': 'var(--calendar-phone-axis-gap)',
-        }}
-      >
-        All day
-      </div>
-      <div
         data-calendar-hour-axis
-        class="pointer-events-none absolute left-0 z-10 overflow-hidden text-[10px] font-medium text-ink-extra-muted"
+        class="pointer-events-none absolute left-0 z-10 overflow-hidden bg-page text-[10px] font-medium text-ink-extra-muted"
         style={{
           top: `${axis.state.top - labelBleed()}px`,
           height: `${axis.state.height + labelBleed()}px`,
@@ -64,15 +55,6 @@ export function MobileCalendarGridAxis(props: {
             )}
           </Show>
         </div>
-        <div
-          class="absolute inset-x-0"
-          style={{
-            top: `${labelBleed()}px`,
-            height: `${MOBILE_EDGE_FADE_FALLOFF}px`,
-            background: mobileEdgeFade('top', 'var(--color-page)'),
-            opacity: axis.faded() ? 1 : 0,
-          }}
-        />
       </div>
       <Show when={axis.scrollElement()?.parentElement}>
         {(host) => (

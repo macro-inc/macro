@@ -137,18 +137,23 @@ host lives in `../block-calendar/`.
   dismissing. Week selection keeps the first visible week's ordinal; Today
   navigates to today and dismisses the sheet.
 - Host phone navigation through the shell's `NavigationSheet`, as Email does;
-  `views/mobile/calendar-sidebar.tsx` keeps Email's fixed title header above views,
+  `views/mobile/calendar-sidebar.tsx` keeps one fixed Calendar title header above views,
   account calendars, booking links, and a fixed `MobileDrawer.Section` Settings footer.
-  Keep desktop sidebar sections unchanged. `/calendar/settings` is an authenticated
-  native view over existing setting owners; retain its `view-` route id and component
-  registry entry so the split-content bridge and shell metadata both resolve it.
+  Agenda is a text-only view row, not another menu toggle. Keep desktop sidebar sections unchanged.
+  `/calendar/settings` is an authenticated native view over existing setting owners;
+  give its content `Layer depth={2}` with `bg-surface` cards above `bg-page`. Retain
+  its `view-` route id and component registry entry for the split-content bridge and shell metadata.
 - Keep phone grid layout tokens in `calendar-phone-grid.css`; hours sit outside
   the timed card, with day headers and all-day lanes above it. The active grid
-  supplies a stationary gutter through `create-mobile-grid-axis.ts`; synchronize
-  its vertical scroll, and reveal the shared 32px fade only past the opening offset.
-  Keep timed-card grid lines below the all-day row, leave headers/gutters transparent,
-  and do not shade weekends in any view. Keep midnight and the current-time gutter
-  label aligned with the card lines. `timeGridThreeDay` advances by three days.
+  supplies a stationary, opaque page-colored gutter through `create-mobile-grid-axis.ts`;
+  synchronize its vertical scroll without fading the hour labels or showing an
+  All day gutter label. Reveal only the timed card's shared 32px fade past the opening offset.
+  Keep timed-card grid lines below the all-day row and do not shade weekends in any view.
+  Keep midnight and the current-time gutter label aligned with the card lines.
+  `timeGridThreeDay` advances by three days.
+- Phone all-day rows use a 24px minimum and the existing 48px cap from
+  `core/all-day-row.ts`; let FullCalendar allocate the lanes and expose excess
+  events through its native more link. Do not reserve a second empty creation lane.
 - Keep Agenda on the navigation context, with five fourteen-day windows clipped
   to supported occurrence bounds; never pass Agenda to a FullCalendar API.
 - Keep Agenda rows open-only; RSVP controls belong in event details and Needs Reply, not Agenda rows.

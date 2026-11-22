@@ -11,7 +11,7 @@ export function CalendarSettingsGroup(props: {
       <h2 class="px-4 text-[13px] leading-4 font-medium text-ink-extra-muted">
         {props.title}
       </h2>
-      <div class="ui-field-bg rounded-[var(--calendar-settings-radius)] p-1">
+      <div class="bg-surface rounded-[var(--calendar-settings-radius)] p-1">
         {props.children}
       </div>
     </section>

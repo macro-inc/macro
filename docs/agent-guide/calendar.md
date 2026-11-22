@@ -28,13 +28,17 @@ inside. Pinning a left panel preserves the gap. In Day and Week, the opening
 7am label remains fully readable below the all-day lane. Phone content extends
 behind floating creation and dock controls, with scroll clearance for the last row.
 Phone time-grid headers show short weekday labels above their dates. Hour labels
-sit in a stationary 46px transparent gutter outside the rounded timed card; transparent
-day headers and all-day lanes stay above it. Grid lines start below the all-day row,
-and no view shades weekends. Hours scroll vertically with the active grid while
-its columns and day headers swipe horizontally. Midnight remains fully visible at
-scroll zero. The current-time line crosses the card with an accent time in its gutter.
-The shared 32px top fade appears only past the opening scroll position. Bottom
-clearance is limited to the floating New row and a small gap.
+sit in a stationary 46px opaque, page-colored gutter outside the rounded timed card;
+day headers and all-day lanes stay above it. The all-day row has no gutter label.
+Grid lines start below the all-day row, and no view shades weekends. Hours scroll
+vertically with the active grid while its columns and day headers swipe horizontally.
+Midnight remains fully visible at scroll zero. The current-time line crosses the
+card with an accent time in its gutter. Only the timed card has the shared 32px top
+fade past the opening scroll position; the hour gutter never fades. Bottom clearance
+is limited to the floating New row and a small gap.
+The phone all-day row starts at one 24px lane, grows for overlapping events, and
+keeps its 48px ceiling with FullCalendar's more link for overflow; no extra empty
+creation lane is reserved. Desktop lane sizing is unchanged.
 Phone Month uses a Sunday-start five/six-week Bars grid. Weekday letters sit above
 the card; today has an accent circle, other-month dates are tertiary, and their
 bars are half-opacity. Shared week lanes keep multi-day bars continuous, and +N
@@ -550,7 +554,8 @@ failure or an uncached account/date range shows no retained invitations.
 The phone header has four separate islands: the shell's menu toggle, month and
 caret, Today, and circular Search. There is no large title beneath them. The menu
 opens the same shell `NavigationSheet` used by Email, with Calendar in the fixed
-header and Agenda, Day, 3 days, Week, and Month below; a choice closes the drawer. Calendars are grouped by account, with
+header and Agenda, Day, 3 days, Week, and Month below; Agenda is text-only, not a
+second hamburger. A choice closes the drawer. Calendars are grouped by account, with
 colored visibility checkboxes; hold a calendar for its color and **Show only this
 calendar**. Booking links lists enabled links, copy actions, New, Copy availability,
 and Manage booking links. Mini-month, New event, upcoming events, routines,
@@ -776,7 +781,8 @@ The phone navigation drawer uses plain account captions and calendar rows rather
 than the old header-gear settings sheet. Visibility and color still write the same
 browser-local calendar preferences. The separate Settings page contains display
 preferences, account consent actions, availability hours and busy calendars, next
-meeting countdown, and flag-gated team sharing.
+meeting countdown, and flag-gated team sharing. The Settings page places its cards
+at Layer depth 2 over the page surface in both themes, including the busy-calendar subpage.
 
 On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and

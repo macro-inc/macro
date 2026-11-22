@@ -30,14 +30,14 @@ import BackIcon from '@icon/system/regular/caret-left.svg';
 import ColumnsIcon from '@icon/system/regular/columns.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import GearIcon from '@icon/system/regular/gear.svg';
-import ListIcon from '@icon/system/regular/list.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import GridIcon from '@icon/system/regular/squares-four.svg';
 import { Button, Checkbox } from '@ui';
 import { batch, createSignal, For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
 const VIEWS = [
-  { value: 'agenda', label: 'Agenda', icon: ListIcon },
+  { value: 'agenda', label: 'Agenda', icon: undefined },
   { value: 'timeGridDay', label: 'Day', icon: CalendarIcon },
   { value: 'timeGridThreeDay', label: '3 days', icon: ColumnsIcon },
   { value: 'timeGridWeek', label: 'Week', icon: ColumnsIcon },
@@ -183,9 +183,13 @@ export function MobileCalendarSidebar() {
                         active={navigation.periodView() === item.value}
                         onClick={() => navigation.changeView(item.value)}
                       >
-                        <ViewSidebar.Icon>
-                          <item.icon class="size-5" />
-                        </ViewSidebar.Icon>
+                        <Show when={item.icon}>
+                          {(icon) => (
+                            <ViewSidebar.Icon>
+                              <Dynamic component={icon()} class="size-5" />
+                            </ViewSidebar.Icon>
+                          )}
+                        </Show>
                         {item.label}
                       </ViewSidebar.Item>
                     )}

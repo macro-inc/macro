@@ -15,7 +15,6 @@ type AxisState = {
   height: number;
   scrollTop: number;
   openingScrollTop: number;
-  allDayTop: number;
   now?: AxisLabel;
 };
 
@@ -31,7 +30,6 @@ export function createMobileGridAxis(
     height: 0,
     scrollTop: 0,
     openingScrollTop: 0,
-    allDayTop: 0,
   });
   createEffect(
     on([root, viewport], ([element, boundary]) => {
@@ -75,9 +73,6 @@ export function createMobileGridAxis(
         }
         const box = scroller.getBoundingClientRect();
         const boundaryBox = boundary.getBoundingClientRect();
-        const allDay = element.querySelector<HTMLElement>(
-          '.fc-timegrid-axis-cushion'
-        );
         const indicator = element.querySelector<HTMLElement>(
           '.fc-timegrid-now-indicator-line'
         );
@@ -109,9 +104,6 @@ export function createMobileGridAxis(
           now: stableNow,
           top: box.top - boundaryBox.top,
           height: box.height,
-          allDayTop: allDay
-            ? allDay.getBoundingClientRect().top - boundaryBox.top
-            : 0,
           labels: Array.from(
             scroller.querySelectorAll<HTMLElement>(
               '.fc-timegrid-slot-label-cushion'

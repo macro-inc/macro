@@ -429,6 +429,7 @@ export function Page(props: {
         settings={{
           initialView,
           showWeekends: calendarView.displaySettings.showWeekends,
+          compactAllDaySlot: isMobile(),
           weekStartsOn: calendarView.displaySettings.weekStartsOn,
           timeFormat: calendarView.displaySettings.timeFormat,
           useNarrowDayHeaders: useNarrowWeekdayHeaders(),

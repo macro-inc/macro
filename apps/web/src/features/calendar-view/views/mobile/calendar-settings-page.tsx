@@ -17,7 +17,7 @@ import {
   useAvailabilityCalendarsQuery,
   useSetAvailabilityCalendarMutation,
 } from '@queries/calendar/availability';
-import { Button, Checkbox } from '@ui';
+import { Button, Checkbox, Layer } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
   CalendarSettingsGroup,
@@ -102,236 +102,238 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
             </h1>
           </ViewShell.TopBarTitle>
         </ViewShell.TopBar>
-        <div class="min-h-0 flex-1 overflow-y-auto px-3 pt-[var(--mobile-content-inset-top,0px)] pb-[calc(var(--mobile-content-inset-bottom,0px)+2rem)]">
-          <Show
-            when={!busyPage()}
-            fallback={
-              <CalendarSettingsGroup title="Which calendars make you busy">
-                <Show when={busy.isError}>
-                  <p role="alert" class="p-4">
-                    Could not load busy calendars.
-                    <Button
-                      variant="ghost"
-                      onClick={() =>
-                        fireAndForget(busy.refetch(), 'calendar-settings')
+        <Layer depth={2}>
+          <div class="min-h-0 flex-1 overflow-y-auto px-3 pt-[var(--mobile-content-inset-top,0px)] pb-[calc(var(--mobile-content-inset-bottom,0px)+2rem)]">
+            <Show
+              when={!busyPage()}
+              fallback={
+                <CalendarSettingsGroup title="Which calendars make you busy">
+                  <Show when={busy.isError}>
+                    <p role="alert" class="p-4">
+                      Could not load busy calendars.
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          fireAndForget(busy.refetch(), 'calendar-settings')
+                        }
+                      >
+                        Retry
+                      </Button>
+                    </p>
+                  </Show>
+                  <Show when={busy.isLoading}>
+                    <p role="status" class="p-4">
+                      Loading calendars…
+                    </p>
+                  </Show>
+                  <For
+                    each={view.sources().filter((source) => source.emailLinkId)}
+                  >
+                    {(source) => {
+                      const value = () =>
+                        busyCalendars().find(
+                          (item) => item.calendarId === source.id
+                        )?.contributesToAvailability;
+                      return (
+                        <Checkbox
+                          checked={value() === true}
+                          indeterminate={value() === undefined}
+                          disabled={value() === undefined || setBusy.isPending}
+                          class="flex min-h-14 gap-3 px-4"
+                          onChange={(checked) => {
+                            const userId = user();
+                            if (!userId) return;
+                            setBusy.mutate(
+                              {
+                                userId,
+                                calendarIds: [source.id],
+                                contributesToAvailability: checked,
+                              },
+                              {
+                                onError: () =>
+                                  toast.failure(
+                                    'Could not save which calendars make you busy'
+                                  ),
+                              }
+                            );
+                          }}
+                        >
+                          <Checkbox.Control />
+                          <Checkbox.Label class="min-w-0 flex-1">
+                            {source.name}
+                          </Checkbox.Label>
+                        </Checkbox>
+                      );
+                    }}
+                  </For>
+                </CalendarSettingsGroup>
+              }
+            >
+              <div class="flex flex-col gap-5 py-2">
+                <CalendarSettingsGroup title="Display">
+                  <CalendarSettingsSwitch
+                    label="Show weekends"
+                    checked={view.displaySettings.showWeekends}
+                    onChange={controls.changeShowWeekends}
+                  />
+                  <CalendarSettingsSelect
+                    label="Week starts on"
+                    value={String(view.displaySettings.weekStartsOn)}
+                    options={[
+                      { id: '0', name: 'Sunday' },
+                      { id: '1', name: 'Monday' },
+                    ]}
+                    onChange={(value) =>
+                      controls.changeWeekStartsOn(value === '1' ? 1 : 0)
+                    }
+                  />
+                  <CalendarSettingsSelect
+                    label="Time format"
+                    value={view.displaySettings.timeFormat}
+                    options={[
+                      { id: '12-hour', name: '12-hour' },
+                      { id: '24-hour', name: '24-hour' },
+                    ]}
+                    onChange={(value) =>
+                      controls.changeTimeFormat(
+                        value === '24-hour' ? '24-hour' : '12-hour'
+                      )
+                    }
+                  />
+                </CalendarSettingsGroup>
+                <CalendarSettingsGroup title="Accounts">
+                  <For each={controls.accounts()}>
+                    {(account) => (
+                      <div class="flex min-h-16 items-center gap-3 px-4 py-2">
+                        <div class="min-w-0 flex-1">
+                          <div class="truncate text-base">
+                            {account.emailAddress}
+                          </div>
+                          <div class="text-sm text-ink-muted">
+                            {account.provider === 'GMAIL'
+                              ? 'Google Calendar'
+                              : 'Outlook Calendar'}
+                          </div>
+                        </div>
+                        <Button
+                          variant={
+                            account.action === 'turnOff'
+                              ? 'danger-ghost'
+                              : 'ghost'
+                          }
+                          size="sm"
+                          onClick={() => controls.runAccountAction(account)}
+                        >
+                          {account.action === 'turnOff'
+                            ? 'Turn off'
+                            : account.action === 'reconnect'
+                              ? 'Reconnect'
+                              : 'Enable'}
+                        </Button>
+                      </div>
+                    )}
+                  </For>
+                  <Button
+                    variant="ghost"
+                    fullWidth
+                    size="lg"
+                    class="justify-start"
+                    onClick={controls.connectAnotherAccount}
+                  >
+                    <Plus class="size-5" />
+                    Connect another account
+                  </Button>
+                </CalendarSettingsGroup>
+                <CalendarSettingsGroup title="Availability">
+                  <CalendarSettingsSelect
+                    label="Start time"
+                    value={availability.settings().startTime}
+                    options={startOptions()}
+                    onChange={availability.setStartTime}
+                  />
+                  <CalendarSettingsSelect
+                    label="End time"
+                    value={availability.settings().endTime}
+                    options={endOptions()}
+                    onChange={availability.setEndTime}
+                  />
+                  <CalendarSettingsSwitch
+                    label="Exclude weekends"
+                    checked={availability.settings().excludeWeekends}
+                    onChange={availability.setExcludeWeekends}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    fullWidth
+                    class="justify-between"
+                    onClick={() => setBusyPage(true)}
+                  >
+                    <span>Busy calendars</span>
+                    <span class="flex items-center gap-2 text-ink-muted">
+                      {busy.isSuccess
+                        ? busyCalendars().filter(
+                            (calendar) => calendar.contributesToAvailability
+                          ).length
+                        : '…'}
+                      <CaretRight class="size-5" />
+                    </span>
+                  </Button>
+                </CalendarSettingsGroup>
+                <CalendarSettingsGroup title="Preferences">
+                  <CalendarSettingsSwitch
+                    label="Next meeting countdown"
+                    checked={preferences.showNextMeetingBadge}
+                    onChange={(value) =>
+                      setPreferences('showNextMeetingBadge', value)
+                    }
+                  />
+                  <Show when={sharing.enabled()}>
+                    <Show
+                      when={sharing.hasTeam && !sharing.error}
+                      fallback={
+                        <CalendarSettingsRow
+                          label={
+                            sharing.teamLoading
+                              ? 'Loading team sharing…'
+                              : sharing.error
+                                ? 'Team sharing unavailable'
+                                : 'Join a team to share your calendar'
+                          }
+                        >
+                          <Show when={sharing.error}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={sharing.onRetry}
+                            >
+                              Retry
+                            </Button>
+                          </Show>
+                        </CalendarSettingsRow>
                       }
                     >
-                      Retry
-                    </Button>
-                  </p>
-                </Show>
-                <Show when={busy.isLoading}>
-                  <p role="status" class="p-4">
-                    Loading calendars…
-                  </p>
-                </Show>
-                <For
-                  each={view.sources().filter((source) => source.emailLinkId)}
-                >
-                  {(source) => {
-                    const value = () =>
-                      busyCalendars().find(
-                        (item) => item.calendarId === source.id
-                      )?.contributesToAvailability;
-                    return (
-                      <Checkbox
-                        checked={value() === true}
-                        indeterminate={value() === undefined}
-                        disabled={value() === undefined || setBusy.isPending}
-                        class="flex min-h-14 gap-3 px-4"
-                        onChange={(checked) => {
-                          const userId = user();
-                          if (!userId) return;
-                          setBusy.mutate(
-                            {
-                              userId,
-                              calendarIds: [source.id],
-                              contributesToAvailability: checked,
-                            },
-                            {
-                              onError: () =>
-                                toast.failure(
-                                  'Could not save which calendars make you busy'
-                                ),
-                            }
-                          );
+                      <CalendarSettingsSelect
+                        label="Share with teammates"
+                        value={sharing.sharing}
+                        options={SHARING_OPTIONS}
+                        disabled={sharing.sharing === undefined}
+                        onChange={(value) => {
+                          if (
+                            value === 'all' ||
+                            value === 'none' ||
+                            value === 'busy_only'
+                          )
+                            sharing.onChange(value);
                         }}
-                      >
-                        <Checkbox.Control />
-                        <Checkbox.Label class="min-w-0 flex-1">
-                          {source.name}
-                        </Checkbox.Label>
-                      </Checkbox>
-                    );
-                  }}
-                </For>
-              </CalendarSettingsGroup>
-            }
-          >
-            <div class="flex flex-col gap-5 py-2">
-              <CalendarSettingsGroup title="Display">
-                <CalendarSettingsSwitch
-                  label="Show weekends"
-                  checked={view.displaySettings.showWeekends}
-                  onChange={controls.changeShowWeekends}
-                />
-                <CalendarSettingsSelect
-                  label="Week starts on"
-                  value={String(view.displaySettings.weekStartsOn)}
-                  options={[
-                    { id: '0', name: 'Sunday' },
-                    { id: '1', name: 'Monday' },
-                  ]}
-                  onChange={(value) =>
-                    controls.changeWeekStartsOn(value === '1' ? 1 : 0)
-                  }
-                />
-                <CalendarSettingsSelect
-                  label="Time format"
-                  value={view.displaySettings.timeFormat}
-                  options={[
-                    { id: '12-hour', name: '12-hour' },
-                    { id: '24-hour', name: '24-hour' },
-                  ]}
-                  onChange={(value) =>
-                    controls.changeTimeFormat(
-                      value === '24-hour' ? '24-hour' : '12-hour'
-                    )
-                  }
-                />
-              </CalendarSettingsGroup>
-              <CalendarSettingsGroup title="Accounts">
-                <For each={controls.accounts()}>
-                  {(account) => (
-                    <div class="flex min-h-16 items-center gap-3 px-4 py-2">
-                      <div class="min-w-0 flex-1">
-                        <div class="truncate text-base">
-                          {account.emailAddress}
-                        </div>
-                        <div class="text-sm text-ink-muted">
-                          {account.provider === 'GMAIL'
-                            ? 'Google Calendar'
-                            : 'Outlook Calendar'}
-                        </div>
-                      </div>
-                      <Button
-                        variant={
-                          account.action === 'turnOff'
-                            ? 'danger-ghost'
-                            : 'ghost'
-                        }
-                        size="sm"
-                        onClick={() => controls.runAccountAction(account)}
-                      >
-                        {account.action === 'turnOff'
-                          ? 'Turn off'
-                          : account.action === 'reconnect'
-                            ? 'Reconnect'
-                            : 'Enable'}
-                      </Button>
-                    </div>
-                  )}
-                </For>
-                <Button
-                  variant="ghost"
-                  fullWidth
-                  size="lg"
-                  class="justify-start"
-                  onClick={controls.connectAnotherAccount}
-                >
-                  <Plus class="size-5" />
-                  Connect another account
-                </Button>
-              </CalendarSettingsGroup>
-              <CalendarSettingsGroup title="Availability">
-                <CalendarSettingsSelect
-                  label="Start time"
-                  value={availability.settings().startTime}
-                  options={startOptions()}
-                  onChange={availability.setStartTime}
-                />
-                <CalendarSettingsSelect
-                  label="End time"
-                  value={availability.settings().endTime}
-                  options={endOptions()}
-                  onChange={availability.setEndTime}
-                />
-                <CalendarSettingsSwitch
-                  label="Exclude weekends"
-                  checked={availability.settings().excludeWeekends}
-                  onChange={availability.setExcludeWeekends}
-                />
-                <Button
-                  variant="ghost"
-                  size="lg"
-                  fullWidth
-                  class="justify-between"
-                  onClick={() => setBusyPage(true)}
-                >
-                  <span>Busy calendars</span>
-                  <span class="flex items-center gap-2 text-ink-muted">
-                    {busy.isSuccess
-                      ? busyCalendars().filter(
-                          (calendar) => calendar.contributesToAvailability
-                        ).length
-                      : '…'}
-                    <CaretRight class="size-5" />
-                  </span>
-                </Button>
-              </CalendarSettingsGroup>
-              <CalendarSettingsGroup title="Preferences">
-                <CalendarSettingsSwitch
-                  label="Next meeting countdown"
-                  checked={preferences.showNextMeetingBadge}
-                  onChange={(value) =>
-                    setPreferences('showNextMeetingBadge', value)
-                  }
-                />
-                <Show when={sharing.enabled()}>
-                  <Show
-                    when={sharing.hasTeam && !sharing.error}
-                    fallback={
-                      <CalendarSettingsRow
-                        label={
-                          sharing.teamLoading
-                            ? 'Loading team sharing…'
-                            : sharing.error
-                              ? 'Team sharing unavailable'
-                              : 'Join a team to share your calendar'
-                        }
-                      >
-                        <Show when={sharing.error}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={sharing.onRetry}
-                          >
-                            Retry
-                          </Button>
-                        </Show>
-                      </CalendarSettingsRow>
-                    }
-                  >
-                    <CalendarSettingsSelect
-                      label="Share with teammates"
-                      value={sharing.sharing}
-                      options={SHARING_OPTIONS}
-                      disabled={sharing.sharing === undefined}
-                      onChange={(value) => {
-                        if (
-                          value === 'all' ||
-                          value === 'none' ||
-                          value === 'busy_only'
-                        )
-                          sharing.onChange(value);
-                      }}
-                    />
+                      />
+                    </Show>
                   </Show>
-                </Show>
-              </CalendarSettingsGroup>
-            </div>
-          </Show>
-        </div>
+                </CalendarSettingsGroup>
+              </div>
+            </Show>
+          </div>
+        </Layer>
         <TurnOffCalendarDialog
           target={controls.turnOffTarget()}
           onClose={controls.clearTurnOffTarget}

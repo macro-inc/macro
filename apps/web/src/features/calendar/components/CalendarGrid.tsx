@@ -22,6 +22,12 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import {
+  ALL_DAY_ROW_EVENT_HEIGHT,
+  ALL_DAY_ROW_LANE_HEIGHT,
+  ALL_DAY_ROW_MAX_HEIGHT,
+  ALL_DAY_ROW_MAX_LANES,
+} from '../core/all-day-row';
 import { DAY_DRAFT_ID, type DayDraftRangeBinding } from '../core/day-draft';
 import { useTimeGridOpeningScroll } from '../hooks/use-time-grid-opening-scroll';
 import { dispatchDayDraftTimeChange } from '../primitives/dispatch-day-draft-time-change';
@@ -99,6 +105,8 @@ export interface CalendarGridSettings {
   dayCount?: number;
   showDayHeaders?: boolean;
   showAllDaySlot?: boolean;
+  /** Fit phone all-day content into one or two lanes, with native overflow. */
+  compactAllDaySlot?: boolean;
   showWeekends: boolean;
   weekStartsOn: CalendarWeekStart;
   timeFormat: CalendarTimeFormat;
@@ -160,7 +168,12 @@ function CalendarGridHost(props: {
         <FullCalendar.Host
           tabIndex={-1}
           ref={setElement}
-          style={{ '--calendar-selection-color': props.selectionColor }}
+          style={{
+            '--calendar-selection-color': props.selectionColor,
+            '--calendar-all-day-lane-height': `${ALL_DAY_ROW_LANE_HEIGHT}px`,
+            '--calendar-all-day-max-height': `${ALL_DAY_ROW_MAX_HEIGHT}px`,
+            '--calendar-all-day-event-height': `${ALL_DAY_ROW_EVENT_HEIGHT}px`,
+          }}
           class="calendar-view-host size-full min-w-0 min-h-0 overflow-hidden"
         />
       </div>
@@ -284,7 +297,10 @@ export function CalendarGrid(props: CalendarGridProps) {
       }}
       moreLinkClick="popover"
       handleWindowResize={false}
-      allDayText="All day"
+      allDayText={props.settings.compactAllDaySlot ? '' : 'All day'}
+      dayMaxEventRows={
+        props.settings.compactAllDaySlot ? ALL_DAY_ROW_MAX_LANES : undefined
+      }
       nowIndicator
       headerToolbar={false}
       scrollTime={TIME_GRID_OPENING_SCROLL_TIME}
