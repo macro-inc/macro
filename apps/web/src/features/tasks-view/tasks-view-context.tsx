@@ -574,10 +574,13 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       selection: {
         getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
       },
-      // Continuation rows load on their own when scrolled into view.
+      // Continuation rows load on their own when scrolled into view. A task
+      // the server has not created yet has nothing to open or act on.
       isNavigable: (row) =>
-        row.kind === 'entity' || row.kind === 'group-header',
-      isSelectable: (row) => row.kind === 'entity',
+        (row.kind === 'entity' && !source.isPendingTask?.(row.entity.id)) ||
+        row.kind === 'group-header',
+      isSelectable: (row) =>
+        row.kind === 'entity' && !source.isPendingTask?.(row.entity.id),
       onActivate: (value) => activation.current?.(value),
     })
   );

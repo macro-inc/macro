@@ -689,3 +689,117 @@ it('pauses task reads across project views and resumes when returning to tasks',
     }
   });
 });
+
+it('shows created tasks in their group until the query lists them', async () => {
+  const { buildOptimisticTask } = await import('../core/optimistic-task');
+  const { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } = await import(
+    '@property/constants'
+  );
+  const notStarted = PROPERTY_OPTION_IDS.STATUS.NOT_STARTED;
+  const inProject = (id: string, projectId: string) =>
+    buildOptimisticTask({
+      id,
+      title: id,
+      ownerId: 'viewer',
+      properties: [
+        [
+          SYSTEM_PROPERTY_IDS.PROJECT,
+          {
+            valueType: 'ENTITY',
+            refs: [{ entity_id: projectId, entity_type: 'INITIATIVE' }],
+          },
+        ],
+      ],
+      definitions: new Map(),
+      now: new Date('2026-11-22T12:00:00Z'),
+    });
+  const listed = inProject('listed', 'project');
+  const [entities, setEntities] = createSignal([listed]);
+  const [optimistic, setOptimistic] = createSignal([
+    { entity: inProject('temp', 'project'), pending: true },
+    { entity: inProject('elsewhere', 'other'), pending: true },
+  ]);
+  const onListed = vi.fn();
+  fixture.query = {
+    isLoading: false,
+    isPending: false,
+    isPlaceholderData: false,
+    get data() {
+      return {
+        entities: entities(),
+        itemsById: {},
+        groups: [
+          {
+            key: 'done',
+            label: 'Done',
+            totalCount: entities().length,
+            itemIds: entities().map((task) => task.id),
+          },
+        ],
+      };
+    },
+  };
+  let cleanup = () => {};
+  const source = createRoot((dispose) => {
+    cleanup = dispose;
+    return useTasksDataSource(
+      {
+        tab: 'team-tasks',
+        search: '',
+        facets: {},
+        groupBy: 'status',
+        sort: [],
+      },
+      {
+        userId: () => 'viewer',
+        tagSets: () => [],
+        tagSetsReady: () => true,
+        isGroupExpanded: () => true,
+        reference: () => ({
+          propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+          entityId: 'project',
+        }),
+        optimisticTasks: optimistic,
+        onOptimisticTasksListed: onListed,
+      }
+    );
+  });
+  const shape = () =>
+    source
+      .items()
+      .map((row) =>
+        row.kind === 'entity'
+          ? row.entity.id
+          : row.kind === 'group-header'
+            ? `#${row.groupId}:${row.count}`
+            : row.kind
+      );
+  try {
+    // A Not started group no page had opens for it; another project's task stays out.
+    expect(shape()).toEqual(['#done:1', 'listed', `#${notStarted}:1`, 'temp']);
+    expect(source.isPendingTask?.('temp')).toBe(true);
+    expect(source.isPendingTask?.('listed')).toBe(false);
+    expect(
+      source
+        .boardRows?.()
+        .some((row) => row.kind === 'entity' && row.entity.id === 'temp')
+    ).toBe(false);
+
+    // The server created it: the row takes its real id and can be opened.
+    setOptimistic([
+      {
+        entity: { ...inProject('temp', 'project'), id: 'task' },
+        pending: false,
+      },
+    ]);
+    expect(shape()).toEqual(['#done:1', 'listed', `#${notStarted}:1`, 'task']);
+    expect(source.isPendingTask?.('task')).toBe(false);
+    expect(onListed).not.toHaveBeenCalled();
+
+    // The query lists it itself: the stand-in is released.
+    setEntities([listed, { ...inProject('task', 'project') }]);
+    expect(onListed).toHaveBeenCalledWith(['task']);
+  } finally {
+    cleanup();
+  }
+});

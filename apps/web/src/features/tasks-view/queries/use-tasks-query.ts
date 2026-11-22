@@ -24,6 +24,10 @@ import {
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { toPropertyDefinitionDomain } from '@property/utils/transforms';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
+import {
+  computeGroupKeysForProperties,
+  DATE_GROUP_BUCKETS,
+} from '@queries/soup/grouped/api';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import {
   type SoupApiItemFilter,
@@ -31,8 +35,9 @@ import {
 } from '@queries/soup/items';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import { sortTasks } from '../constants';
+import type { OptimisticTask } from '../core/optimistic-task';
 import {
   type DateBucketBoundaries,
   TASK_DUE_DATE_BUCKETS,
@@ -83,6 +88,10 @@ export type UseTasksDataSourceOptions = {
   networkPaused?: Accessor<boolean>;
   board?: Accessor<boolean>;
   calendar?: Accessor<DateBucketBoundaries>;
+  /** Tasks created here that the query may not list yet, shown in place. */
+  optimisticTasks?: Accessor<readonly OptimisticTask[]>;
+  /** Confirmed optimistic tasks the query now lists itself. */
+  onOptimisticTasksListed?: (taskIds: string[]) => void;
 };
 
 export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
@@ -96,6 +105,8 @@ export type TasksDataSource = ListDataSource<TasksDataSourceItem> & {
   boardSearching?: Accessor<boolean>;
   boardLoading?: Accessor<boolean>;
   groupError?: (groupId: string) => unknown;
+  /** A row standing in for a task the server has not created yet. */
+  isPendingTask?: (taskId: string) => boolean;
 };
 
 type TaskGroupContinuationReader = {
@@ -162,6 +173,41 @@ function taskInsertFilter(
       (!crm || namesCrmRecord(entity, crm))
     );
   };
+}
+
+/**
+ * Adds each optimistic task the groups don't list to the groups its keys name,
+ * opening a group no loaded page has, and to the first group when its keys
+ * are unknown. Counts include it, since the server's do not yet.
+ */
+function placeOptimisticTasks(
+  groups: SoupGroup<TaskEntityWithProperties>[],
+  optimistic: readonly TaskEntityWithProperties[],
+  groupKeys: (task: TaskEntityWithProperties) => readonly string[],
+  groupLabel: (key: string) => string,
+  sort: (entities: TaskEntityWithProperties[]) => TaskEntityWithProperties[]
+) {
+  const touched = new Set<SoupGroup<TaskEntityWithProperties>>();
+  const listed = new Set(
+    groups.flatMap((group) => group.entities.map((task) => task.id))
+  );
+  for (const task of optimistic) {
+    if (listed.has(task.id)) continue;
+    listed.add(task.id);
+    const keys = groupKeys(task);
+    const targets = keys.length > 0 ? keys : groups[0] ? [groups[0].id] : [];
+    for (const key of targets) {
+      let group = groups.find((candidate) => candidate.id === key);
+      if (!group) {
+        group = { id: key, label: groupLabel(key), entities: [], count: 0 };
+        groups.push(group);
+      }
+      group.entities = [task, ...group.entities];
+      if (group.count !== undefined) group.count += 1;
+      touched.add(group);
+    }
+  }
+  for (const group of touched) group.entities = sort(group.entities);
 }
 
 /** Query, service search, and row assembly owned by the production Tasks view. */
@@ -366,6 +412,72 @@ export function useTasksDataSource(
     return results;
   }, []);
 
+  // Created tasks the query has not listed yet. Search results come from
+  // another source, so they show only the tasks it finds.
+  const optimisticTasks = createMemo<TaskEntityWithProperties[]>(() => {
+    const optimistic = options.optimisticTasks?.() ?? [];
+    if (optimistic.length === 0 || search.isSearching()) return [];
+    const reference = options.reference?.();
+    const context = viewContext();
+    return optimistic.flatMap(({ entity }) =>
+      (!reference || referencesEntity(entity, reference)) &&
+      taskMatchesView(entity, context)
+        ? [entity]
+        : []
+    );
+  });
+  const optimisticGroupKeys = (task: TaskEntityWithProperties) => {
+    const groupBy = queryArgs().groupBy;
+    // Date grouping buckets by update time, and a created task is new.
+    if (groupBy?.type === 'date') return ['today'];
+    return computeGroupKeysForProperties(task.properties, groupBy) ?? [];
+  };
+  // A group no page has: headers name status, priority, people and projects
+  // from the key itself.
+  const optimisticGroupLabel = (key: string) => {
+    if (state.groupBy === 'due_date')
+      return (
+        TASK_DUE_DATE_BUCKETS.find((bucket) => bucket.id === key)?.label ?? key
+      );
+    if (state.groupBy === 'date')
+      return DATE_GROUP_BUCKETS.find(([id]) => id === key)?.[1] ?? key;
+    return key;
+  };
+  const isPendingTask = (taskId: string) =>
+    (options.optimisticTasks?.() ?? []).some(
+      ({ entity, pending }) => pending && entity.id === taskId
+    );
+
+  // Confirmed tasks the query lists itself no longer need their stand-in.
+  const listedOptimisticTaskIds = createMemo<string[]>(
+    () => {
+      const confirmed = (options.optimisticTasks?.() ?? []).filter(
+        ({ pending }) => !pending
+      );
+      if (confirmed.length === 0 || search.isSearching() || query.isLoading)
+        return [];
+      const listed = new Set(baseTasks().map((task) => task.id));
+      for (const group of query.data?.groups ?? []) {
+        for (const task of continuations.entities(group.key)) {
+          listed.add(task.id);
+        }
+      }
+      return confirmed.flatMap(({ entity }) =>
+        listed.has(entity.id) ? [entity.id] : []
+      );
+    },
+    [],
+    {
+      equals: (a, b) =>
+        a.length === b.length && a.every((id, i) => id === b[i]),
+    }
+  );
+  createEffect(
+    on(listedOptimisticTaskIds, (taskIds) => {
+      if (taskIds.length > 0) options.onOptimisticTasksListed?.(taskIds);
+    })
+  );
+
   const builtRows = createMemo<SoupRow<TaskEntityWithProperties>[]>(
     (previous) => {
       if (
@@ -377,8 +489,16 @@ export function useTasksDataSource(
 
       const groups = search.isSearching() ? undefined : query.data?.groups;
       const currentTasks = tasks();
+      const optimistic = optimisticTasks();
       if (!groups || state.groupBy === 'none') {
-        return buildFlatSoupRows(currentTasks);
+        if (optimistic.length === 0) return buildFlatSoupRows(currentTasks);
+        return buildFlatSoupRows(
+          sortTasks(
+            deduplicateSoupEntities([...currentTasks, ...optimistic]),
+            state.sort,
+            propertyDefinitions()
+          )
+        );
       }
 
       const tasksById = new Map(currentTasks.map((task) => [task.id, task]));
@@ -421,6 +541,16 @@ export function useTasksDataSource(
         }
 
         taskGroups.push(taskGroup);
+      }
+
+      if (optimistic.length > 0) {
+        placeOptimisticTasks(
+          taskGroups,
+          optimistic,
+          optimisticGroupKeys,
+          optimisticGroupLabel,
+          (entities) => sortTasks(entities, state.sort, propertyDefinitions())
+        );
       }
 
       return buildGroupedSoupRows(taskGroups);
@@ -492,15 +622,21 @@ export function useTasksDataSource(
       return [];
     }
 
+    // Boards and timelines drag and open cards: a temporary id has neither.
+    const settledRows = () =>
+      rows().filter(
+        (row) => row.kind !== 'entity' || !isPendingTask(row.entity.id)
+      );
+
     if (search.isSearching()) {
-      return rows();
+      return settledRows();
     }
 
     if (query.isPending || query.isPlaceholderData) {
       return [];
     }
 
-    return rows();
+    return settledRows();
   };
 
   const boardLoading = () => {
@@ -530,5 +666,6 @@ export function useTasksDataSource(
     loadMore,
     refresh,
     sortsSearchResults: Boolean(options.crm),
+    isPendingTask,
   } satisfies TasksDataSource;
 }

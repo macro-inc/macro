@@ -165,6 +165,7 @@ export function TaskList(props: TaskListProps) {
       .find((row) => row.kind === 'entity' && row.id === item.id);
 
     if (sourceRow?.kind !== 'entity') return;
+    if (source.isPendingTask?.(sourceRow.entity.id)) return;
 
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
@@ -632,6 +633,25 @@ export function TaskList(props: TaskListProps) {
                                   reason: 'pointer',
                                 })
                               }
+                            />
+                          )}
+                        </Match>
+                        <Match
+                          when={
+                            row.kind === 'entity' &&
+                            source.isPendingTask?.(row.entity.id) &&
+                            row
+                          }
+                        >
+                          {(entityRow) => (
+                            // Being created: no menu, drag, selection or opening.
+                            <TaskListEntity
+                              pending
+                              referencePropertyIds={props.referencePropertyIds}
+                              showProject={showTaskProject()}
+                              calendar={calendar}
+                              rowId={entityRow().id}
+                              entity={entityRow().entity}
                             />
                           )}
                         </Match>

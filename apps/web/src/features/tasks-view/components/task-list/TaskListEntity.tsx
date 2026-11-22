@@ -38,6 +38,7 @@ import {
   Match,
   Show,
   Switch,
+  untrack,
   useContext,
 } from 'solid-js';
 import type { DateBucketBoundaries } from '../../core/task-due-date';
@@ -55,6 +56,11 @@ type TaskListEntityProps = Omit<BaseListEntityProps, 'entity'> & {
   onFilterByTag?: (optionId: string) => void;
   /** Called when "Filter by" is clicked in an assignee's hover card. */
   onFilterByAssignee?: (userId: string) => void;
+  /**
+   * A task still being created: its id is temporary, so the row is dimmed and
+   * inert. A created task mounts a new row under its real id.
+   */
+  pending?: boolean;
 };
 
 function MaybeEntityRow(props: {
@@ -87,7 +93,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
   const isShared = useIsShared(props.entity);
 
   createEffect(() => {
-    if (!isWakeableDocument(props.entity)) return;
+    if (props.pending || !isWakeableDocument(props.entity)) return;
 
     enqueueDocumentWakeup(props.entity);
   });
@@ -134,16 +140,18 @@ export function TaskListEntity(props: TaskListEntityProps) {
     onFilterByAssignee: props.onFilterByAssignee,
   });
 
-  const draggable = createEntityDraggable({
-    entity: props.entity,
-    splitId: useSplitPanel()?.handle?.id,
-  });
+  const splitId = useSplitPanel()?.handle?.id;
+  const draggable = untrack(() => props.pending)
+    ? undefined
+    : createEntityDraggable({ entity: props.entity, splitId });
 
   return (
     <Entity.Root
       id={props.rowId}
       role={props.rowId ? 'row' : undefined}
       aria-selected={props.rowId ? props.checked : undefined}
+      aria-disabled={props.pending || undefined}
+      aria-busy={props.pending || undefined}
       tabIndex={props.rowId ? -1 : undefined}
       entity={props.entity}
       onClick={(e) => {
@@ -157,6 +165,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
       class={cn(
         'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 mobile:py-0 rounded-xl',
         {
+          'pointer-events-none opacity-50': props.pending,
           'min-h-10 mx-1': !isMobile(),
           'bg-list-selected': props.checked,
           'bg-list-selected-highlighted':
