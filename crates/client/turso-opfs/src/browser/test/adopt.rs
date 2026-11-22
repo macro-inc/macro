@@ -1224,6 +1224,34 @@ async fn a_count_that_cannot_be_removed_holds_no_wipe_or_removal_back() {
 }
 
 #[wasm_bindgen_test]
+async fn a_removal_that_leaves_a_file_keeps_the_marker_beside_it() {
+    // Moved files whose first open never succeeded are removed while their
+    // WAL stays open somewhere: the main file goes, the WAL stays, and so
+    // does the marker, so what is left never reads as this identity's own.
+    let (old, new) = identities("removal-held-wal");
+    write_pair(&old, 22).await;
+    clean_pair(&new).await;
+    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
+    let root = worker_root().await.expect("root");
+    let (held, _) = open_sync_handle(&root, &format!("{new}-wal"), BusyDeadline::start())
+        .await
+        .expect("hold the WAL open");
+    let owner = OpfsOwner::acquire(&new).await.expect("owner");
+    let removed = owner.remove_and_release().await;
+    close_sync_handle(&held).expect("close the WAL");
+    assert!(removed.is_err());
+    assert_eq!(present(&new).await, [false, true]);
+    assert!(marker_exists(&new).await);
+    // The next read finds the marker beside no main file and removes it
+    // with the WAL.
+    assert_eq!(read_adoption(&new).await, None);
+    assert!(!marker_exists(&new).await);
+    assert_eq!(present(&new).await, [false, false]);
+    clean_pair(&old).await;
+    clean_pair(&new).await;
+}
+
+#[wasm_bindgen_test]
 async fn a_read_cut_short_is_an_error_and_moves_or_removes_nothing() {
     // A marker read short fails the read and stays.
     let (old, new) = identities("short-marker-read");

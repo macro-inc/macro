@@ -3168,24 +3168,26 @@ async fn reset_paths(paths: &Paths, recursive: bool) -> Result<(), OpfsError> {
     Ok(())
 }
 
-/// Removes both approved paths and any adoption marker beside them,
-/// attempting each even if another fails, and tries the attempt count once.
+/// Removes both approved paths, attempting each even if the other fails,
+/// then, once both are gone, any adoption marker beside them, and tries the
+/// attempt count once. The files go first, as in [`reset_paths`]: a file
+/// that stays keeps its marker, so moved files whose first open never
+/// succeeded never read as this identity's own to a later adoption.
 async fn remove_paths(paths: &Paths) -> Result<(), OpfsError> {
     let deadline = BusyDeadline::start();
     let root = worker_root()
         .await
         .map_err(|error| js_error(OpfsErrorKind::Remove, "OPFS remove root open", &error))?;
     let mut first_error = None;
-    if let Err(error) = remove_if_present(&root, &marker_path(paths), true, deadline).await {
-        first_error.get_or_insert(error);
-    }
-    remove_count(&root, paths).await;
     for role in FileRole::ALL {
         if let Err(error) = remove_if_present(&root, paths.get(role), true, deadline).await {
             first_error.get_or_insert(error);
         }
     }
-    first_error.map_or(Ok(()), Err)
+    if let Some(error) = first_error {
+        return Err(error);
+    }
+    remove_marker(&root, paths, deadline).await
 }
 
 async fn remove_if_present(
