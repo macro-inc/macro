@@ -7,9 +7,9 @@ use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, ImportVisibility, NotionPlanRepo,
     NotionRunRepo, Result, SlackWorkspaceSource, WorkspaceWriter, WrittenObjects,
 };
+use connectors::McpConnectionsService;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
 use uuid::Uuid;
 
 // Separate roles retain the existing ledger kind so older readers can parse them.
@@ -43,7 +43,7 @@ impl PersonalMirrorLocks {
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,

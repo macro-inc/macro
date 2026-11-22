@@ -25,7 +25,7 @@ use soup::domain::{
 use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
 
 use crate::{
-    inputs::{GroupedSoupInput, SoupInput},
+    inputs::{GroupedSoupInput, SoupChannelReads, SoupInput},
     loaders::{AgentSessionEntityLoader, PrimarySoupItemLoader, SoupItemDataLoader},
     objects::{
         GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup,
@@ -276,9 +276,40 @@ where
     }
 }
 
+/// The Soup service a page with `channelReads: PRIMARY` runs against: the
+/// same service as the ordinary one, except that its channel list reads the
+/// primary. The schema's context data carries it, typed by the schema's own
+/// Soup service (`Arc<_>` in a shared schema); a schema without it rejects
+/// such a page instead of quietly reading the replica.
+#[derive(Clone)]
+pub struct PrimaryChannelSoup<S>(pub S);
+
+/// The error for a `channelReads: PRIMARY` page on a schema without
+/// [`PrimaryChannelSoup`].
+pub const PRIMARY_CHANNEL_SOUP_MISSING: &str = "channelReads PRIMARY is not served here";
+
+/// The error for a `channelReads: PRIMARY` page that is not a channel
+/// directory page (`SoupRequest::is_channel_directory_page`).
+pub const PRIMARY_CHANNEL_READS_REFUSED: &str =
+    "channelReads PRIMARY serves only channel directory pages";
+
 /// Resolve a page of Soup items for the authenticated user: runs the lazy
 /// axum extractors against the request context, converts the GraphQL input
-/// into a Soup request, and executes it against the Soup service.
+/// into a Soup request, and executes it against the Soup service, or against
+/// [`PrimaryChannelSoup`] when the input asks for its channels from the
+/// primary and the page is a channel directory page.
+///
+/// The span records how the page ended as `outcome`, never an error's text:
+/// errors here carry submitted filter values, such as a sender's address.
+#[tracing::instrument(
+    name = "soup.page",
+    skip_all,
+    fields(
+        channel_reads = tracing::field::Empty,
+        limit = tracing::field::Empty,
+        outcome = tracing::field::Empty,
+    )
+)]
 pub async fn resolve_soup<S, E, EAS, Auth, St, Edges>(
     service: &S,
     ctx: &Context<'_>,
@@ -295,11 +326,65 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     Edges: SoupEntityEdges,
 {
+    let result = resolve_soup_page::<S, E, EAS, Auth, St, Edges>(service, ctx, input).await;
+    tracing::Span::current().record("outcome", soup_page_outcome(&result));
+    result
+}
+
+/// How a Soup page ended, for its span: served, refused a primary read, or
+/// failed.
+fn soup_page_outcome<T>(result: &async_graphql::Result<T>) -> &'static str {
+    match result {
+        Ok(_) => "ok",
+        Err(error) if error.message == PRIMARY_CHANNEL_SOUP_MISSING => "primary_missing",
+        Err(error) if error.message == PRIMARY_CHANNEL_READS_REFUSED => "primary_refused",
+        Err(_) => "error",
+    }
+}
+
+/// The page itself, run inside [`resolve_soup`]'s span.
+async fn resolve_soup_page<S, E, EAS, Auth, St, Edges>(
+    service: &S,
+    ctx: &Context<'_>,
+    input: SoupInput,
+) -> async_graphql::Result<SoupPage<Edges>>
+where
+    S: SoupService,
+    E: EmailService,
+    EAS: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    St: Clone + Send + Sync + 'static,
+    EmailRouterState<E>: FromRef<St>,
+    Arc<EAS>: FromRef<St>,
+    MacroAuthorizationState<Auth>: FromRef<St>,
+    Edges: SoupEntityEdges,
+{
+    let span = tracing::Span::current();
+    let channel_reads = input.channel_reads();
+    span.record(
+        "channel_reads",
+        match channel_reads {
+            SoupChannelReads::Replica => "replica",
+            SoupChannelReads::Primary => "primary",
+        },
+    );
+    let service: &S = match channel_reads {
+        SoupChannelReads::Replica => service,
+        SoupChannelReads::Primary => {
+            &ctx.data::<PrimaryChannelSoup<S>>()
+                .map_err(|_| async_graphql::Error::new(PRIMARY_CHANNEL_SOUP_MISSING))?
+                .0
+        }
+    };
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
     let Cached(MultiEmailLinkExtractor(links, _)) =
         extract_part::<Cached<MultiEmailLinkExtractor<E, Auth>>, St>(ctx).await?;
     let link_ids: Vec<_> = links.into_iter().map(|link| link.id).collect();
     let request = input.into_request(macro_user_id.clone(), link_ids.clone())?;
+    span.record("limit", request.limit);
+    if channel_reads == SoupChannelReads::Primary && !request.is_channel_directory_page() {
+        return Err(async_graphql::Error::new(PRIMARY_CHANNEL_READS_REFUSED));
+    }
 
     // Always forward the optional team receipt: Soup uses it for all
     // team-scoped foreign entities, not only CRM-scoped filters.
@@ -332,3 +417,6 @@ where
         Ok(SoupPage::new_with_projection(page.type_erase()))
     }
 }
+
+#[cfg(test)]
+mod tests;
