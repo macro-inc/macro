@@ -1,0 +1,87 @@
+crates/agent_code_mode/src/inbound/toolset/test/js_tools.rs
+  s_73462c0c5e52fa::t_d00e43adcf91c9 564
+  s_73462c0c5e52fa::t_90fe574b84447c 126-127,131,140,144-147,205-206,208,213-222,303-307,323-335,347-349,351,356,363,366,386-388,391,405-407,418,450,491-496,530-563
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_73462c0c5e52fa::t_96865105704199 3-5
+  s_73462c0c5e52fa::t_af2505f49886e6 237,273-280,286
+  s_73462c0c5e52fa::t_d8d448dc18d9e4 223-228,234,236,244,247,252,254,256-258,260,262,311-312
+  s_73462c0c5e52fa::t_b9ad0b37c90ed2 271-272
+  s_73462c0c5e52fa::t_3c0c43df0b5c33 281-285
+  s_73462c0c5e52fa::t_a3806ddc3cd13f 287-288
+crates/agent_code_mode/src/inbound/toolset/dialect/module.md
+  s_73462c0c5e52fa::t_ee4e54f25f37e6 3,5-19
+crates/agent_code_mode/src/inbound/toolset/session/js_tools.md
+  s_73462c0c5e52fa::t_c7ef1b44efbf33 1-7,10,15-27,29-32
+crates/agent_code_mode/src/domain/service.rs
+  s_73462c0c5e52fa::t_ee4e54f25f37e6 160,177,212-213,215,230-236,611,855-865,867
+crates/agent_code_mode/src/domain/ports.rs
+  s_73462c0c5e52fa::t_ee4e54f25f37e6 26-27,32
+crates/agent_code_mode/src/domain/service/test.rs
+  s_73462c0c5e52fa::t_316a6cc3f38fe5 77,1045
+  s_73462c0c5e52fa::t_d00e43adcf91c9 374,610,1118
+services/agent_harness_service/src/code_mode/permissions/test.rs
+  s_73462c0c5e52fa::t_91a69f61ae4f7f 418,428-429
+  s_73462c0c5e52fa::t_64863918a330ee 462,510,552,609,763,795,824
+  s_73462c0c5e52fa::t_4c28e2e81ec0b7 583
+crates/agent_code_mode/src/domain/ui_commands/test.rs
+  s_73462c0c5e52fa::t_d00e43adcf91c9 153
+crates/agent_code_mode/src/outbound/reviews/test.rs
+  s_73462c0c5e52fa::t_d00e43adcf91c9 25
+services/agent_harness_service/src/code_mode/test.rs
+  s_73462c0c5e52fa::t_a8cb01705a331c 130-133,138,146-147
+  s_73462c0c5e52fa::t_4c28e2e81ec0b7 55,69,86,177,797
+  s_374cba3c67d385::t_c942a5f33d0c2e 1174-1180
+services/agent_harness_service/src/code_mode/permissions.rs
+  s_73462c0c5e52fa::t_4c28e2e81ec0b7 230,309-329
+  s_73462c0c5e52fa::t_2a84cd3d0fd934 203
+  s_73462c0c5e52fa::t_9924947fdf0e09 330-331
+crates/agent_code_mode/src/domain/connected_apps/test.rs
+  s_73462c0c5e52fa::t_d00e43adcf91c9 155,222,272,311
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_73462c0c5e52fa::t_af2505f49886e6 634-636,643,646
+  s_73462c0c5e52fa::t_8fcac6ff9cb1be 512-513,515,517-526,529-536,540-544,547,553-554,556,558,560-599,601-605,607-612,657-662,676,689,695
+  s_73462c0c5e52fa::t_31fc794f82ada3 606
+crates/agent_code_mode/src/outbound/postgres/test.rs
+  s_73462c0c5e52fa::t_d00e43adcf91c9 18,80
+crates/agent_code_mode/src/domain/reviews/test.rs
+  s_73462c0c5e52fa::t_d00e43adcf91c9 110
+services/agent_harness_service/src/code_mode.rs
+  s_73462c0c5e52fa::t_2a84cd3d0fd934 236,257-259,263-265,267,558-560,564-565
+  s_73462c0c5e52fa::t_4c28e2e81ec0b7 260-262,547-548,553
+  s_73462c0c5e52fa::t_d00e43adcf91c9 566
+services/agent_harness_service/src/internal_mcp/test.rs
+  s_73462c0c5e52fa::t_ee8cecea98ca9b 544-548,585,597
+  s_73462c0c5e52fa::t_c87dd5e596e4e7 539,541
+services/agent_harness_service/src/internal_mcp/test/code_mode.rs
+  s_73462c0c5e52fa::t_316a6cc3f38fe5 48
+crates/agent_code_mode/src/domain/models.rs
+  s_73462c0c5e52fa::t_ee4e54f25f37e6 186-189
+crates/agent_code_mode/AGENTS.md
+  s_374cba3c67d385::t_0b5d7ec6db30ac 11,122-133,148-152,200-201,203-205
+services/agent_harness_service/AGENTS.md
+  s_374cba3c67d385::t_edc78f8cf904fe 90-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3e5f9c8732cbbe1008b63c8d7feada5f171fdd3c",
+  "prompts": {},
+  "sessions": {
+    "s_374cba3c67d385": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a476132e-5ad0-443d-a5a7-bb920ca8fb53",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_73462c0c5e52fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "087c879c-02f0-4a34-8e70-214cb3082de1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

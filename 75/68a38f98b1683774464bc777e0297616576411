@@ -1,0 +1,26 @@
+crates/agent_permissions/AGENTS.md
+  s_73462c0c5e52fa::t_698a321d01da13 67-68
+crates/agent_inmem/src/outbound/rig_engine/turn_code_tools/test.rs
+  h_659b58cf3b37bf 55-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7568a38f98b1683774464bc777e0297616576411",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  },
+  "sessions": {
+    "s_73462c0c5e52fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "087c879c-02f0-4a34-8e70-214cb3082de1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

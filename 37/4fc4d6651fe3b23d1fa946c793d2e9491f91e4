@@ -1,0 +1,82 @@
+crates/agent_inmem/src/rig_engine.rs
+  s_73462c0c5e52fa::t_e0fd7f9ede303e 57-58,920-921,925-928,933-937
+crates/agent_inmem/src/outbound/rig_engine/turn_code_tools.rs
+  s_73462c0c5e52fa::t_f4f7ab5b5d4806 78
+  s_73462c0c5e52fa::t_3001dfb407cebb 1-77,79
+crates/agent_inmem/src/outbound/rig_engine/unseen.rs
+  s_73462c0c5e52fa::t_3590ef938ddd8d 25,30
+  s_73462c0c5e52fa::t_5894655fbcfad5 8
+crates/agent_inmem/src/outbound/rig_engine/test/code_tools.rs
+  s_73462c0c5e52fa::t_e0fd7f9ede303e 127-133
+crates/agent_inmem/AGENTS.md
+  s_73462c0c5e52fa::t_9318de7803ddcf 105-111
+crates/agent_inmem/src/outbound/rig_engine/turn_code_tools/test.rs
+  s_73462c0c5e52fa::t_61eb5fef1e53e9 1-54,59-72
+apps/web/src/lib/i18n/locales/en/agent-permissions-chat.ts
+  s_73462c0c5e52fa::t_7dac2f8f13c54a 39-40
+apps/web/src/features/agent-activity/queries/code-activity.ts
+  s_73462c0c5e52fa::t_77d08dc36725fa 4
+  s_73462c0c5e52fa::t_16483c23cf464e 40,55-57
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_73462c0c5e52fa::t_0422018222bc74 108
+  s_73462c0c5e52fa::t_854796303671c2 5,13,15
+apps/web/src/features/block-agent/views/CodeExecutionPart.tsx
+  s_73462c0c5e52fa::t_77d08dc36725fa 148
+  s_73462c0c5e52fa::t_16483c23cf464e 31-32,59,63
+apps/web/src/features/block-agent/views/code-execution-record.ts
+  s_73462c0c5e52fa::t_16483c23cf464e 7,33-34,36-44,88-89
+apps/web/src/features/agent-permissions/components/permissions-notes.tsx
+  s_73462c0c5e52fa::t_77d08dc36725fa 24-26
+  s_73462c0c5e52fa::t_f109e0ee897521 11-14
+apps/web/src/features/block-agent/state/permission-approval.ts
+  s_73462c0c5e52fa::t_0422018222bc74 41,92-93,104
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_73462c0c5e52fa::t_0422018222bc74 112,120-122
+  s_73462c0c5e52fa::t_77d08dc36725fa 115-117
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.test.tsx
+  s_73462c0c5e52fa::t_7dac2f8f13c54a 43-49,65,177-187
+  s_73462c0c5e52fa::t_4b38cb8c70f757 188-189
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.tsx
+  s_73462c0c5e52fa::t_77d08dc36725fa 204-206
+  s_73462c0c5e52fa::t_0422018222bc74 153-169,189-203,207
+apps/web/src/features/block-agent/state/code-execution.ts
+  s_73462c0c5e52fa::t_16483c23cf464e 8-11,30-48
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_73462c0c5e52fa::t_83c0fc9c00e44d 51-55
+apps/web/src/features/agent-permissions/views/agent-permissions-page.test.tsx
+  s_73462c0c5e52fa::t_aa7ac6c7477f2c 87,91
+apps/web/src/features/agent-permissions/views/agent-permissions-page.tsx
+  s_73462c0c5e52fa::t_6fb5d01b5730d5 55
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecord.ts
+  s_73462c0c5e52fa::t_dae8fc790084e2 12,40-42
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecordModule.ts
+  s_73462c0c5e52fa::t_a17865a9e84fb8 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_73462c0c5e52fa::t_af944e70afc3b5 279
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_73462c0c5e52fa::t_7926d77203306f 7531-7534
+docs/agent-guide/ai-chat.md
+  s_73462c0c5e52fa::t_b6e9f6b7db4a23 1838-1840
+docs/agent-guide/settings.md
+  s_73462c0c5e52fa::t_765e5c4312c266 1245-1249
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_73462c0c5e52fa::t_da175660e638f7 2083-2087
+packages/sdk/specs/agent-harness.json
+  s_73462c0c5e52fa::t_368bd3f5e25634 7531-7534
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "374fc4d6651fe3b23d1fa946c793d2e9491f91e4",
+  "prompts": {},
+  "sessions": {
+    "s_73462c0c5e52fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "087c879c-02f0-4a34-8e70-214cb3082de1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
