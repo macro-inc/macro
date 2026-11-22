@@ -57,8 +57,8 @@ use graphql_permission::{EntityPermissionEdgeReader, NoOpEntityPermissionEdgeRea
 use graphql_properties::{
     EntityPropertyReader, EntityPropertyWriter, GraphqlPropertyDefinition,
     GraphqlPropertyDefinitionScope, GraphqlPropertyOption, GraphqlTagSet, NoOpEntityPropertyReader,
-    NoOpEntityPropertyWriter, PropertiesMutationRoot, load_property_definitions,
-    load_property_options, load_tag_sets,
+    NoOpEntityPropertyWriter, PropertiesMutationRoot, PropertyCatalogMutationRoot,
+    load_property_definitions, load_property_options, load_tag_sets,
 };
 use graphql_registered_work::{
     GraphqlRegisteredWork, RegisteredWorkSubscriptionRoot, resolve_registered_work,
@@ -99,6 +99,7 @@ use crate::SoupEdges;
 #[derive(MergedObject)]
 pub struct CompleteMutationRoot<
     W: EntityPropertyWriter,
+    PR: EntityPropertyReader,
     M: EntityMutationService,
     F: FavoritesMutationService,
     E: SoupEntityEdges,
@@ -108,6 +109,7 @@ pub struct CompleteMutationRoot<
     ES: EmailService + EmailSendService,
 >(
     PropertiesMutationRoot<W>,
+    PropertyCatalogMutationRoot<W, PR>,
     EntityMutationRoot<M, E>,
     FavoriteMutationRoot<F, E>,
     ChannelMutationRoot<C, A>,
@@ -124,6 +126,7 @@ pub struct CompleteMutationRoot<
 
 impl<
     W: EntityPropertyWriter,
+    PR: EntityPropertyReader,
     M: EntityMutationService,
     F: FavoritesMutationService,
     E: SoupEntityEdges,
@@ -131,12 +134,13 @@ impl<
     N: NotificationMutationService,
     A: ChannelActivityAuthorizer,
     ES: EmailService + EmailSendService,
-> CompleteMutationRoot<W, M, F, E, C, N, A, ES>
+> CompleteMutationRoot<W, PR, M, F, E, C, N, A, ES>
 {
     /// Construct the composed mutation root.
     fn new() -> Self {
         Self(
             PropertiesMutationRoot::<W>::new(),
+            PropertyCatalogMutationRoot::<W, PR>::new(),
             EntityMutationRoot::<M, E>::new(),
             FavoriteMutationRoot::<F, E>::new(),
             ChannelMutationRoot::<C, A>::new(),
@@ -194,7 +198,7 @@ where
 pub type SoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR> =
     Schema<
         SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
-        CompleteMutationRoot<W, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>,
+        CompleteMutationRoot<W, PR, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>,
         CompleteSubscriptionRoot<R, NS, AS, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
     >;
 
@@ -488,7 +492,8 @@ where
 {
     Schema::build(
         SoupQueryRoot::new(service),
-        CompleteMutationRoot::<W, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>::new(),
+        CompleteMutationRoot::<W, PR, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>::new(
+        ),
         CompleteSubscriptionRoot(
             SoupSubscriptionRoot::new(realtime_service),
             NotificationSubscriptionRoot::new(notification_subscription_service),

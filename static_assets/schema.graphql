@@ -45,6 +45,28 @@ input ActivityOverviewInput {
 }
 
 """
+Input for adding an option to a select definition or tag set.
+"""
+input AddPropertyOptionInput {
+	"""
+	Definition receiving the option.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	Ordering within the definition's options.
+	"""
+	displayOrder: Int!
+	"""
+	The option's value; its kind must match the definition's data type.
+	"""
+	value: GraphqlPropertyOptionValueInput!
+	"""
+	Display color as `#RRGGBB` (string options and tags only).
+	"""
+	color: String
+}
+
+"""
 An all-day span with an exclusive end date.
 """
 input AllDayEventTimeInput {
@@ -331,6 +353,39 @@ type CompleteMutationRoot {
 	Add and remove options across one entity's multi-select properties.
 	"""
 	updateEntityPropertyOptions(input: UpdateEntityPropertyOptionsInput!): [GraphqlProperty!]!
+	"""
+	Create a property definition owned by the viewer or their team.
+	"""
+	createPropertyDefinition(input: CreatePropertyDefinitionInput!): GraphqlPropertyDefinition!
+	"""
+	Delete a property definition and identify its normalized cache record.
+	"""
+	deletePropertyDefinition(propertyDefinitionId: ID!): GraphqlCacheDeletion!
+	"""
+	Add a selectable option to a definition or tag set.
+	"""
+	addPropertyOption(input: AddPropertyOptionInput!): GraphqlPropertyOption!
+	"""
+	Rename, recolor, or reorder one option in place.
+	"""
+	updatePropertyOption(input: UpdatePropertyOptionInput!): GraphqlPropertyOption!
+	"""
+	Delete one option and identify its normalized cache record.
+	"""
+	deletePropertyOption(propertyDefinitionId: ID!, optionId: ID!): GraphqlCacheDeletion!
+	"""
+	Provision the viewer's tag set for a scope and return it.
+	"""
+	ensureTagSet(scope: GraphqlTagScope!): GraphqlTagSet!
+	"""
+	Share one of the viewer's personal labels with their team. A label the
+	team already has by name answers with the conflict, not an error.
+	"""
+	promoteTag(optionId: ID!): GraphqlTagPromotion!
+	"""
+	Replace one of the viewer's personal labels with a team label.
+	"""
+	mergeTag(optionId: ID!, targetOptionId: ID!): GraphqlTagMerge!
 	"""
 	Rename heterogeneous entities in one request.
 	"""
@@ -762,6 +817,37 @@ input CreateInitiativeInput {
 	Initial property values, set in the same create; a rejected value fails it.
 	"""
 	propertyValues: [InitialPropertyValueInput!]
+}
+
+"""
+Input for creating a property definition.
+"""
+input CreatePropertyDefinitionInput {
+	"""
+	Owner of the new definition.
+	"""
+	scope: GraphqlCreatePropertyScope!
+	"""
+	User-visible property name.
+	"""
+	displayName: String!
+	"""
+	Value type; tag sets are provisioned with `ensureTagSet` instead.
+	"""
+	dataType: GraphqlPropertyDataType!
+	"""
+	Whether more than one value may be selected (select, entity and link
+	types only).
+	"""
+	isMultiSelect: Boolean! = false
+	"""
+	Entity-reference type constraint (entity type only).
+	"""
+	specificEntityType: GraphqlPropertyEntityType
+	"""
+	Options to create with a select definition.
+	"""
+	options: [GraphqlPropertyOptionSeedInput!]! = []
 }
 
 """
@@ -4179,6 +4265,20 @@ type GraphqlContactPage {
 }
 
 """
+Who owns a new property definition.
+"""
+enum GraphqlCreatePropertyScope {
+	"""
+	The caller.
+	"""
+	USER
+	"""
+	The caller's team; requires team membership.
+	"""
+	TEAM
+}
+
+"""
 GraphQL input naming the CRM record an association filter restricts to.
 """
 input GraphqlCrmAssociation @oneOf {
@@ -7266,6 +7366,16 @@ input GraphqlProjectLiteral @oneOf {
 }
 
 """
+A personal label now in the team's tag set, keeping its id.
+"""
+type GraphqlPromotedTag {
+	"""
+	The label, now owned by the team tag set.
+	"""
+	option: GraphqlPropertyOption!
+}
+
+"""
 A property assignment and its current value.
 """
 type GraphqlProperty {
@@ -7593,9 +7703,38 @@ type GraphqlPropertyOption {
 }
 
 """
+An option a select definition is created with.
+"""
+input GraphqlPropertyOptionSeedInput {
+	"""
+	Ordering within the definition's options.
+	"""
+	displayOrder: Int!
+	"""
+	The option's value; its kind must match the definition's data type.
+	"""
+	value: GraphqlPropertyOptionValueInput!
+}
+
+"""
 Exactly one of the supported option value types.
 """
 union GraphqlPropertyOptionValue = GraphqlStringPropertyOptionValue | GraphqlNumberPropertyOptionValue
+
+"""
+A selectable option's value: text for string selects and tags, a number for
+numeric selects.
+"""
+input GraphqlPropertyOptionValueInput @oneOf {
+	"""
+	Text of a string select option or tag.
+	"""
+	string: String
+	"""
+	Number of a numeric select option.
+	"""
+	number: Float
+}
 
 """
 The kind of principal owning a property definition.
@@ -11007,6 +11146,40 @@ type GraphqlStringPropertyValue {
 }
 
 """
+A personal label replaced by a team label.
+"""
+type GraphqlTagMerge {
+	"""
+	The team label every entity now carries instead.
+	"""
+	option: GraphqlPropertyOption!
+	"""
+	The deleted personal label's cache record.
+	"""
+	removedOption: GraphqlCacheDeletion!
+}
+
+"""
+Outcome of sharing a personal label with the team.
+"""
+union GraphqlTagPromotion = GraphqlPromotedTag | GraphqlTagPromotionConflict
+
+"""
+The team already has a label with that name; nothing changed. Merging into
+`conflictingOption` with `mergeTag` replaces the personal label instead.
+"""
+type GraphqlTagPromotionConflict {
+	"""
+	Why the label was not moved.
+	"""
+	message: String!
+	"""
+	The team label with the same name.
+	"""
+	conflictingOption: GraphqlPropertyOption!
+}
+
+"""
 Which owner a tag set belongs to.
 """
 enum GraphqlTagScope {
@@ -13460,6 +13633,32 @@ input UpdateNotificationsInput {
 	Status operation applied to every requested notification.
 	"""
 	operation: NotificationUpdateOperation!
+}
+
+"""
+Input for changing an option in place. Omitted fields keep their value.
+"""
+input UpdatePropertyOptionInput {
+	"""
+	Definition owning the option.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	Option to change.
+	"""
+	optionId: ID!
+	"""
+	New text (string options and tags only).
+	"""
+	value: String
+	"""
+	New color as `#RRGGBB`.
+	"""
+	color: String
+	"""
+	New position within the definition's options.
+	"""
+	displayOrder: Int
 }
 
 """

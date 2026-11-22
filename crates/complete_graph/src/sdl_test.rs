@@ -1155,3 +1155,33 @@ fn tag_sets_hang_off_the_authenticated_user() {
     let tag_set = sdl.split_once("type GraphqlTagSet {").unwrap().1;
     assert!(!tag_set.split_once("\n}").unwrap().0.contains("\tid:"));
 }
+
+#[test]
+fn property_catalog_writes_are_mutations() {
+    let sdl = crate::build_schema().sdl();
+    let mutation = sdl
+        .split_once("type CompleteMutationRoot {")
+        .unwrap()
+        .1
+        .split_once("\n}")
+        .unwrap()
+        .0;
+    for expected in [
+        "createPropertyDefinition(input: CreatePropertyDefinitionInput!): GraphqlPropertyDefinition!",
+        "deletePropertyDefinition(propertyDefinitionId: ID!): GraphqlCacheDeletion!",
+        "addPropertyOption(input: AddPropertyOptionInput!): GraphqlPropertyOption!",
+        "updatePropertyOption(input: UpdatePropertyOptionInput!): GraphqlPropertyOption!",
+        "deletePropertyOption(propertyDefinitionId: ID!, optionId: ID!): GraphqlCacheDeletion!",
+        "ensureTagSet(scope: GraphqlTagScope!): GraphqlTagSet!",
+        "promoteTag(optionId: ID!): GraphqlTagPromotion!",
+        "mergeTag(optionId: ID!, targetOptionId: ID!): GraphqlTagMerge!",
+    ] {
+        assert!(mutation.contains(expected), "missing {expected}");
+    }
+    assert!(
+        sdl.contains(
+            "union GraphqlTagPromotion = GraphqlPromotedTag | GraphqlTagPromotionConflict"
+        )
+    );
+    assert!(sdl.contains("input GraphqlPropertyOptionValueInput @oneOf {"));
+}
