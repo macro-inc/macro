@@ -1155,7 +1155,7 @@ function mountCachedDirectory(
         for (const id of ids) cache.records.delete(`GraphqlSoupChannel:${id}`);
         for (const listener of [...generationListeners])
           listener({ storage: 'preserved' } as CacheGenerationChange);
-        return { unconfirmed: [] };
+        return { removed: [...ids], unconfirmed: [] };
       })
   );
   const directory = createRoot((dispose) => {

@@ -90,7 +90,10 @@ function setup(
   }),
   remove: (
     ids: readonly string[]
-  ) => Promise<RemoveUnreadableResult | undefined> = async () => undefined
+  ) => Promise<RemoveUnreadableResult | undefined> = async (ids) => ({
+    removed: ids,
+    unconfirmed: [],
+  })
 ) {
   const controller = new AbortController();
   let generation: string | undefined = 'g1';
@@ -332,6 +335,156 @@ describe('checking a channel the viewer left again', () => {
     expect(rounds()[0]?.attrs['channel_directory.departures_joined']).toBe(1);
   });
 
+  it('reads again while the viewer keeps rejoining live during each read, and leaves a check that never settles for later', async () => {
+    const answers: ((read: PrimaryChannelRead) => void)[] = [];
+    const h = setup(
+      () =>
+        new Promise((resolve) => {
+          answers.push(resolve);
+        })
+    );
+    leave(h, 'deletion');
+    comeBack(h);
+    await vi.advanceTimersByTimeAsync(RECHECKS[0]);
+
+    // A rejoin lands during every read, and every read shows them out.
+    for (let read = 0; read < 3; read += 1) {
+      expect(answers).toHaveLength(read + 1);
+      h.recheck.rejoin(channelUuid('gone'));
+      answers[read]?.({ kind: 'read', channel: null });
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(answers).toHaveLength(3);
+    expect(h.removeUnreadable).not.toHaveBeenCalled();
+    expect(checks()[0]?.attrs['channel_directory.departure_outcome']).toBe(
+      'rejoined_during_check'
+    );
+
+    // Checked again at the next check, while the cache shows it joined.
+    await vi.advanceTimersByTimeAsync(RECHECKS[1] - RECHECKS[0]);
+    expect(answers).toHaveLength(4);
+  });
+
+  it('reads once more when a scan shows the viewer joined again while a read that shows them out was out', async () => {
+    const answers: ((read: PrimaryChannelRead) => void)[] = [];
+    const h = setup(
+      () =>
+        new Promise((resolve) => {
+          answers.push(resolve);
+        })
+    );
+    leave(h, 'record');
+    comeBack(h);
+    await vi.advanceTimersByTimeAsync(RECHECKS[0]);
+    expect(answers).toHaveLength(1);
+
+    // The read writes the viewer out, then a scan lands them back in.
+    h.show(complete(channel('kept'), channel('gone', { isParticipant: false })));
+    comeBack(h);
+    answers[0]?.({
+      kind: 'read',
+      channel: directoryChannel(channelUuid('gone'), { isParticipant: false }),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(answers).toHaveLength(2);
+    answers[1]?.({
+      kind: 'read',
+      channel: directoryChannel(channelUuid('gone')),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(checks()[0]?.attrs['channel_directory.departure_outcome']).toBe(
+      'joined'
+    );
+  });
+
+  it('starts no check of a channel the directory stopped showing joined while an earlier batch was out', async () => {
+    const answers: ((read: PrimaryChannelRead) => void)[] = [];
+    const h = setup(
+      (id) =>
+        new Promise((resolve) => {
+          answers.push(() =>
+            resolve({ kind: 'read', channel: directoryChannel(id) })
+          );
+        })
+    );
+    const all = Array.from({ length: 5 }, (_, index) => channel(`c${index}`));
+    h.show(complete(...all));
+    h.show(complete());
+    h.show(complete(...all));
+    await vi.advanceTimersByTimeAsync(RECHECKS[0]);
+    const first = h.readIds();
+    expect(first).toHaveLength(4);
+    const last = all.find(({ id }) => !first.includes(channelName(id)));
+
+    // The last one goes missing from a page that cannot yet say why.
+    h.show(
+      channelDirectoryState(
+        all.filter((c) => c !== last),
+        [],
+        false
+      )
+    );
+    for (const answer of answers) answer({ kind: 'read', channel: null });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.readIds()).toEqual(first);
+    expect(rounds()[0]?.attrs).toMatchObject({
+      'channel_directory.departures_due': 5,
+      'channel_directory.departures_started': 4,
+      'channel_directory.departures_joined': 4,
+    });
+  });
+
+  it.each([
+    [
+      'throws',
+      async (): Promise<RemoveUnreadableResult> => {
+        throw new Error('storage busy');
+      },
+      0,
+    ],
+    [
+      'times out',
+      () => new Promise<RemoveUnreadableResult>(() => {}),
+      DEPARTURE_CHECK_DEADLINE_MS,
+    ],
+  ] as const)(
+    'reads the channel again after a delete that %s once sent, though the cache no longer shows it',
+    async (_how, remove, wait) => {
+      const h = setup(undefined, remove);
+      leave(h, 'deletion');
+      comeBack(h);
+      await vi.advanceTimersByTimeAsync(RECHECKS[0] + wait);
+      expect(h.removeUnreadable).toHaveBeenCalledTimes(1);
+      // The delete went through before it failed.
+      h.show(complete(channel('kept')));
+
+      await vi.advanceTimersByTimeAsync(RECHECKS[1] - RECHECKS[0]);
+      expect(h.readIds()).toEqual(['gone', 'gone']);
+    }
+  );
+
+  it.each([
+    ['deleted nothing', async (): Promise<RemoveUnreadableResult> => ({
+      removed: [],
+      unconfirmed: [],
+    })],
+    ['answered nothing', async () => undefined],
+  ] as const)(
+    'reports a delete that %s as skipped, and checks the channel again while the cache shows it joined',
+    async (_how, remove) => {
+      const h = setup(undefined, remove);
+      leave(h, 'deletion');
+      comeBack(h);
+      await vi.advanceTimersByTimeAsync(RECHECKS[0]);
+      expect(checks()[0]?.attrs['channel_directory.departure_outcome']).toBe(
+        'remove_skipped'
+      );
+
+      await vi.advanceTimersByTimeAsync(RECHECKS[1] - RECHECKS[0]);
+      expect(h.readIds()).toEqual(['gone', 'gone']);
+    }
+  );
+
   it('keeps a newer leave when an older check finds the viewer joined', async () => {
     const answers: ((read: PrimaryChannelRead) => void)[] = [];
     const h = setup(
@@ -362,7 +515,7 @@ describe('checking a channel the viewer left again', () => {
     let removes = 0;
     const h = setup(undefined, async (ids) => {
       removes += 1;
-      return { unconfirmed: removes === 1 ? ids : [] };
+      return { removed: ids, unconfirmed: removes === 1 ? ids : [] };
     });
     leave(h, 'deletion');
     comeBack(h);
@@ -384,10 +537,10 @@ describe('checking a channel the viewer left again', () => {
 
   it('keeps reading a channel it could not delete, at a later retry', async () => {
     let removes = 0;
-    const h = setup(undefined, async () => {
+    const h = setup(undefined, async (ids) => {
       removes += 1;
       if (removes === 1) throw new Error('storage busy');
-      return { unconfirmed: [] };
+      return { removed: ids, unconfirmed: [] };
     });
     leave(h, 'deletion');
     comeBack(h);
@@ -568,9 +721,9 @@ describe('tracing each check', () => {
         contexts.push(trace.active);
         return { kind: 'read', channel: null };
       },
-      async () => {
+      async (ids) => {
         contexts.push(trace.active);
-        return { unconfirmed: [] };
+        return { removed: ids, unconfirmed: [] };
       }
     );
     departFrom(h, 'live update');
@@ -632,6 +785,7 @@ describe('tracing each check', () => {
       'removed_unconfirmed',
       undefined,
       async (ids: readonly string[]): Promise<RemoveUnreadableResult> => ({
+        removed: ids,
         unconfirmed: ids,
       }),
     ],

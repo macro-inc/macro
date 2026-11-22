@@ -27,6 +27,9 @@ export const DEPARTURE_RETRY_MS = 30_000;
 export const DEPARTURE_RETRIES = 2;
 /** Primary reads in flight at once. */
 const READ_CONCURRENCY = 4;
+/** Reads one check makes at most while live rejoins keep landing during
+ * them; past it, the check is made again later. */
+const CHECK_READS = 3;
 
 /** Aborts after `ms`, on the page's own timers (which tests drive, unlike
  * `AbortSignal.timeout`'s). `release` ends it early once the work is done,
@@ -51,6 +54,8 @@ function deadlineAfter(ms: number): {
 
 /** What the cleanup of unreadable channels reports back. */
 export type RemoveUnreadableResult = {
+  /** Channels whose cached records were deleted. */
+  removed: readonly string[];
   /** Deleted channels the read after the delete did not reach. */
   unconfirmed: readonly string[];
 };
@@ -112,6 +117,8 @@ type DepartureCheckOutcome =
   | 'joined'
   | 'left'
   | 'unreadable_cleared'
+  | 'remove_skipped'
+  | 'rejoined_during_check'
   | 'removed_unconfirmed'
   | 'read_failed'
   | 'remove_failed'
@@ -127,6 +134,10 @@ type CheckJob = {
   /** Ends the check: the directory, the round's scope, or its deadline. */
   signal: AbortSignal;
   deadline: AbortSignal;
+  /** Set once the delete is sent: a check that ends after it, however it
+   * ends, may have deleted the record, so its retry reads the primary even
+   * though the cache no longer shows the channel. */
+  dispatched: boolean;
 };
 
 /** A check in flight, and whether a live update showed the viewer back in
@@ -285,23 +296,37 @@ export function createDepartureRecheck(
 
   /** Reads the channel on the primary and acts on what it shows. */
   const settle = async (
-    { id, departure, generation, tally, signal }: CheckJob,
+    job: CheckJob,
     span: Span
   ): Promise<DepartureCheckOutcome> => {
+    const { id, departure, generation, tally, signal } = job;
     const flight: Flight = { rejoined: false };
     flights.set(id, flight);
     try {
-      let read = await readPrimary(id, tally, span, signal);
-      if (signal.aborted) return 'unfinished';
-      // A rejoin seen while the read was out can be newer than the answer,
-      // and a left answer writes over it: read once more.
+      let read: PrimaryChannelRead = { kind: 'failed' };
+      // A rejoin seen while a read was out (live, in a scan or by this
+      // tab's own write) can be newer than its answer, which the read has
+      // already written over it: while the answer shows the viewer out,
+      // read again.
+      for (let reads = 0; reads < CHECK_READS; reads += 1) {
+        flight.rejoined = false;
+        read = await readPrimary(id, tally, span, signal);
+        if (signal.aborted) return 'unfinished';
+        if (
+          !flight.rejoined ||
+          read.kind !== 'read' ||
+          read.channel?.isParticipant
+        )
+          break;
+      }
       if (
         flight.rejoined &&
         read.kind === 'read' &&
         !read.channel?.isParticipant
       ) {
-        read = await readPrimary(id, tally, span, signal);
-        if (signal.aborted) return 'unfinished';
+        // Rejoins kept landing during every read: check again later.
+        retry(id, departure, departure.repair);
+        return 'rejoined_during_check';
       }
       if (read.kind === 'failed') {
         tally.failed += 1;
@@ -323,6 +348,7 @@ export function createDepartureRecheck(
       tally.unreadable += 1;
       let removed: RemoveUnreadableResult | undefined;
       try {
+        job.dispatched = true;
         removed = await span.run(() =>
           deps.removeUnreadable([id], generation, signal)
         );
@@ -331,7 +357,8 @@ export function createDepartureRecheck(
         tally.failed += 1;
         span.error(error);
         Telemetry.error(error, { surface: 'channel-directory-departures' });
-        retry(id, departure, departure.repair);
+        // The delete may have happened before it failed.
+        retry(id, departure, true);
         return 'remove_failed';
       }
       if (signal.aborted) return 'unfinished';
@@ -340,6 +367,13 @@ export function createDepartureRecheck(
         tally.failed += 1;
         retry(id, departure, true);
         return 'removed_unconfirmed';
+      }
+      if (!removed?.removed.includes(id)) {
+        // Nothing deleted: the record changed or was gone, the primary read
+        // it again, the scope moved, or storage refused to owe its reread.
+        // A record the cache still shows joined is checked again.
+        retry(id, departure, departure.repair);
+        return 'remove_skipped';
       }
       departure.repair = false;
       return 'unreadable_cleared';
@@ -405,7 +439,6 @@ export function createDepartureRecheck(
                     return;
                   }
                   const batch = due.slice(at, at + READ_CONCURRENCY);
-                  started += batch.length;
                   await Promise.all(
                     batch.map(async ([id, departure]) => {
                       // A rejoin or a newer leave since the round began
@@ -419,6 +452,16 @@ export function createDepartureRecheck(
                         departures.get(id) === departure
                       )
                         departures.delete(id);
+                      // The cache stopped showing it joined since the round
+                      // began (an earlier batch's read wrote it, or a live
+                      // update did): only a delete owed its read still needs
+                      // the primary.
+                      if (
+                        !deps.current().records[id]?.isParticipant &&
+                        !departure.repair
+                      )
+                        return;
+                      started += 1;
                       const { signal: deadline, release } = deadlineAfter(
                         DEPARTURE_CHECK_DEADLINE_MS
                       );
@@ -427,18 +470,24 @@ export function createDepartureRecheck(
                         lifetime,
                         deadline,
                       ]);
+                      const job: CheckJob = {
+                        id,
+                        departure,
+                        generation,
+                        tally,
+                        signal,
+                        deadline,
+                        dispatched: false,
+                      };
                       try {
-                        await check({
-                          id,
-                          departure,
-                          generation,
-                          tally,
-                          signal,
-                          deadline,
-                        });
+                        await check(job);
                         if (deadline.aborted) {
                           tally.failed += 1;
-                          retry(id, departure, departure.repair);
+                          retry(
+                            id,
+                            departure,
+                            departure.repair || job.dispatched
+                          );
                         }
                       } catch (error) {
                         if (!signal.aborted)
@@ -503,6 +552,15 @@ export function createDepartureRecheck(
       return;
     }
     if (previous.records === next.records && undecided.size === 0) return;
+    // A check whose channel the directory now shows joined (a scan, or this
+    // tab's own write) saw a rejoin its read may predate.
+    if (previous.records !== next.records)
+      for (const [id, flight] of flights)
+        if (
+          next.records[id]?.isParticipant &&
+          !previous.records[id]?.isParticipant
+        )
+          flight.rejoined = true;
     const decide = (id: string) => {
       const record = next.records[id];
       if (record) {
