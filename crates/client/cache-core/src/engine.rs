@@ -1892,7 +1892,8 @@ impl<S: Storage> Engine<S> {
         // larger than the hot capacity would otherwise evict its own
         // records mid-merge and overwrite storage with partial updates.
         // Each staged record notes whether it came from the hot tier.
-        let mut staging: HashMap<EntityKey<'static>, (Record, bool)> = HashMap::new();
+        let mut staging: HashMap<EntityKey<'static>, (Record, bool)> =
+            HashMap::with_capacity(updates.len());
         let mut missing: Vec<EntityKey<'static>> = Vec::new();
         let mut kept = self.take_kept_reads();
         let mut from_kept: Vec<EntityKey<'static>> = Vec::new();
