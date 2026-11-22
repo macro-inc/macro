@@ -67,6 +67,7 @@ export const CATALOG: ToolPermissionCatalog = {
  */
 export const VIEW: AgentToolPermissions = {
   agentId: 'agent-1',
+  policyId: '0195dbd2-6539-7000-8000-0000000000a1',
   kind: 'agent',
   canEdit: true,
   canTighten: true,

@@ -515,6 +515,7 @@ export * from './toolPermissionErrorTargets';
 export * from './toolPermissionGroup';
 export * from './toolPermissionOrigin';
 export * from './toolPermissionOverride';
+export * from './toolPermissionPolicyId';
 export * from './toolPermissionPolicyKind';
 export * from './toolPermissionRule';
 export * from './toolPermissionState';

@@ -8,6 +8,7 @@
 import type { AgentToolPermissionsSessionRules } from './agentToolPermissionsSessionRules';
 import type { BotId } from './botId';
 import type { ToolPermissionGroup } from './toolPermissionGroup';
+import type { ToolPermissionPolicyId } from './toolPermissionPolicyId';
 import type { ToolPermissionPolicyKind } from './toolPermissionPolicyKind';
 import type { ToolPermissionRule } from './toolPermissionRule';
 
@@ -26,6 +27,8 @@ operations for. */
   groups: ToolPermissionGroup[];
   /** Whose settings these are. */
   kind: ToolPermissionPolicyKind;
+  /** The policy's stable id. */
+  policyId: ToolPermissionPolicyId;
   /**
    * How many operations are not always allowed.
    * @minimum 0
