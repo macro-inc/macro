@@ -1,0 +1,73 @@
+crates/connectors/src/domain/service.rs
+  s_163f8faa0f4288::t_ff8ee8390ade72 38-42,349-365,517,519-520
+  s_163f8faa0f4288::t_07c325a02d876a 518
+crates/connectors/src/domain/service/test.rs
+  s_163f8faa0f4288::t_07c325a02d876a 413,474-477
+  s_163f8faa0f4288::t_072dc89d6c3926 379-412,414-473,478-479
+crates/agent_egress/src/outbound/mcp_credentials/test.rs
+  s_163f8faa0f4288::t_07c325a02d876a 6,129-132
+  s_163f8faa0f4288::t_31c031f821f19c 181,340-349,351,354,358,410-467,469-473,477,485-502,505,507,512-521,523,525-541
+  s_163f8faa0f4288::t_384dfc2db338c6 111-114,116,126-128,133-149,152,157-180
+  s_163f8faa0f4288::t_f5e10cb0830d5c 182
+crates/agent_egress/src/domain/model.rs
+  s_163f8faa0f4288::t_9f8010a414941c 351-355,363-366,470-491
+crates/connectors/src/domain/models.rs
+  s_163f8faa0f4288::t_f6c1db34783576 423-428
+  s_163f8faa0f4288::t_f12ec05b8ac720 379-389,391-400,404-420,429,527-530,535-556
+crates/agent_egress/src/domain/service/actor.rs
+  s_163f8faa0f4288::t_7168b948314463 6-8,81-86,152-153,158-162,171-178,235-239
+  s_163f8faa0f4288::t_1a70e6cd37796d 157
+crates/agent_egress/src/domain/service.rs
+  s_163f8faa0f4288::t_0a7755abd09d6a 16,281-282,285-305,308-312,579,581-583,585-586,589-596,598,600-602,604-609,611-612,614-625,627-630,632-634,636-640,642-646,648-652
+  s_163f8faa0f4288::t_d0d54b29b9d737 283-284,306-307,580,584,587-588,597,599,603,610,613,626,631,635,641,647
+  s_163f8faa0f4288::t_07c325a02d876a 17-18
+  s_163f8faa0f4288::t_d74d37e95b4226 653
+crates/agent_egress/src/outbound/mcp_credentials.rs
+  s_163f8faa0f4288::t_07c325a02d876a 119-126
+  s_163f8faa0f4288::t_7f657b25153398 94-95,110-118,127-139,183
+crates/agent_egress/src/domain/service/test/actor.rs
+  s_163f8faa0f4288::t_0b7da90c8ee566 333-336
+  s_163f8faa0f4288::t_b8d1b16806efff 581-618,623-684
+  s_163f8faa0f4288::t_07c325a02d876a 619-622
+crates/connectors/src/domain/ports.rs
+  s_163f8faa0f4288::t_ff8ee8390ade72 118-130
+crates/connectors/src/outbound/pipedream/source.rs
+  s_163f8faa0f4288::t_32b28bd6b7d8c1 224-248
+crates/connectors/src/outbound/pipedream/source/test.rs
+  s_163f8faa0f4288::t_f1a7a10e7b019d 25-26,79-88,197-215
+  s_163f8faa0f4288::t_6f6b536d340249 216-217
+crates/agent_egress/src/domain/service/test.rs
+  s_163f8faa0f4288::t_07c325a02d876a 3-5,663-665
+  s_163f8faa0f4288::t_0b7da90c8ee566 107-108,157-165,257,266-268,609,909
+  s_163f8faa0f4288::t_83eb597124eb90 622-662,666-741
+crates/connectors/src/fake/source.rs
+  s_03b21ec112ad69::t_199bab3fb56c68 133-138,215-234,351-353,356-360,386-395
+crates/agent_egress/AGENTS.md
+  s_163f8faa0f4288::t_b92a0e2e071198 37-43,45-48
+crates/connectors/AGENTS.md
+  s_163f8faa0f4288::t_ff00431f4453cd 25-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c9284d0817023087f816a40577ac51a6a43f5fe2",
+  "prompts": {},
+  "sessions": {
+    "s_03b21ec112ad69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4313240-0b8c-4454-9ac4-f2c59a5300e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_163f8faa0f4288": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5f175ffc-53c4-479d-b357-25ccf92417f9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
