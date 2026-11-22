@@ -483,14 +483,94 @@ fn id_to_display_name(user_id: &MacroUserIdStr<'static>, name_lookup: &NameLooku
     }
 }
 
+/// Candidate set of channels the viewer participates in.
+///
+/// Reads the viewer's memberships with their activity, then each channel by
+/// primary key, with both behind `OFFSET 0` fences. A plain join lets the
+/// planner push a page's cursor onto `comms_channels` and scan that whole
+/// table for it, which on default cost settings it did for most keyset pages
+/// of a viewer in 15,000 channels. Fenced, a page reads the viewer's channels
+/// and no others, whatever the plan. The activity join sits inside the
+/// membership fence so the viewer's activity is read once by user rather than
+/// probed once per channel, which doubled the reads of a page sorted by view
+/// time.
 #[cfg(feature = "list")]
 static CHANNEL_LIST_PREFIX: &str = r#"
+    WITH user_channels AS (
+        SELECT c.*, m.viewed_at
+        FROM (
+            SELECT cp.channel_id, a.viewed_at
+            FROM comms_channel_participants cp
+            LEFT JOIN comms_activity a ON a.channel_id = cp.channel_id AND a.user_id = $1
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            OFFSET 0
+        ) m
+        CROSS JOIN LATERAL (
+            SELECT c.*
+            FROM comms_channels c
+            WHERE c.id = m.channel_id
+            OFFSET 0
+        ) c
+        WHERE TRUE
+"#;
+
+/// Candidate set of channels the viewer participates in, for a filter on the
+/// viewer's notification state ([`build_channel_notification_state_clause`]),
+/// including one that also names ids or teams.
+///
+/// The same unfenced join every joined page used before
+/// [`CHANNEL_LIST_PREFIX`]. On statistics that put the viewer at one
+/// notification, the planner here hashed the viewer's channel notifications
+/// once against the candidates (110 ms for a `NOT done` over 15,000 channels
+/// and 147,000 done notifications), where behind the fences it rescanned them
+/// for every candidate and ran past the 15 s timeout. It keeps that earlier
+/// join's plans, including the cursor on `comms_channels` the fences prevent.
+#[cfg(feature = "list")]
+static CHANNEL_LIST_PREFIX_BY_CHANNEL: &str = r#"
     WITH user_channels AS (
         SELECT c.*, a.viewed_at
         FROM comms_channels c
         INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
         LEFT JOIN comms_activity a ON a.channel_id = c.id AND a.user_id = $1
         WHERE cp.user_id = $1 AND cp.left_at IS NULL
+"#;
+
+/// Candidate set of channels the viewer participates in, for a filter whose
+/// every match is a channel it names by id or a channel of a team it names
+/// ([`channel_filter_keys_channels`]).
+///
+/// Reads those channels first, by `comms_channels_pkey` or
+/// `idx_comms_channels_team_id`, with the filter inside an `OFFSET 0` fence,
+/// then keeps the ones the viewer participates in. Starting from the
+/// viewer's memberships would read all of them to answer for one id. The
+/// filter is completed by [`CHANNEL_LIST_KEYED_CLOSE`].
+#[cfg(feature = "list")]
+static CHANNEL_LIST_PREFIX_KEYED: &str = r#"
+    WITH user_channels AS (
+        SELECT c.*, a.viewed_at
+        FROM (
+            SELECT c.*
+            FROM comms_channels c
+            WHERE TRUE
+"#;
+
+#[cfg(feature = "list")]
+static CHANNEL_LIST_KEYED_CLOSE: &str = r#"
+            OFFSET 0
+        ) c
+        LEFT JOIN LATERAL (
+            SELECT a.viewed_at
+            FROM comms_activity a
+            WHERE a.channel_id = c.id AND a.user_id = $1
+            OFFSET 0
+        ) a ON TRUE
+        WHERE EXISTS (
+            SELECT 1
+            FROM comms_channel_participants cp
+            WHERE cp.channel_id = c.id
+              AND cp.user_id = $1
+              AND cp.left_at IS NULL
+        )
 "#;
 
 /// Candidate set used when the filter mentions [`ChannelLiteral::IsParticipant`]
@@ -829,6 +909,59 @@ fn channel_filter_names_channels(expr: &Expr<ChannelLiteral>) -> bool {
     })
 }
 
+/// Whether every channel the filter can match is one it names with
+/// [`ChannelLiteral::ChannelId`] or belongs to a team it names with
+/// [`ChannelLiteral::TeamId`], so an index on `comms_channels` can find them.
+///
+/// Judges the predicate [`build_channel_list_filter`] renders: literals it
+/// leaves out (a sender, mention, thread or `importance: true`) drop out of
+/// their AND or OR here too, `importance: false` (rendered `1=0`) matches
+/// no channel, and a NOT flips which side keys, so `NOT NOT id`,
+/// `id OR sender` and `id OR importance: false` still read the one channel.
+#[cfg(feature = "list")]
+fn channel_filter_keys_channels(expr: &Expr<ChannelLiteral>) -> bool {
+    /// Whether the rendered subtree keys channels, and whether its negation
+    /// does.
+    type Sides = (bool, bool);
+    /// `None` when the subtree renders to nothing.
+    type Keys = Option<Sides>;
+    type Join = fn(Sides, Sides) -> Sides;
+    let either = |a: Keys, b: Keys, join: Join| match (a, b) {
+        (None, other) | (other, None) => other,
+        (Some(a), Some(b)) => Some(join(a, b)),
+    };
+    expr.collapse_frames(|frame: filter_ast::ExprFrame<Keys, _>| match frame {
+        filter_ast::ExprFrame::And(a, b) => either(a, b, |a, b| (a.0 || b.0, a.1 && b.1)),
+        filter_ast::ExprFrame::Or(a, b) => either(a, b, |a, b| (a.0 && b.0, a.1 || b.1)),
+        filter_ast::ExprFrame::Not(a) => a.map(|(keys, negation_keys)| (negation_keys, keys)),
+        filter_ast::ExprFrame::Literal(
+            ChannelLiteral::ChannelId(_) | ChannelLiteral::TeamId(_),
+        ) => Some((true, false)),
+        filter_ast::ExprFrame::Literal(
+            ChannelLiteral::ThreadId(_)
+            | ChannelLiteral::Mention(_)
+            | ChannelLiteral::Sender(_)
+            | ChannelLiteral::Importance(true),
+        ) => None,
+        // Rendered as `1=0`: it matches nothing, so it keys vacuously, and its
+        // negation matches everything.
+        filter_ast::ExprFrame::Literal(ChannelLiteral::Importance(false)) => Some((true, false)),
+        filter_ast::ExprFrame::Literal(_) => Some((false, false)),
+    })
+    .is_some_and(|(keys, _)| keys)
+}
+
+/// Whether the filter mentions [`ChannelLiteral::NotificationState`] anywhere.
+#[cfg(feature = "list")]
+fn channel_filter_mentions_notification_state(expr: &Expr<ChannelLiteral>) -> bool {
+    expr.collapse_frames(|frame: filter_ast::ExprFrame<bool, _>| match frame {
+        filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
+        filter_ast::ExprFrame::Not(a) => a,
+        filter_ast::ExprFrame::Literal(ChannelLiteral::NotificationState(_)) => true,
+        filter_ast::ExprFrame::Literal(_) => false,
+    })
+}
+
 /// Whether `IsParticipant(true)` is on the top-level AND chain, so only
 /// channels the user participates in can match.
 #[cfg(feature = "list")]
@@ -843,12 +976,32 @@ fn channel_filter_requires_participation(expr: &Expr<ChannelLiteral>) -> bool {
     }
 }
 
+/// The filter without its top-level `IsParticipant(true)` conjuncts, which
+/// joined candidates already satisfy; `None` when nothing else is left.
+/// Each conjunct is otherwise one more membership read per candidate.
+#[cfg(feature = "list")]
+fn drop_required_participation(expr: &Expr<ChannelLiteral>) -> Option<Expr<ChannelLiteral>> {
+    let mut conjuncts = Vec::new();
+    collect_conjuncts(expr, &mut conjuncts);
+    conjuncts
+        .into_iter()
+        .filter(|conjunct| !matches!(conjunct, Expr::Literal(ChannelLiteral::IsParticipant(true))))
+        .cloned()
+        .reduce(Expr::and)
+}
+
 /// Which channels a channel list reads before its filter applies.
 #[cfg(feature = "list")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ChannelCandidates {
     /// Channels the user participates in ([`CHANNEL_LIST_PREFIX`]).
     Joined,
+    /// Channels the user participates in, for a filter on notification state
+    /// ([`CHANNEL_LIST_PREFIX_BY_CHANNEL`]).
+    JoinedByChannel,
+    /// Channels the user participates in, read from the ids or teams the
+    /// filter names ([`CHANNEL_LIST_PREFIX_KEYED`]).
+    JoinedKeyed,
     /// Joined channels and their teams' channels
     /// ([`CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS`]).
     WithTeamChannels,
@@ -859,27 +1012,48 @@ enum ChannelCandidates {
 
 #[cfg(feature = "list")]
 impl ChannelCandidates {
-    fn for_filter(filter: Option<&Expr<ChannelLiteral>>) -> Self {
-        match filter {
-            Some(expr)
-                if channel_filter_mentions_participation(expr)
-                    && !channel_filter_requires_participation(expr) =>
-            {
-                if channel_filter_names_channels(expr) {
-                    Self::Named
-                } else {
-                    Self::WithTeamChannels
-                }
+    /// The candidates for `filter`, and the part of it left to apply to them.
+    fn for_filter(filter: Option<Expr<ChannelLiteral>>) -> (Self, Option<Expr<ChannelLiteral>>) {
+        let Some(expr) = filter else {
+            return (Self::Joined, None);
+        };
+        if channel_filter_mentions_participation(&expr)
+            && !channel_filter_requires_participation(&expr)
+        {
+            let candidates = if channel_filter_names_channels(&expr) {
+                Self::Named
+            } else {
+                Self::WithTeamChannels
+            };
+            return (candidates, Some(expr));
+        }
+        // Notification state comes first: behind the keyed fence the planner
+        // can read the viewer's notifications once per candidate channel
+        // (team AND NOT done ran past the 15 s timeout on stale statistics).
+        match drop_required_participation(&expr) {
+            Some(rest) if channel_filter_mentions_notification_state(&rest) => {
+                (Self::JoinedByChannel, Some(rest))
             }
-            _ => Self::Joined,
+            Some(rest) if channel_filter_keys_channels(&rest) => (Self::JoinedKeyed, Some(rest)),
+            rest => (Self::Joined, rest),
         }
     }
 
     fn prefix(self) -> &'static str {
         match self {
             Self::Joined => CHANNEL_LIST_PREFIX,
+            Self::JoinedByChannel => CHANNEL_LIST_PREFIX_BY_CHANNEL,
+            Self::JoinedKeyed => CHANNEL_LIST_PREFIX_KEYED,
             Self::WithTeamChannels => CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS,
             Self::Named => CHANNEL_LIST_PREFIX_NAMED_CHANNELS,
+        }
+    }
+
+    /// SQL that follows the filter, before [`CHANNEL_LIST_SELECT`].
+    fn close(self) -> &'static str {
+        match self {
+            Self::JoinedKeyed => CHANNEL_LIST_KEYED_CLOSE,
+            Self::Joined | Self::JoinedByChannel | Self::WithTeamChannels | Self::Named => "",
         }
     }
 }
@@ -887,17 +1061,18 @@ impl ChannelCandidates {
 #[cfg(feature = "list")]
 fn build_channel_list_query(
     filter_ast: &LiteralTree<ChannelLiteral>,
-) -> (ChannelCandidates, QueryBuilder<'static, Postgres>) {
+) -> QueryBuilder<'static, Postgres> {
     // QueryBuilder is required because the channel filter is an AST with arbitrary
     // AND/OR/NOT shape. Dynamic literals are constrained to parsed domain types.
     let filter = filter_ast
         .as_deref()
         .map(|expr| drop_implied_notification_conjuncts(expr, channel_literal_state));
-    let candidates = ChannelCandidates::for_filter(filter.as_ref());
+    let (candidates, filter) = ChannelCandidates::for_filter(filter);
     let mut builder = QueryBuilder::new(candidates.prefix());
     builder.push(build_channel_list_filter(filter.as_ref()));
+    builder.push(candidates.close());
     builder.push(CHANNEL_LIST_SELECT);
-    (candidates, builder)
+    builder
 }
 
 #[cfg(feature = "list")]
@@ -1750,7 +1925,7 @@ impl ChannelListRepo for PgChannelsRepo {
         let (cursor_id, cursor_timestamp) = cursor.vals();
         let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
 
-        let (candidates, mut builder) = build_channel_list_query(cursor.filter());
+        let mut builder = build_channel_list_query(cursor.filter());
         let query = builder
             .build()
             .bind(user_id.as_ref())
@@ -1778,12 +1953,11 @@ impl ChannelListRepo for PgChannelsRepo {
                 }
                 .into_channel_with_participants()
             });
-        if candidates != ChannelCandidates::Named {
-            return Ok(query.fetch_all(&self.pool).await?);
-        }
-        // A by-id read reaches channels the user never joined, so its cost
-        // follows the ids a client sends: bound it a little above Soup's 12 s
-        // client timeout.
+        // Every shape's cost follows the viewer's data: a joined page sorts
+        // their memberships, and a by-id read reaches channels they never
+        // joined. The pool sets no timeout, so bound each a little above
+        // Soup's 12 s client timeout, or a page the client gave up on keeps
+        // running while its retry starts another.
         let mut tx = self.pool.begin().await?;
         sqlx::query!("SET LOCAL statement_timeout = '15s'")
             .execute(&mut *tx)
