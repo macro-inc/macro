@@ -1,0 +1,21 @@
+crates/agent_permissions/AGENTS.md
+  s_e3d42bca6fdb8e::t_ad785572050ce2 12-21,23-34,47-60,62,146-148
+docs/agent-guide/settings.md
+  s_e3d42bca6fdb8e::t_ad785572050ce2 1270,1272-1273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "03ea10ab71dd9242332e58dee860877e4c9a088e",
+  "prompts": {},
+  "sessions": {
+    "s_e3d42bca6fdb8e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9af237d7-a678-4134-bdfa-b6234b0b3b46",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
