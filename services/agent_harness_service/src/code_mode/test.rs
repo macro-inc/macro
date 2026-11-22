@@ -281,6 +281,9 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "auth.joinTeamByInviteLink",
         "auth.toggleTeamNonAdminInvites",
         "auth.postProfilePictures",
+        // Its route refuses program runs, and it only asks the caller's own
+        // machine to check its hosting again.
+        "auth.recheckTeammateHost",
         // Its route refuses a scoped session tools.
         "cognition.sendChatMessage",
         // Stopping a chat's stream reaches nobody and starts nothing.

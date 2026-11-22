@@ -70,6 +70,7 @@ impl Default for Hosting {
 
 impl Hosting {
     /// Hosting already set up.
+    #[cfg(test)]
     pub fn with(teammates: Arc<HostTeammates>) -> Self {
         let hosting = Self::default();
         hosting.set(teammates);
