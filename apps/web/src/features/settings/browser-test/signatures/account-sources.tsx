@@ -4,7 +4,10 @@ import { createNoopCacheHost } from '../../../../lib/graphql-cache/host/noop-hos
 import type { PeopleContextState } from '../../../../lib/graphql-cache/people/generated';
 import { createPeopleCache } from '../../../../lib/graphql-cache/people/host';
 import { useListChannelsQuery } from '../../../../lib/queries/channel/channels';
-import type { PersonFacts } from '../../../../lib/queries/contacts/context-facts';
+import type {
+  ContextChannel,
+  PersonFacts,
+} from '../../../../lib/queries/contacts/context-facts';
 import { useContactContextPublisher } from '../../../../lib/queries/contacts/use-context-publisher';
 import { emailKeys } from '../../../../lib/queries/email/keys';
 import { useEmailLinksQuery } from '../../../../lib/queries/email/link';
@@ -66,9 +69,26 @@ export function AccountSources() {
       search: async () => ({ kind: 'contextPending' }),
     }),
   };
+  // The app passes its channel directory; this fixture's directory is the
+  // account's REST list, so its in-flight responses can be held.
+  const directory = (): ContextChannel[] | undefined =>
+    channels.isSuccess
+      ? channels.data.map((channel) => ({
+          id: channel.id,
+          name: channel.name ?? null,
+          channelType: 'direct_message',
+          updatedAt: channel.updated_at,
+          viewedAt: channel.viewed_at ?? null,
+          participants: channel.participants.map(({ user_id }) => ({
+            userId: user_id,
+          })),
+          botParticipants: [],
+        }))
+      : undefined;
   const publication = useContactContextPublisher(
     () => host,
-    () => 0
+    () => 0,
+    directory
   );
   return (
     <main class="h-dvh bg-panel text-ink">

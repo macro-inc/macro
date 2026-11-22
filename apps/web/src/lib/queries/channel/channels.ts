@@ -10,7 +10,6 @@ import {
   type MessageResponse,
   storageServiceClient,
 } from '@service-storage/client';
-import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import type { CreateChannelRequest } from '@service-storage/generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from '@service-storage/generated/schemas/createChannelResponse';
 import type { PatchChannelRequest } from '@service-storage/generated/schemas/patchChannelRequest';
@@ -30,6 +29,7 @@ import {
 } from '../contacts/cache-scope';
 import { createContactQueryEpoch } from '../contacts/query-epoch';
 import { invalidateChannelParticipants } from './channel-participants';
+import { refreshChannelDirectory } from './directory';
 import {
   type CachedGraphqlChannel,
   readCachedGraphqlChannels,
@@ -146,15 +146,8 @@ export function useCachedGraphqlChannelsQuery(
   });
 }
 
-export function invalidateListChannels(account = currentQueryAccount()) {
-  if (!isCurrentQueryAccount(account)) return Promise.resolve();
-  return queryClient.invalidateQueries({
-    queryKey: channelKeys.listChannels(account.userId).queryKey,
-  });
-}
-
 /**
- * Create a channel. Invalidates the channel list on settle.
+ * Create a channel. Refreshes the in-memory channel directory on settle.
  */
 export function useCreateChannelMutation(
   callbacks?: MutationCallbacks<
@@ -190,10 +183,12 @@ export function useCreateChannelMutation(
             entityId: data.id,
           });
         },
-        onSettled: (_data, _error, _variables, _result, context) => {
-          const owner = mutationQueryAccount(context);
-          if (owner)
-            fireAndForget(invalidateListChannels(owner), 'channel-list');
+        onSettled: (data, _error, _variables, _result, context) => {
+          if (isCurrentQueryAccount(mutationQueryAccount(context)))
+            fireAndForget(
+              refreshChannelDirectory(data ? [data.id] : []),
+              'channel-list'
+            );
         },
       },
       callbacks
@@ -207,27 +202,6 @@ type PatchChannelCallbacks = MutationCallbacks<
   Error,
   PatchChannelParams
 >;
-
-function updateCachedChannel(
-  channels: ApiChannelWithLatest[] | undefined,
-  vars: PatchChannelParams
-): ApiChannelWithLatest[] | undefined {
-  return channels?.map((channel) => {
-    if (channel.id !== vars.channelId) return channel;
-
-    return {
-      ...channel,
-      channel_type:
-        vars.convert_to_team_channel === true
-          ? ChannelType.team
-          : channel.channel_type,
-      auto_join_team:
-        typeof vars.auto_join_team === 'boolean'
-          ? vars.auto_join_team
-          : channel.auto_join_team,
-    };
-  });
-}
 
 /** Patch channel settings and refresh channel/participant state. */
 export function usePatchChannelMutation(callbacks?: PatchChannelCallbacks) {
@@ -247,12 +221,7 @@ export function usePatchChannelMutation(callbacks?: PatchChannelCallbacks) {
     ...withCallbacks<MessageResponse, Error, PatchChannelParams>(
       {
         onSuccess: async (_data, vars, _result, context) => {
-          const owner = mutationQueryAccount(context);
-          if (!isCurrentQueryAccount(owner)) return;
-          queryClient.setQueryData<ApiChannelWithLatest[]>(
-            channelKeys.listChannels(owner.userId).queryKey,
-            (channels) => updateCachedChannel(channels, vars)
-          );
+          if (!isCurrentQueryAccount(mutationQueryAccount(context))) return;
           if (typeof vars.auto_join_team === 'boolean') {
             await invalidateChannelParticipants(vars.channelId);
           }
@@ -268,10 +237,12 @@ export function usePatchChannelMutation(callbacks?: PatchChannelCallbacks) {
           console.error('failed to update channel settings', error);
           toast.failure('Failed to update channel settings');
         },
-        onSettled: (_data, _error, _variables, _result, context) => {
-          const owner = mutationQueryAccount(context);
-          if (owner)
-            fireAndForget(invalidateListChannels(owner), 'channel-list');
+        onSettled: (_data, _error, variables, _result, context) => {
+          if (isCurrentQueryAccount(mutationQueryAccount(context)))
+            fireAndForget(
+              refreshChannelDirectory([variables.channelId]),
+              'channel-list'
+            );
         },
       },
       callbacks

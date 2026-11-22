@@ -20,10 +20,11 @@ import type {
 } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { HydrationSearchChanges } from '@graphql-cache/protocol';
+import type { DirectoryChannel } from '@queries/channel/directory-core';
 import type { CachedGraphqlChannel } from '@queries/channel/graphql';
+import { directoryChannel } from '@queries/channel/tests/directory-channel';
 import type { HistoryItem } from '@queries/history/types';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import { render } from '@solidjs/testing-library';
 import {
@@ -71,7 +72,7 @@ const mocks = vi.hoisted(() => ({
   personPolicies: [] as Parameters<typeof createPersonList>[0]['policy'][],
   search: vi.fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>(),
   history: [] as HistoryItem[],
-  channels: vi.fn<() => ApiChannelWithLatest[]>(() => []),
+  channels: vi.fn<() => DirectoryChannel[]>(() => []),
   cachedChannels: (): CachedGraphqlChannel[] => [],
   projectedChannels: [] as CachedGraphqlChannel[],
   changed: undefined as
@@ -107,13 +108,13 @@ vi.mock('@core/context/user', () => ({
 vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name: string }) => item.name,
 }));
-vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({
-    channels: () => mocks.channels(),
-    isLoading: () => false,
-  }),
-  useDmActivityByUserId: () => () => new Map(),
-}));
+vi.mock('@core/context/channels', async () => {
+  const { staticChannelDirectory } = await import('@queries/channel/directory');
+  return {
+    useChannelDirectory: () => staticChannelDirectory(() => mocks.channels()),
+    useDmActivityByUserId: () => () => new Map(),
+  };
+});
 vi.mock('@queries/contacts/use-directory', () => ({
   useContactDirectoryScope: () => () => ({ userId: 'viewer' }),
 }));
@@ -713,17 +714,12 @@ describe('Quick Access source integration', () => {
   );
   it('keeps known channels searchable before the cache has hydrated them', async () => {
     mocks.channels.mockReturnValue([
-      {
-        id: 'uncached-channel',
+      directoryChannel('uncached-channel', {
         name: 'Planning',
-        channel_type: 'public',
-        owner_id: 'owner',
-        participants: [],
-        auto_join_team: false,
-        is_participant: true,
-        created_at: '2026-08-01T00:00:00.000Z',
-        updated_at: '2026-08-02T00:00:00.000Z',
-      },
+        ownerId: 'owner',
+        createdAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-02T00:00:00.000Z',
+      }),
     ]);
     const [cached, setCached] = createSignal<CachedGraphqlChannel[]>([]);
     mocks.cachedChannels = cached;
@@ -760,29 +756,19 @@ describe('Quick Access source integration', () => {
   it('merges complete channels with cached channels and prefers cached metadata', async () => {
     const channel = cachedChannel('cached-channel');
     mocks.channels.mockReturnValue([
-      {
-        id: channel.id,
+      directoryChannel(channel.id, {
         name: 'Previous name',
-        channel_type: 'public',
-        owner_id: 'owner',
-        participants: [],
-        auto_join_team: false,
-        is_participant: true,
-        created_at: channel.createdAt,
-        updated_at: channel.updatedAt,
-        viewed_at: '2026-08-03T00:00:00.000Z',
-      },
-      {
-        id: 'uncached-channel',
+        ownerId: 'owner',
+        createdAt: channel.createdAt,
+        updatedAt: channel.updatedAt,
+        viewedAt: '2026-08-03T00:00:00.000Z',
+      }),
+      directoryChannel('uncached-channel', {
         name: 'Planning',
-        channel_type: 'public',
-        owner_id: 'owner',
-        participants: [],
-        auto_join_team: false,
-        is_participant: true,
-        created_at: channel.createdAt,
-        updated_at: channel.updatedAt,
-      },
+        ownerId: 'owner',
+        createdAt: channel.createdAt,
+        updatedAt: channel.updatedAt,
+      }),
     ]);
     mocks.cachedChannels = () => [channel];
     mocks.search.mockResolvedValue({
@@ -826,21 +812,14 @@ describe('Quick Access source integration', () => {
   });
 
   it('uses projected channel metadata beyond the recent cache page while preserving live viewed recency', async () => {
-    const [knownChannels, setKnownChannels] = createSignal<
-      ApiChannelWithLatest[]
-    >([
-      {
-        id: 'renamed-channel',
+    const [knownChannels, setKnownChannels] = createSignal<DirectoryChannel[]>([
+      directoryChannel('renamed-channel', {
         name: 'Old planning name',
-        channel_type: 'public',
-        owner_id: 'owner',
-        participants: [],
-        auto_join_team: false,
-        is_participant: true,
-        created_at: '2026-08-01T00:00:00.000Z',
-        updated_at: '2026-08-02T00:00:00.000Z',
-        viewed_at: '2026-08-03T00:00:00.000Z',
-      },
+        ownerId: 'owner',
+        createdAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-02T00:00:00.000Z',
+        viewedAt: '2026-08-03T00:00:00.000Z',
+      }),
     ]);
     mocks.channels.mockImplementation(knownChannels);
     const projectedChannel = cachedChannel('renamed-channel', {
@@ -865,7 +844,7 @@ describe('Quick Access source integration', () => {
     setKnownChannels((channels) =>
       channels.map((channel) => ({
         ...channel,
-        viewed_at: '2026-08-04T00:00:00.000Z',
+        viewedAt: '2026-08-04T00:00:00.000Z',
       }))
     );
     expect(list.items().map((item) => item.searchText)).toEqual([
@@ -1565,17 +1544,12 @@ describe('Quick Access shared sources', () => {
     const channel = cachedChannel('renamed-channel');
     mocks.cachedChannels = () => [channel];
     mocks.channels.mockReturnValue([
-      {
-        id: channel.id,
+      directoryChannel(channel.id, {
         name: 'New name',
-        channel_type: 'public',
-        owner_id: 'owner',
-        participants: [],
-        auto_join_team: false,
-        is_participant: true,
-        created_at: channel.createdAt,
-        updated_at: '2030-01-01T00:00:00.000Z',
-      },
+        ownerId: 'owner',
+        createdAt: channel.createdAt,
+        updatedAt: '2030-01-01T00:00:00.000Z',
+      }),
     ]);
     const list = setup((source) => source.useList('channel'));
     await vi.waitFor(() =>

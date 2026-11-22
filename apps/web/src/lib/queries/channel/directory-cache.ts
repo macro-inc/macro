@@ -1,3 +1,4 @@
+import { deepEqual } from '@core/util/compareUtils';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { readRecordsByKeys, selectRecords } from '@graphql-cache/index';
 import type { SearchCursor } from '@graphql-cache/protocol';
@@ -54,7 +55,7 @@ export async function listCachedChannelDocuments(
 
 /** Reads channel records by key. A record missing any directory field, or
  * no longer cached, is left out. */
-export async function readDirectoryChannels(
+async function readDirectoryChannels(
   host: Pick<CacheHost, 'readRecordsByKeys'>,
   keys: readonly string[],
   signal?: AbortSignal
@@ -80,12 +81,31 @@ export async function readDirectoryChannels(
  * is null while the record lacks one of them. */
 type IndexEntry = { sourceHash: string; channel: DirectoryChannel | null };
 
+/** What the index holds of one channel's record: the record, the search
+ * hash of a record that lacks a directory field, or undefined for none. */
+export type RecordVersion = DirectoryChannel | string | undefined;
+
+/** Whether two versions are of the same record: the same fields, or the
+ * same search hash while it lacks one. */
+export function sameRecordVersion(a: RecordVersion, b: RecordVersion) {
+  if (a === b) return true;
+  return typeof a === 'object' && typeof b === 'object' && deepEqual(a, b);
+}
+
+/** What a reread of some records found: `stale` when the index holds
+ * another storage generation and needs a full refresh first, `unchanged`
+ * when every record read matched what the index held. */
+export type ChannelDirectoryKeysRead =
+  | { kind: 'stale' }
+  | { kind: 'unchanged' }
+  | { kind: 'read'; read: ChannelDirectoryRead };
+
 /** What one refresh of the cached directory found. */
 export type ChannelDirectoryRead = {
   /** Every complete channel record, the same object while it is unchanged. */
   channels: DirectoryChannel[];
-  /** Records the search lists that lack a directory field. */
-  incomplete: number;
+  /** Ids of the records the search lists that lack a directory field. */
+  incompleteIds: string[];
   /** Records read this time: new or changed since the last refresh. */
   reread: number;
 };
@@ -100,25 +120,59 @@ export function createChannelDirectoryIndex(
 ) {
   let entries = new Map<string, IndexEntry>();
   let generation: string | undefined;
+  // The lists `entries` gives, kept until an entry changes, so a refresh
+  // that finds nothing new walks no entry to answer.
+  let listed: Omit<ChannelDirectoryRead, 'reread'> | undefined;
+
+  const snapshot = (reread: number): ChannelDirectoryRead => {
+    if (!listed) {
+      const channels: DirectoryChannel[] = [];
+      const incompleteIds: string[] = [];
+      for (const [recordKey, entry] of entries) {
+        if (entry.channel) channels.push(entry.channel);
+        else incompleteIds.push(recordKey.slice(CHANNEL_RECORD_PREFIX.length));
+      }
+      listed = { channels, incompleteIds };
+    }
+    return { ...listed, reread };
+  };
 
   return {
+    /** What the index holds of the channel's record now. */
+    version(channelId: string): RecordVersion {
+      const entry = entries.get(`${CHANNEL_RECORD_PREFIX}${channelId}`);
+      if (!entry) return undefined;
+      return entry.channel ?? `incomplete:${entry.sourceHash}`;
+    },
+
+    /** The channel's record, if the index holds it with every field. */
+    record(channelId: string): DirectoryChannel | undefined {
+      return (
+        entries.get(`${CHANNEL_RECORD_PREFIX}${channelId}`)?.channel ??
+        undefined
+      );
+    },
+
     async refresh(
       storageGeneration: string,
       signal?: AbortSignal
     ): Promise<ChannelDirectoryRead> {
       if (storageGeneration !== generation) {
         entries = new Map();
+        listed = undefined;
         generation = storageGeneration;
       }
       const documents = await listCachedChannelDocuments(host, signal);
-      const listed = new Set(documents.map(({ recordKey }) => recordKey));
+      const inSearch = new Set(documents.map(({ recordKey }) => recordKey));
       const changed = documents.filter(
         ({ recordKey, sourceHash }) =>
           entries.get(recordKey)?.sourceHash !== sourceHash
       );
       // A record whose sort time changed while the pages were read can be
       // missed by them; read it by key before dropping it.
-      const unlisted = [...entries.keys()].filter((key) => !listed.has(key));
+      const unlisted = [...entries.keys()].filter((key) => !inSearch.has(key));
+      // Every listed record as the index holds it: nothing to read or rebuild.
+      if (changed.length === 0 && unlisted.length === 0) return snapshot(0);
       const read = await readDirectoryChannels(
         host,
         [...changed.map(({ recordKey }) => recordKey), ...unlisted],
@@ -142,14 +196,35 @@ export function createChannelDirectoryIndex(
         if (channel) next.set(key, { sourceHash: '', channel });
       }
       entries = next;
+      listed = undefined;
+      return snapshot(read.size);
+    },
 
-      const channels: DirectoryChannel[] = [];
-      let incomplete = 0;
-      for (const entry of entries.values()) {
-        if (entry.channel) channels.push(entry.channel);
-        else incomplete += 1;
+    /**
+     * Rereads only these records, for the channels a by-id read just wrote,
+     * without listing the rest. A record still missing a field keeps the
+     * entry it had, and so does one whose fields match it, so a read that
+     * changed nothing walks no other entry.
+     */
+    async readKeys(
+      storageGeneration: string,
+      recordKeys: readonly string[],
+      signal?: AbortSignal
+    ): Promise<ChannelDirectoryKeysRead> {
+      if (storageGeneration !== generation) return { kind: 'stale' };
+      const read = await readDirectoryChannels(host, recordKeys, signal);
+      signal?.throwIfAborted();
+      if (storageGeneration !== generation) return { kind: 'stale' };
+      let changed = 0;
+      for (const [recordKey, channel] of read) {
+        if (deepEqual(entries.get(recordKey)?.channel, channel)) continue;
+        // An empty hash makes the next refresh read it again.
+        entries.set(recordKey, { sourceHash: '', channel });
+        listed = undefined;
+        changed += 1;
       }
-      return { channels, incomplete, reread: read.size };
+      if (changed === 0) return { kind: 'unchanged' };
+      return { kind: 'read', read: snapshot(read.size) };
     },
   };
 }

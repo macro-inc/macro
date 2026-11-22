@@ -71,3 +71,52 @@ query ChannelDirectoryPage($input: SoupInput!) {
 		}
 	}
 }
+
+# One channel read from the primary by reconciliation, before it deletes a
+# channel a by-id read of the replica no longer returned and after the delete:
+# the replica can lag an update the cache already holds. A readable channel is
+# written back whole, as the lane writes it. Null when the viewer can no longer
+# read it.
+query ChannelDirectoryReconcileEntity($input: SoupEntityInput!) {
+	user {
+		id
+		soupEntity(input: $input) {
+			__typename
+			id
+			...SoupItemFields
+		}
+	}
+}
+
+# The viewer's DM with one person, the one a first message to them would reuse.
+# Asking never creates one.
+query DirectMessageChannelId($userId: ID!) {
+	user {
+		id
+		directMessageChannelId(userId: $userId)
+	}
+}
+
+# When the viewer last viewed one channel, for a channel the directory does not
+# hold: one they left or never joined. Null when they never viewed it.
+query ViewerChannelViewedAt($channelId: ID!) {
+	user {
+		id
+		channelViewedAt(channelId: $channelId)
+	}
+}
+
+# One channel read from the primary right after the viewer changed it: the
+# in-memory pages take seconds to read again and the cache waits for the
+# server's soup update, so the directory shows this until they catch up.
+# Null when the viewer can no longer read the channel.
+query ChannelDirectoryEntity($input: SoupEntityInput!) {
+	user {
+		id
+		soupEntity(input: $input) {
+			__typename
+			id
+			... on GraphqlSoupChannel { ...ChannelDirectoryFields }
+		}
+	}
+}

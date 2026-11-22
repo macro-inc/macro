@@ -14,7 +14,13 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
+import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  type QueryAccount,
+} from '@queries/auth/account-scope';
 import { callKeys } from '@queries/call/keys';
+import { refreshChannelDirectory } from '@queries/channel/directory';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import {
@@ -41,19 +47,45 @@ import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
-import { useMutation } from '@tanstack/solid-query';
+import { partialMatchKey, useMutation } from '@tanstack/solid-query';
 import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
 import { BulkDeleteFailure } from './bulk-delete-result';
 
-function invalidateDeletedDssItems(entities: EntityData[]): void {
+function invalidateDeletedDssItems(
+  entities: EntityData[],
+  writer: QueryAccount | undefined
+): void {
   // A deleted folder's databases and forms return to the root on the server.
   if (entities.some((e) => e.type === 'project')) {
     queryClient.invalidateQueries({ queryKey: databasesKeys.list.queryKey });
     queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey });
   }
-  if (entities.some((e) => e.type === 'channel')) {
-    queryClient.invalidateQueries({ queryKey: channelKeys._def });
+  const channelIds = entities.flatMap((e) =>
+    e.type === 'channel' ? [e.id] : []
+  );
+  if (channelIds.length > 0) {
+    const deleted = new Set(channelIds);
+    // A deletion settling after another sign-in leaves that sign-in's
+    // channel reads alone: it reads everything again itself.
+    if (!writer || isCurrentQueryAccount(writer))
+      queryClient.invalidateQueries({
+        queryKey: channelKeys._def,
+        // The deleted channels' own reads, and the REST lists that hold them.
+        // The directory refresh below reads the directory again itself, and
+        // Quick Access rereads its cached channels when the cache drops them:
+        // both are account-wide reads one deletion should not repeat.
+        predicate: ({ queryKey }) =>
+          partialMatchKey(queryKey, channelKeys.listChannels._def) ||
+          partialMatchKey(queryKey, channelKeys.activity._def) ||
+          (typeof queryKey[2] === 'string' && deleted.has(queryKey[2])),
+      });
+    // The channel directory rereads its pages, or waits for the soup update:
+    // the deleted channels come out at once, with no read of each.
+    fireAndForget(
+      refreshChannelDirectory([], { removed: channelIds, writer }),
+      'channel-delete'
+    );
   }
   if (entities.some((e) => e.type === 'call')) {
     queryClient.invalidateQueries({ queryKey: callKeys._def });
@@ -108,7 +140,8 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
 
 async function settleDssDeletes(
   entities: EntityData[],
-  deletions: Promise<boolean>[]
+  deletions: Promise<boolean>[],
+  writer: QueryAccount | undefined
 ): Promise<boolean[]> {
   const outcomes = await Promise.allSettled(deletions);
   const results = outcomes.map(
@@ -117,7 +150,10 @@ async function settleDssDeletes(
   // Process confirmed successes before surfacing sibling failures. Never remove
   // failed schedules or skip call invalidation because another API threw.
   try {
-    invalidateDeletedDssItems(entities.filter((_, index) => results[index]));
+    invalidateDeletedDssItems(
+      entities.filter((_, index) => results[index]),
+      writer
+    );
   } catch (error) {
     console.error('Failed to reconcile deleted item caches', error);
   }
@@ -171,6 +207,9 @@ export function createBulkDeleteDssItemsMutation() {
     mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
     gcTime: GRAPHQL_SOUP_DELETE_RETENTION_MS,
     mutationFn: async (entities: EntityData[]) => {
+      // The sign-in that deletes: a deletion settling after another sign-in
+      // holds nothing in its directory.
+      const writer = currentQueryAccount();
       const deletable = entities.filter(isDeletable);
       const deletions = deletable.map(async (e) => {
         if (e.type === 'agent_session') {
@@ -203,7 +242,7 @@ export function createBulkDeleteDssItemsMutation() {
         }
         return deleteItem({ id: e.id, itemType: e.type });
       });
-      return settleDssDeletes(deletable, deletions);
+      return settleDssDeletes(deletable, deletions, writer);
     },
     onMutate: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);

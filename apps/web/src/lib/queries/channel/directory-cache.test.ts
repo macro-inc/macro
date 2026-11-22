@@ -13,7 +13,7 @@ describe('cached channel directory', () => {
 
     expect(read.channels).toHaveLength(1_201);
     expect(new Set(read.channels.map(({ id }) => id)).size).toBe(1_201);
-    expect(read).toMatchObject({ incomplete: 0, reread: 1_201 });
+    expect(read).toMatchObject({ incompleteIds: [], reread: 1_201 });
     expect(cache.host.search).toHaveBeenCalledTimes(3);
     expect(
       cache.host.readRecordsByKeys.mock.calls.map(([args]) => args.keys.length)
@@ -72,19 +72,35 @@ describe('cached channel directory', () => {
     expect(byId(second, 'b')?.name).toBe('renamed');
   });
 
-  it('counts records that lack a directory field and reads them once complete', async () => {
+  it('answers a refresh that finds nothing new with the lists it gave before', async () => {
+    const cache = fakeChannelCache();
+    cache.put(channelRecord('a'));
+    cache.put(channelRecord('partial'), { incomplete: true, sourceHash: 'p1' });
+    const index = createChannelDirectoryIndex(cache.host);
+    const first = await index.refresh('g1');
+    cache.host.readRecordsByKeys.mockClear();
+
+    const second = await index.refresh('g1');
+
+    expect(cache.host.readRecordsByKeys).not.toHaveBeenCalled();
+    expect(second.reread).toBe(0);
+    expect(second.channels).toBe(first.channels);
+    expect(second.incompleteIds).toBe(first.incompleteIds);
+  });
+
+  it('lists records that lack a directory field and reads them once complete', async () => {
     const cache = fakeChannelCache();
     cache.put(channelRecord('partial'), { incomplete: true, sourceHash: 'p1' });
     const index = createChannelDirectoryIndex(cache.host);
 
     expect(await index.refresh('g1')).toMatchObject({
       channels: [],
-      incomplete: 1,
+      incompleteIds: ['partial'],
     });
 
     cache.put(channelRecord('partial'), { sourceHash: 'p2' });
     const read = await index.refresh('g1');
-    expect(read.incomplete).toBe(0);
+    expect(read.incompleteIds).toEqual([]);
     expect(read.channels.map(({ id }) => id)).toEqual(['partial']);
   });
 

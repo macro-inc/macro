@@ -16,6 +16,7 @@ vi.mock('@service-storage/graphql-channel-activity', () => ({
 }));
 
 const recordActivity = vi.mocked(recordChannelActivity);
+const directory = { recordView: vi.fn() };
 // Past the idle wait, well short of the query cache's garbage collection.
 const flushIdle = () => vi.advanceTimersByTimeAsync(2_000);
 
@@ -48,7 +49,7 @@ afterEach(() => {
 });
 
 it('records a view only after the current work yields', async () => {
-  recordChannelViewWhenIdle('a');
+  recordChannelViewWhenIdle('a', directory);
   expect(recordActivity).not.toHaveBeenCalled();
 
   await flushIdle();
@@ -59,9 +60,9 @@ it('records a view only after the current work yields', async () => {
 });
 
 it('sends one request for views of a channel that are still pending', async () => {
-  recordChannelViewWhenIdle('a');
-  recordChannelViewWhenIdle('b');
-  recordChannelViewWhenIdle('a');
+  recordChannelViewWhenIdle('a', directory);
+  recordChannelViewWhenIdle('b', directory);
+  recordChannelViewWhenIdle('a', directory);
 
   await flushIdle();
   expect(recordActivity.mock.calls.map(([args]) => args.channelId)).toEqual([
@@ -79,8 +80,8 @@ it('writes the recorded row into the activity list instead of refetching it', as
     ]
   );
 
-  recordChannelViewWhenIdle('a');
-  recordChannelViewWhenIdle('b');
+  recordChannelViewWhenIdle('a', directory);
+  recordChannelViewWhenIdle('b', directory);
   await flushIdle();
 
   expect(
@@ -92,4 +93,25 @@ it('writes the recorded row into the activity list instead of refetching it', as
     activity('c', '2026-01-01T00:00:00Z'),
     activity('b', '2026-02-01T00:00:00Z'),
   ]);
+});
+
+it('shows the recorded view on the channel in the directory', async () => {
+  recordChannelViewWhenIdle('a', directory);
+  await flushIdle();
+
+  expect(directory.recordView).toHaveBeenCalledExactlyOnceWith(
+    'a',
+    '2026-02-01T00:00:00Z'
+  );
+});
+
+it('shows nothing when the view was recorded for an account since signed out', async () => {
+  recordChannelViewWhenIdle('a', directory);
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    id: 'someone-else',
+    authenticated: true,
+  });
+  await flushIdle();
+
+  expect(directory.recordView).not.toHaveBeenCalled();
 });

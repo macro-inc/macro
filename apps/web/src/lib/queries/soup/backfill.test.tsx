@@ -4,7 +4,9 @@ import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ChannelDirectoryPassUnproven } from '../channel/directory-reconcile';
 import {
+  CHANNEL_SOUP_BACKFILL_LANE,
   DEFAULT_SOUP_BACKFILL_LANES,
   loadSoupBackfillCheckpoint,
   NOISE_EMAIL_FILTER_BACKFILL_LANE,
@@ -18,6 +20,7 @@ import {
   type SoupBackfillParams,
   useSoupBackfills,
 } from './backfill';
+import { soupBackfillLaneFailed } from './backfill-checkpoint';
 
 type FetchInput = Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0];
 
@@ -29,7 +32,8 @@ const graphqlMocks = vi.hoisted(() => ({
 vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
 // Reconciliation has its own tests; here the channel lane only pages.
 vi.mock('../channel/directory-reconcile', () => ({
-  createChannelDirectoryBackfillFetcher:
+  ChannelDirectoryPassUnproven: class extends Error {},
+  channelDirectoryBackfillFetcher:
     async () => (input: unknown, options: unknown) =>
       graphqlMocks.hydrateGraphqlSoup({}, { input }, options),
 }));
@@ -124,8 +128,17 @@ const recencyTree = (signal: boolean, gte: string) => ({
   },
 });
 
+/** The channel lane's pages, which these tests finish at once to reach the
+ * resumable lanes behind it. */
+function isChannelLanePage(input: unknown): boolean {
+  return JSON.stringify(input).includes('"sortMethod":"CREATED_AT"');
+}
+
 function BackfillRunner(props: { userId: string }) {
-  useSoupBackfills(() => props.userId);
+  useSoupBackfills(
+    () => props.userId,
+    () => undefined
+  );
   return null;
 }
 
@@ -280,6 +293,32 @@ describe('runSoupBackfills', () => {
     });
   });
 
+  it('cancels fetcher creation with the lane run', async () => {
+    const fetchPage = vi.fn(async () => ({ nextCursor: null }));
+    let creation: AbortSignal | undefined;
+    const createFetchPage = vi.fn(
+      (_userId: string, signal?: AbortSignal) =>
+        new Promise<typeof fetchPage>(() => {
+          creation = signal;
+        })
+    );
+    const fiber = Effect.runFork(
+      runSoupBackfill(
+        'user-1',
+        mockCacheHost,
+        { ...lane('core-entities', fetchPage), createFetchPage },
+        vi.fn()
+      )
+    );
+    await vi.waitFor(() => expect(creation).toBeDefined());
+    expect(creation?.aborted).toBe(false);
+
+    await Effect.runPromise(Fiber.interrupt(fiber));
+
+    expect(creation?.aborted).toBe(true);
+    expect(fetchPage).not.toHaveBeenCalled();
+  });
+
   it('restarts before the next page when storage changes between pages', async () => {
     const fetchPage = vi.fn(async (_input: unknown) => ({
       nextCursor: fetchPage.mock.calls.length === 1 ? 'saved-page' : null,
@@ -329,7 +368,7 @@ describe('runSoupBackfills', () => {
     expect(
       DEFAULT_SOUP_BACKFILL_LANES.map((lane) => lane.checkpointId)
     ).toEqual([
-      'channel-directory',
+      'channel-directory-reconciled',
       'core-entities',
       'initiatives',
       'email-signal-filter-metadata',
@@ -392,6 +431,30 @@ describe('runSoupBackfills', () => {
       });
     }
   );
+
+  it('reads every page of the channel lane from the primary', async () => {
+    const fetchPage = vi.fn(async (_input: FetchInput) => ({
+      nextCursor:
+        fetchPage.mock.calls.length < 3
+          ? `page-${fetchPage.mock.calls.length + 1}`
+          : null,
+    }));
+    await Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, {
+        ...CHANNEL_SOUP_BACKFILL_LANE,
+        createFetchPage: async () => fetchPage,
+        pageDelayMs: 0,
+      })
+    );
+    // The cursor does not carry it, so a continuation without it would
+    // read the rest of the pass from the replica.
+    expect(
+      fetchPage.mock.calls.map(
+        ([input]) =>
+          input.initial?.channelReads ?? input.continuation?.channelReads
+      )
+    ).toEqual(['PRIMARY', 'PRIMARY', 'PRIMARY']);
+  });
 
   it('bounds Shared mail to either recency window in one scan', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -732,6 +795,13 @@ describe('runSoupBackfills', () => {
     expect(loadSoupBackfillCheckpoint('user-1', 'later-lane').completed).toBe(
       true
     );
+    // Readers waiting on the failed lane learn that it gave up.
+    expect(soupBackfillLaneFailed('user-1', 'failed-lane', 'storage-1')).toBe(
+      true
+    );
+    expect(soupBackfillLaneFailed('user-1', 'later-lane', 'storage-1')).toBe(
+      false
+    );
     expect(warn).toHaveBeenCalledWith(
       '[graphql-soup-backfill] lane failed after retries',
       expect.objectContaining({ checkpointId: 'failed-lane' })
@@ -743,6 +813,158 @@ describe('runSoupBackfills', () => {
       'cache.backfill_state',
       'failed',
     ]);
+  });
+
+  describe('a retried pass', () => {
+    /** Three pages, first, p2 and p3; the calls in `failing` throw. */
+    function threePages(failing: readonly number[]) {
+      const fetchPage = vi.fn(
+        async (input: { continuation?: { cursor: string } }) => {
+          if (failing.includes(fetchPage.mock.calls.length))
+            throw new Error('offline');
+          const cursor = input.continuation?.cursor;
+          if (cursor === undefined) return { nextCursor: 'p2' };
+          return { nextCursor: cursor === 'p2' ? 'p3' : null };
+        }
+      );
+      const pages = () =>
+        fetchPage.mock.calls.map(
+          ([input]) => input.continuation?.cursor ?? 'first'
+        );
+      return { fetchPage, pages };
+    }
+
+    const restartingLane = (
+      fetchPage: NonNullable<SoupBackfillParams['fetchPage']>,
+      createFetchPage: SoupBackfillParams['createFetchPage'],
+      resumesAfter?: SoupBackfillParams['resumesAfter']
+    ): SoupBackfillParams => ({
+      ...lane('restarting-lane', fetchPage),
+      createFetchPage,
+      restartOnRun: true,
+      resumesAfter,
+      pageDelayMs: 0,
+    });
+
+    async function run(params: SoupBackfillParams) {
+      const running = Effect.runPromise(
+        runSoupBackfills('user-1', mockCacheHost, [params])
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+      await running;
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    it('resumes from its cursor with the page fetcher that read the pages before it', async () => {
+      const { fetchPage, pages } = threePages([3]);
+      const createFetchPage = vi.fn(async () => fetchPage);
+
+      await run(restartingLane(fetchPage, createFetchPage, () => true));
+
+      expect(pages()).toEqual(['first', 'p2', 'p3', 'p3']);
+      expect(createFetchPage).toHaveBeenCalledOnce();
+      expect(
+        loadSoupBackfillCheckpoint('user-1', 'restarting-lane')
+      ).toMatchObject({ completed: true, pagesFetched: 3 });
+    });
+
+    it('reads a page again when the check after it failed before its cursor was saved', async () => {
+      const { fetchPage, pages } = threePages([]);
+      fetchPage.mockImplementationOnce(async () => ({ nextCursor: 'p2' }));
+      fetchPage.mockImplementationOnce(async () => {
+        mockCacheHost.currentStorageGeneration.mockRejectedValueOnce(
+          new Error('cache temporarily unavailable')
+        );
+        return { nextCursor: 'p3' };
+      });
+      const createFetchPage = vi.fn(async () => fetchPage);
+
+      await run(restartingLane(fetchPage, createFetchPage, () => true));
+
+      expect(pages()).toEqual(['first', 'p2', 'p2', 'p3']);
+      expect(createFetchPage).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+      { lane: 'does not resume retries', resumesAfter: undefined },
+      { lane: 'cannot resume after the error', resumesAfter: () => false },
+    ])(
+      'starts again at the first page in a lane that $lane',
+      async ({ resumesAfter }) => {
+        const { fetchPage, pages } = threePages([3]);
+        const createFetchPage = vi.fn(async () => fetchPage);
+
+        await run(restartingLane(fetchPage, createFetchPage, resumesAfter));
+
+        expect(pages()).toEqual(['first', 'p2', 'p3', 'first', 'p2', 'p3']);
+        expect(createFetchPage).toHaveBeenCalledTimes(2);
+      }
+    );
+
+    it('resumes the channel lane after a failed page but not after an unproven pass', () => {
+      const resumesAfter = CHANNEL_SOUP_BACKFILL_LANE.resumesAfter;
+      expect(resumesAfter?.(new Error('offline'))).toBe(true);
+      expect(
+        resumesAfter?.(new ChannelDirectoryPassUnproven('partial_pass'))
+      ).toBe(false);
+    });
+
+    it('makes the page fetcher again when making it failed', async () => {
+      const { fetchPage, pages } = threePages([]);
+      const createFetchPage = vi
+        .fn(async () => fetchPage)
+        .mockRejectedValueOnce(new Error('offline'));
+
+      await run(restartingLane(fetchPage, createFetchPage, () => true));
+
+      expect(pages()).toEqual(['first', 'p2', 'p3']);
+      expect(createFetchPage).toHaveBeenCalledTimes(2);
+    });
+
+    it('starts again with a new page fetcher when the storage was replaced', async () => {
+      const { fetchPage, pages } = threePages([2]);
+      fetchPage.mockImplementationOnce(async () => ({ nextCursor: 'p2' }));
+      fetchPage.mockImplementationOnce(async () => {
+        mockCacheHost.currentStorageGeneration.mockResolvedValue('storage-2');
+        throw new Error('offline');
+      });
+      const createFetchPage = vi.fn(async () => fetchPage);
+
+      await run(restartingLane(fetchPage, createFetchPage, () => true));
+
+      expect(pages()).toEqual(['first', 'p2', 'first', 'p2', 'p3']);
+      expect(createFetchPage).toHaveBeenCalledTimes(2);
+      expect(
+        loadSoupBackfillCheckpoint('user-1', 'restarting-lane')
+      ).toMatchObject({ storageGeneration: 'storage-2', completed: true });
+    });
+  });
+
+  it("marks a lane that failed before saving a checkpoint in the cache's generation", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    // Every attempt fails before its first checkpoint save.
+    for (let attempt = 0; attempt < 6; attempt += 1)
+      mockCacheHost.currentStorageGeneration.mockRejectedValueOnce(
+        new Error('cache temporarily unavailable')
+      );
+    const fetchPage = vi.fn(async () => ({ nextCursor: null }));
+
+    const running = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        lane('core-entities', fetchPage),
+      ])
+    );
+    await vi.advanceTimersByTimeAsync(31_000);
+    await running;
+
+    expect(fetchPage).not.toHaveBeenCalled();
+    expect(soupBackfillLaneFailed('user-1', 'core-entities', 'storage-1')).toBe(
+      true
+    );
   });
 
   it('does not hydrate through a disabled cache host', async () => {
@@ -808,7 +1030,7 @@ describe('runSoupBackfills', () => {
     'restarts the runner with %s storage semantics and ignores obsolete completions',
     async (storage) => {
       localStorage.setItem(
-        'graphql-soup-backfill:v19:user-1:channel-directory',
+        'graphql-soup-backfill:v19:user-1:core-entities',
         JSON.stringify({
           userId: 'user-1',
           storageGeneration: 'storage-1',
@@ -831,6 +1053,8 @@ describe('runSoupBackfills', () => {
           options: { signal: AbortSignal }
         ) =>
           new Promise((resolve) => {
+            if (isChannelLanePage(variables.input))
+              return resolve({ nextCursor: null });
             fetchInputs.push(variables.input);
             fetchSignals.push(options.signal);
             // Model an already-admitted cache write that cannot be cancelled.
@@ -839,9 +1063,7 @@ describe('runSoupBackfills', () => {
       );
 
       const rendered = render(() => <BackfillRunner userId="user-1" />);
-      await vi.waitFor(() =>
-        expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce()
-      );
+      await vi.waitFor(() => expect(fetchInputs).toHaveLength(1));
       expect(fetchInputs[0]).toMatchObject({
         continuation: { cursor: 'stale-cursor' },
       });
@@ -851,9 +1073,7 @@ describe('runSoupBackfills', () => {
       }
       for (const callback of cacheGenerationCallbacks) callback({ storage });
 
-      await vi.waitFor(() =>
-        expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledTimes(2)
-      );
+      await vi.waitFor(() => expect(fetchInputs).toHaveLength(2));
       expect(fetchSignals[0]?.aborted).toBe(true);
       expect(fetchInputs[1]).toMatchObject(
         storage === 'preserved'
@@ -865,22 +1085,60 @@ describe('runSoupBackfills', () => {
           ? { nextCursor: 'stale-cursor', pagesFetched: 12 }
           : { nextCursor: null, pagesFetched: 0 };
       expect(
-        loadSoupBackfillCheckpoint('user-1', 'channel-directory')
+        loadSoupBackfillCheckpoint('user-1', 'core-entities')
       ).toMatchObject(expected);
       finishPages[0]({ nextCursor: 'obsolete-cursor' });
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(
-        loadSoupBackfillCheckpoint('user-1', 'channel-directory')
+        loadSoupBackfillCheckpoint('user-1', 'core-entities')
       ).toMatchObject(expected);
       rendered.unmount();
     }
   );
 
+  it('starts an interrupted channel pass again at its first page', async () => {
+    const completedAt = '2026-09-01T00:00:00.000Z';
+    localStorage.setItem(
+      'graphql-soup-backfill:v19:user-1:channel-directory-reconciled',
+      JSON.stringify({
+        userId: 'user-1',
+        storageGeneration: 'storage-1',
+        nextCursor: 'saved-cursor',
+        pagesFetched: 12,
+        completed: false,
+        scanStartedAt: '2026-09-02T00:00:00.000Z',
+        updatedSince: null,
+        completedAt,
+      })
+    );
+    graphqlMocks.hydrateGraphqlSoup.mockImplementation(
+      () => new Promise(() => {})
+    );
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+    try {
+      await vi.waitFor(() =>
+        expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce()
+      );
+      expect(graphqlMocks.hydrateGraphqlSoup.mock.calls[0][1]).toMatchObject({
+        input: { initial: { sortMethod: 'CREATED_AT' } },
+      });
+      // The finished pass before it still answers for the directory.
+      expect(
+        loadSoupBackfillCheckpoint('user-1', 'channel-directory-reconciled')
+      ).toMatchObject({ nextCursor: null, pagesFetched: 0, completedAt });
+    } finally {
+      rendered.unmount();
+    }
+  });
+
   it.each(['preserved', 'reset'] as const)(
     'resumes completed lane watermarks only for %s storage',
     async (storage) => {
       const watermark = '2026-09-01T00:00:00.000Z';
-      for (const checkpointId of ['channel-directory', 'email-thread-pages']) {
+      for (const checkpointId of [
+        'channel-directory-reconciled',
+        'email-thread-pages',
+      ]) {
         localStorage.setItem(
           `graphql-soup-backfill:v19:user-1:${checkpointId}`,
           JSON.stringify({
@@ -965,28 +1223,36 @@ describe('runSoupBackfills', () => {
     leaderMocks.createTabLeaderSignal
       .mockReturnValueOnce(firstLeader)
       .mockReturnValueOnce(secondLeader);
-    graphqlMocks.hydrateGraphqlSoup
-      .mockResolvedValueOnce({ nextCursor: 'committed-page-cursor' })
-      .mockImplementation(() => new Promise(() => {}));
+    const coreInputs: unknown[] = [];
+    let corePages = 0;
+    graphqlMocks.hydrateGraphqlSoup.mockImplementation(
+      (_document, variables: { input: unknown }) => {
+        if (isChannelLanePage(variables.input))
+          return Promise.resolve({ nextCursor: null });
+        coreInputs.push(variables.input);
+        corePages += 1;
+        return corePages === 1
+          ? Promise.resolve({ nextCursor: 'committed-page-cursor' })
+          : new Promise(() => {});
+      }
+    );
     const first = render(() => <BackfillRunner userId="user-1" />);
     const second = render(() => <BackfillRunner userId="user-1" />);
     try {
       await vi.waitFor(() =>
         expect(
-          loadSoupBackfillCheckpoint('user-1', 'channel-directory')
+          loadSoupBackfillCheckpoint('user-1', 'core-entities')
         ).toMatchObject({
           nextCursor: 'committed-page-cursor',
           pagesFetched: 1,
         })
       );
-      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce();
+      await vi.waitFor(() => expect(coreInputs).toHaveLength(2));
       setFirstLeader(false);
       setSecondLeader(true);
-      await vi.waitFor(() =>
-        expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledTimes(2)
-      );
-      expect(graphqlMocks.hydrateGraphqlSoup.mock.calls[1][1]).toMatchObject({
-        input: { continuation: { cursor: 'committed-page-cursor' } },
+      await vi.waitFor(() => expect(coreInputs).toHaveLength(3));
+      expect(coreInputs[2]).toMatchObject({
+        continuation: { cursor: 'committed-page-cursor' },
       });
       expect(cacheGenerationCallbacks.size).toBe(1);
     } finally {
@@ -1024,7 +1290,8 @@ describe('runSoupBackfills', () => {
       expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce()
     );
     expect(
-      loadSoupBackfillCheckpoint('user-1', 'channel-directory').scanStartedAt
+      loadSoupBackfillCheckpoint('user-1', 'channel-directory-reconciled')
+        .scanStartedAt
     ).not.toBeNull();
 
     setUserId('user-2');
@@ -1035,7 +1302,8 @@ describe('runSoupBackfills', () => {
     expect(fetchSignals[0]?.aborted).toBe(true);
     expect(fetchSignals[1]?.aborted).toBe(false);
     expect(
-      loadSoupBackfillCheckpoint('user-2', 'channel-directory').scanStartedAt
+      loadSoupBackfillCheckpoint('user-2', 'channel-directory-reconciled')
+        .scanStartedAt
     ).not.toBeNull();
 
     rendered.unmount();
@@ -1049,7 +1317,7 @@ it('warms sender metadata before paged backfill and pauses it without identity o
   leaderMocks.createTabLeaderSignal.mockReturnValue(leader);
   mailAccounts.mockClear();
   const rendered = render(() => {
-    useSoupBackfills(user);
+    useSoupBackfills(user, () => undefined);
     return null;
   });
   try {

@@ -3,6 +3,7 @@
  * list. Pure: no app imports, so a script can run the same comparison.
  */
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
+import type { ChannelMessage } from '@service-storage/generated/schemas/channelMessage';
 import type { ChannelDirectoryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { match } from 'ts-pattern';
 
@@ -12,7 +13,7 @@ export type DirectoryChannelType =
   | 'public'
   | 'team';
 
-export type DirectoryRole = 'owner' | 'admin' | 'member';
+type DirectoryRole = 'owner' | 'admin' | 'member';
 
 export type DirectoryParticipant = {
   userId: string;
@@ -21,14 +22,14 @@ export type DirectoryParticipant = {
   leftAt: string | null;
 };
 
-export type DirectoryBotParticipant = {
+type DirectoryBotParticipant = {
   botId: string;
   role: DirectoryRole;
   joinedAt: string;
   leftAt: string | null;
 };
 
-export type DirectoryMessage = {
+type DirectoryMessage = {
   messageId: string;
   threadId: string | null;
   senderId: string;
@@ -169,7 +170,62 @@ export type DirectoryDifference = {
 };
 
 // REST lists a bot among the participants under this prefix.
-const BOT_PRINCIPAL_PREFIX = 'bot|';
+export const BOT_PRINCIPAL_PREFIX = 'bot|';
+
+const RFC3339_INSTANT =
+  /^(.+T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/i;
+
+/** Microseconds since the epoch, keeping the microseconds the server sends
+ * and `Date.parse` drops: two updates in one millisecond still order. */
+export function instantMicros(value: string): number {
+  const parts = RFC3339_INSTANT.exec(value);
+  if (!parts) return Date.parse(value) * 1000;
+  const [, seconds, fraction = '', zone] = parts;
+  return (
+    Date.parse(`${seconds}${zone}`) * 1000 +
+    Number(fraction.slice(0, 6).padEnd(6, '0'))
+  );
+}
+
+/** Channels in the REST channel list's order, newest update first and then
+ * by id, descending (`updated_at DESC, id DESC`), so a reader that keeps
+ * the order of ties (a sort by name, the first match) picks as it did. */
+export function inDirectoryOrder(
+  channels: readonly DirectoryChannel[]
+): DirectoryChannel[] {
+  return channels
+    .map((channel) => ({ channel, at: instantMicros(channel.updatedAt) }))
+    .sort((a, b) => {
+      if (a.at !== b.at) return b.at - a.at;
+      if (a.channel.id === b.channel.id) return 0;
+      return a.channel.id < b.channel.id ? 1 : -1;
+    })
+    .map(({ channel }) => channel);
+}
+
+/** Puts `channel` into `channels`, which are in directory order, where that
+ * order places it. */
+export function insertInDirectoryOrder(
+  channels: DirectoryChannel[],
+  channel: DirectoryChannel
+) {
+  const at = instantMicros(channel.updatedAt);
+  // Whether `other` comes before `channel`.
+  const before = (other: DirectoryChannel) => {
+    const otherAt = instantMicros(other.updatedAt);
+    if (otherAt !== at) return otherAt > at;
+    return other.id > channel.id;
+  };
+  let low = 0;
+  let high = channels.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    const other = channels[middle];
+    if (other && before(other)) low = middle + 1;
+    else high = middle;
+  }
+  channels.splice(low, 0, channel);
+}
 
 function sameInstant(
   left: string | null | undefined,
@@ -364,4 +420,79 @@ export function countDirectoryDifferences(
   const counts: Partial<Record<DirectoryDifferenceKind, number>> = {};
   for (const { kind } of differences) counts[kind] = (counts[kind] ?? 0) + 1;
   return counts;
+}
+
+function channelMessage(value: DirectoryMessage | null): ChannelMessage | null {
+  if (!value) return null;
+  return {
+    message_id: value.messageId,
+    thread_id: value.threadId,
+    sender_id: value.senderId,
+    content: value.content,
+    created_at: value.createdAt,
+    updated_at: value.updatedAt,
+    deleted_at: value.deletedAt,
+    mentions: value.mentions,
+  };
+}
+
+const channelListItems = new WeakMap<DirectoryChannel, ApiChannelWithLatest>();
+
+/**
+ * A directory record in the channel list's shape, for readers written
+ * against it (recipients, mentions, channel entities). Bots join the
+ * participants as `bot|<id>`, as the list sent them. One record always maps
+ * to the same object, so a list rebuilt from unchanged records keeps its
+ * items.
+ */
+export function toChannelListItem(
+  channel: DirectoryChannel
+): ApiChannelWithLatest {
+  const cached = channelListItems.get(channel);
+  if (cached) return cached;
+  const item: ApiChannelWithLatest = {
+    id: channel.id,
+    name: channel.name,
+    channel_type: channel.channelType,
+    owner_id: channel.ownerId,
+    org_id:
+      channel.organizationId === null ? null : Number(channel.organizationId),
+    team_id: channel.teamId,
+    auto_join_team: channel.autoJoinTeam,
+    created_at: channel.createdAt,
+    updated_at: channel.updatedAt,
+    viewed_at: channel.viewedAt,
+    interacted_at: channel.interactedAt,
+    is_participant: channel.isParticipant,
+    frecency_score: channel.frecencyScore,
+    participants: [
+      ...channel.participants.map((participant) => ({
+        channel_id: channel.id,
+        user_id: participant.userId,
+        role: participant.role,
+        joined_at: participant.joinedAt,
+        left_at: participant.leftAt,
+      })),
+      ...channel.botParticipants.map((participant) => ({
+        channel_id: channel.id,
+        user_id: `${BOT_PRINCIPAL_PREFIX}${participant.botId}`,
+        role: participant.role,
+        joined_at: participant.joinedAt,
+        left_at: participant.leftAt,
+      })),
+    ],
+    ...(channel.agentDm
+      ? {
+          agent_dm: {
+            bot_id: channel.agentDm.botId,
+            name: channel.agentDm.name,
+            avatar_url: channel.agentDm.avatarUrl,
+          },
+        }
+      : {}),
+    latest_message: channelMessage(channel.latestMessage),
+    latest_non_thread_message: channelMessage(channel.latestNonThreadMessage),
+  };
+  channelListItems.set(channel, item);
+  return item;
 }

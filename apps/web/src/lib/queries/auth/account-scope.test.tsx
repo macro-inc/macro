@@ -6,6 +6,7 @@ import { batch, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useListChannelsQuery } from '../channel/channels';
 import { channelKeys } from '../channel/keys';
+import { ownChannelWrites } from '../channel/own-writes';
 import { emailKeys } from '../email/keys';
 import {
   emailLinksQueryOptions,
@@ -315,4 +316,20 @@ it('forgets the previous account’s routine drafts', async () => {
   client.setQueryData(key, [{ id: 'draft-1', state: 'drafting' }]);
   await resetQueryAccountSession();
   expect(client.getQueryData(key)).toBeUndefined();
+});
+
+// Directories ignore another sign-in's writes, but the store kept them, their
+// hold timers and the reads in flight until each hold ended.
+it('forgets the channel writes the previous sign-in made', async () => {
+  const own = ownChannelWrites(client);
+  const account = { userId: viewer(), session: 0 };
+  own.send(account, ['channel-1']).settle({ 'channel-1': null });
+  const late = own.send(account, ['channel-2']);
+  expect(Object.keys(own.writes())).toEqual(['channel-1']);
+
+  await resetQueryAccountSession();
+  late.settle({ 'channel-2': null });
+
+  expect(own.writes()).toEqual({});
+  expect(own.inFlight()).toEqual([]);
 });
