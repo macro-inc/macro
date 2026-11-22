@@ -189,6 +189,21 @@ it('removes a created task from its project when the create fails', async () => 
     project.createTask('project', 'Ship it', '', [], new Map(), vi.fn())
   ).rejects.toThrow('offline');
   expect(sources.pendingTasks('project')).toEqual([]);
+
+  // Created, but its Project value did not take: it leaves this list.
+  mock.createTask.mockImplementation(
+    async (_title, _content, _properties, _definitions, _history, options) => {
+      options.onMutate();
+      options.onCreated({ documentId: 'task' });
+      expect(sources.pendingTasks('project')).toHaveLength(1);
+      options.onProjectRejected();
+      return { documentId: 'task' };
+    }
+  );
+  expect(
+    await project.createTask('project', 'Ship it', '', [], new Map(), vi.fn())
+  ).toEqual({ documentId: 'task' });
+  expect(sources.pendingTasks('project')).toEqual([]);
   dispose();
 });
 

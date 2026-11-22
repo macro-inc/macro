@@ -184,6 +184,12 @@ export function createProjectSources(
                   pending?.confirm(task.documentId);
                   options?.onCreated?.(task);
                 },
+                // The task exists, but not in this project: it leaves the list.
+                onProjectRejected: () => {
+                  pending?.fail();
+                  options?.onProjectRejected?.();
+                },
+                span,
               }
             );
           } finally {

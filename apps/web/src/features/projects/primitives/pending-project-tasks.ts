@@ -20,7 +20,7 @@ type PendingProjectTask = OptimisticTask & {
 export type PendingProjectTaskHandle = {
   /** The server created it: show it under its real id until listed. */
   confirm(taskId: string): void;
-  /** The create failed: remove it. */
+  /** The create failed, or the task is not in the project: remove it. */
   fail(): void;
 };
 
@@ -85,7 +85,6 @@ export function createPendingProjectTasks(
           );
         },
         fail() {
-          if (settled) return;
           settled = true;
           remove(new Set([key]));
         },

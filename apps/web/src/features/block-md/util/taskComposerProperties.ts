@@ -2,6 +2,7 @@ import { DEFAULT_TASK_COMPOSER_PROPERTY_IDS } from '@app/features/task-composer/
 import { toast } from '@core/component/Toast/Toast';
 import { createTaskWithInitialSnapshot } from '@core/util/create';
 import { filterMap } from '@core/util/list';
+import type { Span } from '@macro-inc/observability';
 import {
   propertyApiValuesToNormalized,
   propertyValueToApi,
@@ -124,6 +125,10 @@ export async function createTaskWithProperties(
         Awaited<ReturnType<typeof createTaskWithInitialSnapshot>>
       >
     ) => void;
+    /** The task was created but its chosen project did not take. */
+    onProjectRejected?: () => void;
+    /** Times the project check as a child of this span. */
+    span?: Span;
   }
 ) {
   options?.onMutate?.();
@@ -166,10 +171,11 @@ export async function createTaskWithProperties(
   // Creation keeps the task when a property is rejected, so confirm a chosen
   // project took and say when it didn't.
   const projectId = chosenProjectId(properties);
-  if (
-    projectId &&
-    (await taskIsInProject(createdTask.documentId, projectId)) === false
-  ) {
+  const inProject = projectId
+    ? await verifyTaskProject(createdTask.documentId, projectId, options?.span)
+    : undefined;
+  if (inProject === false) {
+    options?.onProjectRejected?.();
     toast.failure(
       'Task created, but could not be added to the project. Use Add to project from the task menu to try again.'
     );
@@ -195,6 +201,20 @@ function chosenProjectId(
  * Whether the server has `taskId` in `projectId`, from its Project property;
  * undefined when the properties can't be read.
  */
+/** `taskIsInProject`, as a child phase of the create span when there is one. */
+async function verifyTaskProject(
+  taskId: string,
+  projectId: string,
+  parent: Span | undefined
+): Promise<boolean | undefined> {
+  if (!parent) return taskIsInProject(taskId, projectId);
+  return parent.span('task.compose.verify_project', async (span) => {
+    const inProject = await taskIsInProject(taskId, projectId);
+    if (inProject !== undefined) span.setAttr('task.in_project', inProject);
+    return inProject;
+  });
+}
+
 async function taskIsInProject(
   taskId: string,
   projectId: string

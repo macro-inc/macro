@@ -42,7 +42,13 @@ export function buildOptimisticTask(
   const values: Array<readonly [string, PropertyApiValues]> = [
     ...input.properties,
   ];
-  if (!values.some(([id]) => id === SYSTEM_PROPERTY_IDS.STATUS)) {
+  // A cleared Status is not sent either.
+  if (
+    !values.some(
+      ([id, value]) =>
+        id === SYSTEM_PROPERTY_IDS.STATUS && soupPropertyValue(value)
+    )
+  ) {
     values.push([
       SYSTEM_PROPERTY_IDS.STATUS,
       {

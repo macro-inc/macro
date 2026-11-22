@@ -40,10 +40,14 @@ it('settles creates in whatever order the server answers them', () => {
     first.fail();
     expect(shown(pending)).toEqual(['task-2']);
 
-    // A late answer for a settled create changes nothing.
+    // A late answer for a failed create changes nothing.
     first.confirm('task-1');
-    second.fail();
     expect(shown(pending)).toEqual(['task-2']);
+
+    // A created task its project rejected leaves, with its timer.
+    second.fail();
+    expect(shown(pending)).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
     dispose();
   });
 });
