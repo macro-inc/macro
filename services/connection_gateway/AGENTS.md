@@ -21,7 +21,11 @@ the socket themselves.
   (`activity::UserActivity`). A connection made with a person's own session
   marks them on open and hourly; marks are written in a batch every 30 s, at
   most hourly per user per instance, to `user_last_seen` through
-  `activity::SeenLog`.
+  `activity::SeenLog`. The open mark is made once the connection is
+  registered, before its loop runs, so a socket that closes at once still
+  counts; one that fails to register is not marked. A stopped instance
+  exits without writing its last round (`axum::serve` has no graceful
+  shutdown); its clients reconnect elsewhere and are marked again.
 - `scripts/stale_connections.rs` (`stale_connections` bin): scans DynamoDB for
   connections past the 60s timeout; `README.md` has usage.
 
