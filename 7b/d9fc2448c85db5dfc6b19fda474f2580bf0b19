@@ -1,0 +1,82 @@
+apps/web/src/lib/queries/connectors/connect.test.ts
+  s_03b21ec112ad69::t_3ec606ff52cac6 226-233,235-239
+apps/web/src/lib/queries/connectors/mutations.ts
+  s_03b21ec112ad69::t_ce8d8ddc0cdc5a 4,80-82,84-85
+apps/web/src/lib/i18n/locales/en.ts
+  s_03b21ec112ad69::t_cadb90cb75773c 25
+  s_03b21ec112ad69::t_ce9f3233e90e0c 63
+apps/web/src/lib/queries/connectors/connectors.ts
+  s_03b21ec112ad69::t_01fe57249f55f0 21
+apps/web/src/features/onboarding/queries/tool-connect.ts
+  s_03b21ec112ad69::t_58d380f9d0a378 10,23
+apps/web/src/routes/pages.tsx
+  s_03b21ec112ad69::t_eac98b202e2350 87-97
+apps/web/src/features/onboarding/queries/connected-tools.ts
+  s_03b21ec112ad69::t_58d380f9d0a378 20,29-30
+apps/web/src/features/onboarding/components/tool-tile.tsx
+  s_03b21ec112ad69::t_58d380f9d0a378 15,17-25,29
+apps/web/src/features/settings/connections/integrations-view.tsx
+  s_03b21ec112ad69::t_f11555a419a641 77-78,80,123-126,130
+docs/agent-guide/login.md
+  s_03b21ec112ad69::t_477b633ff1dd33 346-352
+apps/web/src/routes/app-router-view.tsx
+  s_03b21ec112ad69::t_cadb90cb75773c 149
+  s_03b21ec112ad69::t_eac98b202e2350 87,285-287
+  s_03b21ec112ad69::t_00dedbe90dc81a 288
+apps/web/AGENTS.md
+  s_03b21ec112ad69::t_3ec606ff52cac6 512-514
+apps/web/src/features/onboarding/queries/connected-tools.test.ts
+  s_03b21ec112ad69::t_8daba68abfcbec 36-37,41,44-49
+apps/web/src/features/settings/connections/github-connect-page.tsx
+  s_03b21ec112ad69::t_ce9f3233e90e0c 1-12,21-56,60-95,102-154
+  s_03b21ec112ad69::t_cadb90cb75773c 13-20,57-59,96-101
+apps/web/src/features/settings/GitHub.tsx
+  s_03b21ec112ad69::t_2c6912697379c0 3,6-11,20-21,25
+apps/web/src/features/onboarding/context/onboarding-context.tsx
+  s_03b21ec112ad69::t_58d380f9d0a378 72
+apps/web/src/features/onboarding/views/tools-step.tsx
+  s_03b21ec112ad69::t_cadb90cb75773c 26-27
+  s_03b21ec112ad69::t_58d380f9d0a378 95,99
+docs/agent-guide/settings.md
+  s_03b21ec112ad69::t_c8ae2a74967c89 806-809,845-852
+apps/web/src/features/onboarding/browser-test/onboarding.browser.e2e.ts
+  s_03b21ec112ad69::t_58d380f9d0a378 684,695
+apps/web/src/features/settings/connections/github-item.test.tsx
+  s_03b21ec112ad69::t_c21d423aafba05 1,3,5-6,8-87,89-137
+  s_03b21ec112ad69::t_cadb90cb75773c 2,4,7,88
+apps/web/src/features/onboarding/queries/tool-connect.test.ts
+  s_03b21ec112ad69::t_8daba68abfcbec 70,73
+apps/web/src/features/onboarding/views/tools-step.test.tsx
+  s_03b21ec112ad69::t_8daba68abfcbec 96
+  s_03b21ec112ad69::t_58d380f9d0a378 102
+apps/web/src/lib/queries/connectors/connectors.test.tsx
+  s_03b21ec112ad69::t_02a6d14ca9cd94 24,35-37,197
+apps/web/src/routes/routes.ts
+  s_03b21ec112ad69::t_eac98b202e2350 174-184
+apps/web/src/features/settings/connections/github-connect-page.test.tsx
+  s_03b21ec112ad69::t_cadb90cb75773c 1-78
+apps/web/src/features/settings/connections/integration-items.tsx
+  s_03b21ec112ad69::t_43820e9b783ea6 2,4,15-18
+  s_03b21ec112ad69::t_2c6912697379c0 33,173-176,181,183-198,212-217,220-228,238-239,244,247-249,264,269,272
+  s_03b21ec112ad69::t_d1da9ff87b49f6 202-211
+apps/web/src/lib/i18n/locales/en/github-connect.ts
+  s_03b21ec112ad69::t_ce9f3233e90e0c 1-8
+apps/web/src/lib/queries/connectors/connect.ts
+  s_03b21ec112ad69::t_fec23ea820916b 20,61-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7bd9fc2448c85db5dfc6b19fda474f2580bf0b19",
+  "prompts": {},
+  "sessions": {
+    "s_03b21ec112ad69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4313240-0b8c-4454-9ac4-f2c59a5300e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
