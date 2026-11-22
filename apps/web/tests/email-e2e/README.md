@@ -87,7 +87,9 @@ attachments and report annotations. Its unchanged-refresh baseline starts after
 Noise loads and the menu opens; each wake waits for a newly started matching
 Noise query and records before/after node facts and request/response hashes.
 Scheduled-Undo failure cases silence live updates while holding the toast, so
-Undo itself observes that the forced send has completed. Retry counts remain visible in the JSON
+Undo itself observes that the forced send has completed. Lost-response reload
+cases await the intercepted submit abort and its journal lease release before
+reloading; interruption of an active dispatch is a separate recovery case. Retry counts remain visible in the JSON
 report; the suite follows the shared retry policy.
 
 ## Writing a test

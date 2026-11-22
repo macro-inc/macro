@@ -6,6 +6,8 @@
 import recipientRefusal from '../../../../crates/models_email/tests/fixtures/recipient-refusal.json' with {
   type: 'json',
 };
+import type { EmailSendIntent } from '../../src/lib/queries/email/send-intent';
+import type { SendEmailMessageMutationVariables } from '../../src/lib/service-clients/service-storage/graphql/generated/graphql';
 import {
   body,
   composeNew,
@@ -170,6 +172,11 @@ for (const provider of PROVIDERS) {
       mailbox,
     }) => {
       const thread = await lunch(mailbox);
+      const submitAborted = page.waitForEvent('requestfailed', {
+        predicate: (request) =>
+          graphqlOperation(request) === 'SendEmailMessage',
+        timeout: 30_000,
+      });
       // The service receives the send; its answer never arrives, and until
       // the reload neither does the answer to what became of it.
       let reloaded = false;
@@ -191,6 +198,56 @@ for (const provider of PROVIDERS) {
       await replyEditor(page).pressSequentially('Works for me.');
       await page.getByRole('button', { name: 'Send email' }).click();
       await expect.poll(() => sentSubjects(mailbox)).toEqual(['Re: Lunch?']);
+      const aborted = await submitAborted;
+      const { variables } = aborted.postDataJSON() as {
+        variables: SendEmailMessageMutationVariables;
+      };
+      // Reload after the lost response has settled its local dispatch lease.
+      // Reloading an active dispatch instead leaves a 60 s lease (mac-atvo),
+      // a separate recovery case from this test's unanswered send.
+      await expect
+        .poll(
+          () =>
+            page.evaluate(async (attemptId) => {
+              const name = 'macro-email-working-copies-v1';
+              if (!(await indexedDB.databases()).some((db) => db.name === name))
+                return null;
+              return new Promise<number | null>((resolve, reject) => {
+                const open = indexedDB.open(name);
+                open.onerror = () => reject(open.error);
+                open.onsuccess = () => {
+                  const db = open.result;
+                  const tx = db.transaction('sends', 'readonly');
+                  const request = tx.objectStore('sends').get(attemptId);
+                  let leaseUntil: number | null = null;
+                  request.onsuccess = () => {
+                    const intent = request.result as
+                      | EmailSendIntent
+                      | undefined;
+                    leaseUntil = intent?.dispatch?.leaseUntil ?? null;
+                  };
+                  tx.oncomplete = () => {
+                    db.close();
+                    resolve(leaseUntil);
+                  };
+                  tx.onerror = () => {
+                    db.close();
+                    reject(tx.error);
+                  };
+                  tx.onabort = () => {
+                    db.close();
+                    reject(tx.error);
+                  };
+                };
+              });
+            }, String(variables.input.attempt.attemptId)),
+          {
+            message:
+              'The aborted submit must release its journal dispatch lease before reload',
+            timeout: 30_000,
+          }
+        )
+        .toBe(0);
       reloaded = true;
       await page.reload();
 
