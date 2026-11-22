@@ -357,23 +357,26 @@ export function InviteAgentForm(props: {
             when={offers()}
             fallback={
               <Show
-                when={props.offersFailed && !(props.hosts && nothingLoaded())}
+                when={props.offersFailed}
                 fallback={<ComputerSizeSkeleton />}
               >
-                <div
-                  role="alert"
-                  class="flex flex-wrap items-center gap-2 text-sm text-ink-muted"
-                >
-                  <span>{t('teamAgents.sizesFailed')}</span>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => props.onRetryOffers()}
+                {/* With the computers failed too, one error below says both. */}
+                <Show when={!(props.hosts && nothingLoaded())}>
+                  <div
+                    role="alert"
+                    class="flex flex-wrap items-center gap-2 text-sm text-ink-muted"
                   >
-                    {t('teamAgents.tryAgain')}
-                  </Button>
-                </div>
+                    <span>{t('teamAgents.sizesFailed')}</span>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => props.onRetryOffers()}
+                    >
+                      {t('teamAgents.tryAgain')}
+                    </Button>
+                  </div>
+                </Show>
               </Show>
             }
           >

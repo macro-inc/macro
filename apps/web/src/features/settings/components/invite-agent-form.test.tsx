@@ -259,6 +259,10 @@ it('shows one error and no Add when neither the sizes nor the computers load', (
     />
   ));
   expect(screen.getAllByRole('alert')).toHaveLength(1);
+  // Nothing is still loading, either.
+  expect(
+    screen.queryByRole('status', { name: 'Loading computer sizes' })
+  ).toBeNull();
   expect(screen.getByText("Couldn't load computers.")).toBeTruthy();
   expect(screen.queryByText("Couldn't list your computers.")).toBeNull();
   expect(
