@@ -307,6 +307,13 @@ fn egress_error(error: EgressError) -> CodeModeError {
         EgressError::RateLimited { retry_after } => {
             CodeModeError::ConnectedAppRateLimited { retry_after }
         }
+        // Egress answers a sign-in itself, as a tool result; should one
+        // still arrive, it is not a server that could not be reached.
+        EgressError::SignInRequired => CodeModeError::Invalid(
+            "This connected app asked the selected account to sign in; this call did not run. \
+             Ask them to sign in to it under Agents → Connections."
+                .into(),
+        ),
         error => {
             tracing::error!(%error, "a connected app could not be reached");
             CodeModeError::Unavailable

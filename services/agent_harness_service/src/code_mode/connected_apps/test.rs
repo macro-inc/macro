@@ -23,6 +23,13 @@ fn an_upstream_rate_limit_is_a_rate_limited_connected_app() {
     ));
 }
 
+#[test]
+fn a_sign_in_request_is_not_an_unreachable_connected_app() {
+    let error = egress_error(EgressError::SignInRequired);
+
+    assert!(matches!(error, CodeModeError::Invalid(_)), "{error:?}");
+}
+
 use agent_egress::domain::model::McpServerListing;
 use agent_session::testing::{InMemoryAgentSessionRepo, test_agent_session};
 use bots::domain::models::{AgentMcpServer, AgentMcpServers};
