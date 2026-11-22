@@ -1,46 +1,36 @@
 import { t } from '@app/lib/i18n';
 import { formatTime } from '@core/util/date';
-import SparkleIcon from '@icon/system/fill/sparkle-fill.svg';
-import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
-import CircleIcon from '@icon/system/regular/circle.svg';
-import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
-import RepeatIcon from '@icon/system/regular/repeat.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
-import { Button, cn, Item, Spinner, Tooltip } from '@ui';
+import { Button, cn, Item, Spinner, ToggleSwitch, Tooltip } from '@ui';
 import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import type { SuggestionItemParts } from '../context/suggestions-source';
-import type { Suggestion, SuggestionStatus } from '../core/suggestion';
-import { ageLabel, sinceLabel } from './waiting';
+import { type FeedEntry, savedRoutineId } from '../core/lists';
+import { doneWhenTakenUp, type Suggestion } from '../core/suggestion';
+import { suggestionLook } from './suggestion-tile';
+import { ageLabel } from './waiting';
 
-type RowState = {
-  suggestion: Suggestion;
-  status: SuggestionStatus;
-  /** Its action is under way. */
-  busy: boolean;
-  /** Its last action failed. */
-  failed: boolean;
-  /** It was rewritten since the row showed it; the action took nothing up. */
-  changed: boolean;
-  onDismiss(): void;
-};
-
-export type MacroRowProps = RowState & {
-  /** Its button: run it, open its chat, or turn its routine on. */
-  onAccept(): void;
-  /** Pressing its text: look at what it would do before taking it up. */
-  onLook(): void;
-};
-
-export type ToDoRowProps = RowState & {
+export type SuggestionRowProps = {
+  entry: FeedEntry;
   parts: SuggestionItemParts;
-  /** Take it up and open its item or its draft. */
+  /** Whether a turned-on row's saved routine is on; undefined while unknown. */
+  routineEnabled?: boolean;
+  /** Take it up: run it, open its chat or item, or turn its routine on. */
+  onAccept(): void;
+  /** Look at what Macro would do, or is doing, without taking it up. */
+  onLook(): void;
+  /** Open what a settled one left. */
   onOpen(): void;
-  /**
-   * Take it up without opening anything: the person has dealt with it.
-   * Absent for a reply, which is done once the person replies.
-   */
-  onMarkDone?: () => void;
+  /** Take it up without opening anything: the person has dealt with it. */
+  onMarkDone(): void;
+  onUndoDone(): void;
+  /** Stop its run and keep it. */
+  onStop(): void;
+  onDismiss(): void;
+  onUndoDismiss(): void;
+  onRoutineEnabled(enabled: boolean): void;
 };
 
 /**
@@ -83,117 +73,70 @@ function Cut(props: { children: JSX.Element }) {
   );
 }
 
-/**
- * The row's text as one press target: its title over one quiet line, each
- * kept to one line.
- */
-function RowText(props: {
-  titleId: string;
-  title: string;
-  /** A finished row's title is quieter, a dismissed one's quieter still. */
-  tone?: 'done' | 'dismissed';
-  onPress?: () => void;
-  children: JSX.Element;
-}) {
-  const text = () => (
-    <>
-      <Cut>
-        <Item.Title
-          id={props.titleId}
-          class={cn(
-            'truncate font-medium',
-            props.tone === 'done' && 'text-ink-muted',
-            props.tone === 'dismissed' && 'text-ink-placeholder'
-          )}
-        >
-          {props.title}
-        </Item.Title>
-      </Cut>
-      {props.children}
-    </>
-  );
-
+/** A row's second line: smaller and dimmer than its title, on one line. */
+function RowLine(props: { class?: string; children: JSX.Element }) {
   return (
-    <Show
-      when={props.onPress}
-      fallback={<div class="flex min-w-0 flex-col gap-0.5">{text()}</div>}
-    >
-      <button
-        type="button"
-        class="flex min-w-0 flex-col gap-0.5 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-focus"
-        onClick={props.onPress}
+    <Cut>
+      <Item.Description
+        class={cn(
+          'flex min-w-0 items-center gap-1.5 truncate text-[13px] leading-[18px] text-ink-extra-muted',
+          props.class
+        )}
       >
-        {text()}
-      </button>
-    </Show>
-  );
-}
-
-/** What went wrong with the row's last action, under its text. */
-function RowNotes(props: { failed: boolean; changed: boolean }) {
-  return (
-    <>
-      <Show when={props.failed}>
-        <p role="alert" class="text-[13px] leading-[18px] text-failure">
-          {t('suggestions.actionFailed')}
-        </p>
-      </Show>
-      <Show when={props.changed}>
-        <p
-          role="status"
-          class="text-[13px] leading-[18px] text-ink-muted"
-          data-suggestion-changed
-        >
-          {t('suggestions.suggestionChanged')}
-        </p>
-      </Show>
-    </>
-  );
-}
-
-function DismissButton(props: RowState) {
-  return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label={t(
-        props.status === 'running'
-          ? 'suggestions.stopAndDismissSuggestion'
-          : 'suggestions.dismissSuggestion',
-        { title: props.suggestion.title }
-      )}
-      tooltip={t(
-        props.status === 'running'
-          ? 'suggestions.stopAndDismiss'
-          : 'suggestions.dismiss'
-      )}
-      onClick={props.onDismiss}
-    >
-      <CloseIcon class="size-3.5" />
-    </Button>
-  );
-}
-
-/**
- * The right side of a row that waits or runs. At rest it shows only how long
- * the row has waited. Pointing at the row or focusing in it shows its
- * buttons, and dismiss takes the time's place at the row's end. The buttons
- * keep their room while hidden, so nothing in the row moves.
- */
-function RowEnd(props: RowState & { time: string; children: JSX.Element }) {
-  return (
-    <Item.Actions class="relative min-w-20 justify-end">
-      <span class="flex items-center gap-1 opacity-0 transition-opacity group-focus-within/suggestion:opacity-100 not-touch:group-hover/suggestion:opacity-100">
         {props.children}
-        <DismissButton {...props} />
-      </span>
-      <Item.Metadata
-        class="pointer-events-none absolute right-0 whitespace-nowrap text-ink-placeholder transition-opacity group-focus-within/suggestion:opacity-0 not-touch:group-hover/suggestion:opacity-0"
-        data-suggestion-time
+      </Item.Description>
+    </Cut>
+  );
+}
+
+/** A 32px tile: the kind's glyph on its colour, or how the row stands. */
+function RowTile(props: { entry: FeedEntry }) {
+  const look = () => suggestionLook(props.entry.suggestion);
+  const neutral = 'bg-hover text-ink-muted';
+
+  return (
+    <Item.Media
+      class={cn(
+        'size-8 self-center rounded-lg',
+        props.entry.state === 'failed' && 'bg-failure/15 text-failure',
+        props.entry.state === 'finished' && 'bg-success/15 text-success',
+        (props.entry.state === 'markedDone' ||
+          props.entry.state === 'done' ||
+          props.entry.state === 'dismissed') &&
+          neutral,
+        (props.entry.state === 'open' ||
+          props.entry.state === 'running' ||
+          props.entry.state === 'routineOn') &&
+          look().fill
+      )}
+      aria-hidden="true"
+      data-suggestion-tile
+    >
+      <Switch
+        fallback={
+          <Dynamic component={look().icon} class={cn('size-4', look().tint)} />
+        }
       >
-        {props.time}
-      </Item.Metadata>
-    </Item.Actions>
+        <Match when={props.entry.state === 'running'}>
+          <Spinner size="sm" decorative class={cn('size-4', look().tint)} />
+        </Match>
+        <Match when={props.entry.state === 'failed'}>
+          <WarningCircleIcon class="size-4" />
+        </Match>
+        <Match
+          when={
+            props.entry.state === 'finished' ||
+            props.entry.state === 'markedDone' ||
+            props.entry.state === 'done'
+          }
+        >
+          <CheckIcon class="size-4" />
+        </Match>
+        <Match when={props.entry.state === 'dismissed'}>
+          <Dynamic component={look().icon} class="size-4 text-ink-disabled" />
+        </Match>
+      </Switch>
+    </Item.Media>
   );
 }
 
@@ -206,20 +149,13 @@ function sendsText(suggestion: Suggestion): string | undefined {
   return suggestion.sends;
 }
 
-/** A row's second line: smaller and dimmer than its title, on one line. */
-function RowLine(props: { class?: string; children: JSX.Element }) {
-  return (
-    <Cut>
-      <Item.Description
-        class={cn(
-          'truncate text-[13px] leading-[18px] text-ink-extra-muted',
-          props.class
-        )}
-      >
-        {props.children}
-      </Item.Description>
-    </Cut>
-  );
+/** The line a background run wrote saying what it did; undefined until then. */
+function runReport(suggestion: Suggestion): string | undefined {
+  if (suggestion.kind !== 'prompt' || suggestion.runMode !== 'background') {
+    return undefined;
+  }
+
+  return suggestion.run?.report;
 }
 
 /** A routine's sentence as plain text; undefined once its routine is gone. */
@@ -230,353 +166,507 @@ function routineSentence(suggestion: Suggestion): string | undefined {
   return text?.trim() ? text : undefined;
 }
 
-/** What pressing the row's button is called for its kind. */
-function acceptLabel(props: MacroRowProps): string {
-  const suggestion = props.suggestion;
+/** Asked to stop and not yet stopped. */
+function stopping(suggestion: Suggestion): boolean {
+  return (
+    suggestion.kind === 'prompt' &&
+    suggestion.runMode === 'background' &&
+    !!suggestion.run?.stopping
+  );
+}
+
+/**
+ * What a run will post or send, then the rest: a run's line leads with it, so
+ * it is read before Run, which is the approval.
+ */
+function SendsFirst(props: { suggestion: Suggestion; children: string }) {
+  return (
+    <Show when={sendsText(props.suggestion)} fallback={props.children}>
+      {(sends) => (
+        <span class="truncate">
+          <span data-suggestion-sends>{sends()}</span>
+          {` · ${props.children}`}
+        </span>
+      )}
+    </Show>
+  );
+}
+
+/** The item a to-do is about, who wrote, and whether a reply is drafted. */
+function ItemLine(props: {
+  suggestion: Suggestion;
+  parts: SuggestionItemParts;
+}) {
+  const summary = () => (
+    <span class="truncate">{props.suggestion.summary}</span>
+  );
+  const drafted = () =>
+    props.suggestion.kind === 'entity' && !!props.suggestion.draft;
+
+  return (
+    <RowLine>
+      <Show when={props.suggestion.about[0]} fallback={summary()}>
+        {(target) => (
+          <props.parts.Source
+            target={target()}
+            from={
+              props.suggestion.kind === 'entity'
+                ? props.suggestion.from
+                : undefined
+            }
+            fallback={summary()}
+          />
+        )}
+      </Show>
+      <Show when={drafted()}>
+        <span class="-ml-1.5 shrink-0 whitespace-pre" data-suggestion-drafted>
+          {` · ${t('suggestions.replyDrafted')}`}
+        </span>
+      </Show>
+    </RowLine>
+  );
+}
+
+/** The line under the title, for the row's state. */
+function StateLine(props: SuggestionRowProps) {
+  const suggestion = () => props.entry.suggestion;
+
+  return (
+    <Switch>
+      <Match when={props.entry.state === 'dismissed' && props.entry.failed}>
+        <RowLine class="text-failure">
+          <span role="alert" class="truncate">
+            {t('suggestions.undoFailed')}
+          </span>
+        </RowLine>
+      </Match>
+      <Match when={props.entry.failed}>
+        <RowLine class="text-failure">
+          <span role="alert" class="truncate">
+            {t('suggestions.actionFailed')}
+          </span>
+        </RowLine>
+      </Match>
+      <Match when={props.entry.changed}>
+        <RowLine class="text-ink-muted">
+          <span role="status" class="truncate" data-suggestion-changed>
+            {t('suggestions.suggestionChanged')}
+          </span>
+        </RowLine>
+      </Match>
+      <Match when={props.entry.state === 'dismissed'}>
+        <RowLine class="text-ink-placeholder">
+          <span class="truncate">
+            {t(
+              suggestion().status === 'running'
+                ? 'suggestions.dismissedAndStopped'
+                : 'suggestions.dismissed'
+            )}
+          </span>
+        </RowLine>
+      </Match>
+      <Match when={props.entry.state === 'markedDone'}>
+        <RowLine>
+          <span class="truncate">{t('suggestions.doneJustNow')}</span>
+        </RowLine>
+      </Match>
+      <Match when={props.entry.state === 'routineOn'}>
+        <RowLine>
+          <span class="size-1.5 shrink-0 rounded-full bg-success" />
+          <span class="truncate">
+            <Show
+              when={routineWhen(suggestion())}
+              fallback={t('suggestions.routineAdded')}
+            >
+              {(when) => t('suggestions.routineRuns', { when: when() })}
+            </Show>
+          </span>
+        </RowLine>
+      </Match>
+      <Match when={props.entry.state === 'finished'}>
+        <RowLine>
+          <span class="truncate" data-suggestion-report>
+            {runReport(suggestion()) ?? suggestion().summary}
+          </span>
+        </RowLine>
+      </Match>
+      <Match when={props.entry.state === 'done'}>
+        <RowLine class="text-ink-placeholder">
+          <span class="truncate">
+            {runReport(suggestion()) ??
+              routineSentence(suggestion()) ??
+              suggestion().summary}
+          </span>
+        </RowLine>
+      </Match>
+      <Match when={props.entry.state === 'running'}>
+        <RowLine>
+          <SendsFirst suggestion={suggestion()}>
+            {stopping(suggestion())
+              ? t('suggestions.stoppingNow')
+              : t('suggestions.runningNow')}
+          </SendsFirst>
+        </RowLine>
+      </Match>
+      <Match when={props.entry.state === 'failed'}>
+        <RowLine class="text-failure">
+          <SendsFirst suggestion={suggestion()}>
+            {t('suggestions.runFailed')}
+          </SendsFirst>
+        </RowLine>
+      </Match>
+      <Match when={suggestion().kind === 'entity'}>
+        <ItemLine suggestion={suggestion()} parts={props.parts} />
+      </Match>
+      <Match when={true}>
+        <RowLine>
+          <SendsFirst suggestion={suggestion()}>
+            {routineSentence(suggestion()) ?? suggestion().summary}
+          </SendsFirst>
+        </RowLine>
+      </Match>
+    </Switch>
+  );
+}
+
+/** When a routine suggestion's routine runs, e.g. "Fridays at 9:00 AM". */
+function routineWhen(suggestion: Suggestion): string | undefined {
+  return suggestion.kind === 'routine' ? suggestion.routine?.when : undefined;
+}
+
+/** What pressing an open or failed Macro row's button is called. */
+function acceptLabel(entry: FeedEntry): string {
+  const suggestion = entry.suggestion;
   if (suggestion.kind === 'routine') return t('suggestions.turnOn');
   if (suggestion.kind === 'prompt' && suggestion.runMode === 'composer') {
     return t('suggestions.openInChat');
   }
+  if (suggestion.kind === 'entity') {
+    return suggestion.draft
+      ? t('suggestions.openDraft')
+      : t('suggestions.openItem');
+  }
 
-  return props.status === 'failed'
+  return entry.state === 'failed'
     ? t('suggestions.runAgain')
     : t('suggestions.run');
 }
 
-/**
- * What looking without taking it up is called, where the row's button does
- * something else: a run's prompt opens in chat, a routine for review.
- */
-function lookLabel(props: MacroRowProps): string | undefined {
-  if (props.status === 'running') return undefined;
-
-  const suggestion = props.suggestion;
-  if (suggestion.kind === 'routine') return t('suggestions.review');
-  if (suggestion.kind === 'prompt' && suggestion.runMode === 'background') {
-    return t('suggestions.openInChat');
+/** What pressing the row's text does, if anything. */
+function pressAction(props: SuggestionRowProps): (() => void) | undefined {
+  const entry = props.entry;
+  if (entry.state === 'dismissed') return undefined;
+  if (entry.state === 'open' && entry.suggestion.kind === 'entity') {
+    return props.onAccept;
   }
-
-  return undefined;
-}
-
-/** How long it has waited, or how long ago its run started. */
-function macroTime(props: MacroRowProps): string {
-  const suggestion = props.suggestion;
   if (
-    props.status === 'running' &&
-    suggestion.kind === 'prompt' &&
-    suggestion.runMode === 'background' &&
-    suggestion.run
+    entry.state === 'open' ||
+    entry.state === 'failed' ||
+    entry.state === 'running'
   ) {
-    return sinceLabel(suggestion.run.startedAt);
+    return props.onLook;
   }
 
-  return ageLabel(suggestion);
+  return props.onOpen;
 }
 
-/** The mark before the title: its kind, or how its run is going. */
-function MacroLead(props: MacroRowProps) {
+/**
+ * The row's controls. `hover` shows only while the row is pointed at or
+ * focused, in room it keeps while hidden so nothing moves. With a `time`,
+ * the time stands where they are at rest; without one, `children` stay in
+ * view after them.
+ */
+function RowEnd(props: {
+  time?: string;
+  hover?: JSX.Element;
+  children?: JSX.Element;
+}) {
+  const reveal =
+    'opacity-0 transition-opacity group-focus-within/suggestion:opacity-100 not-touch:group-hover/suggestion:opacity-100';
+
   return (
-    <Switch fallback={<SparkleIcon class="text-violet-ink" />}>
-      <Match when={props.status === 'running'}>
-        <Spinner size="sm" decorative class="size-3.5" />
+    <Item.Actions class="relative ml-2 justify-end gap-2">
+      <Show
+        when={props.time}
+        fallback={
+          <>
+            <span
+              class={cn('flex items-center gap-0.5', reveal)}
+              data-suggestion-hover
+            >
+              {props.hover}
+            </span>
+            {props.children}
+          </>
+        }
+      >
+        {(time) => (
+          <>
+            <span
+              class={cn('flex items-center gap-2', reveal)}
+              data-suggestion-hover
+            >
+              <span class="flex items-center gap-0.5">{props.hover}</span>
+              {props.children}
+            </span>
+            <span
+              class="pointer-events-none absolute right-0 text-xs leading-4 font-medium whitespace-nowrap text-ink-placeholder transition-opacity group-focus-within/suggestion:opacity-0 not-touch:group-hover/suggestion:opacity-0"
+              data-suggestion-time
+            >
+              {time()}
+            </span>
+          </>
+        )}
+      </Show>
+    </Item.Actions>
+  );
+}
+
+function MarkDoneButton(props: SuggestionRowProps) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      disabled={props.entry.busy}
+      aria-label={t('suggestions.markDoneSuggestion', {
+        title: props.entry.suggestion.title,
+      })}
+      tooltip={t('suggestions.markDone')}
+      onClick={props.onMarkDone}
+      data-suggestion-done
+    >
+      <CheckIcon class="size-4" />
+    </Button>
+  );
+}
+
+function DismissButton(props: SuggestionRowProps) {
+  const running = () => props.entry.state === 'running';
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label={t(
+        running()
+          ? 'suggestions.stopAndDismissSuggestion'
+          : 'suggestions.dismissSuggestion',
+        { title: props.entry.suggestion.title }
+      )}
+      tooltip={t(
+        running() ? 'suggestions.stopAndDismiss' : 'suggestions.dismiss'
+      )}
+      onClick={props.onDismiss}
+      data-suggestion-dismiss
+    >
+      <CloseIcon class="size-4" />
+    </Button>
+  );
+}
+
+/** Mark done and dismiss, for a row that waits on the person. */
+function WaitingHover(props: SuggestionRowProps) {
+  return (
+    <>
+      <Show when={doneWhenTakenUp(props.entry.suggestion)}>
+        <MarkDoneButton {...props} />
+      </Show>
+      <DismissButton {...props} />
+    </>
+  );
+}
+
+/** The right side of the row, for its state. */
+function StateEnd(props: SuggestionRowProps) {
+  const suggestion = () => props.entry.suggestion;
+  const routineId = () => savedRoutineId(suggestion());
+
+  return (
+    <Switch>
+      <Match when={props.entry.state === 'done'}>
+        <RowEnd>
+          <span
+            class="text-xs leading-4 font-medium whitespace-nowrap text-ink-placeholder"
+            data-suggestion-time
+          >
+            {formatTime(suggestion().stateChangedAt)}
+          </span>
+        </RowEnd>
       </Match>
-      <Match when={props.status === 'failed'}>
-        <WarningCircleIcon class="text-failure" />
+      <Match when={props.entry.state === 'dismissed'}>
+        <RowEnd>
+          <Button
+            variant="ghost"
+            size="sm"
+            loading={props.entry.busy}
+            onClick={props.onUndoDismiss}
+            data-suggestion-undo
+          >
+            {t('suggestions.undo')}
+          </Button>
+        </RowEnd>
       </Match>
-      <Match when={props.suggestion.kind === 'routine'}>
-        <RepeatIcon class="text-orange" />
+      <Match when={props.entry.state === 'markedDone'}>
+        <RowEnd>
+          <Show when={props.entry.canUndo}>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={props.entry.busy}
+              onClick={props.onUndoDone}
+              data-suggestion-undo
+            >
+              {t('suggestions.undo')}
+            </Button>
+          </Show>
+        </RowEnd>
+      </Match>
+      <Match when={props.entry.state === 'routineOn'}>
+        <RowEnd>
+          <Show when={routineId()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={props.onOpen}
+              data-suggestion-edit
+            >
+              {t('suggestions.editRoutine')}
+            </Button>
+            <ToggleSwitch
+              checked={props.routineEnabled ?? true}
+              onChange={props.onRoutineEnabled}
+              label={t('suggestions.routineSwitch', {
+                title: suggestion().title,
+              })}
+              labelClass="sr-only"
+              data-suggestion-switch
+            />
+          </Show>
+        </RowEnd>
+      </Match>
+      <Match when={props.entry.state === 'finished'}>
+        <RowEnd>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={props.entry.busy}
+            onClick={props.onOpen}
+            data-suggestion-open
+          >
+            {t('suggestions.openItem')}
+          </Button>
+        </RowEnd>
+      </Match>
+      <Match when={props.entry.state === 'running'}>
+        <RowEnd hover={<DismissButton {...props} />}>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={props.entry.busy || stopping(suggestion())}
+            disabled={stopping(suggestion())}
+            aria-label={t('suggestions.stopSuggestion', {
+              title: suggestion().title,
+            })}
+            onClick={props.onStop}
+            data-suggestion-stop
+          >
+            {t('suggestions.stop')}
+          </Button>
+        </RowEnd>
+      </Match>
+      <Match when={suggestion().kind === 'entity'}>
+        <RowEnd
+          time={ageLabel(suggestion())}
+          hover={<WaitingHover {...props} />}
+        >
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={props.entry.busy}
+            onClick={props.onAccept}
+            data-suggestion-accept
+          >
+            {acceptLabel(props.entry)}
+          </Button>
+        </RowEnd>
+      </Match>
+      <Match when={true}>
+        <RowEnd hover={<WaitingHover {...props} />}>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={props.entry.busy}
+            onClick={props.onAccept}
+            data-suggestion-accept
+          >
+            {acceptLabel(props.entry)}
+          </Button>
+        </RowEnd>
       </Match>
     </Switch>
   );
 }
 
 /**
- * The line under the title: what Macro will do, on one line. A run that
- * posts or sends something leads with that, so it is read before Run, which
- * is the approval.
+ * One suggestion as a row, the same height in every state: a tile with its
+ * kind's colour (or how it stands), its title over one quiet line, and its
+ * controls. Pressing the text opens it, looks at it, or opens what it left.
  */
-function MacroSentence(props: MacroRowProps) {
-  const sends = () => sendsText(props.suggestion);
-  // What follows what the run sends: how it stands, else what it will do.
-  const rest = () => {
-    if (props.status === 'failed') return t('suggestions.runFailed');
-    if (props.status === 'running') return t('suggestions.runningNow');
-
-    return routineSentence(props.suggestion) ?? props.suggestion.summary;
-  };
-
-  return (
-    <RowLine class={props.status === 'failed' ? 'text-failure' : undefined}>
-      <Show when={sends()} fallback={rest()}>
-        {(line) => (
-          <>
-            <span data-suggestion-sends>{line()}</span>
-            {' · '}
-            {rest()}
-          </>
+export function SuggestionRow(props: SuggestionRowProps) {
+  const titleId = () => `suggestion-title-${props.entry.suggestion.id}`;
+  const settled = () =>
+    props.entry.state === 'markedDone' ||
+    props.entry.state === 'done' ||
+    props.entry.state === 'dismissed';
+  const title = () => (
+    <Cut>
+      <Item.Title
+        id={titleId()}
+        class={cn(
+          'truncate font-medium',
+          props.entry.state === 'markedDone' && 'text-ink-muted line-through',
+          props.entry.state === 'done' && 'text-ink-muted',
+          props.entry.state === 'dismissed' && 'text-ink-placeholder'
         )}
-      </Show>
-    </RowLine>
-  );
-}
-
-/**
- * Work Macro can do, as a row: its kind's mark, what it is, what Macro will
- * do, and one button that starts it. A run stays in its row while it runs
- * and when it fails.
- */
-export function MacroRow(props: MacroRowProps) {
-  const titleId = () => `suggestion-title-${props.suggestion.id}`;
-
-  return (
-    <Item
-      size="sm"
-      role="article"
-      aria-labelledby={titleId()}
-      data-suggestion={props.suggestion.id}
-      data-suggestion-status={props.status}
-      class="group/suggestion border-0 has-focus-visible:bg-hover not-touch:hover:bg-hover"
-    >
-      <Item.Icon class="[&>svg]:size-3.5" aria-hidden="true">
-        <MacroLead {...props} />
-      </Item.Icon>
-      <Item.Content class="gap-0.5">
-        <RowText
-          titleId={titleId()}
-          title={props.suggestion.title}
-          onPress={props.onLook}
-        >
-          <MacroSentence {...props} />
-        </RowText>
-        <RowNotes failed={props.failed} changed={props.changed} />
-      </Item.Content>
-      <RowEnd {...props} time={macroTime(props)}>
-        <Show when={lookLabel(props)}>
-          {(label) => (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={props.onLook}
-              data-suggestion-look
-            >
-              {label()}
-            </Button>
-          )}
-        </Show>
-        <Show
-          when={props.status !== 'running'}
-          fallback={
-            <Button variant="ghost" size="sm" onClick={props.onLook}>
-              {t('suggestions.viewProgress')}
-            </Button>
-          }
-        >
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={props.busy}
-            onClick={props.onAccept}
-            data-suggestion-accept
-          >
-            {acceptLabel(props)}
-          </Button>
-        </Show>
-      </RowEnd>
-    </Item>
-  );
-}
-
-/**
- * Something waiting on the person, as a row: a circle that marks it done
- * (a plain mark on a reply, which is done once the person replies), what to
- * do, the item it is about, and how long it has waited. Pointing at
- * the row or focusing in it swaps the age for Open and dismiss.
- */
-export function ToDoRow(props: ToDoRowProps) {
-  const titleId = () => `suggestion-title-${props.suggestion.id}`;
-  const drafted = () =>
-    props.suggestion.kind === 'entity' && !!props.suggestion.draft;
-  const summary = () => (
-    <span class="truncate">{props.suggestion.summary}</span>
-  );
-
-  return (
-    <Item
-      size="sm"
-      role="article"
-      aria-labelledby={titleId()}
-      data-suggestion={props.suggestion.id}
-      data-suggestion-status={props.status}
-      class="group/suggestion border-0 has-focus-visible:bg-hover not-touch:hover:bg-hover"
-    >
-      <Item.Icon>
-        <Show
-          when={props.onMarkDone}
-          fallback={
-            <Tooltip label={t('suggestions.doneOnReply')}>
-              <span class="flex" data-suggestion-waits>
-                <CircleIcon class="size-4 text-ink-placeholder" />
-              </span>
-            </Tooltip>
-          }
-        >
-          {(markDone) => (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              class="-m-1"
-              disabled={props.busy}
-              aria-label={t('suggestions.markDoneSuggestion', {
-                title: props.suggestion.title,
-              })}
-              tooltip={t('suggestions.markDone')}
-              onClick={markDone()}
-            >
-              <CircleIcon class="size-4 text-ink-placeholder" />
-            </Button>
-          )}
-        </Show>
-      </Item.Icon>
-      <Item.Content class="gap-0.5">
-        <RowText
-          titleId={titleId()}
-          title={props.suggestion.title}
-          onPress={props.onOpen}
-        >
-          <Cut>
-            <Item.Description class="flex min-h-4.5 min-w-0 flex-1 items-center gap-1.5 text-[13px] leading-[18px] text-ink-extra-muted">
-              <Show when={props.suggestion.about[0]} fallback={summary()}>
-                {(target) => (
-                  <props.parts.Source
-                    target={target()}
-                    from={
-                      props.suggestion.kind === 'entity'
-                        ? props.suggestion.from
-                        : undefined
-                    }
-                    fallback={summary()}
-                  />
-                )}
-              </Show>
-              <Show when={drafted()}>
-                <span
-                  class="-ml-1.5 shrink-0 whitespace-pre"
-                  data-suggestion-drafted
-                >
-                  {` · ${t('suggestions.replyDrafted')}`}
-                </span>
-              </Show>
-            </Item.Description>
-          </Cut>
-        </RowText>
-        <RowNotes failed={props.failed} changed={props.changed} />
-      </Item.Content>
-      <RowEnd {...props} time={ageLabel(props.suggestion)}>
-        <Button
-          variant="secondary"
-          size="sm"
-          loading={props.busy}
-          onClick={props.onOpen}
-          data-suggestion-accept
-        >
-          {drafted() ? t('suggestions.openDraft') : t('suggestions.openItem')}
-        </Button>
-      </RowEnd>
-    </Item>
-  );
-}
-
-/**
- * A finished suggestion, as a quiet row: what it was, what was done, and
- * when. Pressing its text opens what it left.
- */
-export function DoneRow(props: { suggestion: Suggestion; onOpen(): void }) {
-  const titleId = () => `suggestion-title-${props.suggestion.id}`;
-  const line = () =>
-    routineSentence(props.suggestion) ?? props.suggestion.summary;
-
-  return (
-    <Item
-      size="sm"
-      role="article"
-      aria-labelledby={titleId()}
-      data-suggestion={props.suggestion.id}
-      data-suggestion-status="done"
-      class="border-0 has-focus-visible:bg-hover not-touch:hover:bg-hover"
-    >
-      <Item.Icon class="text-success [&>svg]:size-3.5" aria-hidden="true">
-        <CheckCircleIcon />
-      </Item.Icon>
-      <Item.Content class="gap-0.5">
-        <RowText
-          titleId={titleId()}
-          title={props.suggestion.title}
-          tone="done"
-          onPress={props.onOpen}
-        >
-          <Show when={line()}>
-            <RowLine class="text-ink-placeholder">{line()}</RowLine>
-          </Show>
-        </RowText>
-      </Item.Content>
-      <Item.Metadata class="text-ink-placeholder" data-suggestion-time>
-        {formatTime(props.suggestion.stateChangedAt)}
-      </Item.Metadata>
-    </Item>
-  );
-}
-
-/** A dismissed suggestion, in its card until the person leaves, with Undo. */
-export function DismissedSuggestion(props: {
-  suggestion: Suggestion;
-  /** Its run was under way: dismissing stops it. */
-  wasRunning: boolean;
-  /** Undo is under way. */
-  busy: boolean;
-  /** The server refused to bring it back. */
-  failed: boolean;
-  onUndo(): void;
-}) {
-  const titleId = () => `suggestion-title-${props.suggestion.id}`;
-
-  return (
-    <Item
-      size="sm"
-      class="border-0"
-      data-suggestion-dismissed={props.suggestion.id}
-    >
-      <Item.Icon class="text-ink-disabled" aria-hidden="true">
-        <CircleDashedIcon />
-      </Item.Icon>
-      <Item.Content class="gap-0.5">
-        <RowText
-          titleId={titleId()}
-          title={props.suggestion.title}
-          tone="dismissed"
-        >
-          <Item.Description class="text-[13px] leading-[18px] text-ink-placeholder">
-            {t(
-              props.wasRunning
-                ? 'suggestions.dismissedAndStopped'
-                : 'suggestions.dismissed'
-            )}
-          </Item.Description>
-        </RowText>
-        <Show when={props.failed}>
-          <p role="alert" class="text-[13px] leading-[18px] text-failure">
-            {t('suggestions.undoFailed')}
-          </p>
-        </Show>
-      </Item.Content>
-      <Button
-        variant="ghost"
-        size="sm"
-        loading={props.busy}
-        onClick={props.onUndo}
       >
-        {t('suggestions.undo')}
-      </Button>
+        {props.entry.state === 'routineOn'
+          ? t('suggestions.routineIsOn', {
+              title: props.entry.suggestion.title,
+            })
+          : props.entry.suggestion.title}
+      </Item.Title>
+    </Cut>
+  );
+
+  return (
+    <Item
+      size="sm"
+      role="article"
+      aria-labelledby={titleId()}
+      data-suggestion={props.entry.suggestion.id}
+      data-suggestion-state={props.entry.state}
+      data-suggestion-settled={settled() ? '' : undefined}
+      class="group/suggestion h-14 border-0 px-4 py-2 has-focus-visible:bg-hover not-touch:hover:bg-hover"
+    >
+      <RowTile entry={props.entry} />
+      <Item.Content class="gap-0.5">
+        <Show
+          when={pressAction(props)}
+          fallback={<div class="flex min-w-0 flex-col gap-0.5">{title()}</div>}
+        >
+          {(press) => (
+            <button
+              type="button"
+              class="flex min-w-0 flex-col gap-0.5 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-focus"
+              onClick={() => press()()}
+            >
+              {title()}
+            </button>
+          )}
+        </Show>
+        <StateLine {...props} />
+      </Item.Content>
+      <StateEnd {...props} />
     </Item>
   );
 }
