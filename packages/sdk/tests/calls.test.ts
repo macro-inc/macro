@@ -236,3 +236,45 @@ test('call previews preserve input order and omit missing records', async () => 
     callIds: ['call-1', 'call-2', 'call-3'],
   });
 });
+
+test('a resumed meeting lists its sessions and reads each recording', async () => {
+  const session = (n: number) => ({
+    startedAt: `2026-01-01T0${n}:00:00Z`,
+    endedAt: `2026-01-01T0${n}:30:00Z`,
+    recordingStartedAt: `2026-01-01T0${n}:00:05Z`,
+  });
+  const requests = serve({
+    'GET /call/record/call-1': () =>
+      Response.json({
+        callId: 'call-1',
+        createdBy: 'user-1',
+        discussion: { kind: 'call_chat', call_id: 'call-1' },
+        guests: [],
+        isActive: false,
+        participants: [],
+        shareWithTeam: false,
+        startedAt: '2026-01-01T01:00:00Z',
+        transcript: [],
+        sessions: [session(1), session(2)],
+      }),
+    'GET /call/record/call-1/recording': (request) =>
+      new Response(
+        new Uint8Array([
+          Number(new URL(request.url).searchParams.get('session') ?? 0),
+        ]),
+        { headers: { 'content-type': 'video/mp4' } },
+      ),
+  });
+  const call = macro().calls.byId('call-1');
+
+  const sessions = await call.sessions();
+  expect(sessions.map((s) => s.startedAt)).toEqual([
+    '2026-01-01T01:00:00Z',
+    '2026-01-01T02:00:00Z',
+  ]);
+  expect(await call.recording.bytes({ session: 1 })).toEqual(
+    new Uint8Array([1]),
+  );
+  expect(await call.recording.bytes()).toEqual(new Uint8Array([0]));
+  expect(new URL(requests[2]?.url ?? '').search).toBe('');
+});
