@@ -1,0 +1,45 @@
+packages/sdk/src/coverage/skipped.ts
+  s_be0dcf8f48154b::t_d7d8da1130f3ad 32,36,40
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_be0dcf8f48154b::t_789b7c946f4fa6 11,14,1451-1720
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentFeedbackMySuggestionFeedbackParams.ts
+  s_be0dcf8f48154b::t_1da8a345d70fd4 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentFeedbackRetractSuggestionParams.ts
+  s_be0dcf8f48154b::t_7eb90026bf7d55 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackErrorBody.ts
+  s_be0dcf8f48154b::t_5453d9fd7cf4df 14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackErrorBodyCode.ts
+  s_be0dcf8f48154b::t_c6559c53553eea 10
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_be0dcf8f48154b::t_7b79089bdad6b7 56,59
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/subjectKind.ts
+  s_be0dcf8f48154b::t_491bd2bc68838b 18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/surface.ts
+  s_be0dcf8f48154b::t_8b80b68c05d752 20-22
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_be0dcf8f48154b::t_add7fd9444e5a9 1225-1467,8283,10122,10132-10135
+packages/sdk/generated/agent-harness/index.ts
+  s_be0dcf8f48154b::t_35051dc855e08c 4
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_be0dcf8f48154b::t_90ae48de730d33 5,265-301
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_be0dcf8f48154b::t_27474c5ece8a14 2095,3235,3240,4050-4154
+packages/sdk/specs/agent-harness.json
+  s_be0dcf8f48154b::t_ec663cc95a448c 1225-1467,8283,10122,10132-10135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6692bc6fcdd297f5d102afffef5ad9e165728938",
+  "prompts": {},
+  "sessions": {
+    "s_be0dcf8f48154b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84f26c56-f4ae-4114-a847-2d20de026f21",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
