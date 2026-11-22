@@ -1,11 +1,9 @@
 import { buildOptimisticTask } from '@app/features/tasks-view/core/optimistic-task';
 import { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
-import { revalidateActivityQueries } from '@queries/activity/push-registry';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import {
   createGraphqlBulkSaveEntityPropertiesMutation,
@@ -178,22 +176,13 @@ export function createProjectSources(
                       now: new Date(),
                     })
                   );
-                  span.event('project.tasks.create.pending_shown');
+                  span.event('project.tasks.create.pending_added');
                   options?.onMutate?.();
                 },
                 onCreated: (task) => {
-                  span.setAttr('task.id', task.documentId);
+                  span.setAttr('document.id', task.documentId);
                   pending?.confirm(task.documentId);
                   options?.onCreated?.(task);
-                  // The project's task ids and counts come from its own read,
-                  // which the task list's cache does not maintain.
-                  fireAndForget(
-                    revalidateActivityQueries(
-                      soup.client(),
-                      new Set([projectId])
-                    ),
-                    'projects'
-                  );
                 },
               }
             );

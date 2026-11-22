@@ -157,10 +157,9 @@ it('shows a created task in its project from submit, then under its real id', as
     { pending: false, entity: { id: 'task', name: 'Ship it' } },
   ]);
   expect(onCreated).toHaveBeenCalledWith({ documentId: 'task' });
-  expect(revalidateActivityQueries).toHaveBeenCalledWith(
-    expect.anything(),
-    new Set(['project'])
-  );
+  // Nothing is read again for it: the project's own read learns of the task
+  // from its activity push, and the stand-in stays until then.
+  expect(revalidateActivityQueries).not.toHaveBeenCalled();
 
   sources.releasePendingTasks(['task']);
   expect(sources.pendingTasks('project')).toEqual([]);

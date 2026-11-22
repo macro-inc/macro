@@ -30,6 +30,10 @@ export function createProjectTasksDataSource(
     }),
     enabled: () => Boolean(project.project()),
     optimisticTasks: () => pending.pendingTasks(projectId),
+    // The empty state reads the project's own task ids: keep a created task
+    // until they list it too, or the first one would hide behind it.
+    isOptimisticTaskKnown: (taskId) =>
+      project.project()?.taskIds.includes(taskId) ?? false,
     onOptimisticTasksListed: pending.releasePendingTasks,
   });
   return {

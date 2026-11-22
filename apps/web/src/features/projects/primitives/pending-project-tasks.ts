@@ -1,5 +1,6 @@
 import type { OptimisticTask } from '@app/features/tasks-view/core/optimistic-task';
 import type { TaskEntityWithProperties } from '@entity';
+import { getOwner, onCleanup } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 
 /**
@@ -35,9 +36,22 @@ export function createPendingProjectTasks(
   const [state, setState] = createStore<{ tasks: PendingProjectTask[] }>({
     tasks: [],
   });
+  const expiries = new Map<string, ReturnType<typeof setTimeout>>();
 
-  const remove = (key: string) =>
-    setState('tasks', (tasks) => tasks.filter((task) => task.key !== key));
+  const remove = (keys: ReadonlySet<string>) => {
+    for (const key of keys) {
+      clearTimeout(expiries.get(key));
+      expiries.delete(key);
+    }
+    setState('tasks', (tasks) => tasks.filter((task) => !keys.has(task.key)));
+  };
+
+  if (getOwner()) {
+    onCleanup(() => {
+      for (const expiry of expiries.values()) clearTimeout(expiry);
+      expiries.clear();
+    });
+  }
 
   return {
     tasks(projectId: string): OptimisticTask[] {
@@ -65,23 +79,28 @@ export function createPendingProjectTasks(
               task.pending = false;
             })
           );
-          setTimeout(() => remove(key), retentionMs);
+          expiries.set(
+            key,
+            setTimeout(() => remove(new Set([key])), retentionMs)
+          );
         },
         fail() {
           if (settled) return;
           settled = true;
-          remove(key);
+          remove(new Set([key]));
         },
       };
     },
     /** The list shows these tasks itself now. */
     release(taskIds: readonly string[]) {
       const listed = new Set(taskIds);
-      setState('tasks', (tasks) =>
-        tasks.filter((task) => task.pending || !listed.has(task.entity.id))
+      remove(
+        new Set(
+          state.tasks.flatMap((task) =>
+            !task.pending && listed.has(task.entity.id) ? [task.key] : []
+          )
+        )
       );
     },
   };
 }
-
-export type PendingProjectTasks = ReturnType<typeof createPendingProjectTasks>;
