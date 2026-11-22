@@ -1609,6 +1609,59 @@
         }
       }
     },
+    "/scheduled-actions/{id}/stop": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "description": "Stop the routine's run in progress. It ends as stopped shortly after; with no run in progress, nothing changes.",
+        "operationId": "stop_scheduled_action_run",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The stop was sent, or nothing was running"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}/template": {
       "get": {
         "tags": ["scheduled actions"],
@@ -4430,6 +4483,10 @@
               "type": "object"
             },
             "description": "What each step that ran did, in order: decisions, tool calls, the agent."
+          },
+          "stopped": {
+            "type": "boolean",
+            "description": "The owner stopped the run before it finished. Older records, and\nreplicas built before it, leave it out."
           },
           "version": {
             "type": "integer",
