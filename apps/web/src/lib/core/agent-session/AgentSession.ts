@@ -614,9 +614,12 @@ export class AgentSession {
   ): Promise<SendCheck> {
     const startedAt = performance.now();
     let seen = false;
-    void arrived.then(() => {
-      seen = true;
-    });
+    fireAndForget(
+      arrived.then(() => {
+        seen = true;
+      }),
+      'agent-session'
+    );
     const waited = () => Math.round(performance.now() - startedAt);
     const sent = (via: 'log' | 'queue', status: 'sent' | 'queued') =>
       ({ outcome: 'sent', via, status, waitedMs: waited() }) as const;
