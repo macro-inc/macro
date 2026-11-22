@@ -53,8 +53,13 @@ async function chooseSetting(dialog: Locator, label: RegExp, value: string) {
   await expect(trigger).toHaveText(value);
 }
 
-async function submitConnection(page: Page, dialog: Locator, mobile: boolean) {
-  const submit = dialog.getByRole('button', { name: 'Connect inbox' });
+async function submitConnection(
+  page: Page,
+  dialog: Locator,
+  mobile: boolean,
+  action: 'Connect inbox' | 'Reconnect' = 'Connect inbox'
+) {
+  const submit = dialog.getByRole('button', { name: action, exact: true });
   await expect(submit).toBeEnabled();
   const [response] = await Promise.all([
     page.waitForResponse(
@@ -278,7 +283,12 @@ for (const mobile of [false, true]) {
             name: 'Reconnect inbox',
           });
           await fillLabCredentials(reconnect, email);
-          const promotion = await submitConnection(page, reconnect, mobile);
+          const promotion = await submitConnection(
+            page,
+            reconnect,
+            mobile,
+            'Reconnect'
+          );
           expect((await promotion.json()).linkId).toBe(linkId);
           await expect(
             page

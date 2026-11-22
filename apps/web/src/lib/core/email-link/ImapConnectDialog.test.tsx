@@ -111,7 +111,7 @@ it('binds reconnect to its inbox, requires confirmation again when a destination
   fireEvent.input(outgoingPassword, {
     target: { value: 'outgoing-app-password' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
   await screen.findByRole('alert');
   expect(mail.connect).toHaveBeenCalledTimes(1);
   expect(mail.connect.mock.calls[0][0]).toEqual({
@@ -391,7 +391,7 @@ it('keeps an existing Google IMAP reconnect on its bound password flow', async (
   ).toBeNull();
   fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
   fireEvent.input(password, { target: { value: 'synthetic-app-password' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
   await vi.waitFor(() => expect(result).toHaveBeenCalledWith('connected'));
   expect(mail.connect.mock.calls[0][0].linkId).toBe('existing-inbox');
   expect(result).not.toHaveBeenCalledWith('GMAIL');

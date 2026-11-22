@@ -2132,6 +2132,8 @@ holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide
   fields, and offer the catalog app-password help link. Render only whitelisted
   error guidance; a connection failure must never imply a rejected password.
 
+- Label reconnect actions Reconnect, stack server fields at full dialog width,
+  and show the same labelled port/TLS choice in the menu and selected value.
 - Keep IMAP connect action labels mounted through verification with Button
   loading, and reserve a wrapping error area so refusal/retry does not shift
   the footer. Avoid fixed action widths or clipped error copy.
@@ -2149,3 +2151,7 @@ The reserved IMAP browser-lab domain intentionally receives no passive MX offer.
 Drive its normal manual provider chooser, open Server settings through the
 Collapsible trigger, and choose settings via the shared listbox roles. Do not
 add product routing exceptions for test identities.
+
+A queued send's HTTP acceptance is not SMTP acceptance: a client timer may show
+Still sending, but only the server's actual unconfirmed outcome may warn about
+uncertain delivery. Terminal send progress must not replay its failure toast.

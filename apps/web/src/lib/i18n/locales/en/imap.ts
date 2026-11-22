@@ -25,6 +25,7 @@ export default {
   incoming: 'Incoming mail (IMAP)',
   outgoing: 'Outgoing mail (SMTP)',
   reconnect: 'Reconnect inbox',
+  reconnectAction: 'Reconnect',
   connectEmail: 'Connect email',
   findSettings: 'Find settings',
   connectInbox: 'Connect inbox',
@@ -39,8 +40,8 @@ export default {
   separatePassword: 'Use a separate outgoing password',
   outgoingPassword: 'Outgoing password',
   cancel: 'Cancel',
-  tlsPort: 'TLS on port {{port}}',
-  startTlsPort: 'STARTTLS on port {{port}}',
+  tlsPort: '{{port}} (SSL/TLS)',
+  startTlsPort: '{{port}} (STARTTLS)',
   continueWith: 'Continue with {{provider}}',
   noMailbox:
     '{{provider}} does not provide a mailbox Macro can connect to directly.',

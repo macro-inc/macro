@@ -74,19 +74,24 @@ function EndpointFields(props: {
     if (port === startTls) return 'start_tls';
     return props.discoveredEndpoint?.tls ?? props.endpoint.tls;
   };
-  const ports = createMemo(() => [
-    ...new Set([
-      implicit,
-      startTls,
-      props.discoveredEndpoint?.port ?? implicit,
-    ]),
-  ]);
-  const portLabel = (port: number) =>
-    t(tlsForPort(port) === 'implicit' ? 'imap.tlsPort' : 'imap.startTlsPort', {
-      port: String(port),
-    });
+  const ports = createMemo(() =>
+    [
+      ...new Set([
+        implicit,
+        startTls,
+        props.discoveredEndpoint?.port ?? implicit,
+      ]),
+    ].map((port) => ({
+      port,
+      tls: tlsForPort(port),
+      label: t(
+        tlsForPort(port) === 'implicit' ? 'imap.tlsPort' : 'imap.startTlsPort',
+        { port: String(port) }
+      ),
+    }))
+  );
   return (
-    <fieldset class="flex flex-col gap-2">
+    <fieldset class="flex min-w-0 flex-col gap-2">
       <legend class="mb-1 text-sm font-semibold">
         {props.protocol === 'IMAP' ? t('imap.incoming') : t('imap.outgoing')}
       </legend>
@@ -105,16 +110,17 @@ function EndpointFields(props: {
           }
         />
       </label>
-      <Select<number>
+      <Select<{ port: number; tls: Endpoint['tls']; label: string }>
         class="grid gap-1 text-sm"
         options={ports()}
-        value={props.endpoint.port}
-        optionTextValue={portLabel}
+        value={ports().find((option) => option.port === props.endpoint.port)}
+        optionValue="port"
+        optionTextValue="label"
         disabled={props.disabled}
         disallowEmptySelection
-        onChange={(port) => {
-          if (port == null) return;
-          const tls = tlsForPort(port);
+        onChange={(option) => {
+          if (!option) return;
+          const { port, tls } = option;
           // Kobalte can re-emit a controlled selection when options change.
           if (port === props.endpoint.port && tls === props.endpoint.tls)
             return;
@@ -123,8 +129,8 @@ function EndpointFields(props: {
       >
         <Select.Label>{t('imap.connection')}</Select.Label>
         <Select.Trigger>
-          <Select.Value<number>>
-            {(state) => portLabel(state.selectedOption())}
+          <Select.Value<{ port: number; tls: Endpoint['tls']; label: string }>>
+            {(state) => state.selectedOption().label}
           </Select.Value>
           <Select.Icon />
         </Select.Trigger>
@@ -458,7 +464,7 @@ function ConnectForm(props: ImapConnectProps) {
         >
           {phase() === 'address'
             ? t('imap.findSettings')
-            : t('imap.connectInbox')}
+            : t(props.linkId ? 'imap.reconnectAction' : 'imap.connectInbox')}
         </Button>
       </Show>
     </div>
@@ -471,7 +477,7 @@ function ConnectForm(props: ImapConnectProps) {
         if (open || !busy()) props.onOpenChange(open);
       }}
       position="center"
-      class={isMobile() ? undefined : 'w-118'}
+      class={isMobile() ? undefined : 'w-140 max-w-[calc(100vw-2rem)]'}
     >
       <Panel
         depth={2}
@@ -573,7 +579,7 @@ function ConnectForm(props: ImapConnectProps) {
                       <CaretDownIcon class="size-3 group-data-expanded:rotate-180" />
                     </Collapsible.Trigger>
                     <Collapsible.Content class="data-closed:hidden">
-                      <div class="mt-3 grid gap-4 sm:grid-cols-2">
+                      <div class="mt-3 grid gap-4">
                         <EndpointFields
                           disabled={busy()}
                           protocol="IMAP"
