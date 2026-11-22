@@ -1,0 +1,105 @@
+packages/sdk/src/coverage/skipped.ts
+  s_be0dcf8f48154b::t_b8ccb2a0bcac4d 28-38
+packages/sdk/generated/agent-harness/index.ts
+  s_be0dcf8f48154b::t_23221f4fcc9400 4
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_be0dcf8f48154b::t_23221f4fcc9400 302-306,2005-2029,2089-2191,2496-2531,2777-2803,3232-3241,3742-4049,5664-5697
+  s_be0dcf8f48154b::t_e61af3db14e930 5698
+packages/sdk/specs/agent-harness.json
+  s_be0dcf8f48154b::t_23221f4fcc9400 411-1224,4945-5022,5718-5722,7897-7938,8033-8193,8659-8703,9005-9033,9876-9891
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_be0dcf8f48154b::t_23221f4fcc9400 5,159-269,940-946
+  s_be0dcf8f48154b::t_2f994fa2abf327 947
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_be0dcf8f48154b::t_04886563c8fee0 10-13,61,64-65,72,81,625-1448,5593-5677
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentFeedbackExportEventsParams.ts
+  s_be0dcf8f48154b::t_2065cf239fc4b1 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentFeedbackRetractMessageParams.ts
+  s_be0dcf8f48154b::t_f68a4b54762724 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentFeedbackRetractRunParams.ts
+  s_be0dcf8f48154b::t_f085d8634e2753 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentFeedbackRetractTurnParams.ts
+  s_be0dcf8f48154b::t_39ff1870ad2491 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentKind.ts
+  s_be0dcf8f48154b::t_512a083798759a 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/exportCursor.ts
+  s_be0dcf8f48154b::t_7b387ba6de7285 1-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/exportPage.ts
+  s_be0dcf8f48154b::t_37d5d35b13d183 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/exportPageNext.ts
+  s_be0dcf8f48154b::t_c564d305b98fdc 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackErrorBody.ts
+  s_be0dcf8f48154b::t_c110b4edf71ad7 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackErrorBodyCode.ts
+  s_be0dcf8f48154b::t_f73942344f267f 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEvent.ts
+  s_be0dcf8f48154b::t_49b7f6368294b7 1-63
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventAgentBotId.ts
+  s_be0dcf8f48154b::t_c8d96c54baa30e 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventAgentKind.ts
+  s_be0dcf8f48154b::t_6ba23fe97fee9f 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventAgentSessionId.ts
+  s_be0dcf8f48154b::t_4b068c20f7417d 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventAgentUserId.ts
+  s_be0dcf8f48154b::t_5c6cc65a155826 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventHarness.ts
+  s_be0dcf8f48154b::t_9bc747af3f47d4 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventMessageParentType.ts
+  s_be0dcf8f48154b::t_4e1eed3fbcfa79 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventModel.ts
+  s_be0dcf8f48154b::t_61bcbc91e33791 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventNote.ts
+  s_be0dcf8f48154b::t_14deba09dae82f 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventRating.ts
+  s_be0dcf8f48154b::t_b7c092a9b2ef2a 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventTraceId.ts
+  s_be0dcf8f48154b::t_34b98614473152 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventTurn.ts
+  s_be0dcf8f48154b::t_4f6f26407234be 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackState.ts
+  s_be0dcf8f48154b::t_6192498b8608c6 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackStateNote.ts
+  s_be0dcf8f48154b::t_f576826a799e24 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackStateRating.ts
+  s_be0dcf8f48154b::t_7a2883dc3ad281 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackStateUpdatedAt.ts
+  s_be0dcf8f48154b::t_c7ef90811131db 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_be0dcf8f48154b::t_357ad559994632 55-59,275-277,285-302,363-366,398-400,498-499
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/myFeedback.ts
+  s_be0dcf8f48154b::t_ad1312316b8d6f 1-28
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/myFeedbackNote.ts
+  s_be0dcf8f48154b::t_7037cc064efe0e 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/myFeedbackResponse.ts
+  s_be0dcf8f48154b::t_157eef67988359 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/myFeedbackTurn.ts
+  s_be0dcf8f48154b::t_44d337d35763e5 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/rateFeedbackBody.ts
+  s_be0dcf8f48154b::t_7e64bc91c2188b 1-23
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/rateFeedbackBodyNote.ts
+  s_be0dcf8f48154b::t_f7c403fdb09a43 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/rating.ts
+  s_be0dcf8f48154b::t_4f8b8dde8c5af7 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/subjectKind.ts
+  s_be0dcf8f48154b::t_7a8939050410f2 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/surface.ts
+  s_be0dcf8f48154b::t_13f7519f534c3d 1-20
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_be0dcf8f48154b::t_2a3cf85aa4dfd2 411-1224,4945-5022,5718-5722,7897-7938,8033-8193,8659-8703,9005-9033,9876-9891
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "321b6374effc377e1a5496008aac6106059a66fe",
+  "prompts": {},
+  "sessions": {
+    "s_be0dcf8f48154b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84f26c56-f4ae-4114-a847-2d20de026f21",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
