@@ -668,6 +668,39 @@ async fn an_away_user_is_not_generated_for_even_when_their_agents_worked() {
 }
 
 #[tokio::test]
+async fn an_away_day_keeps_what_an_earlier_attempt_already_reviewed() {
+    let repo = Repo::default();
+    let (_, date) = due_yesterday(&repo);
+    // An attempt while they were still around reviewed the daily report, then
+    // failed; by its retry they have been away 14 days.
+    let daily = Activity {
+        granularity: Granularity::Day,
+        period_start: date,
+        period_end: date,
+        content: "Reviewed before".into(),
+    };
+    repo.0
+        .lock()
+        .unwrap()
+        .staged
+        .push((date, Piece::Activity(daily.clone())));
+    let generator = Arc::new(Generator::default());
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        generator.clone(),
+        Arc::new(Judge::default()),
+        no_teams(),
+        Active::new(true, Some(false)),
+    );
+    service.refresh_pending(|| async { false }).await.unwrap();
+    assert_eq!(generator.calls(), 0);
+    let data = repo.0.lock().unwrap();
+    assert_eq!(data.snapshot.through_date, Some(date));
+    assert_eq!(data.snapshot.activity, vec![daily]);
+    assert_eq!(data.snapshot.profile, "Existing profile");
+}
+
+#[tokio::test]
 async fn an_active_user_is_generated_for() {
     let repo = Repo::default();
     let (_, date) = due_yesterday(&repo);
