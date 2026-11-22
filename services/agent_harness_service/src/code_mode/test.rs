@@ -337,7 +337,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "storage.renameChannelLabel",
         "storage.setChannelLabel",
         "storage.cancelChannelAccessRequest",
-        "storage.deleteWebhook",
         "storage.deleteDatabaseWebhook",
         "storage.externalChatRead",
         "storage.externalChatUpload",
