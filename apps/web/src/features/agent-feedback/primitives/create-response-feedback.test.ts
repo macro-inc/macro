@@ -59,7 +59,7 @@ describe('createResponseFeedback', () => {
     expect(feedback.noteDraft()).toBeUndefined();
   });
 
-  it('switches rating in one write with a new id, keeping the note', async () => {
+  it('switches rating in one write with a new id, dropping the old note', async () => {
     const { feedback, writes } = setup();
 
     const first = feedback.rate('up');
@@ -79,10 +79,36 @@ describe('createResponseFeedback', () => {
     expect(writes[2]?.write).toEqual({
       kind: 'rate',
       rating: 'down',
-      note: 'cites the doc',
+      note: null,
     });
+    expect(feedback.noteDraft()).toEqual({ rating: 'down', note: '' });
     expect(new Set(writes.map((write) => write.id)).size).toBe(3);
     expect(feedback.rating()).toBe('down');
+    expect(feedback.note()).toBeNull();
+  });
+
+  it('keeps the note when the same rating is saved again', async () => {
+    const { feedback, writes } = setup({
+      rating: 'up',
+      note: 'cites the doc',
+      updatedAt: 'then',
+    });
+
+    feedback.openNote();
+    expect(feedback.noteDraft()).toEqual({
+      rating: 'up',
+      note: 'cites the doc',
+    });
+    const saved = feedback.saveNote('cites the doc and the PR');
+    await vi.waitFor(() => expect(writes).toHaveLength(1));
+    writes[0]?.succeed();
+    await saved;
+
+    expect(writes[0]?.write).toEqual({
+      kind: 'rate',
+      rating: 'up',
+      note: 'cites the doc and the PR',
+    });
   });
 
   it('rolls back a refused write and reports it', async () => {

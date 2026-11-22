@@ -3,7 +3,7 @@
  * action carries, and the note that follows a rating.
  *
  * A click on the current rating retracts it; a click on the other rating
- * switches, keeping the note. Writes run one at a time, so a note saved while
+ * switches and drops the note, which was about the other rating. Writes run one at a time, so a note saved while
  * its rating is still in flight lands after it.
  */
 import { deepEqual } from '@core/util/compareUtils';
@@ -75,9 +75,10 @@ export function createResponseFeedback(
     }
 
     // The note dialog opens with the click; skipping it leaves the rating.
-    const note = current?.note ?? null;
-    setNoteDraft({ rating, note: note ?? '' });
-    return enqueue({ kind: 'rate', rating, note });
+    // A note said why the other rating was given, so a new rating starts
+    // without one; only re-saving the same rating keeps it.
+    setNoteDraft({ rating, note: '' });
+    return enqueue({ kind: 'rate', rating, note: null });
   }
 
   function openNote() {
