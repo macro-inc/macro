@@ -405,7 +405,9 @@ export function DesktopModelSelector(props: {
                 </Show>
               </div>
               <Show when={showOptions()}>
-                <div class="shrink-0">
+                {/* A rule marks where the list scrolls under the options, so a row cut
+                    off there doesn't read as an empty gap. */}
+                <div class="shrink-0 border-t border-edge-muted">
                   <Dropdown.Group>
                     <Show when={options().model}>
                       <Show
