@@ -64,7 +64,10 @@ fetch sends a request to a host's base to that service under the forwarder
 (`forwarder` in the child's context, `http://127.0.0.1:<port>/<service>`).
 The forwarder sets the mark and trace context itself, outside the realm, drops
 the ones the program set, follows no redirects and records a
-`code_execution.egress` span per request. It stops when the run ends, is
+`code_execution.egress` span per request. In a dry run it forwards nothing
+but GET, HEAD and the catalog's reads (`DryRunReads`, matched on the path as
+sent), and the sender refuses a program's request that names the forwarder
+instead of a service's own URL. It stops when the run ends, is
 cancelled or times out. The agent harness picks it per user with the
 fail-closed `enable-code-execution-egress-proxy` flag; `Egress::Direct` (the
 default) is the old path.
@@ -81,10 +84,15 @@ into plain data (with copies of built-ins taken before the program loads,
 bodies whole. Answers come back the same way, with `url`, `redirected` and
 `type` set as own properties (kept by `clone()`), and headers that stay
 mutable, unlike a fetched response's; an abort after the answer stops the
-body with the signal's reason. The program can reach the channel and the
-worker object (through an `EventTarget.prototype.dispatchEvent` hook), never
-its realm: the worker checks every message and refuses malformed ones, so at
-most a program stops its own fetches. Rewriting `Function.prototype.call` stops Deno
+body with the signal's reason, which stays in the program's realm (only the
+request's id crosses). The program can reach the channel and could reach
+the worker object (through an `EventTarget.prototype.dispatchEvent` hook),
+never its realm: the worker accepts only http(s) requests, checks every
+message, refuses malformed ones and can't throw back into the program's
+realm. The program has no `Worker` class at all: the global is the timer
+refusal (attended) or `undefined` (unattended), and `Worker.prototype` and
+`MessagePort.prototype` lose `constructor` before the program loads, since a
+worker it started would get a realm with Deno's unmarked fetch. Rewriting `Function.prototype.call` stops Deno
 delivering those answers, so such a program's fetches can hang until the
 deadline; nothing it sends goes unmarked. A built-in the wrapper starts
 reading gets a copy and a row in the `PATCHED_FETCHES` test; test direct and

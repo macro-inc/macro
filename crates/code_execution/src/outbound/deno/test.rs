@@ -2523,9 +2523,10 @@ export async function main() {
   if (!port) return "no port";
   const answers = [];
   port.addEventListener("message", ({data}) => answers.push(data));
-  for (const message of [null, 7, {}, {id: "x"}, {id: 1000, request: null}, {abort: 1001}]) port.postMessage(message);
+  const file = {id: 1002, request: {url: import.meta.url, method: "GET", headers: [], body: null, options: {}}};
+  for (const message of [null, 7, {}, {id: "x"}, {id: 1000, request: null}, {abort: 1001}, file]) port.postMessage(message);
   const second = await fetch("HOST/second");
-  return {second: second.status, answers: answers.filter(answer => answer.id === 1000)};
+  return {second: second.status, answers: answers.filter(answer => answer.id >= 1000).sort((left, right) => left.id - right.id)};
 }
 "#
     .replace("HOST", &host);
@@ -2548,7 +2549,10 @@ export async function main() {
         value,
         serde_json::json!({
             "second": 200,
-            "answers": [{"id": 1000, "error": {"name": "TypeError", "message": "A malformed request was refused."}}],
+            "answers": [
+                {"id": 1000, "error": {"name": "TypeError", "message": "A malformed request was refused."}},
+                {"id": 1002, "error": {"name": "TypeError", "message": "Only http and https URLs can be fetched."}},
+            ],
         })
     );
     let sent = server.await.unwrap();
@@ -2557,6 +2561,162 @@ export async function main() {
             .map(|request| method_and_mark(request))
             .collect::<Vec<_>>(),
         vec![("GET", true), ("GET", true)]
+    );
+    service.shutdown().await;
+}
+
+/// A program crashes the sender with an abort reason that can't be turned
+/// into a string, takes the sender from its error event, and starts a worker
+/// of its own from the sender's class to send an unmarked DELETE. The reason
+/// never reaches the sender and the class is unreachable, so every request
+/// that arrives is marked and none is a write.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_hostile_abort_reason_never_hands_the_program_a_worker() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
+    let server = tokio::spawn(async move {
+        let mut sent = Vec::new();
+        loop {
+            let (mut stream, _) = tokio::select! {
+                accepted = listener.accept() => accepted.unwrap(),
+                _ = &mut stopped => break,
+            };
+            let request = read_request(&mut stream).await;
+            sent.push(request.clone());
+            // The first request hangs until the program has aborted it.
+            tokio::spawn(async move {
+                if request.starts_with("GET /hang ") {
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                }
+                let _ = stream.write_all(ok_json("").as_bytes()).await;
+            });
+        }
+        sent
+    });
+    let source = r#"
+// Run again as a worker of the program's own, this module sends a DELETE.
+if (typeof WorkerGlobalScope !== "undefined") {
+  postMessage((await fetch("HOST/decisions", {method: "DELETE"})).status);
+}
+export async function main() {
+  let sender;
+  const dispatch = EventTarget.prototype.dispatchEvent;
+  EventTarget.prototype.dispatchEvent = function (event) {
+    if (event?.type === "error" && !(this instanceof MessagePort) && this !== globalThis) sender ??= this;
+    return dispatch.call(this, event);
+  };
+  const preventDefault = Event.prototype.preventDefault;
+  Event.prototype.preventDefault = function () {
+    if (this.target && this.target !== globalThis) sender ??= this.target;
+    return preventDefault.call(this);
+  };
+  const controller = new AbortController();
+  const hanging = fetch("HOST/hang", {signal: controller.signal}).catch(() => {});
+  await fetch("HOST/first");
+  controller.abort({message: {toString: 1}});
+  await hanging;
+  const after = (await fetch("HOST/after")).status;
+  const portClass = Object.getPrototypeOf(new MessageChannel().port1).constructor;
+  const NativeWorker = sender && Object.getPrototypeOf(sender).constructor;
+  if (typeof NativeWorker !== "function") return {sender: Boolean(sender), worker: "no class", after, portClass: typeof portClass};
+  const child = new NativeWorker(import.meta.url, {type: "module"});
+  const status = await new Promise(resolve => {
+    child.onmessage = ({data}) => resolve(data);
+    child.onerror = (event) => { event.preventDefault(); resolve(String(event.message)); };
+  });
+  return {sender: true, worker: status, after};
+}
+"#
+    .replace("HOST", &host);
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 10_000,
+                },
+                RunEnvironment {
+                    token: "fixture-run-token".into(),
+                    endpoints: SdkEndpoints {
+                        hosts: BTreeMap::from([("cognition".into(), host.clone())]),
+                        ..SdkEndpoints::default()
+                    },
+                    ..RunEnvironment::default()
+                },
+            )
+            .unwrap(),
+    )
+    .await;
+    stop.send(()).unwrap();
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({"sender": false, "worker": "no class", "after": 200, "portClass": "undefined"})
+    );
+    let sent = server.await.unwrap();
+    for request in &sent {
+        assert_eq!(method_and_mark(request), ("GET", true), "{request}");
+    }
+    service.shutdown().await;
+}
+
+/// A proxied dry run learns its forwarder's URL from a response and sends a
+/// DELETE there: the sender refuses a request that names the forwarder, and
+/// the forwarder itself forwards no dry run's write.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_dry_run_cannot_write_through_the_forwarder_url() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, stop, server) = recording_server(ok_json).await;
+    let source = r#"
+export async function main() {
+  const read = await fetch("HOST/decisions");
+  const forwarder = read.url;
+  const attempts = {};
+  for (const [name, url] of [["forwarder", forwarder], ["host", "HOST/decisions"]]) {
+    try {
+      attempts[name] = `sent ${(await fetch(url, {method: "DELETE"})).status}`;
+    } catch (error) {
+      attempts[name] = String(error);
+    }
+  }
+  return {viaForwarder: forwarder !== "HOST/decisions", attempts};
+}
+"#
+    .replace("HOST", &host);
+    let mut environment = unattended(
+        "fixture-run-token",
+        &[("cognition", host.clone())],
+        serde_json::json!({}),
+        true,
+    );
+    environment.egress = Egress::Proxied;
+    let (_, outcome) = run_unattended(&service, &source, environment).await;
+    stop.send(()).unwrap();
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "viaForwarder": true,
+            "attempts": {
+                "forwarder": "TypeError: Fetch a service by its own URL, not the run's forwarder.",
+                "host": "Error: A dry run doesn't send changes.",
+            },
+        })
+    );
+    let sent = server.await.unwrap();
+    assert_eq!(
+        sent.iter()
+            .map(|request| method_and_mark(request))
+            .collect::<Vec<_>>(),
+        vec![("GET", true)]
     );
     service.shutdown().await;
 }

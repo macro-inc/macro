@@ -2,8 +2,10 @@
 // loads, so its realm (built-ins, prototypes, Deno's own fetch internals) is
 // one the program never reaches. The program's realm sends it each request as
 // plain data; this realm marks it, holds back a dry run's writes, routes it to
-// the forwarder and sends it. The first message is the run's settings; every
-// later one is checked here, whoever posted it.
+// the forwarder and sends it. The first message is the run's settings and the
+// port requests arrive on. The program can reach that port, so every message
+// on it is checked here, and nothing it posts can make this realm throw: an
+// error the program saw would hand it this worker.
 let settings;
 const inFlight = new Map();
 
@@ -34,6 +36,8 @@ function configure({hosts, operations, dryRun, traceHeaders, forwarder}) {
     dryRun,
     routes,
     destinations: new Set(Object.values(hosts).map(destinationOf)),
+    // A proxied run's forwarder, which only the requests sent here may reach.
+    forwarders: new Set(Object.values(forwarder).map(destinationOf)),
     traceHeaders: Object.entries(traceHeaders).filter(([name]) => name === "traceparent" || name === "tracestate"),
     // A proxied run reaches only its forwarder, longest service base first.
     forwarded: Object.entries(forwarder)
@@ -46,6 +50,13 @@ async function send({url, method, headers, body, options}) {
   // Parsed and normalized here, as Deno's fetch would, so what is checked is
   // what is sent.
   const request = new Request(url, {method, headers, body});
+  const {protocol} = new URL(request.url);
+  if (protocol !== "http:" && protocol !== "https:") throw new TypeError("Only http and https URLs can be fetched.");
+  // The forwarder marks what it sends but holds back no dry run's writes, so
+  // the program names a service by its own URL, never the forwarder's.
+  if (settings.forwarders.has(destinationOf(request.url))) {
+    throw new TypeError("Fetch a service by its own URL, not the run's forwarder.");
+  }
   const sent = new Headers(request.headers);
   const init = {...options, method: request.method, headers: sent, body: request.body === null ? null : body};
   // Every request to an SDK origin, whatever credential it carries.
@@ -74,12 +85,17 @@ async function send({url, method, headers, body, options}) {
   return fetch(request.url, init);
 }
 
+// Built from the error's own strings only: formatting anything else could
+// throw here.
+const failure = (error) => ({
+  name: typeof error?.name === "string" ? error.name : "Error",
+  message: typeof error?.message === "string" ? error.message : "fetch failed",
+});
+
 async function answer(port, data) {
-  // Only the bootstrap should post here, but the program can reach the port:
-  // anything malformed is refused, never thrown.
   if (data === null || typeof data !== "object") return;
   if (data.abort !== undefined) {
-    inFlight.get(data.abort)?.abort(data.reason);
+    inFlight.get(data.abort)?.abort();
     return;
   }
   const {id, request} = data;
@@ -110,13 +126,23 @@ async function answer(port, data) {
     }, body ? [body] : []);
   } catch (error) {
     inFlight.delete(id);
-    port.postMessage({id, error: {name: error?.name ?? "Error", message: String(error?.message ?? error)}});
+    try {
+      port.postMessage({id, error: failure(error)});
+    } catch {
+      port.postMessage({id, error: {name: "Error", message: "fetch failed"}});
+    }
   }
 }
+
+// Nothing here may reach the bootstrap as an error event.
+self.addEventListener("unhandledrejection", (event) => event.preventDefault());
+self.addEventListener("error", (event) => event.preventDefault());
 
 self.onmessage = ({data}) => {
   if (settings !== undefined) return;
   settings = configure(data);
   const {port} = data;
-  port.onmessage = ({data}) => answer(port, data);
+  port.onmessage = ({data}) => {
+    answer(port, data).catch(() => {});
+  };
 };

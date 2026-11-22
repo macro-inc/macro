@@ -267,18 +267,30 @@ impl DenoRunner {
         .await
         .map_err(internal)?;
         // A proxied run reaches only its forwarder, which reaches the hosts.
-        let egress = match job.environment.egress {
-            Egress::Direct => None,
-            Egress::Proxied => Some(
-                egress::RunEgress::start(
-                    self.egress.clone(),
-                    &job.environment.endpoints.hosts,
-                    &job.environment.trace_headers,
-                )
-                .await
-                .map_err(internal)?,
-            ),
-        };
+        let egress =
+            match job.environment.egress {
+                Egress::Direct => None,
+                Egress::Proxied => Some(
+                    egress::RunEgress::start(
+                        self.egress.clone(),
+                        &job.environment.endpoints.hosts,
+                        &job.environment.trace_headers,
+                        // A dry run's backstop outside the realm: its forwarder
+                        // sends only the catalog's reads besides GET and HEAD.
+                        job.environment
+                            .unattended
+                            .as_ref()
+                            .filter(|unattended| unattended.dry_run)
+                            .map(|_| {
+                                egress::DryRunReads::new(CATALOG.iter().map(|entry| {
+                                    (entry.key, entry.method, entry.path, entry.write)
+                                }))
+                            }),
+                    )
+                    .await
+                    .map_err(internal)?,
+                ),
+            };
         // The program keeps the real hosts, which its links need; its fetch
         // sends their requests to the forwarder, the only address it reaches.
         let forwarder = egress.as_ref().map(|egress| &egress.hosts);

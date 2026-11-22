@@ -37,6 +37,7 @@ impl RunEgress {
         client: reqwest::Client,
         hosts: &BTreeMap<String, String>,
         trace_headers: &BTreeMap<String, String>,
+        dry_run: Option<DryRunReads>,
     ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
         let port = listener.local_addr()?.port();
@@ -54,6 +55,7 @@ impl RunEgress {
             client,
             upstreams,
             run,
+            dry_run,
         });
         let app = axum::Router::new().fallback(forward).with_state(routes);
         // Owned by the run, not a tracker: it is aborted when the run ends
@@ -103,6 +105,75 @@ struct Routes {
     upstreams: HashMap<String, String>,
     /// The run's trace context, each request's parent.
     run: opentelemetry::Context,
+    /// A dry run's reads: the only requests besides GET and HEAD it forwards.
+    dry_run: Option<DryRunReads>,
+}
+
+/// The catalog's reads that aren't GET or HEAD, each as its service, method
+/// and path template, so a dry run's forwarder sends no write however the
+/// program's realm was tampered with.
+#[derive(Debug, Default)]
+pub(crate) struct DryRunReads {
+    reads: Vec<(String, String, Vec<Segment>)>,
+}
+
+#[derive(Debug, PartialEq)]
+enum Segment {
+    Literal(String),
+    /// A `{name}` placeholder: any one non-empty segment.
+    Parameter,
+}
+
+impl DryRunReads {
+    /// From `(service.operation, method, path template, write)` entries.
+    pub(crate) fn new<'a>(
+        operations: impl IntoIterator<Item = (&'a str, &'a str, &'a str, bool)>,
+    ) -> Self {
+        let reads = operations
+            .into_iter()
+            .filter(|(_, _, _, write)| !write)
+            .filter_map(|(key, method, path, _)| {
+                let (service, _) = key.split_once('.')?;
+                let segments = path
+                    .trim_start_matches('/')
+                    .split('/')
+                    .map(|segment| {
+                        if segment.starts_with('{') && segment.ends_with('}') {
+                            Segment::Parameter
+                        } else {
+                            Segment::Literal(segment.to_owned())
+                        }
+                    })
+                    .collect();
+                Some((service.to_owned(), method.to_owned(), segments))
+            })
+            .collect();
+        Self { reads }
+    }
+
+    /// Whether `method` on `path`, under `service`'s base, is a read. The
+    /// path is compared as sent, so an encoded or dotted spelling of a
+    /// read's path is refused, never taken for it.
+    fn allows(&self, service: &str, method: &str, path: &str) -> bool {
+        if method == "GET" || method == "HEAD" {
+            return true;
+        }
+        let sent: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+        self.reads
+            .iter()
+            .any(|(read_service, read_method, segments)| {
+                read_service == service
+                    && read_method == method
+                    && segments.len() == sent.len()
+                    && segments
+                        .iter()
+                        .zip(&sent)
+                        .all(|(segment, sent)| match segment {
+                            Segment::Literal(literal) => literal == sent,
+                            Segment::Parameter => !sent.is_empty(),
+                        })
+            })
+    }
 }
 
 /// The headers of `headers` that cross the forwarder: not the ones that
@@ -170,6 +241,13 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         span.record("status", StatusCode::NOT_FOUND.as_u16());
         return (StatusCode::NOT_FOUND, "no such SDK host").into_response();
     };
+    if let Some(reads) = &routes.dry_run
+        && !reads.allows(&service, request.method().as_str(), &format!("/{rest}"))
+    {
+        span.record("outcome", "dry_run_write");
+        span.record("status", StatusCode::FORBIDDEN.as_u16());
+        return (StatusCode::FORBIDDEN, "A dry run doesn't send changes.").into_response();
+    }
     let mut url = format!("{base}/{rest}");
     if let Some(query) = request.uri().query() {
         url.push('?');
