@@ -14,6 +14,7 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { createMobileToastSwipe } from './create-mobile-toast-swipe';
+import { createToastLift } from './toast-clearance';
 
 const ImportJobsTray = lazyNamed(
   () => import('@app/features/import-jobs/import-jobs'),
@@ -51,14 +52,32 @@ export function ToastRegion() {
   const [mobileTransientStack, setMobileTransientStack] =
     createSignal<HTMLDivElement>();
   const mobileTransientSize = createElementSize(mobileTransientStack);
+  const [desktopStack, setDesktopStack] = createSignal<HTMLDivElement>();
+  const desktopLift = createToastLift(desktopStack);
+  const mobileLift = createToastLift(mobileTransientStack);
+  const [mobilePromptStack, setMobilePromptStack] =
+    createSignal<HTMLDivElement>();
+  // With no transient toast below it, a prompt sits low enough to reach a
+  // composer on its own, so its stack is measured too, again whenever the
+  // transient slot under it grows, empties or rises.
+  const mobilePromptLift = createToastLift(mobilePromptStack, () => [
+    mobileTransientSize.height,
+    mobileLift(),
+  ]);
 
   return (
     <Portal>
       {/*
         Desktop stack, bottom-right. Persistent prompts get their own region
         capped at one visible card. Ordinary notices form an expandable three-card stack. Background imports, upload progress, then background work, sit nearest the corner.
+        The stack rises above a composer it would cover (`keepToastsClearOf`),
+        so a toast never hides send or stop.
       */}
-      <div class="fixed bottom-5 right-5 m-0 w-[380px] max-w-[calc(100vw-32px)] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4">
+      <div
+        ref={setDesktopStack}
+        class="fixed right-5 m-0 w-[380px] max-w-[calc(100vw-32px)] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4"
+        style={{ bottom: `calc(1.25rem + ${desktopLift()}px)` }}
+      >
         <Toast.Region
           class="macro-toast-region"
           regionId="reminder-region"
@@ -111,7 +130,8 @@ export function ToastRegion() {
         They need separate stacks, each `fixed` and so its own stacking
         context: prompts go under the modal stack so they never cover a sheet
         or the picker on it, while transient toasts stay above sheets. The
-        prompt stack measures the transient one to stay above that slot.
+        prompt stack measures the transient one to stay above that slot, and
+        both rise above a composer the transient slot would cover.
       */}
       <div
         class="contents"
@@ -130,8 +150,9 @@ export function ToastRegion() {
         }}
       >
         <MobileToastStack
+          ref={setMobilePromptStack}
           class="z-mobile-prompt-region"
-          lift={`${mobileTransientSize.height ?? 0}px + 1.25rem`}
+          lift={`${mobileTransientSize.height ?? 0}px + 1.25rem + ${mobileLift()}px + ${mobilePromptLift()}px`}
         >
           <Toast.Region
             class="macro-toast-region"
@@ -154,7 +175,11 @@ export function ToastRegion() {
             <Toast.List class="macro-toast-list" />
           </Toast.Region>
         </MobileToastStack>
-        <MobileToastStack ref={setMobileTransientStack} class="z-toast-region">
+        <MobileToastStack
+          ref={setMobileTransientStack}
+          class="z-toast-region"
+          lift={`${mobileLift()}px`}
+        >
           <Toast.Region
             class="macro-toast-region"
             regionId="mobile-toast-region"

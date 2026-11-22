@@ -1,4 +1,5 @@
 import { Input } from '@channel/Input/Input';
+import { keepToastsClearOf } from '@core/component/Toast/toast-clearance';
 import { ComposerSurface } from '@ui';
 import { createSignal, type ParentProps } from 'solid-js';
 import { MobileComposerContext } from './context';
@@ -24,6 +25,7 @@ export function MobileComposerRoot(props: MobileComposerRootProps) {
       value={{ collapsed: () => props.collapsed, setAttachmentHeight }}
     >
       <ComposerSurface
+        ref={keepToastsClearOf}
         as="div"
         data-agent-composer="chat"
         data-composer-expanded={!props.collapsed || undefined}
