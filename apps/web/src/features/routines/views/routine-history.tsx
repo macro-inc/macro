@@ -184,6 +184,23 @@ function withoutError(step: HistoryStep): HistoryStep {
   return { ...step, error: undefined };
 }
 
+/** It ended in a failure; a run its owner stopped is recorded unsuccessful but did not fail. */
+function failedRun(record: HistoryRecord): boolean {
+  return record.success === false && !record.stopped;
+}
+
+/** What a run with nothing to show is called. */
+function emptyRunTitle(record: HistoryRecord): string {
+  if (record.stopped) return 'Stopped';
+  return failedRun(record) && record.error ? 'Run failed' : 'Run unavailable';
+}
+
+/** What a run with no step to name it is called. */
+function fallbackTitle(record: HistoryRecord): string {
+  if (record.stopped) return 'Stopped';
+  return failedRun(record) ? 'Run failed' : 'Ran steps';
+}
+
 /** Whether a run has steps worth showing beyond its agent's transcript. */
 function hasStepDetail(record: HistoryRecord): boolean {
   return Boolean(
@@ -191,7 +208,7 @@ function hasStepDetail(record: HistoryRecord): boolean {
       !record.skipped &&
       (record.steps?.some((step) => step.kind !== 'agent' || step.error) ||
         // A run that failed before any step or session opens its reason.
-        (record.success === false && record.error && !record.resource))
+        (failedRun(record) && record.error && !record.resource))
   );
 }
 
@@ -208,11 +225,11 @@ function stepLines(
   const failed = failedStep(record);
   const failure = failed
     ? describe(failed)
-    : record.success === false
+    : failedRun(record)
       ? record.error
       : undefined;
   return {
-    title: first ?? (record.success === false ? 'Run failed' : 'Ran steps'),
+    title: first ?? fallbackTitle(record),
     summary: failure ?? (rest.join(' · ') || undefined),
     failure: Boolean(failure),
   };
@@ -256,11 +273,9 @@ function SessionRow(props: {
       record={props.record}
       title={title()}
       summary={
-        props.record.success === false
-          ? (props.record.error ?? undefined)
-          : 'Asked AI'
+        failedRun(props.record) ? (props.record.error ?? undefined) : 'Asked AI'
       }
-      failure={props.record.success === false}
+      failure={failedRun(props.record)}
       onActivate={
         ready()
           ? (newSplit) => props.onOpen(props.resource, newSplit)
@@ -290,17 +305,13 @@ function RunEntry(props: {
           fallback={
             <RunRow
               record={props.record}
-              title={
-                props.record.success === false && props.record.error
-                  ? 'Run failed'
-                  : 'Run unavailable'
-              }
+              title={emptyRunTitle(props.record)}
               summary={
-                props.record.success === false
+                failedRun(props.record)
                   ? (props.record.error ?? undefined)
                   : undefined
               }
-              failure
+              failure={!props.record.stopped}
             />
           }
         >

@@ -206,7 +206,9 @@ export function RunDetail(props: {
   const steps = () => props.record.steps ?? [];
   // A run can fail outside its steps, e.g. while preparing its agent.
   const unexplained = () =>
-    props.record.success === false && !failedStep(props.record)
+    props.record.success === false &&
+    !props.record.stopped &&
+    !failedStep(props.record)
       ? props.record.error
       : undefined;
   return (
