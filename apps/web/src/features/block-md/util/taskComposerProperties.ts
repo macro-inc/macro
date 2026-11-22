@@ -131,7 +131,6 @@ export async function createTaskWithProperties(
     span?: Span;
   }
 ) {
-  options?.onMutate?.();
   // Convert properties to API format (filter out null values)
   const propertyValues = properties.flatMap(([id, value]) => {
     const definition = definitions.get(id);
@@ -145,7 +144,7 @@ export async function createTaskWithProperties(
     return [{ propertyId: id, value: apiValue }];
   });
 
-  const createdTask = await createTaskWithInitialSnapshot({
+  const request = createTaskWithInitialSnapshot({
     revalidateSoup: options?.revalidateSoup,
     shareWithTeam: options?.shareWithTeam,
     title: taskTitle,
@@ -153,6 +152,10 @@ export async function createTaskWithProperties(
     propertyValues: propertyValues.length > 0 ? propertyValues : undefined,
     pinnedPropertyDefinitionIds: options?.pinnedPropertyDefinitionIds,
   });
+  // After the request starts: rendering what onMutate shows (a list row)
+  // would otherwise hold the request back.
+  options?.onMutate?.();
+  const createdTask = await request;
 
   if (!createdTask) {
     if (options?.showFailureToast !== false)
@@ -210,7 +213,7 @@ async function verifyTaskProject(
   if (!parent) return taskIsInProject(taskId, projectId);
   return parent.span('task.compose.verify_project', async (span) => {
     const inProject = await taskIsInProject(taskId, projectId);
-    if (inProject !== undefined) span.setAttr('task.in_project', inProject);
+    span.setAttr('task.project_check', projectCheckOutcome(inProject));
     return inProject;
   });
 }
@@ -497,4 +500,10 @@ export function createTaskComposerProperties(args: {
     clearComposerTags,
     createDefinitions,
   };
+}
+
+/** Unreadable: the task's properties could not be read, so nothing is said. */
+function projectCheckOutcome(inProject: boolean | undefined) {
+  if (inProject === undefined) return 'unreadable';
+  return inProject ? 'in_project' : 'rejected';
 }

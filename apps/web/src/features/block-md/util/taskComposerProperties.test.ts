@@ -127,6 +127,18 @@ it('confirms creation before waiting for a project membership read', async () =>
   expect(await creating).toEqual({ documentId: 'task' });
 });
 
+it('sends the create request before showing the task being created', async () => {
+  const order: string[] = [];
+  mock.create.mockImplementation(async () => {
+    order.push('request');
+    return { documentId: 'task' };
+  });
+  await createTaskWithProperties('Ship it', '', [], new Map(), vi.fn(), {
+    onMutate: () => order.push('mutate'),
+  });
+  expect(order).toEqual(['request', 'mutate']);
+});
+
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import {
   taskComposerVisiblePropertyIds,
