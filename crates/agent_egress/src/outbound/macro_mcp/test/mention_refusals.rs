@@ -305,3 +305,13 @@ async fn no_send_refuses_configuration_that_background_suggestions_never_need() 
         .await;
     }
 }
+
+#[tokio::test]
+async fn mention_refuses_persisting_memory_and_coding_preferences() {
+    for (method, path) in [
+        ("PATCH", "/memory/explicit"),
+        ("PUT", "/agent-coding-preferences"),
+    ] {
+        refuses_before_dispatch(method, path).await;
+    }
+}

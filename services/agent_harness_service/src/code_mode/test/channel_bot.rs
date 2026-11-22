@@ -10,6 +10,7 @@ use channel_bots::{
 use code_execution::domain::ExecuteRequest;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
+use memory::{domain::ports::ComposedMemoryRepo, outbound::pg_memory_repo::PgMemoryRepo};
 use rig_core::test_utils::{MockCompletionModel, MockStreamEvent};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
@@ -48,7 +49,7 @@ impl UsageRecorder for NoUsage {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_responder_runs_code_for_the_original_user_and_mention(pool: sqlx::PgPool) {
-    let ctx = test_api_context(pool).await;
+    let ctx = test_api_context(pool.clone()).await;
     let programs = Arc::new(Programs::default());
     let source = "export async function main() { return {data: 'found the document'}; }";
     let model = MockCompletionModel::from_stream_turns([
@@ -80,6 +81,26 @@ async fn the_responder_runs_code_for_the_original_user_and_mention(pool: sqlx::P
         .await
         .unwrap();
     assert_eq!(reply, "I found the document.");
+    // Classic mentions use AgentLoop directly, without the session runtime's
+    // automatic memory fetch. Even that hidden read would enroll this user.
+    let memory = PgMemoryRepo::new(pool);
+    let today = chrono::Utc::now().date_naive();
+    assert!(memory.claim_refresh(today).await.unwrap().is_none());
+    // The control proves that enrollment would be observable in this fixture.
+    memory
+        .enroll(&MacroUserIdStr::try_from(ADMISSION_TEST_USER).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(
+        memory
+            .claim_refresh(today)
+            .await
+            .unwrap()
+            .unwrap()
+            .user
+            .as_ref(),
+        ADMISSION_TEST_USER
+    );
     assert_eq!(
         *programs.0.lock().unwrap(),
         vec![(

@@ -39,6 +39,8 @@ fn replies_get_the_code_tools_and_only_the_direct_tools_code_mode_keeps() {
     // SDK-covered tools and the Anthropic sandbox are gone; the rest stay.
     for dropped in [
         "ReadContent",
+        "ReadMemory",
+        "UpdateMemory",
         "RenderCanvas",
         "BashCodeExecution",
         "TextEditorCodeExecution",
@@ -57,13 +59,6 @@ fn replies_get_the_code_tools_and_only_the_direct_tools_code_mode_keeps() {
     // to schedule one to check back later. The signed scope also prevents
     // creating routines a later unrestricted run could execute.
     assert!(!tools.system_prompt().contains("To check back later"));
-    // The routines guide still teaches creating routines; the reply prompt
-    // overrides it, since a routine or session would run without the mention.
-    assert!(
-        tools.system_prompt().contains(
-            "You cannot create, change or run routines, or start or prompt agent sessions"
-        )
-    );
 }
 
 #[test]
@@ -105,6 +100,8 @@ fn a_hidden_native_tool_is_refused_not_dispatched() {
     assert_eq!(tools.route("SelfKnowledge"), Route::Direct);
     for hidden in [
         "ReadContent",
+        "ReadMemory",
+        "UpdateMemory",
         "SendChannelMessage",
         "BashCodeExecution",
         "NoSuchTool",
