@@ -50,6 +50,12 @@ max-threads = 1
 filter = "package(email_e2e) & binary(search)"
 test-group = "email-e2e-search"
 
+# Leaving and coming back waits on the Focus worker's minute-apart looks
+# and sweeps, four of their rounds: about four minutes whatever the load.
+[[profile.email-e2e.overrides]]
+filter = "package(email_e2e) & binary(focus) & test(away_from_macro)"
+slow-timeout = { period = "120s", terminate-after = 4 }
+
 [[profile.email-e2e.overrides]]
 filter = "package(email_e2e) & binary(focus)"
 test-group = "email-e2e-focus"

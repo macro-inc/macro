@@ -301,9 +301,17 @@ impl<G: Send + Sync + 'static, O: super::replacement::CalendarReplacementProvide
         master: &str,
         recurrence_id: Option<&str>,
         remove_conference: bool,
+        changes: &CalendarEventPatch,
     ) -> Result<super::replacement::ReplacementSnapshot, CalendarProviderError> {
         self.outlook
-            .inspect_replacement(token, target, master, recurrence_id, remove_conference)
+            .inspect_replacement(
+                token,
+                target,
+                master,
+                recurrence_id,
+                remove_conference,
+                changes,
+            )
             .await
     }
     async fn event_url(

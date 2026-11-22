@@ -43,6 +43,8 @@ export type EntityActionListState = {
     SoupState['collapseEntity'],
     'callback' | 'shouldCollapse'
   >;
+  /** Unfolds an entity's rows that a done folded but the list kept. */
+  expandEntity?: { callback: () => ((entityId: string) => void) | undefined };
   /** Lists that can keep rows in place while an action changes their sort. */
   positions?: Pick<SoupState['positions'], 'hold'>;
 };
@@ -63,6 +65,8 @@ export type ToEntityActionListStateOptions<TItem, TMetadata> = {
     enabled: () => boolean;
     run: (entityId: string) => Promise<void>;
   };
+  /** Unfolds an entity's rows that a done folded but the list kept. */
+  expand?: (entityId: string) => void;
   positions?: EntityActionListState['positions'];
 };
 
@@ -271,6 +275,7 @@ export function toEntityActionListState<TItem, TMetadata>(
       callback: collapseCallback,
       shouldCollapse: () => options.collapse?.enabled() ?? false,
     },
+    expandEntity: { callback: () => options.expand },
     positions: options.positions,
   };
 }

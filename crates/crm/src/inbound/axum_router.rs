@@ -35,6 +35,9 @@ pub mod get_contact;
 /// receive null for hidden rows; admin/owner reach hidden contacts.
 pub mod get_contact_by_email;
 
+/// Resolve a team's CRM company by one of its domains.
+pub mod get_company_by_domain;
+
 /// Search the caller's team's CRM contacts by email or name.
 pub mod search_contacts;
 
@@ -208,6 +211,10 @@ where
         .route(
             "/companies/{company_id}/name",
             put(set_company_name::handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/companies/by-domain",
+            get(get_company_by_domain::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}",
@@ -388,7 +395,7 @@ impl IntoResponse for CrmError {
             CrmError::CompanyAlreadyExistsForTeam => (
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
-                    message: "a crm company already exists for this domain".into(),
+                    message: "a crm company already exists for this domain; get it with GET /crm/companies/by-domain, which returns an archived company to team admins only".into(),
                 }),
             ),
             CrmError::ContactAlreadyExistsForCompany => (

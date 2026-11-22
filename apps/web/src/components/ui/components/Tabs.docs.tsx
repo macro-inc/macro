@@ -132,6 +132,27 @@ function ValueDemo() {
 }
 // #endregion
 
+// #region demo:full-width-icons
+function FullWidthIconsDemo() {
+  const [value, setValue] = createSignal<'chat' | 'code'>('chat');
+  return (
+    <div class="w-48">
+      <Tabs
+        aria-label="Conversation mode"
+        fullWidth
+        iconOnly
+        options={[
+          { value: 'chat', label: 'Chat', icon: ChatIcon, dot: true },
+          { value: 'code', label: 'Code', icon: CodeIcon },
+        ]}
+        value={value()}
+        onChange={setValue}
+      />
+    </div>
+  );
+}
+// #endregion
+
 // #region demo:track
 function TrackDemo() {
   const [value, setValue] = createSignal<'chat' | 'code'>('chat');
@@ -195,6 +216,13 @@ export default defineDoc({
       description:
         'In forms and dialogs, `fullWidth` gives equal-width options and `size="sm"` matches compact rows.',
       render: ValueDemo,
+    },
+    {
+      id: 'full-width-icons',
+      title: 'Full width, icon only',
+      description:
+        'With `fullWidth`, icon-only options still share the row equally, and a dot sits on its glyph’s corner.',
+      render: FullWidthIconsDemo,
     },
     {
       id: 'track',

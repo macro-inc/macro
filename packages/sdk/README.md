@@ -253,6 +253,53 @@ await doc.setProperty(macro.properties.byId('prop_status'), {
 const props = await doc.properties();
 ```
 
+### Task creation
+
+Task creation leaves an omitted `shareWithTeam` to the backend: tasks default to
+team sharing, or private when the calling session cannot share. Explicit `true`
+still requests sharing and is subject to the backend's permission checks.
+
+### Task templates
+
+`macro.taskTemplates` manages personal and team templates. Selected fields can
+stay blank or carry a default. An optional `title` is the default task title,
+separate from the template's `name`; description Markdown fills a blank task body.
+Read the default with `template.title()`. Omitted update fields stay unchanged;
+pass `title: ''` to clear the default.
+
+An optional `shareWithTeam` controls task sharing independently of the template's
+own `team`; `false` is an explicit private-task default. Omission leaves the
+composer switch unchanged. Read it with `template.shareWithTeam()` and update it
+with `template.update({ shareWithTeam: false })`. Property-only updates retain it.
+Without a current team the composer hides the switch and ignores the saved value.
+
+Pass a client-generated UUID as `idempotencyKey` and retain it with the same input
+when retrying creation. The server returns the same template rather than creating
+a duplicate; changed content or ownership conflicts.
+
+```ts
+const effort = macro.properties.definition('00000001-0000-0000-0000-000000000008');
+// Persist this key and input before sending; retries reuse both unchanged.
+const creation: Parameters<typeof macro.taskTemplates.create>[0] = {
+  idempotencyKey: crypto.randomUUID(),
+  name: 'Bug report',
+  title: 'Investigate issue',
+  shareWithTeam: false, // create private tasks even from a team-owned template
+  team: await macro.teams.current(), // omit for a personal template
+  properties: [{ property: effort, defaultValue: { type: 'number', value: 0 } }],
+  descriptionMarkdown: '## Details\n\n- [ ] Describe the task',
+};
+const template = await macro.taskTemplates.create(creation);
+// After an uncertain response: await macro.taskTemplates.create(creation).
+const templates = await macro.taskTemplates.list({ team: await macro.teams.current() });
+await template.update({ name: 'Detailed bug report' });
+```
+
+Current team members can use team templates; the creator and current team admins
+can edit or delete them. Ownership cannot change. Updates and `template.delete()`
+use the observed revision; after a conflict, read a fresh handle before retrying.
+Template edits and deletion never change tasks already created from them.
+
 ### Databases
 
 Databases are collections of tables. Tables, columns, and views are parts of
@@ -744,7 +791,7 @@ atomic database operation contract, including batch-local UUIDs, like
 successful batches. Call `row.refresh()` to reload a row after a batch changes it.
 
 A pipeline that tracks companies or contacts has an **Outcome** field (`Open`,
-`Won` or `Lost`, independent of Stage) and a currency field beside each
+`Won`, `Lost` or `Declined`, a deal the team turned down, independent of Stage) and a currency field beside each
 monetary field, such as `Revenue currency`; new entries default to `Open` and
 `USD`, and neither field can be emptied. `listWithFields()` and `find()` name
 each monetary field's `currencyField`, `find()` returns one total per

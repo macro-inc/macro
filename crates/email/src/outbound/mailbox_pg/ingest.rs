@@ -295,6 +295,17 @@ impl MailboxIngest for PgMailboxSync {
         tx.commit().await.map_err(db_error)
     }
 
+    async fn stored(&self, lease: &MessageLease) -> Result<bool, MailboxError> {
+        sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM email_messages WHERE link_id = $1 AND provider_id = $2) AS "stored!""#,
+            lease.mailbox.link_id,
+            lease.provider_id.as_str()
+        )
+        .fetch_one(&self.db)
+        .await
+        .map_err(db_error)
+    }
+
     async fn absent(&self, lease: &MessageLease) -> Result<(), MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         let Some(mailbox_address) = sqlx::query_scalar!("SELECT email_address FROM email_links WHERE id = $1 AND sync_generation = $2 AND grant_generation = $3 AND is_sync_active FOR UPDATE",lease.mailbox.link_id,lease.mailbox.sync_generation,lease.mailbox.grant_generation)

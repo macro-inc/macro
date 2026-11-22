@@ -3,9 +3,10 @@ use crate::api::search::simple::filter::{
     reject_unsupported_email_filters,
 };
 use crate::domain::email_search::ThreadStates;
+use crate::domain::search_allowance::{AllowanceDraw, draw_api_key_search};
 use crate::domain::search_lanes::{LaneTurn, SearchCaller, SearchLanes};
 
-use crate::api::search::caller::{caller_label, search_caller};
+use crate::api::search::caller::{caller_label, draws_api_key_allowance, search_caller};
 use crate::api::search::crm_company;
 use crate::api::search::simple::{simple_channel, simple_chat};
 use crate::api::{
@@ -386,6 +387,9 @@ fn unified_search_span(
         search.lane = tracing::field::Empty,
         search.lane_wait_ms = tracing::field::Empty,
         search.lane_outcome = tracing::field::Empty,
+        search.rate_limit = tracing::field::Empty,
+        search.rate_limit_remaining = tracing::field::Empty,
+        search.rate_limit_wait_ms = tracing::field::Empty,
     )
 }
 
@@ -434,12 +438,19 @@ pub(in crate::api::search) async fn perform_unified_search(
             ctx,
             &user.user_context,
             search_caller(user),
+            draws_api_key_allowance(user),
             include_crm,
             query_params,
             req,
         )
         .await
-        .inspect_err(|error| tracing::error!(error = %error))
+        .inspect_err(|error| {
+            // A limited search is the allowance working, marked on the span
+            // by `search.rate_limit`, not a failure to report.
+            if !matches!(error, SearchError::RateLimited { .. }) {
+                tracing::error!(error = %error);
+            }
+        })
     }
     .instrument(span)
     .await
@@ -472,10 +483,40 @@ async fn take_search_turn(
     })
 }
 
+/// Draw an API-key search from its account's allowance, recording on the
+/// current span how the draw ended, how many searches are left and how long
+/// the bucket took to answer. A limited search is refused before it waits for
+/// a turn.
+async fn draw_search_allowance(
+    ctx: &SearchHandlerState,
+    account: &MacroUserId<Lowercase<'_>>,
+) -> Result<(), SearchError> {
+    let started = tokio::time::Instant::now();
+    let draw = draw_api_key_search(ctx.api_key_search_buckets.as_ref(), account).await;
+    let waited_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    let span = tracing::Span::current();
+    span.record("search.rate_limit_wait_ms", waited_ms);
+    span.record("search.rate_limit", draw.label());
+    if let Some(remaining) = draw.remaining() {
+        span.record("search.rate_limit_remaining", remaining);
+    }
+
+    match draw {
+        AllowanceDraw::Limited { retry_after } => {
+            let retry_after_seconds = retry_after.as_millis().div_ceil(1000).max(1);
+            Err(SearchError::RateLimited {
+                retry_after_seconds: u64::try_from(retry_after_seconds).unwrap_or(u64::MAX),
+            })
+        }
+        AllowanceDraw::Allowed { .. } | AllowanceDraw::Unavailable => Ok(()),
+    }
+}
+
 async fn search_unified_sources(
     ctx: &SearchHandlerState,
     user_context: &UserContext,
     caller: SearchCaller,
+    draws_api_key_allowance: bool,
     include_crm: bool,
     query_params: SearchPaginationParams,
     req: UnifiedSearchRequest,
@@ -559,6 +600,9 @@ async fn search_unified_sources(
     // when it runs (channel and CRM company ids) are checked in its turn, as
     // they were before lanes: a caller the source doesn't apply to never
     // fails on them.
+    if draws_api_key_allowance {
+        draw_search_allowance(ctx, &user_id).await?;
+    }
     let _turn = take_search_turn(&ctx.search_lanes, caller).await?;
 
     // CRM is opt-in: only when the caller asks for it does this resolve a
@@ -1127,7 +1171,7 @@ async fn search_unified_sources(
             (status = 200, body=SimpleSearchResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
-            (status = 429, body=ErrorResponse, description = "The caller's other searches kept every slot of its lane busy for 20 seconds; retry after `Retry-After` seconds."),
+            (status = 429, body=ErrorResponse, description = "The caller's other searches kept every slot of its lane busy for 20 seconds, or the account's user API keys used their shared search allowance (200 at once, then one a second); retry after `Retry-After` seconds."),
             (status = 500, body=ErrorResponse),
     )
 )]

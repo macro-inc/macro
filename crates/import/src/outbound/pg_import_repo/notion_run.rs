@@ -54,7 +54,7 @@ impl NotionRunRepo for PgImportRepo {
         }
     }
 
-    #[tracing::instrument(skip(self, job), err)]
+    #[tracing::instrument(skip(self, job, user), err)]
     async fn take_run(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -97,7 +97,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn renew_lease(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -122,7 +122,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn release_lease(&self, user: &MacroUserIdStr<'static>, owner: Uuid) -> Result<bool> {
         // Lapsed as of now, so the next adopter takes it straight away.
         let result = sqlx::query!(
@@ -140,7 +140,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn adopt_stalled_runs(
         &self,
         user: Option<&MacroUserIdStr<'static>>,
@@ -218,7 +218,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(adopted)
     }
 
-    #[tracing::instrument(skip(self, event), fields(notified = tracing::field::Empty), err)]
+    #[tracing::instrument(skip(self, event, user), fields(notified = tracing::field::Empty), err)]
     async fn transition_reviewed_run<Event>(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -277,7 +277,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(Some(run))
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn root_folder(&self, user: &MacroUserIdStr<'static>) -> Result<Option<Uuid>> {
         let folder = sqlx::query_scalar!(
             r#"SELECT root_folder_id FROM import_run WHERE user_id = $1 AND source = $2"#,
@@ -289,7 +289,192 @@ impl NotionRunRepo for PgImportRepo {
         Ok(folder.flatten())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    async fn personal_root_folder(&self, user: &MacroUserIdStr<'static>) -> Result<Option<Uuid>> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT personal_root_folder_id FROM import_run
+            WHERE user_id = $1 AND source = $2
+            "#,
+            user.as_ref(),
+            self.workspace_source.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .flatten())
+    }
+
+    async fn set_personal_root_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> Result<()> {
+        let updated = sqlx::query!(
+            r#"
+            UPDATE import_run
+            SET personal_root_folder_id = $2, personal_folder_ids = '{}'::jsonb
+            WHERE user_id = $1 AND source = $3
+            "#,
+            user.as_ref(),
+            folder,
+            self.workspace_source.as_ref(),
+        )
+        .execute(&self.pool)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(anyhow::anyhow!("personal mirror import run is missing").into());
+        }
+        Ok(())
+    }
+
+    async fn personal_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        path: &[String],
+    ) -> Result<Option<Uuid>> {
+        let key = serde_json::to_string(path)?;
+        let id = sqlx::query_scalar!(
+            r#"
+            SELECT personal_folder_ids ->> $3 AS folder FROM import_run
+            WHERE user_id = $1 AND source = $2
+            "#,
+            user.as_ref(),
+            self.workspace_source.as_ref(),
+            key,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .flatten();
+        id.map(|id| {
+            id.parse()
+                .map_err(|error| anyhow::anyhow!("invalid personal folder id: {error}").into())
+        })
+        .transpose()
+    }
+
+    async fn set_personal_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        path: &[String],
+        folder: Uuid,
+    ) -> Result<()> {
+        let key = serde_json::to_string(path)?;
+        let updated = sqlx::query!(
+            r#"
+            UPDATE import_run
+            SET personal_folder_ids = jsonb_set(
+                COALESCE(personal_folder_ids, '{}'::jsonb), ARRAY[$3], to_jsonb($4::text)
+            )
+            WHERE user_id = $1 AND source = $2
+            "#,
+            user.as_ref(),
+            self.workspace_source.as_ref(),
+            key,
+            folder.to_string(),
+        )
+        .execute(&self.pool)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(anyhow::anyhow!("personal mirror import run is missing").into());
+        }
+        Ok(())
+    }
+
+    async fn set_shared_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        folder: Uuid,
+    ) -> Result<()> {
+        // Keep the source lookup on the item PK even with stale owner statistics.
+        let updated = sqlx::query!(
+            r#"
+            INSERT INTO import_entity_written AS shared_folder (import_id, kind, object, macro_id)
+            SELECT entity.id, 'folder', 'shared', $3
+            FROM import_entity AS entity
+            WHERE entity.id = $2 AND (SELECT entity.user_id OFFSET 0) = $1
+            ON CONFLICT (import_id, kind, object) DO UPDATE SET macro_id = EXCLUDED.macro_id
+            "#,
+            user.as_ref(),
+            import_id,
+            folder,
+        )
+        .execute(&self.pool)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(
+                anyhow::anyhow!("import item is missing or not owned by the caller").into(),
+            );
+        }
+        Ok(())
+    }
+
+    async fn record_personal_relocation(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        folder: Uuid,
+    ) -> Result<()> {
+        // Fence the tuple's owner check so stale statistics cannot drive this
+        // one-item update through the user's entire ledger instead of its PK.
+        let updated = sqlx::query!(
+            r#"
+            UPDATE import_entity AS entity
+            SET metadata = jsonb_set(entity.metadata, '{personalFolderId}', to_jsonb($3::text))
+            WHERE entity.id = $1 AND (SELECT entity.user_id OFFSET 0) = $2
+            "#,
+            import_id,
+            user.as_ref(),
+            folder.to_string(),
+        )
+        .execute(&self.pool)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(
+                anyhow::anyhow!("import item is missing or not owned by the caller").into(),
+            );
+        }
+        Ok(())
+    }
+
+    async fn record_separate_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        folder: Uuid,
+        reason: crate::domain::ports::FolderSeparation,
+    ) -> Result<()> {
+        use crate::domain::ports::FolderSeparation;
+        let visibility = match reason {
+            FolderSeparation::PersonalFromShared => "personal",
+            FolderSeparation::SharedFromPersonal | FolderSeparation::SharedAfterGrantRemoval => {
+                "shared"
+            }
+        };
+        let record =
+            serde_json::json!({"visibility":visibility, "folderId":folder, "reason":reason});
+        // Fence the tuple's owner check so stale statistics cannot drive this
+        // one-item update through the user's entire ledger instead of its PK.
+        let updated = sqlx::query!(
+            r#"
+            UPDATE import_entity AS entity
+            SET metadata = jsonb_set(entity.metadata, '{separateFolder}', $3)
+            WHERE entity.id = $1 AND (SELECT entity.user_id OFFSET 0) = $2
+            "#,
+            import_id,
+            user.as_ref(),
+            record,
+        )
+        .execute(&self.pool)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(
+                anyhow::anyhow!("import item is missing or not owned by the caller").into(),
+            );
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
     async fn set_root_folder(&self, user: &MacroUserIdStr<'static>, folder: Uuid) -> Result<()> {
         sqlx::query!(
             r#"UPDATE import_run SET root_folder_id = $2 WHERE user_id = $1 AND source = $3"#,
@@ -302,7 +487,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn settle_importing(&self, user: &MacroUserIdStr<'static>, reason: &str) -> Result<u64> {
         let mut transaction = self.pool.begin().await?;
         let settled = sqlx::query_scalar!(
@@ -335,7 +520,125 @@ impl NotionRunRepo for PgImportRepo {
 }
 
 impl WrittenObjects for PgImportRepo {
-    #[tracing::instrument(skip(self, import_ids), fields(rows = import_ids.len()), err)]
+    #[tracing::instrument(skip(self, user), err)]
+    async fn record_task_notice(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        task_id: Uuid,
+        reason: crate::domain::ports::TaskImportNoticeReason,
+    ) -> Result<()> {
+        let payload =
+            serde_json::to_string(&crate::domain::ports::TaskImportNotice { task_id, reason })?;
+        let owned = sqlx::query_scalar!(
+            r#"
+WITH owned AS MATERIALIZED (
+    SELECT entity.id FROM import_entity AS entity
+    WHERE entity.id = $2 AND (SELECT entity.user_id OFFSET 0) = $1
+), inserted AS (
+    INSERT INTO import_entity_written (import_id, kind, object, macro_id)
+    SELECT owned.id, 'task_notice', $3, $4 FROM owned
+    ON CONFLICT (import_id, kind, object) DO NOTHING
+    RETURNING import_id
+)
+SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
+        "#,
+            user.as_ref(),
+            import_id,
+            payload,
+            task_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        if !owned {
+            return Err(
+                anyhow::anyhow!("import item is missing or not owned by the caller").into(),
+            );
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, user, import_ids), fields(items=import_ids.len()), err)]
+    async fn task_notice_counts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_ids: &[Uuid],
+    ) -> Result<Vec<crate::domain::ports::TaskImportNoticeCount>> {
+        if import_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let ids: Vec<_> = import_ids
+            .iter()
+            .copied()
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        let rows = sqlx::query!(
+            r#"
+SELECT written.import_id, written.object::jsonb ->> 'reason' AS reason,
+    count(DISTINCT written.macro_id) AS "count!",
+    bool_and((written.object::jsonb - ARRAY['task_id', 'reason']) = '{}'::jsonb
+        AND (written.object::jsonb ->> 'task_id')::uuid = written.macro_id) AS valid
+FROM UNNEST($2::uuid[]) AS wanted(import_id)
+JOIN import_entity AS entity ON entity.id = wanted.import_id
+    AND (SELECT entity.user_id OFFSET 0) = $1
+JOIN import_entity_written AS written ON written.import_id = entity.id
+    AND written.kind = 'task_notice'
+GROUP BY written.import_id, written.object::jsonb ->> 'reason'
+        "#,
+            user.as_ref(),
+            &ids
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                anyhow::ensure!(row.valid == Some(true), "invalid task notice identity");
+                let reason = row
+                    .reason
+                    .ok_or_else(|| anyhow::anyhow!("task notice reason is missing"))?;
+                Ok(crate::domain::ports::TaskImportNoticeCount {
+                    import_id: row.import_id,
+                    reason: serde_json::from_value(serde_json::Value::String(reason))?,
+                    count: u32::try_from(row.count).map_err(anyhow::Error::from)?,
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn clear_task_notices(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+    ) -> Result<()> {
+        let owned = sqlx::query_scalar!(
+            r#"
+WITH owned AS MATERIALIZED (
+    SELECT entity.id FROM import_entity AS entity
+    WHERE entity.id = $2 AND (SELECT entity.user_id OFFSET 0) = $1
+), removed AS (
+    DELETE FROM import_entity_written AS written USING owned
+    WHERE written.import_id = owned.id AND written.kind = 'task_notice'
+    RETURNING written.import_id
+)
+SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
+        "#,
+            user.as_ref(),
+            import_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        if !owned {
+            return Err(
+                anyhow::anyhow!("import item is missing or not owned by the caller").into(),
+            );
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, import_ids, user), fields(rows = import_ids.len()), err)]
     async fn written(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -357,7 +660,7 @@ impl WrittenObjects for PgImportRepo {
         rows.into_iter().map(WrittenObject::try_from).collect()
     }
 
-    #[tracing::instrument(skip(self, objects), fields(objects = objects.len()), err)]
+    #[tracing::instrument(skip(self, objects, user), fields(objects = objects.len()), err)]
     async fn record_written(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -386,7 +689,8 @@ impl WrittenObjects for PgImportRepo {
                 INSERT INTO import_entity_written (import_id, kind, object, macro_id)
                 SELECT input.import_id, input.kind, input.object, input.macro_id
                 FROM input
-                JOIN import_entity AS entity ON entity.id = input.import_id AND entity.user_id = $1
+                JOIN import_entity AS entity ON entity.id = input.import_id
+                    AND (SELECT entity.user_id OFFSET 0) = $1
                 ON CONFLICT (import_id, kind, object) DO NOTHING
                 RETURNING import_id, kind, object, macro_id
             )
@@ -395,9 +699,16 @@ impl WrittenObjects for PgImportRepo {
             FROM inserted
             UNION ALL
             SELECT written.import_id, written.kind, written.object, written.macro_id
-            FROM import_entity_written AS written
-            JOIN input USING (import_id, kind, object)
-            JOIN import_entity AS entity ON entity.id = written.import_id AND entity.user_id = $1
+            FROM input
+            JOIN LATERAL (
+                SELECT written.import_id, written.kind, written.object, written.macro_id
+                FROM import_entity_written AS written
+                WHERE written.import_id = input.import_id AND written.kind = input.kind
+                  AND written.object = input.object
+                OFFSET 0
+            ) AS written ON true
+            JOIN import_entity AS entity ON entity.id = written.import_id
+                AND (SELECT entity.user_id OFFSET 0) = $1
             "#,
             user.as_ref(),
             &import_ids,

@@ -195,6 +195,10 @@ impl SuggestionSources for FakeSources {
     async fn apps(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<String>> {
         Ok(vec!["slack".to_owned()])
     }
+
+    async fn crm(&self, _: &MacroUserIdStr<'static>) -> Result<bool> {
+        Ok(true)
+    }
 }
 
 /// Generation sessions open in a generation, and the latest status.

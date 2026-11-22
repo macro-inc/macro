@@ -13,6 +13,9 @@ levels, and the computed `UserItemAccess` a caller has to an entity.
   `team_share.rs`, `link_share.rs` (`LinkShare`).
   `SharePermissionV2::new` gives a new item no link share under an agent
   session scope that may not share (`agent_correlation::context::may_share`).
+- `InitialLinkShare` in `share_permission.rs` is the single creation policy
+  type for documents, folders and initiatives: `EntityDefault` or `Exact(state)`.
+  Creators apply it before inserting permissions.
 - `src/user_item_access.rs`: the resolved access an actor has to an item.
 
 ## Scope

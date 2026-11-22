@@ -113,13 +113,15 @@ mod test;
 
 /// A parsed body, and whether the parse stopped at a bound, leaving out
 /// everything from there on.
-pub(crate) struct BoundedHtml {
-    pub(crate) html: Html,
-    pub(crate) clipped: bool,
+pub struct BoundedHtml {
+    /// What was parsed before the parse stopped, or all of it.
+    pub html: Html,
+    /// Whether the parse stopped at a bound, so `html` lacks the rest.
+    pub clipped: bool,
 }
 
 /// Parses a document as [`Html::parse_document`] does, within the bounds.
-pub(crate) fn parse_document(html: &str) -> BoundedHtml {
+pub fn parse_document(html: &str) -> BoundedHtml {
     feed(
         driver::parse_document(
             BoundedSink::new(Html::new_document(), MAX_HTML_NODES),
@@ -147,7 +149,7 @@ pub(crate) fn parse_document_for_text(html: &str, max_nodes: usize) -> BoundedHt
 }
 
 /// Parses a fragment as [`Html::parse_fragment`] does, within the bounds.
-pub(crate) fn parse_fragment(html: &str) -> BoundedHtml {
+pub fn parse_fragment(html: &str) -> BoundedHtml {
     let context = QualName::new(
         None,
         Namespace::from(HTML_NAMESPACE),

@@ -19,7 +19,7 @@ data:
       replication_factor: 3
       storage:
         s3:
-          bucketnames: macro-observability-k8s-loki
+          bucketnames: observability-logs-2be9169
           insecure: false
           region: us-east-2
           s3forcepathstyle: false
@@ -68,7 +68,7 @@ data:
     ruler:
       storage:
         s3:
-          bucketnames: macro-observability-k8s-loki
+          bucketnames: observability-logs-2be9169
           insecure: false
           region: us-east-2
           s3forcepathstyle: false

@@ -65,7 +65,7 @@ impl Default for UpdateSettings {
 }
 
 /// One native launch configuration, shared by all new sessions.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HerdrSettings {
     /// Native model ID; absent uses the CLI's configured default. Only the
@@ -75,19 +75,9 @@ pub struct HerdrSettings {
     pub arguments: Vec<String>,
     /// Repository cache and worktree location; absent uses instance storage.
     pub storage_path: Option<PathBuf>,
-    /// Switch Herdr to newly launched sessions.
+    /// Switch Herdr to newly launched sessions. Off by default: sessions
+    /// Macro opens should not take over the operator's view.
     pub focus: bool,
-}
-
-impl Default for HerdrSettings {
-    fn default() -> Self {
-        Self {
-            model: None,
-            arguments: Vec::new(),
-            storage_path: None,
-            focus: true,
-        }
-    }
 }
 
 /// The credential pairing minted for this daemon.

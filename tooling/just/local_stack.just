@@ -32,6 +32,7 @@ create_local_queues:
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name webhook-event-queue.fifo --attributes FifoQueue=true || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-backfill-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-crm-cleanup-queue || true
+  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-crm-population-queue.fifo --attributes FifoQueue=true,VisibilityTimeout=60,DelaySeconds=10 || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name delete-chat-handler-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name contacts-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name convert-service-queue || true
@@ -43,7 +44,10 @@ create_local_queues:
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-gmail-inbox-retry-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-gmail-ops-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-gmail-ops-retry-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-refresh-queue || true
+  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-refresh-queue --attributes VisibilityTimeout=300 || true
+  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-link-maintenance-queue --attributes VisibilityTimeout=300 || true
+  aws --endpoint-url=http://localhost:4566 sqs set-queue-attributes --queue-url http://localhost:4566/000000000000/email-service-refresh-queue --attributes VisibilityTimeout=300
+  aws --endpoint-url=http://localhost:4566 sqs set-queue-attributes --queue-url http://localhost:4566/000000000000/email-service-link-maintenance-queue --attributes VisibilityTimeout=300
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name search-event-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-sfs-delete-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-sfs-mapper-queue || true

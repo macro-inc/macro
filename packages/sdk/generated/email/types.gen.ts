@@ -1854,9 +1854,10 @@ export type Settings = {
 /**
  * Coarse sync state for an inbox, used to render a one-line hint in the
  * multi-inbox settings list. Derived from the link's `is_sync_active` flag, its
- * reauth health, and its most recent backfill job.
+ * reauth health, whether the provider serves its mailbox, and its most recent
+ * backfill job.
  */
-export type SyncStatus = 'SYNCING' | 'UP_TO_DATE' | 'ERROR' | 'NEEDS_REAUTH' | 'INACTIVE';
+export type SyncStatus = 'SYNCING' | 'UP_TO_DATE' | 'ERROR' | 'NEEDS_REAUTH' | 'MAILBOX_UNAVAILABLE' | 'INACTIVE';
 
 export type Thread = {
     created_at: string;

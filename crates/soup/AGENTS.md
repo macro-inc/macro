@@ -57,7 +57,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
   `keying.rs`. A read of known items (`only`) under `FiledEntity` keying
   takes its pending notifications from `attention/pending_only.sql`, by key;
-  every other read takes them from `attention/pending.sql`. Change both.
+  every other read, and every probe (which empties it), takes them from
+  `attention/pending.sql`. Change both.
 - Find where a viewer's unread rows may be without paging a feed:
   `src/outbound/pg_soup_repo/attention_unread.rs`. It is neither gated nor
   filtered and runs for every signed-in viewer; its two reads are bounded by
@@ -82,6 +83,14 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `ports` for `domain/service`, `outbound` for the Postgres repository.
 
 ## Gotchas
+
+- `AttentionCandidateRequest::assume_attention` probes the attention query:
+  each `only` key counts as if a notification about it were pending, so a
+  caller can ask whether a new notification would be listed. A probe never
+  reads the viewer's pending notifications, so its cost stays flat however
+  many they have (`a_probe_costs_the_same_however_many_notifications_are_pending`;
+  past Postgres's JIT threshold a probe took hundreds of milliseconds).
+  Normal pages build byte-identical SQL (`only_a_probe_changes_the_query`).
 
 - Project grouping uses the system Project property (initiative membership),
   including canonical TASK assignments, rather than legacy folder `project_id`.
