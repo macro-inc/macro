@@ -13,26 +13,6 @@ const TEAM_SIZE: i32 = 1_000;
 const BACKGROUND_USERS: i32 = 20_000;
 
 async fn seed(pool: &PgPool) {
-    // An autovacuum analyze that starts while the seed is still inserting can
-    // hold back the horizon, so the VACUUM below cannot mark the new rows
-    // all-visible and index-only scans fetch every heap tuple (seen in CI
-    // under load). The test runs its own VACUUM (ANALYZE), so autovacuum is off.
-    for table in [
-        "macro_user",
-        "\"User\"",
-        "team",
-        "team_user",
-        "email_links",
-        "contact_list_members",
-        "contact_inbox_members",
-    ] {
-        sqlx::query(&format!(
-            "ALTER TABLE {table} SET (autovacuum_enabled = false)"
-        ))
-        .execute(pool)
-        .await
-        .unwrap();
-    }
     // Users 0..TEAM_SIZE are the subject and its teammates, spread through
     // the subject's stored contacts so the roster interleaves with every page.
     // The rest fill background teams of ten, so the roster is a small part of
