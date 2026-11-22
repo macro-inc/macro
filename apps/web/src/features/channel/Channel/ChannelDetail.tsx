@@ -201,9 +201,20 @@ export function ChannelDetailActions(
   const screenHarnessId = useDmScreenHarnessId(props.channelId);
   const call = useCall(() => props.channelId);
   const { activeTab } = useChannelTab();
+  // After the tabs and the agent's chip, the actions give up their labels,
+  // before the title (and the avatar) would be cut.
+  const labelsHidden = props.collapser
+    ? useRegisterPriorityCollapseItem(props.collapser, {
+        id: 'header-action-labels',
+        priority: 3,
+      })
+    : () => false;
 
   return (
-    <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
+    <div
+      class="header-actions group/header-labels ml-auto flex shrink-0 items-center gap-2 touch:gap-1"
+      data-labels-hidden={labelsHidden() ? '' : undefined}
+    >
       <Show when={channelType() === ChannelType.direct_message}>
         <DebugSuspense name="ChannelDetail.agent-status">
           <TeamAgentDmStatusChip
