@@ -1,9 +1,6 @@
-import { SLACK_PIPEDREAM_SLUGS } from '@core/pipedream/slugs';
-import type {
-  PipedreamConnectionResponse,
-  PipedreamProvider,
-} from '@service-cognition/client';
-import type { ServerResponse } from '@service-cognition/generated/schemas';
+import type { Connector, ConnectorStatus } from '@queries/connectors';
+import { Result } from 'neverthrow';
+import { match } from 'ts-pattern';
 
 export type CapabilityStatus =
   | 'connected'
@@ -11,70 +8,51 @@ export type CapabilityStatus =
   | 'action-required'
   | 'not-connected';
 
-export type CapabilityScope = 'personal' | 'shared';
-
-export type CapabilityMechanism = 'pipedream' | 'native-mcp';
+export type CuratedAiProvider = 'github' | 'linear' | 'notion' | 'slack';
 
 export type ProviderId = CuratedAiProvider;
 
-export type CuratedAiProvider = 'github' | 'linear' | 'notion' | 'slack';
-
-export type CapabilityKind = 'ai';
-
+/** A featured app the user holds a connection for. */
 export type Capability = {
   id: string;
-  kind: CapabilityKind;
   provider: ProviderId;
   title: string;
   outcome: string;
+  /** The connection's display name. */
   account: string;
-  scope: CapabilityScope;
   status: CapabilityStatus;
-  mechanism: CapabilityMechanism;
-  /** Stored Pipedream slug used to update or remove this connection. */
-  appSlug?: string;
-  /** Backend holding this connection's grant, for `mechanism: 'pipedream'`. */
-  grantProvider?: PipedreamProvider;
-  /** Native MCP URL, when this row is that server. */
-  sourceUrl?: string;
+  /** Its connector key, `app/{provider}`. */
+  key: string;
+  /** Whether Macro can import from the app through this connection. */
+  importAvailable: boolean;
 };
 
+/** A held connector without a featured row of its own. */
 export type Leftover =
   | {
-      kind: 'native-mcp';
+      /** A server added by URL. */
+      kind: 'server';
       id: string;
+      key: string;
       title: string;
+      /** Its address, shortened for display. */
       subtitle: string;
-      url: string;
-      enabled: boolean;
-      authenticated: boolean;
+      status: CapabilityStatus;
     }
   | {
-      kind: 'pipedream';
+      /** A catalog app. */
+      kind: 'app';
       id: string;
+      key: string;
       title: string;
       appSlug: string;
-      enabled: boolean;
+      status: CapabilityStatus;
+      importAvailable: boolean;
     };
-
-export type ProviderSummary = {
-  id: ProviderId;
-  name: string;
-  ready: number;
-  total: number;
-  summary: string;
-  accounts: string;
-};
 
 export type ConnectionsModel = {
   capabilities: Capability[];
   leftovers: Leftover[];
-  providers: ProviderSummary[];
-};
-
-export type ConnectionsInput = {
-  pipedream: PipedreamConnectionResponse[];
-  nativeMcp: ServerResponse[];
 };
 
 export const CURATED_AI: Record<
@@ -101,205 +79,88 @@ export const CURATED_AI: Record<
   },
 };
 
-const NATIVE_CURATED: {
-  provider: CuratedAiProvider;
-  url: string;
-}[] = [
-  { provider: 'github', url: 'https://api.githubcopilot.com/mcp' },
-  { provider: 'linear', url: 'https://mcp.linear.app/mcp' },
-  { provider: 'notion', url: 'https://mcp.notion.com/mcp' },
-  { provider: 'slack', url: 'https://mcp.slack.com/mcp' },
-];
-
-const PROVIDER_NAMES: Record<ProviderId, string> = {
-  github: 'GitHub',
-  linear: 'Linear',
-  notion: 'Notion',
-  slack: 'Slack',
-};
-
-function nativeCuratedProvider(
-  server: ServerResponse
-): CuratedAiProvider | null {
-  const url = server.url.replace(/\/$/, '');
-  return NATIVE_CURATED.find((row) => row.url === url)?.provider ?? null;
+function isCurated(slug: string): slug is CuratedAiProvider {
+  return slug in CURATED_AI;
 }
 
-function pipedreamBySlug(
-  connections: PipedreamConnectionResponse[]
-): Map<string, PipedreamConnectionResponse> {
-  return new Map(connections.map((row) => [row.app_slug, row]));
+/** The server's status as settings shows it. */
+function capabilityStatus(status: ConnectorStatus): CapabilityStatus {
+  return match(status)
+    .with('connected', () => 'connected' as const)
+    .with('disabled', () => 'off' as const)
+    .with('needsReauth', () => 'action-required' as const)
+    .with('notConnected', () => 'not-connected' as const)
+    .exhaustive(() => 'not-connected' as const);
 }
 
-function aiStatus(enabled: boolean): CapabilityStatus {
-  return enabled ? 'connected' : 'off';
+const parseUrl = Result.fromThrowable(
+  (url: string) => new URL(url),
+  () => ({ kind: 'invalid-url' as const })
+);
+
+function urlPreview(url: string): string {
+  const parsed = parseUrl(url);
+  if (parsed.isErr()) return url;
+  const path = parsed.value.pathname.replace(/\/$/, '');
+  return path ? `${parsed.value.host}${path}` : parsed.value.host;
 }
 
-function mcpUrlPreview(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const path = parsed.pathname.replace(/\/$/, '');
-    return path ? `${parsed.host}${path}` : parsed.host;
-  } catch {
-    return url;
-  }
-}
-
-function leftoverNative(server: ServerResponse): Leftover {
-  return {
-    kind: 'native-mcp',
-    id: `mcp:${server.url}`,
-    title: server.server_name,
-    subtitle: mcpUrlPreview(server.url),
-    url: server.url,
-    enabled: server.enabled,
-    authenticated: server.authenticated,
-  };
-}
-
-function curatedAiAndLeftovers(input: ConnectionsInput): {
-  capabilities: Capability[];
-  leftovers: Leftover[];
-} {
-  const pipedream = pipedreamBySlug(input.pipedream);
-  const usedPipedream = new Set<string>();
-  const usedNative = new Set<string>();
+/**
+ * The connectors the server listed, as settings shows them: the featured
+ * apps (GitHub, Linear, Notion, Slack) as capabilities, everything else as
+ * leftovers. Statuses are the server's; nothing here decides them.
+ */
+export function toConnectionsModel(
+  connectors: readonly Connector[]
+): ConnectionsModel {
   const capabilities: Capability[] = [];
   const leftovers: Leftover[] = [];
-
-  for (const provider of Object.keys(CURATED_AI) as CuratedAiProvider[]) {
-    const copy = CURATED_AI[provider];
-    // Match backend alias priority before considering enabled state.
-    const slugs = provider === 'slack' ? SLACK_PIPEDREAM_SLUGS : [provider];
-    const pd = slugs.map((slug) => pipedream.get(slug)).find((row) => row);
-    const native = input.nativeMcp.find(
-      (server) => nativeCuratedProvider(server) === provider
-    );
-
-    if (pd) {
-      usedPipedream.add(pd.app_slug);
-      capabilities.push({
-        id: `${provider}-ai`,
-        kind: 'ai',
-        provider,
-        title: copy.title,
-        outcome: copy.outcome,
-        account: pd.server_name,
-        scope: 'personal',
-        status: aiStatus(pd.enabled),
-        mechanism: 'pipedream',
-        appSlug: pd.app_slug,
-        grantProvider: pd.provider,
-      });
-      if (native) {
-        usedNative.add(native.url);
-        leftovers.push(leftoverNative(native));
-      }
-      continue;
-    }
-
-    if (native) {
-      usedNative.add(native.url);
-      capabilities.push({
-        id: `${provider}-ai`,
-        kind: 'ai',
-        provider,
-        title: copy.title,
-        outcome: copy.outcome,
-        account: native.server_name,
-        scope: 'personal',
-        status: native.authenticated
-          ? aiStatus(native.enabled)
-          : 'action-required',
-        mechanism: 'native-mcp',
-        sourceUrl: native.url,
-      });
-    }
+  for (const connector of connectors) {
+    const status = capabilityStatus(connector.status);
+    match(connector.target)
+      .with({ type: 'server' }, (target) =>
+        leftovers.push({
+          kind: 'server',
+          id: connector.key,
+          key: connector.key,
+          title: connector.name,
+          subtitle: urlPreview(target.url),
+          status,
+        })
+      )
+      .with({ type: 'app' }, (target) => {
+        if (isCurated(target.slug)) {
+          capabilities.push({
+            id: `${target.slug}-ai`,
+            provider: target.slug,
+            title: CURATED_AI[target.slug].title,
+            outcome: CURATED_AI[target.slug].outcome,
+            account: connector.name,
+            status,
+            key: connector.key,
+            importAvailable: connector.importAvailable,
+          });
+          return;
+        }
+        leftovers.push({
+          kind: 'app',
+          id: connector.key,
+          key: connector.key,
+          title: connector.name,
+          appSlug: target.slug,
+          status,
+          importAvailable: connector.importAvailable,
+        });
+      })
+      .exhaustive();
   }
-
-  for (const server of input.nativeMcp) {
-    if (usedNative.has(server.url)) continue;
-    leftovers.push(leftoverNative(server));
-  }
-
-  for (const row of input.pipedream) {
-    if (usedPipedream.has(row.app_slug)) continue;
-    leftovers.push({
-      kind: 'pipedream',
-      id: `pipedream:${row.app_slug}`,
-      title: row.server_name,
-      appSlug: row.app_slug,
-      enabled: row.enabled,
-    });
-  }
-
   return { capabilities, leftovers };
 }
 
-function providerSummary(
-  id: ProviderId,
-  rows: Capability[]
-): ProviderSummary | null {
-  const readyRows = rows.filter((row) => row.status === 'connected');
-  if (
-    readyRows.length === 0 &&
-    !rows.some((row) => row.status !== 'not-connected')
-  ) {
-    return null;
-  }
-
-  const accounts = [
-    ...new Set(
-      rows
-        .filter(
-          (row) =>
-            row.status !== 'not-connected' && row.mechanism !== 'pipedream'
-        )
-        .map((row) => row.account)
-    ),
-  ].join(' · ');
-
-  const summary =
-    readyRows[0]?.outcome ?? rows[0]?.outcome ?? PROVIDER_NAMES[id];
-
-  return {
-    id,
-    name: PROVIDER_NAMES[id],
-    ready: readyRows.length,
-    total: rows.length,
-    summary,
-    accounts,
-  };
-}
-
-/** Map connection records into the Connections presentation model. */
-export function toConnectionsModel(input: ConnectionsInput): ConnectionsModel {
-  const curated = curatedAiAndLeftovers(input);
-  const capabilities = [...curated.capabilities];
-
-  const order: ProviderId[] = ['github', 'linear', 'notion', 'slack'];
-  const providers = order.flatMap((id) => {
-    const summary = providerSummary(
-      id,
-      capabilities.filter((row) => row.provider === id)
-    );
-    return summary ? [summary] : [];
-  });
-
-  return {
-    capabilities,
-    leftovers: curated.leftovers,
-    providers,
-  };
-}
-
-export function capabilitiesFor(
+/** The held connection for a featured app, if any. */
+export function capabilityFor(
   model: ConnectionsModel,
   provider: ProviderId
-): Capability[] {
-  return model.capabilities.filter((row) => row.provider === provider);
-}
-
-export function isConnectionsEmpty(model: ConnectionsModel): boolean {
-  return model.providers.length === 0 && model.leftovers.length === 0;
+): Capability | undefined {
+  return model.capabilities.find((row) => row.provider === provider);
 }

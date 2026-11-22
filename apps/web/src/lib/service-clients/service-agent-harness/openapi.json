@@ -6139,30 +6139,19 @@
       "ConnectMcpServerResponse": {
         "type": "object",
         "description": "Response from [`ConnectMcpServer`].",
-        "required": [
-          "url",
-          "serverName",
-          "alreadyConnected",
-          "authenticated",
-          "enabled",
-          "summary"
-        ],
+        "required": ["url", "serverName", "status", "enabled", "summary"],
         "properties": {
-          "alreadyConnected": {
-            "type": "boolean",
-            "description": "Whether the user already had this server before the call."
-          },
-          "authenticated": {
-            "type": "boolean",
-            "description": "Whether the server holds the user's sign-in."
-          },
           "enabled": {
             "type": "boolean",
-            "description": "Whether the server's tools are turned on."
+            "description": "Whether its tools are turned on."
           },
           "serverName": {
             "type": "string",
-            "description": "The server's display name."
+            "description": "The connector's display name."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConnectorStatus",
+            "description": "Where the user stands with it."
           },
           "summary": {
             "type": "string",
@@ -6170,7 +6159,7 @@
           },
           "url": {
             "type": "string",
-            "description": "The server's URL."
+            "description": "The server's URL, normalized."
           }
         }
       },
@@ -6274,6 +6263,11 @@
             "description": "Apps whose tools could not be listed."
           }
         }
+      },
+      "ConnectorStatus": {
+        "type": "string",
+        "description": "Where a user stands with an app or server.",
+        "enum": ["connected", "disabled", "needsReauth", "notConnected"]
       },
       "ConnectorTool": {
         "type": "object",
@@ -6680,7 +6674,7 @@
               },
               "connected": {
                 "type": "boolean",
-                "description": "Whether this caller has an enabled connection. For an app that\nconnects through its own MCP server, that connection is checked\nthere, not in Pipedream."
+                "description": "Whether this caller's connection to the app is usable now."
               },
               "operation": {
                 "type": "string",
