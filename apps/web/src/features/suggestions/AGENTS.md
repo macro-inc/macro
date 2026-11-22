@@ -85,20 +85,24 @@ only, behind `enable-suggestions`.
   for the visit, and Undo calls `POST /suggestions/{id}/restore`, which the
   server allows for a few minutes. `restore` takes the suggestion as the row
   held it, so it shows open at once, back in the feed, even if the read after
-  it fails: it drops a feed read already out first (one that predates the
-  restore could put the old state back), and resolves once the feed's readers
-  have the restored row, without waiting for the read after it. A dismissed routine suggestion has no Undo: its idea
-  goes with it, which the server can't bring back. A dismissal also reads
-  the routine ideas again, for the sidebar's Ideas count, dropping a read
-  already out (it may predate the dismissal); the row doesn't wait for it. A refused
-  dismissal leaves the row with the failed-action line, unless the feed no
-  longer lists the suggestion: then the server has it and only the answer was
-  lost, so the row stays dismissed, with Undo; a refused Undo says
-  it may be too late. The Undo that replaces a pressed ✓ or ✕ takes the
-  focus it left, once it can be pressed, unless the person pressed or
-  focused something outside the row meanwhile (`createFocusHandoff`). Dismissing a
-  running suggestion stops its run (the control and the row say so), and
-  restoring it brings it back open, not running.
+  it fails or lands behind a read that predates the restore, and resolves
+  once the feed's readers have the restored row, without waiting for the read
+  after it. Don't cancel the feed's reads there: another write waiting on its
+  read would be let go on a feed from before it. A dismissed routine
+  suggestion has no Undo: its idea goes with it, which the server can't bring
+  back. A dismissal also reads the routine ideas again, for the sidebar's
+  Ideas count, dropping a read already out (it may predate the dismissal);
+  the row doesn't wait for it. A failed dismissal reads the feed again to
+  learn what happened: still listed and waiting, it was refused and the row
+  opens with the failed-action line; no longer listed, the server has it
+  (only the answer was lost), so the row stays dismissed, with Undo; settled
+  first (a run finished), the row shows what it left. The Ideas count is read
+  again either way; a refused Undo says it may be too late. The Undo that
+  replaces a pressed ✓ or ✕ takes the focus it left, once it can be pressed,
+  unless the person pressed or focused something outside the row meanwhile
+  (`createFocusHandoff`). Dismissing a running suggestion stops its run (the
+  control and the row say so), and restoring it brings it back open, not
+  running.
 - Leaving For you calls `POST /suggestions/viewed` (also on `pagehide`, with
   `keepalive`): what is proposed after that is new next time.
 - Accept sends the suggestion's `updatedAt` as the row read it. If the suggestion was

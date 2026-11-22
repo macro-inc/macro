@@ -198,6 +198,27 @@ export function createSuggestionsFeed(
     }
   };
 
+  /**
+   * A dismissal that failed may still have reached the server (only its
+   * answer was lost), or the suggestion may have settled first (a run that
+   * finished can't be dismissed). The feed, read again, says which.
+   */
+  const settleFailedDismissal = async (
+    suggestion: Suggestion,
+    error: unknown
+  ) => {
+    await source.refresh();
+    const feed = source.feed();
+    const now = feed?.suggestions.find((other) => other.id === suggestion.id);
+    // No longer listed: the server has the dismissal. The row stays, with Undo.
+    if (feed && !now) return;
+
+    setDismissed((list) => list.filter((other) => other.id !== suggestion.id));
+    // Still waiting or running: refused, so the row opens again, failed.
+    // Settled first: the row shows what it left.
+    if (!now || isLive(now)) throw error;
+  };
+
   const completed = (suggestion: Suggestion) =>
     setCompletedIds((ids) => [...without(suggestion.id)(ids), suggestion.id]);
 
@@ -337,8 +358,8 @@ export function createSuggestionsFeed(
     /**
      * Sent at once, and the row shows dismissed from the press: the feed
      * drops the suggestion as soon as the server has it, before the call
-     * answers. A refusal opens the row again, marked failed, while the feed
-     * still lists it.
+     * answers. A failure is settled against the feed, read again
+     * (`settleFailedDismissal`).
      */
     dismiss: (suggestion: Suggestion) =>
       act(suggestion, 'dismiss', async () => {
@@ -349,19 +370,7 @@ export function createSuggestionsFeed(
           source.dismiss(suggestion.id),
           (error) => error
         );
-        if (sent.isErr()) {
-          // A feed that no longer lists it says the server has the
-          // dismissal and only its answer was lost: keep the row, with Undo.
-          const listed = source
-            .feed()
-            ?.suggestions.some(
-              (other) => other.id === suggestion.id && isLive(other)
-            );
-          if (!listed) return;
-
-          setDismissed(holdOthers);
-          throw sent.error;
-        }
+        if (sent.isErr()) await settleFailedDismissal(suggestion, sent.error);
       }),
     /** Ask the server to bring it back; a refusal leaves the row, marked failed. */
     undoDismiss: (suggestion: Suggestion) =>

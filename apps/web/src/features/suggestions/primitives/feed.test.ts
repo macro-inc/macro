@@ -599,6 +599,38 @@ describe('suggestions feed', () => {
     });
   });
 
+  it('keeps a row dismissed when its dismissal failed but the feed read after it no longer lists it', async () => {
+    await withFeed([composerSuggestion], async (feed, { source, serve }) => {
+      source.dismiss.mockRejectedValueOnce(new Error('connection lost'));
+      source.refresh.mockImplementationOnce(async () => {
+        serve([]);
+      });
+
+      await feed.dismiss(composerSuggestion);
+
+      expect(entryOf(feed, 'suggestion-composer')).toMatchObject({
+        state: 'dismissed',
+        failed: false,
+      });
+    });
+  });
+
+  it('shows what a run left when it finished before its dismissal reached the server', async () => {
+    await withFeed([runningSuggestion], async (feed, { source, serve }) => {
+      source.dismiss.mockRejectedValueOnce(new Error('not found'));
+      source.refresh.mockImplementationOnce(async () => {
+        serve([{ ...runningSuggestion, status: 'done' }]);
+      });
+
+      await feed.dismiss(runningSuggestion);
+
+      expect(entryOf(feed, 'suggestion-running')).toMatchObject({
+        state: 'finished',
+        failed: false,
+      });
+    });
+  });
+
   it('leaves the card, marked failed, when the server refused its dismissal', async () => {
     const deps = host([composerSuggestion]);
     deps.source.dismiss.mockRejectedValueOnce(new Error('refused'));

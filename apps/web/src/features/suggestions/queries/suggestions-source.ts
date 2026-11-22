@@ -12,6 +12,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/solid-query';
+import { ResultAsync } from 'neverthrow';
 import { createEffect, createMemo } from 'solid-js';
 import type { SuggestionsSource } from '../context/suggestions-source';
 import type { Suggestion, SuggestionFeed } from '../core/suggestion';
@@ -100,6 +101,22 @@ export function useSuggestionsSource(): SuggestionsSource {
       queryClient.invalidateQueries({ queryKey: suggestionsKeys.top._def }),
     ]);
   };
+  /** The feed held for `asked`, with `suggestion` back in it, open. */
+  const putBack = (asked: ReturnType<typeof key>, suggestion: Suggestion) =>
+    queryClient.setQueryData(asked, (held: SuggestionFeed | undefined) =>
+      held ? reopened(held, suggestion) : held
+    );
+  // The read after a restore may fail, or land behind one already out that
+  // predates the restore: either way the restore stands.
+  const refreshKeeping = async (
+    asked: ReturnType<typeof key>,
+    suggestion: Suggestion
+  ) => {
+    await refresh();
+    if (queryClient.getQueryState(asked)?.status === 'error') {
+      putBack(asked, suggestion);
+    }
+  };
   // The sidebar's Ideas count is the routine suggestions feature's read, and
   // a dismissed routine suggestion takes its idea with it. A read already
   // out may predate the dismissal, so it is dropped, not joined.
@@ -177,11 +194,16 @@ export function useSuggestionsSource(): SuggestionsSource {
       return 'changed';
     },
     async dismiss(id) {
-      await throwOnErr(() =>
-        scheduledActionClient.dismissSuggestion({ suggestionId: id })
+      const sent = await ResultAsync.fromPromise(
+        throwOnErr(() =>
+          scheduledActionClient.dismissSuggestion({ suggestionId: id })
+        ),
+        (error) => error
       );
-      // The row waits only for its own feed.
+      // A call that failed may still have taken the idea (only its answer
+      // was lost). The row waits only for its own feed.
       fireAndForget(refreshIdeas(), 'suggestions.ideas');
+      if (sent.isErr()) throw sent.error;
       await refresh();
     },
     async stop(id) {
@@ -197,20 +219,14 @@ export function useSuggestionsSource(): SuggestionsSource {
           suggestionId: suggestion.id,
         })
       );
-      // A read already out may predate the restore: drop it (awaiting lets
-      // one that has answered land first), so it can't put the old state
-      // back over the restored one.
-      await queryClient.cancelQueries({ queryKey: asked });
-      // Restored is open: say so before the read, which keeps what it held
-      // if it fails. A dismissed one has left the feed, so it goes back in.
-      queryClient.setQueryData(asked, (held: SuggestionFeed | undefined) =>
-        held ? reopened(held, suggestion) : held
-      );
+      // Restored is open: say so before the read. A dismissed one has left
+      // the feed, so it goes back in.
+      putBack(asked, suggestion);
+      // The row shows open now; the read that follows doesn't hold it.
+      fireAndForget(refreshKeeping(asked, suggestion), 'suggestions');
       // Readers hear of the patch on the next notify; resolving after it
       // means a caller that drops its own copy of the row never leaves a gap.
       await new Promise<void>((resolve) => notifyManager.schedule(resolve));
-      // The row shows open now; the read that follows doesn't hold it.
-      fireAndForget(refresh(), 'suggestions');
     },
     viewed: () =>
       fireAndForget(
