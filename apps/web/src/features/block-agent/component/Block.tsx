@@ -38,6 +38,7 @@ import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
+
 import { AgentSessionHeader } from '../views/agent-session-header';
 import { MobileAgentSessionHeader } from '../views/mobile/redesigned-session-header/redesigned-session-header';
 import { AgentComposer } from './AgentComposer';
@@ -47,6 +48,7 @@ import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { ArchivedSessionFooter } from './ArchivedSessionFooter';
 import { useAgentSessionHeader } from './agent-session-header';
+import { HeldStartupCards } from './HeldStartupCards';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
 
@@ -157,26 +159,36 @@ function AgentBlockContent(props: {
             <Show
               when={accessDenied()}
               fallback={
-                <LoadErrorPanel
-                  title="Unable to load this agent session"
-                  onRetry={loadRetryable() ? retryLoad : undefined}
-                />
+                <div class="flex size-full flex-col">
+                  <LoadErrorPanel
+                    title="Unable to load this agent session"
+                    onRetry={loadRetryable() ? retryLoad : undefined}
+                  />
+                  <HeldStartupCards />
+                </div>
               }
             >
-              <EmptyStatePanel
-                centered
-                title="You don't have access to this agent session"
-                description="Ask a participant to share it with you."
-              />
+              <div class="flex size-full flex-col">
+                <EmptyStatePanel
+                  centered
+                  title="You don't have access to this agent session"
+                  description="Ask a participant to share it with you."
+                />
+                {/* A reload of a create that never landed is refused too. */}
+                <HeldStartupCards />
+              </div>
             </Show>
           }
         >
           {(error) => (
-            <EmptyStatePanel
-              centered
-              title="Unable to start this agent"
-              description={error()}
-            />
+            <div class="flex size-full flex-col">
+              <EmptyStatePanel
+                centered
+                title="Unable to start this agent"
+                description={error()}
+              />
+              <HeldStartupCards />
+            </div>
           )}
         </Show>
       }

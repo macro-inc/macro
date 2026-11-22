@@ -2412,6 +2412,41 @@ must stay hidden; subsequent live messages must still appear.
   switching session clears it. Another composer that takes a refused message
   in shows no reason. Any other failure shows "The message could not be sent"
   and leaves an earlier reason in place.
+- A send with no clear answer (a network failure, a 5xx or gateway timeout, a
+  thrown request) is not treated as refused: the pending bubble stays, the box
+  stays empty, and the composer shows "Checking whether it was sent…" (only on
+  that session) while the session waits up to 10 s for the prompt's row in the
+  log (matched by its client-minted action id), then reads the queue, waits
+  2 s more in case it just dispatched, and reads the log directly for the
+  prompt's `session/prompt` request. Found anywhere, it counts as sent (or
+  queued), with no error. Absence is not proof: the harness can be running a
+  command that is in neither yet. So when nothing shows it, or a read fails, or
+  the session was let go, the send is unconfirmed: the text stays out of the box
+  and a "Not confirmed" card above the input keeps it, with Copy, Dismiss, and
+  Send again (which first says the agent may get it twice). The card goes away
+  when the prompt's row reaches the log, also after a reload. Each held send
+  is its own local-storage key, scoped to the person who sent it (another
+  account on the browser never sees it; sign-out clears them), expiring after
+  7 days, at most 10 per session. A refused Send again keeps the card; Send
+  again runs one resend at a time and the card's buttons wait for it.
+- A new chat's create with no clear answer is asked again under the same id.
+  "Id taken" after an unclear try, on a session this person owns, means the
+  first try made it: it is adopted and a first prompt that rode the create
+  goes on the card. "Id taken" on the first try is a warm id the harness
+  couldn't hand over (expired, or another tab's): it falls back to a fresh id
+  as before, and that fresh id gets the same retry rules. Once any try was
+  unclear nothing later counts as a refusal: no fresh id, no draft handed
+  back. If the prompt rode the create, the error view says the chat may not
+  have been created and shows the card (Copy, Dismiss), also after a reload
+  of a create that never landed (whose load is refused: the card shows in
+  that view too, and a warm placeholder points at the fallback id it was
+  held under); if it didn't ride it, it was never sent and
+  comes back as the draft. The harness answers a taken id as a 409 with
+  `code: "session_id_taken"`.
+- Every send names its sender (`userId` is required on `startPendingSession`
+  and `AgentSession.issue`); a non-prompt action passes `NOT_A_PROMPT`. With
+  no signed-in user known, nothing is held and the error quotes the text. Each check is one `agent.prompt.send_check` span under the prompt's
+  trace, with its outcome (sent / unknown) and each phase's duration.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.
   The list is capped at the smaller of 40% of the viewport height and 24rem. Past that

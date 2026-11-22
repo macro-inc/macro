@@ -45,6 +45,11 @@ import {
   type NO_RUNTIME_ACCESS_ERROR,
   readNoRuntimeAccessError,
 } from './no-runtime-access';
+import {
+  isSessionIdTaken,
+  SESSION_ID_TAKEN,
+  SESSION_ID_TAKEN_TEXT,
+} from './session-id-taken';
 
 export type {
   ArchiveCause,
@@ -65,6 +70,7 @@ const sessionError: ErrorResponseHandler<never> = async (response) => {
     : '';
   return {
     code: response.status === 401 ? 'UNAUTHORIZED' : 'HTTP_ERROR',
+    status: response.status,
     message:
       message === 'repository is not available to this user'
         ? 'Connect GitHub to Macro with access to the selected repository, or choose a repository your Macro account can access.'
@@ -78,6 +84,20 @@ const sessionAiError: ErrorResponseHandler<
   (await readAiUsageLimitError(response)) ??
   (await readNoRuntimeAccessError(response)) ??
   (await sessionError(response));
+
+const sessionCreateError: ErrorResponseHandler<
+  | typeof AI_USAGE_LIMIT_ERROR
+  | typeof NO_RUNTIME_ACCESS_ERROR
+  | typeof SESSION_ID_TAKEN
+> = async (response) => {
+  if (await isSessionIdTaken(response))
+    return {
+      code: SESSION_ID_TAKEN,
+      status: 409,
+      message: SESSION_ID_TAKEN_TEXT,
+    };
+  return sessionAiError(response);
+};
 
 export const PROVIDER_CREDENTIAL_REJECTED =
   'PROVIDER_CREDENTIAL_REJECTED' as const;
@@ -178,12 +198,14 @@ export const agentHarnessServiceClient = {
   create(request: CreateAgentSessionRequest) {
     return fetchWithToken<
       CreateAgentSessionResponse,
-      typeof AI_USAGE_LIMIT_ERROR | typeof NO_RUNTIME_ACCESS_ERROR
+      | typeof AI_USAGE_LIMIT_ERROR
+      | typeof NO_RUNTIME_ACCESS_ERROR
+      | typeof SESSION_ID_TAKEN
     >(`${agentHarnessHost}/agent-sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
-      errorResponseHandler: sessionAiError,
+      errorResponseHandler: sessionCreateError,
     });
   },
 
@@ -293,10 +315,10 @@ export const agentHarnessServiceClient = {
   },
 
   /** The actions waiting to dispatch in this session, oldest first. */
-  queue(sessionId: string) {
+  queue(sessionId: string, init: { signal?: AbortSignal } = {}) {
     return fetchWithToken<AgentSessionQueueResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/queue`,
-      { method: 'GET' }
+      { method: 'GET', signal: init.signal }
     );
   },
 

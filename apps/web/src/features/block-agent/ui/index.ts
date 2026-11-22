@@ -74,5 +74,9 @@ export {
   type TodoItem,
   type ToolStatus,
 } from './types';
+export {
+  UnconfirmedSendCard,
+  type UnconfirmedSendCardProps,
+} from './UnconfirmedSendCard';
 export { WorkingDots } from './WorkingDots';
 export { WorkingLine } from './WorkingLine';

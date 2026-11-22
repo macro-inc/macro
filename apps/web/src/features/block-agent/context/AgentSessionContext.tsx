@@ -16,6 +16,7 @@ import { type Accessor, createContext, useContext } from 'solid-js';
 import type { ToolApprovalController } from '../primitives/create-tool-approval-controller';
 import type { EffortSelection } from '../state/session-config';
 import type { QuoteInsert } from '../ui';
+import type { IssueOptions, UnconfirmedSend } from './create-agent-session';
 import type { QueueController } from './create-queue-controller';
 
 export type AgentSessionState = {
@@ -33,6 +34,9 @@ export type AgentSessionState = {
   /** Unsent context from the action that opened this session. */
   initialInput?: string;
   startupError: Accessor<string | undefined>;
+  /** A first prompt a failed create may have started, held until dismissed. */
+  startupHeld?: Accessor<UnconfirmedSend[]>;
+  dropStartupHeld?: (actionId: string) => void;
   /** Session metadata, absent until the load resolves. */
   session: Accessor<AgentSessionResponse | undefined>;
   /** The bot the session runs as, absent until the fold is acquired. */
@@ -70,7 +74,14 @@ export type AgentSessionState = {
    * the action at once and the log settles it. `undefined` while the block
    * has no session to act on.
    */
-  issue: (action: AgentAction) => Promise<IssueResult> | undefined;
+  issue: (
+    action: AgentAction,
+    options?: IssueOptions
+  ) => Promise<IssueResult> | undefined;
+  /** Prompts whose send could not be confirmed; see `AgentSessionHandle`. */
+  unconfirmed: Accessor<UnconfirmedSend[]>;
+  /** Stop keeping an unconfirmed prompt (resent or dismissed). */
+  dropUnconfirmed: (actionId: string) => void;
   /**
    * Why the last prompt could not run: the agent may not run on its
    * registered runtime. Shown in the transcript; cleared by a prompt that is

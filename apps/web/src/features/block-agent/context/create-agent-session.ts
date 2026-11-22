@@ -20,6 +20,7 @@ import {
   isRecentlyViewed,
   retainRecentlyViewed,
 } from '@core/agent-session/recently-viewed';
+import type { UnconfirmedSend } from '@core/agent-session/unconfirmed-sends';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
 import {
@@ -43,6 +44,7 @@ import type {
 import {
   type Accessor,
   batch,
+  createEffect,
   createMemo,
   createResource,
   createSignal,
@@ -53,6 +55,19 @@ import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { issueSessionAction } from '../queries/issue-session-action';
 import type { EffortSelection } from '../state/session-config';
 import { configureSessionModel } from './configure-session-model';
+
+/** What a caller of `issue` may follow while the action is out. */
+export type IssueOptions = {
+  /**
+   * The send got no clear answer (a lost response, a gateway timeout), so
+   * the session is checking the log for the prompt before calling it sent
+   * or not sent.
+   */
+  onChecking?: () => void;
+};
+
+/** A prompt whose send could not be confirmed, kept so its text is not lost. */
+export type { UnconfirmedSend } from '@core/agent-session/unconfirmed-sends';
 
 export type AgentSessionHandle = {
   /** Session row, absent until the load resolves. */
@@ -72,7 +87,10 @@ export type AgentSessionHandle = {
    * Do something to the agent. Folded speculatively at once; settled by the
    * log. `undefined` while the block has no session to act on.
    */
-  issue: (action: AgentAction) => Promise<IssueResult> | undefined;
+  issue: (
+    action: AgentAction,
+    options?: IssueOptions
+  ) => Promise<IssueResult> | undefined;
   /** Confirm a model change, then validate and confirm its optional effort. */
   selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
   /**
@@ -82,6 +100,13 @@ export type AgentSessionHandle = {
   expect: (actionId: string, action: AgentAction) => void;
   /** Take a speculation back. See {@link AgentSession.retract}. */
   retract: (actionId: string) => void;
+  /**
+   * Prompts whose send could not be confirmed, oldest first, until their row
+   * reaches the log. See {@link AgentSession.unconfirmed}.
+   */
+  unconfirmed: Accessor<UnconfirmedSend[]>;
+  /** Stop keeping an unconfirmed prompt (resent or dismissed). */
+  dropUnconfirmed: (actionId: string) => void;
   /**
    * The session's own turn state, read at call time - not reactive. It is
    * ahead of `metadata().turn` by the worker round trip: a prompt just
@@ -219,6 +244,15 @@ export function createAgentSession(
     });
     options.onAcquire?.();
     return session;
+  });
+
+  const [unconfirmed, setUnconfirmed] = createSignal<UnconfirmedSend[]>([]);
+  createEffect(() => {
+    const session = live();
+    const read = () =>
+      setUnconfirmed(session ? [...session.unconfirmed(options.userId())] : []);
+    read();
+    if (session) onCleanup(session.subscribeUnconfirmed(read));
   });
 
   let latestRename: AgentSessionRenamedEvent | undefined;
@@ -418,10 +452,13 @@ export function createAgentSession(
     loadFailed: () => failure() !== undefined,
     accessDenied: () => failure() instanceof AgentSessionAccessDenied,
     retry: () => fireAndForget(refetch(), 'agent-session'),
-    issue: (action) => {
+    issue: (action, issueOptions) => {
       const current = live();
       return current
-        ? issueSessionAction(current, action, { userId: options.userId() })
+        ? issueSessionAction(current, action, {
+            userId: options.userId(),
+            onChecking: issueOptions?.onChecking,
+          })
         : undefined;
     },
     selectModel: async (model, effort) => {
@@ -444,6 +481,8 @@ export function createAgentSession(
     expect: (actionId, action) =>
       live()?.expect(actionId, action, { userId: options.userId() }),
     retract: (actionId) => live()?.retract(actionId),
+    unconfirmed,
+    dropUnconfirmed: (actionId) => live()?.dropUnconfirmed(actionId),
     currentTurn: () => untrack(live)?.currentTurn() ?? 'idle',
     applySnapshot: (snapshot) => {
       if (sessionId() !== snapshot.id) return;

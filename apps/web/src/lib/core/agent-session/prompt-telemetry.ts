@@ -44,18 +44,27 @@ export type PromptOutcome =
   /** Raw text arrived but no visible renderer confirmed it before the deadline. */
   | 'not_rendered'
   /** Still waiting at {@link STALL_THRESHOLD_MS} — reported, not concluded. */
-  | 'stalled';
+  | 'stalled'
+  /** The send got no answer and neither the log nor the queue showed it. */
+  | 'unconfirmed';
 
 /** A point the prompt reached, named as its attribute and event suffix. */
 export type PromptStage =
   /** A new session's create answered. */
   | 'created'
+  /** A new session's create got no clear answer and is asked again. */
+  | 'create_retry'
   /** A new session's log was loaded. */
   | 'loaded'
   /** A new session's model and effort were confirmed. */
   | 'configured'
   /** The control POST answered. */
   | 'accepted'
+  /**
+   * The control POST got no clear answer (lost response, 5xx, gateway
+   * timeout); the log or the queue decides whether it was sent.
+   */
+  | 'unanswered'
   /** The log confirmed the prompt: its row came back over the socket. */
   | 'confirmed'
   /** The first agent message in the prompt's turn was folded. */
@@ -508,7 +517,8 @@ function documentHidden(): boolean {
   );
 }
 
-function messagesOf(event: FoldedStreamEvent): FoldedMessage[] {
+/** The messages a fold event adds or replaces. */
+export function messagesOf(event: FoldedStreamEvent): FoldedMessage[] {
   return match(event)
     .with({ kind: 'new' }, { kind: 'update' }, (changed) => [changed.message])
     .with({ kind: 'replace' }, (replaced) => replaced.messages)

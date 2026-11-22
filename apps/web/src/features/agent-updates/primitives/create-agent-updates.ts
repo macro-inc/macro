@@ -1,6 +1,9 @@
 import { createInteractionController } from '@app/features/agent-interactions/primitives/create-interaction-controller';
 import { createToolApprovalController } from '@app/features/block-agent/primitives/create-tool-approval-controller';
-import { issueSessionAction } from '@app/features/block-agent/queries/issue-session-action';
+import {
+  issueSessionAction,
+  NOT_A_PROMPT,
+} from '@app/features/block-agent/queries/issue-session-action';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -97,7 +100,7 @@ export function createAgentUpdates(
       sessionId: () => id,
       pending,
       canEdit: () => Boolean(ownerId()),
-      issue: (action) => issueSessionAction(live, action),
+      issue: (action) => issueSessionAction(live, action, NOT_A_PROMPT),
       onFailure: source.onFailure,
     });
     const approvals = createToolApprovalController({

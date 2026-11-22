@@ -6,6 +6,7 @@
  */
 
 import { isCoderHarness } from '@app/features/agents-view/core/agent-kind';
+import { SEND_OUTCOME_UNKNOWN } from '@core/agent-session/send-outcome';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ParentProps } from 'solid-js';
@@ -31,7 +32,13 @@ export function AgentChangesProvider(props: ParentProps) {
   const sendPrompt = async (markdown: string) => {
     try {
       const result = await session.issue({ type: 'prompt', prompt: markdown });
-      if (!result || result.isErr()) {
+      if (
+        result?.isErr() &&
+        result.error.some((error) => error.code === SEND_OUTCOME_UNKNOWN)
+      ) {
+        // Possibly sent; the composer's "Not confirmed" card keeps them.
+        toast.failure("We couldn't confirm the review notes were sent");
+      } else if (!result || result.isErr()) {
         toast.failure('The review notes could not be sent');
       }
     } catch {

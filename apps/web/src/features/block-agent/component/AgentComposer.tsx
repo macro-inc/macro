@@ -21,6 +21,7 @@ import {
   type InputAttachmentData,
   uploadInputAttachments,
 } from '@channel/Input';
+import { SEND_OUTCOME_UNKNOWN } from '@core/agent-session/send-outcome';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -37,6 +38,7 @@ import {
   Show,
 } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import type { UnconfirmedSend } from '../context/create-agent-session';
 import {
   createSessionAttachmentTracker,
   createSessionComposerDraft,
@@ -57,6 +59,7 @@ import {
   ComposerNotice,
   type QueuedPromptItem,
   QueuedPrompts,
+  UnconfirmedSendCard,
 } from '../ui';
 import { PermissionRequest } from './PermissionRequest';
 import { promptActionOf } from './prompt-action';
@@ -90,6 +93,8 @@ export function AgentComposer(props: {
     registerQuoteInsert,
     initialInput,
     sessionId,
+    unconfirmed = () => [],
+    dropUnconfirmed = () => {},
   } = useAgentSession();
   const persistedDraft = createSessionComposerDraft(
     sessionId,
@@ -105,6 +110,11 @@ export function AgentComposer(props: {
   const [refusal, setRefusal] = createSignal<string>();
   createEffect(on(sessionId, () => setRefusal(undefined), { defer: true }));
 
+  // Sends with no clear answer that their session is still checking, by
+  // session: the notice shows only for the session on screen.
+  const [checks, setChecks] = createSignal<string[]>([]);
+  const checking = () => checks().includes(sessionId() ?? '');
+
   // The fold speculates the action the moment it is issued, so success is
   // observed there; only a refusal needs saying here. Resolves whether the
   // harness took the action, and its reason when it refused, so a refused
@@ -115,8 +125,37 @@ export function AgentComposer(props: {
   ): Promise<{ taken: boolean; refusal?: string }> => {
     if (readOnly()) return { taken: false };
     try {
-      const result = await issue(action);
-      if (!result?.isErr()) return { taken: true };
+      const checked = sessionId() ?? '';
+      let started = false;
+      let result: Awaited<ReturnType<typeof issue>>;
+      try {
+        result = await issue(action, {
+          onChecking: () => {
+            started = true;
+            setChecks((all) => [...all, checked]);
+          },
+        });
+      } finally {
+        if (started)
+          setChecks((all) => {
+            const index = all.indexOf(checked);
+            return all.filter((_, at) => at !== index);
+          });
+      }
+      // No live session to send through: nothing was sent, keep the text.
+      if (result === undefined) return { taken: false };
+      if (result.isOk()) return { taken: true };
+      // Possibly sent: never put it back, or a resend could run it twice.
+      const unconfirmed = result.error.find(
+        (error) => error.code === SEND_OUTCOME_UNKNOWN
+      );
+      // The card for it (below) keeps the text instead, or, with no one to
+      // hold it for, the message quotes it.
+      if (unconfirmed) {
+        if ('held' in unconfirmed && unconfirmed.held === false)
+          toast.failure(unconfirmed.message);
+        return { taken: true };
+      }
       // A stopped agent says why in the transcript instead of a toast.
       const refused = result.error.find(isNoRuntimeAccessError);
       if (refused) return { taken: false, refusal: refused.message };
@@ -280,6 +319,28 @@ export function AgentComposer(props: {
     if (sent.refusal && sessionId() === sentTo) setRefusal(sent.refusal);
   };
 
+  // An unconfirmed prompt sent again on purpose, as a new send, one at a
+  // time per card. Its card stays until the new send is taken, so a refusal
+  // keeps the text and files on it, with the reason above the input.
+  const [resending, setResending] = createSignal<string[]>([]);
+  const sendAgain = async (sent: UnconfirmedSend) => {
+    if (resending().includes(sent.actionId)) return;
+    setResending((all) => [...all, sent.actionId]);
+    try {
+      const sentTo = sessionId();
+      setRefusal(undefined);
+      const outcome = await act(sent.action, 'The message could not be sent');
+      if (outcome.taken) {
+        dropUnconfirmed(sent.actionId);
+        return;
+      }
+      if (outcome.refusal && sessionId() === sentTo)
+        setRefusal(outcome.refusal);
+    } finally {
+      setResending((all) => all.filter((id) => id !== sent.actionId));
+    }
+  };
+
   // Focus plumbing between the input and the queue list above it: Up at the
   // start of the input lands on the bottom (next-to-dispatch) queue row, and
   // Down past that row comes back. Plain variables, read only at call time.
@@ -350,6 +411,32 @@ export function AgentComposer(props: {
           )}
         </Show>
       </div>
+      <Show when={checking()}>
+        <ComposerNotice text="Checking whether it was sent…" active />
+      </Show>
+      <For each={unconfirmed()}>
+        {(sent) => (
+          <UnconfirmedSendCard
+            text={sent.action.type === 'prompt' ? sent.action.prompt : ''}
+            attachmentCount={
+              sent.action.type === 'prompt'
+                ? (sent.action.attachments?.length ?? 0)
+                : 0
+            }
+            onCopy={() =>
+              fireAndForget(
+                navigator.clipboard.writeText(
+                  sent.action.type === 'prompt' ? sent.action.prompt : ''
+                ),
+                'agent-composer'
+              )
+            }
+            onSendAgain={() => fireAndForget(sendAgain(sent), 'agent-composer')}
+            sending={resending().includes(sent.actionId)}
+            onDismiss={() => dropUnconfirmed(sent.actionId)}
+          />
+        )}
+      </For>
       <Show when={resuming()}>
         <ComposerNotice text="Waking the agent's sandbox…" active />
       </Show>

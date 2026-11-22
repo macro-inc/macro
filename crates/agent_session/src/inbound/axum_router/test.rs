@@ -1102,7 +1102,14 @@ async fn a_taken_id_says_the_id_is_taken() {
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
-    assert_eq!(bytes.as_ref(), b"this id is already taken");
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "code": "session_id_taken",
+            "error": "this id is already taken",
+        })
+    );
 }
 
 #[tokio::test]

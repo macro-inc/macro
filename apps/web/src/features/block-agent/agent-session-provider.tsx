@@ -33,6 +33,7 @@ import {
   createQueueController,
   type QueueController,
 } from './context/create-queue-controller';
+import { createHeldStartupSends } from './context/held-startup-sends';
 import { resolveSessionId } from './context/resolve-session-id';
 import { createSteering } from './context/steer';
 import { createToolApprovalController } from './primitives/create-tool-approval-controller';
@@ -51,6 +52,7 @@ export function AgentSessionProvider(
     pending,
     failed,
     error,
+    heldId,
     pendingPrompt,
     initialInput,
     acquired,
@@ -68,6 +70,14 @@ export function AgentSessionProvider(
     userId,
     provisioning: pending,
     onAcquire: acquired,
+  });
+  // A lost create's first prompt, for the views with no session to show it:
+  // a failed create, or a load failed or refused after a reload.
+  const startup = createHeldStartupSends({
+    blockId: () => props.blockId,
+    heldId,
+    userId,
+    unavailable: () => failed() || live.loadFailed() || live.accessDenied(),
   });
   // A block opened by sending a first prompt shows that prompt, and the
   // working line under it, from its very first paint. Nothing else can: the
@@ -164,8 +174,8 @@ export function AgentSessionProvider(
     );
     return result;
   };
-  const issue: typeof live.issue = (action) => {
-    const issued = live.issue(action);
+  const issue: typeof live.issue = (action, options) => {
+    const issued = live.issue(action, options);
     if (!issued || action.type !== 'prompt') return issued;
     return recordRefusal(issued);
   };
@@ -191,6 +201,8 @@ export function AgentSessionProvider(
           pending,
           initialInput: initialInput(),
           startupError: error,
+          startupHeld: startup.held,
+          dropStartupHeld: startup.drop,
           session: live.session,
           bot: live.bot,
           metadata: live.metadata,
@@ -211,6 +223,8 @@ export function AgentSessionProvider(
           retryLoad: live.retry,
           turn,
           issue,
+          unconfirmed: live.unconfirmed,
+          dropUnconfirmed: live.dropUnconfirmed,
           runtimeRefusal,
           selectModel: live.selectModel,
           steer: steering.steer,

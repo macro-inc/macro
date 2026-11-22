@@ -7,6 +7,7 @@
 
 import type { WarmClaim } from '@queries/agent-session/warm';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
+import { ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,8 +27,11 @@ vi.mock('@queries/soup/normalized-cache', () => ({ refetchSoupEntity }));
 
 const create = vi.hoisted(() => ({
   resolve: undefined as ((id?: string) => void) | undefined,
-  reject: undefined as (() => void) | undefined,
+  reject: undefined as
+    | ((error?: { code: string; status?: number; message: string }) => void)
+    | undefined,
   control: vi.fn(),
+  get: vi.fn(),
   autoConfirm: true,
   confirm: undefined as ((error?: string) => void) | undefined,
   release: vi.fn(),
@@ -50,19 +54,17 @@ vi.mock('@service-agent-harness/client', () => ({
               isErr: () => false,
               value: { session: { id, ownerId: 'session-owner' } },
             });
-          create.reject = () =>
-            resolve({
-              isErr: () => true,
-              error: [
-                {
-                  code: 'HTTP_ERROR',
-                  message: 'Connect GitHub to use this repository.',
-                },
-              ],
-            });
+          create.reject = (
+            error = {
+              code: 'HTTP_ERROR',
+              status: 403,
+              message: 'Connect GitHub to use this repository.',
+            }
+          ) => resolve({ isErr: () => true, error: [error] });
         })
     ),
     control: create.control,
+    get: create.get,
   },
 }));
 
@@ -184,6 +186,7 @@ describe('an id whose create is in flight', () => {
       value: { actionId: 'prompt', status: 'sent' },
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       prompt: 'Hello',
       modelOverride: 'model-2',
       effortOverride: { configId: 'effort', value: 'low' },
@@ -198,6 +201,7 @@ describe('an id whose create is in flight', () => {
 
   it('keeps initial context as a draft after startup without issuing a prompt', async () => {
     const placeholder = startPendingSession({
+      userId: undefined,
       initialInput: 'Document context ',
     });
     await createRoot(async (dispose) => {
@@ -214,7 +218,7 @@ describe('an id whose create is in flight', () => {
   });
 
   it('has no session until the create lands, then is that session', async () => {
-    const placeholder = startPendingSession();
+    const placeholder = startPendingSession({ userId: undefined });
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);
       expect(resolved.sessionId()).toBeUndefined();
@@ -238,7 +242,7 @@ describe('an id whose create is in flight', () => {
   // A service that predates client-minted ids answers with its own; the
   // block adopts that one exactly as it adopted a placeholder's before.
   it('adopts the id the service answers with when it differs', async () => {
-    const minted = startPendingSession();
+    const minted = startPendingSession({ userId: undefined });
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => minted);
       create.resolve?.('server-minted');
@@ -255,7 +259,7 @@ describe('an id whose create is in flight', () => {
   });
 
   it('fails when the create fails', async () => {
-    const placeholder = startPendingSession();
+    const placeholder = startPendingSession({ userId: undefined });
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);
       create.reject?.();
@@ -278,6 +282,7 @@ describe('an id whose create is in flight', () => {
       value: { actionId: 'action-1', status: 'accepted' },
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       botId: 'persona-1',
       modelOverride: 'model-2',
       prompt: 'Fix the tests',
@@ -313,6 +318,7 @@ describe('an id whose create is in flight', () => {
       value: { actionId: 'action-1', status: 'accepted' },
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       initialInput: 'Ask about Offsite ',
       modelOverride: 'model-2',
       instructions: 'Use the Offsite database by default.',
@@ -345,6 +351,7 @@ describe('an id whose create is in flight', () => {
       })
     );
     const placeholder = startPendingSession({
+      userId: undefined,
       botId: 'persona',
       prompt: 'Hello',
     });
@@ -374,6 +381,7 @@ describe('an id whose create is in flight', () => {
       value: { actionId: 'prompt', status: 'sent' },
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       modelOverride: 'model-2',
       effortOverride: { configId: 'effort', value: 'low' },
       prompt: 'Hello',
@@ -396,6 +404,7 @@ describe('an id whose create is in flight', () => {
       value: { actionId: 'control', status: 'accepted' },
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       modelOverride: 'model-2',
       effortOverride: { configId: 'effort', value: 'ultra' },
       prompt: 'Hello',
@@ -437,6 +446,7 @@ describe('an id whose create is in flight', () => {
       value: { actionId: 'control', status: 'accepted' },
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       effortOverride: { configId: 'effort', value: 'ultra' },
       prompt: 'Hello',
     });
@@ -456,9 +466,16 @@ describe('an id whose create is in flight', () => {
   it('shows the first prompt failure', async () => {
     create.control.mockResolvedValue({
       isErr: () => true,
-      error: [{ code: 'HTTP_ERROR', message: 'Runtime is disconnected.' }],
+      error: [
+        {
+          code: 'HTTP_ERROR',
+          status: 409,
+          message: 'Runtime is disconnected.',
+        },
+      ],
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       botId: 'persona',
       prompt: 'Hello',
     });
@@ -497,7 +514,7 @@ it.each(['Describe this', ''])(
         mimeType: 'image/png',
       },
     ];
-    const id = startPendingSession({ prompt, attachments });
+    const id = startPendingSession({ userId: undefined, prompt, attachments });
     create.resolve?.();
     await flush();
     expect(create.requests).toEqual([
@@ -535,7 +552,7 @@ it.each([undefined, 'explicit-user'])(
 
 it('falls back to a cold session when claiming a warm session fails', async () => {
   takeWarm.mockReturnValueOnce({ id: 'stale-warm', claim: 'hit' });
-  const placeholder = startPendingSession();
+  const placeholder = startPendingSession({ userId: undefined });
   expect(placeholder).toBe('stale-warm');
   create.reject?.();
   await vi.waitFor(() => {
@@ -551,6 +568,105 @@ it('falls back to a cold session when claiming a warm session fails', async () =
   );
   expect(pendingSession(placeholder)?.failed()).toBe(false);
   expect(replenishWarm).toHaveBeenCalledExactlyOnceWith('session-owner');
+});
+
+it('starts a fresh session when a warm id it took has expired', async () => {
+  takeWarm.mockReturnValueOnce({ id: 'expired-warm', claim: 'hit' });
+  const placeholder = startPendingSession({
+    userId: undefined,
+    prompt: 'Hello',
+  });
+  // The claim missed, so the harness created under the same id: taken.
+  create.reject?.({
+    code: 'SESSION_ID_TAKEN',
+    status: 409,
+    message: 'this id is already taken',
+  });
+  await vi.waitFor(() => {
+    const request = vi.mocked(agentHarnessServiceClient.create).mock
+      .lastCall?.[0];
+    expect(request?.id).not.toBe('expired-warm');
+  });
+  expect(create.get).not.toHaveBeenCalled();
+  create.resolve?.();
+  const { pendingSession } = await import('./pending-session');
+  await vi.waitFor(() =>
+    expect(pendingSession(placeholder)?.sessionId()).not.toBe('expired-warm')
+  );
+});
+
+it("never adopts another tab's session on a shared warm id", async () => {
+  vi.useFakeTimers();
+  try {
+    takeWarm.mockReturnValueOnce({ id: 'shared-warm', claim: 'hit' });
+    create.get.mockResolvedValueOnce(
+      ok({ id: 'shared-warm', ownerId: 'macro|other@macro.com' })
+    );
+    const placeholder = startPendingSession({
+      prompt: 'Hello',
+      userId: 'macro|me@macro.com',
+    });
+    create.reject?.({
+      code: 'HTTP_ERROR',
+      status: 504,
+      message: 'Agent request failed (HTTP 504).',
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    create.reject?.({
+      code: 'SESSION_ID_TAKEN',
+      status: 409,
+      message: 'this id is already taken',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const ids = vi
+      .mocked(agentHarnessServiceClient.create)
+      .mock.calls.map(([request]) => request.id);
+    expect(ids.slice(0, 2)).toEqual(['shared-warm', 'shared-warm']);
+    expect(ids[2]).not.toBe('shared-warm');
+    create.resolve?.();
+    await vi.advanceTimersByTimeAsync(0);
+    const { pendingSession } = await import('./pending-session');
+    expect(pendingSession(placeholder)?.sessionId()).not.toBe('shared-warm');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('never forks a warm id once a create got no clear answer, even when a retry is refused', async () => {
+  vi.useFakeTimers();
+  try {
+    takeWarm.mockReturnValueOnce({ id: 'lost-warm', claim: 'hit' });
+    const onFailure = vi.fn();
+    const placeholder = startPendingSession({
+      userId: undefined,
+      prompt: 'Hello',
+      onFailure,
+    });
+    create.reject?.({
+      code: 'HTTP_ERROR',
+      status: 504,
+      message: 'Agent request failed (HTTP 504).',
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    create.reject?.({
+      code: 'HTTP_ERROR',
+      status: 422,
+      message: 'owner is not a known user',
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    const ids = vi
+      .mocked(agentHarnessServiceClient.create)
+      .mock.calls.map(([request]) => request.id);
+    expect(ids).toEqual(['lost-warm', 'lost-warm']);
+    const { pendingSession } = await import('./pending-session');
+    expect(pendingSession(placeholder)?.error()).toContain(
+      'may not have been created'
+    );
+    expect(onFailure).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it.each([undefined, 'ready-warm'])(

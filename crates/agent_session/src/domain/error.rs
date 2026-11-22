@@ -12,6 +12,11 @@ pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 /// runtime: on the session API's 403 and on its `command_rejected` event.
 pub const NO_RUNTIME_ACCESS_CODE: &str = "no_runtime_access";
 
+/// The `code` of the session API's 409 for a create under an id that already
+/// has a session, so a client that retried a lost create can tell it apart
+/// from other conflicts.
+pub const SESSION_ID_TAKEN_CODE: &str = "session_id_taken";
+
 /// Why no session opens on an agent teammate's computer, as callers show it.
 pub const TEAM_AGENT_COMPUTER_MESSAGE: &str =
     "This computer belongs to an agent teammate. Message them instead.";

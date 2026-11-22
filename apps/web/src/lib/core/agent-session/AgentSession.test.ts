@@ -27,6 +27,7 @@ const fold = vi.hoisted(() => ({
 const harness = vi.hoisted(() => ({
   get: vi.fn(),
   control: vi.fn(),
+  queue: vi.fn(),
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   const actual =
@@ -171,6 +172,7 @@ vi.mock('@queries/agent-session/log', () => ({
   forgetAgentSessionLog: logSource.forget,
 }));
 
+import { clearComposerStorage } from '@core/auth/clear-composer-storage';
 import {
   AgentSession,
   AgentSessionAccessDenied,
@@ -179,8 +181,15 @@ import {
 import { forgetSessionCreated, markSessionCreated } from './recently-created';
 import { resetSessionTurns, sessionTurn } from './session-turn';
 import { holdMobile, MOBILE_DEVICES } from './tests/device';
+import {
+  forgetUnconfirmedSendsInMemory,
+  hasUnconfirmedSends,
+  holdUnconfirmedSend,
+  unconfirmedSends,
+} from './unconfirmed-sends';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
+const USER = 'macro|wolf@macro.com';
 
 function row(n: number): AgentSessionLogEntryDto {
   return {
@@ -225,6 +234,8 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
+  forgetUnconfirmedSendsInMemory();
   resetSessionTurns();
   telemetry.spans.length = 0;
   socket.listeners.clear();
@@ -241,6 +252,7 @@ beforeEach(() => {
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({ messages: [], metadata: {} });
   harness.get.mockResolvedValue(ok(session));
+  harness.queue.mockResolvedValue(ok({ entries: [] }));
   logSource.cached.mockResolvedValue(undefined);
   logSource.fetched.mockResolvedValue(logOf([row(1)]));
   logSource.follow = undefined;
@@ -336,8 +348,11 @@ describe('AgentSession', () => {
     const live = AgentSession.acquire(SESSION);
     await live.load();
 
-    await live.issue({ type: 'prompt', prompt: 'open the plan' });
-    await live.issue({ type: 'stop' });
+    await live.issue(
+      { type: 'prompt', prompt: 'open the plan' },
+      { userId: undefined }
+    );
+    await live.issue({ type: 'stop' }, { userId: undefined });
 
     const [prompt, stop] = harness.control.mock.calls.map(
       ([, request]) => request
@@ -356,7 +371,10 @@ describe('AgentSession', () => {
       const live = AgentSession.acquire(SESSION);
       await live.load();
 
-      await live.issue({ type: 'prompt', prompt: 'open the plan' });
+      await live.issue(
+        { type: 'prompt', prompt: 'open the plan' },
+        { userId: undefined }
+      );
 
       const [[, prompt]] = harness.control.mock.calls;
       expect(prompt).toMatchObject({ type: 'prompt', prompt: 'open the plan' });
@@ -370,10 +388,13 @@ describe('AgentSession', () => {
     const live = AgentSession.acquire(SESSION);
     await live.load();
 
-    await live.issue({ type: 'stop' });
-    await live.issue({ type: 'prompt', prompt: 'hi' });
+    await live.issue({ type: 'stop' }, { userId: undefined });
+    await live.issue({ type: 'prompt', prompt: 'hi' }, { userId: undefined });
     harness.control.mockResolvedValueOnce(err([{ code: 'FORBIDDEN' }]));
-    await live.issue({ type: 'prompt', prompt: 'refused' });
+    await live.issue(
+      { type: 'prompt', prompt: 'refused' },
+      { userId: undefined }
+    );
     await settle();
 
     expect(analytics.track.mock.calls).toEqual([
@@ -397,14 +418,17 @@ describe('AgentSession', () => {
     const live = AgentSession.acquire(SESSION);
     await live.load();
 
-    await live.issue({
-      type: 'prompt',
-      prompt: 'see these',
-      attachments: [
-        { uri: 'https://files.test/a', name: 'a.pdf' },
-        { uri: 'https://files.test/b', name: 'b.png' },
-      ],
-    });
+    await live.issue(
+      {
+        type: 'prompt',
+        prompt: 'see these',
+        attachments: [
+          { uri: 'https://files.test/a', name: 'a.pdf' },
+          { uri: 'https://files.test/b', name: 'b.png' },
+        ],
+      },
+      { userId: undefined }
+    );
     await settle();
 
     expect(analytics.track).toHaveBeenCalledExactlyOnceWith(
@@ -421,7 +445,7 @@ describe('AgentSession', () => {
     const live = AgentSession.acquire(SESSION);
     await live.load();
 
-    await live.issue({ type: 'prompt', prompt: 'hi' });
+    await live.issue({ type: 'prompt', prompt: 'hi' }, { userId: undefined });
     await settle();
 
     const tail = inputs().slice(-3);
@@ -447,7 +471,7 @@ describe('AgentSession', () => {
     const live = AgentSession.acquire(SESSION);
     await live.load();
 
-    await live.issue({ type: 'stop' });
+    await live.issue({ type: 'stop' }, { userId: undefined });
     await settle();
 
     expect(inputs().filter((input) => input.kind === 'retracted')).toEqual([]);
@@ -462,7 +486,10 @@ describe('AgentSession', () => {
     const live = AgentSession.acquire(SESSION);
     await live.load();
 
-    const result = await live.issue({ type: 'prompt', prompt: 'hi' });
+    const result = await live.issue(
+      { type: 'prompt', prompt: 'hi' },
+      { userId: undefined }
+    );
     await settle();
 
     expect(result.isErr()).toBe(true);
@@ -476,23 +503,555 @@ describe('AgentSession', () => {
     live.release();
   });
 
-  it('retracts a speculation whose request threw', async () => {
+  it('keeps a thrown send unconfirmed when nothing shows it, never unsent', async () => {
+    vi.useFakeTimers();
     harness.control.mockRejectedValue(new Error('offline'));
     const live = AgentSession.acquire(SESSION);
-    await live.load();
+    try {
+      await live.load();
 
-    await expect(live.issue({ type: 'prompt', prompt: 'hi' })).rejects.toThrow(
-      'offline'
+      const issuing = live.issue(
+        { type: 'prompt', prompt: 'hi' },
+        { userId: USER }
+      );
+      // The wait, the queue read, the grace for a dispatch, the log read.
+      await vi.advanceTimersByTimeAsync(13_000);
+      const result = await issuing;
+
+      expect(result.isErr() && result.error.map((error) => error.code)).toEqual(
+        ['SEND_OUTCOME_UNKNOWN']
+      );
+      const [speculation] = inputs().filter(
+        (input) => input.kind === 'speculated'
+      );
+      const actionId = (speculation as { actionId: string }).actionId;
+      expect(inputs().at(-1)).toEqual({ kind: 'retracted', actionId });
+      expect(live.unconfirmed(USER).map((send) => send.actionId)).toEqual([
+        actionId,
+      ]);
+    } finally {
+      live.release();
+      vi.useRealTimers();
+    }
+  });
+
+  describe('a prompt whose send got no clear answer', () => {
+    // The confirmed user row the log folds once the harness ran the prompt.
+    const confirmed = (actionId: string): FoldedStreamEvent => ({
+      kind: 'update',
+      message: {
+        agentSessionId: SESSION,
+        key: '1:user',
+        turn: 1,
+        author: { kind: 'user', userId: 'macro|wolf@macro.com' },
+        requestId: actionId,
+        parts: [{ kind: 'text', text: 'hi' }],
+        stop: null,
+        pending: false,
+        segments: [],
+        phase: null,
+        postedAt: null,
+      },
+    });
+    const gatewayTimeout = {
+      name: 'Error',
+      code: 'HTTP_ERROR' as const,
+      status: 504,
+      message: 'Agent request failed (HTTP 504).',
+    };
+
+    it('counts as sent when its row reaches the log', async () => {
+      let actionId = '';
+      harness.control.mockImplementationOnce(
+        async (_id: string, request: { actionId: string }) => {
+          actionId = request.actionId;
+          return err([gatewayTimeout]);
+        }
+      );
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      const onChecking = vi.fn();
+
+      const issuing = live.issue(
+        { type: 'prompt', prompt: 'hi' },
+        { userId: undefined, onChecking }
+      );
+      await settle();
+      expect(onChecking).toHaveBeenCalledOnce();
+      fold.pushSession.mockResolvedValueOnce([confirmed(actionId)]);
+      deliver(row(2));
+      const result = await issuing;
+
+      expect(result.isOk() && result.value).toEqual({
+        actionId,
+        status: 'sent',
+      });
+      expect(inputs().filter((input) => input.kind === 'retracted')).toEqual(
+        []
+      );
+      live.release();
+    });
+
+    it('counts as queued when the harness holds it behind a turn', async () => {
+      vi.useFakeTimers();
+      let actionId = '';
+      harness.control.mockImplementationOnce(
+        async (_id: string, request: { actionId: string }) => {
+          actionId = request.actionId;
+          return err([gatewayTimeout]);
+        }
+      );
+      harness.queue.mockImplementation(async () =>
+        ok({ entries: [{ actionId, kind: 'prompt', prompt: 'hi' }] })
+      );
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
+        await vi.advanceTimersByTimeAsync(10_000);
+        const result = await issuing;
+
+        expect(result.isOk() && result.value).toEqual({
+          actionId,
+          status: 'queued',
+        });
+      } finally {
+        live.release();
+        vi.useRealTimers();
+      }
+    });
+
+    it('counts as sent when its row lands while the queue is read', async () => {
+      vi.useFakeTimers();
+      let actionId = '';
+      harness.control.mockImplementationOnce(
+        async (_id: string, request: { actionId: string }) => {
+          actionId = request.actionId;
+          return err([gatewayTimeout]);
+        }
+      );
+      const queueRead = deferred<unknown>();
+      harness.queue.mockReturnValueOnce(queueRead.promise);
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
+        await vi.advanceTimersByTimeAsync(10_000);
+        // Dispatched from the queue meanwhile: gone from it, its row arriving.
+        fold.pushSession.mockResolvedValueOnce([confirmed(actionId)]);
+        deliver(row(2));
+        queueRead.resolve(ok({ entries: [] }));
+        await vi.advanceTimersByTimeAsync(0);
+        const result = await issuing;
+
+        expect(result.isOk() && result.value).toEqual({
+          actionId,
+          status: 'sent',
+        });
+      } finally {
+        live.release();
+        vi.useRealTimers();
+      }
+    });
+
+    it('counts a thrown request as sent when its row reaches the log', async () => {
+      let actionId = '';
+      harness.control.mockImplementationOnce(
+        async (_id: string, request: { actionId: string }) => {
+          actionId = request.actionId;
+          throw new Error('offline');
+        }
+      );
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+
+      const issuing = live.issue(
+        { type: 'prompt', prompt: 'hi' },
+        { userId: USER }
+      );
+      await settle();
+      fold.pushSession.mockResolvedValueOnce([confirmed(actionId)]);
+      deliver(row(2));
+
+      const result = await issuing;
+      expect(result.isOk() && result.value).toEqual({
+        actionId,
+        status: 'sent',
+      });
+      live.release();
+    });
+
+    it.each([
+      ['the queue cannot be read', 'queue'],
+      ['the log cannot be reread', 'log'],
+      ['the session was let go', 'released'],
+    ])('stays unconfirmed, never unsent, when %s', async (_name, broken) => {
+      vi.useFakeTimers();
+      harness.control.mockResolvedValueOnce(err([gatewayTimeout]));
+      if (broken === 'queue')
+        harness.queue.mockResolvedValueOnce(
+          err([{ name: 'Error', code: 'NETWORK_ERROR', message: 'offline' }])
+        );
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+        if (broken === 'log')
+          logSource.fetched.mockRejectedValueOnce(new Error('offline'));
+
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
+        if (broken === 'released') {
+          await vi.advanceTimersByTimeAsync(5_000);
+          live.release();
+        }
+        await vi.advanceTimersByTimeAsync(20_000);
+        const result = await issuing;
+
+        expect(
+          result.isErr() && result.error.map((error) => error.code)
+        ).toEqual(['SEND_OUTCOME_UNKNOWN']);
+        const check = telemetry.spans.find(
+          (span) => span.name === 'agent.prompt.send_check'
+        );
+        expect(check?.attributes['agent.send_check.outcome']).toBe('unknown');
+        expect(check?.attributes['agent.send_check.reason']).toBe(
+          {
+            queue: 'queue_unreadable',
+            log: 'log_unreadable',
+            released: 'released',
+          }[broken]
+        );
+        expect(check?.ends).toBe(1);
+        // Kept past the instance that checked it.
+        expect(unconfirmedSends(SESSION, USER)).toEqual([
+          expect.objectContaining({ action: { type: 'prompt', prompt: 'hi' } }),
+        ]);
+      } finally {
+        if (broken !== 'released') live.release();
+        vi.useRealTimers();
+      }
+    });
+
+    it('stays unconfirmed when neither the queue nor the log shows it', async () => {
+      vi.useFakeTimers();
+      harness.control.mockResolvedValueOnce(err([gatewayTimeout]));
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
+        await vi.advanceTimersByTimeAsync(9_000);
+        expect(inputs().filter((input) => input.kind === 'retracted')).toEqual(
+          []
+        );
+        await vi.advanceTimersByTimeAsync(5_000);
+        const result = await issuing;
+
+        // Absent from both is not authority: the harness may still run it.
+        expect(
+          result.isErr() && result.error.map((error) => error.code)
+        ).toEqual(['SEND_OUTCOME_UNKNOWN']);
+        expect(logSource.watch).toHaveBeenCalledWith(SESSION, 'network-only');
+        const check = telemetry.spans.find(
+          (span) => span.name === 'agent.prompt.send_check'
+        );
+        expect(check?.attributes).toMatchObject({
+          'agent.send_check.outcome': 'unknown',
+          'agent.send_check.reason': 'absent',
+          'agent.send_check.http_status': 504,
+        });
+        for (const phase of ['log_wait', 'queue', 'grace', 'log_read'])
+          expect(check?.attributes[`agent.send_check.${phase}_ms`]).toEqual(
+            expect.any(Number)
+          );
+      } finally {
+        live.release();
+        vi.useRealTimers();
+      }
+    });
+
+    it('counts as sent when a direct read of the log has its prompt', async () => {
+      vi.useFakeTimers();
+      let actionId = '';
+      harness.control.mockImplementationOnce(
+        async (_id: string, request: { actionId: string }) => {
+          actionId = request.actionId;
+          return err([gatewayTimeout]);
+        }
+      );
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+        logSource.fetched.mockImplementationOnce(async () =>
+          logOf([
+            {
+              ...row(2),
+              content: {
+                type: 'acp',
+                jsonrpc: '2.0',
+                id: actionId,
+                method: 'session/prompt',
+              },
+            } as unknown as AgentSessionLogEntryDto,
+          ])
+        );
+
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
+        await vi.advanceTimersByTimeAsync(14_000);
+        const result = await issuing;
+
+        expect(result.isOk() && result.value).toEqual({
+          actionId,
+          status: 'sent',
+        });
+        expect(live.unconfirmed(USER)).toEqual([]);
+      } finally {
+        live.release();
+        vi.useRealTimers();
+      }
+    });
+
+    it.each([
+      ['the session leaves memory and is opened again', false],
+      ['the page reloads', true],
+    ])('keeps an unconfirmed prompt when %s', async (_name, reload) => {
+      vi.useFakeTimers();
+      harness.control.mockResolvedValueOnce(err([gatewayTimeout]));
+      const first = AgentSession.acquire(SESSION);
+      try {
+        await first.load();
+        const issuing = first.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
+        await vi.advanceTimersByTimeAsync(14_000);
+        await issuing;
+      } finally {
+        first.release();
+      }
+      if (reload) forgetUnconfirmedSendsInMemory();
+
+      const again = AgentSession.acquire(SESSION);
+      try {
+        await again.load();
+        expect(again.unconfirmed(USER)).toEqual([
+          expect.objectContaining({ action: { type: 'prompt', prompt: 'hi' } }),
+        ]);
+      } finally {
+        again.release();
+        vi.useRealTimers();
+      }
+    });
+
+    it('lets a prompt kept across a reload go when its row arrives later', async () => {
+      holdUnconfirmedSend(SESSION, USER, {
+        actionId: 'kept',
+        action: { type: 'prompt', prompt: 'hi' },
+      });
+      forgetUnconfirmedSendsInMemory();
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+        expect(live.unconfirmed(USER)).toHaveLength(1);
+
+        fold.pushSession.mockResolvedValueOnce([confirmed('kept')]);
+        deliver(row(3));
+        await vi.waitFor(() => expect(live.unconfirmed(USER)).toEqual([]));
+        expect(localStorage.length).toBe(0);
+      } finally {
+        live.release();
+      }
+    });
+
+    it('shows a held prompt only to the person who sent it, and forgets it on sign-out', async () => {
+      holdUnconfirmedSend(SESSION, USER, {
+        actionId: 'kept',
+        action: { type: 'prompt', prompt: 'hi' },
+      });
+      const live = AgentSession.acquire(SESSION);
+      try {
+        expect(live.unconfirmed('macro|someone-else@macro.com')).toEqual([]);
+        expect(live.unconfirmed(USER)).toHaveLength(1);
+        clearComposerStorage();
+        expect(live.unconfirmed(USER)).toEqual([]);
+      } finally {
+        live.release();
+      }
+    });
+
+    it("keeps two tabs' held prompts apart, and lets old ones expire", () => {
+      vi.useFakeTimers();
+      try {
+        holdUnconfirmedSend(SESSION, USER, {
+          actionId: 'tab-a',
+          action: { type: 'prompt', prompt: 'a' },
+        });
+        // Another tab writes its own key; nothing reads and rewrites a list.
+        holdUnconfirmedSend(SESSION, USER, {
+          actionId: 'tab-b',
+          action: { type: 'prompt', prompt: 'b' },
+        });
+        forgetUnconfirmedSendsInMemory();
+        expect(
+          unconfirmedSends(SESSION, USER).map((send) => send.actionId)
+        ).toEqual(['tab-a', 'tab-b']);
+        vi.advanceTimersByTime(8 * 24 * 60 * 60 * 1000);
+        expect(unconfirmedSends(SESSION, USER)).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('says the text when there is no one to hold an unconfirmed prompt for', async () => {
+      vi.useFakeTimers();
+      harness.control.mockResolvedValueOnce(err([gatewayTimeout]));
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi there' },
+          { userId: undefined }
+        );
+        await vi.advanceTimersByTimeAsync(14_000);
+        const result = await issuing;
+
+        expect(result.isErr() && result.error[0]).toMatchObject({
+          code: 'SEND_OUTCOME_UNKNOWN',
+          held: false,
+          message: expect.stringContaining('hi there'),
+        });
+        expect(localStorage.length).toBe(0);
+      } finally {
+        live.release();
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps at most 100 held prompts on this browser, dropping the oldest', () => {
+      vi.useFakeTimers();
+      try {
+        for (let at = 0; at < 105; at++) {
+          vi.advanceTimersByTime(1);
+          holdUnconfirmedSend(`session-${at}`, USER, {
+            actionId: `send-${at}`,
+            action: { type: 'prompt', prompt: `${at}` },
+          });
+        }
+        forgetUnconfirmedSendsInMemory();
+        expect(unconfirmedSends('session-0', USER)).toEqual([]);
+        expect(unconfirmedSends('session-4', USER)).toEqual([]);
+        expect(unconfirmedSends('session-5', USER)).toHaveLength(1);
+        expect(unconfirmedSends('session-104', USER)).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('checks the session index, not all of storage, on every fold batch', () => {
+      holdUnconfirmedSend(SESSION, USER, {
+        actionId: 'kept',
+        action: { type: 'prompt', prompt: 'hi' },
+      });
+      const key = vi.spyOn(Storage.prototype, 'key');
+      try {
+        for (let batch = 0; batch < 50; batch++) hasUnconfirmedSends(SESSION);
+        expect(key).not.toHaveBeenCalled();
+        expect(hasUnconfirmedSends(SESSION)).toBe(true);
+        expect(hasUnconfirmedSends('another-session')).toBe(false);
+      } finally {
+        key.mockRestore();
+      }
+    });
+
+    it('lets a kept prompt go when the loaded log already has it', async () => {
+      holdUnconfirmedSend(SESSION, USER, {
+        actionId: 'kept',
+        action: { type: 'prompt', prompt: 'hi' },
+      });
+      forgetUnconfirmedSendsInMemory();
+      fold.pushSession.mockResolvedValueOnce([confirmed('kept')]);
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+        expect(live.unconfirmed(USER)).toEqual([]);
+        expect(localStorage.length).toBe(0);
+      } finally {
+        live.release();
+      }
+    });
+
+    it('lets an unconfirmed prompt go once its row lands', async () => {
+      vi.useFakeTimers();
+      let actionId = '';
+      harness.control.mockImplementationOnce(
+        async (_id: string, request: { actionId: string }) => {
+          actionId = request.actionId;
+          return err([gatewayTimeout]);
+        }
+      );
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+        const changes = vi.fn();
+        live.subscribeUnconfirmed(changes);
+
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
+        await vi.advanceTimersByTimeAsync(14_000);
+        await issuing;
+        expect(live.unconfirmed(USER)).toHaveLength(1);
+
+        fold.pushSession.mockResolvedValueOnce([confirmed(actionId)]);
+        deliver(row(3));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(live.unconfirmed(USER)).toEqual([]);
+        expect(changes).toHaveBeenCalledTimes(2);
+      } finally {
+        live.release();
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  it('retracts a refused prompt at once, without waiting for the log', async () => {
+    const refusal = {
+      name: 'Error',
+      code: 'HTTP_ERROR' as const,
+      status: 422,
+      message: 'The prompt is empty.',
+    };
+    harness.control.mockResolvedValueOnce(err([refusal]));
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+    const onChecking = vi.fn();
+
+    const result = await live.issue(
+      { type: 'prompt', prompt: 'hi' },
+      { userId: undefined, onChecking }
     );
     await settle();
 
-    const [speculation] = inputs().filter(
-      (input) => input.kind === 'speculated'
-    );
-    expect(inputs().at(-1)).toEqual({
-      kind: 'retracted',
-      actionId: (speculation as { actionId: string }).actionId,
-    });
+    expect(result.isErr() && result.error).toEqual([refusal]);
+    expect(onChecking).not.toHaveBeenCalled();
+    expect(inputs().at(-1)).toMatchObject({ kind: 'retracted' });
     live.release();
   });
 
@@ -500,11 +1059,14 @@ describe('AgentSession', () => {
     const live = AgentSession.acquire(SESSION);
     await live.load();
 
-    await live.issue({
-      type: 'respondElicitation',
-      requestId: 3,
-      action: 'decline',
-    });
+    await live.issue(
+      {
+        type: 'respondElicitation',
+        requestId: 3,
+        action: 'decline',
+      },
+      { userId: undefined }
+    );
 
     expect(
       inputs().filter((input) => input.kind === 'speculated')
@@ -523,7 +1085,10 @@ describe('AgentSession', () => {
     const live = AgentSession.acquire(SESSION);
     await live.load();
 
-    await live.issue({ type: 'prompt', prompt: 'later' });
+    await live.issue(
+      { type: 'prompt', prompt: 'later' },
+      { userId: undefined }
+    );
     await settle();
 
     const [speculation] = inputs().filter(
@@ -541,7 +1106,10 @@ describe('AgentSession', () => {
     logSource.fetched.mockReturnValue(log.promise);
     const live = AgentSession.acquire(SESSION);
 
-    const issued = live.issue({ type: 'prompt', prompt: 'early' });
+    const issued = live.issue(
+      { type: 'prompt', prompt: 'early' },
+      { userId: undefined }
+    );
     await settle();
     expect(fold.pushSession).not.toHaveBeenCalled();
 
@@ -738,7 +1306,10 @@ describe('AgentSession', () => {
       const refresh = deferred<LogSnapshot>();
       logSource.fetched.mockReturnValueOnce(refresh.promise);
       invalidate();
-      await live.issue({ type: 'prompt', prompt: 'Continue' });
+      await live.issue(
+        { type: 'prompt', prompt: 'Continue' },
+        { userId: undefined }
+      );
       expect(inputs().filter((input) => input.kind === 'speculated')).toEqual(
         []
       );
@@ -842,7 +1413,10 @@ describe('AgentSession', () => {
     async (state) => {
       const live = await loadedWith(state);
 
-      const result = await live.issue({ type: 'prompt', prompt: 'later' });
+      const result = await live.issue(
+        { type: 'prompt', prompt: 'later' },
+        { userId: undefined }
+      );
 
       expect(speculations()).toEqual([]);
       // Still posted - the queue row is what shows it, not a bubble.
@@ -857,7 +1431,10 @@ describe('AgentSession', () => {
     async (state) => {
       const live = await loadedWith(state);
 
-      await live.issue({ type: 'prompt', prompt: 'now' });
+      await live.issue(
+        { type: 'prompt', prompt: 'now' },
+        { userId: undefined }
+      );
 
       expect(speculations()).toHaveLength(1);
       live.release();
@@ -867,8 +1444,11 @@ describe('AgentSession', () => {
   it('speculates a stop and a model change even mid-turn: both ride alongside', async () => {
     const live = await loadedWith('running');
 
-    await live.issue({ type: 'stop' });
-    await live.issue({ type: 'setModel', model: 'sonnet' });
+    await live.issue({ type: 'stop' }, { userId: undefined });
+    await live.issue(
+      { type: 'setModel', model: 'sonnet' },
+      { userId: undefined }
+    );
     await settle();
 
     expect(speculations().map((input) => input.action.type)).toEqual([
@@ -887,7 +1467,10 @@ describe('AgentSession', () => {
     deliver(row(2));
     await settle();
 
-    await live.issue({ type: 'prompt', prompt: 'later' });
+    await live.issue(
+      { type: 'prompt', prompt: 'later' },
+      { userId: undefined }
+    );
 
     expect(speculations()).toEqual([]);
     live.release();
@@ -911,7 +1494,10 @@ describe('AgentSession', () => {
     );
     const live = await loadedWith('idle');
 
-    await live.issue({ type: 'prompt', prompt: 'raced' });
+    await live.issue(
+      { type: 'prompt', prompt: 'raced' },
+      { userId: undefined }
+    );
     await settle();
 
     const [speculation] = speculations();
@@ -927,8 +1513,14 @@ describe('AgentSession', () => {
 
     // No await between them: the fold's turn state cannot have moved yet, so
     // only the session's own record of what it just folded can catch this.
-    const first = live.issue({ type: 'prompt', prompt: 'one' });
-    const second = live.issue({ type: 'prompt', prompt: 'two' });
+    const first = live.issue(
+      { type: 'prompt', prompt: 'one' },
+      { userId: undefined }
+    );
+    const second = live.issue(
+      { type: 'prompt', prompt: 'two' },
+      { userId: undefined }
+    );
     await Promise.all([first, second]);
     await settle();
 
@@ -965,7 +1557,10 @@ describe('AgentSession', () => {
     // The head now occupies the turn, so a prompt sent meanwhile is queued
     // and not speculated.
     fold.pushSession.mockClear();
-    await live.issue({ type: 'prompt', prompt: 'later' });
+    await live.issue(
+      { type: 'prompt', prompt: 'later' },
+      { userId: undefined }
+    );
     expect(inputs().filter((input) => input.kind === 'speculated')).toEqual([]);
 
     live.retract('head-id');
@@ -1574,8 +2169,11 @@ describe('AgentSession', () => {
       const live = AgentSession.acquire(SESSION);
       await live.load();
 
-      await live.issue({ type: 'stop' });
-      await live.issue({ type: 'setModel', model: 'a-model' });
+      await live.issue({ type: 'stop' }, { userId: undefined });
+      await live.issue(
+        { type: 'setModel', model: 'a-model' },
+        { userId: undefined }
+      );
 
       expect(promptSpans()).toEqual([]);
       live.release();
@@ -1584,7 +2182,7 @@ describe('AgentSession', () => {
     it('ends a prompt still waiting for output as released', async () => {
       const live = AgentSession.acquire(SESSION);
       await live.load();
-      await live.issue({ type: 'prompt', prompt: 'hi' });
+      await live.issue({ type: 'prompt', prompt: 'hi' }, { userId: undefined });
 
       live.release();
 

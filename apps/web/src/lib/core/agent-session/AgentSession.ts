@@ -30,6 +30,7 @@ import {
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   AgentSessionLogUnavailable,
   forgetAgentSessionLog,
@@ -45,13 +46,16 @@ import type {
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentAction,
+  AgentSessionLogEntryDto,
   AgentSessionResponse,
   ControlRequest,
+  ControlResponse,
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { CombinedError } from '@urql/core';
 import { err, ok, type Result } from 'neverthrow';
+import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import {
   type LoadFailure,
@@ -59,10 +63,24 @@ import {
   traceAcquire,
   transcriptSize,
 } from './load-telemetry';
-import { frameDelivery, PromptTrace } from './prompt-telemetry';
+import { frameDelivery, messagesOf, PromptTrace } from './prompt-telemetry';
 import { createdRecently, forgetSessionCreated } from './recently-created';
+import {
+  isUnknownOutcome,
+  SEND_OUTCOME_UNKNOWN,
+  type SendCheck,
+  type UnconfirmedSendError,
+} from './send-outcome';
 import { publishSessionTurn } from './session-turn';
 import { typedInClientId } from './ui-client';
+import {
+  dropUnconfirmedSends,
+  hasUnconfirmedSends,
+  holdUnconfirmedSend,
+  subscribeUnconfirmedSends,
+  type UnconfirmedSend,
+  unconfirmedSends,
+} from './unconfirmed-sends';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
 
@@ -72,9 +90,34 @@ export type AgentSessionRecord = {
   bot: SessionBot;
 };
 
-export type IssueResult = Awaited<
+type ControlResult = Awaited<
   ReturnType<typeof agentHarnessServiceClient.control>
 >;
+type ControlError =
+  ControlResult extends Result<unknown, (infer Failure)[]> ? Failure : never;
+
+/** The harness's answer, or that a send with no clear answer stayed unconfirmed. */
+export type IssueResult = Result<
+  ControlResponse,
+  (ControlError | UnconfirmedSendError)[]
+>;
+
+/**
+ * How long a prompt whose send got no clear answer waits for its row in the
+ * log before it counts as not sent. The log flushes in about 1.5 s, so this
+ * covers a slow flush several times over.
+ */
+export const UNKNOWN_OUTCOME_WAIT_MS = 10_000;
+
+/** The longest the queue read and the log reread may each take in a check. */
+const SEND_CHECK_READ_MS = 5_000;
+
+/**
+ * After the queue no longer holds the prompt, how long its row may take to
+ * reach the log: it may have dispatched while the queue was read, and the
+ * log is written in batches about every 1.5 s.
+ */
+const DISPATCH_GRACE_MS = 2_000;
 
 /**
  * The load was abandoned because every surface holding the session let go
@@ -156,6 +199,52 @@ function occupiesTurn(action: AgentAction): boolean {
 }
 
 const RESYNC_RETRY_DELAYS_MS = [1_000, 3_000, 10_000];
+
+/** The value, or `false` when it takes longer than `ms`. */
+async function within<Value>(
+  value: Promise<Value>,
+  ms: number
+): Promise<Value | false> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      value,
+      new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The send check's span, under the prompt's trace when there is one. */
+function startSendCheckSpan(trace: PromptTrace | undefined): Span | undefined {
+  try {
+    const start = () => Telemetry.span('agent.prompt.send_check');
+    return trace ? trace.run(start) : start();
+  } catch {
+    return undefined;
+  }
+}
+
+/** Records each phase's duration since the previous one on `span`. */
+function phaseTimer(span: Span | undefined): (name: string) => void {
+  let last = performance.now();
+  return (name) => {
+    const now = performance.now();
+    span?.setAttr(`agent.send_check.${name}_ms`, Math.round(now - last));
+    last = now;
+  };
+}
+
+/** The JSON-RPC id of a `session/prompt` request row, which is its action id. */
+function promptIdOf(row: AgentSessionLogEntryDto): string | undefined {
+  const content: unknown = row.content;
+  if (typeof content !== 'object' || content === null) return undefined;
+  const { method, id } = content as { method?: unknown; id?: unknown };
+  return method === 'session/prompt' && typeof id === 'string' ? id : undefined;
+}
 
 /**
  * Waits before re-reading a session this tab created and was refused.
@@ -372,7 +461,16 @@ export class AgentSession {
    */
   async issue(
     action: AgentAction,
-    options: { userId?: string; trace?: PromptTrace } = {}
+    options: {
+      /**
+       * The sender. Required: a send that stays unconfirmed is held for them,
+       * and only they see it. `undefined` only before sign-in loads.
+       */
+      userId: string | undefined;
+      trace?: PromptTrace;
+      /** The send got no clear answer; its arrival is being checked. */
+      onChecking?: () => void;
+    }
   ): Promise<IssueResult> {
     const actionId = uuidv7();
     const trace =
@@ -405,12 +503,76 @@ export class AgentSession {
       actionId,
       ...this.typedIn(action),
     };
-    let result: IssueResult;
+    // Watched from before the POST: the row can reach the socket before
+    // the POST's answer does, or instead of it.
+    const arrival =
+      action.type === 'prompt' ? this.watchArrival(actionId) : undefined;
+    let result: IssueResult | undefined;
+    let thrown: { error: unknown } | undefined;
     try {
       result = trace
         ? await this.sendPrompt(trace, actionId, request)
         : await agentHarnessServiceClient.control(this.id, request);
     } catch (error) {
+      thrown = { error };
+    }
+    // No clear answer: the harness may have applied the prompt anyway. Its
+    // row in the log, or its entry in the queue, settles which.
+    if (
+      arrival &&
+      (thrown !== undefined ||
+        (result?.isErr() === true && isUnknownOutcome(result.error)))
+    ) {
+      options.onChecking?.();
+      const status = result?.isErr() ? result.error[0]?.status : undefined;
+      const check = await this.checkSend(
+        actionId,
+        arrival.arrived,
+        trace,
+        status
+      );
+      arrival.stop();
+      // Retracted either way when it is not running: a queued prompt shows
+      // in the queue, and an unconfirmed one is kept by the composer instead
+      // of a bubble that would read as still sending.
+      if (speculated && !(check.outcome === 'sent' && check.status === 'sent'))
+        fireAndForget(
+          this.enqueue({ kind: 'retracted', actionId }),
+          'agent-session'
+        );
+      return match(check)
+        .returnType<IssueResult>()
+        .with({ outcome: 'sent' }, ({ status: sentStatus }) => {
+          trace?.accepted(actionId, sentStatus === 'queued');
+          return ok({ actionId, status: sentStatus });
+        })
+        .with({ outcome: 'unknown' }, () => {
+          trace?.end('unconfirmed');
+          const message =
+            "We couldn't confirm it was sent; check the conversation.";
+          if (options.userId) {
+            holdUnconfirmedSend(this.id, options.userId, { actionId, action });
+            return err([
+              { name: 'Error', code: SEND_OUTCOME_UNKNOWN, message, actionId },
+            ]);
+          }
+          // No one to hold it for, so no card would show it: the error keeps
+          // the text instead.
+          const text = action.type === 'prompt' ? action.prompt : '';
+          return err([
+            {
+              name: 'Error',
+              code: SEND_OUTCOME_UNKNOWN,
+              message: text ? `${message} Your message: ${text}` : message,
+              actionId,
+              held: false,
+            },
+          ]);
+        })
+        .exhaustive();
+    }
+    arrival?.stop();
+    if (thrown !== undefined || result === undefined) {
       // A request that never got an answer goes back to the composer, so
       // its bubble goes too; otherwise a resend would show it twice.
       if (speculated)
@@ -418,7 +580,7 @@ export class AgentSession {
           this.enqueue({ kind: 'retracted', actionId }),
           'agent-session'
         );
-      throw error;
+      throw thrown?.error;
     }
 
     if (!speculated) return result;
@@ -460,6 +622,171 @@ export class AgentSession {
   }
 
   /**
+   * Resolves when the log shows the prompt sent under `actionId` as
+   * confirmed. `stop` ends the watch.
+   */
+  private watchArrival(actionId: string): {
+    arrived: Promise<void>;
+    stop: () => void;
+  } {
+    let stop: () => void = () => {};
+    const arrived = new Promise<void>((resolve) => {
+      stop = this.subscribe((events) => {
+        const confirmed = events.some((event) =>
+          messagesOf(event).some(
+            (message) =>
+              message.author.kind === 'user' &&
+              !message.pending &&
+              message.requestId === actionId
+          )
+        );
+        if (confirmed) resolve();
+      });
+    });
+    return { arrived, stop: () => stop() };
+  }
+
+  /**
+   * What became of a prompt whose send got no clear answer. Sent when its
+   * row reaches the log, the queue holds it, or a direct read of the log
+   * finds it. Otherwise unknown: the harness can be running a command that
+   * is in neither yet, so absence never counts as "not sent". One
+   * `agent.prompt.send_check` span covers the check, under the prompt's
+   * trace, with each phase's duration.
+   */
+  private async checkSend(
+    actionId: string,
+    arrived: Promise<void>,
+    trace: PromptTrace | undefined,
+    status: number | undefined
+  ): Promise<SendCheck> {
+    const span = startSendCheckSpan(trace);
+    span?.setAttr('agent.session.id', this.id);
+    span?.setAttr('agent.action.id', actionId);
+    if (status !== undefined)
+      span?.setAttr('agent.send_check.http_status', status);
+    const phase = phaseTimer(span);
+    let seen = false;
+    fireAndForget(
+      arrived.then(() => {
+        seen = true;
+      }),
+      'agent-session'
+    );
+    const finish = (check: SendCheck): SendCheck => {
+      span?.setAttr('agent.send_check.outcome', check.outcome);
+      match(check)
+        .with({ outcome: 'sent' }, ({ via }) =>
+          span?.setAttr('agent.send_check.via', via)
+        )
+        .with({ outcome: 'unknown' }, ({ reason }) => {
+          span?.setAttr('agent.send_check.reason', reason);
+          span?.error(new Error(`send unconfirmed: ${reason}`));
+        })
+        .exhaustive();
+      span?.end();
+      return check;
+    };
+    const sent = (via: 'log' | 'queue', sentStatus: 'sent' | 'queued') =>
+      finish({ outcome: 'sent', via, status: sentStatus });
+    const unknown = (
+      reason: 'absent' | 'released' | 'queue_unreadable' | 'log_unreadable'
+    ) => finish({ outcome: 'unknown', reason });
+
+    if (this.closed) return unknown('released');
+    const logged = await within(arrived, UNKNOWN_OUTCOME_WAIT_MS);
+    phase('log_wait');
+    if (logged !== false) return sent('log', 'sent');
+    if (this.closed) return unknown('released');
+
+    const queue = await within(
+      agentHarnessServiceClient.queue(this.id, {
+        signal: AbortSignal.timeout(SEND_CHECK_READ_MS),
+      }),
+      SEND_CHECK_READ_MS
+    ).catch((error: unknown) => {
+      console.warn(
+        '[agent-session] queue could not be read for a send check',
+        error
+      );
+      return false as const;
+    });
+    phase('queue');
+    if (seen) return sent('log', 'sent');
+    const queueRead = queue !== false && queue.isOk();
+    if (queue !== false && queue.isErr())
+      console.warn(
+        '[agent-session] queue could not be read for a send check',
+        queue.error
+      );
+    if (
+      queueRead &&
+      queue.value.entries.some((entry) => entry.actionId === actionId)
+    )
+      return sent('queue', 'queued');
+
+    // Possibly dispatched while the queue was read: give its row a moment,
+    // then read the log itself, fresh from the network.
+    const late = await within(arrived, DISPATCH_GRACE_MS);
+    phase('grace');
+    if (late !== false) return sent('log', 'sent');
+    if (this.closed) return unknown('released');
+    const logRead = await this.logHolds(actionId);
+    phase('log_read');
+    if (seen) return sent('log', 'sent');
+    if (logRead === true) {
+      // The follow missed its row: fold the log so the bubble is not left
+      // pending.
+      fireAndForget(this.refresh(), 'agent-session');
+      return sent('log', 'sent');
+    }
+    if (this.closed) return unknown('released');
+    if (logRead === undefined) return unknown('log_unreadable');
+    return unknown(queueRead ? 'absent' : 'queue_unreadable');
+  }
+
+  /**
+   * Whether a fresh network read of the log holds the prompt sent under
+   * `actionId`: its `session/prompt` request carries that id. `undefined`
+   * when the log could not be read in time.
+   */
+  private async logHolds(actionId: string): Promise<boolean | undefined> {
+    const watch = watchAgentSessionLog(this.id, 'network-only');
+    try {
+      const log = await within(watch.fetched, SEND_CHECK_READ_MS);
+      if (log === false) return undefined;
+      return log.rows.some((row) => promptIdOf(row) === actionId);
+    } catch (error: unknown) {
+      console.warn(
+        '[agent-session] log could not be read for a send check',
+        error
+      );
+      return undefined;
+    } finally {
+      watch.stop();
+    }
+  }
+
+  /**
+   * Prompts whose send could not be confirmed, oldest first. Kept outside
+   * this instance and across reloads; one leaves when its row reaches the
+   * log, or when {@link dropUnconfirmed} lets it go.
+   */
+  unconfirmed(userId: string | undefined): readonly UnconfirmedSend[] {
+    return unconfirmedSends(this.id, userId);
+  }
+
+  /** Follow {@link unconfirmed}. */
+  subscribeUnconfirmed(listener: () => void): () => void {
+    return subscribeUnconfirmedSends(this.id, listener);
+  }
+
+  /** Stop keeping an unconfirmed prompt: the person resent or dismissed it. */
+  dropUnconfirmed(actionId: string): void {
+    dropUnconfirmedSends(this.id, [actionId]);
+  }
+
+  /**
    * The tab a prompt is typed in, so what the turn opens for the person
    * reaches this tab (`macro.ui.open`).
    */
@@ -486,7 +813,12 @@ export class AgentSession {
       const result = await trace.run(() =>
         agentHarnessServiceClient.control(this.id, request)
       );
-      if (result.isErr()) {
+      if (result.isErr() && isUnknownOutcome(result.error)) {
+        // Still followed: its row may yet come back over the socket.
+        trace.stage('unanswered', {
+          unanswered_status: result.error[0]?.status ?? 0,
+        });
+      } else if (result.isErr()) {
         trace.end(
           'failed',
           new Error(result.error.map((error) => error.message).join(' '))
@@ -503,7 +835,8 @@ export class AgentSession {
       }
       return result;
     } catch (error) {
-      trace.end('failed', error);
+      // Still followed: the request may have reached the harness anyway.
+      trace.stage('unanswered');
       throw error;
     } finally {
       // Released while the POST was out: nothing will observe the turn.
@@ -947,6 +1280,25 @@ export class AgentSession {
     return this.apply(inputs);
   }
 
+  /**
+   * An unconfirmed prompt whose row the log just delivered was sent. A
+   * snapshot passes here too, so one kept across a reload clears on load.
+   */
+  private confirmArrived(events: FoldedStreamEvent[]): void {
+    const arrived: string[] = [];
+    for (const event of events) {
+      for (const message of messagesOf(event)) {
+        if (
+          message.author.kind === 'user' &&
+          !message.pending &&
+          message.requestId !== null
+        )
+          arrived.push(message.requestId);
+      }
+    }
+    dropUnconfirmedSends(this.id, arrived);
+  }
+
   private apply(inputs: FoldInput[]): Promise<void> {
     // Taken now, not after the chain: waiting for earlier pushes is part of
     // what a prompt's fold stage costs.
@@ -970,6 +1322,7 @@ export class AgentSession {
       }
       const projectionStartedAt = performance.now();
       for (const listener of this.listeners) listener(events);
+      if (hasUnconfirmedSends(this.id)) this.confirmArrived(events);
       if (snapshot) {
         this.trace.projected(
           projectionStartedAt,

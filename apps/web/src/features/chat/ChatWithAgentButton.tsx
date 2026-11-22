@@ -14,6 +14,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { fireAndForget } from '@core/util/fireAndForget';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import { buildMentionMarkdownString } from '@macro-inc/lexical-core/utils/mentions';
+import { cachedUserId } from '@queries/auth/user-info';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { ButtonSize } from '@ui';
 import { createSignal } from 'solid-js';
@@ -88,6 +89,8 @@ async function createAndOpenAgent(seed: {
   }
 
   const id = startPendingSession({
+    // Called from menus outside any component: the cached signed-in user.
+    userId: cachedUserId(),
     prompt: seed.message,
     initialInput: seed.message ? undefined : seed.input,
     ...(seed.model ? { modelOverride: seed.model } : {}),

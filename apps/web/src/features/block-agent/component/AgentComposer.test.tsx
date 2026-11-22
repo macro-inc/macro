@@ -28,6 +28,8 @@ const speedOption = (values: string[]) => ({
 const mocks = vi.hoisted(() => ({
   session: (): { canEdit?: boolean; harness?: string } => ({ canEdit: false }),
   sessionId: (): string => 'session-1',
+  unconfirmed: (): { actionId: string; action: unknown }[] => [],
+  dropUnconfirmed: vi.fn(),
   turn: () => 'idle' as TurnState,
   issue: vi.fn(),
   selectModel: vi.fn(),
@@ -81,6 +83,8 @@ vi.mock('../context/AgentSessionContext', () => ({
     steerFailed: () => new Set(),
     turn: () => mocks.turn(),
     sessionId: () => mocks.sessionId(),
+    unconfirmed: () => mocks.unconfirmed(),
+    dropUnconfirmed: mocks.dropUnconfirmed,
     registerQuoteInsert: vi.fn(),
   }),
 }));
@@ -94,6 +98,26 @@ vi.mock('../ui', () => ({
     return null;
   },
   ComposerNotice: (props: { text: string }) => <p>{props.text}</p>,
+  UnconfirmedSendCard: (props: {
+    text: string;
+    sending?: boolean;
+    onSendAgain: () => void;
+    onDismiss: () => void;
+  }) => (
+    <div data-testid="unconfirmed">
+      <p>{props.text}</p>
+      <button
+        type="button"
+        data-sending={props.sending ? 'true' : 'false'}
+        onClick={() => props.onSendAgain()}
+      >
+        Send anyway
+      </button>
+      <button type="button" onClick={() => props.onDismiss()}>
+        Dismiss
+      </button>
+    </div>
+  ),
 }));
 vi.mock('@app/features/agents-view/model-selector', () => ({
   UnifiedModelSelector: (props: { state: UnifiedModelSelectorState }) => {
@@ -109,6 +133,7 @@ beforeEach(() => {
   mocks.turn = () => 'idle';
   mocks.metadata = () => undefined;
   mocks.sessionId = () => 'session-1';
+  mocks.unconfirmed = () => [];
   mocks.session = () => ({ canEdit: false });
   mocks.issue.mockResolvedValue({ isErr: () => false });
   setPreferredSpeed('priority');
@@ -189,10 +214,13 @@ describe('view-only session controls', () => {
       expect(mocks.input?.readOnly).toBe(false);
       expect(mocks.queued?.disabled).toBe(false);
       mocks.input?.onSend('A permitted prompt', []);
-      expect(mocks.issue).toHaveBeenCalledWith({
-        type: 'prompt',
-        prompt: 'A permitted prompt',
-      });
+      expect(mocks.issue).toHaveBeenCalledWith(
+        {
+          type: 'prompt',
+          prompt: 'A permitted prompt',
+        },
+        { onChecking: expect.any(Function) }
+      );
     }
   );
 });
@@ -249,10 +277,13 @@ it.each([
   render(() => <AgentComposer />);
   mocks.input?.onSend('Use external settings', []);
   expect(mocks.selectModel).not.toHaveBeenCalled();
-  expect(mocks.issue).toHaveBeenCalledWith({
-    type: 'prompt',
-    prompt: 'Use external settings',
-  });
+  expect(mocks.issue).toHaveBeenCalledWith(
+    {
+      type: 'prompt',
+      prompt: 'Use external settings',
+    },
+    { onChecking: expect.any(Function) }
+  );
 });
 
 it('retains the draft if editing access is revoked while applying speed', async () => {
@@ -344,10 +375,13 @@ it('allows another prompt after a failed turn', () => {
 
   expect(mocks.input?.busy).toBe(false);
   mocks.input?.onSend('Try again', []);
-  expect(mocks.issue).toHaveBeenCalledWith({
-    type: 'prompt',
-    prompt: 'Try again',
-  });
+  expect(mocks.issue).toHaveBeenCalledWith(
+    {
+      type: 'prompt',
+      prompt: 'Try again',
+    },
+    { onChecking: expect.any(Function) }
+  );
 });
 
 describe('a message the harness does not take', () => {
@@ -531,6 +565,139 @@ describe('a message the harness does not take', () => {
     await vi.waitFor(() =>
       expect(mocks.input?.attachments).toEqual([attachment])
     );
+  });
+
+  it('says it is checking while a lost send is looked for, then keeps the box empty', async () => {
+    let answer!: (result: unknown) => void;
+    mocks.issue.mockImplementation(
+      (_action: unknown, options: { onChecking?: () => void }) =>
+        new Promise((resolve) => {
+          options.onChecking?.();
+          answer = resolve;
+        })
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    expect(
+      await screen.findByText('Checking whether it was sent…')
+    ).toBeTruthy();
+    expect(mocks.input?.draft).toBe('');
+    answer(ok({ status: 'sent', actionId: 'a' }));
+    await vi.waitFor(() =>
+      expect(screen.queryByText('Checking whether it was sent…')).toBeNull()
+    );
+    expect(mocks.input?.draft).toBe('');
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unconfirmed send out of the box', async () => {
+    mocks.issue.mockResolvedValue(
+      err([
+        {
+          code: 'SEND_OUTCOME_UNKNOWN',
+          message: "We couldn't confirm it was sent; check the conversation.",
+          actionId: 'a',
+        },
+      ])
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    await vi.waitFor(() => expect(mocks.issue).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mocks.input?.draft).toBe('');
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unconfirmed prompt on a card and sends it again only when asked', async () => {
+    const action = { type: 'prompt', prompt: 'Run the tests' };
+    mocks.unconfirmed = () => [{ actionId: 'a', action }];
+    mocks.issue.mockResolvedValue(ok({ actionId: 'b', status: 'sent' }));
+    render(() => <AgentComposer />);
+
+    expect(screen.getByTestId('unconfirmed').textContent).toContain(
+      'Run the tests'
+    );
+    expect(mocks.issue).not.toHaveBeenCalled();
+    screen.getByRole('button', { name: 'Send anyway' }).click();
+
+    await vi.waitFor(() =>
+      expect(mocks.issue).toHaveBeenCalledWith(action, {
+        onChecking: expect.any(Function),
+      })
+    );
+    await vi.waitFor(() =>
+      expect(mocks.dropUnconfirmed).toHaveBeenCalledWith('a')
+    );
+  });
+
+  it('sends an unconfirmed prompt again only once while that send is in flight', async () => {
+    const action = { type: 'prompt', prompt: 'Run the tests' };
+    mocks.unconfirmed = () => [{ actionId: 'a', action }];
+    let answer!: (value: unknown) => void;
+    mocks.issue.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      })
+    );
+    render(() => <AgentComposer />);
+    const button = screen.getByRole('button', { name: 'Send anyway' });
+    button.click();
+    button.click();
+
+    await vi.waitFor(() =>
+      expect(button.getAttribute('data-sending')).toBe('true')
+    );
+    button.click();
+    expect(mocks.issue).toHaveBeenCalledTimes(1);
+    answer(ok({ actionId: 'b', status: 'sent' }));
+    await vi.waitFor(() =>
+      expect(button.getAttribute('data-sending')).toBe('false')
+    );
+  });
+
+  it('keeps the card, files and all, when sending it again is refused', async () => {
+    const action = {
+      type: 'prompt',
+      prompt: 'Run the tests',
+      attachments: [{ uri: 'https://files/1', name: 'a.png' }],
+    };
+    mocks.unconfirmed = () => [{ actionId: 'a', action }];
+    mocks.issue.mockResolvedValue(
+      err([
+        {
+          code: 'HTTP_ERROR',
+          status: 409,
+          message: 'Runtime is disconnected.',
+        },
+      ])
+    );
+    render(() => <AgentComposer />);
+    screen.getByRole('button', { name: 'Send anyway' }).click();
+
+    await vi.waitFor(() => expect(mocks.issue).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mocks.dropUnconfirmed).not.toHaveBeenCalled();
+  });
+
+  it('shows the checking notice only on the session being checked', async () => {
+    const [session, setSession] = createSignal('session-1');
+    mocks.sessionId = session;
+    mocks.issue.mockImplementation(
+      (_action: unknown, options: { onChecking?: () => void }) =>
+        new Promise(() => {
+          options.onChecking?.();
+        })
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    expect(
+      await screen.findByText('Checking whether it was sent…')
+    ).toBeTruthy();
+    setSession('session-2');
+    expect(screen.queryByText('Checking whether it was sent…')).toBeNull();
   });
 
   it('leaves the composer empty once the message is taken', async () => {
