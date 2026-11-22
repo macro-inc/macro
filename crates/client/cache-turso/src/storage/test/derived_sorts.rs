@@ -146,6 +146,11 @@ fn store(storage: &TursoStorage, shapes: &[Shape], optimistic_owner: Option<i64>
             );
         }
     }
+    // Authoritative documents carry their facts blob, as storage 13 writes it.
+    if optimistic_owner.is_none() {
+        let ids = (1..=i64::try_from(shapes.len()).unwrap()).collect::<Vec<_>>();
+        crate::storage::rewrite_facts_blobs(&storage.connection(), &ids).unwrap();
+    }
 }
 
 fn derived(storage: &TursoStorage, sorts: &str) -> Vec<(i64, i64)> {
@@ -205,6 +210,7 @@ proptest! {
             forget_version(&storage);
             crate::storage::derived_sorts::ensure_version(&storage.connection()).unwrap();
             assert_eq!(derived(&storage, "sort_facts"), expected(&shapes));
+            assert_facts_blobs_match(&storage);
             assert_eq!(derived(&storage, "optimistic_sort_facts"), expected(&shapes));
             // Once recorded, a reopen changes nothing.
             raw_execute(&storage, "DELETE FROM sort_facts WHERE attribute = ?1", vec![text(INBOX_VIEW_DERIVATION.target)]);
@@ -250,6 +256,7 @@ fn reopening_an_older_cache_derives_facts_and_keeps_queued_writes() {
 
         let storage = database.open("derived-reopen").unwrap();
         assert_eq!(derived(&storage, "sort_facts"), vec![(1, 30)]);
+        assert_facts_blobs_match(&storage);
         assert_eq!(derived(&storage, "optimistic_sort_facts"), vec![(1, 30)]);
         // The copy of an uncertain source is uncertain too.
         assert_eq!(
@@ -392,6 +399,7 @@ fn a_document_at_the_attribute_limit_becomes_incomplete() {
         crate::storage::derived_sorts::ensure_version(&storage.connection()).unwrap();
 
         assert_eq!(derived(&storage, "sort_facts"), vec![(2, 30)]);
+        assert_facts_blobs_match(&storage);
         assert_eq!(derived(&storage, "optimistic_sort_facts"), vec![(2, 30)]);
         let keys = [1, 2].map(|index| document(index - 1, &shapes[0]).record_key);
         let states = storage.load_projection_states(&keys).await.unwrap();

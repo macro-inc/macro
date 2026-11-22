@@ -97,7 +97,20 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
             exact,
             sorts,
             ..
-        } = tables;
+        } = &tables;
+        let holders = format!(
+            "SELECT document_id FROM {sorts} WHERE attribute = ?1 AND document_id IN (SELECT id FROM {documents} WHERE profile IN ({after_target}))"
+        );
+        // An authoritative document whose sort facts change gets its facts
+        // blob rewritten: those holding the fact before and after.
+        let mut touched = BTreeSet::new();
+        if !tables.optimistic {
+            touched.extend(document_ids(
+                connection,
+                &holders,
+                with_profiles(vec![text(derivation.target)], derivation),
+            )?);
+        }
         driver::execute(
             connection,
             &format!(
@@ -129,9 +142,30 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
             ),
             parameters,
         )?;
+        if !tables.optimistic {
+            touched.extend(document_ids(
+                connection,
+                &holders,
+                with_profiles(vec![text(derivation.target)], derivation),
+            )?);
+        }
         mark_over_limit_incomplete(connection, &tables, derivation)?;
+        if !tables.optimistic {
+            rewrite_facts_blobs(connection, &touched.into_iter().collect::<Vec<_>>())?;
+        }
     }
     derive_uncertainty(connection, derivation)
+}
+
+fn document_ids(
+    connection: &Db,
+    sql: &str,
+    parameters: Vec<Value>,
+) -> Result<Vec<i64>, TursoStorageError> {
+    driver::query(connection, sql, parameters)?
+        .iter()
+        .map(|row| required_i64(row, 0))
+        .collect()
 }
 
 /// Gives each uncertain optimistic row the uncertainty composition gives a
@@ -180,7 +214,8 @@ fn derive_uncertainty(
 /// A document the derived fact took past `MAX_ATTRIBUTES_PER_DOCUMENT`
 /// distinct attributes becomes incomplete, as composition makes it, so its
 /// queries fall back and loads do not refuse it: an authority `Missing`, which
-/// keeps retained server rows, a shadow `Dirty`. Row counts bound
+/// keeps retained server rows, a shadow `Dirty`. The caller drops an
+/// authority's facts blob with its facts. Row counts bound
 /// distinct attributes from above, so SQL selects the few documents holding
 /// the fact with that many rows and Rust counts their distinct attributes.
 fn mark_over_limit_incomplete(
