@@ -831,6 +831,8 @@ export async function refreshChannelDirectory(
   // sign-in reads every directory again itself, and the write's soup
   // updates reach it. Counting it would only walk the network again.
   if (writer && !sameQueryAccount(writer, account())) return;
+  // Pages read from now on hold the write; only older ones need it laid in.
+  const started = Date.now();
   const ownWrites = readOwnWrites(
     changed,
     removed,
@@ -856,7 +858,53 @@ export async function refreshChannelDirectory(
     await Promise.allSettled(firstReads);
     await client.invalidateQueries(filters);
   }
-  await ownWrites;
+  const held = await ownWrites;
+  if (held && sameQueryAccount(held.writer, account()))
+    await keepOwnWritesInPages(client, held, started);
+}
+
+/** A write's primary read, held in the own-write store at `sequence`. */
+type HeldOwnWrites = {
+  writer: QueryAccount;
+  sequence: number;
+  channelIds: readonly string[];
+};
+
+/**
+ * Lays the channels `held` read into the writer's in-memory pages when the
+ * walk that should have read them again failed, so the pages are still the
+ * ones read before the write. Without this the directory shows the write
+ * only while the store holds it, then falls back to those older pages until
+ * another walk succeeds: a rename it showed would revert. Only reads the
+ * store still holds at `held.sequence` are laid in, so a later write's read
+ * that landed first is never undone. The pages keep the time they were read
+ * and stay invalidated: the next walk replaces them.
+ */
+async function keepOwnWritesInPages(
+  client: QueryClient,
+  held: HeldOwnWrites,
+  started: number
+) {
+  const queryKey = channelKeys.directory(held.writer.userId).queryKey;
+  const state = client.getQueryState(queryKey);
+  const pages = client.getQueryData<readonly DirectoryChannel[]>(queryKey);
+  if (!state || !pages || state.dataUpdatedAt >= started) return;
+  const writes = untrack(ownChannelWrites(client).writes);
+  const taken = new Map<string, DirectoryChannel | null>();
+  for (const id of held.channelIds) {
+    const write = writes[id];
+    if (write?.sequence === held.sequence) taken.set(id, write.channel);
+  }
+  if (taken.size === 0) return;
+  const next = pages.filter(({ id }) => !taken.has(id));
+  for (const channel of taken.values())
+    if (channel?.isParticipant) insertInDirectoryOrder(next, channel);
+  client.setQueryData(queryKey, next, { updatedAt: state.dataUpdatedAt });
+  await client.invalidateQueries({
+    queryKey,
+    exact: true,
+    refetchType: 'none',
+  });
 }
 
 export type PrimaryChannelRead =
@@ -999,7 +1047,7 @@ async function settleFullReadOnPrimary(
  * nothing, and neither do reads still unanswered once
  * `OWN_WRITE_READ_DEADLINE_MS` passed, nor a write of more than
  * `OWN_WRITE_READ_LIMIT` channels: the directory shows what it reads, as it
- * would without this. */
+ * would without this. Resolves to what it held, if anything. */
 async function readOwnWrites(
   changed: readonly string[],
   removed: readonly string[],
@@ -1007,7 +1055,7 @@ async function readOwnWrites(
   soup: () => UrqlQuery,
   account: () => QueryAccount | undefined,
   writerOf?: QueryAccount
-) {
+): Promise<HeldOwnWrites | undefined> {
   const removedIds = new Set(removed);
   const gone = [...removedIds].filter(isChannelId);
   const channelIds = [...new Set(changed)]
@@ -1021,7 +1069,7 @@ async function readOwnWrites(
   // would carry this sign-in's credentials.
   if (!signedIn()) return;
   const own = ownChannelWrites(client);
-  await Telemetry.span('channel_directory.own_writes', async (span) => {
+  return Telemetry.span('channel_directory.own_writes', async (span) => {
     span.setAttr('channel_directory.requested', channelIds.length);
     span.setAttr('channel_directory.removed', gone.length);
     const reading = channelIds.length <= OWN_WRITE_READ_LIMIT ? channelIds : [];
@@ -1078,6 +1126,11 @@ async function readOwnWrites(
     } finally {
       sent.settle(found);
     }
+    return {
+      writer,
+      sequence: sent.sequence,
+      channelIds: Object.keys(found),
+    };
   });
 }
 

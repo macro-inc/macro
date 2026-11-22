@@ -94,7 +94,8 @@ import {
 import { type DirectoryChannel, toDirectoryChannel } from './directory-core';
 import type { RemoveUnreadableResult } from './directory-departures';
 import { CHANNEL_DIRECTORY_CHECKPOINT_ID } from './directory-lane';
-import { ownChannelWrites } from './own-writes';
+import { channelKeys } from './keys';
+import { OWN_WRITE_HOLD_MS, ownChannelWrites } from './own-writes';
 import { channelName, channelUuid } from './tests/channel-uuid';
 import { directoryChannel as channelWithId } from './tests/directory-channel';
 import {
@@ -229,7 +230,17 @@ function fakeNetwork(
           : answer(variables.input),
     })
   );
-  return { client: fakeClient(query), query, inputs, entityReads, release };
+  return {
+    client: fakeClient(query),
+    query,
+    inputs,
+    entityReads,
+    release,
+    /** Fails the next `count` page reads. */
+    failPages: (count: number) => {
+      failures = count;
+    },
+  };
 }
 
 function page(
@@ -3829,6 +3840,40 @@ describe("the viewer's own channel writes", () => {
     expect(ids(directory.channels())).toEqual(['kept', 'new']);
     expect(directory.lookup(channelUuid('gone')).status).toBe('missing');
     expect(ids(await directory.readComplete())).toEqual(['kept', 'new']);
+  });
+
+  it('keeps a write it showed once the pages fail to read again', async () => {
+    vi.useFakeTimers();
+    try {
+      const network = fakeNetwork(
+        [channelRecord('a', { name: 'before' }), channelRecord('gone')],
+        {
+          primary: [
+            channelRecord('a', { name: 'after', updatedAt: UPDATED_MID }),
+          ],
+        }
+      );
+      const client = queryClient();
+      const directory = mountMemoryDirectory(network, client);
+      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+      network.failPages(Number.POSITIVE_INFINITY);
+      await writeOf(client, network, ['a', 'gone']);
+      expect(nameOf(directory, 'a')).toBe('after');
+
+      // Past the hold: the pages, read before the write, are all it has.
+      await vi.advanceTimersByTimeAsync(OWN_WRITE_HOLD_MS + 1_000);
+
+      expect(nameOf(directory, 'a')).toBe('after');
+      expect(directory.channels().map(({ name }) => name)).toEqual(['after']);
+      // Still owed a walk: the next one replaces them.
+      expect(
+        client.getQueryState(channelKeys.directory(VIEWER).queryKey)
+          ?.isInvalidated
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('shows a later update by someone else over the write', async () => {
