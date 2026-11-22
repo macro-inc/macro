@@ -96,9 +96,6 @@ query PropertyCatalogTagSets {
 mutation CreatePropertyDefinition($input: CreatePropertyDefinitionInput!) {
 	createPropertyDefinition(input: $input) {
 		...PropertyCatalogDefinitionFields
-		options {
-			...PropertyCatalogOptionFields
-		}
 	}
 }
 

@@ -4,9 +4,10 @@
  * - Updating and deleting an option, and deleting a definition, are predicted
  *   by the resolvers in `resolvers.ts`: every reader shows the change at once,
  *   the cache rolls it back if the server refuses, and offline writes queue.
- * - Adding an option shows it at once under a local id that the server's id
- *   replaces on commit, linked into the cached lists it belongs to. The call
- *   resolves with the server's option, so callers can apply it to an entity.
+ * - Adding an option shows it at once under an id minted here, linked into the
+ *   cached lists it belongs to. The server creates it under that id and a
+ *   replay answers with it, so a queued add resolves at once with its final id
+ *   and callers can apply it to an entity.
  * - Creating a definition, provisioning a tag set, and sharing or replacing a
  *   tag are answered by the server (it assigns ids and owners, and decides
  *   name collisions); the lists that hold them reload after it answers.
@@ -17,9 +18,7 @@ import {
   type OptimisticUpdate,
   optimisticMutationDispositionOf,
   prependUnique,
-  readRecordsByKeys,
   select,
-  selectRecords,
   update,
 } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
@@ -41,7 +40,6 @@ import {
   MergeTagDocument,
   PromoteTagDocument,
   PropertyCatalogDefinitionsWithOptionsDocument,
-  PropertyCatalogOptionFieldsFragmentDoc,
   PropertyCatalogOptionsDocument,
   PropertyCatalogTagSetsDocument,
   UpdatePropertyOptionDocument,
@@ -75,12 +73,20 @@ import {
 
 export { CatalogMutationError, isCatalogErrorCode };
 
+/** The code REST's status class carried, for a refusal made before GraphQL ran. */
+function httpStatusCode(status: number | undefined): string | undefined {
+  if (status === 401) return 'UNAUTHENTICATED';
+  if (status === 403) return 'FORBIDDEN';
+  return undefined;
+}
+
 function errorOf(result: OperationResult): CatalogMutationError {
   const [first] = result.error?.graphQLErrors ?? [];
   const code = first?.extensions?.code;
+  const response = result.error?.response as Response | undefined;
   return new CatalogMutationError(
     first?.message ?? result.error?.message ?? 'Property catalog write failed',
-    typeof code === 'string' ? code : undefined
+    typeof code === 'string' ? code : httpStatusCode(response?.status)
   );
 }
 
@@ -210,9 +216,7 @@ export async function deletePropertyDefinition(
 }
 
 // ---------------------------------------------------------------------------
-// Added under a local id
-
-const optionSelection = selectRecords(PropertyCatalogOptionFieldsFragmentDoc);
+// Added under a client-minted id
 
 /** The cached tag sets, without a request: which scope owns a definition. */
 async function cachedTagScopeOf(propertyDefinitionId: string) {
@@ -285,22 +289,29 @@ async function optionListLinks(
   return links;
 }
 
-/** Adds an option and resolves with the server's record once it commits. */
+/**
+ * Adds an option under an id minted here. The server creates it under that
+ * id, and a replay of the same add answers with the option the first attempt
+ * made, so a queued add can resolve at once and the id it returns is final.
+ * A refusal that arrives after a queued add resolved goes to `onLateFailure`;
+ * the cache has removed the option by then.
+ */
 export async function addPropertyOption(
   propertyDefinitionId: string,
-  request: AddPropertyOptionRequest
+  request: AddPropertyOptionRequest,
+  onLateFailure: (error: Error) => void
 ): Promise<PropertyOption> {
   return Telemetry.span('property_catalog.add_option', async (span) => {
     span.setAttr('property.definition_id', propertyDefinitionId);
-    const input = toAddOptionInput(propertyDefinitionId, request);
+    const id = uuidv4();
+    span.setAttr('property.option_id', id);
+    const input = { ...toAddOptionInput(propertyDefinitionId, request), id };
     const client = getGraphqlSoupClient();
     const host = getGraphqlSoupCacheHost();
-    const localId = uuidv4();
-    const localKey = `GraphqlPropertyOption:${localId}`;
     const now = new Date().toISOString();
     const option = {
       __typename: 'GraphqlPropertyOption' as const,
-      id: localId,
+      id,
       propertyDefinitionId,
       displayOrder: input.displayOrder,
       value: optionValueRecord(input.value),
@@ -320,33 +331,18 @@ export async function addPropertyOption(
               { input },
               { addPropertyOption: option },
               {
-                uuid: localId,
-                identityBindings: [
-                  { localKey, responsePath: ['addPropertyOption'] },
-                ],
+                uuid: id,
                 updates: await optionListLinks(propertyDefinitionId, option),
               }
             ).toPromise()
           : client.mutation(AddPropertyOptionDocument, { input }).toPromise(),
-      { waitForCommit: true }
+      { waitForCommit: false, onLateFailure }
     );
     span.setAttr('property.outcome', outcome.kind);
-    let created =
-      outcome.kind === 'committed'
-        ? outcome.data?.addPropertyOption
-        : undefined;
-    if (!created && host) {
-      // Committed from the queue: the local key now aliases the server record.
-      const { records } = await readRecordsByKeys(host, optionSelection, [
-        localKey,
-      ]);
-      const [read] = records;
-      if (read && read.identity?.pending !== true && read.record.id !== localId)
-        created = read.record;
-    }
+    const created =
+      outcome.kind === 'committed' ? outcome.data?.addPropertyOption : option;
     const mapped = created && toPropertyOption(created);
     if (!mapped) noData('addPropertyOption');
-    span.setAttr('property.option_id', mapped.id);
     return mapped;
   });
 }
