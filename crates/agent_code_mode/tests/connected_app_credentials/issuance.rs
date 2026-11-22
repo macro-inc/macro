@@ -63,6 +63,24 @@ impl ExecutionCredentials for Credentials {
             environment: RunEnvironment::default(),
         })
     }
+    async fn approve_job(
+        &self,
+        _: &ExecutionIdentity,
+        _: &str,
+        _: CancellationToken,
+    ) -> Result<MacroUserIdStr<'static>, CodeModeError> {
+        Err(CodeModeError::Forbidden)
+    }
+    async fn mint_job(
+        &self,
+        _: &ExecutionIdentity,
+        _: &MacroUserIdStr<'static>,
+    ) -> Result<IssuedRun, CodeModeError> {
+        Err(CodeModeError::Unavailable)
+    }
+    async fn revoke_job(&self, _: Uuid) -> Result<(), CodeModeError> {
+        Ok(())
+    }
 }
 struct Runner {
     journal: Arc<Journal>,
@@ -142,6 +160,7 @@ async fn the_issued_binding_is_saved_before_the_runner_starts() {
                     source: "export async function main() { return {data:42,reviews:[]}; }".into(),
                     timeout_ms: 1000,
                 },
+                None,
                 CancellationToken::new(),
             )
             .await;
@@ -233,6 +252,7 @@ async fn cancellation_during_binding_save_starts_no_program() {
                 source: "export async function main() { return {data:42,reviews:[]}; }".into(),
                 timeout_ms: 1000,
             },
+            None,
             cancel.clone(),
         );
         let (result, ()) = tokio::join!(

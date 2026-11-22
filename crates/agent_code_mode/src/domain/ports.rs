@@ -43,8 +43,8 @@ pub trait ExecutionCredentials: Send + Sync + 'static {
         cancel: CancellationToken,
     ) -> Result<MacroUserIdStr<'static>, CodeModeError>;
     /// Mint the credential of a job [`Self::approve_job`] approved for
-    /// `acting_user`, when it starts running. It is limited to the no-send
-    /// scope and lasts until the job's deadline.
+    /// `acting_user`, when it starts running. It is limited to the
+    /// default-deny `job` scope and lasts until the job's deadline.
     async fn mint_job(
         &self,
         identity: &ExecutionIdentity,

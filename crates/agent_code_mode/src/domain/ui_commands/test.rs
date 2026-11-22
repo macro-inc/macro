@@ -539,8 +539,9 @@ async fn a_background_job_never_sends_a_command() {
         execution,
     };
 
-    // A job's credential is scoped: it opens nothing and is told no tab
-    // waits, as any scoped caller is.
+    // A job's credential is scoped. In the stack the job scope refuses the
+    // ui-commands route first; called directly, the domain opens nothing and
+    // answers no_client, as for any scoped caller.
     let access = EntityAccessReceipt::<EditAccessLevel>::dangerously_assert_authenticated_user(
         owner(),
         &session().to_string(),

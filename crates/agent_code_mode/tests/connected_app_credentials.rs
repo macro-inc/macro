@@ -362,7 +362,7 @@ mod ui_binding;
 #[tokio::test]
 async fn the_api_omits_the_binding_while_the_journal_retains_it() {
     let fixture = Fixture::new(true);
-    let record = fixture
+    let mut record = fixture
         .store
         .get(
             AgentSessionId::new_from_uuid(Uuid::from_u128(202)),
@@ -370,6 +370,14 @@ async fn the_api_omits_the_binding_while_the_journal_retains_it() {
         )
         .await
         .unwrap();
+    // A job's record, so every optional public field is present.
+    let now = chrono::Utc::now();
+    record.job = Some(agent_code_mode::domain::JobInfo {
+        title: "Scanning inbox".into(),
+        started_at: now,
+        deadline: now + chrono::TimeDelta::minutes(10),
+        never_ran: false,
+    });
     let journal = serde_json::to_value(&record).unwrap();
     assert_eq!(
         journal["credentialCorrelationId"],

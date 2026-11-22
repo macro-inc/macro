@@ -76,7 +76,8 @@ pub enum RunLifetime {
     /// A background job, until its deadline.
     Job {
         /// When the job stops at the latest. Its credential is always
-        /// limited to the no-send scope: no one watches a job's calls.
+        /// limited to the default-deny `job` scope: no one watches a job's
+        /// calls.
         deadline: chrono::DateTime<chrono::Utc>,
     },
 }

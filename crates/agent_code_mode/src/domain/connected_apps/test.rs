@@ -439,10 +439,59 @@ async fn a_background_jobs_credential_reaches_no_connected_app() {
                     &session.to_string(),
                     EntityType::AgentSession,
                 );
-            assert!(matches!(
-                service.apps(&access, &owner, execution).await,
-                Err(CodeModeError::Forbidden)
-            ));
+            let app = || ConnectedAppRef {
+                kind: ConnectedAppKind::App,
+                key: "slack".into(),
+            };
+            let outcomes = [
+                service.apps(&access, &owner, execution).await.map(|_| ()),
+                service
+                    .tools(&access, &owner, execution, app())
+                    .await
+                    .map(|_| ()),
+                service
+                    .call(
+                        &access,
+                        &owner,
+                        execution,
+                        app(),
+                        CallConnectedTool {
+                            tool: "send_message".into(),
+                            arguments: serde_json::Map::new(),
+                        },
+                    )
+                    .await
+                    .map(|_| ()),
+                service
+                    .discover(
+                        &access,
+                        &owner,
+                        execution,
+                        DiscoveryRequest::Search {
+                            query: "slack".into(),
+                        },
+                    )
+                    .await
+                    .map(|_| ()),
+                service
+                    .add_server(
+                        &access,
+                        &owner,
+                        execution,
+                        ConnectMcpServer {
+                            url: "https://example.com/mcp".into(),
+                            server_name: "Example".into(),
+                        },
+                    )
+                    .await
+                    .map(|_| ()),
+            ];
+            for outcome in outcomes {
+                assert!(
+                    matches!(outcome, Err(CodeModeError::Forbidden)),
+                    "{outcome:?}"
+                );
+            }
             assert!(apps.0.lock().unwrap().is_empty());
         },
     )
