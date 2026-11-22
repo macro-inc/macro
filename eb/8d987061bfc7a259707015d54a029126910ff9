@@ -1,0 +1,64 @@
+crates/mcp_select/src/domain/ports.rs
+  s_57e1c74013b228::t_27f4ba4bba9344 1-152,154-168
+  s_5d42f0dc11f02e::t_9f873f8cbca331 153
+crates/mcp_select/src/domain/resolve/test.rs
+  s_57e1c74013b228::t_ae33fbf942687e 4
+  s_57e1c74013b228::t_6606681cbb1e72 1-3,5-35,37-368,373-441,450-519,524-611,617,622-658,663-678,680,685-760,765-855,857-941
+  s_57e1c74013b228::t_5323a569426e1e 36,369-372,442-449,520-523,612-616,618-621,659-662,679,681-684,761-764,856
+crates/mcp_select/src/domain/models/test.rs
+  s_57e1c74013b228::t_ae33fbf942687e 1
+  s_57e1c74013b228::t_5323a569426e1e 17,32-65
+  s_57e1c74013b228::t_2c0547ab523fa2 2-16,18-31,66
+crates/mcp_select/src/domain/catalog.rs
+  s_57e1c74013b228::t_568df74481df1f 1-85
+crates/workspace-hack/Cargo.toml
+  s_57e1c74013b228::t_7cad44b7c3799f 124,297
+crates/mcp_select/src/domain/service.rs
+  s_57e1c74013b228::t_893e28d136d313 1-6,9-107
+  s_57e1c74013b228::t_5323a569426e1e 7-8
+rules/ast-grep/rust-no-transport-in-domain.yml
+  s_57e1c74013b228::t_84d7060ce351ae 28-32
+crates/mcp_select/src/domain/models.rs
+  s_57e1c74013b228::t_932fd3fcfa5129 1-632
+crates/mcp_select/src/domain.rs
+  s_57e1c74013b228::t_627b2084babc03 1-8,18,23,28,36-37
+  s_57e1c74013b228::t_5323a569426e1e 9-17,19-22,24-27,29-35
+crates/mcp_select/src/domain/resolve.rs
+  s_57e1c74013b228::t_de812cfdecf27d 1-142,147-199,201-203
+  s_57e1c74013b228::t_5323a569426e1e 143-146,200
+crates/mcp_select/src/domain/catalog/test.rs
+  s_57e1c74013b228::t_ae33fbf942687e 1
+  s_5d42f0dc11f02e::t_7c69fe7f11bdeb 2-39
+Cargo.lock
+  s_57e1c74013b228::t_b1392b082ab2de 13438,13441,13444,13446,13448,13450,13453,24348
+crates/mcp_select/Cargo.toml
+  s_5d42f0dc11f02e::t_a59355582af764 11-12,15,17,19,21,25
+crates/mcp_select/proptest-regressions/domain/resolve/test.txt
+  s_57e1c74013b228::t_b03055923ad728 1-7
+crates/mcp_select/src/lib.rs
+  s_5d42f0dc11f02e::t_2066a96b7bafaa 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "eb8d987061bfc7a259707015d54a029126910ff9",
+  "prompts": {},
+  "sessions": {
+    "s_57e1c74013b228": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa6029da-d45a-45b0-b22c-f1996be6c27d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_5d42f0dc11f02e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "28ceb712-beab-4ed6-9edf-e5c817833544",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
