@@ -1,7 +1,7 @@
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { agentFeedbackClient } from './client';
+import { agentFeedbackClient, SUGGESTION_MINE_MAX_IDS } from './client';
 
 vi.mock('@core/constant/servers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/servers')>()),
@@ -137,5 +137,110 @@ describe('agentFeedbackClient', () => {
     });
 
     expect(result.isErr() && result.error[0]?.code).toBe('NOT_FOUND');
+  });
+
+  it('rates and retracts a suggestion by its id', async () => {
+    vi.mocked(fetchWithToken).mockResolvedValue(
+      ok({ rating: 'up', note: null, updatedAt: '2026-11-22T10:00:00Z' })
+    );
+    const suggestion = { kind: 'suggestion', suggestionId: 'sug-1' } as const;
+
+    await agentFeedbackClient.rate(suggestion, {
+      id: 'action-3',
+      rating: 'up',
+      note: null,
+      surface: 'suggestion_tile',
+    });
+    expect(lastCall().url).toBe(`${HOST}/suggestions/sug-1`);
+    expect(lastCall().init?.method).toBe('PUT');
+    expect(JSON.parse(String(lastCall().init?.body))).toEqual({
+      id: 'action-3',
+      rating: 'up',
+      note: null,
+      surface: 'suggestion_tile',
+    });
+
+    vi.mocked(fetchWithToken).mockResolvedValue(ok({}));
+    await agentFeedbackClient.retract(suggestion, {
+      id: 'action-4',
+      surface: 'suggestion_draft',
+    });
+    expect(lastCall().url).toBe(
+      `${HOST}/suggestions/sug-1?id=action-4&surface=suggestion_draft`
+    );
+    expect(lastCall().init?.method).toBe('DELETE');
+  });
+
+  it('reads the suggestions of one list in one request and hands each its own', async () => {
+    vi.mocked(fetchWithToken).mockResolvedValue(
+      ok({
+        items: [
+          {
+            subjectId: 'sug-2',
+            turn: null,
+            rating: 'down',
+            note: 'not urgent',
+            updatedAt: '2026-11-22T10:00:00Z',
+          },
+        ],
+      })
+    );
+
+    const [first, second, again] = await Promise.all(
+      ['sug-1', 'sug-2', 'sug-1'].map((suggestionId) =>
+        agentFeedbackClient.mine({ kind: 'suggestion', suggestionId })
+      )
+    );
+
+    expect(fetchWithToken).toHaveBeenCalledTimes(1);
+    expect(lastCall().url).toBe(`${HOST}/suggestions/mine?ids=sug-1,sug-2`);
+    expect(first?._unsafeUnwrap()).toEqual([]);
+    expect(again?._unsafeUnwrap()).toEqual([]);
+    expect(second?._unsafeUnwrap()).toEqual([
+      {
+        key: 'sug-2',
+        rating: 'down',
+        note: 'not urgent',
+        updatedAt: '2026-11-22T10:00:00Z',
+      },
+    ]);
+  });
+
+  it('splits a long list of suggestions into requests of at most the server limit', async () => {
+    vi.mocked(fetchWithToken).mockResolvedValue(ok({ items: [] }));
+    const ids = Array.from(
+      { length: SUGGESTION_MINE_MAX_IDS + 20 },
+      (_, index) => `sug-${index}`
+    );
+
+    await Promise.all(
+      ids.map((suggestionId) =>
+        agentFeedbackClient.mine({ kind: 'suggestion', suggestionId })
+      )
+    );
+
+    const requested = vi
+      .mocked(fetchWithToken)
+      .mock.calls.map(
+        ([url]) => String(url).split('ids=')[1]?.split(',').length
+      );
+    expect(requested).toEqual([SUGGESTION_MINE_MAX_IDS, 20]);
+  });
+
+  it('hands a refused suggestion read to every suggestion in it', async () => {
+    vi.mocked(fetchWithToken).mockResolvedValue(
+      err([{ code: 'NOT_FOUND', message: 'Resource not found' }])
+    );
+
+    const answers = await Promise.all(
+      ['sug-1', 'sug-2'].map((suggestionId) =>
+        agentFeedbackClient.mine({ kind: 'suggestion', suggestionId })
+      )
+    );
+
+    expect(fetchWithToken).toHaveBeenCalledTimes(1);
+    expect(
+      answers.map((answer) => answer.isErr() && answer.error[0]?.code)
+    ).toEqual(['NOT_FOUND', 'NOT_FOUND']);
   });
 });

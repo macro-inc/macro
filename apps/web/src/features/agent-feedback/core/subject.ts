@@ -13,7 +13,10 @@ export type FeedbackSurface =
   | 'agents_view'
   | 'message_timeline'
   | 'message_thread'
-  | 'routine_run';
+  | 'routine_run'
+  | 'suggestion_row'
+  | 'suggestion_tile'
+  | 'suggestion_draft';
 
 export type FeedbackSubject =
   | { kind: 'agent_session_turn'; sessionId: string; turn: number }
@@ -23,13 +26,19 @@ export type FeedbackSubject =
       parentId: string;
       messageId: string;
     }
-  | { kind: 'routine_run'; routineId: string; runId: string };
+  | { kind: 'routine_run'; routineId: string; runId: string }
+  | { kind: 'suggestion'; suggestionId: string };
 
-/** One `mine` read covers every response in a container. */
+/**
+ * One `mine` read covers every response in a container. A suggestion is its
+ * own container: the client batches the suggestions read together into one
+ * request.
+ */
 export type FeedbackContainer =
   | { kind: 'agent_session'; sessionId: string }
   | { kind: 'message_parent'; parentType: string; parentId: string }
-  | { kind: 'routine'; routineId: string };
+  | { kind: 'routine'; routineId: string }
+  | { kind: 'suggestion'; suggestionId: string };
 
 /** The person's current rating of one response. */
 export type FeedbackState = {
@@ -59,6 +68,10 @@ export function feedbackContainer(subject: FeedbackSubject): FeedbackContainer {
       kind: 'routine' as const,
       routineId: s.routineId,
     }))
+    .with({ kind: 'suggestion' }, (s) => ({
+      kind: 'suggestion' as const,
+      suggestionId: s.suggestionId,
+    }))
     .exhaustive();
 }
 
@@ -71,6 +84,7 @@ export function containerKey(container: FeedbackContainer): string {
       (c) => `message_parent:${c.parentType}:${c.parentId}`
     )
     .with({ kind: 'routine' }, (c) => `routine:${c.routineId}`)
+    .with({ kind: 'suggestion' }, (c) => `suggestion:${c.suggestionId}`)
     .exhaustive();
 }
 
@@ -80,6 +94,7 @@ export function responseKey(subject: FeedbackSubject): string {
     .with({ kind: 'agent_session_turn' }, (s) => String(s.turn))
     .with({ kind: 'message' }, (s) => s.messageId)
     .with({ kind: 'routine_run' }, (s) => s.runId)
+    .with({ kind: 'suggestion' }, (s) => s.suggestionId)
     .exhaustive();
 }
 

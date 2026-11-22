@@ -1,31 +1,24 @@
 /**
- * The agent harness's `/agent-feedback` routes, through the generated
- * client's URLs and types. Each call is one client span whose trace context
- * travels to the harness, so a rating's trace runs from the click through the
- * write.
+ * The agent harness's `/agent-feedback` routes. Each call is one client span
+ * whose trace context travels to the harness, so a rating's trace runs from
+ * the click through the write.
+ *
+ * The wire types and paths are declared here until the backend's routes are
+ * in the generated harness client (`@service-agent-harness/generated`); then
+ * this adapter should build its requests from it. The operations, by id:
+ * `agent_feedback_{rate,retract}_turn`, `agent_feedback_my_turn_feedback`,
+ * `agent_feedback_{rate,retract}_message`,
+ * `agent_feedback_my_message_feedback`, `agent_feedback_{rate,retract}_run`,
+ * `agent_feedback_my_run_feedback`, `agent_feedback_{rate,retract}_suggestion`
+ * and `agent_feedback_my_suggestion_feedback`.
  */
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ResultError } from '@core/util/result';
 import type { BaseFetchErrorCode } from '@core/util/safeFetch';
 import { Telemetry } from '@macro-inc/observability';
-import {
-  getAgentFeedbackMyMessageFeedbackUrl,
-  getAgentFeedbackMyRunFeedbackUrl,
-  getAgentFeedbackMyTurnFeedbackUrl,
-  getAgentFeedbackRateMessageUrl,
-  getAgentFeedbackRateRunUrl,
-  getAgentFeedbackRateTurnUrl,
-  getAgentFeedbackRetractMessageUrl,
-  getAgentFeedbackRetractRunUrl,
-  getAgentFeedbackRetractTurnUrl,
-} from '@service-agent-harness/generated/client';
-import type {
-  FeedbackState as FeedbackStateDto,
-  MyFeedback,
-  MyFeedbackResponse,
-  RateFeedbackBody,
-} from '@service-agent-harness/generated/schemas';
+import { AsyncBatcher } from '@tanstack/pacer';
 import { err, type Result } from 'neverthrow';
 import { match } from 'ts-pattern';
 import type {
@@ -37,9 +30,34 @@ import type {
   MyFeedbackItem,
 } from '../core/subject';
 
-type FeedbackFetchResult<T> = Promise<
-  Result<T, ResultError<BaseFetchErrorCode>[]>
->;
+type FetchErrors = ResultError<BaseFetchErrorCode>[];
+
+type FeedbackFetchResult<T> = Promise<Result<T, FetchErrors>>;
+
+/** The current state after a write; no rating once retracted. */
+type FeedbackStateDto = {
+  rating: FeedbackRating | null;
+  note: string | null;
+  updatedAt: string | null;
+};
+
+/** One rated response: the session's turn, or the message, run or suggestion. */
+type MyFeedbackDto = {
+  subjectId: string;
+  turn: number | null;
+  rating: FeedbackRating;
+  note: string | null;
+  updatedAt: string;
+};
+
+type MyFeedbackResponseDto = { items: MyFeedbackDto[] };
+
+type RateFeedbackBodyDto = {
+  id: string;
+  rating: FeedbackRating;
+  note: string | null;
+  surface: FeedbackSurface;
+};
 
 export type RateRequest = {
   id: string;
@@ -62,45 +80,58 @@ export type AgentFeedbackClient = {
   ): FeedbackFetchResult<void>;
 };
 
-const host = () => SERVER_HOSTS['agent-harness'];
-const segment = encodeURIComponent;
+/** The most suggestion ids one `mine` request may name. */
+export const SUGGESTION_MINE_MAX_IDS = 100;
+
+/** How long suggestion reads wait to share a request with their neighbours. */
+const SUGGESTION_BATCH_WINDOW_MS = 10;
 
 /** A subject this build can't address: the request fails rather than guess. */
-const UNKNOWN_SUBJECT: ResultError<BaseFetchErrorCode>[] = [
+const UNKNOWN_SUBJECT: FetchErrors = [
   { code: 'UNKNOWN_ERROR', message: 'Unknown feedback subject' },
 ];
 
-function mineUrl(container: FeedbackContainer): string | undefined {
+const host = () => `${SERVER_HOSTS['agent-harness']}/agent-feedback`;
+const segment = encodeURIComponent;
+
+function mineUrl(
+  container: Exclude<FeedbackContainer, { kind: 'suggestion' }>
+): string | undefined {
   return match(container)
-    .with({ kind: 'agent_session' }, (c) =>
-      getAgentFeedbackMyTurnFeedbackUrl(segment(c.sessionId))
+    .with(
+      { kind: 'agent_session' },
+      (c) => `/agent-sessions/${segment(c.sessionId)}/mine`
     )
-    .with({ kind: 'message_parent' }, (c) =>
-      getAgentFeedbackMyMessageFeedbackUrl(
-        segment(c.parentType),
-        segment(c.parentId)
-      )
+    .with(
+      { kind: 'message_parent' },
+      (c) => `/messages/${segment(c.parentType)}/${segment(c.parentId)}/mine`
     )
-    .with({ kind: 'routine' }, (c) =>
-      getAgentFeedbackMyRunFeedbackUrl(segment(c.routineId))
-    )
+    .with({ kind: 'routine' }, (c) => `/routines/${segment(c.routineId)}/mine`)
     .exhaustive(() => undefined);
 }
 
-function rateUrl(subject: FeedbackSubject): string | undefined {
+function suggestionsMineUrl(ids: string[]): string {
+  return `/suggestions/mine?ids=${ids.map(segment).join(',')}`;
+}
+
+function subjectUrl(subject: FeedbackSubject): string | undefined {
   return match(subject)
-    .with({ kind: 'agent_session_turn' }, (s) =>
-      getAgentFeedbackRateTurnUrl(segment(s.sessionId), s.turn)
+    .with(
+      { kind: 'agent_session_turn' },
+      (s) => `/agent-sessions/${segment(s.sessionId)}/turns/${s.turn}`
     )
-    .with({ kind: 'message' }, (s) =>
-      getAgentFeedbackRateMessageUrl(
-        segment(s.parentType),
-        segment(s.parentId),
-        segment(s.messageId)
-      )
+    .with(
+      { kind: 'message' },
+      (s) =>
+        `/messages/${segment(s.parentType)}/${segment(s.parentId)}/items/${segment(s.messageId)}`
     )
-    .with({ kind: 'routine_run' }, (s) =>
-      getAgentFeedbackRateRunUrl(segment(s.routineId), segment(s.runId))
+    .with(
+      { kind: 'routine_run' },
+      (s) => `/routines/${segment(s.routineId)}/runs/${segment(s.runId)}`
+    )
+    .with(
+      { kind: 'suggestion' },
+      (s) => `/suggestions/${segment(s.suggestionId)}`
     )
     .exhaustive(() => undefined);
 }
@@ -109,26 +140,10 @@ function retractUrl(
   subject: FeedbackSubject,
   params: RetractRequest
 ): string | undefined {
-  return match(subject)
-    .with({ kind: 'agent_session_turn' }, (s) =>
-      getAgentFeedbackRetractTurnUrl(segment(s.sessionId), s.turn, params)
-    )
-    .with({ kind: 'message' }, (s) =>
-      getAgentFeedbackRetractMessageUrl(
-        segment(s.parentType),
-        segment(s.parentId),
-        segment(s.messageId),
-        params
-      )
-    )
-    .with({ kind: 'routine_run' }, (s) =>
-      getAgentFeedbackRetractRunUrl(
-        segment(s.routineId),
-        segment(s.runId),
-        params
-      )
-    )
-    .exhaustive(() => undefined);
+  const path = subjectUrl(subject);
+  if (!path) return undefined;
+  const query = new URLSearchParams({ id: params.id, surface: params.surface });
+  return `${path}?${query}`;
 }
 
 /** The ids a span about this subject records, by attribute name. */
@@ -138,7 +153,7 @@ function subjectAttributes(
   return match(subject)
     .with({ kind: 'agent_session_turn' }, (s) => ({
       'agent.session.id': s.sessionId,
-      'agent_feedback.turn': s.turn,
+      'agent.turn': s.turn,
     }))
     .with({ kind: 'message' }, (s) => ({
       'message.parent_type': s.parentType,
@@ -149,28 +164,35 @@ function subjectAttributes(
       'routine.id': s.routineId,
       'routine.run_id': s.runId,
     }))
+    .with({ kind: 'suggestion' }, (s) => ({
+      'suggestion.id': s.suggestionId,
+    }))
     .exhaustive(() => ({}));
 }
 
 function toState(dto: FeedbackStateDto): FeedbackState | undefined {
   if (!dto.rating || !dto.updatedAt) return undefined;
-  return { rating: dto.rating, note: dto.note, updatedAt: dto.updatedAt };
+  return {
+    rating: dto.rating,
+    note: dto.note ?? null,
+    updatedAt: dto.updatedAt,
+  };
 }
 
 /** One rated response, keyed the way `responseKey` keys its subject. */
 function toItem(
   container: FeedbackContainer,
-  item: MyFeedback
+  item: MyFeedbackDto
 ): MyFeedbackItem[] {
   const fields = {
     rating: item.rating,
-    note: item.note,
+    note: item.note ?? null,
     updatedAt: item.updatedAt,
   };
   if (container.kind !== 'agent_session')
     return [{ key: item.subjectId, ...fields }];
   // A session's ratings are per turn; one without a turn isn't a reply's.
-  if (item.turn === null) return [];
+  if (item.turn == null) return [];
   return [{ key: String(item.turn), ...fields }];
 }
 
@@ -199,38 +221,97 @@ export function isRefusal(errors: ResultError<string>[]): boolean {
   );
 }
 
+/** One `mine` request under its own span. */
+async function readMine(
+  url: string,
+  subjectKind: string,
+  attributes: Record<string, string | number>
+): FeedbackFetchResult<MyFeedbackDto[]> {
+  const { span, headers } = startSpan('agent_feedback.mine', subjectKind);
+  for (const [attribute, value] of Object.entries(attributes))
+    span.setAttr(attribute, value);
+  try {
+    const result = await fetchWithToken<MyFeedbackResponseDto>(
+      `${host()}${url}`,
+      { method: 'GET', headers, trace: { parentSpan: span } }
+    );
+    // A 404 (feature off) or 403 is an answer, not a failure.
+    if (result.isErr() && !isRefusal(result.error))
+      span.error('Reading agent feedback failed');
+    return result.map(({ items }) => {
+      span.setAttr('agent_feedback.count', items.length);
+      return items;
+    });
+  } finally {
+    span.end();
+  }
+}
+
+type MineAnswer = Result<MyFeedbackDto[], FetchErrors>;
+
+type SuggestionRead = { id: string; resolve: (answer: MineAnswer) => void };
+
+/**
+ * Suggestion reads made together (the rows of one list mounting) share one
+ * request of at most `SUGGESTION_MINE_MAX_IDS` ids; each read gets its own
+ * items.
+ */
+function createSuggestionMineBatcher(
+  read: (ids: string[]) => Promise<MineAnswer>
+) {
+  const batcher = new AsyncBatcher<SuggestionRead>(
+    async (reads) => {
+      const answer = await read([...new Set(reads.map((r) => r.id))]);
+      for (const { id, resolve } of reads)
+        resolve(
+          answer.map((items) => items.filter((item) => item.subjectId === id))
+        );
+    },
+    {
+      wait: SUGGESTION_BATCH_WINDOW_MS,
+      maxSize: SUGGESTION_MINE_MAX_IDS,
+      onError: (error, reads) => {
+        for (const { resolve } of reads)
+          resolve(err([{ code: 'UNKNOWN_ERROR', message: String(error) }]));
+      },
+      throwOnError: false,
+    }
+  );
+  return (id: string) =>
+    new Promise<MineAnswer>((resolve) => {
+      fireAndForget(batcher.addItem({ id, resolve }), 'agent-feedback');
+    });
+}
+
+const readSuggestionMine = createSuggestionMineBatcher((ids) =>
+  readMine(suggestionsMineUrl(ids), 'suggestion', {
+    'agent_feedback.requested': ids.length,
+  })
+);
+
+function readContainer(container: FeedbackContainer): Promise<MineAnswer> {
+  if (container.kind === 'suggestion')
+    return readSuggestionMine(container.suggestionId);
+  const url = mineUrl(container);
+  if (!url) return Promise.resolve(err(UNKNOWN_SUBJECT));
+  return readMine(url, container.kind, {});
+}
+
 export const agentFeedbackClient: AgentFeedbackClient = {
   async mine(container) {
-    const url = mineUrl(container);
-    if (!url) return err(UNKNOWN_SUBJECT);
-    const { span, headers } = startSpan('agent_feedback.mine', container.kind);
-    try {
-      const result = await fetchWithToken<MyFeedbackResponse>(
-        `${host()}${url}`,
-        { method: 'GET', headers, trace: { parentSpan: span } }
-      );
-      // A 404 (feature off) or 403 is an answer, not a failure.
-      if (result.isErr() && !isRefusal(result.error))
-        span.error('Reading agent feedback failed');
-      return result.map(({ items }) => {
-        const rated = items.flatMap((item) => toItem(container, item));
-        span.setAttr('agent_feedback.count', rated.length);
-        return rated;
-      });
-    } finally {
-      span.end();
-    }
+    const items = await readContainer(container);
+    return items.map((list) => list.flatMap((item) => toItem(container, item)));
   },
 
   async rate(subject, request) {
-    const url = rateUrl(subject);
+    const url = subjectUrl(subject);
     if (!url) return err(UNKNOWN_SUBJECT);
     const { span, headers } = startSubjectSpan('agent_feedback.rate', subject);
     span.setAttr('agent_feedback.id', request.id);
     span.setAttr('agent_feedback.rating', request.rating);
     span.setAttr('agent_feedback.surface', request.surface);
     span.setAttr('agent_feedback.has_note', request.note !== null);
-    const body: RateFeedbackBody = {
+    const body: RateFeedbackBodyDto = {
       id: request.id,
       rating: request.rating,
       note: request.note,
