@@ -87,7 +87,9 @@ const CONFIG = {
   pg: E.PG_CONTAINER ?? 'macro-gqlprops-postgres-1',
   redis: E.REDIS_CONTAINER ?? 'macro-gqlprops-redis-1', // '' to wait out the sign-up limit instead
   headless: E.HEADED !== '1',
+  optimism: E.OPTIMISM === '1', // optimistic states only (optimism.mjs), no sequences
 };
+let DUMP_LEFT = Number(E.DUMP || 0);
 const OUT = path.resolve(
   E.OUT ??
     path.join(
@@ -142,7 +144,6 @@ const NAME_STEMS = ['Status', 'status', 'STATUS', 'priority', 'Owner', 'Due', 'S
 const OPT_STRINGS = ['Alpha', 'alpha', 'ALPHA', 'Beta', 'Ωmega', '名前', '🚀', 'Done', 'done', 'In Progress', '  spaced  ', 'Zulu', 'ärger', 'Ärger', 'Ä', 'a', 'A', 'RTL שלום', '0', '-1'];
 // Colors are for tag options only; the server refuses one on other options and a tag without one.
 const TAG_COLORS = ['#FF0000', '#00AA88', '#7C3AED', '#ffffff', '#123456', '#abcdef'];
-const COLORS = [null, null, '#FF0000', '#00AA88', '#7C3AED', '#ffffff', '#123456', '#abcdef'];
 
 function makeGen(g) {
   // The server takes 1-100 characters; one in ten long names is over, and refused.
@@ -388,23 +389,129 @@ function classify(a, b, canon = (x) => x) {
   if (JT(canon(a)) === JT(canon(b))) return 'tie-order';
   return 'diff';
 }
-// The part of an error a caller can see. `retry` is the query client's own
-// decision, computed in the page with the app's predicate (lib/queries/client.ts).
-function errorView(e) {
-  if (!e) return null;
-  if (!e.retry) throw new Error(`error without the page's retry decision: ${JSON.stringify(e)}`);
-  if (typeof e.fullMessage !== 'string') throw new Error(`error without the page's whole message: ${JSON.stringify(e)}`);
-  return e;
+// ------------------------------------------------------------ twin worlds ----
+// OLD's accounts and NEW's are different users on the same server, and each
+// side writes for real. Every id OLD's world names is paired with the id NEW's
+// world gave the same row (`pair.ids`, O -> N), and OLD's values are
+// translated into NEW's world before any comparison. An id with no pair stays
+// as it is, so a row one world has and the other lacks is a difference.
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const isUuid = (s) => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+function trString(pair, s) {
+  const direct = pair.ids.get(s);
+  if (direct !== undefined) return direct;
+  let out = s.replace(UUID_RE, (u) => pair.ids.get(u) ?? pair.ids.get(u.toLowerCase()) ?? u);
+  // the account tag names the world in every email, domain and user id
+  for (const [o, n] of pair.subst) out = out.split(o).join(n);
+  return out;
+}
+function tr(pair, x) {
+  if (!pair) return x;
+  if (Array.isArray(x)) return x.map((v) => tr(pair, v));
+  if (x && typeof x === 'object') {
+    const o = {};
+    for (const [k, v] of Object.entries(x)) o[trString(pair, k)] = tr(pair, v);
+    return o;
+  }
+  return typeof x === 'string' ? trString(pair, x) : x;
+}
+// Timestamps differ between the worlds; what a row's two stamps say is kept:
+// created, and whether it changed since.
+function stampTs(x) {
+  if (Array.isArray(x)) return x.map(stampTs);
+  if (!x || typeof x !== 'object') return x;
+  const o = {};
+  const row = isRow(x);
+  const created = Object.entries(x).find(([k]) => /^created_?at$/i.test(k))?.[1];
+  for (const [k, v] of Object.entries(x)) {
+    if (row && typeof v === 'string' && /^created_?at$/i.test(k)) o[k] = '<ts>';
+    else if (row && typeof v === 'string' && /^updated_?at$/i.test(k)) o[k] = typeof created === 'string' && (instant(v) ?? v) === (instant(created) ?? created) ? '<ts:same>' : '<ts:later>';
+    else o[k] = stampTs(v);
+  }
+  return o;
+}
+const prepN = (x) => stampTs(x);
+const prepO = (pair, x) => stampTs(tr(pair, x));
+function pairOne(pair, o, n, how) {
+  if (typeof o !== 'string' || typeof n !== 'string' || o === n) return;
+  const was = pair.ids.get(o);
+  if (was === n) return;
+  if (was !== undefined || pair.rev.has(n)) {
+    R.idMap.conflicts++;
+    return;
+  }
+  pair.ids.set(o, n);
+  pair.rev.set(n, o);
+  R.idMap[how]++;
+}
+// Two results of the same write, walked in parallel: ids at the same place pair.
+function pairIds(pair, o, n, how = 'explicit') {
+  if (isUuid(o) && isUuid(n)) return pairOne(pair, o, n, how);
+  if (Array.isArray(o) && Array.isArray(n)) {
+    if (o.length === n.length) o.forEach((v, i) => pairIds(pair, v, n[i], how));
+    return;
+  }
+  if (o && n && typeof o === 'object' && typeof n === 'object') for (const k of Object.keys(o)) if (k in n) pairIds(pair, o[k], n[k], how);
+}
+// A definition's identity apart from its ids and stamps, in NEW's world.
+const OWNER_IDS = ['user_id', 'team_id', 'userId', 'teamId'];
+function defIdentity(pair, d) {
+  const { id, created_at, updated_at, owner, ...rest } = d;
+  const own = owner && typeof owner === 'object' ? Object.fromEntries(Object.entries(owner).filter(([k]) => !OWNER_IDS.includes(k))) : owner;
+  return J(tr(pair, { ...rest, owner: own }));
+}
+const optIdentity = (o) => J({ value: o.value, order: o.display_order ?? o.displayOrder, color: o.color ?? null });
+// Rows the explicit pairing did not reach (a fallback create, what a team
+// brought, a volume of rows): equal identities pair in list order.
+function pairByIdentity(pair, os, ns, identity, onPair) {
+  const pool = new Map();
+  for (const n of ns) {
+    const k = identity(n);
+    if (!pool.has(k)) pool.set(k, []);
+    pool.get(k).push(n);
+  }
+  for (const o of os) {
+    const k = identity(o);
+    const cands = pool.get(k);
+    if (!cands?.length) continue;
+    // the row the id map already names, else the first unpaired one
+    const id = o.definition?.id ?? o.id;
+    const at = cands.findIndex((n) => (n.definition?.id ?? n.id) === (pair.ids.get(id) ?? id));
+    const i = at >= 0 ? at : cands.findIndex((n) => !pair.rev.has(n.definition?.id ?? n.id));
+    if (i < 0) continue;
+    const [n] = cands.splice(i, 1);
+    onPair(o, n);
+  }
+}
+function pairOptions(pair, os, ns) {
+  pairByIdentity(pair, os ?? [], ns ?? [], optIdentity, (o, n) => pairOne(pair, o.id, n.id, 'structural'));
+}
+async function syncIds(pair) {
+  for (const who of ['A', 'B']) {
+    const acct = pair[who];
+    const [o, n] = await Promise.all([ev(acct.old, 'setup.catalog'), ev(acct.neu, 'setup.catalog')]);
+    if (o.defs.ok && n.defs.ok)
+      pairByIdentity(pair, o.defs.value, n.defs.value, (e) => defIdentity(pair, e.definition), (a, b) => {
+        pairOne(pair, a.definition.id, b.definition.id, 'structural');
+        for (const k of OWNER_IDS) pairOne(pair, a.definition.owner?.[k], b.definition.owner?.[k], 'structural');
+        pairOptions(pair, a.property_options, b.property_options);
+      });
+    if (o.tags.ok && n.tags.ok)
+      pairByIdentity(pair, o.tags.value, n.tags.value, (s) => s.scope, (a, b) => {
+        pairOne(pair, a.definition?.id, b.definition?.id, 'structural');
+        pairOptions(pair, a.options, b.options);
+      });
+  }
 }
 
 // --------------------------------------------------------------- results ----
-const OLD_COMMIT = E.OLD_COMMIT ?? 'a03c481f726';
+const OLD_COMMIT = E.OLD_COMMIT ?? 'c8b5760036c';
 const R = {
   config: { ...CONFIG },
   commit: git('rev-parse', 'HEAD'),
   // The code under test is the web PR's head; the harness commit only adds this directory.
-  prHead: E.PR_HEAD ?? '51cc987139b',
-  identicalToPrHeadOutsideProof: git('diff', '--quiet', E.PR_HEAD ?? '51cc987139b', 'HEAD', '--', '.', ':(exclude)apps/web/src/proof') !== null,
+  prHead: E.PR_HEAD ?? '3ffe3a5f86c',
+  identicalToPrHeadOutsideProof: git('diff', '--quiet', E.PR_HEAD ?? '3ffe3a5f86c', 'HEAD', '--', '.', ':(exclude)apps/web/src/proof') !== null,
   dssBinaryBuiltAt: (() => {
     try {
       return fs.statSync(path.join(ROOT, 'target/debug/document_storage_service')).mtime.toISOString();
@@ -430,6 +537,11 @@ const R = {
   collation: null,
   settle: { samples: 0, maxMs: 0, timeouts: 0, buckets: {}, fresh: { samples: 0, maxMs: 0, timeouts: 0 } },
   staleness: { byOp: {}, mismatches: 0 },
+  // writes whose resolved value the head dropped, by operation (`VALUE_DROPPED`)
+  valueDropped: {},
+  // live differences where main's reader was stale and the head's current
+  // (see `oldStaleExcuses`), by operation and reader
+  oldStale: { byOp: {}, staleness: 0 },
   visibility: { checks: 0, oldMissing: 0, newMissing: 0, readFailures: 0 },
   harnessErrors: [],
   settleTimeouts: [], // every settle timeout, whole (first 1,000)
@@ -438,6 +550,8 @@ const R = {
   examples: {}, // class -> first few examples
   mutant: CONFIG.mutant ? { name: CONFIG.mutant, applied: 0, caughtBy: {}, firstCatch: null, ignoredAsInBaseline: 0, beforeApplied: 0, candidate: {}, candidatesBy: {}, tainted: {}, running: {}, marks: [], clock: 0, discardedCatches: 0, taintedSequences: 0 } : null,
   load: CONFIG.load ? { pages: CONFIG.load, ops: 0, errors: 0, sameUserReads: 0, sameUserErrors: 0 } : null,
+  idMap: { explicit: 0, structural: 0, conflicts: 0 },
+  writeTransport: {}, // mutation -> side -> request sequence -> n
   crashes: [],
 };
 // The clean run a mutant is measured against: its difference signatures do
@@ -493,7 +607,7 @@ const sig = (level, cls, kind, d, extra) =>
 // Levels that report on the harness and the run rather than on data the app
 // read or showed: a timeout, a write outside the tap, an uncaught page error.
 // They are still differences, but never count as catching a mutant.
-const NOT_A_CATCH = new Set(['settle', 'write-replay', 'page-errors']);
+const NOT_A_CATCH = new Set(['settle', 'write-transport', 'page-errors']);
 // Where each planted fault can show. The response mutants rewrite NEW's
 // GraphQL read responses, so any read of them; the cache mutants change what
 // NEW's live query cache holds, so only live readers, never a direct read,
@@ -520,9 +634,21 @@ function callerOk(snap, caller) {
   return src[source] !== null && src[source] !== undefined && src.failing?.[source] === false && src.placeholder?.[source] === false;
 }
 const snapshotClean = (s, expected = []) => !!s && 'callers' in s && expected.every((k) => k in s) && Object.entries(s).every(([k, v]) => (k === 'callers' ? !!v && Object.keys(v).every((c) => c === '__sources' || callerOk(s, c)) : readerOk(v)));
+// Live readers and callers whose difference is main's staleness alone, for
+// the comparison running now (set by compareStep, `oldStaleExcuses`).
+let OLD_STALE = null;
 function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
+  if (cls === 'diff' && OLD_STALE?.has(kind)) {
+    cls = 'old-stale';
+    bump(R.oldStale.byOp, here().op ?? level, kind.replace(UUID_RE, '<id>'));
+  }
   bump(R.classes, level, cls);
   if (cls === 'equal') return;
+  // DUMP=n: the first n differences in full, both sides, to out/<run>/dump.jsonl
+  if (DUMP_LEFT > 0 && cls !== 'tie-order' && cls !== 'timestamp-format') {
+    DUMP_LEFT--;
+    fs.appendFileSync(path.join(OUT, 'dump.jsonl'), `${JSON.stringify({ level, kind, cls, at: here(), old: a, neu: b })}\n`);
+  }
   const ex = (R.examples[`${level}:${cls}`] ??= []);
   // The first difference that survives normalization (timestamps, tie order).
   const norm = (x) => (x === undefined ? null : JSON.parse(JT(canon(x))));
@@ -708,7 +834,7 @@ async function login(email) {
     try {
       await page.goto(`${CONFIG.base}/app/`, { waitUntil: 'load', timeout: 180000 });
       // a page the dev server served without its modules stays blank: load it again
-      await page.getByText('Continue with email').first().click({ timeout: 60000 });
+      await page.getByText('Continue with email').first().click({ timeout: 150000 });
       await page.getByPlaceholder(/company\.com$/).fill(email);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       const outcome = await Promise.race([
@@ -740,29 +866,42 @@ async function login(email) {
 }
 
 const HARNESS = `${CONFIG.base}/src/proof/property-catalog/index.html`;
-const OLD_MODULE = /\/src\/lib\/queries\/properties\/(definitions|options|tags)\.ts(\?.*)?$/;
+// Every web module the PR changed (run.sh lists them and writes each one's
+// base copy beside it as `*.__old__.*`): an OLD page loads the base copies.
+const OLD_MODULES = new Set(JSON.parse(fs.readFileSync(path.join(HERE, 'out', 'old-modules.json'), 'utf8')));
+const oldModule = (u) => OLD_MODULES.has(new URL(u.toString()).pathname);
+const oldCopy = (p) => p.replace(/\.([a-z]+)$/, '.__old__.$1');
 // The properties service, on any host: behind the local proxy
 // (`/dss/properties/...`) or on a direct DSS port (`/properties/...`).
 const PROPS_PATH = /(^|\/)properties(\/|$)/;
 const isWrite = (req) => !['GET', 'HEAD', 'OPTIONS'].includes(req.method());
-// A GraphQL request that writes (the catalog's writes are all REST).
-// Comments are stripped first, every operation of a batch counts, and a body
-// with no query text (a persisted query) counts as a write unless it names a
-// catalog read.
-const isGraphqlMutation = (req) => {
+// The operations of a GraphQL request that writes, by name. Comments are
+// stripped first, every operation of a batch counts, and a body with no query
+// text (a persisted query) counts as a write unless it names a catalog read.
+function graphqlMutationOps(req) {
   // A GET (the app's cached reads) or an empty POST carries no operation.
-  if (!isWrite(req)) return false;
+  if (!isWrite(req)) return [];
   let body;
   try {
     body = req.postDataJSON();
   } catch {
-    return false;
+    return [];
   }
-  if (body === null || body === undefined) return false;
-  return (Array.isArray(body) ? body : [body]).some((b) => {
-    if (typeof b?.query !== 'string') return !String(b?.operationName ?? '').startsWith('PropertyCatalog');
-    return /(^|[\s}])(mutation|subscription)\b/.test(b.query.replace(/#[^\n\r]*/g, ' '));
+  if (body === null || body === undefined) return [];
+  return (Array.isArray(body) ? body : [body]).flatMap((b) => {
+    const name = b?.operationName ?? null;
+    if (typeof b?.query !== 'string') return String(name ?? '').startsWith('PropertyCatalog') ? [] : [name ?? '(unnamed)'];
+    const text = b.query.replace(/#[^\n\r]*/g, ' ');
+    const m = /(^|[\s}])(mutation|subscription)\s*([A-Za-z_][A-Za-z0-9_]*)?/.exec(text);
+    return m ? [name ?? m[3] ?? '(unnamed)'] : [];
   });
+}
+const graphqlOp = (req) => {
+  try {
+    return req.postDataJSON()?.operationName ?? null;
+  } catch {
+    return null;
+  }
 };
 // Writes the page sends outside the properties service and GraphQL, by side,
 // tap mode and route (ids masked): a census, and in a write window a stray.
@@ -778,9 +917,9 @@ const IGNORED_WRITE = /^POST [^ ]+\/auth\/jwt\/refresh$/;
 async function openSide(storageState, side, label) {
   const bctx = await browser.newContext({ ...CTX_OPTS, storageState });
   await baseRoutes(bctx);
-  // mode: pass (no write expected), setup (the runner's own NEW writes),
-  // record (NEW, in a write window), replay (OLD, in a write window)
-  const tap = { mode: 'pass', rec: [], queue: [], mismatches: [], stray: [], mutantArmed: false };
+  // mode: pass (no write expected), setup (the runner's own writes), write
+  // (a write window: every write the page sends is counted in `window`)
+  const tap = { mode: 'pass', window: [], stray: [], mutantArmed: false };
   const sameUserLoad = CONFIG.load > 0 && side === 'neu' && /^L\d/.test(label);
   if (sameUserLoad)
     await bctx.exposeBinding('__sameUserTick', (_src, ok) => {
@@ -789,64 +928,19 @@ async function openSide(storageState, side, label) {
     });
   const old = side === 'old' || CONFIG.control;
   if (old)
-    await bctx.route(OLD_MODULE, async (r) => {
+    await bctx.route(oldModule, async (r) => {
       const u = new URL(r.request().url());
-      u.pathname = u.pathname.replace(/\.ts$/, '.__old__.ts');
+      u.pathname = oldCopy(u.pathname);
       // A failed module fetch fails the page load, which loadHarness retries; it
       // must never fall back to the head's module on the OLD side.
       const resp = await r.fetch({ url: u.toString(), maxRedirects: 0 }).catch((e) => (harnessError(`${label}: old module ${u.pathname}: ${firstLine(e)}`), null));
       if (!resp || resp.status() !== 200) return r.abort('failed');
       await r.fulfill({ response: resp });
     });
-  // Writes to the properties service: recorded on NEW, replayed on OLD, so
-  // each write reaches the server once and both sides see the same answer.
-  // The runner checks after each write that the replay matched one for one.
-  await bctx.route((u) => PROPS_PATH.test(new URL(u.toString()).pathname), async (r) => {
-    const req = r.request();
-    if (!isWrite(req)) return r.fallback();
-    const u = new URL(req.url());
-    // The origin is part of a write's identity: a replay to another host is a mismatch.
-    const entry = { method: req.method(), path: u.origin + u.pathname + u.search, body: req.postData() ?? null };
-    // setup: the runner's own writes (accounts, volume, load), NEW pages only.
-    if (tap.mode === 'setup' && side === 'neu') return r.fallback();
-    if (tap.mode === 'pass' || tap.mode === 'setup') {
-      // No write is expected here: the OLD side never writes on its own, and a
-      // NEW write outside a write window (a late retry) bypasses the replay.
-      // Either is held as a stray and recorded as a difference.
-      tap.stray.push({ ...entry, mode: tap.mode });
-      if (side === 'old') return r.fulfill({ status: 599, body: 'harness: OLD side wrote outside a replay' });
-      return r.fallback();
-    }
-    if (tap.mode === 'record') {
-      // A write the dev server never answered fails on both sides alike.
-      const resp = await r.fetch().catch((e) => (harnessError(`${label}: write ${entry.method} ${u.pathname}: ${firstLine(e)}`), null));
-      if (!resp) {
-        tap.rec.push({ ...entry, failed: true });
-        return r.abort('failed');
-      }
-      const body = await resp.text();
-      const headers = { ...resp.headers() };
-      delete headers['content-encoding'];
-      delete headers['content-length'];
-      tap.rec.push({ ...entry, status: resp.status(), headers, resp: body });
-      return r.fulfill({ status: resp.status(), headers, body });
-    }
-    const next = tap.queue.shift();
-    if (!next || next.method !== entry.method || next.path !== entry.path || next.body !== entry.body) {
-      tap.mismatches.push({ expected: next && { method: next.method, path: next.path, body: next.body }, got: entry });
-      return r.fulfill({ status: 599, body: 'harness: unexpected write' });
-    }
-    if (next.failed) return r.abort('failed');
-    return r.fulfill({ status: next.status, headers: next.headers, body: next.resp });
-  });
   if (side === 'neu' && ['drop-row', 'swap-order', 'alter-field'].includes(CONFIG.mutant)) {
     const g = rng(CONFIG.seed * 7919 + label.length);
     await bctx.route(/\/graphql/, async (r) => {
-      const req = r.request();
-      let op = null;
-      try {
-        op = req.postDataJSON()?.operationName ?? null;
-      } catch {}
+      const op = graphqlOp(r.request());
       if (!op?.startsWith('PropertyCatalog') || !tap.mutantArmed || !g.chance(CONFIG.mutantRate)) return r.fallback();
       const resp = await r.fetch().catch((e) => (harnessError(`${label}: mutant fetch: ${firstLine(e)}`), null));
       if (!resp) return r.abort('failed');
@@ -863,31 +957,46 @@ async function openSide(storageState, side, label) {
       }
     });
   }
-  // Which transport each page reads through. Raw read cases and the generator
-  // call both clients from the NEW page, so NEW's REST count includes those;
-  // the module check, not this count, shows which code each side runs.
+  // Every write the page sends. In a write window it is counted, with its
+  // answer; outside one, a catalog write (REST or a GraphQL mutation) or any
+  // other write is a stray, unless it is the runner's own setup.
+  const entries = new WeakMap();
   bctx.on('request', (req) => {
-    const p = new URL(req.url()).pathname;
+    const u = new URL(req.url());
+    const p = u.pathname;
     const role = old ? 'old side' : 'new side';
-    if (PROPS_PATH.test(p) && !isWrite(req)) bump(R.traffic, role, 'REST GET /properties');
-    else if (/graphql/.test(p)) {
-      let op = null;
-      try {
-        op = req.postDataJSON()?.operationName ?? null;
-      } catch {}
+    let entry = null;
+    if (PROPS_PATH.test(p)) {
+      if (!isWrite(req)) bump(R.traffic, role, 'REST GET /properties');
+      else entry = { kind: 'rest', method: req.method(), path: maskIds(p.replace(/^.*?\/properties/, '/properties')) };
+    } else if (/graphql/.test(p)) {
+      const op = graphqlOp(req);
       if (op?.startsWith('PropertyCatalog')) bump(R.traffic, role, `GraphQL ${op}`);
-      // A GraphQL write bypasses the tap: from OLD at any time, from NEW
-      // outside the runner's setup.
-      if (isGraphqlMutation(req)) {
-        bump(R.otherWrites, `${side}:${tap.mode}`, `GraphQL ${req.method()} ${op ?? '(unnamed)'}`);
-        if (side === 'old' || tap.mode !== 'setup') tap.stray.push({ method: 'POST', path: p, body: op, mode: tap.mode });
+      const ops = graphqlMutationOps(req);
+      if (ops.length) {
+        bump(R.otherWrites, `${side}:${tap.mode}`, `GraphQL ${ops.join('+')}`);
+        entry = { kind: 'gql', method: req.method(), path: p, op: ops.join('+') };
       }
-    } else if (isWrite(req) && !PROPS_PATH.test(p)) {
-      const u = new URL(req.url());
+    } else if (isWrite(req)) {
       const route = `${req.method()} ${u.host}${maskIds(p)}`;
       bump(R.otherWrites, `${side}:${tap.mode}`, route);
-      if (!IGNORED_WRITE.test(route) && (tap.mode === 'record' || tap.mode === 'replay' || side === 'old')) tap.stray.push({ method: req.method(), path: route, body: null, mode: tap.mode });
+      if (!IGNORED_WRITE.test(route)) entry = { kind: 'other', method: req.method(), path: route };
     }
+    if (!entry) return;
+    if (tap.mode === 'write') {
+      entry.status = null;
+      entry.failed = false;
+      entries.set(req, entry);
+      tap.window.push(entry);
+    } else if (tap.mode !== 'setup') tap.stray.push({ ...entry, mode: tap.mode });
+  });
+  bctx.on('response', (res) => {
+    const e = entries.get(res.request());
+    if (e) e.status = res.status();
+  });
+  bctx.on('requestfailed', (req) => {
+    const e = entries.get(req);
+    if (e) e.failed = true;
   });
   const page = await bctx.newPage();
   // Uncaught page errors, by side and message: one seen on one side only is a
@@ -972,9 +1081,14 @@ async function loadHarness(s) {
   const want = s.old ? `old:${OLD_COMMIT}` : 'head';
   const wrong = Object.entries(sides).filter(([, v]) => v !== want);
   if (wrong.length) throw new Error(`${s.label}: page runs the wrong query modules: ${JSON.stringify(sides)}, want ${want}`);
+  // NEW reads through the normalized cache, as the app does: a page whose
+  // cache did not start would read through the network alone.
+  if (!s.old) {
+    const cache = await ev(s, 'cacheState');
+    if (cache.init !== 'ready' || !cache.host) throw new Error(`${s.label}: normalized cache not running: ${JSON.stringify(cache)}`);
+  }
   // By physical side: in CONTROL both sides run the base commit's modules.
   R.moduleChecks[s.side]++;
-  if (s.side === 'neu' && CONFIG.mutant === 'skip-live-update') await ev(s, 'mutant.skipLiveUpdate');
   if (s.sameUserLoad) await startSameUserLoad(s);
 }
 // The first line of an error: Playwright appends the request log, cookies included.
@@ -1039,42 +1153,11 @@ function mutateResponse(json, kind, g) {
 }
 
 // ------------------------------------------------------------ comparisons ----
-const STATE_FIELDS = ['status', 'fetchStatus', 'isPending', 'isSuccess', 'isError', 'isFetched', 'isPlaceholderData', 'isLoading', 'isStale', 'isRefetching', 'isRefetchError', 'isLoadingError', 'failureCount'];
-const errorLabel = (e) => (e ? `${e.class}/${JSON.stringify(e.codes)}/${e.httpStatus}/${JSON.stringify(e.graphqlCodes)}/${e.retry}/${JSON.stringify(e.message)}` : 'none');
-// Errors are always compared, whatever the data did. A different error with
-// the same retry decision is error-shape (each old=>new pair its own
-// signature); one side failing alone, or a different retry decision, is a diff.
-// Equality reads the whole message as it is. The signature carries both
-// sides' whole messages with ids masked, and whether the ids they name are
-// the same, so a pair that differs in what it says or which ids it names is a
-// signature of its own, closed on its own.
-// Ids in the pair's two messages are numbered by first appearance across
-// both, so the signature keeps which id fills which role on each side
-// (`<id1> on <id2>` vs `<id2> on <id1>`) without the ids themselves.
-const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
-// The message's own `\` and `<` are escaped first, so literal text can
-// never read as an id token.
-function pairLabel(A, B) {
-  const n = new Map();
-  const num = (u) => n.get(u.toLowerCase()) ?? (n.set(u.toLowerCase(), n.size + 1), n.size);
-  const mask = (e) =>
-    e && {
-      ...e,
-      message: String(e.fullMessage)
-        .replace(/[\\<]/g, (c) => `\\${c}`)
-        .replace(UUID, (u) => `<id${num(u)}>`),
-    };
-  const a = mask(A);
-  const b = mask(B);
-  return `${errorLabel(a)}=>${errorLabel(b)}`;
-}
-function compareErrors(level, kind, ea, eb, extra = {}) {
-  const A = errorView(ea);
-  const B = errorView(eb);
-  if (J(A) === J(B)) return record(level, `${kind}.error`, 'equal');
-  const cls = (A === null) !== (B === null) || A?.retry !== B?.retry ? 'diff' : 'error-shape';
-  record(level, `${kind}.error`, cls, A, B, { ...extra, errorPair: pairLabel(A, B) });
-}
+// What a reader's caller can branch on: its status flags (isPlaceholderData
+// only where the hook defines it), its data, and whether it holds an error.
+// The error object itself is transport-specific (a REST result error on OLD,
+// a GraphQL CombinedError on NEW) and no caller reads its fields.
+const STATE_FIELDS = ['isPending', 'isSuccess', 'isError', 'isFetched', 'isLoading', 'isPlaceholderData'];
 function compareReader(level, id, a, b, at) {
   R.counts.readerComparisons++;
   const kind = `reader${id}`;
@@ -1087,7 +1170,7 @@ function compareReader(level, id, a, b, at) {
   if (J(sa) !== J(sb)) record(level, kind, 'state', sa, sb);
   const canon = canonFor(readerKind(id));
   record(level, `${kind}.data`, classify(a.data, b.data, canon), a.data, b.data, { clean: readerOk(a) && readerOk(b), ...at }, canon);
-  compareErrors(level, kind, a.error, b.error);
+  record(level, `${kind}.error`, (a.error === null) === (b.error === null) ? 'equal' : 'diff', { error: a.error !== null }, { error: b.error !== null });
 }
 function compareCallers(level, sa, sb, groupsFor, at) {
   const a = sa.callers;
@@ -1110,48 +1193,58 @@ const compareSnapshots = timed('compare snapshots', (level, a, b, expected, at) 
     } else compareReader(level, k, a[k], b[k], at);
   }
 });
-// Raw read case: the old queryFn and the new reader, back to back.
-const compareRaw = timed('compare raw', (kind, k, oldR, newR, account) => {
+// Raw read case: OLD's queryFn in OLD's world and NEW's read in NEW's, at
+// once. Both answering is compared as data. Both failing is compared as
+// failing: what each transport says about a failure is its own, and callers
+// see a failed read only through the reader's error state, compared above.
+const compareRaw = timed('compare raw', (pair, kind, k, oldR, newR, account) => {
   R.counts.rawCases++;
   const level = `raw:${here().phase ?? 'read'}`;
   if (oldR.ok !== newR.ok) return record(level, kind, 'diff', { ok: oldR.ok, error: oldR.error ?? null, message: oldR.message ?? null }, { ok: newR.ok, error: newR.error ?? null, message: newR.message ?? null });
   if (!oldR.ok) {
     bump(R.coverage, 'raw outcome', 'both errored');
-    return compareErrors(level, kind, oldR.error, newR.error, { oldMessage: oldR.message, newMessage: newR.message });
+    bump(R.coverage, 'raw error pair', `${oldR.error?.class}/${oldR.error?.httpStatus ?? '-'} => ${newR.error?.class}/${newR.error?.httpStatus ?? '-'}/${JSON.stringify(newR.error?.graphqlCodes ?? null)}`);
+    return record(level, `${kind}.error`, 'equal');
   }
   bump(R.coverage, 'raw outcome', 'both ok');
   const canon = canonFor(k);
-  return record(level, kind, classify(oldR.value, newR.value, canon), oldR.value, newR.value, { clean: true, account, asOf: clockNow() }, canon);
+  const a = prepO(pair, oldR.value);
+  const b = prepN(newR.value);
+  return record(level, kind, classify(a, b, canon), a, b, { clean: true, account, asOf: clockNow() }, canon);
 });
 // In CONTROL both halves of a raw case run the base commit's functions.
 const newRaw = (fn) => (CONFIG.control ? `raw.old.${fn}` : `raw.neu.${fn}`);
-async function rawCase(s, key) {
+// One read of one account: the key names OLD's ids; NEW reads its pair.
+async function rawCase(pair, who, key) {
+  const acct = pair[who];
+  const nkey = tr(pair, key);
+  const account = `L${pair.lane}${who}`;
   if (key.k === 'defs') {
     cover('listing scope', key.scope);
     cover('listing includeOptions', key.includeOptions);
     cover('listing forEntityType', key.forEntityType ?? 'none');
     const a = { scope: key.scope, includeOptions: key.includeOptions, forEntityType: key.forEntityType };
-    const [o, n] = await Promise.all([ev(s, 'raw.old.list', a), ev(s, newRaw('list'), a)]);
+    const [o, n] = await Promise.all([ev(acct.old, 'raw.old.list', a), ev(acct.neu, newRaw('list'), a)]);
     if (o.ok) {
       cover('listing size', sizeBucket(o.value.length));
       coverTies('definitions', o.value, defKey);
     }
-    compareRaw(`defs:${key.scope}:${key.includeOptions ? 'opts' : 'plain'}:${key.forEntityType ?? '-'}`, 'defs', o, n, acctKey(s.label));
+    compareRaw(pair, `defs:${key.scope}:${key.includeOptions ? 'opts' : 'plain'}:${key.forEntityType ?? '-'}`, 'defs', o, n, account);
   } else if (key.k === 'opts') {
     cover('option target', key.why ?? 'visible');
-    const [o, n] = await Promise.all([ev(s, 'raw.old.options', key.id), ev(s, newRaw('options'), key.id)]);
+    const [o, n] = await Promise.all([ev(acct.old, 'raw.old.options', key.id), ev(acct.neu, newRaw('options'), nkey.id)]);
     if (o.ok) {
       cover('options size', sizeBucket(o.value.length));
       coverTies('options', o.value, optKey);
     }
-    compareRaw(`opts:${key.why ?? 'visible'}`, 'opts', o, n, acctKey(s.label));
+    compareRaw(pair, `opts:${key.why ?? 'visible'}`, 'opts', o, n, account);
   } else {
-    const [o, n] = await Promise.all([ev(s, 'raw.old.tags'), ev(s, newRaw('tags'))]);
+    const [o, n] = await Promise.all([ev(acct.old, 'raw.old.tags'), ev(acct.neu, newRaw('tags'))]);
     if (o.ok) {
       cover('tag count', sizeBucket(o.value.reduce((t, set) => t + set.options.length, 0)));
       for (const set of o.value) coverTies('tag options', set.options, optKey);
     }
-    compareRaw('tags', 'tags', o, n, acctKey(s.label));
+    compareRaw(pair, 'tags', 'tags', o, n, account);
   }
 }
 // Rows whose server sort key is shared with a neighbour (the tie-order class
@@ -1167,10 +1260,10 @@ function coverTies(what, list, keyOf) {
 }
 
 // ---------------------------------------------------------------- catalog ----
-// What the account can see now, read through the old REST client (the
-// generator only needs ids; it never feeds the comparison).
-async function catalog(s) {
-  const [defs, tags] = await Promise.all([ev(s, 'raw.old.list', { scope: 'all', includeOptions: true }), ev(s, 'raw.old.tags')]);
+// What the account can see now in OLD's world, by REST (the generator only
+// needs OLD's ids; NEW's are their pairs, and it never feeds the comparison).
+async function catalog(pair, who) {
+  const { defs, tags } = await ev(pair[who].old, 'setup.catalog');
   const list = defs.ok ? defs.value : [];
   return {
     // a failed listing leaves the generator nothing to pick from; it is not an empty catalog
@@ -1183,53 +1276,72 @@ async function catalog(s) {
   };
 }
 const defType = (d) => (d.definition.data_type?.type ?? d.definition.data_type ?? '').toString().toUpperCase();
+const createdId = (v) => v?.id ?? v?.definition?.id ?? null;
 
 // ------------------------------------------------------------------ lanes ----
+// A lane's four accounts: A and B in OLD's world and in NEW's. The world is
+// the last part of each account's tag, so translating `-o` to `-n` there turns
+// every email, domain and user id of OLD's world into NEW's.
 async function newAccountPair(lane, generation) {
   const tag = `${CONFIG.seed}-${lane}-${generation}-${STAMP}`;
   // A domain per account: a team auto-joins its owner's domain, which must be unique.
-  const emailA = `pc-owner-${tag}@owner-${tag}.fuzz.test`;
-  const emailB = `pc-member-${tag}@member-${tag}.fuzz.test`;
-  const [stA, stB] = await Promise.all([login(emailA), login(emailB)]);
-  const A = { name: 'A', old: await openSide(stA, 'old', `L${lane}A-old`), neu: await openSide(stA, 'neu', `L${lane}A-neu`), storage: stA };
-  const B = { name: 'B', old: await openSide(stB, 'old', `L${lane}B-old`), neu: await openSide(stB, 'neu', `L${lane}B-neu`), storage: stB };
-  const pair = { lane, generation, A, B, inTeam: false, teamCreated: false, everJoined: false, bUserId: null, deleted: [], foreign: [] };
+  const email = (role, w) => `pc-${role}-${tag}-${w}@${role}-${tag}-${w}.fuzz.test`;
+  const [aO, aN, bO, bN] = await Promise.all([login(email('owner', 'o')), login(email('owner', 'n')), login(email('member', 'o')), login(email('member', 'n'))]);
+  const A = { name: 'A', old: await openSide(aO, 'old', `L${lane}A-old`), neu: await openSide(aN, 'neu', `L${lane}A-neu`) };
+  const B = { name: 'B', old: await openSide(bO, 'old', `L${lane}B-old`), neu: await openSide(bN, 'neu', `L${lane}B-neu`) };
+  const pair = { lane, generation, A, B, ids: new Map(), rev: new Map(), subst: [[`${tag}-o`, `${tag}-n`]], inTeam: false, teamCreated: false, everJoined: false, bUserId: null, deleted: [], foreign: [] };
   // B's private user definition: an id A may not read (permission dimension).
-  const bPrivate = await ev(B.neu, 'setup.rest', 'createPropertyDefinition', { body: { display_name: `B private ${tag}`, data_type: { type: 'select_string', multi: false, options: [{ display_order: 0, value: 'secret' }] }, scope: 'user' } });
-  if (bPrivate.ok) pair.foreign.push(bPrivate.value.id ?? bPrivate.value.definition?.id);
+  const body = { body: { display_name: `B private ${tag}`, data_type: { type: 'select_string', multi: false, options: [{ display_order: 0, value: 'secret' }] }, scope: 'user' } };
+  const [po, pn] = await Promise.all([ev(B.old, 'setup.rest', 'createPropertyDefinition', body), ev(B.neu, 'setup.rest', 'createPropertyDefinition', body)]);
+  if (po.ok && pn.ok) {
+    pairIds(pair, po.value, pn.value);
+    pair.foreign.push(createdId(po.value));
+  } else harnessError(`B private definition: ${po.message ?? ''} ${pn.message ?? ''}`);
+  await syncIds(pair);
   return pair;
 }
 async function closePair(pair) {
   for (const acct of [pair.A, pair.B]) for (const s of [acct.old, acct.neu]) await s.ctx.close().catch(() => {});
 }
 const sides = (pair) => [pair.A.old, pair.A.neu, pair.B.old, pair.B.neu];
-
+// Team setup runs in both worlds alike; both must succeed, or the worlds part.
+async function bothWorlds(what, f) {
+  const [o, n] = await Promise.all([f('old'), f('neu')]);
+  if (!o.ok || !n.ok) harnessError(`${what}: ${o.ok ? 'ok' : `${JSON.stringify(o.error)} ${o.message}`} / ${n.ok ? 'ok' : `${JSON.stringify(n.error)} ${n.message}`}`);
+  return [o, n];
+}
 async function teamCreate(pair, g) {
-  const t = await ev(pair.A.neu, 'setup.auth', 'createTeam', { name: `Fuzz team ${pair.lane}-${pair.generation}-${g.int(1e6)}` });
-  if (!t.ok) {
-    harnessError(`createTeam: ${JSON.stringify(t.error)} ${t.message}`);
-    return false;
-  }
+  const name = `Fuzz team ${pair.lane}-${pair.generation}-${g.int(1e6)}`;
+  const [o, n] = await bothWorlds('createTeam', (w) => ev(pair.A[w], 'setup.auth', 'createTeam', { name }));
+  if (!o.ok || !n.ok) return false;
+  pairIds(pair, o.value?.id, n.value?.id);
   pair.teamCreated = true;
   return teamJoin(pair);
 }
 async function teamJoin(pair) {
-  const link = await ev(pair.A.neu, 'setup.auth', 'createTeamInviteLink');
-  if (!link.ok) return harnessError(`invite link: ${link.message}`), false;
-  const join = await ev(pair.B.neu, 'setup.auth', 'joinTeamByInviteLink', link.value.token);
-  if (!join.ok) return harnessError(`join: ${join.message}`), false;
-  const team = await ev(pair.A.neu, 'setup.auth', 'getTeam');
-  const owner = team.ok ? team.value?.members?.find((m) => m.role === 'owner') : null;
-  const member = team.ok ? team.value?.members?.find((m) => m !== owner) : null;
-  pair.bUserId = member?.user_id ?? null;
+  const [lo, ln] = await bothWorlds('invite link', (w) => ev(pair.A[w], 'setup.auth', 'createTeamInviteLink'));
+  if (!lo.ok || !ln.ok) return false;
+  const link = { old: lo.value.token, neu: ln.value.token };
+  const [jo, jn] = await bothWorlds('join', (w) => ev(pair.B[w], 'setup.auth', 'joinTeamByInviteLink', link[w]));
+  if (!jo.ok || !jn.ok) return false;
+  const [to, tn] = await bothWorlds('getTeam', (w) => ev(pair.A[w], 'setup.auth', 'getTeam'));
+  const roles = (t) => {
+    const owner = t.ok ? t.value?.members?.find((m) => m.role === 'owner') : null;
+    return { team: t.ok ? (t.value?.team?.id ?? null) : null, owner: owner?.user_id ?? null, member: t.ok ? (t.value?.members?.find((m) => m !== owner)?.user_id ?? null) : null };
+  };
+  const ro = roles(to);
+  const rn = roles(tn);
+  for (const k of ['team', 'owner', 'member']) pairOne(pair, ro[k], rn[k], 'explicit');
+  pair.bUserId = ro.member && rn.member ? { old: ro.member, neu: rn.member } : null;
   pair.inTeam = true;
   pair.everJoined = true;
+  await syncIds(pair);
   return true;
 }
 async function teamRevoke(pair) {
   if (!pair.bUserId) return false;
-  const r = await ev(pair.A.neu, 'setup.auth', 'removeUserFromTeam', pair.bUserId);
-  if (!r.ok) return harnessError(`remove: ${r.message}`), false;
+  const [o, n] = await bothWorlds('remove', (w) => ev(pair.A[w], 'setup.auth', 'removeUserFromTeam', pair.bUserId[w]));
+  if (!o.ok || !n.ok) return false;
   pair.inTeam = false;
   return true;
 }
@@ -1251,9 +1363,11 @@ function chooseKeys(g, cat, pair) {
     return seen.has(id) ? false : (seen.add(id), true);
   });
 }
+const keysFor = (pair, s, keys) => (s.side === 'old' ? keys : tr(pair, keys));
 async function setKeys(pair, keys) {
   pair.keys = keys;
-  await Promise.all(sides(pair).map((s) => ev(s, 'setKeys', keys)));
+  // OLD opens the keys as they name its world, NEW their pairs
+  await Promise.all(sides(pair).map((s) => ev(s, 'setKeys', keysFor(pair, s, keys))));
   for (const k of keys) cover('open reader', k.k === 'defs' ? `defs:${k.scope}` : k.k);
 }
 // What a side that timed out was still waiting on: its busy queries, its API
@@ -1293,38 +1407,86 @@ async function settleAll(pair) {
   return res.map((t) => t.timedOut);
 }
 const SIDE_NAMES = ['A old', 'A new', 'B old', 'B new'];
-// Writes a side sent outside a write window (OLD on its own, a late NEW
-// retry, a GraphQL mutation): each is a difference, checked before any
-// window resets the list and at every comparison.
+// Writes a side sent outside a write window (a late retry, a mutation the
+// cache replayed on its own, OLD writing by itself): each is a difference,
+// checked before any window opens and at every comparison.
 function checkStray(pair) {
   for (const [who, s] of [['A new', pair.A.neu], ['A old', pair.A.old], ['B new', pair.B.neu], ['B old', pair.B.old]]) {
     if (!s.tap.stray.length) continue;
-    record('write-replay', `write outside the tap (${who})`, 'diff', [], s.tap.stray.map(({ method, path, mode }) => ({ method, path: path.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>'), mode })));
+    record('write-transport', `write outside a write window (${who})`, 'diff', [], s.tap.stray.map(({ kind, method, path, op, mode }) => ({ kind, method, path: maskIds(path), op, mode })));
     s.tap.stray = [];
   }
 }
 // After a step: live (open readers) OLD vs NEW, fresh (a cold load) OLD vs
-// NEW, and within each side live vs fresh, whose staleness must match.
+// NEW, and within each side live vs fresh, whose staleness must match. OLD's
+// snapshots are translated into NEW's world first.
+// Main's staleness alone. A live reader (or caller) whose difference is only
+// that main missed an update: main's live copy differs from main's own cold
+// mount, the head's live copy equals the head's cold mount, and the two cold
+// mounts agree. Such a difference is class `old-stale`, counted by operation
+// and reader in `oldStale` instead of as a difference; a head that is stale
+// itself, or reads otherwise cold, never qualifies.
+function oldStaleExcuses(lo, ln, fo, fn) {
+  const out = new Set();
+  const same = (x, y, canon) => JT(canon(x)) === JT(canon(y));
+  for (const k of new Set([...Object.keys(lo), ...Object.keys(ln)])) {
+    if (k === 'callers') continue;
+    const canon = canonFor(readerKind(k));
+    const d = (s) => s?.[k]?.data;
+    if (!same(d(lo), d(fo), canon) && same(d(ln), d(fn), canon) && same(d(fo), d(fn), canon)) out.add(`reader${k}.data`);
+  }
+  const of = (s, c) => s?.callers?.[c];
+  const gOld = callerGroups(lo, fo);
+  const gNew = callerGroups(ln, fn);
+  const gFresh = callerGroups(fo, fn);
+  for (const c of new Set([...Object.keys(lo?.callers ?? {}), ...Object.keys(ln?.callers ?? {})])) {
+    if (c === '__sources') continue;
+    const by = (g) => (x) => canonCallers(x, g(c));
+    if (!same(of(lo, c), of(fo, c), by(gOld)) && same(of(ln, c), of(fn, c), by(gNew)) && same(of(fo, c), of(fn, c), by(gFresh))) out.add(`caller.${c}`);
+  }
+  return out;
+}
+// The staleness record, given each side's stale keys: main's staleness alone
+// when the head's stale keys are a subset of main's and every key only main
+// has stale is excused (for `callers`, every caller main has stale).
+function staleOnlyOnOld(so, sn, excuses, lo, fo) {
+  if (!sn.every((k) => so.includes(k))) return false;
+  const gOld = callerGroups(lo, fo);
+  return so
+    .filter((k) => !sn.includes(k))
+    .every((k) => {
+      if (k !== 'callers') return excuses.has(`reader${k}.data`);
+      const stale = Object.keys(lo?.callers ?? {}).filter((c) => c !== '__sources' && JT(canonCallers(lo.callers[c], gOld(c))) !== JT(canonCallers(fo?.callers?.[c], gOld(c))));
+      return stale.length > 0 && stale.every((c) => excuses.has(`caller.${c}`));
+    });
+}
 async function compareStep(pair, level, op) {
   checkStray(pair);
   const timedOut = await settleAll(pair);
+  const news = [pair.A.neu, pair.B.neu];
   if (CONFIG.mutant === 'stale-cache') {
-    const pages = [pair.A.neu, pair.B.neu];
-    const restored = await Promise.all(pages.map((s) => ev(s, 'mutant.restoreCache')));
+    const restored = await Promise.all(news.map((s) => ev(s, 'mutant.restoreCache')));
     if (restored.some((x) => x.restored > 0)) R.mutant.applied++;
-    restored.forEach((x, i) => x.restored > 0 && mark(pages[i].label, { kind: 'stale-cache', readers: x.readers }));
+    restored.forEach((x, i) => x.restored > 0 && mark(news[i].label, { kind: 'stale-cache', readers: x.readers.map((r) => ({ id: r.id, data: prepN(r.data) })) }));
   }
-  if (CONFIG.mutant === 'skip-live-update') await takeSkipped(pair.A.neu, pair.B.neu);
+  if (CONFIG.mutant === 'skip-live-update') {
+    const n = await Promise.all(news.map((s) => ev(s, 'mutant.takeFrozen')));
+    R.mutant.applied += n.reduce((a, x) => a + x.count, 0);
+    n.forEach((x, i) => x.count > 0 && mark(news[i].label, { kind: 'skip-live-update', readers: x.readers.map((r) => ({ id: r.id, data: prepN(r.data) })) }));
+  }
   const keys = pair.keys;
-  const expected = keys.map((k) => JSON.stringify(k));
+  const expected = tr(pair, keys).map((k) => JSON.stringify(k));
+  const prep = (s, x) => (s.side === 'old' ? prepO(pair, x) : prepN(x));
   // Only a fault applied before a snapshot was taken can show in it.
   const liveAsOf = clockNow();
-  const [liveAo, liveAn, liveBo, liveBn] = await Promise.all(sides(pair).map((s) => ev(s, 'snapshot')));
+  const [liveAo, liveAn, liveBo, liveBn] = await Promise.all(sides(pair).map(async (s) => prep(s, await ev(s, 'snapshot'))));
+  // the frozen readers go back to live before the fresh mounts read
+  if (CONFIG.mutant === 'skip-live-update') await Promise.all(news.map((s) => ev(s, 'mutant.release')));
   const fresh = await Promise.all(
     sides(pair).map(async (s) => {
       const since = Date.now();
-      const f = await ev(s, 'fresh', keys, CONFIG.settleMs);
-      return { ...f, timing: withWaitedOn(s, f.timing, since), asOf: clockNow() };
+      const f = await ev(s, 'fresh', keysFor(pair, s, keys), CONFIG.settleMs);
+      return { snap: prep(s, f.snap), timing: withWaitedOn(s, f.timing, since), asOf: clockNow() };
     })
   );
   R.counts.freshMounts += 4;
@@ -1347,7 +1509,11 @@ async function compareStep(pair, level, op) {
     const account = `L${pair.lane}${who}`;
     // the cold NEW mount of this account, which a cache fault's catch must disagree with
     if (R.mutant) R.mutant.freshNew = freshOut[at + 1] ? null : fn;
+    // main's staleness alone is excused only with both cold mounts in hand
+    const excuses = freshOutHere ? new Set() : oldStaleExcuses(lo, ln, fo, fn);
+    OLD_STALE = excuses;
     if (!liveOut) compareSnapshots(`${level}:live`, lo, ln, expected, { account, asOf: liveAsOf });
+    OLD_STALE = null;
     if (R.mutant) R.mutant.freshNew = null;
     if (!freshOutHere) compareSnapshots(`${level}:fresh`, fo, fn, expected, { account, asOf: fresh[at + 1].asOf });
     if (liveOut || freshOutHere) continue;
@@ -1367,7 +1533,10 @@ async function compareStep(pair, level, op) {
     const sn = stale(ln, fn);
     if (so.length) bump(R.staleness.byOp, `${op}:${who}`, 'old');
     if (sn.length) bump(R.staleness.byOp, `${op}:${who}`, 'new');
-    if (J(so) !== J(sn)) {
+    if (J(so) !== J(sn) && staleOnlyOnOld(so, sn, excuses, lo, fo)) {
+      R.oldStale.staleness++;
+      record(`${level}:staleness`, `stale keys ${who}`, 'old-stale', so, sn);
+    } else if (J(so) !== J(sn)) {
       R.staleness.mismatches++;
       record(`${level}:staleness`, `stale keys ${who}`, 'diff', so, sn, { clean: [lo, ln, fo, fn].every((x) => snapshotClean(x, expected)), account, asOf: liveAsOf });
     } else record(`${level}:staleness`, `stale keys ${who}`, 'equal');
@@ -1378,112 +1547,161 @@ async function compareStep(pair, level, op) {
   // the live comparison above saw it.
   const pending = pair.imperative ?? [];
   pair.imperative = [];
-  for (const { actor, id } of pending) await compareImperative(pair[actor], id);
+  for (const { actor, id } of pending) await compareImperative(pair, actor, id);
   checkStray(pair);
-}
-async function takeSkipped(...pages) {
-  const n = await Promise.all(pages.map((s) => ev(s, 'mutant.takeSkipped')));
-  R.mutant.applied += n.reduce((a, x) => a + x.count, 0);
-  n.forEach((x, i) => x.count > 0 && mark(pages[i].label, { kind: 'skip-live-update', readers: x.readers }));
 }
 
-// One write, through the real mutation hooks: NEW performs it against the
-// server, OLD replays NEW's recorded requests and responses.
+// One write, through the real mutation hooks, in both worlds at once: OLD's
+// hook with OLD's ids, NEW's with their pairs. Each really writes.
 // The answers the properties service gives a write it refuses on its merits.
-const REFUSAL_STATUSES = new Set([400, 403, 409, 422]);
+const REFUSAL_STATUSES = new Set([400, 403, 404, 409, 422]);
 // An option's value as written: the API returns `{ type, value }`.
 const optValue = (v) => (v && typeof v === 'object' ? v.value : v);
+// The GraphQL operations each NEW hook may send, the last one the write itself.
+// Writes the head resolves with nothing where main resolved with the changed
+// option. The head's hooks type the result `void`, so the type check proves no
+// caller reads it; the one caller, the tag editor, passes `onSuccess: onClose`
+// (`() => void`). The value is left out of their mutation-result comparison.
+const VALUE_DROPPED = {
+  updateTag: 'TagEditorDialog closes on success and reads no value',
+  updateOption: 'no caller outside tests',
+};
+const NEW_OPS = {
+  createDef: ['CreatePropertyDefinition'],
+  deleteDef: ['DeletePropertyDefinition'],
+  addOption: ['AddPropertyOption'],
+  updateOption: ['UpdatePropertyOption'],
+  deleteOption: ['DeletePropertyOption'],
+  ensureTagSet: ['EnsureTagSet'],
+  createTag: ['EnsureTagSet', 'AddPropertyOption'],
+  updateTag: ['UpdatePropertyOption'],
+  deleteTag: ['DeletePropertyOption'],
+  promoteTag: ['PromoteTag'],
+  mergeTag: ['MergeTag'],
+};
+// What one side sent in its write window, and what is wrong with it: OLD
+// (main's code) writes through REST only, NEW through GraphQL mutations only,
+// and a write that succeeded sent the request that does it.
+function transport(name, s, res) {
+  const w = s.tap.window;
+  const seq = w.map((e) => (e.kind === 'gql' ? `GraphQL ${e.op}` : `${e.kind === 'rest' ? 'REST' : 'other'} ${e.method} ${e.path}`));
+  bump(R.writeTransport, name, s.old ? 'main modules' : 'head modules', seq.join(', ') || '(none)');
+  const rest = w.filter((e) => e.kind === 'rest');
+  const ops = w.filter((e) => e.kind === 'gql').flatMap((e) => e.op.split('+'));
+  const problems = [];
+  if (w.some((e) => e.kind === 'other')) problems.push('a write outside the catalog');
+  if (s.old) {
+    if (ops.length) problems.push('main sent a GraphQL mutation');
+    if (res.ok && !rest.length) problems.push('succeeded without a request');
+  } else {
+    if (rest.length) problems.push('head sent a REST catalog write');
+    if (ops.some((o) => !NEW_OPS[name].includes(o))) problems.push('head sent another GraphQL operation');
+    if (res.ok && ops.at(-1) !== NEW_OPS[name].at(-1)) problems.push(`succeeded without ${NEW_OPS[name].at(-1)} last`);
+  }
+  return { sent: seq, problems };
+}
+// A request in the window that never got an answer, or a server failure:
+// a write refused for that reason is not refused on its merits.
+const transportFailed = (s, res) => s.tap.window.some((e) => e.failed || (e.status !== null && e.status >= 500)) || res.error?.network === true;
 async function write(pair, actor, name, vars) {
   const acct = pair[actor];
+  const nvars = tr(pair, vars);
   if (CONFIG.mutant === 'stale-cache') await ev(acct.neu, 'mutant.takeCache');
+  if (CONFIG.mutant === 'skip-live-update') await ev(acct.neu, 'mutant.freeze');
   acct.neu.tap.mutantArmed = true;
   checkStray(pair);
-  acct.neu.tap.rec = [];
-  acct.neu.tap.mode = 'record';
-  const n = await ev(acct.neu, 'mutate', name, vars);
-  acct.neu.tap.mode = 'pass';
-  if (CONFIG.mutant === 'skip-live-update') await takeSkipped(acct.neu);
-  // read-after-write: the old and new readers, right after the write returned
-  await readAfterWrite(acct.neu, name, vars, n);
-  acct.old.tap.queue = [...acct.neu.tap.rec];
-  acct.old.tap.mismatches = [];
-  acct.old.tap.mode = 'replay';
-  const o = await ev(acct.old, 'mutate', name, vars);
-  acct.old.tap.mode = 'pass';
-  // The replay must be the recorded writes, one for one, in order: a write
-  // OLD sent differently, or did not send, is a difference in the write path.
-  const replay = { requests: acct.neu.tap.rec.length, unused: acct.old.tap.queue.map(({ method, path, body }) => ({ method, path, body })), mismatches: acct.old.tap.mismatches };
-  bump(R.coverage, 'write requests per mutation', String(replay.requests));
-  // Every catalog write sends at least one request: a hook that succeeded
-  // without one (on either side) wrote nothing the replay could compare.
-  const empty = (n.ok || o.ok) && replay.requests === 0;
-  record('write-replay', empty ? `${name}: succeeded without a request` : name, replay.unused.length || replay.mismatches.length || empty ? 'diff' : 'equal', { sent: 'as recorded' }, replay);
-  checkStray(pair);
-  bump(R.ops, `${name}:${actor}`, n.ok ? 'ok' : 'rejected');
+  for (const s of [acct.old, acct.neu]) {
+    s.tap.window = [];
+    s.tap.mode = 'write';
+  }
+  const [o, n] = await Promise.all([ev(acct.old, 'mutate', name, vars), ev(acct.neu, 'mutate', name, nvars)]);
+  for (const s of [acct.old, acct.neu]) s.tap.mode = 'pass';
+  const to = transport(name, acct.old, o);
+  const tn = transport(name, acct.neu, n);
+  const problems = [...to.problems.map((p) => `old: ${p}`), ...tn.problems.map((p) => `new: ${p}`)];
+  bump(R.coverage, 'write requests per mutation', `${to.sent.length}/${tn.sent.length}`);
+  record('write-transport', problems.length ? `${name}: ${problems.join('; ')}` : name, problems.length ? 'diff' : 'equal', { sent: to.sent }, { sent: tn.sent });
+  // the ids each world gave the rows this write made, then any it did not name
+  if (o.ok && n.ok) pairIds(pair, o.value, n.value);
+  await syncIds(pair);
+  bump(R.ops, `${name}:${actor}`, o.ok === n.ok ? (n.ok ? 'ok' : 'rejected') : `old ${o.ok ? 'ok' : 'rejected'}, new ${n.ok ? 'ok' : 'rejected'}`);
   // What a create made, for every create (fallbacks included), once it succeeded.
-  if (n.ok && name === 'createDef') {
+  if (o.ok && name === 'createDef') {
     const body = vars.body;
     cover('created data type', body.data_type.type);
     cover('created scope', body.scope);
     if (/[^\x00-\x7f]/.test(body.display_name)) cover('odd value', 'unicode name');
     if (body.display_name.length > 60) cover('odd value', 'long name');
   }
-  if (n.ok && name === 'createTag') cover('tag scope', vars.scope);
-  if (!n.ok) {
-    const why = (R.rejections[`${name}:${actor}`] ??= {});
-    const msg = `${n.error?.class} ${JSON.stringify(n.error?.codes)} ${String(n.message).slice(0, 80)}`;
+  if (o.ok && name === 'createTag') cover('tag scope', vars.scope);
+  for (const [side, x] of [['old', o], ['new', n]]) {
+    if (x.ok) continue;
+    const why = (R.rejections[`${name}:${actor}:${side}`] ??= {});
+    const msg = `${x.error?.class} ${JSON.stringify(x.error?.codes ?? x.error?.graphqlCodes)} ${maskIds(String(x.message)).slice(0, 80)}`;
     why[msg] = (why[msg] ?? 0) + 1;
   }
   // What the caller of mutateAsync gets: resolved with a value, or rejected
-  // with an error and message.
-  const view = (x) => (x.ok ? { ok: true, value: x.value } : { ok: false, error: x.error, message: x.message });
-  record('mutation-result', name, classify(view(o), view(n)), view(o), view(n));
+  // with what the callers branch on (a reserved name, a tag conflict); and
+  // the toasts the hook showed either way.
+  // A write the head resolves with nothing, where main resolved with the row
+  // (`VALUE_DROPPED`): only whether it resolved, and its toasts, are compared.
+  const dropped = n.ok && n.value === undefined && VALUE_DROPPED[name];
+  if (dropped && o.ok && o.value !== undefined) bump(R.valueDropped, name, 'main resolved a value');
+  const view = (x) => (x.ok ? { ok: true, ...(dropped ? {} : { value: x.value }), toasts: x.toasts } : { ok: false, contract: x.contract, toasts: x.toasts });
+  const vo = prepO(pair, view(o));
+  const vn = prepN(view(n));
+  record('mutation-result', name, classify(vo, vn), vo, vn, { account: `L${pair.lane}${actor}`, ...(o.ok ? {} : { oldMessage: maskIds(String(o.message)) }), ...(n.ok ? {} : { newMessage: maskIds(String(n.message)) }) });
+  // read-after-write: both worlds' readers, right after the write returned
+  await readAfterWrite(pair, actor, name, vars, o, n);
   // The imperative read the property editor runs on a definition it just
   // created or changed (fetchPropertyDefinitionWithOptions), OLD vs NEW.
-  const defId = name === 'createDef' ? (n.ok ? (n.value?.id ?? n.value?.definition?.id) : null) : (vars?.propertyDefinitionId ?? null);
+  const defId = name === 'createDef' ? (o.ok ? createdId(o.value) : null) : (vars?.propertyDefinitionId ?? null);
   if (defId) (pair.imperative ??= []).push({ actor, id: defId });
-  // Both sides refused it on the server's own refusal of the request (every
-  // request answered with one, replayed one for one): not a transport, auth,
-  // rate-limit or server failure.
-  const refused = !n.ok && !o.ok && replay.requests > 0 && !replay.unused.length && !replay.mismatches.length && acct.neu.tap.rec.every((x) => !x.failed && REFUSAL_STATUSES.has(x.status));
-  return { n, refused };
+  // Both worlds refused it on the server's own refusal (OLD's REST answered
+  // with a refusal; nothing failed in transport on either side).
+  const refused = !o.ok && !n.ok && !transportFailed(acct.old, o) && !transportFailed(acct.neu, n) && acct.old.tap.window.some((e) => e.kind === 'rest' && REFUSAL_STATUSES.has(e.status));
+  return { o, n, refused };
 }
 const canonDefWithOptions = (x) => (x && Array.isArray(x.property_options) ? { ...x, property_options: canonOptions(x.property_options) } : x);
-async function compareImperative(acct, id) {
+async function compareImperative(pair, actor, id) {
   R.counts.imperativeReads++;
-  const [o, n] = await Promise.all([ev(acct.old, 'imperative.fetchDefinitionWithOptions', id), ev(acct.neu, 'imperative.fetchDefinitionWithOptions', id)]);
-  if (o.ok !== n.ok) return record('imperative', 'fetchPropertyDefinitionWithOptions', 'diff', o, n);
-  if (!o.ok) return compareErrors('imperative', 'fetchPropertyDefinitionWithOptions', o.error, n.error, { oldMessage: o.message, newMessage: n.message });
-  record('imperative', 'fetchPropertyDefinitionWithOptions', classify(o.value, n.value, canonDefWithOptions), o.value, n.value, { clean: true, account: acctKey(acct.neu.label), asOf: clockNow() }, canonDefWithOptions);
+  const acct = pair[actor];
+  const [o, n] = await Promise.all([ev(acct.old, 'imperative.fetchDefinitionWithOptions', id), ev(acct.neu, 'imperative.fetchDefinitionWithOptions', tr(pair, id))]);
+  if (o.ok !== n.ok) return record('imperative', 'fetchPropertyDefinitionWithOptions', 'diff', { ok: o.ok, message: o.message ?? null }, { ok: n.ok, message: n.message ?? null });
+  if (!o.ok) return record('imperative', 'fetchPropertyDefinitionWithOptions.error', 'equal');
+  const a = prepO(pair, o.value);
+  const b = prepN(n.value);
+  record('imperative', 'fetchPropertyDefinitionWithOptions', classify(a, b, canonDefWithOptions), a, b, { clean: true, account: `L${pair.lane}${actor}`, asOf: clockNow() }, canonDefWithOptions);
 }
-// Read-after-write: the old and new readers right after a write (or an
-// out-of-band change), then whether the write is visible to each.
-async function readAfterWrite(s, name, vars, result) {
+// Read-after-write: both worlds' reads right after a write (or an
+// out-of-band change, o and n null), then whether the write is visible to each.
+async function readAfterWrite(pair, who, name, vars, o, n) {
   const keys = [{ k: 'defs', scope: 'all', includeOptions: true }, { k: 'tags' }];
   const defId = vars?.propertyDefinitionId ?? vars?.definitionId;
-  // result is null for an out-of-band change, which happened when it returns
-  if (defId) keys.push({ k: 'opts', id: defId, why: result && !result.ok ? 'failed write' : 'just written' });
+  if (defId) keys.push({ k: 'opts', id: defId, why: o && !o.ok ? 'failed write' : 'just written' });
   const c = here();
   const prev = c.phase;
   c.phase = 'read-after-write';
-  for (const key of keys) await rawCase(s, key);
+  for (const key of keys) await rawCase(pair, who, key);
   c.phase = prev;
-  if (!result?.ok || (name !== 'createDef' && name !== 'deleteDef')) return;
+  if (!o?.ok || !n?.ok || (name !== 'createDef' && name !== 'deleteDef')) return;
   // visibility: the write is in both readers' answer right away
-  const id = name === 'createDef' ? (result.value?.id ?? result.value?.definition?.id) : vars.definitionId;
+  const acct = pair[who];
+  const idO = name === 'createDef' ? createdId(o.value) : vars.definitionId;
+  const idN = name === 'createDef' ? createdId(n.value) : tr(pair, vars.definitionId);
   const a = { scope: 'all', includeOptions: false };
-  const [o, n] = await Promise.all([ev(s, 'raw.old.list', a), ev(s, newRaw('list'), a)]);
+  const [lo, ln] = await Promise.all([ev(acct.old, 'raw.old.list', a), ev(acct.neu, newRaw('list'), a)]);
   R.visibility.checks++;
-  if (!o.ok || !n.ok) {
+  if (!lo.ok || !ln.ok) {
     R.visibility.readFailures++;
-    return record('visibility', `${name}: listing failed`, 'diff', { ok: o.ok, error: o.error ?? null }, { ok: n.ok, error: n.error ?? null });
+    return record('visibility', `${name}: listing failed`, 'diff', { ok: lo.ok, error: lo.error ?? null }, { ok: ln.ok, error: ln.error ?? null });
   }
-  const has = (x) => x.value.some((d) => (d.definition?.id ?? d.id) === id);
+  const has = (x, id) => x.value.some((d) => (d.definition?.id ?? d.id) === id);
   const want = name === 'createDef';
-  if (has(o) !== want) R.visibility.oldMissing++;
-  if (has(n) !== want) R.visibility.newMissing++;
-  const shown = { expected: want, old: has(o), new: has(n) };
-  record('visibility', name, shown.old === want && shown.new === want ? 'equal' : 'diff', { listed: want }, { listed: { old: shown.old, new: shown.new } });
+  const shown = { old: has(lo, idO), new: has(ln, idN) };
+  if (shown.old !== want) R.visibility.oldMissing++;
+  if (shown.new !== want) R.visibility.newMissing++;
+  record('visibility', name, shown.old === want && shown.new === want ? 'equal' : 'diff', { listed: want }, { listed: shown });
 }
 
 // A seeded operation over what the account can see.
@@ -1491,8 +1709,7 @@ async function step(pair, g, gen) {
   // B also acts after it was removed from the team: its team-scope writes must
   // be refused the same way on both sides.
   const actor = g.chance(0.3) ? 'B' : 'A';
-  const acct = pair[actor];
-  const cat = await catalog(acct.neu);
+  const cat = await catalog(pair, actor);
   if (cat.listed) cover('catalog size', sizeBucket(cat.defs.length));
   const teamScope = () => (pair.teamCreated && g.chance(0.5) ? 'team' : 'user');
   // Mostly the account's own selects; now and then a system one, whose writes the server refuses.
@@ -1590,21 +1807,21 @@ const res = await write(pair, actor, 'updateTag', { propertyDefinitionId: t.prop
       if (!cat.own.length) return null;
       const d = g.pick(cat.own);
       const v = gen.name();
-      const ok = sql(`UPDATE property_definitions SET display_name = :'v', updated_at = now() WHERE id = :'id'`, { v, id: d.definition.id });
+      const ok = sqlBoth(pair, `UPDATE property_definitions SET display_name = :'v', updated_at = now() WHERE id = :'id'`, { v, id: d.definition.id }, ['id']);
       bump(R.ops, 'sqlRename', ok ? 'ok' : 'rejected');
       // a rename to the name it already had changes nothing a reader shows
       if (ok && v !== d.definition.display_name) cover('odd value', 'renamed definition');
-      await readAfterWrite(acct.neu, op, { definitionId: d.definition.id }, ok ? null : { ok: false });
+      await readAfterWrite(pair, actor, op, { definitionId: d.definition.id }, ok ? null : { ok: false }, ok ? null : { ok: false });
       return null;
     }
     case 'sqlNullColor': {
       // A tag with no color: the API refuses one, but older rows and other writers have them.
       if (!tagOpts.length) return null;
       const t = g.pick(tagOpts);
-      const ok = sql(`UPDATE property_options SET color = NULL, updated_at = now() WHERE id = :'id'`, { id: t.id });
+      const ok = sqlBoth(pair, `UPDATE property_options SET color = NULL, updated_at = now() WHERE id = :'id'`, { id: t.id }, ['id']);
       bump(R.ops, 'sqlNullColor', ok ? 'ok' : 'rejected');
       if (ok && t.color != null) cover('odd value', 'null color');
-      await readAfterWrite(acct.neu, op, { propertyDefinitionId: t.propertyDefinitionId }, ok ? null : { ok: false });
+      await readAfterWrite(pair, actor, op, { propertyDefinitionId: t.propertyDefinitionId }, ok ? null : { ok: false }, ok ? null : { ok: false });
       return null;
     }
     case 'openEditor': {
@@ -1623,7 +1840,7 @@ const res = await write(pair, actor, 'updateTag', { propertyDefinitionId: t.prop
       const [ok, event] = !pair.teamCreated ? [await teamCreate(pair, g), 'created + member joined'] : pair.inTeam ? [await teamRevoke(pair), 'member revoked'] : pair.everJoined ? [await teamJoin(pair), 'member re-joined'] : [await teamJoin(pair), 'created + member joined'];
       if (ok) cover('team event', event);
       // Membership changes what B can read: read-after-write on both accounts.
-      for (const a of [pair.A, pair.B]) await readAfterWrite(a.neu, op, {}, null);
+      for (const who of ['A', 'B']) await readAfterWrite(pair, who, op, {}, null, null);
       return null;
     }
   }
@@ -1637,6 +1854,17 @@ const DB_REFUSALS = [
   ['duplicate name', /duplicate key value violates unique constraint "unique_property_definitions_(user|team)_display_name"/],
   ['reserved system name', /Cannot create custom property with reserved system property name/],
 ];
+// The same out-of-band write in both worlds: OLD's rows by their ids, NEW's
+// by their pairs. The worlds hold the same rows, so the database must answer
+// both alike.
+function sqlBoth(pair, statement, vars, idKeys) {
+  const nvars = { ...vars };
+  for (const k of idKeys) nvars[k] = tr(pair, vars[k]);
+  const o = sql(statement, vars);
+  const n = sql(statement, nvars);
+  if (o !== n) record('sql', 'out-of-band write', 'diff', { applied: o }, { applied: n });
+  return o && n;
+}
 // An out-of-band write. It must change exactly the rows it names: a failed
 // statement or one that matched nothing is a harness failure, not a quiet
 // skip, unless the database refused it for one of the reasons above.
@@ -1686,16 +1914,16 @@ function checkCollation() {
 // Every listing key, every option id the account can name, and the tags.
 async function sweep(pair, label) {
   const outer = { ...here() };
-  for (const acct of [pair.A, pair.B]) {
-    setCtx({ lane: pair.lane, generation: pair.generation, phase: `sweep:${label}`, account: acct.name });
-    for (const lk of LIST_KEYS) await rawCase(acct.neu, { k: 'defs', ...lk });
-    await rawCase(acct.neu, { k: 'tags' });
-    const cat = await catalog(acct.neu);
+  for (const who of ['A', 'B']) {
+    setCtx({ lane: pair.lane, generation: pair.generation, phase: `sweep:${label}`, account: who });
+    for (const lk of LIST_KEYS) await rawCase(pair, who, { k: 'defs', ...lk });
+    await rawCase(pair, who, { k: 'tags' });
+    const cat = await catalog(pair, who);
     const ids = [...new Set([...cat.defs.map((d) => d.definition.id), ...cat.tagSets.filter((t) => t.definition).map((t) => t.definition.id)])];
-    for (const id of ids) await rawCase(acct.neu, { k: 'opts', id, why: cat.defs.find((d) => d.definition.id === id)?.definition.is_system ? 'system definition' : 'visible' });
-    for (const id of pair.deleted.slice(-5)) await rawCase(acct.neu, { k: 'opts', id, why: 'deleted definition' });
-    for (const id of pair.foreign) await rawCase(acct.neu, { k: 'opts', id, why: acct.name === 'B' ? 'own private definition' : "another user's private definition" });
-    await rawCase(acct.neu, { k: 'opts', id: crypto.randomUUID(), why: 'random id' });
+    for (const id of ids) await rawCase(pair, who, { k: 'opts', id, why: cat.defs.find((d) => d.definition.id === id)?.definition.is_system ? 'system definition' : 'visible' });
+    for (const id of pair.deleted.slice(-5)) await rawCase(pair, who, { k: 'opts', id, why: 'deleted definition' });
+    for (const id of pair.foreign) await rawCase(pair, who, { k: 'opts', id, why: who === 'B' ? 'own private definition' : "another user's private definition" });
+    await rawCase(pair, who, { k: 'opts', id: crypto.randomUUID(), why: 'random id' });
   }
   setCtx(outer);
 }
@@ -1719,13 +1947,13 @@ async function runLane(lane, seqCount) {
       pair = await newAccountPair(lane, Math.floor(seq / CONFIG.rotate));
       // empty account first, then (most pairs) a team from the start
       setCtx({ lane, generation: pair.generation, seq, step: 0, op: 'empty' });
-      await setKeys(pair, chooseKeys(g, await catalog(pair.A.neu), pair));
+      await setKeys(pair, chooseKeys(g, await catalog(pair, 'A'), pair));
       await compareStep(pair, 'empty', 'empty');
       if (CONFIG.sweep) await sweep(pair, 'empty');
       if (g.chance(0.75)) await teamCreate(pair, g);
     }
     setCtx({ lane, generation: pair.generation, seq, step: 0, op: 'open' });
-    await setKeys(pair, chooseKeys(g, await catalog(pair.A.neu), pair));
+    await setKeys(pair, chooseKeys(g, await catalog(pair, 'A'), pair));
     await compareStep(pair, 'open', 'open');
     for (let st = 1; st <= CONFIG.steps; st++) {
       setCtx({ lane, generation: pair.generation, seq, step: st });
@@ -1733,13 +1961,13 @@ async function runLane(lane, seqCount) {
       const c = here();
       c.phase = 'random-read';
       for (let i = 0; i < CONFIG.readsPerStep; i++) {
-        const acct = g.chance(0.7) ? pair.A : pair.B;
-        c.account = acct.name;
-        const cat = await catalog(acct.neu);
+        const who = g.chance(0.7) ? 'A' : 'B';
+        c.account = who;
+        const cat = await catalog(pair, who);
         const kind = g.weighted([['defs', 5], ['opts', 3], ['tags', 1]]);
         const ids = [...cat.selects.map((d) => d.definition.id), ...cat.tagSets.filter((t) => t.definition).map((t) => t.definition.id)];
         const key = kind === 'defs' ? { k: 'defs', ...g.pick(LIST_KEYS) } : kind === 'tags' || !ids.length ? { k: 'tags' } : { k: 'opts', id: g.pick(ids) };
-        await rawCase(acct.neu, key);
+        await rawCase(pair, who, key);
       }
       delete c.phase;
       delete c.account;
@@ -1765,50 +1993,65 @@ async function runLane(lane, seqCount) {
   }
 }
 
-// Thousands of definitions, a definition with hundreds of options, hundreds of tags.
+// Thousands of definitions, a definition with hundreds of options, hundreds of
+// tags, made alike in both worlds. Names are unique (ignoring case) so each
+// world keeps the same rows however its parallel creates interleave.
 async function volumePhase() {
   log(`volume: ${CONFIG.volume} definitions`);
   const g = rng(CONFIG.seed * 31337);
   const gen = makeGen(g);
   const pair = await newAccountPair('V', 0);
   setCtx({ lane: 'V', phase: 'volume' });
-  const bodies = Array.from({ length: CONFIG.volume }, (_, i) => ({ body: { display_name: `${gen.name()} v${i % 700}`, data_type: g.chance(0.3) ? gen.dataType() : { type: 'string' }, scope: 'user' } }));
+  const seen = new Set();
+  const bodies = [];
+  for (let i = 0; bodies.length < CONFIG.volume; i++) {
+    const display_name = `${gen.name()} v${i % 700}`;
+    const dataType = g.chance(0.3) ? gen.dataType() : { type: 'string' };
+    if (seen.has(display_name.toLowerCase())) continue;
+    seen.add(display_name.toLowerCase());
+    bodies.push({ body: { display_name, data_type: dataType, scope: 'user' } });
+  }
   const big = { body: { display_name: 'Big select', data_type: { type: 'select_string', multi: true, options: [] }, scope: 'user' } };
-  pair.A.neu.tap.mode = 'setup';
-  const res = await pair.A.neu.page.evaluate(
-    async ([bodies, big, nOpts, nTags]) => {
-      const h = window.__h;
-      const n = { ok: 0, rejected: 0, optionsOk: 0, optionsRejected: 0, tagsOk: 0, tagsRejected: 0 };
-      let next = 0;
-      const worker = async () => {
-        while (next < bodies.length) {
-          const r = await h.setup.rest('createPropertyDefinition', bodies[next++]);
-          r.ok ? n.ok++ : n.rejected++;
-        }
-      };
-      await Promise.all(Array.from({ length: 16 }, worker));
-      const count = (rs, okKey, badKey) => {
-        for (const r of rs) r.ok ? n[okKey]++ : n[badKey]++;
-      };
-      const b = await h.setup.rest('createPropertyDefinition', big);
-      const id = b.value?.id ?? b.value?.definition?.id;
-      for (let i = 0; i < nOpts; i += 16) count(await Promise.all(Array.from({ length: Math.min(16, nOpts - i) }, (_, j) => h.setup.rest('addPropertyOption', { definition_id: id, body: { type: 'select_string', option: { value: `${(i + j) % 2 ? 'Opt' : 'opt'} ${Math.floor((i + j) / 2)}`, display_order: (i + j) % 5 } } }))), 'optionsOk', 'optionsRejected');
-      const set = await h.setup.rest('ensureTagSet', { body: { scope: 'user' } });
-      const tagDef = set.value?.definition?.id;
-      for (let i = 0; i < nTags; i += 16) count(await Promise.all(Array.from({ length: Math.min(16, nTags - i) }, (_, j) => h.setup.rest('addPropertyOption', { definition_id: tagDef, body: { type: 'select_string', option: { value: `${(i + j) % 2 ? 'Tag' : 'tag'} ${Math.floor((i + j) / 2)}`, display_order: (i + j) % 3, color: '#123456' } } }))), 'tagsOk', 'tagsRejected');
-      return { ...n, bigId: id, tagDef };
-    },
-    [bodies, big, 600, 300]
-  );
-  pair.A.neu.tap.mode = 'pass';
-  R.volume = { requested: CONFIG.volume, options: 600, tags: 300, ...res };
-  log(`volume: ${JSON.stringify(res)}`);
-  if (!res.bigId || !res.tagDef || res.ok < CONFIG.volume * 0.95 || res.optionsOk < 600 * 0.95 || res.tagsOk < 300 * 0.95) throw new Error(`volume setup incomplete: ${JSON.stringify(res)}`);
-  for (const lk of LIST_KEYS) await rawCase(pair.A.neu, { k: 'defs', ...lk });
-  await rawCase(pair.A.neu, { k: 'tags' });
-  await rawCase(pair.A.neu, { k: 'opts', id: res.bigId, why: `definition with ${res.optionsOk} options` });
-  await rawCase(pair.A.neu, { k: 'opts', id: res.tagDef, why: `tag set with ${res.tagsOk} tags` });
-  await setKeys(pair, [{ k: 'tags' }, { k: 'defs', scope: 'all', includeOptions: true }, { k: 'defs', scope: 'user', includeOptions: false }, { k: 'defs', scope: 'all', includeOptions: true, forEntityType: 'TASK' }, { k: 'opts', id: res.bigId }, { k: 'opts', id: res.tagDef }]);
+  const fill = (s) =>
+    s.page.evaluate(
+      async ([bodies, big, nOpts, nTags]) => {
+        const h = window.__h;
+        const n = { ok: 0, rejected: 0, optionsOk: 0, optionsRejected: 0, tagsOk: 0, tagsRejected: 0 };
+        let next = 0;
+        const worker = async () => {
+          while (next < bodies.length) {
+            const r = await h.setup.rest('createPropertyDefinition', bodies[next++]);
+            r.ok ? n.ok++ : n.rejected++;
+          }
+        };
+        await Promise.all(Array.from({ length: 16 }, worker));
+        const count = (rs, okKey, badKey) => {
+          for (const r of rs) r.ok ? n[okKey]++ : n[badKey]++;
+        };
+        const b = await h.setup.rest('createPropertyDefinition', big);
+        const id = b.value?.id ?? b.value?.definition?.id;
+        for (let i = 0; i < nOpts; i += 16) count(await Promise.all(Array.from({ length: Math.min(16, nOpts - i) }, (_, j) => h.setup.rest('addPropertyOption', { definition_id: id, body: { type: 'select_string', option: { value: `${(i + j) % 2 ? 'Opt' : 'opt'} ${Math.floor((i + j) / 2)}`, display_order: (i + j) % 5 } } }))), 'optionsOk', 'optionsRejected');
+        const set = await h.setup.rest('ensureTagSet', { body: { scope: 'user' } });
+        const tagDef = set.value?.definition?.id;
+        for (let i = 0; i < nTags; i += 16) count(await Promise.all(Array.from({ length: Math.min(16, nTags - i) }, (_, j) => h.setup.rest('addPropertyOption', { definition_id: tagDef, body: { type: 'select_string', option: { value: `${(i + j) % 2 ? 'Tag' : 'tag'} ${Math.floor((i + j) / 2)}`, display_order: (i + j) % 3, color: '#123456' } } }))), 'tagsOk', 'tagsRejected');
+        return { ...n, bigId: id, tagDef };
+      },
+      [bodies, big, 600, 300]
+    );
+  for (const s of [pair.A.old, pair.A.neu]) s.tap.mode = 'setup';
+  const [ro, rn] = await Promise.all([fill(pair.A.old), fill(pair.A.neu)]);
+  for (const s of [pair.A.old, pair.A.neu]) s.tap.mode = 'pass';
+  pairOne(pair, ro.bigId, rn.bigId, 'explicit');
+  pairOne(pair, ro.tagDef, rn.tagDef, 'explicit');
+  await syncIds(pair);
+  R.volume = { requested: CONFIG.volume, options: 600, tags: 300, old: ro, neu: rn };
+  log(`volume: old ${JSON.stringify(ro)} new ${JSON.stringify(rn)}`);
+  for (const res of [ro, rn]) if (!res.bigId || !res.tagDef || res.ok < CONFIG.volume * 0.95 || res.optionsOk < 600 * 0.95 || res.tagsOk < 300 * 0.95) throw new Error(`volume setup incomplete: ${JSON.stringify(res)}`);
+  for (const lk of LIST_KEYS) await rawCase(pair, 'A', { k: 'defs', ...lk });
+  await rawCase(pair, 'A', { k: 'tags' });
+  await rawCase(pair, 'A', { k: 'opts', id: ro.bigId, why: `definition with ${ro.optionsOk} options` });
+  await rawCase(pair, 'A', { k: 'opts', id: ro.tagDef, why: `tag set with ${ro.tagsOk} tags` });
+  await setKeys(pair, [{ k: 'tags' }, { k: 'defs', scope: 'all', includeOptions: true }, { k: 'defs', scope: 'user', includeOptions: false }, { k: 'defs', scope: 'all', includeOptions: true, forEntityType: 'TASK' }, { k: 'opts', id: ro.bigId }, { k: 'opts', id: ro.tagDef }]);
   await compareStep(pair, 'volume', 'volume');
   for (let st = 1; st <= 20; st++) {
     setCtx({ lane: 'V', phase: 'volume', step: st });
@@ -1821,7 +2064,8 @@ async function volumePhase() {
 
 // Concurrent load: other accounts writing and reading on the same server,
 // and (in the fuzzed accounts' own pages) the same user reading through both
-// clients, while the differential runs.
+// transports, while the differential runs. REST reads go through the runner's
+// own client (`setup.rest`): the head's service client no longer reads the catalog.
 const loadPages = [];
 async function startLoad() {
   for (let i = 0; i < CONFIG.load; i++) {
@@ -1840,9 +2084,9 @@ async function startLoad() {
           let r;
           if (k < 0.3) r = await h.setup.rest('createPropertyDefinition', { body: { display_name: `load ${Math.floor(rnd() * 1e9)}`, data_type: { type: 'select_string', multi: false, options: [{ display_order: 0, value: 'a' }] }, scope: 'user' } });
           else if (k < 0.55) r = await h.raw.neu.list({ scope: 'all', includeOptions: true });
-          else if (k < 0.8) r = await h.raw.old.list({ scope: 'all', includeOptions: true });
+          else if (k < 0.8) r = await h.setup.rest('listProperties', { scope: 'all', include_options: true });
           else if (k < 0.9) r = await h.raw.neu.tags();
-          else r = await h.raw.old.tags();
+          else r = await h.setup.rest('listTags');
           window.__loadStats.ops++;
           if (!r.ok) window.__loadStats.errors++;
         }
@@ -1858,7 +2102,7 @@ async function startSameUserLoad(s) {
     const h = window.__h;
     (async () => {
       for (let i = 0; !window.__stopLoad; i++) {
-        const r = await [() => h.raw.neu.list({ scope: 'all', includeOptions: true }), () => h.raw.old.list({ scope: 'all', includeOptions: true }), () => h.raw.neu.tags(), () => h.raw.old.tags()][i % 4]();
+        const r = await [() => h.raw.neu.list({ scope: 'all', includeOptions: true }), () => h.setup.rest('listProperties', { scope: 'all', include_options: true }), () => h.raw.neu.tags(), () => h.setup.rest('listTags')][i % 4]();
         await window.__sameUserTick(r.ok);
         await new Promise((res) => setTimeout(res, 25));
       }
@@ -1895,6 +2139,10 @@ const crashed = (what) => (e) => {
   log(msg);
 };
 try {
+  if (CONFIG.optimism) {
+    const { runOptimism } = await import('./optimism.mjs');
+    await lanes.run({ lane: 'O' }, () => runOptimism({ CONFIG, R, log, sleep, login, openSide, loadHarness, ev, harnessError, firstLine, STAMP })).catch(crashed('optimism'));
+  }
   if (CONFIG.load) await startLoad();
   const per = Array.from({ length: CONFIG.lanes }, (_, i) => Math.floor(CONFIG.seqs / CONFIG.lanes) + (i < CONFIG.seqs % CONFIG.lanes ? 1 : 0));
   await Promise.all(per.map((n, lane) => lanes.run({ lane }, () => runLane(lane, n)).catch(crashed(`lane ${lane}`))));
@@ -1920,6 +2168,11 @@ try {
 flush();
 const real = Object.entries(R.diffSignatures);
 log(`done: ${R.counts.sequences} sequences, ${R.counts.steps} steps, ${R.counts.rawCases} raw cases, ${R.counts.readerComparisons} reader and ${R.counts.callerComparisons} caller comparisons; ${R.totals.differences} differences in ${real.length} signatures; ${R.totals.harnessErrors} harness errors; module checks ${JSON.stringify(R.moduleChecks)}`);
+{
+  const n = Object.values(R.oldStale.byOp).reduce((a, x) => a + Object.values(x).reduce((b, y) => b + y, 0), 0);
+  if (n || R.oldStale.staleness) log(`main stale, head current: ${n} live differences and ${R.oldStale.staleness} staleness records (oldStale in results.json)`);
+  if (Object.keys(R.valueDropped).length) log(`value dropped by the head: ${JSON.stringify(R.valueDropped)}`);
+}
 for (const [s, n] of real.sort((a, b) => b[1] - a[1])) log(`  ${n}x ${s}`);
 const failures = [...R.crashes];
 // A mutant run stops at its first catch; every other run must finish all its sequences.
@@ -1929,6 +2182,13 @@ if (!R.moduleChecks.old || !R.moduleChecks.neu) failures.push('no module check p
 if (R.sqlFailures) failures.push(`${R.sqlFailures} out-of-band SQL writes failed or changed no rows`);
 if (!R.collation || R.collation.error || R.collation.mismatches.length) failures.push(`collation check: ${JSON.stringify(R.collation).slice(0, 300)}`);
 log(`collation: ${R.collation?.strings ?? 0} tie-key strings lowercase the same in PostgreSQL${R.collation?.mismatches?.length ? ` except ${R.collation.mismatches.length}` : ''}`);
+if (R.optimism) {
+  log(`optimism: ${R.optimism.scenarios.length} cases; checks ${JSON.stringify(R.optimism.checks)}; ${R.optimism.failures.length} failed`);
+  if (R.optimism.oldStale.length) log(`optimism: main stale, head current in ${R.optimism.oldStale.length} cases: ${R.optimism.oldStale.map((x) => `${x.mode}-${x.op}`).join(", ")}`);
+  for (const f of R.optimism.failures.slice(0, 20)) log(`  ${JSON.stringify(f).slice(0, 400)}`);
+  if (R.optimism.failures.length) failures.push(`${R.optimism.failures.length} optimistic-state checks failed`);
+  if (R.optimism.scenarios.length < 24) failures.push(`ran ${R.optimism.scenarios.length} of 24 optimism cases`);
+} else if (CONFIG.optimism) failures.push('optimism phase did not run');
 if (R.mutant) {
   log(`mutant ${R.mutant.name}: applied ${R.mutant.applied}, caught ${R.mutant.firstCatch ? `at ${JSON.stringify(R.mutant.firstCatch).slice(0, 300)}` : 'NO'}; ${R.mutant.discardedCatches} catches discarded in ${R.mutant.taintedSequences} sequences with harness-level differences`);
   if (!R.mutant.applied) failures.push(`mutant ${R.mutant.name} never applied`);

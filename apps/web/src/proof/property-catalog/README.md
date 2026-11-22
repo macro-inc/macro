@@ -1,12 +1,15 @@
 # Property catalog differential
 
-Proof harness for moving the property catalog reads (definitions, options, tag
-sets) from REST to GraphQL. It is not product code and is not on `main`.
+Proof harness for porting the property catalog (definitions, options, tag
+sets) from REST and TanStack Query to GraphQL and the normalized cache: reads
+as live queries, writes as GraphQL mutations with optimistic updates. It is
+not product code and is not on `main`.
 
 ```sh
-apps/web/src/proof/property-catalog/run.sh all     # mutants, seed 1 quiet, seed 2 under load, seed 4 quiet, control
+apps/web/src/proof/property-catalog/run.sh all     # mutants, seed 1 quiet, seed 2 under load, seed 4 quiet, control, optimism
 apps/web/src/proof/property-catalog/run.sh control mutants   # any modes, in order
 apps/web/src/proof/property-catalog/run.sh smoke   # 1 sequence of 3 steps
+apps/web/src/proof/property-catalog/run.sh optimism   # pending, failed, offline and two-tab states
 ```
 
 It needs a local stack built from this worktree (`just run_local --instance <name>`)
@@ -14,32 +17,48 @@ serving the web app at `$BASE` (default `https://localhost:24709`), and its
 Postgres container in `$PG_CONTAINER`. All accounts are synthetic
 (`pc-*@*.fuzz.test`). Results go to `out/<run>/results.json`; `run.sh` exits
 non-zero when a run crashed, ran fewer sequences than asked, the OLD page did
-not run the base commit's modules, or a mutant was not applied or not caught.
+not run the base commit's modules, a mutant was not applied or not caught, or
+an optimistic-state check failed.
 
 ## What runs
 
 - `harness.tsx` mounts the real query hooks and their callers (property panel,
   filter bar, tag picker and settings, CRM stages and export, task board,
-  projects, select editors) in one page and exposes `window.__h`.
-- `run.sh` writes the base commit's `definitions.ts`, `options.ts` and `tags.ts`
-  beside the head's as `*.__old__.ts`, each marked with
-  `__PROOF_MODULE__ = 'old:<commit>'`. `run.mjs` opens every account twice in
-  one Chromium: the OLD context swaps those modules in by URL (REST queryFns),
-  the NEW context runs the head (GraphQL readers). Every page load reads the
-  markers back and stops the run if a side runs the wrong modules.
-- Each write runs through the real mutation hooks on NEW; its requests and
-  responses are recorded and replayed to OLD, so the server sees it once and
-  both sides get the same answer; a replayed write must match the recording's
-  method, origin, path, query and body. Every write either page sends is watched:
-  a replay that differs from the recording, a recorded write OLD never sent,
-  a hook that succeeded without sending any request, a GraphQL mutation
-  (comments stripped, batches and persisted queries included), a write to
-  another service during a write window, any write OLD sends on its own, or a
-  late NEW write after its window closed is a `diff` at level
-  `write-replay`, checked before each window and at every comparison. The
-  runner's own setup writes (accounts, teams, volume, load) run in a separate
-  `setup` mode; `otherWrites` in the results counts every non-catalog write
-  by side and mode.
+  projects, select editors) in one page and exposes `window.__h`. It installs
+  the normalized cache's host at boot, as the app does; a NEW page whose cache
+  did not start stops the run.
+- `run.sh` writes the base commit's copy of every web module the PR changed
+  beside the head's as `*.__old__.*`, each marked with
+  `__PROOF_MODULE__ = 'old:<commit>'`, and lists them in `out/old-modules.json`.
+  The OLD context swaps those modules in by URL, so OLD runs main's web code
+  end to end (REST reads, TanStack queries, invalidations); the NEW context
+  runs the head. Every page load reads the markers back and stops the run if a
+  side runs the wrong modules.
+- Twin worlds. Each lane has four accounts: A and B in OLD's world and the
+  same two in NEW's, whose emails differ only in the world's last tag
+  (`-o`/`-n`). Every write runs through the real mutation hooks on both sides
+  at once, OLD against its accounts and NEW against its own, so each world's
+  server sees each write once and both mutations are real. Comparisons
+  translate OLD's world into NEW's: emails, domains and user ids by the tag,
+  and row ids through an id map (`pairIds` pairs the ids two results hold at
+  the same paths; `syncIds` pairs the rest by identity after every write:
+  definitions by their fields, options by value, order and color, tag sets by
+  scope). A pairing that would override another counts in `idMap.conflicts`.
+  Timestamps compare as `<ts>`, and `updated_at` as unchanged or later.
+- Write transport: every write either page sends is watched. OLD must send
+  REST and no GraphQL mutation; NEW must send only the GraphQL operations its
+  mutation may send (`NEW_OPS`), ending with the mutation's own, and no REST
+  write. A hook that succeeds without its request, a catalog write outside a
+  write window, or a write to another service during one is a `diff` at level
+  `write-transport`. The token refresh is never a stray. The runner's own
+  setup writes (accounts, teams, volume, load) run in a separate `setup` mode;
+  `otherWrites` counts every non-catalog write by side and mode, and
+  `writeTransport` the request sequence each mutation sent per side.
+- Each write's result compares as `{ok, value or failure contract, toasts}`;
+  a write both servers refused (400, 403, 404, 409 or 422 on OLD's REST, with
+  no transport failure) is a coverage case of its own. Out-of-band SQL steps
+  run in both worlds with translated ids; worlds whose SQL outcomes differ are
+  a `diff` at level `sql`.
 - After every step: read-after-write (old and new raw readers right after the
   write returns, and after out-of-band SQL changes and team membership
   changes), whether a created or deleted definition is listed by both (level
@@ -97,7 +116,7 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   retires the mark. A real bug that made the same change to
   the same row would also be credited; it would show up as a difference in
   the runs without a mutant. A
-  cache restore that changes nothing is not applied. A settle timeout, a write-replay difference or an uncaught page
+  cache restore that changes nothing is not applied. A settle timeout, a write-transport difference or an uncaught page
   error never counts, and a catch in a sequence that had one is discarded (each sequence
   ends with a reload, so its fallout stays inside it). `CONTROL=1` runs OLD
   against OLD.
@@ -138,12 +157,11 @@ The counts measure work attempted, not successes, and are not interchangeable:
   (created type and scope, unicode and long names, tag scope, renames, team
   events, SQL renames and null colors) are credited only when the write
   succeeded and changed that value; an option write to a system definition is
-  credited as `(refused)` when both sides refused it on a server answer
-  replayed one for one.
+  credited as `(refused)` when both worlds' servers refused it.
   Read dimensions count reads requested, not reads that succeeded; an
   `option target` already open is credited again without a new mount.
-- `ops`: for a hook write, NEW's outcome per operation and actor (OLD's replay
-  is checked at `write-replay`); for an out-of-band SQL write, the statement's
+- `ops`: for a hook write, both worlds' outcomes per operation and actor
+  (`ok`, `rejected`, or each side's when they differ); for an out-of-band SQL write, the statement's
   outcome, where `rejected` includes database refusals (`sqlRefusals`, the two
   recognized ones) and harness failures (`sqlFailures`, which fail the run).
   `rejections` buckets refused hook writes, transport errors included, by
@@ -228,8 +246,7 @@ The counts measure work attempted, not successes, and are not interchangeable:
   and so every page's API answers until it returns. Under machine load that
   took up to 3.1 s. No route handler runs while it does, so no request in
   flight across it is answered before it ends; a cold mount that also needs a
-  retried read (two round trips plus TanStack's 1 s delay;
-  `opts-error.test.tsx` shows it) or a token refresh then overruns
+  retried read (two round trips plus the retry delay) or a token refresh then overruns
   `SETTLE_MS`. In the final load run every `settle` timeout's `waitedOn` has
   a `psql` in `driverWork` covering at least 2.6 s of the last 5 s before the
   call returned, matching a stall in `driverStalls`
