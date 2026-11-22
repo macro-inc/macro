@@ -565,9 +565,11 @@ async function replay(
   const running = new Set<number>();
   /**
    * Each generation a reset ended just after a sample, with the running tabs
-   * that have not sampled since: until they do, they may act on it.
+   * whose last sample it was: until they sample again, they may act on it.
    */
   const late = new Map<string, Set<number>>();
+  /** Each running suite tab's last generation sample. */
+  const lastSample = new Map<number, string>();
   /** `tab` acts on a newer sample, or writes nothing more. */
   const caughtUp = (tab: number) => {
     for (const [stale, behind] of late) {
@@ -581,8 +583,12 @@ async function replay(
       tick();
       caughtUp(tab);
       const sampled = `g${generation}`;
+      lastSample.set(tab, sampled);
       if (samplesUntilReset === 0) {
-        late.set(sampled, new Set(running));
+        const acting = [...running].filter(
+          (id) => lastSample.get(id) === sampled
+        );
+        late.set(sampled, new Set(acting));
         reset();
       }
       if (samplesUntilReset !== null) {
@@ -859,6 +865,7 @@ async function replay(
       )
     );
     running.delete(id);
+    lastSample.delete(id);
     caughtUp(id);
     if (exit === undefined) return false;
     if (Exit.isFailure(exit) && !tab.ended && !tab.close.signal.aborted) {
