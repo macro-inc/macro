@@ -1,0 +1,1991 @@
+.agents/rules/checks.md
+  s_ebcb6b1bfaf7ce::t_ef8e58258c3327 31-34
+.config/nextest.toml
+  s_ebcb6b1bfaf7ce::t_64467b2d2adb04 3-5,7,55-60,68-87
+.github/workflows/connectors_e2e.yml
+  s_ebcb6b1bfaf7ce::t_6551dc9c1e7467 1-1390
+.github/workspace-dep-closures.json
+  s_ebcb6b1bfaf7ce::t_3e12cbf4ac3753 70,234,441,602,849,1013,1233,1959,2055,2167,2552,2556,2638,2778,3469,3705,4236,4410,4716,4724-4725,4739,4749-4750,4791-4837,4860,4937,5674,5833,6159,6286,8049,8250,8261,8502,8613,10640,10820,10911-10912,10914-10916,10920,10922-10923,10933,10936,10938-10939,10941-10942,10944-10948,10953-10954,10956-10958,10962,10964-10965,10975,10978,10980-10981,10983-10984,10986-10990,10995-10996,10998-11000,11004,11006-11007,11016,11021-11022,11024-11025,11027,11029-11032,11037-11038,11040-11042,11046,11048-11049,11058,11061,11063-11064,11066-11067,11069-11073,11309,12572,13122-13123,13126,13136,13139,13413,13817,13907,15096,15213,16391,16689,16811,17128
+.gitleaks.toml
+  s_ebcb6b1bfaf7ce::t_16f5bf6320fffb 1-15
+.sqlx/query-21031b20bf303e906efc6bd49aa21e17dfdd6c87f77c95a062549b692a96d0a9.json
+  s_ebcb6b1bfaf7ce::t_60a1e380b90df4 1-30
+.sqlx/query-24cf31d083b13a9c8ce1e920fdb3ae0e8bbcdec6b322c1dec80a42bc59566f0a.json
+  s_ebcb6b1bfaf7ce::t_6cb8d25958728f 1-17
+.sqlx/query-2e913b23962b87058d9e82ab56c8fd2d88eaf0c60c9340e554f8a4f3d0d0041f.json
+  s_ebcb6b1bfaf7ce::t_ecc549a1637dc0 1-24
+.sqlx/query-3d654b638d78212e496d2e7bf27ae8a18049c7068edcceb8d7f830fcfc990ad4.json
+  s_ebcb6b1bfaf7ce::t_6f6c4302b410fa 1-22
+.sqlx/query-411e14560b3102c79f432259d6c7b243242bea161d2515190e4ac9b95e3d9eb1.json
+  s_ebcb6b1bfaf7ce::t_7a0098f6546c78 1-15
+.sqlx/query-4c8de3a2e3da2257651b008ac867696502e1278350549bd70369f55ac06f5a10.json
+  s_ebcb6b1bfaf7ce::t_a0c2e398bc937c 1-23
+.sqlx/query-4e638789551c5d68a5127b1cc0e0dc6917ad893075f159e9a68dd7cf108209ef.json
+  s_ebcb6b1bfaf7ce::t_bf7eb42b1bf003 3,5-11,18-20,22
+.sqlx/query-51b3acfbc2db4fb446bb1dc8e7bfbe7cd1da064e0680efe378b1dbcf58cc67e4.json
+  s_ebcb6b1bfaf7ce::t_473ffa2c623876 1-15
+.sqlx/query-5928f5d0b6ab81545e7b2a9f4c503e89305550ab705f51a4717d0c94f23b59dd.json
+  s_ebcb6b1bfaf7ce::t_0058c1f9c10dc8 1-24
+.sqlx/query-5c1ac2b543cc1a0a2482c325ccfc1a2398e51b376b2d8fbc1c14dbc5ff35e0db.json
+  s_ebcb6b1bfaf7ce::t_69cd89ff1d12dd 3,48,53,58-67,72,77,101-102,108
+.sqlx/query-611bcae6b83639ee5187ba9a802910520a5433790628a1279bc4113a0810ef1a.json
+  s_ebcb6b1bfaf7ce::t_f26965472b803f 3,5-11,18-20,22
+.sqlx/query-6330f7d46f01b11af7bfd8fef94263f96403d33b830df813aa1e138316235133.json
+  s_ebcb6b1bfaf7ce::t_0182543477d267 1-31
+.sqlx/query-65d6cd46ce33e6fe1fcbfceaef6f347eafc91afb736fd3bba1ca379dd2c954d1.json
+  s_ebcb6b1bfaf7ce::t_7f773aad719244 1-42
+.sqlx/query-65e4fedd3860372efac5e6b08287b952756b15fbb396d93d4fbe0d25330b5334.json
+  s_ebcb6b1bfaf7ce::t_94320c5cfc6680 1-57
+.sqlx/query-67b4b3099afabf24775252917cb0626c14cac9c2fbfb03bb90def5e7bebe548d.json
+  s_ebcb6b1bfaf7ce::t_d2d7fdf74e353f 1-30
+.sqlx/query-6c8f423c3d7bd312246ad4f5188f80698ad870686636e1c51b80219e9b94660a.json
+  s_ebcb6b1bfaf7ce::t_ae2ba10ed814e0 1-22
+.sqlx/query-6d6f72696d4eadc65a806f5fc2c89ca6384d4a26ba746a389bf1297b80a4d332.json
+  s_ebcb6b1bfaf7ce::t_94caa26b3ddabc 3,65-74,94-96,99
+.sqlx/query-7b6ebee975633c3e39d4de3159f74811701a48c156a6715cbb1d005084c50908.json
+  s_ebcb6b1bfaf7ce::t_5e37eab284673d 1-23
+.sqlx/query-7e1ec8e3af3e255175404883c5e808acfae8bdd9b83cb7287aab77566ef3cecc.json
+  s_ebcb6b1bfaf7ce::t_caf229c2c414dd 1-29
+.sqlx/query-86ace32d5afbfcd5c4d2c9f75976eae97bd70659ab6c3e4ede32c2dc6cc503f7.json
+  s_ebcb6b1bfaf7ce::t_cc3b29eeed45f7 1-41
+.sqlx/query-8bfd839c224b399d999d9b5b82b5cde1cfe24dc0f5e44715aa4d5054455a05f6.json
+  s_ebcb6b1bfaf7ce::t_1587c66f1dab47 1-18
+.sqlx/query-8c73ceaebdf844c974f4a45892e9db5fa417ff48002236860930a7a3a542446c.json
+  s_ebcb6b1bfaf7ce::t_2712de5ce43d3d 1-22
+.sqlx/query-8e82b6e9250623f4bc398a4aa038e254d711be4360a271a59e8df3c550a85ab4.json
+  s_ebcb6b1bfaf7ce::t_c537120b0a1898 1-35
+.sqlx/query-94df0f09f73e1d155239b767b8e4752e364b16bf35d153f791ef4bd5d8f4b313.json
+  s_ebcb6b1bfaf7ce::t_f5b3a28cd5801e 1-24
+.sqlx/query-97cc817c772e1b4566b6951948b17039941705a4b1eedf1c8e7f68d211d1f518.json
+  s_ebcb6b1bfaf7ce::t_e3c279c8aacbcc 1-17
+.sqlx/query-99139acbb6d0a695e3621e951400c5675e28c13228c501911eb0911cd97a1f5e.json
+  s_ebcb6b1bfaf7ce::t_09fe6f7146a133 1-47
+.sqlx/query-a550aaa9c6a17a3cb56740cfd301772c45c5a3d50bbf8d07720dc9d25ae5fc12.json
+  s_ebcb6b1bfaf7ce::t_01b9811f272106 1-16
+.sqlx/query-b46525bef3ac816845f4cdfa4cb7a3ee80f4976188905738cfc74beb237210ad.json
+  s_ebcb6b1bfaf7ce::t_5d9c4bf557b1e2 1-29
+.sqlx/query-c04a7c042e6170439b90e1b9a33c9766025aa36ca3fde1c8ed1b0b670c754131.json
+  s_ebcb6b1bfaf7ce::t_9a06b525298a07 1-30
+.sqlx/query-ce3a181adbb678c689711ba0b5201478d825bc389b5d558465a97871b6e454a1.json
+  s_ebcb6b1bfaf7ce::t_8f4c8ee7b8a92b 3,25
+.sqlx/query-d395f351752c039b1d5ad370b14fc068c94c7d624cc71ab98bceb4aa34904bcf.json
+  s_ebcb6b1bfaf7ce::t_558c645c8f3f73 1-23
+.sqlx/query-d663a387354adc3ed4972f99122582c1011c57cd42d4423e018de19ee4163e52.json
+  s_ebcb6b1bfaf7ce::t_6870b8a08d712c 1-40
+.sqlx/query-e35372174cf105a530ebc6dc38ee31032173e0de7c6b74d8157ff91881456bdd.json
+  s_ebcb6b1bfaf7ce::t_32748ea12567d2 1-16
+.sqlx/query-e3577c61b292ac6e8fb34d7d2f49e4c1e6fa79c27f8a7dd6b866dee86f9389c1.json
+  s_ebcb6b1bfaf7ce::t_039a487299a2b4 1-15
+.sqlx/query-e6abdfa5afa16beefab9a10531594ef1e1a9dabd624221244d4a04e24f67f4b4.json
+  s_ebcb6b1bfaf7ce::t_95ee4a88f37bdb 1-22
+.sqlx/query-ec572fbfe80b182c8e69b2eccd1e1a791f4ecc31d138f7c7e43b724884ad8cb0.json
+  s_ebcb6b1bfaf7ce::t_27f11063aeaf94 1-23
+.sqlx/query-f1f3d7ca198ee4552dbd359f4c7ab6a101d9e746efa904b2859e2690d94562de.json
+  s_ebcb6b1bfaf7ce::t_c2e37aab7d95dc 1-84
+.sqlx/query-f380bb436b98b88fcea7f017a0677f3cfd1df62693d899f49174c8c4063d574e.json
+  s_ebcb6b1bfaf7ce::t_5791593068e0a8 3,40
+.sqlx/query-f4b360c12c6c526dc1a45175ccc47a66504d5b9098c125bf5a7d033d17031dae.json
+  s_ebcb6b1bfaf7ce::t_a4ce18396c8733 1-35
+.sqlx/query-faab550e673d5af37d7c486ebb68a1eb168adabcd677ff4898369d6d3d898911.json
+  s_ebcb6b1bfaf7ce::t_d1e3771180fc51 3,25-27,32
+.sqlx/query-fed7695e101bd66070a1e0562d3141822412af98083ebd7819be20a9d029188e.json
+  s_ebcb6b1bfaf7ce::t_5fdccae6c96782 1-25
+Cargo.lock
+  s_ebcb6b1bfaf7ce::t_3b7ec5022ea8ff 355,454,467,585,705,770,1319,5250,5294,5333-5391,5483,5485,5492,5494,5498-5499,5508,5513-5514,5532-5533,5537,5552,6984,7805,7852,9669,11435,11461,11472,11488,11505,11528,15162,24343
+Cargo.toml
+  s_ebcb6b1bfaf7ce::t_4b550e21212970 82,150
+apps/web/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_aa246f1e4771ee 503-514,909-910,1163-1164,1166,1446,1968-1977
+apps/web/codegen.ts
+  s_ebcb6b1bfaf7ce::t_4471b690ec744e 21
+apps/web/docs/graphql-normalized-cache-plan.md
+  s_ebcb6b1bfaf7ce::t_e6834bc9a6a0c7 1395
+apps/web/src/components/app/sidebar-next/create-button.tsx
+  s_ebcb6b1bfaf7ce::t_3b86d2f5dd4d4c 27
+apps/web/src/components/app/sidebar-next/more-menu.tsx
+  s_ebcb6b1bfaf7ce::t_eb9629588f02a0 22-23,34,36,46-47,54-58,81,83
+apps/web/src/components/app/sidebar-next/rail-fit.test.ts
+  s_ebcb6b1bfaf7ce::t_75351cdfb9f9f2 2,4-11,14-17
+apps/web/src/components/app/sidebar-next/rail-fit.ts
+  s_ebcb6b1bfaf7ce::t_8d15093b4c1e32 1-15
+apps/web/src/components/app/sidebar-next/search-bar-button.tsx
+  s_ebcb6b1bfaf7ce::t_7b2bbf19083658 58
+apps/web/src/components/app/sidebar-next/sidebar-rail.tsx
+  s_ebcb6b1bfaf7ce::t_0e0cd051bca584 8-16,24,48-50,59-82,105,107,154,156
+apps/web/src/components/date-time-range/date-time-range-fields.tsx
+  s_ebcb6b1bfaf7ce::t_1e0e08e6a138ed 22,130-131,178,210-211,251
+apps/web/src/components/date-time-range/time-input.tsx
+  s_ebcb6b1bfaf7ce::t_7117bc60d847ec 10,32-33,62-64,107,193
+apps/web/src/components/date-time-range/time-options.test.ts
+  s_ebcb6b1bfaf7ce::t_5431daf704c6d2 6,33-53
+apps/web/src/components/date-time-range/time-options.ts
+  s_ebcb6b1bfaf7ce::t_2da891ecc97770 14-27,64-67,70,89-94,99,105-110,112-123,130-133,135,148,221-222,232
+apps/web/src/features/agents-view/components/AgentsSidebar.test.tsx
+  s_ebcb6b1bfaf7ce::t_c4a52bd50d6065 233-235,237,1165-1166
+apps/web/src/features/agents-view/components/AgentsSidebar.tsx
+  s_ebcb6b1bfaf7ce::t_0363a9129ba1a0 525-529
+apps/web/src/features/agents-view/core/conversation-filters.test.ts
+  s_ebcb6b1bfaf7ce::t_46e695be332ce7 87,95,98-113,117,121-122,124-136,138
+apps/web/src/features/agents-view/core/conversation-filters.ts
+  s_ebcb6b1bfaf7ce::t_f42651bc062e52 6,11,103-108,115,123,129,136,141-143,145-148,154-162
+apps/web/src/features/agents-view/primitives/conversation-list-view.test.ts
+  s_ebcb6b1bfaf7ce::t_7ec2d321ceb2a3 1-23
+apps/web/src/features/agents-view/primitives/conversation-list-view.ts
+  s_ebcb6b1bfaf7ce::t_3a59ef9bc1d5cc 26-27
+apps/web/src/features/block-agent/browser-test/composer.browser.e2e.ts
+  s_ebcb6b1bfaf7ce::t_a26a1b95dd7372 6,10,14-21
+apps/web/src/features/block-agent/component/AgentConnections.test.tsx
+  s_ebcb6b1bfaf7ce::t_b3057b9b38f19a 1,23-25
+apps/web/src/features/block-agent/component/AgentConnections.tsx
+  s_ebcb6b1bfaf7ce::t_0ef1fe6153c90e 2,4,28-29
+apps/web/src/features/block-agent/primitives/create-connector-continuation.test.ts
+  s_ebcb6b1bfaf7ce::t_9afca75dc3bf3f 1,7-8,41-48
+apps/web/src/features/block-agent/primitives/create-connector-continuation.ts
+  s_ebcb6b1bfaf7ce::t_6af715c30603d5 1,8,24
+apps/web/src/features/block-agent/ui/AgentComposerAddMenu.test.tsx
+  s_ebcb6b1bfaf7ce::t_43a07a73855972 14-24,42,67,73-74,84,164-169,171,201-208,210
+apps/web/src/features/block-agent/ui/AgentComposerAddMenu.tsx
+  s_ebcb6b1bfaf7ce::t_01b08a8aab7a2f 6,17-21,36,40-54,119-124,136,138,161,166,177,184
+apps/web/src/features/block-calendar/components/EventComposerSplit.tsx
+  s_ebcb6b1bfaf7ce::t_377402ab7e8180 21,100,202
+apps/web/src/features/block-md/component/FormatTools.tsx
+  s_ebcb6b1bfaf7ce::t_ecc5b19d491171 98,138,144,150,319
+apps/web/src/features/calendar/browser-test/composer.browser.e2e.ts
+  s_ebcb6b1bfaf7ce::t_66b9388bd70bd5 230-283
+apps/web/src/features/calendar/browser-test/tool-preview.browser.e2e.ts
+  s_ebcb6b1bfaf7ce::t_397c9569f79266 1-49
+apps/web/src/features/calendar/browser-test/tool-preview.html
+  s_ebcb6b1bfaf7ce::t_b2d200e8a6dc12 1
+apps/web/src/features/calendar/browser-test/tool-preview.tsx
+  s_ebcb6b1bfaf7ce::t_578c5a11f1b511 1-8,10,12-43,46-55
+apps/web/src/features/calendar/browser-test/vite.config.ts
+  s_ebcb6b1bfaf7ce::t_ba3eac16793607 109-114
+apps/web/src/features/calendar/components/composer/EventForm.test.tsx
+  s_ebcb6b1bfaf7ce::t_1e548f0edc13cf 319-350
+apps/web/src/features/calendar/components/composer/event-form-state.ts
+  s_ebcb6b1bfaf7ce::t_ebf39754313f49 7,41-42,129-132
+apps/web/src/features/calls-view/components/calls-sidebar.tsx
+  s_ebcb6b1bfaf7ce::t_a267334df0a8cc 250-252
+apps/web/src/features/channel/Call/CallOverlay.tsx
+  s_ebcb6b1bfaf7ce::t_9d3ee02e6857a0 109-113,116-117,893
+apps/web/src/features/channel/Call/chat/components/CallChatPanel.tsx
+  s_ebcb6b1bfaf7ce::t_2bf29b1d046c33 37-38,128-129
+apps/web/src/features/channel/Call/discussion/browser-test/call-thread.browser.e2e.ts
+  s_ebcb6b1bfaf7ce::t_ff071d9381dcf3 209-225,448-452,766-767
+apps/web/src/features/channel/Call/primitives/create-call-panel.ts
+  s_ebcb6b1bfaf7ce::t_3edd526fb9af37 15-17,34-35,51-55,70-74
+apps/web/src/features/channel/Call/tests/create-call-panel.test.ts
+  s_ebcb6b1bfaf7ce::t_bcce55c0be1423 1-56
+apps/web/src/features/connector-import/browser-test/import.tsx
+  s_ebcb6b1bfaf7ce::t_47c42afed3a5bf 16-18,25-29,33,38
+apps/web/src/features/connector-import/components/provider-row.tsx
+  s_ebcb6b1bfaf7ce::t_c9ae48930c176c 10-15,38-43,58-72
+apps/web/src/features/connector-import/connector-import-dialog.tsx
+  s_ebcb6b1bfaf7ce::t_1cb70264619fa6 3-7,9,16-32,34-44,47-49,59
+apps/web/src/features/connector-import/context/contracts.ts
+  s_ebcb6b1bfaf7ce::t_9509b85791df2d 4-5,10-11,19-20,23
+apps/web/src/features/connector-import/core/catalog.ts
+  s_ebcb6b1bfaf7ce::t_85586f9e50aa22 115
+apps/web/src/features/connector-import/core/providers.ts
+  s_ebcb6b1bfaf7ce::t_4001be374f8fa6 10
+apps/web/src/features/connector-import/tests/fake-context.ts
+  s_ebcb6b1bfaf7ce::t_c47b4aab1a8c3e 8-15,19-22,25
+apps/web/src/features/connector-import/views/import-dialog.test.tsx
+  s_ebcb6b1bfaf7ce::t_cc085b7bb0a20f 87,102-111,138,140,143
+apps/web/src/features/connector-import/views/import-dialog.tsx
+  s_ebcb6b1bfaf7ce::t_18cf5b6a6dd746 75-76,78,85
+apps/web/src/features/crm/tour.ts
+  s_ebcb6b1bfaf7ce::t_7dec2944b5e884 16
+apps/web/src/features/drive-view/tour.ts
+  s_ebcb6b1bfaf7ce::t_fb3ba29c345c5c 7
+apps/web/src/features/granola-connect/components/GranolaPromoChip.tsx
+  s_ebcb6b1bfaf7ce::t_31b8f2529573a7 1,20
+apps/web/src/features/granola-connect/core/granola.test.ts
+  s_ebcb6b1bfaf7ce::t_26922dd40a95e7 5-11
+apps/web/src/features/granola-connect/core/granola.ts
+  s_ebcb6b1bfaf7ce::t_3f6c6a72aaf6a4 1-4,6,10-14,18,20-25
+apps/web/src/features/granola-connect/primitives/create-granola-connection.ts
+  s_ebcb6b1bfaf7ce::t_628526a805cecb 3-8,16-17,19-21,25-27,31-32,34-35,42,45,55,63
+apps/web/src/features/onboarding/browser-test/onboarding.browser.e2e.ts
+  s_ebcb6b1bfaf7ce::t_41009e148b6e3b 77,547,664-665,669,684,689-691,695,702,705,713-716,722,724,739-741
+apps/web/src/features/onboarding/components/tool-tile.tsx
+  s_ebcb6b1bfaf7ce::t_a84db222b33859 1,15,17-25,29,42
+apps/web/src/features/onboarding/components/trust-details.tsx
+  s_ebcb6b1bfaf7ce::t_9d3bde7edd0bfa 18,23,35,45,55,74,85,98,112,124,134,152,276
+apps/web/src/features/onboarding/context/onboarding-context.tsx
+  s_ebcb6b1bfaf7ce::t_a77476b289b03d 72
+apps/web/src/features/onboarding/create-app-onboarding-context.ts
+  s_ebcb6b1bfaf7ce::t_beb5e4c078d7eb 23,54,71-79,254,257,259,263-267,269
+apps/web/src/features/onboarding/primitives/tools.test.ts
+  s_ebcb6b1bfaf7ce::t_5b54c561c3b737 16,27,39,50
+apps/web/src/features/onboarding/primitives/tools.ts
+  s_ebcb6b1bfaf7ce::t_8e4d6e37034b90 17-19,24-25
+apps/web/src/features/onboarding/queries/connected-tools.test.ts
+  s_ebcb6b1bfaf7ce::t_905ddc5b07c9b8 3,8,10-11,13-17,19,22-33,35-43,45-49,52-55
+apps/web/src/features/onboarding/queries/connected-tools.ts
+  s_ebcb6b1bfaf7ce::t_7a2498fba6100d 1-2,8-9,11,13,15-17,20,23,25-32
+apps/web/src/features/onboarding/queries/tool-catalog.test.ts
+  s_ebcb6b1bfaf7ce::t_70bc23c92b3bc0 8-10,14-18,74
+apps/web/src/features/onboarding/queries/tool-catalog.ts
+  s_ebcb6b1bfaf7ce::t_31abc11aaf93a4 2,7-8,24,26-28
+apps/web/src/features/onboarding/queries/tool-connect.test.ts
+  s_ebcb6b1bfaf7ce::t_3c809e4ebd5d16 1-2,6-8,14-18,20-34,37,40-44,47-64,67,69-78,80-84
+apps/web/src/features/onboarding/queries/tool-connect.ts
+  s_ebcb6b1bfaf7ce::t_604e681a100c49 3-7,10,12,16-23,26
+apps/web/src/features/onboarding/tests/connector-icons.ts
+  s_ebcb6b1bfaf7ce::t_e4434ef5e72561 5,8
+apps/web/src/features/onboarding/tests/fake-onboarding-context.ts
+  s_ebcb6b1bfaf7ce::t_4f297d3db9a02e 25,49-52,121-122,285,289,291,296-297,299-301,303-304,308-317,319
+apps/web/src/features/onboarding/views/tools-step.test.tsx
+  s_ebcb6b1bfaf7ce::t_ee8af634b25e4a 16,28,72,76,83-90,96,99,102,117,142
+apps/web/src/features/onboarding/views/tools-step.tsx
+  s_ebcb6b1bfaf7ce::t_f84aa944d58d09 26-27,42,95,99
+apps/web/src/features/routines/context/routine-sources.ts
+  s_ebcb6b1bfaf7ce::t_e67a3d0112ed0a 14-18
+apps/web/src/features/routines/core/draft.ts
+  s_ebcb6b1bfaf7ce::t_1da3179184ff73 6
+apps/web/src/features/routines/queries/routine-sources.ts
+  s_ebcb6b1bfaf7ce::t_92d6c4efb357fd 2,81-86,108-120,206-207
+apps/web/src/features/routines/queries/routines.ts
+  s_ebcb6b1bfaf7ce::t_8a95a73207d9a2 1,7-17,23
+apps/web/src/features/routines/routine-apps.tsx
+  s_ebcb6b1bfaf7ce::t_689114cdddd68c 1,6,9,17-18,21,28,34-35,104,107-108,118-119,126-128
+apps/web/src/features/routines/routine-detail.test.tsx
+  s_ebcb6b1bfaf7ce::t_c9816d2de746c7 2,46-47,90-96,391,1056-1087
+apps/web/src/features/routines/routine-detail.tsx
+  s_ebcb6b1bfaf7ce::t_6e2d7e6d995ba7 154-156,159-160
+apps/web/src/features/settings/Agents.test.tsx
+  s_ebcb6b1bfaf7ce::t_dd24972209b61f 308,313-315,317-318,321-323,325-326,331-352,354-365,368-370,401-409,2293-2294
+apps/web/src/features/settings/Agents.tsx
+  s_ebcb6b1bfaf7ce::t_7498a704200c0e 65,97,957,1794,1797
+apps/web/src/features/settings/ConnectorAppPicker.tsx
+  s_ebcb6b1bfaf7ce::t_a5743e27d20a33 1-3,7-11,25,34,41,47,50,92,167,179-181,185,211-213
+apps/web/src/features/settings/GitHub.tsx
+  s_ebcb6b1bfaf7ce::t_125bd364455c8e 3,6-11,20-21,25
+apps/web/src/features/settings/agentMcpServers.test.ts
+  s_ebcb6b1bfaf7ce::t_8398f660405433 16-17
+apps/web/src/features/settings/agentMcpServers.ts
+  s_ebcb6b1bfaf7ce::t_fffb9518b27fce 6-7,9
+apps/web/src/features/settings/connections/add-custom-mcp-dialog.tsx
+  s_ebcb6b1bfaf7ce::t_cf9ce8d2b9c790 2,13,32
+apps/web/src/features/settings/connections/ai-grant-actions.tsx
+  s_ebcb6b1bfaf7ce::t_bb262806dddce1 12-13,50
+apps/web/src/features/settings/connections/ai-provider.test.tsx
+  s_ebcb6b1bfaf7ce::t_b519c2fba26ac6 1-8,10-11,17-21,23-24,26-28,32-40,44,47-68,71-74,79-96,99-102,105-111,114-121
+apps/web/src/features/settings/connections/ai-provider.tsx
+  s_ebcb6b1bfaf7ce::t_f61e2f51cc2562 2,5-9,28,55-56,61-63,66-76,83,85,89,92-96,99,102,108,127,130-141,148-149
+apps/web/src/features/settings/connections/catalog-rows.tsx
+  s_ebcb6b1bfaf7ce::t_7d30a95c9ee3b5 3-4,7,15,24-25,89-94,100-102,108,112
+apps/web/src/features/settings/connections/github-connect-page.test.tsx
+  s_ebcb6b1bfaf7ce::t_89b3fb7e28ab0d 1-78
+apps/web/src/features/settings/connections/github-connect-page.tsx
+  s_ebcb6b1bfaf7ce::t_2bde3101e0c48c 1-20,22-25,27-29,31-32,34,38,40,46-92,94-153
+apps/web/src/features/settings/connections/github-item.test.tsx
+  s_ebcb6b1bfaf7ce::t_7d7eebd5fbb2a0 1-137
+apps/web/src/features/settings/connections/integration-items.tsx
+  s_ebcb6b1bfaf7ce::t_2a6fd57a636175 2-4,15-18,33,44,56,69-71,173-176,181,183-198,202-217,220-228,238-239,244,247-249,264,269,272,280-284,291,293-301,306,311,347-351,358-362,364,413-418,435,448,452-458
+apps/web/src/features/settings/connections/integrations-view.test.tsx
+  s_ebcb6b1bfaf7ce::t_9dd9765e86020c 4-5,20,22-24,39,47-54,59-74,112-113,182-207,212-213,250,278,311,329-339,341-344,348,353-354,358,401-404,415,420-461,468-546
+apps/web/src/features/settings/connections/integrations-view.tsx
+  s_ebcb6b1bfaf7ce::t_4d66c4d41433e3 6,10-15,32,50,54,76-82,84-91,95,122-127,130,134,140,155,160,183,204,208-209,229,258,260-262,264-267,269-280,285,288-289,342
+apps/web/src/features/settings/connections/leftover-row.tsx
+  s_ebcb6b1bfaf7ce::t_d5eb7b5b3fae1c 2-3,7-9,11,28-30,33-34,36,42-47,49-51,53-56,59-70,72,92-93,109,120,124-148,150-155,158,163,168,173,179,183,186-202,207,216,222,231-249,253,255,258-259,261,267,272-273,275,326,329
+apps/web/src/features/settings/connections/model.test.ts
+  s_ebcb6b1bfaf7ce::t_728b02ddf4d508 1,3,5-20,23-38,40-53,56-68,71-83,86-92,94-113
+apps/web/src/features/settings/connections/model.ts
+  s_ebcb6b1bfaf7ce::t_fbec6ee5c02552 1-3,13,15,21,24-27,30,33-34,36,38,40,43-44,46,49-50,82-83,86-93,96-99,101-105,108-115,118-155,160-161,164-165
+apps/web/src/features/settings/connections/provider-meta.tsx
+  s_ebcb6b1bfaf7ce::t_cb132441e2d1ea 7,10-17,23
+apps/web/src/features/settings/connections/slack-channel-import/SlackChannelImportFlow.tsx
+  s_ebcb6b1bfaf7ce::t_735d2c7197c381 2,26-27
+apps/web/src/features/settings/connections/use-connections-model.ts
+  s_ebcb6b1bfaf7ce::t_074ffa5c52fdb1 1,5,7-12
+apps/web/src/features/settings/primitives/team-roster.ts
+  s_ebcb6b1bfaf7ce::t_4ec5fedd99d47a 4,48-52,60-67
+apps/web/src/features/settings/views/crm-member-access.test.tsx
+  s_ebcb6b1bfaf7ce::t_9ba31dd306e88b 222-233
+apps/web/src/features/slack-import/slack-import.test.tsx
+  s_ebcb6b1bfaf7ce::t_0b7f4b0a6c5e9d 38,107
+apps/web/src/features/slack-import/slack-import.tsx
+  s_ebcb6b1bfaf7ce::t_11c1cafd3dd45a 6,83
+apps/web/src/features/tasks-view/tour.ts
+  s_ebcb6b1bfaf7ce::t_2d122afe8ada8a 10
+apps/web/src/features/theme/signals/themeSignals.ts
+  s_ebcb6b1bfaf7ce::t_8198ec929d395a 2,72-74,86-87
+apps/web/src/features/tours/ViewTour.test.tsx
+  s_ebcb6b1bfaf7ce::t_799b286a0da619 12,32-38,56,70,157-158,164
+apps/web/src/features/tours/ViewTour.tsx
+  s_ebcb6b1bfaf7ce::t_391162e28f1318 7,207,230,233-237
+apps/web/src/features/tours/core/view-tour.ts
+  s_ebcb6b1bfaf7ce::t_83f4fa01c45777 12-17
+apps/web/src/features/universal-input/browser-test/composer.browser.e2e.ts
+  s_ebcb6b1bfaf7ce::t_e00d60e30076a9 361-381
+apps/web/src/features/universal-input/views/calendar-draft.tsx
+  s_ebcb6b1bfaf7ce::t_a8c685d5005665 3,25,27,43,112,138
+apps/web/src/lib/core/component/AI/component/tool/ConnectMcpServer.tsx
+  s_ebcb6b1bfaf7ce::t_e5cfe13d47ebe1 2,4,10-18,36
+apps/web/src/lib/core/component/AI/component/tool/McpToolCall.tsx
+  s_ebcb6b1bfaf7ce::t_bf4bd861b94fad 1,14
+apps/web/src/lib/core/component/AI/component/tool/calendar/DraftComposer.test.tsx
+  s_ebcb6b1bfaf7ce::t_b8679e62883be6 2,8-16,80,343-352
+apps/web/src/lib/core/component/AI/component/tool/calendar/DraftComposer.tsx
+  s_ebcb6b1bfaf7ce::t_19f5b611e6091a 21,134,327
+apps/web/src/lib/core/component/AI/component/tool/calendar/EventPreview.tsx
+  s_ebcb6b1bfaf7ce::t_cf9d5699d7815e 7,171,373
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/ConnectApp.test.tsx
+  s_ebcb6b1bfaf7ce::t_16c5d988ec090a 9,38,41-42,44-45,47,57,62,113,129,249
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/ConnectApp.tsx
+  s_ebcb6b1bfaf7ce::t_3dff59c1150de3 4-6,11,20,27,32,35,40,42,52
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.test.tsx
+  s_ebcb6b1bfaf7ce::t_041c8eac4834b9 91
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.tsx
+  s_ebcb6b1bfaf7ce::t_25585db7878c1f 1047,1125
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/components/MentionLoadingRows.tsx
+  s_ebcb6b1bfaf7ce::t_61881fa55a7c15 10-11,14-17
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useUsersMention.test.ts
+  s_ebcb6b1bfaf7ce::t_c7b637216e0900 4-5,13-14,16-20,24-36,108-112,278-343,683-701
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useUsersMention.ts
+  s_ebcb6b1bfaf7ce::t_8ae555f89c9c72 21,62-65,75-87,111-112,177-178,231-233,244-253,255-256,380,383-385,387
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/SkillsMenu/McpRow.tsx
+  s_ebcb6b1bfaf7ce::t_97d300512eb11f 1,34
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/SkillsMenu/SkillsMenu.test.tsx
+  s_ebcb6b1bfaf7ce::t_9c4bf44969ec27 84-85,89-90
+apps/web/src/lib/core/connectors/ConnectedAppIcon.test.tsx
+  s_ebcb6b1bfaf7ce::t_472a465a9adcd8 9-10
+apps/web/src/lib/core/connectors/ConnectedAppIcon.tsx
+  s_ebcb6b1bfaf7ce::t_1cf1e4c4493850 1,3,9,13
+apps/web/src/lib/core/connectors/ConnectorIcon.test.tsx
+  s_ebcb6b1bfaf7ce::t_6780eb2776be68 4,8,13
+apps/web/src/lib/core/connectors/ConnectorIcon.tsx
+  s_ebcb6b1bfaf7ce::t_191c2d6d4a2042 4,10,19,41
+apps/web/src/lib/core/connectors/app-icons.ts
+  s_ebcb6b1bfaf7ce::t_3ce0ad4cb8b576 12-21,23-26,29-30,32-33
+apps/web/src/lib/core/connectors/connect-action.ts
+  s_ebcb6b1bfaf7ce::t_3437c27bfe8e54 2-3,6-8,10-16,23,26-27,30,32
+apps/web/src/lib/core/connectors/pendingConnect.ts
+  s_ebcb6b1bfaf7ce::t_fee0de4e69c358 6
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_ebcb6b1bfaf7ce::t_a31f4b1a679dec 480-487
+apps/web/src/lib/core/context/quickAccess/QuickAccessSource.test.ts
+  s_ebcb6b1bfaf7ce::t_da2e24637386c2 48,71,120-122,124-135,1677-1700
+apps/web/src/lib/core/context/quickAccess/QuickAccessSource.tsx
+  s_ebcb6b1bfaf7ce::t_b1886b5c8f116a 58,1145-1146,1150,1152-1153,1163
+apps/web/src/lib/core/context/quickAccess/person-list.test.tsx
+  s_ebcb6b1bfaf7ce::t_de98744fd53e90 6-10,22-23,425-620
+apps/web/src/lib/core/context/quickAccess/person-list.ts
+  s_ebcb6b1bfaf7ce::t_11cf285152f307 29,31-32,46-47,51,95-99,101-102
+apps/web/src/lib/core/context/quickAccess/types.ts
+  s_ebcb6b1bfaf7ce::t_ac18ee0a59f119 22,212-217
+apps/web/src/lib/core/hotkey/eclipse-override.test.ts
+  s_ebcb6b1bfaf7ce::t_3ebc0a0ec9473f 114-136
+apps/web/src/lib/core/hotkey/hotkeys.ts
+  s_ebcb6b1bfaf7ce::t_7229cc45132ea2 52-54,261-266,271-275,350
+apps/web/src/lib/core/signal/module-ownership.test.ts
+  s_ebcb6b1bfaf7ce::t_40bf241f618599 1,3-16,18-31,33,35-38
+apps/web/src/lib/core/signal/tabFocus.ts
+  s_ebcb6b1bfaf7ce::t_ee949cfcf7ff3e 4,11-13,26-30
+apps/web/src/lib/core/util/response-observers.test.ts
+  s_ebcb6b1bfaf7ce::t_e4d303a241f366 9-29,166-194
+apps/web/src/lib/core/util/response-observers.ts
+  s_ebcb6b1bfaf7ce::t_eb59b51b61cf82 21-41
+apps/web/src/lib/graphql-cache/people/generated.ts
+  s_ebcb6b1bfaf7ce::t_4898ecbb61c0eb 5,209,217
+apps/web/src/lib/graphql-cache/worker/browser-test/people-list-order-adapters.ts
+  s_ebcb6b1bfaf7ce::t_786f0d25880a42 1-11
+apps/web/src/lib/graphql-cache/worker/browser-test/people-list-order.browser.e2e.ts
+  s_ebcb6b1bfaf7ce::t_23181ad3fa8fd1 1-41
+apps/web/src/lib/graphql-cache/worker/browser-test/people-list-order.html
+  s_ebcb6b1bfaf7ce::t_9dcf48015d27f3 1
+apps/web/src/lib/graphql-cache/worker/browser-test/people-list-order.ts
+  s_ebcb6b1bfaf7ce::t_9c266778150f70 1-121
+apps/web/src/lib/graphql-cache/worker/browser-test/playwright.config.ts
+  s_ebcb6b1bfaf7ce::t_7053a1dbf2f536 23
+apps/web/src/lib/graphql-cache/worker/browser-test/vite.config.ts
+  s_ebcb6b1bfaf7ce::t_bdb3d6890993ab 12-24,76
+apps/web/src/lib/i18n/locales/en.ts
+  s_ebcb6b1bfaf7ce::t_5fa22414b399d8 27,67
+apps/web/src/lib/i18n/locales/en/github-connect.ts
+  s_ebcb6b1bfaf7ce::t_9d1ba541bc00b5 1-8
+apps/web/src/lib/queries/auth/github-link.ts
+  s_ebcb6b1bfaf7ce::t_f3a418c8b37eb2 5,91-94
+apps/web/src/lib/queries/calendar/graphql/range.ts
+  s_ebcb6b1bfaf7ce::t_48357e3973a213 11,20,31-34,394-398,402-403,435-437,449-450,454-456,465-481,501-513
+apps/web/src/lib/queries/calendar/graphql/readiness.ts
+  s_ebcb6b1bfaf7ce::t_b2fad0c3ae4790 29-42
+apps/web/src/lib/queries/calendar/graphql/sync-controller.ts
+  s_ebcb6b1bfaf7ce::t_c701364b0549e9 1,7,13,15,39-40,49-71,92-101,108-115,118,127,148-197,208-211,216,218-225,233-235,238-239,250-280,283-301,304-319,323,326-327,333-338,368,371-391
+apps/web/src/lib/queries/calendar/graphql/tests/sync-controller.test.ts
+  s_ebcb6b1bfaf7ce::t_c8b671ef7a8a93 9,14,18-19,90-118,150-153,301-406,474-670
+apps/web/src/lib/queries/calendar/graphql/tests/viewport.test.ts
+  s_ebcb6b1bfaf7ce::t_89f477096f46c9 13,413-571
+apps/web/src/lib/queries/calendar/graphql/use-calendar-cache.ts
+  s_ebcb6b1bfaf7ce::t_ba81224013212a 75-78
+apps/web/src/lib/queries/calendar/graphql/viewport.ts
+  s_ebcb6b1bfaf7ce::t_338dccb19d76f7 27,42-47,66-72,80-81,134-141,159-168,176-181,235-244,264,292-293,306,308,332-340
+apps/web/src/lib/queries/calendar/occurrences.ts
+  s_ebcb6b1bfaf7ce::t_d4507d9c433ccc 17-20,118-128,147,155-159,224,252-256,259-260,301-303
+apps/web/src/lib/queries/calendar/tests/cache-fallback.test.tsx
+  s_ebcb6b1bfaf7ce::t_35ae5890aa4255 1-5,9,17-28,61-66,124,177-457
+apps/web/src/lib/queries/connectors/catalog.ts
+  s_ebcb6b1bfaf7ce::t_05e8045dd5264d 1-118
+apps/web/src/lib/queries/connectors/connect.test.ts
+  s_ebcb6b1bfaf7ce::t_34b63dada2534c 2,9-14,17-18,35,40-41,45-82,86,89-90,93-106,109-115,118-120,122,125-129,132-138,142-146,148,151-155,159-165,167-172,174-175,177-191,193-196,198-199,202-212,214-221,225-232,234-235,237-238
+apps/web/src/lib/queries/connectors/connect.ts
+  s_ebcb6b1bfaf7ce::t_61410f847a0906 13-20,23-24,26,28-37,39-44,46-47,50-51,54-55,57-63,65,67-78,81-96,101-102,108-135,137-138,140-154,156,159-166,169-173,177-180,182-188,192-194,196-202,208-209,211-214,216-217,226-232,238-245
+apps/web/src/lib/queries/connectors/connectors.test.tsx
+  s_ebcb6b1bfaf7ce::t_bafcfc0b3f459b 1-199
+apps/web/src/lib/queries/connectors/connectors.ts
+  s_ebcb6b1bfaf7ce::t_1356e8a1526a4e 1,4,7-8,10-13,15-27,29-30,32-34,38-42,45-75,79-81,86-87,89-116,119-120,122-126,128,134-150,152-154,156,159-167,170-172,175-179,182-187
+apps/web/src/lib/queries/connectors/index.ts
+  s_ebcb6b1bfaf7ce::t_414c62621ca8d9 1-23
+apps/web/src/lib/queries/connectors/keys.ts
+  s_ebcb6b1bfaf7ce::t_b693a273065cbb 1-7
+apps/web/src/lib/queries/connectors/mutations.ts
+  s_ebcb6b1bfaf7ce::t_1d7b11cbaec2e1 2-10,12-18,20-21,23-25,28-116
+apps/web/src/lib/queries/connectors/wire.test.ts
+  s_ebcb6b1bfaf7ce::t_064d7d037621ed 1-105
+apps/web/src/lib/queries/contacts/backfill.test.ts
+  s_ebcb6b1bfaf7ce::t_40ff3eccf6a77b 23-28,64-66,70,435-594
+apps/web/src/lib/queries/contacts/backfill.ts
+  s_ebcb6b1bfaf7ce::t_683b16208b96f0 16,19,22-25,49-50,85-86,89-90,94,128-132,148,151,175-176,203-204,231,239-241,259,271-273,291,314,320-321,329,334
+apps/web/src/lib/queries/contacts/directory-list.test.tsx
+  s_ebcb6b1bfaf7ce::t_b8e32a25e8fef2 247-531
+apps/web/src/lib/queries/contacts/directory-list.ts
+  s_ebcb6b1bfaf7ce::t_401b0c21cac93f 2,5,24-25,29-83,97-98,132-141,160,180,184-189,200-201
+apps/web/src/lib/queries/contacts/directory-query.test.tsx
+  s_ebcb6b1bfaf7ce::t_9de00e47438102 140-219
+apps/web/src/lib/queries/contacts/directory-query.ts
+  s_ebcb6b1bfaf7ce::t_b122f14263bef6 91-96,109-110,115-118,121-125,129-130,166-169,216-236,246-252
+apps/web/src/lib/queries/contacts/directory-window-lifecycle.test.tsx
+  s_ebcb6b1bfaf7ce::t_0b9c1c6e94da89 356-475
+apps/web/src/lib/queries/contacts/directory.test.ts
+  s_ebcb6b1bfaf7ce::t_bd114ee420b3e4 24-33,37-38,79-93,100-103,178-292,472-950
+apps/web/src/lib/queries/contacts/directory.ts
+  s_ebcb6b1bfaf7ce::t_f098121521a3bb 2,10,14-18,26-27,57-58,62-68,78-85,90-94,99-101,170-172,174-179,201-220,224-258,281-374,404-415,419,476-649,652-660,665-666,676-679,687-688,690-703
+apps/web/src/lib/queries/contacts/filter-source.ts
+  s_ebcb6b1bfaf7ce::t_42b3a9032bb096 16-18,21-23,42-44,48-50
+apps/web/src/lib/queries/contacts/list-priority.ts
+  s_ebcb6b1bfaf7ce::t_df91cebb2cbfde 1-3,5-11
+apps/web/src/lib/queries/contacts/lists.ts
+  s_ebcb6b1bfaf7ce::t_0e921c30b00671 1-10,12-16,19-23,26-33
+apps/web/src/lib/queries/contacts/lookup.test.ts
+  s_ebcb6b1bfaf7ce::t_277da70ae4d326 17-18,198-272
+apps/web/src/lib/queries/contacts/lookup.ts
+  s_ebcb6b1bfaf7ce::t_314539bbc77ac1 17,30,54-65,170-178,202,205-206
+apps/web/src/lib/queries/contacts/recipient-source.ts
+  s_ebcb6b1bfaf7ce::t_a856574f52dc22 9,19-21
+apps/web/src/lib/queries/contacts/recipient-window.test.tsx
+  s_ebcb6b1bfaf7ce::t_bea2a7ac5ac30e 1-5,20-21,216-306
+apps/web/src/lib/queries/contacts/recipient-window.ts
+  s_ebcb6b1bfaf7ce::t_6945ed9ae989ec 7,18-20,29
+apps/web/src/lib/queries/contacts/refresh.ts
+  s_ebcb6b1bfaf7ce::t_605f57b462d9e9 1,3,11-52
+apps/web/src/lib/queries/contacts/top-up.test.ts
+  s_ebcb6b1bfaf7ce::t_b77eaefd19af40 1-243
+apps/web/src/lib/queries/contacts/top-up.ts
+  s_ebcb6b1bfaf7ce::t_bf4a742bfa4cbc 1-89
+apps/web/src/lib/queries/contacts/use-directory.ts
+  s_ebcb6b1bfaf7ce::t_64da17d35e6102 5,27-35,44-47
+apps/web/src/lib/queries/contacts/write-turn.ts
+  s_ebcb6b1bfaf7ce::t_20a67652b4807d 1-35
+apps/web/src/lib/queries/preview/fetchers.ts
+  s_ebcb6b1bfaf7ce::t_f6c9ba7f79bf65 435-439,445-458
+apps/web/src/lib/queries/preview/tests/routine-fetcher.test.ts
+  s_ebcb6b1bfaf7ce::t_20c917bd1c9ad1 2,5,7,21-26,79-108
+apps/web/src/lib/queries/slash-menu-mcps.test.ts
+  s_ebcb6b1bfaf7ce::t_73846d51b039b2 1,7-9,12-16,20-33,35-40,42,47-49,53-64,66-68,72-90,93-97
+apps/web/src/lib/queries/slash-menu-mcps.ts
+  s_ebcb6b1bfaf7ce::t_747edf3ee2999b 1,6,9,13-16,18,21-28,30-31,35,37
+apps/web/src/lib/queries/soup/backfill-contacts.test.ts
+  s_ebcb6b1bfaf7ce::t_5e4824ecb0ba53 11
+apps/web/src/lib/queries/soup/backfill.test.tsx
+  s_ebcb6b1bfaf7ce::t_f6340b411e6f79 30
+apps/web/src/lib/queries/soup/backfill.ts
+  s_ebcb6b1bfaf7ce::t_db67af14588a46 24,760
+apps/web/src/lib/queries/sync/use-query-sync.ts
+  s_ebcb6b1bfaf7ce::t_bcf0330b40b880 37,125-128
+apps/web/src/lib/queries/team/roster.test.tsx
+  s_ebcb6b1bfaf7ce::t_1e83e2ffdcbc13 1-47
+apps/web/src/lib/queries/team/roster.ts
+  s_ebcb6b1bfaf7ce::t_1c88a13be53928 1-5,7-38
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/connectMcpServerResponse.ts
+  s_ebcb6b1bfaf7ce::t_1399b1813892d7 7,13,15,17-18,21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/connectorStatus.ts
+  s_ebcb6b1bfaf7ce::t_d6119ab48b8677 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/discoveryResultOneOfThree.ts
+  s_ebcb6b1bfaf7ce::t_e20910d3c05599 18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_ebcb6b1bfaf7ce::t_952394dc677a96 192
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_ebcb6b1bfaf7ce::t_caa8047b9ec0a6 6590,6594,6598-6602,6610,6715-6719,7130
+apps/web/src/lib/service-clients/service-cognition/client.ts
+  s_ebcb6b1bfaf7ce::t_83d51b8cffbce2 18-20,32,142-146,149-150,152,159-169,171-172,178-179,181,183,190-191,193,195,201-207,210-212
+apps/web/src/lib/service-clients/service-cognition/generated/client.ts
+  s_ebcb6b1bfaf7ce::t_207e32c6f0f5d9 11,14,19-22,80,1286-1291,1295-1296,1300-1301,1305-1306,1308-1310,1315-1317,1319-1320,1323,1325-1326,1328,1333,1338,1341-1348,1351-1352,1356-1357,1361-1362,1366-1373,1378-1380,1382-1383,1386-1387,1389-1390,1394,1399,1404,1408,1410-1411,1415-1416,1420-1422,1425-1426,1429-1431,1436-1438,1440-1455,1458-1459,1461-1462,1464,1469-1471,1476,1480-1481,1483-1493,1495,1498-1516,1520-1522,1524-1525,1528-1530,1532-1533,1535,1540,1545,1549,1551-1553,1556-1557,1561-1562,1566-1568,1571-1573,1576-1577,1579-1585,1588-1590,1592-1593,1596-1599,1601-1602,1604,1606,1611,1616,1620-1623,1625-1626,1630-1646,1650-1651,1654-1659,1663-1665,1667-1671,1674-1676,1678-1679,1681,1686-1688,1693,1697-1698,1700-1701,1705-1706,1710-1712,1715-1717,1720-1722,1724-1733,1738-1740,1742-1746,1749-1751,1753-1754,1761-1763,1768,1771-1773,1776,1778,1781-1783,1786-1792,1796-1807,1810-1816,1821-1823,1825-1826,1829-1830,1832-1833,1835-1837,1842,1849,1852-1853,1857-1859,1862-1865,1867-1870,1872-1874,1877-1880,1882-1884,1887-1889,1892-1894,1897,1900-1908,1913-1915,1917-1918,1921-1922,1924-1925,1929,1934,1939,1943,1945-1946,1950-1952,1955-1957,1960-1962,1964-1972,1977-1979,1981-1982,1985-1986,1988-1989,1991-1993,1998,2003,2007,2009,2011,2014,2018,2020-2021,2024,2026-2027,2029,2034,2039,2043-2044,2046-2048,2051-2052,2056-2057,2061-2077,2081-2091,2094-2102,2107-2109,2111-2112,2115-2116,2118-2119,2123,2128,2133,2137-2138,2140-2142,2145-2146,2150-2154,2158-2160,2162,2174-2175,2178-2179,2181-2182,2184,2189,2194,2198-2200,2202-2203,2207-2208,2212-2218,2222,2225-2228,2233-2235,2237-2238,2241-2242,2244-2245,2247-2249,2254,2259,2263-2264,2266,2268-2283,2286-2287,2290-2296,2298-2300,2302-2303,2306-2307,2309-2310,2312,2317,2324,2328,2330-2331,2335-2336,2340-2347,2349-2351,2353-2354,2357,2359-2360,2362,2367-2369,2374,2378-2379,2381-2382,2386,2391-2398,2400-2402,2404-2405,2408,2410-2411,2413,2418-2420,2425,2429-2431,2433-2434,2438-2439,2443-2445,2448-2449,2453,2456-2459,2464-2466,2468-2469,2472-2473,2475-2476,2478-2480,2485,2490,2494,2496-2497,2501-2502,2506-2509,2513-2515,2517-2518,2521-2522,2524-2525,2527-2529,2534,2539,2543,2545-2547,2550-2551,2555-2557,2560-2565,2570-2572,2574-2575,2578-2579,2581-2582,2584,2589,2594,2598,2600-2601,2605,2610,2613,2617-2619,2621-2622,2625,2627-2628,2630,2635,2640,2644,2646-2647,2651-2652,2656-2657,2659-2660,2663-2664,2666-2667,2674,2681,2685,2687-2689,2692-2693,2697-2698,2700-2701,2704-2705,2707-2708,2715,2722,2726-2727,2729-2730,2734,2736,2739,2741,2744-2745,2748-2750,2755-2757,2759-2760,2773-2774,2777-2778,2780-2781,2788,2795,2799,2801-2802,2806-2807,2811-2812,2814-2815,2818,2820-2821,2823,2828,2835,2839-2841,2843-2844,2848-2849,2853-2854,2858-2859,2861-2863,2868-2870,2872-2873,2876,2878-2879,2881,2886,2891,2895-2897,2899-2900,2904-2911,2914-2915,2919-2925,2930-2943,2945-2947,2950-2951,2953-2954,2961,2966,2970-2971,2973-2974,2978-2979,2983-2984,2987,2991-2993,2995-2996,2999,3001-3002,3004,3009,3014,3018-3020,3022-3024,3027-3029,3032-3043,3047-3053,3056-3061,3066-3068,3070-3071,3074-3075,3077-3078,3080-3082,3087,3092,3096-3097,3099-3100,3104-3105,3109-3112,3116-3118,3120-3121,3124-3125,3127-3128,3130-3132,3137,3142,3146,3148-3149,3153-3154,3158-3163,3167-3169,3171-3172,3175,3177-3178,3180,3185,3192,3196-3197,3199-3201,3204-3206,3209-3210,3214-3215,3218-3220,3225-3227,3229-3230,3233-3234,3236-3237,3244,3251
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/addServerRequest.ts
+  s_ebcb6b1bfaf7ce::t_f66afff50391ae 9,12-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/browseConnectorCatalogParams.ts
+  s_ebcb6b1bfaf7ce::t_031fbe96e17a62 8,10,14,18
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/catalogApp.ts
+  s_ebcb6b1bfaf7ce::t_ea91fc7498e7b4 7-8,11,13-25
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/catalogAppDescription.ts
+  s_ebcb6b1bfaf7ce::t_c1df0f036f0be8 9,11
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/catalogAppIconUrl.ts
+  s_ebcb6b1bfaf7ce::t_46145b4ebaaacc 9,11
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/catalogPage.ts
+  s_ebcb6b1bfaf7ce::t_c51f34599687ef 7-8,11,13-17
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/catalogPageNextCursor.ts
+  s_ebcb6b1bfaf7ce::t_ae53316ffbabce 1-11
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectStep.ts
+  s_ebcb6b1bfaf7ce::t_588bf99fed8687 7-8,11,13
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectStepOneOf.ts
+  s_ebcb6b1bfaf7ce::t_75734201fe8dda 7,10-12,14-16,18
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectStepOneOfThree.ts
+  s_ebcb6b1bfaf7ce::t_9d7e6691c51151 7,10-11,13-21
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectStepOneOfThreeType.ts
+  s_ebcb6b1bfaf7ce::t_d9bfb5e818c92f 8-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectStepOneOfType.ts
+  s_ebcb6b1bfaf7ce::t_9cba4fd650b303 8-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectedServer.ts
+  s_ebcb6b1bfaf7ce::t_ee61508324947e 9-10,13-14,16,18
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connector.ts
+  s_ebcb6b1bfaf7ce::t_83bd476c10004f 7-8,11-12,14-30
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorKind.ts
+  s_ebcb6b1bfaf7ce::t_223370ef30f7e9 9,11,14-16
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorOauthCallbackParams.ts
+  s_ebcb6b1bfaf7ce::t_4def699565f256 8,10,14,18,22
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorStatus.ts
+  s_ebcb6b1bfaf7ce::t_16f9b5b419b815 1-20
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorTarget.ts
+  s_ebcb6b1bfaf7ce::t_bb1a927e693c7a 7-8,11,13
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorTargetOneOf.ts
+  s_ebcb6b1bfaf7ce::t_c68257ee45b7b1 7,10,12-16
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorTargetOneOfThree.ts
+  s_ebcb6b1bfaf7ce::t_1ea41000241e79 7,9-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorTargetOneOfThreeType.ts
+  s_ebcb6b1bfaf7ce::t_6147ba6efb1321 1-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorTargetOneOfType.ts
+  s_ebcb6b1bfaf7ce::t_a51a900aa65a9c 8-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/index.ts
+  s_ebcb6b1bfaf7ce::t_8b1f8467e8495f 40,43-47,101-114,393-395
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/onboardingState.ts
+  s_ebcb6b1bfaf7ce::t_dcf5b9b769b11d 16
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/updateConnectorRequest.ts
+  s_ebcb6b1bfaf7ce::t_4e05f5f3774a7d 7-8,11,13-17
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/updateConnectorRequestEnabled.ts
+  s_ebcb6b1bfaf7ce::t_3f862916a74d1b 9,11
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/updateConnectorRequestName.ts
+  s_ebcb6b1bfaf7ce::t_19f270ea8facc9 9,11
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_ebcb6b1bfaf7ce::t_2d329649d057a4 1284-1306,21142-21320
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_ebcb6b1bfaf7ce::t_d29f195163e4c0 237-244,1237,4968-5004,6386,6390,6393,6395,16834-16951
+apps/web/src/lib/service-clients/service-cognition/openapi.json
+  s_ebcb6b1bfaf7ce::t_14968093b132d4 1105-1109,1116-1119,1125-1132,1134,1139,1143-1156,1158-1161,1166,1171,1176,1181,1184,1186,1191,1196,1204-1216,1219-1239,1242,1246,1251-1252,1254,1256,1261-1262,1266,1270-1287,1289-1301,1303-1304,1308,1313-1314,1316,1318,1323-1324,1328,1333-1334,1338,1344-1368,1373,1380-1384,1388,1393-1394,1396,1398,1403-1404,1408,1412-1414,1416,1418,1426,1428-1439,1441-1450,1453,1457,1463,1467,1473,1475,1477,1482-1483,1487,1492-1493,1497,1501-1518,1520-1532,1536,1541-1542,1546,1551-1552,1554,1556,1561,1566,1572-1579,1582-1584,1586-1587,1592,1604,1609-1610,1612-1619,1622-1630,1637,1642-1643,1647,1652-1660,1665,1667-1668,1673,1681,1685,1691,1695,1700-1701,1703-1704,1708,1713-1715,1717,1721,1725-1727,1731,1736-1737,1739,1741,1746-1747,1751,1757-1763,1765,1769,1777,1781,1786-1787,1789,1791,1796-1800,1804,1808-1819,1821,1823,1829-1831,1833-1835,1840,1847-1848,1852,1858,1862,1868-1871,1873,1875,1880-1881,1885,1890-1891,1893,1895,1901,1905-1925,1933,1935-1937,1940,1942,1945,1949,1951,1954,1960,1964,1970,1973,1975-1977,1982,1994,1999-2050,2053,2055,2061-2073,2077,2081-2083,2088-2102,2105,2109,2114-2118,2121-2143,2147,2151-2153,2158-2162,2165-2168,2175-2176,2179,2182,2187,2189-2191,2194,2198,2204,2209,2211-2223,2226,2230,2238,2240-2249,2252,2255,2259,2267-2271,2274-2277,2283,2285,2292,2294,2301,2303,2306,2312,2314-2315,2324,2337-2341,2344,2349-2354,2357,2361,2367,2370,2374,2382,2384-2395,2398-2405,2408-2415,2417-2418,2421,2425,2430-2431,2435,2440-2441,2445,2451,2455,2463,2465-2468,2471,2475,2481,2485,2491-2496,2501,2509,2513,2518-2519,2521,2523,2528-2529,2533,2538-2539,2543,2549,2553,2558-2559,2563-2582,2586-2588,2593,2595-2597,2602,2605-2606,2610,2614,2620-2632,2636,2641-2659,2662-2672,3299-3300,3302,3304,3308,3564-3604,3606,3608,3610-3614,3618,3620-3621,3623-3632,4091-4133,4136,4141,4145,4149-4197,4201-4245,6239,7321-7334
+apps/web/src/lib/service-clients/service-connection/websocket.ts
+  s_ebcb6b1bfaf7ce::t_f27882146a757f 12,78
+apps/web/src/lib/service-clients/service-contacts/generated/schemas/searchPeopleResponse.ts
+  s_ebcb6b1bfaf7ce::t_222c027aeef018 13-16
+apps/web/src/lib/service-clients/service-contacts/generated/schemas/searchedPerson.ts
+  s_ebcb6b1bfaf7ce::t_daba67d768d1ba 17-20
+apps/web/src/lib/service-clients/service-contacts/openapi.json
+  s_ebcb6b1bfaf7ce::t_452647527a1d4c 211,218,228-234
+apps/web/src/lib/service-clients/service-storage/graphql-contacts.test.ts
+  s_ebcb6b1bfaf7ce::t_4b511501219066 8-9,14,161-220
+apps/web/src/lib/service-clients/service-storage/graphql-contacts.ts
+  s_ebcb6b1bfaf7ce::t_41989407c56392 12,15,30-53,57-58,65-67,127-128,132-133,146,161-162
+apps/web/src/lib/service-clients/service-storage/graphql/contacts.graphql
+  s_ebcb6b1bfaf7ce::t_c9bdb12344fae9 14-20,34-45,55-63
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_ebcb6b1bfaf7ce::t_c3f0c8ff695290 5338-5339,5348-5355,5363-5369,28990,29072,29074,29171-29172
+apps/web/src/lib/service-clients/service-storage/websocket.ts
+  s_ebcb6b1bfaf7ce::t_6adc77550aba0b 9,66
+apps/web/src/routes/app-router-view.tsx
+  s_ebcb6b1bfaf7ce::t_c730c84fd5a4f2 87,149,285-288
+apps/web/src/routes/pages.tsx
+  s_ebcb6b1bfaf7ce::t_68f86eb5e0afee 87-97
+apps/web/src/routes/routes.ts
+  s_ebcb6b1bfaf7ce::t_b0837371bdd191 174-184
+apps/web/src/vite-env.d.ts
+  s_ebcb6b1bfaf7ce::t_9cb04fa564142e 42
+apps/web/tauri/graphql_cache_plugin/src/engine/test/people.rs
+  s_ebcb6b1bfaf7ce::t_4a30639ac50ee3 94-95
+apps/web/tests/email-e2e/README.md
+  s_ebcb6b1bfaf7ce::t_b1c74d7355d15a 54-58
+apps/web/tests/email-e2e/full-stack-calendar.spec.ts
+  s_ebcb6b1bfaf7ce::t_b530fdc8d9ce62 772-875
+apps/web/tests/email-e2e/harness/front.ts
+  s_ebcb6b1bfaf7ce::t_f4b5c37b6fa4b4 21-22,306-312
+apps/web/tests/email-e2e/harness/states-list.ts
+  s_ebcb6b1bfaf7ce::t_48615435fb109e 53-58,70-73,80-83,88-89,92,94-95,99-101
+apps/web/tests/email-e2e/harness/ways-list-more.ts
+  s_ebcb6b1bfaf7ce::t_9e32b85351c21b 6,42-44,51-55
+apps/web/tests/email-e2e/states-list-focus.spec.ts
+  s_ebcb6b1bfaf7ce::t_1353e2f9fae26a 58-59,73-74
+apps/web/tests/email-e2e/ways-list1-filters.spec.ts
+  s_ebcb6b1bfaf7ce::t_2bae8e4a93230c 235-236
+apps/web/tests/native/fixtures/bootstrap.ts
+  s_ebcb6b1bfaf7ce::t_1fd3ce39ae08f7 3-4,45-51,94-95,106,122-129
+apps/web/tests/native/fixtures/server.test.ts
+  s_ebcb6b1bfaf7ce::t_e29f1722135446 477-491
+crates/activity/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_ccab1f5b7e4d67 26-33,39,59-61
+crates/activity/src/domain/ports.rs
+  s_ebcb6b1bfaf7ce::t_94f183ef9cd373 198-244
+crates/activity/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_f9177d0270c52c 43-44
+crates/activity/src/outbound/pg_activity_repo.rs
+  s_ebcb6b1bfaf7ce::t_b51cc689163531 10
+crates/activity/src/outbound/pg_activity_repo/test.rs
+  s_ebcb6b1bfaf7ce::t_9338a7f560bbef 12
+crates/activity/src/outbound/pg_activity_repo/test/teammate_feed.rs
+  s_ebcb6b1bfaf7ce::t_583612e207c9b3 10
+crates/activity/src/outbound/pg_activity_repo/test/user_activity.rs
+  s_ebcb6b1bfaf7ce::t_ab87de976de9be 1-261
+crates/activity/src/outbound/pg_activity_repo/user_activity.rs
+  s_ebcb6b1bfaf7ce::t_130488850a40e1 1-99
+crates/agent_code_mode/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_9de8a39d88f711 29
+crates/agent_code_mode/src/domain/connected_apps.rs
+  s_ebcb6b1bfaf7ce::t_abbe30388a2249 12-14
+crates/agent_code_mode/src/inbound/axum_router.rs
+  s_ebcb6b1bfaf7ce::t_939e4e219519e0 410-411,422,439-440,451
+crates/agent_egress/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_86b45248a740ce 29-48,138-139
+crates/agent_egress/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_e4b08c21286f22 50-54,74-75
+crates/agent_egress/src/domain/error.rs
+  s_ebcb6b1bfaf7ce::t_de161a1cdb602c 37-38,42-44,48-53,55-56
+crates/agent_egress/src/domain/model.rs
+  s_ebcb6b1bfaf7ce::t_f9aa397e024b95 29-30,231-236,248,250-252,312-327,348-349,351-358,361,363-365,367-373,382-383,422-423,425-430,444-445,447-449,460-526,537,541-562,898
+crates/agent_egress/src/domain/ports.rs
+  s_ebcb6b1bfaf7ce::t_5c87dd011c5dac 18,50-51,58-62,68
+crates/agent_egress/src/domain/service.rs
+  s_ebcb6b1bfaf7ce::t_c1d1bfbee3557f 15-18,270,276,281-287,290-310,312-343,531-580,583,590-595,597,599,602-617,619-639,641-644,647
+crates/agent_egress/src/domain/service/actor.rs
+  s_ebcb6b1bfaf7ce::t_240963c23eb43d 6-8,81-89,118-119,126-141,143,145-147,151-166,171-188,235-242,436,448-463,483-487
+crates/agent_egress/src/domain/service/test.rs
+  s_ebcb6b1bfaf7ce::t_567e63391ae626 3-5,8,58,86-99,105,107-110,112-113,123-124,141,149,153-170,209,227,231-234,248-257,266-269,397-399,401-430,433,438,447-450,562-626,628,647,656,662-668,670-739,886-887,889,904,906-909,1105,1419
+crates/agent_egress/src/domain/service/test/actor.rs
+  s_ebcb6b1bfaf7ce::t_a690af6017b1ee 332-336,347,534-684
+crates/agent_egress/src/inbound/axum_router.rs
+  s_ebcb6b1bfaf7ce::t_3976e94a0be4b0 278,304
+crates/agent_egress/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_7438ee91965205 8,25-29,42-46,48-49
+crates/agent_egress/src/outbound/actor_mcp.rs
+  s_ebcb6b1bfaf7ce::t_12fa2dbf442e65 7,116
+crates/agent_egress/src/outbound/forwarder.rs
+  s_ebcb6b1bfaf7ce::t_94323f94cd36f6 8
+crates/agent_egress/src/outbound/macro_mcp.rs
+  s_ebcb6b1bfaf7ce::t_269fd307d82585 20,166,169,171-174
+crates/agent_egress/src/outbound/macro_mcp/test.rs
+  s_ebcb6b1bfaf7ce::t_2e4248b5ef411d 3,78,104,134,155-161,185,206,236,271-277
+crates/agent_egress/src/outbound/mcp_credentials.rs
+  s_ebcb6b1bfaf7ce::t_8db78e2f0b5ddf 1-2,4-10,12-13,15-18,24,31-33,37,39,41-43,46,48-89,91-108,110-153,156,158,166,169-171,174,176-194
+crates/agent_egress/src/outbound/mcp_credentials/test.rs
+  s_ebcb6b1bfaf7ce::t_d700b4000224e5 2-8,10-13,15-16,22-23,26-28,30-37,39-46,48-50,52-66,68-71,75-87,90-97,100-131,133-152,157-180,183-184,186-187,189-200,204,207,210,212-215,217-243,245,247-320,322-323,326-356,358-359,361-370,373,375-391,394-395,397-398,400-422,424-429,431-437,439-440,442-458,461-467,469-473,475-485,487-489,491-521,524-550
+crates/agent_egress/src/outbound/mod.rs
+  s_ebcb6b1bfaf7ce::t_ef9bb052c6c4ac 9-10
+crates/agent_egress/src/outbound/session_authority.rs
+  s_ebcb6b1bfaf7ce::t_16cdc30e86e222 30,125-127,139,160
+crates/agent_harness/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_ece70f30c04615 54-63
+crates/agent_harness/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_6b1fe4b3e5a8f4 58,110-111
+crates/agent_harness/src/outbound/connected_apps.rs
+  s_ebcb6b1bfaf7ce::t_4c72b04a11f7aa 1-2,6,14,17,19-20,24-27,31,33,37,43-50,52-58
+crates/agent_harness/src/outbound/connected_apps/test.rs
+  s_ebcb6b1bfaf7ce::t_62da18b2554639 2,4-5,8-12,15-30,33-44,47-53,56,58-68,70-119,121-126,128-131,133-141
+crates/agent_harness/src/outbound/egress.rs
+  s_ebcb6b1bfaf7ce::t_e52c1343d44db7 3-5,14,16,28-29,35,37,39-41,55-60,66-88,91-92,96,98
+crates/agent_harness/src/outbound/egress/test.rs
+  s_ebcb6b1bfaf7ce::t_c0381947f78432 3,9-10,13,15-16,19-27,31-36,39,45-64,71,73,75,92-95,98-100,102,105,112-114,116,118-119,122-124,126-137,139,142,150,156-157,160,162,164-207,376
+crates/agent_inmem/src/outbound/rig_engine/test/code_tools.rs
+  s_ebcb6b1bfaf7ce::t_a3df2c252fd238 125
+crates/agent_inmem/src/rig_engine.rs
+  s_ebcb6b1bfaf7ce::t_dcdfe73d719d3f 165,196,311,923,933
+crates/agent_session/src/domain/routines.rs
+  s_ebcb6b1bfaf7ce::t_6737aef31581ad 68,70-73,76-77
+crates/agent_session/src/domain/routines/service.rs
+  s_ebcb6b1bfaf7ce::t_bc7dac926f5ff2 102-106,109,112,115
+crates/agent_session/src/domain/routines/service/test.rs
+  s_ebcb6b1bfaf7ce::t_ca000d265a71c9 189,192-197
+crates/ai_tools/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_654ba36d04a4c9 79-80
+crates/ai_tools/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_4d0d4bea4f3e56 32,84,130
+crates/ai_tools/src/bin/memory/context.rs
+  s_ebcb6b1bfaf7ce::t_282d7323a79df0 29-30
+crates/ai_tools/src/build_context.rs
+  s_ebcb6b1bfaf7ce::t_c84c2895e2895b 81-82,86-88,93-111,161-162,199-201,212,228,414-425,599,632-633,637,659,662-667,670,687,741
+crates/ai_tools/src/connectors_config.rs
+  s_ebcb6b1bfaf7ce::t_fc31ab14009e3c 1-224
+crates/ai_tools/src/import_channels/test.rs
+  s_ebcb6b1bfaf7ce::t_6fd726599f0765 38-41,191,227
+crates/ai_tools/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_d9213325675018 14,64-65,69,89-90,350-352,379-381,461-462
+crates/ai_tools/src/mcp_app_catalog.rs
+  s_ebcb6b1bfaf7ce::t_cb53a5845aa89f 1,4,6,8-9,11-12,15-18,22,25-26,31,33-36,38,41-44
+crates/ai_tools/src/mcp_app_catalog/test.rs
+  s_ebcb6b1bfaf7ce::t_706232380c9ae5 2,4-6,8-10,12-13,17-21,25-28,32-35,38-53
+crates/ai_tools/src/schemas/anthropic_tools.rs
+  s_ebcb6b1bfaf7ce::t_bfe5bc1e37ce8b 1-2,5,7-8,10-25,29-30
+crates/ai_tools/src/schemas/mod.rs
+  s_ebcb6b1bfaf7ce::t_6eb319c4c69925 6
+crates/ai_tools/src/test.rs
+  s_ebcb6b1bfaf7ce::t_101a1d5b03cc9f 878,881-885
+crates/ai_tools/src/tool_context.rs
+  s_ebcb6b1bfaf7ce::t_3b0d7bb0e52d29 31-32,177,184-185,191,203-204,330-334,387-394,1464-1471,1492-1493,1498,1504-1511,2169,2171-2172,2305-2309,2312-2313,2315,2317-2321
+crates/ai_tools/src/tool_context/test/import_link_access.rs
+  s_ebcb6b1bfaf7ce::t_88db9d6b345ba0 214-216,229,349,593
+crates/anthropic/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_5074e420e2fdb3 7-11,22-24,31,45-46
+crates/authentication_service_client/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_89ddecf73c0998 13-15
+crates/authentication_service_client/src/github_access_token.rs
+  s_ebcb6b1bfaf7ce::t_2196095dc744e6 5-19,29-41,53-59,61-70,72-93
+crates/channels/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_f5fa7650596542 108-120
+crates/channels/src/domain/events.rs
+  s_ebcb6b1bfaf7ce::t_db321f2dba35e1 122-132
+crates/channels/src/domain/ports.rs
+  s_ebcb6b1bfaf7ce::t_5e26121117ca4b 292-293,298,341,348,953-960
+crates/channels/src/domain/service.rs
+  s_ebcb6b1bfaf7ce::t_d891dbc2d8b0da 474-475,479-486,843-873,1254-1255,1258-1263
+crates/channels/src/domain/service/test.rs
+  s_ebcb6b1bfaf7ce::t_f40f35dd3e18cb 24,62-63,108,270-288,340-368,1282
+crates/channels/src/domain/service/test/auto_join.rs
+  s_ebcb6b1bfaf7ce::t_02d553ce5e5c10 1-145
+crates/channels/src/domain/side_effects.rs
+  s_ebcb6b1bfaf7ce::t_ee020d31df5331 364,467,508-520,1190-1277,1390-1391
+crates/channels/src/domain/side_effects/test.rs
+  s_ebcb6b1bfaf7ce::t_646080e1814cf3 1,127,140-151
+crates/channels/src/domain/side_effects/test/interactions.rs
+  s_ebcb6b1bfaf7ce::t_abf8377729a673 1-364
+crates/channels/src/outbound/contacts_dispatcher.rs
+  s_ebcb6b1bfaf7ce::t_90283640bcc232 4,30,43-53
+crates/channels/src/outbound/pg_channels_repo.rs
+  s_ebcb6b1bfaf7ce::t_2fb7a97cbc7b7a 2715-2716,2727,2732,2734,2842,2929-2930,2941,2946,2948-2951,2957
+crates/channels/src/outbound/pg_channels_repo/tests.rs
+  s_ebcb6b1bfaf7ce::t_ca3f8aa4fdc1e8 935-950,993-1006,1089-1094,1148-1149
+crates/client/README.md
+  s_ebcb6b1bfaf7ce::t_36497862368448 323,343-344
+crates/client/cache-core/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_bc0cf22e30e3b8 33-34
+crates/client/cache-core/src/calendar/test.rs
+  s_ebcb6b1bfaf7ce::t_52ca6bba7ef881 270,275,279,283,290-332,336,343,350-357,371-391
+crates/client/cache-core/src/calendar/watermark.rs
+  s_ebcb6b1bfaf7ce::t_2d0cba1f5165e6 39-43,50-52,95-97,113-117
+crates/client/cache-core/src/people.rs
+  s_ebcb6b1bfaf7ce::t_49edd5a90c126a 20-22,27-32,154-165
+crates/client/cache-core/src/people/name_search.rs
+  s_ebcb6b1bfaf7ce::t_0119eabadada3a 3-4,6,110-141
+crates/client/cache-core/src/people/name_search/projection.rs
+  s_ebcb6b1bfaf7ce::t_a7f4bf9a1dc832 2,33-40,67-73,75-83,100,107-119
+crates/client/cache-core/src/people/name_search/reader.rs
+  s_ebcb6b1bfaf7ce::t_ddde1d0268693b 2,5-7,36,47,50-68,98-111,124,147-156,173-175,186,269-314,362,374,376-377,380-386,394,398-410,413-416,436-440,446-447,457,474-477,480,482,484,488,492,494,506-509,511-519,521-524,526-527,530-536,573-576,588
+crates/client/cache-core/src/people/name_search/reader/test.rs
+  s_ebcb6b1bfaf7ce::t_1b880dbb3dc102 22-23,282-515
+crates/client/cache-core/src/people/schema.json
+  s_ebcb6b1bfaf7ce::t_6b8ad615439ac7 10,760-770,780-783
+crates/client/cache-core/src/people/sql/projection.rs
+  s_ebcb6b1bfaf7ce::t_4b6b849926283a 19,29
+crates/client/cache-core/tests/contact_lists.rs
+  s_ebcb6b1bfaf7ce::t_eb65f515bc4379 1-112
+crates/client/cache-turso/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_3bf61daa2b068b 17-18
+crates/client/cache-turso/src/storage/name_search.rs
+  s_ebcb6b1bfaf7ce::t_49ff07b6692fea 9-10,14,206-210,216-217,219-280,284-288,298-299,321,325-333,355
+crates/client/cache-turso/src/storage/name_search/test.rs
+  s_ebcb6b1bfaf7ce::t_0690d2513491fa 114-115,671-819
+crates/client/cache-turso/tests/common/contacts.rs
+  s_ebcb6b1bfaf7ce::t_56cf4126c2ee5f 239-319
+crates/client/cache-turso/tests/common/name_search.rs
+  s_ebcb6b1bfaf7ce::t_d46a6968cf884e 44-45,80-81,136-138
+crates/client/cache-turso/tests/common/people.rs
+  s_ebcb6b1bfaf7ce::t_b9465882ca00a2 54-65,125-126
+crates/client/cache-turso/tests/contacts.rs
+  s_ebcb6b1bfaf7ce::t_d3ed4675d8c5cd 26
+crates/client/cache-turso/tests/people.rs
+  s_ebcb6b1bfaf7ce::t_862c4d012901d2 53-61,73-74,82-83
+crates/client/cache-turso/tests/web.rs
+  s_ebcb6b1bfaf7ce::t_035724aea25443 198
+crates/client/cache-wasm/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_9c1559d11f25bb 64
+crates/coding_agent_worker/src/dispatch.rs
+  s_ebcb6b1bfaf7ce::t_2b07eaa334d319 11-26,42-64,155-184,213-218,268-278,286-290,293,304,315-316,325-331,352-357,361,370,372
+crates/coding_agent_worker/src/herdr/cli.rs
+  s_ebcb6b1bfaf7ce::t_c8a7c93c91b898 59-60,63-68
+crates/coding_agent_worker/src/herdr/cli/hc.rs
+  s_ebcb6b1bfaf7ce::t_ebac924c089471 28,260-262,269,274,293,361-371
+crates/coding_agent_worker/src/herdr/cli/test.rs
+  s_ebcb6b1bfaf7ce::t_36713d91b0ddb7 312-323
+crates/coding_agent_worker/src/herdr/repositories.rs
+  s_ebcb6b1bfaf7ce::t_a2d71f15218ebf 7,10-12,14-15,22-23,28-36,41-58,60-71,81,84-85
+crates/coding_agent_worker/src/herdr/repositories/test.rs
+  s_ebcb6b1bfaf7ce::t_76e78540c35747 2,4-8,10-12,15-16,19-21,23,25-47,50-57,61-63,65-68,70-71,76-79,81,83,87-91,93,95-96,98-99,104-115,117-118
+crates/coding_agent_worker/src/outbound/agent_session.rs
+  s_ebcb6b1bfaf7ce::t_9c25b654a4cde2 112,157
+crates/coding_agent_worker/src/telemetry.rs
+  s_ebcb6b1bfaf7ce::t_36592dbda85346 149,154-155
+crates/coding_agent_worker/src/trigger.rs
+  s_ebcb6b1bfaf7ce::t_a82599bb0975ee 16,22,29-30,218-265,268-291,296-299,301-319,321
+crates/coding_agent_worker/src/trigger/test.rs
+  s_ebcb6b1bfaf7ce::t_d9e3d855d17c17 332-452
+crates/complete_graph/src/schema/test/contacts.rs
+  s_ebcb6b1bfaf7ce::t_f4cf2a2b615595 47
+crates/connectors/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_6e022f890ff5c7 1,5-9,13-44,48-55,57,59-64,68-92,96-97
+crates/connectors/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_2d97d458575816 2,10-12,15,19,21-24,26,33,35,39,52-57
+crates/connectors/src/composition.rs
+  s_ebcb6b1bfaf7ce::t_bbf46a33b4ba7f 1-244
+crates/connectors/src/composition/test.rs
+  s_ebcb6b1bfaf7ce::t_42ca4ab8b35a6d 1-114
+crates/connectors/src/domain.rs
+  s_ebcb6b1bfaf7ce::t_7b3c60df77177a 1-11,13-15,17
+crates/connectors/src/domain/catalog.rs
+  s_ebcb6b1bfaf7ce::t_9f9c975dc75b17 1-95
+crates/connectors/src/domain/catalog/test.rs
+  s_ebcb6b1bfaf7ce::t_03c6954827051a 1-46
+crates/connectors/src/domain/discovery.rs
+  s_ebcb6b1bfaf7ce::t_bf515f9f8c956a 1-10,16-20,23-44,47-50,52,56-66,69-119,122-125,128-139,145,147-149,151-161,164-165,167-180,182-187
+crates/connectors/src/domain/discovery/test.rs
+  s_ebcb6b1bfaf7ce::t_743dec8afefe0b 2-3,6-8,10,13-25,28,32-33,36,40-44,46-47,50,53-58,63-65,67-69,75-78,81-82,85-89,93-100,102,105-107,111-126,128-130,135-139,143,147-157,161-184
+crates/connectors/src/domain/models.rs
+  s_ebcb6b1bfaf7ce::t_379c4726764ce4 1-8,10,12-14,16,21-69,71-88,90-131,136-160,162-165,167-170,174-187,190-198,200-225,227-262,264-269,271-283,285-295,297-298,300-302,306-308,311-318,322-328,332-338,341-345,347-352,354-357,359-408,410,412-428,431,433-471,474-476,479-483,486-488,490-510,512-515,517-518,521-526,530-549,552-581,585-592,595-596,598-600,603-722,725,728,732-734,738,742,746,750
+crates/connectors/src/domain/models/test.rs
+  s_ebcb6b1bfaf7ce::t_88a2c16c4cfddf 1-66
+crates/connectors/src/domain/policy.rs
+  s_ebcb6b1bfaf7ce::t_c276ad8d329cad 1-77
+crates/connectors/src/domain/policy/test.rs
+  s_ebcb6b1bfaf7ce::t_5c07b23739fea6 1-79
+crates/connectors/src/domain/ports.rs
+  s_ebcb6b1bfaf7ce::t_4a3cb2d51d8a3a 1-242
+crates/connectors/src/domain/resolve.rs
+  s_ebcb6b1bfaf7ce::t_e1af3597e3fedc 1-24,28-33,35-48,50-54,57-90,94-121,123-130,133-135,139-146,149-158,161-170,172-179,181-191,193-205,207-214
+crates/connectors/src/domain/resolve/test.rs
+  s_ebcb6b1bfaf7ce::t_3a530cf7f04cb4 1-919
+crates/connectors/src/domain/resolve/test/properties.rs
+  s_ebcb6b1bfaf7ce::t_204b8f497e5cac 1-381
+crates/connectors/src/domain/service.rs
+  s_ebcb6b1bfaf7ce::t_03e162e3b79e7a 1-825
+crates/connectors/src/domain/service/test.rs
+  s_ebcb6b1bfaf7ce::t_3191eb6d99bedf 1-976
+crates/connectors/src/domain/sign_in.rs
+  s_ebcb6b1bfaf7ce::t_301105d2dfd41e 1-11,14-15,17-22,24-27,30-33,37-60,62-65,67-76,78-98,100-115,117,120-121
+crates/connectors/src/domain/sign_in/test.rs
+  s_ebcb6b1bfaf7ce::t_c924a1c88dcf5d 1-91
+crates/connectors/src/fake.rs
+  s_ebcb6b1bfaf7ce::t_ef2b6004889fad 1-315
+crates/connectors/src/fake/source.rs
+  s_ebcb6b1bfaf7ce::t_86f4ea2bac9e5c 1-488
+crates/connectors/src/inbound.rs
+  s_ebcb6b1bfaf7ce::t_47bde469cc59cb 1-67
+crates/connectors/src/inbound/axum_router.rs
+  s_ebcb6b1bfaf7ce::t_6fe479c08d4d67 1-13,15,18,21,32-35,37-39,42,45-46,48-50,55-56,61,63-64,67-68,70-71,75-76,78-80,84-88,92-94,98-101,105-107,110-111,117-124,127-132,137,139-143,146-148,151,154-164,166-174,178,187-189,191,196-197,199-200,202,204-205,208-209,212-215,221-223,226,232-234,236-237,240,242-243,246-252,256,261-265,267,272,274-275,277-278,280-281,284-293,295-298,302-306,308-309,311,315-316,318-319,321-322,324-325,328-330,332,337-340,342-343,345,349-352,354-355,357-358,360-361,364-384,386,390-395,397-401,404-411,413-414,417-422,425-429,431-432,436-440,442-445,449-456,458-459,462-465,467
+crates/connectors/src/inbound/axum_router/test.rs
+  s_ebcb6b1bfaf7ce::t_ad48a60fa329e9 1-505
+crates/connectors/src/inbound/callbacks.rs
+  s_ebcb6b1bfaf7ce::t_891ffc93e75406 1-11,14,16-17,20,22,27-34,36-39,42,45-46,51-53,55-56,60-62,67-69,71,75-77,81-82,84-85,91-92,97,99-217,220,222,227-233,235-238,242,244,248,250,254,256-260,263-264,279-280
+crates/connectors/src/inbound/callbacks/test.rs
+  s_ebcb6b1bfaf7ce::t_86a899ab7e153c 1-49,53-60,63-175,177,179,188,190,194,198
+crates/connectors/src/inbound/dto.rs
+  s_ebcb6b1bfaf7ce::t_a891d3eea4b038 1-361
+crates/connectors/src/inbound/dto/test.rs
+  s_ebcb6b1bfaf7ce::t_57252402fbac4b 2-9,12-13,16-17,21-24,26-27,29-30,35-40,42-49,51,56-69,73-84,87-97,102-113,117-124,126-127,130-131,133,137-145,147-159
+crates/connectors/src/inbound/test.rs
+  s_ebcb6b1bfaf7ce::t_7264e073322e16 1-30
+crates/connectors/src/inbound/test_support.rs
+  s_ebcb6b1bfaf7ce::t_1a1329d8246284 1-120
+crates/connectors/src/inbound/toolset.rs
+  s_ebcb6b1bfaf7ce::t_ac7c0eddae7f43 1-5,7-10,12-13,16,21-34,37,40-225,266,273-448
+crates/connectors/src/inbound/toolset/test.rs
+  s_ebcb6b1bfaf7ce::t_d77e4df468b5e1 1-307
+crates/connectors/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_f6750b70e16dd5 2-3,5-10,12-17,19,21-34
+crates/connectors/src/outbound.rs
+  s_ebcb6b1bfaf7ce::t_784b270b7a2435 1-21
+crates/connectors/src/outbound/app_directory.rs
+  s_ebcb6b1bfaf7ce::t_8fc1c7baecf644 1-18,32,48,54,57-59,62-65,69-89,91-141,144-174
+crates/connectors/src/outbound/app_directory/test.rs
+  s_ebcb6b1bfaf7ce::t_a2f73ee8cbaed3 2-3,5-7,9-15,23-35,43,47-56,60-64,66-67,71-72,74,76-78,82-94
+crates/connectors/src/outbound/github_link.rs
+  s_ebcb6b1bfaf7ce::t_a4103f22c9d5c8 1-14,16,19-23,25-28,30-32,37-53,56-61,64,66-108,111-115,118-131,134-145,147-167,170-174,178-187,189-203,207-218,220-222,225-227,230-232,235-238,240-244,247-257,260-261,263-268,271-272,274-280,282-283,286-289,291-300,302,306-313,315-319,321,323-329,332-338
+crates/connectors/src/outbound/github_link/auth_service.rs
+  s_ebcb6b1bfaf7ce::t_9c6302dc05f5b4 1,4-5,7-8,10-12,16-18,24-33,35-36
+crates/connectors/src/outbound/github_link/test.rs
+  s_ebcb6b1bfaf7ce::t_eb8c7293e53217 2-8,10,12-45,48-64,67-84,87-88,90-93,97-98,102-103,105-111,113,115-157,160-236,238-240,243,247,249-254,258-261,265-272,274-277,280,283,285-286,288-295,299-306,310-315,317,319-320,323-346,348-349,352,354-366,368,370-378
+crates/connectors/src/outbound/guarded_http.rs
+  s_ebcb6b1bfaf7ce::t_b9cc36d7fd00b7 23-25,27
+crates/connectors/src/outbound/hosted_connections.rs
+  s_ebcb6b1bfaf7ce::t_eda47cba405cc1 1-10,12-13,16-62,64-73,75,77,80-83,86-92,94-97,99-100,102-116,119-121,123-126,128,130-131,133-134,136-150,153-163,165-179,181-183,185-194,196-198,200-204,206-208,210-225,230-233,235-240,242-244,246-249,251-253,255,258-276,278-282,285-300,302-306,310-342,345-349
+crates/connectors/src/outbound/hosted_connections/test.rs
+  s_ebcb6b1bfaf7ce::t_48b7481be54823 6-7,10-42,47-56,58,60-62,64-65,67-70,72-73,75-90,92-117,120-122,127-141,144-160,164,169-184,188-213,216,221-238,240-247
+crates/connectors/src/outbound/macro_connect.rs
+  s_ebcb6b1bfaf7ce::t_7733e0712256b4 1-13
+crates/connectors/src/outbound/macro_connect/source.rs
+  s_ebcb6b1bfaf7ce::t_505f9d92e237cd 1-372
+crates/connectors/src/outbound/macro_connect/source/test.rs
+  s_ebcb6b1bfaf7ce::t_d5f0c00d6c7648 1-388
+crates/connectors/src/outbound/macro_connect/vendor.rs
+  s_ebcb6b1bfaf7ce::t_03c9b36e7b1d1a 1-5,7-8,13,19,22-25,47,49-90,97-101,103,105-106,114-129,131-134,141-142,147-148,150-155,157-158,161,163-164,167-168,170-173,175,178-179,181,183-184,186,188,194,197-200,203-209,212-213,215-218,221,223-225,227-228,230-231,233-241
+crates/connectors/src/outbound/native.rs
+  s_ebcb6b1bfaf7ce::t_c33d8abc4b4643 1-19
+crates/connectors/src/outbound/native/memory_store.rs
+  s_ebcb6b1bfaf7ce::t_1ec63930ceddd8 1-4,7,9,14-15,21-22,32-40,46,49-52,57,63,69,71-75
+crates/connectors/src/outbound/native/models.rs
+  s_ebcb6b1bfaf7ce::t_a3c8c8a9d6e669 1-2,7-9,11-16
+crates/connectors/src/outbound/native/models/oauth_client_metadata.rs
+  s_ebcb6b1bfaf7ce::t_6083c293f414eb 1,32,37
+crates/connectors/src/outbound/native/models/server.rs
+  s_ebcb6b1bfaf7ce::t_e59936f5483506 1-2,4-5,29,66-79
+crates/connectors/src/outbound/native/models/server/test.rs
+  s_ebcb6b1bfaf7ce::t_cc6d4157d4e83f 3
+crates/connectors/src/outbound/native/oauth.rs
+  s_ebcb6b1bfaf7ce::t_913e7769ab2576 3-5,9,11,169
+crates/connectors/src/outbound/native/persisting_credential_store.rs
+  s_ebcb6b1bfaf7ce::t_c46fffe967e08e 5-6
+crates/connectors/src/outbound/native/persisting_credential_store/test.rs
+  s_ebcb6b1bfaf7ce::t_566d5c652ffbd3 2
+crates/connectors/src/outbound/native/pg_server_repo.rs
+  s_ebcb6b1bfaf7ce::t_5871afb1d820f0 1-2,188-190
+crates/connectors/src/outbound/native/pg_server_repo/test.rs
+  s_ebcb6b1bfaf7ce::t_6a327213cefb08 2-17,19-20,23-24,27-37,40,42,44,50-52,55-58,60-81,83,85-86,88-101,103-104,107-142,144-145,147-151,153-155,158-159,161-169,171-177,180-189,191-192,194-200,202-207,210-230
+crates/connectors/src/outbound/native/ports.rs
+  s_ebcb6b1bfaf7ce::t_8ef92183dd29b3 1-2
+crates/connectors/src/outbound/native/provider_registry.rs
+  s_ebcb6b1bfaf7ce::t_ce4e1571ab292f 38,57-58,73,106
+crates/connectors/src/outbound/native/redis_state_store.rs
+  s_ebcb6b1bfaf7ce::t_b8248635e90f2e 1
+crates/connectors/src/outbound/native/server_access.rs
+  s_ebcb6b1bfaf7ce::t_221976c3096419 4,17-19,117
+crates/connectors/src/outbound/native/server_access/test.rs
+  s_ebcb6b1bfaf7ce::t_b274b40dd4f400 3
+crates/connectors/src/outbound/native/server_directory.rs
+  s_ebcb6b1bfaf7ce::t_0938216037f611 6-8
+crates/connectors/src/outbound/native/server_directory/test.rs
+  s_ebcb6b1bfaf7ce::t_37ec73f8c5f31d 2
+crates/connectors/src/outbound/native/sign_in.rs
+  s_ebcb6b1bfaf7ce::t_d46ad2170c1ae0 1-2,4-7,9-10,16-19,22-29,33-35,37-42,44-51
+crates/connectors/src/outbound/native/sign_in/test.rs
+  s_ebcb6b1bfaf7ce::t_539d5b5c38be91 1-64
+crates/connectors/src/outbound/native/source.rs
+  s_ebcb6b1bfaf7ce::t_0022b0277d9bc1 1-399
+crates/connectors/src/outbound/native/source/test.rs
+  s_ebcb6b1bfaf7ce::t_33c2b8f936b206 2-4,6-8,11-12,14-15,17-18,21-22,24-28,31-32,35,37-43,47-50,53-59,63-75,78-94,97-99,102-103,106-109,112-123,127-128,131-150,153-155,157-176,178-194,198-199,201-202,204-206,208-210,213,215-222,224-242,246-253,256-261,266-268,270-274,276-280,283-284,286-299,303-340,343,347-357,359-360,362-367,370-371,373-389,391-396,400-401,403-410,414-415,417-437,439-442,447-448,450-451,453-454,457-458,460-461,463-468,470-472,477-484,489-490,492-501,503-506,509-510,512-516,518,520-521,524,526-527,529,533-537,539,542-543
+crates/connectors/src/outbound/overlays.rs
+  s_ebcb6b1bfaf7ce::t_831a9ea1183484 1-12,14-21,24-31,34-67
+crates/connectors/src/outbound/overlays/test.rs
+  s_ebcb6b1bfaf7ce::t_f83c8066f818fd 1-19
+crates/connectors/src/outbound/pipedream.rs
+  s_ebcb6b1bfaf7ce::t_fbb65cbfb31a53 1-8
+crates/connectors/src/outbound/pipedream/api.rs
+  s_ebcb6b1bfaf7ce::t_c806e5d825da3e 1-4,9,159-161,163-166,199-200,202,226-227,229,252-255,371,380-386,389,408-410,412-413,435-441,444-451,455,463,466,480
+crates/connectors/src/outbound/pipedream/api/capabilities.rs
+  s_ebcb6b1bfaf7ce::t_0cb0d7b15f0f56 2-4,16,27,32
+crates/connectors/src/outbound/pipedream/api/capabilities/test.rs
+  s_ebcb6b1bfaf7ce::t_bbc33ce9769f3d 2
+crates/connectors/src/outbound/pipedream/models.rs
+  s_ebcb6b1bfaf7ce::t_68a33eeb8dd524 1,3-7,9,16,24,35,50,65
+crates/connectors/src/outbound/pipedream/source.rs
+  s_ebcb6b1bfaf7ce::t_8261a7ac67106f 1-417
+crates/connectors/src/outbound/pipedream/source/test.rs
+  s_ebcb6b1bfaf7ce::t_0549b7e2677d0f 2-5,7,10,13-14,17-26,29-31,33-37,41-47,54-72,75-76,79-88,91,93-96,98-104,106-108,110-113,118-130,132-144,146-155,158-167,169,171-177,180-187,190-191,193-211,213-214,216-249,251-256,258-266,269,271-272,276-293,296-316,318-323
+crates/connectors_e2e/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_dc9794ef6a1cae 1,5-9,13-42,46-49,53-58,62-64
+crates/connectors_e2e/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_a0e623fd795461 3,5-6,9-17,21
+crates/connectors_e2e/src/agent.rs
+  s_ebcb6b1bfaf7ce::t_93d88f6f6ac27b 1-161
+crates/connectors_e2e/src/agent/test.rs
+  s_ebcb6b1bfaf7ce::t_2a446efcdbef46 4-6,8-9,14-19,23-29,33-35
+crates/connectors_e2e/src/api.rs
+  s_ebcb6b1bfaf7ce::t_62a0929b91e509 1-2,4,6-12,14-40,42-47,50-87,89-91,94-107,109-119,122-142,144-156,158-165,167-174,176-179,181-195,197-208,211-218,220-251,253-261,263,266-274,276-277,279-288,290-300,303-320,322-338,340-349,352-360,362,364,366-369
+crates/connectors_e2e/src/config.rs
+  s_ebcb6b1bfaf7ce::t_bd7270903f6e7d 1-3,5-6,8-22,24-31,34-48,51-75,79-81,84-88,90-92
+crates/connectors_e2e/src/connector.rs
+  s_ebcb6b1bfaf7ce::t_3bcbcc36614f69 1-82
+crates/connectors_e2e/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_7df56fa27622ec 1-26
+crates/connectors_e2e/tests/connectors.rs
+  s_ebcb6b1bfaf7ce::t_c5142582c4c0f5 1-13,15,17-31,33-50,52-57,59-63,65-68,72-82,84,87-105,108-129,132-142,144-168,170,173-205,208-246,249-268,271-272,275-279,281,283-284,287-293,296-304,307-325,328-329,331-333,335-355,357-358,362,365-372,374-376,379-388,391-396,398-405,407-409,411
+crates/contacts/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_aaff3dd076929c 12-13,19-26,29-30,32-36,48-50
+crates/contacts/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_9f7298a4dec3ae 16-23,26-27,30,62-64,67,69,77,80,88,90,94
+crates/contacts/src/domain.rs
+  s_ebcb6b1bfaf7ce::t_f166e79c996065 1-6
+crates/contacts/src/domain/backfill.rs
+  s_ebcb6b1bfaf7ce::t_00ef2ec2781e8e 1-664
+crates/contacts/src/domain/backfill/audit.rs
+  s_ebcb6b1bfaf7ce::t_9a9e49ff687759 1-340
+crates/contacts/src/domain/backfill/audit/test.rs
+  s_ebcb6b1bfaf7ce::t_e6ed0426fa5acf 1-124
+crates/contacts/src/domain/backfill/channels.rs
+  s_ebcb6b1bfaf7ce::t_83aafb6f8c9ee9 1-534
+crates/contacts/src/domain/backfill/channels/test.rs
+  s_ebcb6b1bfaf7ce::t_20f1d18742cfe1 1-321
+crates/contacts/src/domain/backfill/test.rs
+  s_ebcb6b1bfaf7ce::t_875b723cbe7016 1-194
+crates/contacts/src/domain/list_reads.rs
+  s_ebcb6b1bfaf7ce::t_1872298561c28b 1-424
+crates/contacts/src/domain/list_reads/test.rs
+  s_ebcb6b1bfaf7ce::t_5c6cf80e14d6af 2-6,8-10,12-13,16-23,26-34,36-43,45,47-65,67,69-70,72-73,75-78,81-87,89,91-92,94-96,99-100,103-108,112-122,125-135,137,139-144,148-153,156-163,166-189,191-208,210-211,213-219,222-231,233-238,241-260,264-274,276-278,280-287,292-310,312-322,326-348,352-354,356-357,359,361-372,374-394,396-397,402-412,416-428,430-434,437-446,449-464,466-482,486-504,506-516,519-529
+crates/contacts/src/domain/list_writes.rs
+  s_ebcb6b1bfaf7ce::t_8a35bc48e673d0 1-169
+crates/contacts/src/domain/list_writes/test.rs
+  s_ebcb6b1bfaf7ce::t_d71c6543190256 2-14,17-23,26-38,42-44,47-49,53-54,58-60,64-65,68-79,82-111,115-120,122,124-129,133-149,152-155,157-159,162-166,169-178,180-206
+crates/contacts/src/domain/models.rs
+  s_ebcb6b1bfaf7ce::t_10620e73792dec 1-2,7-12
+crates/contacts/src/domain/models/backfill.rs
+  s_ebcb6b1bfaf7ce::t_d6f179fa7c5967 1-148
+crates/contacts/src/domain/models/contact.rs
+  s_ebcb6b1bfaf7ce::t_0d8774d65e959f 3,59-63
+crates/contacts/src/domain/models/invalidation.rs
+  s_ebcb6b1bfaf7ce::t_cafa3833cf87f7 1,3-4,6-45
+crates/contacts/src/domain/models/invalidation/test.rs
+  s_ebcb6b1bfaf7ce::t_64a90dd0406281 1-34
+crates/contacts/src/domain/models/list.rs
+  s_ebcb6b1bfaf7ce::t_df93f1049a90c7 1-56
+crates/contacts/src/domain/models/listed.rs
+  s_ebcb6b1bfaf7ce::t_2e20e723a33ebe 1-13
+crates/contacts/src/domain/models/messages.rs
+  s_ebcb6b1bfaf7ce::t_da3d7fcf3d252f 1,49-85,90-92,98-108
+crates/contacts/src/domain/models/messages/test.rs
+  s_ebcb6b1bfaf7ce::t_9cc2e8147bde53 52-84
+crates/contacts/src/domain/models/query/test.rs
+  s_ebcb6b1bfaf7ce::t_2733ee9d54f3ca 12,34
+crates/contacts/src/domain/ports.rs
+  s_ebcb6b1bfaf7ce::t_c976c8a81183fb 1-4,6-11,15,36-142,208-218,261-262,265,293-298,316-350,359-374,380-387,413-492
+crates/contacts/src/domain/service.rs
+  s_ebcb6b1bfaf7ce::t_74f590c42652b4 2-3,5,11-14,19,37-39,41,53-64,69-70,94-98,102,106-229,232-265,276-305,340-404,412-420,454-518,549-584
+crates/contacts/src/domain/service/directory.rs
+  s_ebcb6b1bfaf7ce::t_47c12b0a9b51d8 4,8,14-15,17,21-30,34-38,64,69-122,125-140,212,227,239
+crates/contacts/src/domain/service/directory/test.rs
+  s_ebcb6b1bfaf7ce::t_3f91bcb823477c 5-6,35-110,160,210,236,251-320
+crates/contacts/src/domain/service/directory/test/search.rs
+  s_ebcb6b1bfaf7ce::t_c3411955a165ef 48,98-102,136-140,199,249-294
+crates/contacts/src/domain/service/picture_fanout.rs
+  s_ebcb6b1bfaf7ce::t_2ca2f5e2c3f854 2,38-43,49-61,69-70,72-75,83,98-111,115-126
+crates/contacts/src/domain/service/picture_fanout/test.rs
+  s_ebcb6b1bfaf7ce::t_b640c90dff2505 2,4,19-20,24-25,52-108,139-140,145-157,159,163-164,166-170,192,207-250,261,284
+crates/contacts/src/domain/service/test.rs
+  s_ebcb6b1bfaf7ce::t_65e27cc6ef1ca4 2,5-7,11-18,42-87,93,99-127,182-452
+crates/contacts/src/inbound/http.rs
+  s_ebcb6b1bfaf7ce::t_aea2f458801d1d 12,65-68,78-83,91-94,110,147,174,183,186
+crates/contacts/src/inbound/http/test.rs
+  s_ebcb6b1bfaf7ce::t_32bab1c44e6aef 2,53-60,85-92,353,363
+crates/contacts/src/inbound/user_picture_consumer.rs
+  s_ebcb6b1bfaf7ce::t_e4d486e1e0dc73 18,81,90,108
+crates/contacts/src/inbound/worker.rs
+  s_ebcb6b1bfaf7ce::t_627c6f14e48b12 4-6,10,22,28-31,43-44,54-56,61-77
+crates/contacts/src/inbound/worker/test.rs
+  s_ebcb6b1bfaf7ce::t_48dc145e010744 2-3,35-78,84,157-226
+crates/contacts/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_4ba45e2f18e29a 14-16
+crates/contacts/src/outbound/gateway.rs
+  s_ebcb6b1bfaf7ce::t_47c7401dc43543 4,8-16,35-47,53,55-56,58-63,67-70,79,81-82,84,96,99-101
+crates/contacts/src/outbound/gateway/test.rs
+  s_ebcb6b1bfaf7ce::t_1c030c14847dbb 3,28,35,41,50-53,91-94,111-115,123-179
+crates/contacts/src/outbound/ingress.rs
+  s_ebcb6b1bfaf7ce::t_af89543ed7967e 1-4,6,8,31-34,51-55
+crates/contacts/src/outbound/ingress/test.rs
+  s_ebcb6b1bfaf7ce::t_a81295daf622d7 1-9,12-20,23-28,31-35,38,40,42,45,47,49-59,63-67,71,73,75-76,80
+crates/contacts/src/outbound/names/test.rs
+  s_ebcb6b1bfaf7ce::t_acfc85ebd2be50 26,170
+crates/contacts/src/outbound/repository.rs
+  s_ebcb6b1bfaf7ce::t_073679a30ad809 1-3,78-81
+crates/contacts/src/outbound/repository/backfill.rs
+  s_ebcb6b1bfaf7ce::t_4a6c51843b6072 1-326
+crates/contacts/src/outbound/repository/backfill/channel_members.sql
+  s_ebcb6b1bfaf7ce::t_1586f8732e2806 1-11
+crates/contacts/src/outbound/repository/backfill/channel_page.sql
+  s_ebcb6b1bfaf7ce::t_29d58ab21bf41c 1-12
+crates/contacts/src/outbound/repository/backfill/delete_inbox_owner_rows.sql
+  s_ebcb6b1bfaf7ce::t_6343cc7328fb70 1-14
+crates/contacts/src/outbound/repository/backfill/delete_interacted_contact_rows.sql
+  s_ebcb6b1bfaf7ce::t_cbbd5728df52a5 1-14
+crates/contacts/src/outbound/repository/backfill/delete_list_owner_rows.sql
+  s_ebcb6b1bfaf7ce::t_23cbe0cd953683 1-14
+crates/contacts/src/outbound/repository/backfill/direct_messages_with_person_message.sql
+  s_ebcb6b1bfaf7ce::t_a794c8579a2894 1-16
+crates/contacts/src/outbound/repository/backfill/fixtures/directory.sql
+  s_ebcb6b1bfaf7ce::t_1d32c26dc1d205 1-95
+crates/contacts/src/outbound/repository/backfill/fixtures/orphans.sql
+  s_ebcb6b1bfaf7ce::t_ab8e718dba22bf 1-28
+crates/contacts/src/outbound/repository/backfill/inbox_contact_page.sql
+  s_ebcb6b1bfaf7ce::t_9c847177c3b239 1-43
+crates/contacts/src/outbound/repository/backfill/inbox_owner_page.sql
+  s_ebcb6b1bfaf7ce::t_b29c6cd71c4d27 1-14
+crates/contacts/src/outbound/repository/backfill/legacy_edge_page.sql
+  s_ebcb6b1bfaf7ce::t_f75e6525e4e47c 1-105
+crates/contacts/src/outbound/repository/backfill/orphan_inbox_owners.sql
+  s_ebcb6b1bfaf7ce::t_7e00b3f9a032ae 1-37
+crates/contacts/src/outbound/repository/backfill/orphan_interacted_contacts.sql
+  s_ebcb6b1bfaf7ce::t_fab797464615f7 1-41
+crates/contacts/src/outbound/repository/backfill/orphan_list_owners.sql
+  s_ebcb6b1bfaf7ce::t_ef737b2828fe2e 1-37
+crates/contacts/src/outbound/repository/backfill/snapshot_page.sql
+  s_ebcb6b1bfaf7ce::t_73948fbe57c451 1-17
+crates/contacts/src/outbound/repository/backfill/test.rs
+  s_ebcb6b1bfaf7ce::t_8cea7980449fb4 1-314
+crates/contacts/src/outbound/repository/directory.rs
+  s_ebcb6b1bfaf7ce::t_efd779c84f9a28 1-290
+crates/contacts/src/outbound/repository/directory/audience.sql
+  s_ebcb6b1bfaf7ce::t_ddb631930a58f0 1-50
+crates/contacts/src/outbound/repository/directory/fixtures/directory.sql
+  s_ebcb6b1bfaf7ce::t_d4f88063448d18 1-52
+crates/contacts/src/outbound/repository/directory/fixtures/people_search.sql
+  s_ebcb6b1bfaf7ce::t_82a8ad2fb9a981 1-68
+crates/contacts/src/outbound/repository/directory/inbox_contacts.sql
+  s_ebcb6b1bfaf7ce::t_1f8f0fdf0a6f21 1-6
+crates/contacts/src/outbound/repository/directory/lists.sql
+  s_ebcb6b1bfaf7ce::t_1caee92d67970b 1-40
+crates/contacts/src/outbound/repository/directory/lookup.sql
+  s_ebcb6b1bfaf7ce::t_7f6c9dd525d059 1-37
+crates/contacts/src/outbound/repository/directory/page.sql
+  s_ebcb6b1bfaf7ce::t_e2e0d0f928e900 1-53
+crates/contacts/src/outbound/repository/directory/people_search.sql
+  s_ebcb6b1bfaf7ce::t_d3f4e89d5efb2c 1-128
+crates/contacts/src/outbound/repository/directory/test.rs
+  s_ebcb6b1bfaf7ce::t_a74599c9e42e08 1-334
+crates/contacts/src/outbound/repository/directory/test/people_search.rs
+  s_ebcb6b1bfaf7ce::t_a99829bb7d2bc2 1-146
+crates/contacts/src/outbound/repository/directory/test/plans.rs
+  s_ebcb6b1bfaf7ce::t_d346cf36ceb124 1-367
+crates/contacts/src/outbound/repository/lists.rs
+  s_ebcb6b1bfaf7ce::t_5f333a433b1330 1-187
+crates/contacts/src/outbound/repository/lists/delete_user_lists.sql
+  s_ebcb6b1bfaf7ce::t_39dcc7b8b48264 1-17
+crates/contacts/src/outbound/repository/lists/fixtures/inboxes.sql
+  s_ebcb6b1bfaf7ce::t_8ad2ddf8534840 1-3
+crates/contacts/src/outbound/repository/lists/fixtures/legacy_user.sql
+  s_ebcb6b1bfaf7ce::t_3c7e397aafe4de 1-7
+crates/contacts/src/outbound/repository/lists/fixtures/users.sql
+  s_ebcb6b1bfaf7ce::t_eeb2515727dd26 1-11
+crates/contacts/src/outbound/repository/lists/missing_profiles.sql
+  s_ebcb6b1bfaf7ce::t_aa4b1cfb7f645c 1-11
+crates/contacts/src/outbound/repository/lists/record_inbox_contacts.sql
+  s_ebcb6b1bfaf7ce::t_152070b577654e 1-13
+crates/contacts/src/outbound/repository/lists/record_interactions.sql
+  s_ebcb6b1bfaf7ce::t_23f5729eb8008d 1-38
+crates/contacts/src/outbound/repository/lists/record_invite.sql
+  s_ebcb6b1bfaf7ce::t_d0ed18e6f088ce 1-8
+crates/contacts/src/outbound/repository/lists/test.rs
+  s_ebcb6b1bfaf7ce::t_f2295dd89befd0 1-622
+crates/contacts/src/outbound/repository/people_search.rs
+  s_ebcb6b1bfaf7ce::t_9f7f92a47d863a 56-57
+crates/contacts/src/trace_context.rs
+  s_ebcb6b1bfaf7ce::t_948c27e48803c8 1-51
+crates/contacts/src/trace_context/capture.rs
+  s_ebcb6b1bfaf7ce::t_a1bd0051ce7f6a 1-71
+crates/databases_sql/src/row_source.rs
+  s_ebcb6b1bfaf7ce::t_bd870d18b120aa 291-306
+crates/databases_sql/src/row_source/test.rs
+  s_ebcb6b1bfaf7ce::t_0e8f1970f905e2 307-314
+crates/databases_sql/src/test_support.rs
+  s_ebcb6b1bfaf7ce::t_dfd320fc280e66 734-741
+crates/email/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_91faedd340771d 254-270,286-290,299-300,305-321
+crates/email/src/domain/backfill_jobs/worker.rs
+  s_ebcb6b1bfaf7ce::t_e904be10db29ac 38
+crates/email/src/domain/backfill_jobs/worker/crm_contact.rs
+  s_ebcb6b1bfaf7ce::t_b34fa4a0075004 28-30,61
+crates/email/src/domain/backfill_jobs/worker/crm_policy.rs
+  s_ebcb6b1bfaf7ce::t_d2526c9e37016b 18
+crates/email/src/domain/backfill_jobs/worker/deferral.rs
+  s_ebcb6b1bfaf7ce::t_e0ec9fd592d6d2 31-32,41-46
+crates/email/src/domain/backfill_jobs/worker/deferral/test.rs
+  s_ebcb6b1bfaf7ce::t_28b60cc3d36fe0 66-83
+crates/email/src/domain/backfill_jobs/worker/followups.rs
+  s_ebcb6b1bfaf7ce::t_82f6444cf0e911 87
+crates/email/src/domain/backfill_jobs/worker/lifecycle_ports.rs
+  s_ebcb6b1bfaf7ce::t_187ec436e64223 179,182
+crates/email/src/domain/backfill_jobs/worker/ports.rs
+  s_ebcb6b1bfaf7ce::t_ada2e1c0c8eedf 206-207,210-211,213-214
+crates/email/src/domain/backfill_jobs/worker/seed.rs
+  s_ebcb6b1bfaf7ce::t_0c48d57b693cc5 11-14,16-17,50,52,73-76,79-88
+crates/email/src/domain/backfill_jobs/worker/test.rs
+  s_ebcb6b1bfaf7ce::t_059e5c13f32621 285-287,292-302
+crates/email/src/domain/backfill_jobs/worker/test/crm_policy.rs
+  s_ebcb6b1bfaf7ce::t_ac9edf4c2bfaac 100-118
+crates/email/src/domain/backfill_jobs/worker/test/fakes.rs
+  s_ebcb6b1bfaf7ce::t_bbd03a2b73a10f 47,512-513,515,517
+crates/email/src/domain/backfill_jobs/worker/test/lifecycle_fakes.rs
+  s_ebcb6b1bfaf7ce::t_37d9a7a1cee0a1 229
+crates/email/src/domain/backfill_jobs/worker/test/seed_attachment.rs
+  s_ebcb6b1bfaf7ce::t_982fac918e52b0 81-92,97
+crates/email/src/domain/backfill_jobs/worker/write_slot.rs
+  s_ebcb6b1bfaf7ce::t_0dd2c44d8a6fae 2-19,41-56
+crates/email/src/domain/focus.rs
+  s_ebcb6b1bfaf7ce::t_1b82a05941d3e6 9-15,21,36-38
+crates/email/src/domain/focus/calendar.rs
+  s_ebcb6b1bfaf7ce::t_9182b16f752515 108-114
+crates/email/src/domain/focus/dates.rs
+  s_ebcb6b1bfaf7ce::t_737d06e68c3880 1,3-10,15-19,21-29,31-34,36-70
+crates/email/src/domain/focus/dates/test.rs
+  s_ebcb6b1bfaf7ce::t_387a42deb40128 1-314
+crates/email/src/domain/focus/input.rs
+  s_ebcb6b1bfaf7ce::t_558a1f1336f98c 245-255
+crates/email/src/domain/focus/input/test.rs
+  s_ebcb6b1bfaf7ce::t_cb3ff705717a83 308-327
+crates/email/src/domain/focus/models.rs
+  s_ebcb6b1bfaf7ce::t_472b5c9f4aa74e 186-190,270-271,385-404,406-414,429-430,441-442
+crates/email/src/domain/focus/ports.rs
+  s_ebcb6b1bfaf7ce::t_191b38a4282354 5,12-13,59-63,74-78,105-107,152,154-156,161
+crates/email/src/domain/focus/rule.rs
+  s_ebcb6b1bfaf7ce::t_685c638a595f1f 67-75,168-178
+crates/email/src/domain/focus/service.rs
+  s_ebcb6b1bfaf7ce::t_63425d0cdc82ac 11,20-21,23-24,39-40,63-64,351,355,361,400-401,403,406,416-426,428,435-436,440-441,453,456,458,463-484,490,496,511,524
+crates/email/src/domain/focus/service/test.rs
+  s_ebcb6b1bfaf7ce::t_7bcec84fee5de6 15,180,201,206,209,371,396-413,465,1228,1237,1246-1325,1332,1345,1354,1375,1379,1382,1385,1398,1402,1405,1412,1423,1444,1462,1469,1480,1487,1507,1682,1718
+crates/email/src/domain/mailbox/inbox_sync/import_ports.rs
+  s_ebcb6b1bfaf7ce::t_7e9677b5854583 265,267-268,271
+crates/email/src/domain/mailbox/inbox_sync/test/import_fakes.rs
+  s_ebcb6b1bfaf7ce::t_f9c498b6af9ab2 371
+crates/email/src/domain/mailbox/inbox_sync/upsert_message/contacts.rs
+  s_ebcb6b1bfaf7ce::t_b4b63a1996363d 43-48
+crates/email/src/domain/mailbox/link_manager/deletion.rs
+  s_ebcb6b1bfaf7ce::t_2c18c6cb3383cc 117-118
+crates/email/src/domain/mailbox/link_manager/deletion/ports.rs
+  s_ebcb6b1bfaf7ce::t_a21b8eb7ade5e6 6,116-119
+crates/email/src/domain/mailbox/link_manager/deletion/test/fakes.rs
+  s_ebcb6b1bfaf7ce::t_45b58c9689eb96 27,112,268-271
+crates/email/src/domain/mailbox/projection.rs
+  s_ebcb6b1bfaf7ce::t_98d190ff36df8f 13-16,143-144,708
+crates/email/src/outbound/focus_pg.rs
+  s_ebcb6b1bfaf7ce::t_5504c17a3144c4 13-16,220-227,258-262,301-302,308-313,332-337,356-358,576-577,586,597-608,623-625,629-630,633,637-643,666,668,683-684,688-690,694-695,697,699-700,702,705,709,722-735,738-744,746-750,767-768,773-776
+crates/email/src/outbound/focus_pg/test.rs
+  s_ebcb6b1bfaf7ce::t_2c695cf87c5830 16,61,64,69,74,76,254,546-576,613-615,995-1437,1713-1756,1867,1875,1884-1887,1892-1897,1901,2484,2507-2508,2750-2753,2763,2782-2785,2789-2792,2814-2817
+crates/email_api_client/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_5997b97b4599d7 158-161
+crates/email_api_client/src/outbound/outlook/calendar.rs
+  s_ebcb6b1bfaf7ce::t_c385fd23a93e54 585-604
+crates/email_api_client/src/outbound/outlook/calendar/conference_body.rs
+  s_ebcb6b1bfaf7ce::t_8fda2952d59d4e 4-8,58-60,82-120,141-145,149-152,154-157,163-165,204-208,220,238-254
+crates/email_api_client/src/outbound/outlook/calendar/conference_body/test.rs
+  s_ebcb6b1bfaf7ce::t_99163ac4d7c325 172-252
+crates/email_api_client/src/outbound/outlook/calendar/test.rs
+  s_ebcb6b1bfaf7ce::t_87ab0e2913ca65 1065-1109
+crates/email_e2e/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_e403492a0ced2b 45-46,100,159-160,163-164,168-174,176,182-184,446-447
+crates/email_e2e/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_a175d5d0c5f572 9
+crates/email_e2e/coverage/entrypoints.tsv
+  s_ebcb6b1bfaf7ce::t_57814ec04586e1 9,21-25,27-31,81,96-97,123,153-164,302-306,309-311,319-323
+crates/email_e2e/coverage/sources.toml
+  s_ebcb6b1bfaf7ce::t_7e082088c786b8 89-90,157-160
+crates/email_e2e/src/focus.rs
+  s_ebcb6b1bfaf7ce::t_039f790e670a6a 3-4,50-52,77-78,81-82,119-125,132-137,245-246,260,268-269,284-285,300-306
+crates/email_e2e/src/inbox.rs
+  s_ebcb6b1bfaf7ce::t_0975ea127a7e0f 9,26-28,88-93,133-144,754-755,781-782
+crates/email_e2e/src/infra/sqs.rs
+  s_ebcb6b1bfaf7ce::t_160c890f35a385 54-59
+crates/email_e2e/src/stack.rs
+  s_ebcb6b1bfaf7ce::t_8074ab1ba793b5 559-562,828
+crates/email_e2e/src/user.rs
+  s_ebcb6b1bfaf7ce::t_c798af0d508152 8-10,66,80-84,109-138
+crates/email_e2e/tests/focus.rs
+  s_ebcb6b1bfaf7ce::t_27a850be6930d0 9,23-34,92-99,396-836
+crates/email_e2e/tests/maintenance.rs
+  s_ebcb6b1bfaf7ce::t_f6e4467bb8c292 564-566,571-578,611-617
+crates/granola_sync/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_6c03e1a5f7ef34 6-7,11-20,30,34,51-56
+crates/granola_sync/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_79f15d1dee69ed 18,33
+crates/granola_sync/src/domain/models.rs
+  s_ebcb6b1bfaf7ce::t_c52f3e1f2b9665 6,109
+crates/granola_sync/src/domain/ports.rs
+  s_ebcb6b1bfaf7ce::t_276c1264684e0c 25,39-40,43-46
+crates/granola_sync/src/domain/service.rs
+  s_ebcb6b1bfaf7ce::t_3409f66a447c61 24-26,28,34,38,43,70-74,89,94,96,166,263,265,283-296
+crates/granola_sync/src/domain/service/test.rs
+  s_ebcb6b1bfaf7ce::t_5c144027658fb8 9,23,30,35-40,46,49,64,66,82,84,90-330
+crates/granola_sync/src/inbound.rs
+  s_ebcb6b1bfaf7ce::t_0b670d5ec0662f 10-11,13-16,25-46
+crates/granola_sync/src/inbound/test.rs
+  s_ebcb6b1bfaf7ce::t_9277fff617d3a5 1-2,4-6,8-11,14-15,18-19,21-30,32-57
+crates/granola_sync/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_dc0c8f2e4effbe 1-2
+crates/granola_sync/src/outbound/accounts.rs
+  s_ebcb6b1bfaf7ce::t_7322499cf4cfa4 6,8-11,13-19,21-23,27-29,31-32,35-36,38
+crates/granola_sync/src/outbound/accounts/test.rs
+  s_ebcb6b1bfaf7ce::t_3b3b1d4db38088 1-42
+crates/granola_sync/src/outbound/api.rs
+  s_ebcb6b1bfaf7ce::t_f97a9bf52c0d64 6,10,17-21,35-43,46,53-60,62,78,83,132,139,142,171,173,183,186,214
+crates/granola_sync/src/outbound/api/test.rs
+  s_ebcb6b1bfaf7ce::t_80d7f4ea8534b4 2-3,87-110,113,117,120-136,138,146,165,171,190
+crates/granola_sync/src/outbound/pg_repo.rs
+  s_ebcb6b1bfaf7ce::t_d82548d3acf2cd 14-19,136
+crates/granola_sync/src/outbound/pg_repo/test.rs
+  s_ebcb6b1bfaf7ce::t_c2a5a6018c362d 110-111,116-118,120-138,141,173-178,210,212-216,229-233,236,247-266
+crates/graphql_contacts/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_af555dcb21cf28 34
+crates/graphql_contacts/src/test.rs
+  s_ebcb6b1bfaf7ce::t_f7e17b39e385e8 6,91,278-281,292-295
+crates/graphql_contacts/src/user_query.rs
+  s_ebcb6b1bfaf7ce::t_097436d4af2d79 23-26,36-40
+crates/graphql_email/src/focus.rs
+  s_ebcb6b1bfaf7ce::t_48156ca329bf71 131-133
+crates/import/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_aad829b170b5d6 21,89-93,128
+crates/import/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_243829afc77c2a 26,51,55
+crates/import/src/domain/models.rs
+  s_ebcb6b1bfaf7ce::t_c486a8c4e09fa9 6,76-85
+crates/import/src/domain/models/test.rs
+  s_ebcb6b1bfaf7ce::t_741111c9da1958 2,157-165,167-168
+crates/import/src/domain/service.rs
+  s_ebcb6b1bfaf7ce::t_a178484a230c91 23,487,635,893,990,1081,1173,1309,1312,1392-1406
+crates/import/src/domain/service/notion_workspace.rs
+  s_ebcb6b1bfaf7ce::t_d6363b96009fde 37,162,365,573
+crates/import/src/domain/service/notion_workspace/object.rs
+  s_ebcb6b1bfaf7ce::t_12dce61c7f96d5 6,40
+crates/import/src/domain/service/notion_workspace/personal.rs
+  s_ebcb6b1bfaf7ce::t_f9382b51d56c78 10,46
+crates/import/src/domain/service/slack_discovery.rs
+  s_ebcb6b1bfaf7ce::t_5615c809b7fbc9 13,127,234,338
+crates/import/src/domain/service/slack_discovery/test.rs
+  s_ebcb6b1bfaf7ce::t_7f1737b8625452 4,184
+crates/import/src/domain/service/test.rs
+  s_ebcb6b1bfaf7ce::t_d205e905db698e 327-378
+crates/import/src/domain/service/test/admission.rs
+  s_ebcb6b1bfaf7ce::t_7e76fbf79d6053 371-375,430,480,585,619
+crates/import/src/domain/service/tracker_workspace.rs
+  s_ebcb6b1bfaf7ce::t_bd4d72d910a071 4,58
+crates/import/src/domain/service/workspace.rs
+  s_ebcb6b1bfaf7ce::t_40258f25434a2f 5,110,172
+crates/import/src/domain/service/workspace/events.rs
+  s_ebcb6b1bfaf7ce::t_0b2d15e55cfad1 15,36
+crates/import/src/domain/service/workspace/run.rs
+  s_ebcb6b1bfaf7ce::t_7f2cf574c30889 14,127
+crates/import/src/domain/service/workspace/run/test.rs
+  s_ebcb6b1bfaf7ce::t_83bce888e3a3e8 36,195,389,554,649,720
+crates/import/src/domain/service/workspace/run/test/dates.rs
+  s_ebcb6b1bfaf7ce::t_fb6fd88cd41c16 15
+crates/import/src/domain/service/workspace/run/test/events.rs
+  s_ebcb6b1bfaf7ce::t_b83b26bb202e6c 63,121,151,184,242,297
+crates/import/src/domain/service/workspace/run/test/reimport.rs
+  s_ebcb6b1bfaf7ce::t_abdced896192ec 53,185,271,328,402
+crates/import/src/domain/service/workspace/run/test/root.rs
+  s_ebcb6b1bfaf7ce::t_93d0b4bd3cd2b3 41,109
+crates/import/src/inbound/axum_router.rs
+  s_ebcb6b1bfaf7ce::t_cc7550f2ee5c8b 125,150,167,187,233,255,286
+crates/import/src/inbound/axum_router/ledger.rs
+  s_ebcb6b1bfaf7ce::t_aafccd91a5fb71 145,177,271,303
+crates/import/src/inbound/axum_router/test.rs
+  s_ebcb6b1bfaf7ce::t_a6cab002d7505d 17,32,663-725
+crates/import/src/inbound/toolset.rs
+  s_ebcb6b1bfaf7ce::t_368048d9a54f9f 213,362,463,532,604
+crates/import/src/inbound/toolset/import_from_notion.rs
+  s_ebcb6b1bfaf7ce::t_6870f95b3c311d 80
+crates/import/src/outbound/mcp_slack_source.rs
+  s_ebcb6b1bfaf7ce::t_e573d298fd9edc 8,16,22-25,28-31,35,42
+crates/import/src/outbound/mcp_slack_source/test.rs
+  s_ebcb6b1bfaf7ce::t_24708c410e7c54 4,569-573,575-605,610-631,633-638,640-649
+crates/import/src/outbound/pg_import_repo.rs
+  s_ebcb6b1bfaf7ce::t_e7d707b2007e57 185,209,238,274,332,350,409,436,487,516,540,556,572,600,620,648,671
+crates/import/src/outbound/pg_import_repo/notion_run.rs
+  s_ebcb6b1bfaf7ce::t_e0b16a41148195 57,100,125,143,221,280,477,490,641,663
+crates/import/src/outbound/pg_import_repo/plan.rs
+  s_ebcb6b1bfaf7ce::t_e73b8480a7ce85 62,184,224,267,295,320,376,403,459,486
+crates/import_jira/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_046b1249fbe989 15
+crates/import_jira/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_bb8174d97181aa 11,19
+crates/import_jira/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_87d5f6a23193f2 6
+crates/import_jira/src/outbound/client.rs
+  s_ebcb6b1bfaf7ce::t_bc84ba022f4417 1,8,13,127-128,130-133,135,137-138,145,165,167
+crates/import_jira/src/outbound/client/test.rs
+  s_ebcb6b1bfaf7ce::t_0f5ddc78c87b18 2,52,54-63,65-66,82,92-121
+crates/import_linear/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_cce08c291c2872 15
+crates/import_linear/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_293839f6525df2 12,20
+crates/import_linear/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_f494cfe5029af4 6
+crates/import_linear/src/outbound/client.rs
+  s_ebcb6b1bfaf7ce::t_273836737538c5 1,8,13,79-80,82-86,90,92-93,100,255-256,260-261
+crates/import_linear/src/outbound/client/test.rs
+  s_ebcb6b1bfaf7ce::t_4ca27e33078fd6 2-3,8-12,26,28-41,43,50,61,63-65,67,76,78-80,82,90-123
+crates/import_notion/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_ee3d08ce90780d 22-23,30,34-35,47-48
+crates/import_notion/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_715528a8798faf 15,27
+crates/import_notion/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_2cb8c918003639 6
+crates/import_notion/src/outbound.rs
+  s_ebcb6b1bfaf7ce::t_8ac3b02cfc49aa 3
+crates/import_notion/src/outbound/connected.rs
+  s_ebcb6b1bfaf7ce::t_cbdbc522a17879 1-3,8,18,24,26,29-31,34-36,38,43,45,50,55-56,63-69,73-75,77,82-89,92,102-110,113
+crates/import_notion/src/outbound/connected/test.rs
+  s_ebcb6b1bfaf7ce::t_4685c824e887af 1,4-5,10,14,16-17,20-21,25-30,33-34,43-49,51-61,63-64,67-72,74-81,83-84,86-133
+crates/import_tracker/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_87baec8fcf1ddb 5,15
+crates/import_tracker/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_c0edc893975812 11,21
+crates/import_tracker/src/domain/model.rs
+  s_ebcb6b1bfaf7ce::t_57ecec99f1d25d 183
+crates/import_tracker/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_ebc286112df5c8 1,6
+crates/import_tracker/src/outbound/connection.rs
+  s_ebcb6b1bfaf7ce::t_96fe74bc163040 1-2,8,46-50,55-58,60,67-75,77,83,87-88,94-98,103,115-132,138-140,142-144
+crates/import_tracker/src/outbound/connection/test.rs
+  s_ebcb6b1bfaf7ce::t_fbe3d536f85364 2,7-10,13-14,17,19-23,25-26,43-140
+crates/import_tracker/src/outbound/mod.rs
+  s_ebcb6b1bfaf7ce::t_65d4c44f19aea6 1-2
+crates/import_tracker/test_support.rs
+  s_ebcb6b1bfaf7ce::t_6a283b63102e75 1-6,9,11-12,15-17,19-25,28-42
+crates/macro_db_client/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_ad4961c181bc26 140
+crates/macro_db_client/migrations/20261120051120_email_thread_focus_due_at_event_over_at.down.sql
+  s_ebcb6b1bfaf7ce::t_03531b3971b436 1-6
+crates/macro_db_client/migrations/20261120051120_email_thread_focus_due_at_event_over_at.up.sql
+  s_ebcb6b1bfaf7ce::t_c1e31ff837e35c 1-14
+crates/macro_db_client/migrations/20261120180613_user_last_seen.down.sql
+  s_ebcb6b1bfaf7ce::t_1409d6a7cb0fc4 1-5
+crates/macro_db_client/migrations/20261120180613_user_last_seen.up.sql
+  s_ebcb6b1bfaf7ce::t_31b05aab726fae 1-16
+crates/macro_db_client/migrations/20261120181726_activity_events_own_actor_index.down.sql
+  s_ebcb6b1bfaf7ce::t_a2499e94cf01b0 1-2
+crates/macro_db_client/migrations/20261120181726_activity_events_own_actor_index.up.sql
+  s_ebcb6b1bfaf7ce::t_05a61e9df9609f 1-21
+crates/macro_db_client/src/user/get_user_name.rs
+  s_ebcb6b1bfaf7ce::t_5324b5a465e3c9 85-86,90-97
+crates/macro_db_client/src/user/get_user_name/names_with_email.sql
+  s_ebcb6b1bfaf7ce::t_d0e28b8d9107b3 1-51
+crates/macro_db_client/src/user/get_user_name/tests.rs
+  s_ebcb6b1bfaf7ce::t_f5f9d3b73d7fd1 9-10,194-266
+crates/macro_queues/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_15f2a7fb754705 566-567,573-579
+crates/mcp_toolset/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_8b0c3fb120c0ea 17-18,24-25,31
+crates/mcp_toolset/src/combined.rs
+  s_ebcb6b1bfaf7ce::t_a877dc9c707603 1,3,17-20
+crates/mcp_toolset/src/combined/test.rs
+  s_ebcb6b1bfaf7ce::t_fba309a6537408 3,101-104
+crates/mcp_toolset/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_087e70341cf904 9-11,14,19-20,23-25
+crates/mcp_toolset/src/mangle.rs
+  s_ebcb6b1bfaf7ce::t_213ea8333b316c 9-10
+crates/mcp_toolset/src/test.rs
+  s_ebcb6b1bfaf7ce::t_4d5158c8c7fe0c 1-53
+crates/models_email/src/email/service/pubsub.rs
+  s_ebcb6b1bfaf7ce::t_ec46d3a1996c88 3,80-82,105-161,175-177
+crates/models_email/src/email/service/pubsub/test.rs
+  s_ebcb6b1bfaf7ce::t_8b92dc2af4ae0c 3-8,11-19,23-28,31-32,37-75,81-89,93-98
+crates/onboarding/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_8e42764a291adb 7,25
+crates/onboarding/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_055f4ee8fb30bb 17,28
+crates/onboarding/src/domain/models.rs
+  s_ebcb6b1bfaf7ce::t_aba3cd5c1b0e5d 42-43,46,48,50-51,61
+crates/onboarding/src/domain/service.rs
+  s_ebcb6b1bfaf7ce::t_04d585236a0006 6,54-55,58,62-64,71,73-74,79-80,83-84,86-90,99
+crates/onboarding/src/domain/service/test.rs
+  s_ebcb6b1bfaf7ce::t_6eff196ef66fd2 3-4,86-87,90-92,94-102,105,109-123,129,151-152,182-183
+crates/sqs_client/src/email.rs
+  s_ebcb6b1bfaf7ce::t_ee36decd8f327e 7,47-48,54-60,129-130,134,136-144
+crates/sqs_client/src/email/test.rs
+  s_ebcb6b1bfaf7ce::t_41c8f94706e435 196-304
+crates/sqs_client/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_8546ad687970cf 83-84,127-128
+crates/sqs_worker/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_e7a54f0ed4d9aa 5
+crates/sqs_worker/src/receive_messages.rs
+  s_ebcb6b1bfaf7ce::t_153b71204407b0 2-5,24,39-51
+crates/sqs_worker/src/receive_messages/test.rs
+  s_ebcb6b1bfaf7ce::t_7a8cb82d0a07c1 2,4-7,11-12,15-16,19-28
+crates/teams/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_14758ff8597591 77-84
+crates/teams/src/domain/contacts_enqueuer.rs
+  s_ebcb6b1bfaf7ce::t_b5627d270d122e 1,4-6,11,21-29,45-52
+crates/teams/src/domain/team_service.rs
+  s_ebcb6b1bfaf7ce::t_275d01ace62ed4 558-559,903,938-942,1188-1191,1246,1299-1340,2254-2255
+crates/teams/src/domain/team_service/test.rs
+  s_ebcb6b1bfaf7ce::t_d864efa22fa331 74,1880-1881,1886,1913-1929,2193-2194,2198,2201-2204,7503,7588,7652,7719
+crates/teams/src/domain/team_service/test/directory_changes.rs
+  s_ebcb6b1bfaf7ce::t_55f5a06e2ceb74 1-207
+crates/teams/src/outbound/colleague_directory.rs
+  s_ebcb6b1bfaf7ce::t_863134e749e8b2 1,3,9-11,14-17,21,26
+crates/teams/src/outbound/contacts_enqueuer.rs
+  s_ebcb6b1bfaf7ce::t_8ee4a505876a10 8-11,38,57-72
+crates/teams/src/outbound/contacts_enqueuer/test.rs
+  s_ebcb6b1bfaf7ce::t_6c0b78266b3221 6-9,40-69
+crates/universal_input/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_399c4c7e357dcb 23-25,27-34,36-41
+crates/universal_input/eval/README.md
+  s_ebcb6b1bfaf7ce::t_08272e2db98a80 90-99,108-117
+crates/universal_input/eval/thread_due_dates.json
+  s_ebcb6b1bfaf7ce::t_387d94bb3f24a7 2,93-94,174-348
+crates/universal_input/examples/thread_due_date_eval.rs
+  s_ebcb6b1bfaf7ce::t_107f7c64a5a98e 2-4,10-11,19-23,36-85,96-99,102-103,114-118,121-122,124-130,133-140,143-147,150-169
+crates/universal_input/prompts/README.md
+  s_ebcb6b1bfaf7ce::t_e873353cf690cf 21
+crates/universal_input/prompts/temporal_thread_prompt.txt
+  s_ebcb6b1bfaf7ce::t_e2ad9f3c6f292b 1-2,4-5,14-15,18,20,22,24,26-42,44
+crates/universal_input/src/domain/temporal/resolve.rs
+  s_ebcb6b1bfaf7ce::t_d92e725bd9e4f6 16-28,64,394-434
+crates/universal_input/src/domain/temporal/thread_due_date.rs
+  s_ebcb6b1bfaf7ce::t_d036815ace2697 1-4,31-35,59,64-69,74-79,126-153,162-163,192-195,239,245-304,331-332,334-335,354-370,372-378
+crates/universal_input/src/domain/temporal/thread_due_date/test.rs
+  s_ebcb6b1bfaf7ce::t_492b4ded3b8d45 63,145,164,241,264,339-783,853-855,867-870,876,880-993
+crates/universal_input/src/inbound/axum_router/test.rs
+  s_ebcb6b1bfaf7ce::t_931acf94f46de4 148
+crates/universal_input/src/outbound/thread_due_date.rs
+  s_ebcb6b1bfaf7ce::t_d41b9115f961cc 1
+crates/universal_input/src/outbound/thread_due_date/test.rs
+  s_ebcb6b1bfaf7ce::t_ed629decd4d263 60-62,69,85-92,101-133
+crates/webhook/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_21b23ff4868fa2 52-59
+crates/webhook/README.md
+  s_ebcb6b1bfaf7ce::t_c18ade6a1deb1c 103-105
+crates/webhook/src/domain/stream.rs
+  s_ebcb6b1bfaf7ce::t_44693efb952cff 247-249,414-415,417
+crates/webhook/src/domain/stream/test.rs
+  s_ebcb6b1bfaf7ce::t_54b1286a6497d8 887,900-915,955
+crates/workspace-hack/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_e312d8f59d1d99 123,295
+deny.toml
+  s_ebcb6b1bfaf7ce::t_f3cb356b036dd5 238,260
+docker/docker-compose.local-e2e.yml
+  s_ebcb6b1bfaf7ce::t_8c99642043ac7a 45
+docs/CRM_EMAIL_PRIVACY.md
+  s_ebcb6b1bfaf7ce::t_554d002615bb7d 607-608
+docs/agent-guide/ai-chat.md
+  s_ebcb6b1bfaf7ce::t_d896339cbcac6d 72-75,78,549-551,1397
+docs/agent-guide/calendar.md
+  s_ebcb6b1bfaf7ce::t_80971ec2f04922 136-144,166-181
+docs/agent-guide/calls.md
+  s_ebcb6b1bfaf7ce::t_1b4f1646e00fae 233-236
+docs/agent-guide/channels.md
+  s_ebcb6b1bfaf7ce::t_31950cf3a5e066 653-659
+docs/agent-guide/email.md
+  s_ebcb6b1bfaf7ce::t_aa72aa0d7a16b7 288-301,340-344
+docs/agent-guide/login.md
+  s_ebcb6b1bfaf7ce::t_728a2dc6542765 335-341,346-352,355-360
+docs/agent-guide/navigation.md
+  s_ebcb6b1bfaf7ce::t_ef254e74cf0d0a 628-629,1635-1637,1639-1641
+docs/agent-guide/observability.md
+  s_ebcb6b1bfaf7ce::t_21357176b5ac22 241-255
+docs/agent-guide/search.md
+  s_ebcb6b1bfaf7ce::t_12a41cd0a96a5e 68-80
+docs/agent-guide/settings.md
+  s_ebcb6b1bfaf7ce::t_18e68dcd0f86ac 806-809,819-822,830-853,855-856
+docs/agent-guide/setup-cards.md
+  s_ebcb6b1bfaf7ce::t_45d59f5e101a03 16-21
+docs/architecture/cursor-agent-transport.md
+  s_ebcb6b1bfaf7ce::t_da9d11383086d6 317
+docs/architecture/email-backend.md
+  s_ebcb6b1bfaf7ce::t_59368adc0dc4b0 54
+docs/design/disk-backed-contacts.md
+  s_ebcb6b1bfaf7ce::t_2ef8fd5711eea8 186-193,242-244,281-284,450-457,477-484,636-639
+docs/development/ci.md
+  s_ebcb6b1bfaf7ce::t_b7efd2530026a9 54-62
+docs/runbooks/ai-quota-enforcement.md
+  s_ebcb6b1bfaf7ce::t_5e9e38b42d839c 274
+docs/runbooks/email-focus.md
+  s_ebcb6b1bfaf7ce::t_cb152dc59859ba 5-11,23-26,43-44
+docs/runbooks/queues.md
+  s_ebcb6b1bfaf7ce::t_42d08631b2cda3 33-35
+docs/runbooks/search-freshness.md
+  s_ebcb6b1bfaf7ce::t_1d73d759b34e3b 82-83
+docs/runbooks/slack-live-channel-import.md
+  s_ebcb6b1bfaf7ce::t_d60223cfe54309 129
+infra/k8s/observability/aws/README.md
+  s_ebcb6b1bfaf7ce::t_284e2c4cf7c185 22,40-42
+infra/k8s/observability/aws/modules/edge.nix
+  s_ebcb6b1bfaf7ce::t_af399dd9b34447 6-8,14-17,21-65
+infra/k8s/observability/aws/settings.nix
+  s_ebcb6b1bfaf7ce::t_1969cce2361224 156-159,171-178
+infra/k8s/observability/cluster/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_8184133190f507 6-7
+infra/k8s/observability/cluster/README.md
+  s_ebcb6b1bfaf7ce::t_0be5311779e886 19,31,70-76,79-83,89-91,97-118
+infra/k8s/observability/cluster/env/prod.nix
+  s_ebcb6b1bfaf7ce::t_c12275dca98143 37,45,57-60
+infra/k8s/observability/cluster/manifests/prod/argocd/ConfigMap-argocd-cm.yaml
+  s_ebcb6b1bfaf7ce::t_306e4960b04631 3,6,109
+infra/k8s/observability/cluster/manifests/prod/argocd/ConfigMap-argocd-cmd-params-cm.yaml
+  s_ebcb6b1bfaf7ce::t_da525daab244cb 18-20
+infra/k8s/observability/cluster/manifests/prod/argocd/ConfigMap-argocd-rbac-cm.yaml
+  s_ebcb6b1bfaf7ce::t_bd259427d3b878 4
+infra/k8s/observability/cluster/manifests/prod/argocd/Deployment-argocd-applicationset-controller.yaml
+  s_ebcb6b1bfaf7ce::t_6ff8248ddc8b73 24
+infra/k8s/observability/cluster/manifests/prod/argocd/Deployment-argocd-dex-server.yaml
+  s_ebcb6b1bfaf7ce::t_caebd1ef1419e4 1-153
+infra/k8s/observability/cluster/manifests/prod/argocd/Deployment-argocd-repo-server.yaml
+  s_ebcb6b1bfaf7ce::t_01888b9c022649 24-25
+infra/k8s/observability/cluster/manifests/prod/argocd/Deployment-argocd-server.yaml
+  s_ebcb6b1bfaf7ce::t_e63341234fa003 24-25
+infra/k8s/observability/cluster/manifests/prod/argocd/ExternalSecret-argocd-google.yaml
+  s_ebcb6b1bfaf7ce::t_11f3f4d64d406d 1-28
+infra/k8s/observability/cluster/manifests/prod/argocd/NetworkPolicy-argocd-dex-server.yaml
+  s_ebcb6b1bfaf7ce::t_2f16289caca42b 1-36
+infra/k8s/observability/cluster/manifests/prod/argocd/Role-argocd-dex-server.yaml
+  s_ebcb6b1bfaf7ce::t_8861ba8805cf63 1-23
+infra/k8s/observability/cluster/manifests/prod/argocd/RoleBinding-argocd-dex-server.yaml
+  s_ebcb6b1bfaf7ce::t_d461b91098b21b 1-21
+infra/k8s/observability/cluster/manifests/prod/argocd/Service-argocd-dex-server.yaml
+  s_ebcb6b1bfaf7ce::t_acd97d37e8a37c 1-26
+infra/k8s/observability/cluster/manifests/prod/argocd/ServiceAccount-argocd-dex-server.yaml
+  s_ebcb6b1bfaf7ce::t_6ddf32af8260f1 1-14
+infra/k8s/observability/cluster/manifests/prod/argocd/StatefulSet-argocd-application-controller.yaml
+  s_ebcb6b1bfaf7ce::t_3f84ccc1527da5 25-26
+infra/k8s/observability/cluster/manifests/prod/edge/ConfigMap-edge.yaml
+  s_ebcb6b1bfaf7ce::t_24db10083a299b 97-117
+infra/k8s/observability/cluster/manifests/prod/edge/Deployment-edge.yaml
+  s_ebcb6b1bfaf7ce::t_70d66cebdd1ac6 21
+infra/k8s/observability/cluster/manifests/prod/edge/NetworkPolicy-edge.yaml
+  s_ebcb6b1bfaf7ce::t_53956ecdcbf78d 23-33
+infra/k8s/observability/cluster/manifests/prod/edge/TargetGroupBinding-edge-argocd.yaml
+  s_ebcb6b1bfaf7ce::t_0ffdb8e13e538b 1-12
+infra/k8s/observability/cluster/manifests/prod/external-secrets/ClusterSecretStore-secrets-manager.yaml
+  s_ebcb6b1bfaf7ce::t_5446f2191d53c6 12
+infra/k8s/observability/cluster/manifests/prod/grafana/ConfigMap-grafana-alerting.yaml
+  s_ebcb6b1bfaf7ce::t_61c5218f7adb69 6
+infra/k8s/observability/cluster/manifests/prod/grafana/ConfigMap-grafana-dashboards-macro-email-focus.yaml
+  s_ebcb6b1bfaf7ce::t_3eb025bf8c42bb 3
+infra/k8s/observability/cluster/manifests/prod/grafana/Deployment-grafana.yaml
+  s_ebcb6b1bfaf7ce::t_9a1d2018c68918 29
+infra/k8s/observability/cluster/modules/edge.nix
+  s_ebcb6b1bfaf7ce::t_1ae605255872dc 5,35-41,108-126,194-198,312-315
+infra/k8s/observability/cluster/modules/platform/argocd.nix
+  s_ebcb6b1bfaf7ce::t_e8fbd943697c15 4-14,17-22,25-37,44,46,50-51,53-69,75-76,88-127
+infra/k8s/observability/cluster/modules/platform/external-secrets.nix
+  s_ebcb6b1bfaf7ce::t_1965020f43127c 55-65
+infra/k8s/observability/cluster/scripts/bootstrap.sh
+  s_ebcb6b1bfaf7ce::t_2c5496b3c41e23 45-51
+infra/k8s/observability/cluster/scripts/kind-smoke.sh
+  s_ebcb6b1bfaf7ce::t_5b43792a9108ff 44,46
+infra/stacks/email-service/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_acdbd0f0f15f27 38-43
+infra/stacks/email-service/index.ts
+  s_ebcb6b1bfaf7ce::t_005bcd2d9baed5 170-185,328,495-497
+infra/stacks/kafka-cluster/topics.ts
+  s_ebcb6b1bfaf7ce::t_4c060de46d4940 6,8,37
+infra/stacks/monitoring/README.md
+  s_ebcb6b1bfaf7ce::t_5435595cd5e749 240
+infra/stacks/monitoring/monitors/oauth.ts
+  s_ebcb6b1bfaf7ce::t_c3d6cdae950320 1-3,13,24
+infra/stacks/monitoring/monitors/queues.ts
+  s_ebcb6b1bfaf7ce::t_838acfe62aa467 47-53,126-140
+infra/stacks/monitoring/monitors/search-freshness.ts
+  s_ebcb6b1bfaf7ce::t_52abc6b6ce37c6 82,232-233,396-397,400
+infra/stacks/monitoring/routing.test.ts
+  s_ebcb6b1bfaf7ce::t_fb15da074dea42 237
+infra/stacks/observability/nixos/grafana-provisioning/alerting.nix
+  s_ebcb6b1bfaf7ce::t_8ae555f24302b0 126-131,137-140,142-155
+infra/stacks/observability/nixos/grafana-provisioning/email-focus-dashboard.nix
+  s_ebcb6b1bfaf7ce::t_bc8e3dc94a1672 144-170
+infra/stacks/observability/nixos/grafana-provisioning/email-focus.nix
+  s_ebcb6b1bfaf7ce::t_84988750bc79dd 21-24,147-148,150,174-175,177
+packages/sdk/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_a03be920a57b7e 92-94
+packages/sdk/generated/agent-harness/index.ts
+  s_e6ba6cb868bc8a::t_41950b01d02aff 4
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_e6ba6cb868bc8a::t_38860eea417570 1367,1371,1374-1377,1383,1482-1486,1844
+packages/sdk/generated/cognition/index.ts
+  s_e6ba6cb868bc8a::t_cb7fc2260b486a 4
+packages/sdk/generated/cognition/sdk.gen.ts
+  s_ebcb6b1bfaf7ce::t_8415d10270718b 5,267-337,503-504,506-507,511,513-514
+packages/sdk/generated/cognition/types.gen.ts
+  s_e6ba6cb868bc8a::t_ece7d5dbdf1efb 40,44,46,48,206-249,505-531,535-536,540-575,579-610,1648,2322,2324,2326,2328,2330,2332,2336,2338,2340,2342,2344,2346,2349-2350,3215-3216,3219,3222-3224,3227,3229-3230,3233,3235-3236,3239,3242-3451,3877,3882,3886,3890,3894,3901,3903,3909,3911,3913,3918,3925,3927
+packages/sdk/generated/contacts/types.gen.ts
+  s_e6ba6cb868bc8a::t_403fa42b0b17ad 32-35,52-57
+packages/sdk/specs/agent-harness.json
+  s_ebcb6b1bfaf7ce::t_d91b57a7e6b143 6590,6594,6598-6602,6610,6715-6719,7130
+packages/sdk/specs/cognition.json
+  s_ebcb6b1bfaf7ce::t_264c3d6a34d3ac 1105-1109,1116-1119,1125-1132,1134,1139,1143-1156,1158-1161,1166,1171,1176,1181,1184,1186,1191,1196,1204-1216,1219-1239,1242,1246,1251-1252,1254,1256,1261-1262,1266,1270-1287,1289-1301,1303-1304,1308,1313-1314,1316,1318,1323-1324,1328,1333-1334,1338,1344-1368,1373,1380-1384,1388,1393-1394,1396,1398,1403-1404,1408,1412-1414,1416,1418,1426,1428-1439,1441-1450,1453,1457,1463,1467,1473,1475,1477,1482-1483,1487,1492-1493,1497,1501-1518,1520-1532,1536,1541-1542,1546,1551-1552,1554,1556,1561,1566,1572-1579,1582-1584,1586-1587,1592,1604,1609-1610,1612-1619,1622-1630,1637,1642-1643,1647,1652-1660,1665,1667-1668,1673,1681,1685,1691,1695,1700-1701,1703-1704,1708,1713-1715,1717,1721,1725-1727,1731,1736-1737,1739,1741,1746-1747,1751,1757-1763,1765,1769,1777,1781,1786-1787,1789,1791,1796-1800,1804,1808-1819,1821,1823,1829-1831,1833-1835,1840,1847-1848,1852,1858,1862,1868-1871,1873,1875,1880-1881,1885,1890-1891,1893,1895,1901,1905-1925,1933,1935-1937,1940,1942,1945,1949,1951,1954,1960,1964,1970,1973,1975-1977,1982,1994,1999-2050,2053,2055,2061-2073,2077,2081-2083,2088-2102,2105,2109,2114-2118,2121-2143,2147,2151-2153,2158-2162,2165-2168,2175-2176,2179,2182,2187,2189-2191,2194,2198,2204,2209,2211-2223,2226,2230,2238,2240-2249,2252,2255,2259,2267-2271,2274-2277,2283,2285,2292,2294,2301,2303,2306,2312,2314-2315,2324,2337-2341,2344,2349-2354,2357,2361,2367,2370,2374,2382,2384-2395,2398-2405,2408-2415,2417-2418,2421,2425,2430-2431,2435,2440-2441,2445,2451,2455,2463,2465-2468,2471,2475,2481,2485,2491-2496,2501,2509,2513,2518-2519,2521,2523,2528-2529,2533,2538-2539,2543,2549,2553,2558-2559,2563-2582,2586-2588,2593,2595-2597,2602,2605-2606,2610,2614,2620-2632,2636,2641-2659,2662-2672,3299-3300,3302,3304,3308,3564-3604,3606,3608,3610-3614,3618,3620-3621,3623-3632,4091-4133,4136,4141,4145,4149-4197,4201-4245,6239,7321-7334
+packages/sdk/specs/contacts.json
+  s_ebcb6b1bfaf7ce::t_aac67e73315bed 211,218,228-234
+packages/sdk/src/coverage/skipped.ts
+  s_ebcb6b1bfaf7ce::t_a6e1bbe90f03dd 192-202
+packages/sdk/tests/connected-apps.test.ts
+  s_ebcb6b1bfaf7ce::t_75ae5f91f09da7 100
+rules/ast-grep-tests/__snapshots__/rust-macro-connect-flag-in-policy-snapshot.yml
+  s_ebcb6b1bfaf7ce::t_e5ac54ba4afe49 1-23
+rules/ast-grep-tests/__snapshots__/ts-connection-state-through-connectors-queries-snapshot.yml
+  s_ebcb6b1bfaf7ce::t_c0be77abfef2bf 1-178
+rules/ast-grep-tests/__snapshots__/tsx-connection-state-through-connectors-queries-snapshot.yml
+  s_ebcb6b1bfaf7ce::t_e650258d789233 1-178
+rules/ast-grep-tests/rust-macro-connect-flag-in-policy-test.yml
+  s_ebcb6b1bfaf7ce::t_2a5a91e79db7d2 1-16
+rules/ast-grep-tests/ts-connection-state-through-connectors-queries-test.yml
+  s_ebcb6b1bfaf7ce::t_c968fee61a6ef7 1-38
+rules/ast-grep-tests/tsx-connection-state-through-connectors-queries-test.yml
+  s_ebcb6b1bfaf7ce::t_d490305a2d0276 1-38
+rules/ast-grep/rust-macro-connect-flag-in-policy.yml
+  s_ebcb6b1bfaf7ce::t_62544fe173fe43 1-22
+rules/ast-grep/rust-no-transport-in-domain.yml
+  s_ebcb6b1bfaf7ce::t_bf694cc5be4c33 24-28
+rules/ast-grep/ts-connection-state-through-connectors-queries.yml
+  s_ebcb6b1bfaf7ce::t_367a2dc433b3b1 1-80
+rules/ast-grep/tsx-connection-state-through-connectors-queries.yml
+  s_ebcb6b1bfaf7ce::t_51ef5c0a7e43d8 1-80
+services/agent_harness_service/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_b93b95aa74e94e 19-26,223-238,243-247,268-270,345-346,414
+services/agent_harness_service/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_8fb0f7acdf4ceb 151-152,234
+services/agent_harness_service/src/code_mode/connected_apps.rs
+  s_ebcb6b1bfaf7ce::t_794849770bf361 24,26-30,38,40-42,47-49,60,63,146,149,245-246,248,258-259,261-273
+services/agent_harness_service/src/code_mode/connected_apps/test.rs
+  s_ebcb6b1bfaf7ce::t_e190a24677de84 25-221
+services/agent_harness_service/src/cognition/api.rs
+  s_ebcb6b1bfaf7ce::t_1907d2a62b143c 181-182,186-189,193-195,198,201
+services/agent_harness_service/src/cognition/api/context.rs
+  s_ebcb6b1bfaf7ce::t_9dbe175a985164 98-101,105-108,113,116,165-169
+services/agent_harness_service/src/cognition/api/context/test.rs
+  s_ebcb6b1bfaf7ce::t_b966f25d435c55 467,506,513,567,606-607,630,635,638,644,646,785-788,790-793,801-824,826
+services/agent_harness_service/src/cognition/api/stream/chat_message.rs
+  s_ebcb6b1bfaf7ce::t_63101def24635d 559,589
+services/agent_harness_service/src/cognition/api/structured_completion.rs
+  s_ebcb6b1bfaf7ce::t_9c17441dcaf636 193
+services/agent_harness_service/src/cognition/api/swagger.rs
+  s_ebcb6b1bfaf7ce::t_321f70b9eb1d14 21-26,122-130,291-296,298-300
+services/agent_harness_service/src/cognition/api/tool_selection.rs
+  s_ebcb6b1bfaf7ce::t_621206c111533e 2-3,73,76,91,93,100-115
+services/agent_harness_service/src/cognition/api/tool_selection/test.rs
+  s_ebcb6b1bfaf7ce::t_6c68a010b28547 123-217
+services/agent_harness_service/src/cognition/config.rs
+  s_ebcb6b1bfaf7ce::t_8dcc2efc49f410 159,201-282
+services/agent_harness_service/src/cognition/config/test.rs
+  s_ebcb6b1bfaf7ce::t_7054bcdee714e5 6
+services/agent_harness_service/src/cognition/server.rs
+  s_ebcb6b1bfaf7ce::t_873ff2619a0a9a 9,99-101,107,368-373,597-601,603,606-620,674,679,682-687,690,713,760,813,870,875-876,878-880,883-896,964-966,982-1016
+services/agent_harness_service/src/cognition/service/integration_analytics.rs
+  s_ebcb6b1bfaf7ce::t_05a4d08c025a69 1-2,10-11,21-22,42-43,45-46,51-58,62-64,109-121
+services/agent_harness_service/src/cognition/service/integration_analytics/test.rs
+  s_ebcb6b1bfaf7ce::t_55fc271c7137a6 2,6-7,10-11,16-18,20-21,26-28,32-33,38,40-41
+services/agent_harness_service/src/config/test.rs
+  s_ebcb6b1bfaf7ce::t_8f1026d5ed9060 81,91
+services/agent_harness_service/src/internal_mcp.rs
+  s_ebcb6b1bfaf7ce::t_e66e35d2ed2af9 156
+services/agent_harness_service/src/internal_mcp/test/code_mode.rs
+  s_ebcb6b1bfaf7ce::t_72d27eba130e36 261
+services/agent_harness_service/src/lib.rs
+  s_ebcb6b1bfaf7ce::t_e295f9fda81b57 68,543-562,564-565,570,573-574,578,665,678,682,814,898,903,1383-1392,1695-1696,2048,2072,2248-2249
+services/agent_harness_service/src/public_mcp/direct_tools_instructions.md
+  s_ebcb6b1bfaf7ce::t_47eb3e2dd65bcf 1
+services/agent_harness_service/src/public_mcp/tool_service.rs
+  s_ebcb6b1bfaf7ce::t_87b21815146b35 19-21,24,27-32,189-212,280,351-353,363-364,378,382-423
+services/agent_harness_service/src/public_mcp/tool_service/test.rs
+  s_ebcb6b1bfaf7ce::t_1cecd04240e6e7 288,293,513-524,530-534,671-804
+services/agent_harness_service/src/routine_sessions.rs
+  s_ebcb6b1bfaf7ce::t_d78430ca6ba002 13,22,27,36,50-53,56-57,59,62,64-70,73-78,80-88,94,96,98-99,107,112-136,139,141,147,150-152,155,160-161,163-168
+services/agent_harness_service/src/routine_sessions/test.rs
+  s_ebcb6b1bfaf7ce::t_0b7f0e32c202ef 1,16-17,20-21,24-27,30-46,48-51,54-61,63,66,68-71,74-76,78-82,84-95,98-121
+services/agent_harness_service/src/scheduling.rs
+  s_ebcb6b1bfaf7ce::t_23e0cc268232b3 7,551,559-564,867,930
+services/agent_harness_service/src/scheduling/routine_suggestions.rs
+  s_ebcb6b1bfaf7ce::t_b454599ab75397 11-12,19,21,23,28,30
+services/authentication_service/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_4b13bbd6f4302a 364-371
+services/authentication_service/src/api/context.rs
+  s_ebcb6b1bfaf7ce::t_ddb290c18cb6de 18-27,92,128-135,152,305
+services/authentication_service/src/api/webhooks/user/delete_user_webhook.rs
+  s_ebcb6b1bfaf7ce::t_f908b915cb6032 19,137-140
+services/authentication_service/src/outbound/user_deletion.rs
+  s_ebcb6b1bfaf7ce::t_fed9b84e35525d 5,20-22,27,35,51,62,103-105,146-154
+services/authentication_service/src/server.rs
+  s_ebcb6b1bfaf7ce::t_a02adb9215f406 23-29,447-456,481,789-792,794-805,920
+services/authentication_service/src/service/user/delete_user.rs
+  s_ebcb6b1bfaf7ce::t_db6648323ff30b 40-46,88-89
+services/authentication_service/src/service/user/delete_user/test.rs
+  s_ebcb6b1bfaf7ce::t_5bbf1ffa1f5ec5 37-39,67
+services/connection_gateway/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_9e66d5ad54dc80 20-28,43,82-85
+services/connection_gateway/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_39a7120403239a 32,84,96
+services/connection_gateway/src/api/connection.rs
+  s_ebcb6b1bfaf7ce::t_79c5f7bb859b33 56-58,61,76,119-127,142
+services/connection_gateway/src/context.rs
+  s_ebcb6b1bfaf7ce::t_814648271662f9 34-36
+services/connection_gateway/src/main.rs
+  s_ebcb6b1bfaf7ce::t_acf650dcfa97ec 47,119-126,139,187,189-197,199
+services/connection_gateway/src/service/mod.rs
+  s_ebcb6b1bfaf7ce::t_f830499c512731 6
+services/connection_gateway/src/service/seen.rs
+  s_ebcb6b1bfaf7ce::t_f492574d2cd4f2 1-2,4-12,14-20,25-26,28-29,31-34,36,38-41,44-53,56-58,61-66,68-79,82,84-88,90-97,99-102,106-150
+services/connection_gateway/src/service/seen/test.rs
+  s_ebcb6b1bfaf7ce::t_3b146269e8370d 1-192
+services/contacts_service/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_810c474472f047 13-19,22-24
+services/contacts_service/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_feb4151cbba5e4 16-19,30-31,33,44-45,57
+services/contacts_service/README.md
+  s_ebcb6b1bfaf7ce::t_4002ff94b4b657 4-57
+services/contacts_service/src/bin/contacts_backfill.rs
+  s_ebcb6b1bfaf7ce::t_b9f928a920b6db 1-199
+services/contacts_service/src/config.rs
+  s_ebcb6b1bfaf7ce::t_1ead0ccf2a6942 14-18,40-43,47-54,71-72
+services/contacts_service/src/main.rs
+  s_ebcb6b1bfaf7ce::t_38573d87ce9450 9,24,28-30,98-120,167
+services/document_storage_service/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_3b2574840fefd6 215
+services/document_storage_service/src/api/context.rs
+  s_ebcb6b1bfaf7ce::t_fac11045dad167 1,4,539-541,554-559,718-724,729-730,970
+services/document_storage_service/src/outbound/stream_contacts.rs
+  s_ebcb6b1bfaf7ce::t_ae9bc337052a0e 4,9,16-17,31
+services/document_storage_service/src/outbound/stream_contacts/test.rs
+  s_ebcb6b1bfaf7ce::t_fccfffe2fba17e 17
+services/document_storage_service/src/server.rs
+  s_ebcb6b1bfaf7ce::t_614a0a89ca5c2c 388-410,419-423,1060,1120-1134,1143,1485-1493,1716,2045,2049-2051,2054-2055
+services/email_focus_worker/Cargo.toml
+  s_ebcb6b1bfaf7ce::t_0c1ed61ccf9e03 16
+services/email_focus_worker/src/config.rs
+  s_ebcb6b1bfaf7ce::t_011a1c1ba86ce8 56-63
+services/email_focus_worker/src/main.rs
+  s_ebcb6b1bfaf7ce::t_563a98a53b3514 6-14,26,38,56,128,157-162
+services/email_focus_worker/src/metrics.rs
+  s_ebcb6b1bfaf7ce::t_433fc731bd35e4 64-66
+services/email_focus_worker/src/outbound/active_enrollment.rs
+  s_ebcb6b1bfaf7ce::t_555070f4d97d35 1-6,8-11,13-20,25,27-36,39-56,58-62,66-86,90,92,94-110,112-118,120-131
+services/email_focus_worker/src/outbound/active_enrollment/test.rs
+  s_ebcb6b1bfaf7ce::t_5868f5a8205847 1-351
+services/email_focus_worker/src/outbound/flag_enrollment.rs
+  s_ebcb6b1bfaf7ce::t_f38aa520c20114 4-5
+services/email_focus_worker/src/outbound/harness_due_dates.rs
+  s_ebcb6b1bfaf7ce::t_98af88897888b0 10,34-36,96,101,135-140,144-147
+services/email_focus_worker/src/outbound/harness_due_dates/test.rs
+  s_ebcb6b1bfaf7ce::t_2b2351fe6bb863 26,43-46,55,58-61,66,76,79,93,102-139,177
+services/email_focus_worker/src/test_support.rs
+  s_ebcb6b1bfaf7ce::t_f3fa2fc3bafc8b 11,107,115,120,125
+services/email_refresh_handler/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_c4d5d37c3512a7 9-11,25
+services/email_refresh_handler/src/main.rs
+  s_ebcb6b1bfaf7ce::t_6248046dd8b0e0 33-34,38
+services/email_refresh_handler/src/outbound/sqs.rs
+  s_ebcb6b1bfaf7ce::t_e474d19ccedc6b 3,25
+services/email_service/AGENTS.md
+  s_ebcb6b1bfaf7ce::t_4660e104c0f2f3 260-265,318-326,331-340
+services/email_service/src/api/outlook.rs
+  s_ebcb6b1bfaf7ce::t_b6ae4b8fe6624f 48-54,73-75,77-97
+services/email_service/src/api/outlook/test.rs
+  s_ebcb6b1bfaf7ce::t_bb4590823a2e3f 11,14,16,20,23
+services/email_service/src/bin/backfill_contacts/backfill_contacts.rs
+  s_ebcb6b1bfaf7ce::t_2a9d92d5112223 29-38
+services/email_service/src/bin/backfill_contacts/config.rs
+  s_ebcb6b1bfaf7ce::t_3a7ed3f7aeade4 2-3,9-13,21-25,35-37
+services/email_service/src/bin/backfill_contacts/process.rs
+  s_ebcb6b1bfaf7ce::t_67672ef2414a36 2-4,10,29,31,34-37,42-45
+services/email_service/src/bin/pubsub_workers/pubsub_workers.rs
+  s_ebcb6b1bfaf7ce::t_cc225b0b7e78b7 17,107,121-122,139-144,155-162,760-795
+services/email_service/src/composition.rs
+  s_ebcb6b1bfaf7ce::t_d1dbe2d534bea1 10-16,21,25-45,74,85
+services/email_service/src/composition/api.rs
+  s_ebcb6b1bfaf7ce::t_27522b34d9d447 46
+services/email_service/src/config.rs
+  s_ebcb6b1bfaf7ce::t_1fe07b1fa773bc 22-23,168-169
+services/email_service/src/outbound.rs
+  s_ebcb6b1bfaf7ce::t_d81b6bfa0b1df2 48-49
+services/email_service/src/outbound/backfill_jobs/worker.rs
+  s_ebcb6b1bfaf7ce::t_f1801541216fda 38
+services/email_service/src/outbound/backfill_jobs/worker/effects.rs
+  s_ebcb6b1bfaf7ce::t_5674620cade128 5,9-12,69-70,72-81,85,331,337-338,341-343
+services/email_service/src/outbound/backfill_jobs/worker/effects/test.rs
+  s_ebcb6b1bfaf7ce::t_c7d7e6eebd1faa 59-65
+services/email_service/src/outbound/email_api/token_source.rs
+  s_ebcb6b1bfaf7ce::t_15c83ab30c1b4e 10,173
+services/email_service/src/outbound/inbox_health.rs
+  s_ebcb6b1bfaf7ce::t_0a8922da4ee860 1,11,63-66,89-90
+services/email_service/src/outbound/inbox_lifecycle.rs
+  s_ebcb6b1bfaf7ce::t_7b8be216c1fab5 6,132-138
+services/email_service/src/outbound/inbox_lifecycle/inbox_sync.rs
+  s_ebcb6b1bfaf7ce::t_05add744c61c9a 42
+services/email_service/src/outbound/inbox_lifecycle/inbox_sync/import_effects.rs
+  s_ebcb6b1bfaf7ce::t_89e65a259f4d6d 3,7-10,97,102-103,108-111
+services/email_service/src/outbound/inbox_source.rs
+  s_ebcb6b1bfaf7ce::t_47604725dc3511 1,3-26
+services/email_service/src/outbound/inbox_source/recording.rs
+  s_ebcb6b1bfaf7ce::t_e8e5019867146c 1-93
+services/email_service/src/outbound/inbox_source/test.rs
+  s_ebcb6b1bfaf7ce::t_d94862e0652d32 1-36
+services/email_service/src/outbound/link_manager/deletion.rs
+  s_ebcb6b1bfaf7ce::t_cfa6ef0e4c4d56 8,14,20,23-25,79-82,84,86-102
+services/email_service/src/outbound/link_manager/deletion/test.rs
+  s_ebcb6b1bfaf7ce::t_6acda458855b3b 1-39
+services/email_service/src/outbound/mailbox_projection.rs
+  s_ebcb6b1bfaf7ce::t_b047c710876fc0 3,5-8,77,182-185,189-197
+services/email_service/src/outbound/mailbox_projection/test.rs
+  s_ebcb6b1bfaf7ce::t_0a25f6a35864d9 2-3,48-58,67-79,93,623-698
+services/email_service/src/outbound/user_deletion.rs
+  s_ebcb6b1bfaf7ce::t_feff65c0bd41d1 5,35-41
+services/email_service/src/outlook_flags.rs
+  s_ebcb6b1bfaf7ce::t_373201d48a3164 4,30-32,34-48,51,54
+services/email_service/src/pubsub/backfill/worker.rs
+  s_ebcb6b1bfaf7ce::t_e2244e9e0ffe03 27,68,121
+services/email_service/src/pubsub/inbox_sync/worker.rs
+  s_ebcb6b1bfaf7ce::t_a3a052a81e1b02 33,76,134
+services/email_service/src/pubsub/label_write_sim/world.rs
+  s_ebcb6b1bfaf7ce::t_40a5d85fdf9a01 267-273,327-333
+services/email_service/src/pubsub/link_manager/process.rs
+  s_ebcb6b1bfaf7ce::t_94d088a8d40e71 12-13,17,19,41-43
+services/email_service/src/pubsub/link_manager/worker.rs
+  s_ebcb6b1bfaf7ce::t_0921a621a7ed42 10,16,66,118,141-144,152,160,171,217-218,227,295-325
+services/email_service/src/pubsub/link_manager/worker/test.rs
+  s_ebcb6b1bfaf7ce::t_72c622cf45df72 112-170
+services/email_service/src/server.rs
+  s_ebcb6b1bfaf7ce::t_6a35dab5824073 64,73-74,125-130
+services/email_service/src/util/redis/backfill_write_slots.rs
+  s_ebcb6b1bfaf7ce::t_2228b765277684 195-199,208
+services/email_service/src/util/redis/backfill_write_slots/test.rs
+  s_ebcb6b1bfaf7ce::t_c953b3324b9a08 180-209
+services/email_service/src/util/sync_contacts.rs
+  s_ebcb6b1bfaf7ce::t_4541e3e5275bc2 2,5-8,30,74-75,89,102-104,112-125,127,129-133
+services/email_service/src/util/sync_contacts/test.rs
+  s_ebcb6b1bfaf7ce::t_66b8a40b4bbd11 7,207,219,221,224,227-254,257-286
+static_assets/schema.graphql
+  s_ebcb6b1bfaf7ce::t_6e22c4503ba7d5 4036-4041,5091-5093
+tooling/just/local_stack.just
+  s_ebcb6b1bfaf7ce::t_92c5a64dc5a654 47-50
+tooling/just/rust.just
+  s_ebcb6b1bfaf7ce::t_3c797e959669db 54-60,166
+tooling/xtask/crates/xtask_local/src/local/resources.rs
+  s_ebcb6b1bfaf7ce::t_5f8409a8eae888 132-136,256-264
+tooling/xtask/crates/xtask_local/src/local/resources/test.rs
+  s_ebcb6b1bfaf7ce::t_1e6b2556b56de6 92-93,120-139
+tooling/xtask/crates/xtask_workflows/checks.lock
+  s_ebcb6b1bfaf7ce::t_20ad945559d65b 62-63
+tooling/xtask/crates/xtask_workflows/src/workflows.rs
+  s_ebcb6b1bfaf7ce::t_a545d7c6cc5d96 50,170-174
+tooling/xtask/crates/xtask_workflows/src/workflows/connectors_e2e.rs
+  s_ebcb6b1bfaf7ce::t_9264dabe3b66d3 1-130
+tooling/xtask/crates/xtask_workflows/src/workflows/email_e2e_alert.rs
+  s_ebcb6b1bfaf7ce::t_619cf6c86f0370 2-7,12-13,18,26-47,103-105,107-111,113,130-133,146,156-157,167-176,186,189-190
+tooling/xtask/crates/xtask_workflows/src/workflows/email_e2e_alert/test.rs
+  s_ebcb6b1bfaf7ce::t_667446644f023a 3-4,27-41,87-89,91,147
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/connectors_e2e.sh
+  s_ebcb6b1bfaf7ce::t_92f8450f2650fe 1-30
+tooling/xtask/crates/xtask_workflows/src/workflows/steps.rs
+  s_ebcb6b1bfaf7ce::t_0fc99dd193dabe 8-9,576-593,596,604-605,612-613
+tooling/xtask/crates/xtask_workflows/src/workflows/vars.rs
+  s_ebcb6b1bfaf7ce::t_a6ea575f5e397d 22-24,47-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "515e2dd5b5dc175abb465d30012971ca1051749f",
+  "prompts": {},
+  "sessions": {
+    "s_e6ba6cb868bc8a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d95a6335-3d2e-4cf7-b86e-dc40d55d75fd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_ebcb6b1bfaf7ce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "56ea889e-d12a-4b7f-8492-51a639a581b9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
