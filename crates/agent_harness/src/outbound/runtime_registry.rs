@@ -206,10 +206,14 @@ where
             .is_ok()
     }
 
-    /// Ask `harness`'s runtime to check its teammate hosting again now.
-    /// Whether it was sent: false when it isn't connected here or didn't
-    /// list the message.
-    pub async fn recheck_teammate_host(&self, harness: HarnessId) -> bool {
+    /// Ask `harness`'s runtime to check its teammate hosting again now, its
+    /// check joining the trace of `traceparent`. Whether it was sent: false
+    /// when it isn't connected here or didn't list the message.
+    pub async fn recheck_teammate_host(
+        &self,
+        harness: HarnessId,
+        traceparent: Option<String>,
+    ) -> bool {
         let Some(runtime) = self
             .connections
             .get(&harness)
@@ -219,7 +223,7 @@ where
             return false;
         };
         runtime
-            .recheck_teammate_host()
+            .recheck_teammate_host(traceparent)
             .await
             .inspect_err(|error| tracing::warn!(%harness, error = ?error, "could not ask a runtime to recheck its teammate hosting"))
             .is_ok()

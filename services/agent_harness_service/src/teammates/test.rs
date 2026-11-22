@@ -189,7 +189,7 @@ impl InstallIssuer for FakeIssuer {
 enum Sent {
     Run(TeammateInstall),
     Stop(TeammateInstall),
-    Recheck,
+    Recheck(Option<String>),
 }
 
 struct FakeSockets {
@@ -248,10 +248,10 @@ impl TeammateSockets for FakeSockets {
         Box::pin(async { true })
     }
 
-    fn recheck(&self, _: HarnessId) -> BoxFuture<'_, bool> {
+    fn recheck(&self, _: HarnessId, traceparent: Option<String>) -> BoxFuture<'_, bool> {
         let connected = self.dial.lock().unwrap().is_some();
         if connected {
-            self.sent.lock().unwrap().push(Sent::Recheck);
+            self.sent.lock().unwrap().push(Sent::Recheck(traceparent));
         }
         Box::pin(async move { connected })
     }
@@ -699,5 +699,49 @@ async fn a_recheck_asks_the_machine_this_replica_holds() {
 
     machine.delivery.recheck_host(LAPTOP).await;
 
-    assert_eq!(machine.sockets.sent(), [Sent::Recheck]);
+    assert!(
+        matches!(machine.sockets.sent().as_slice(), [Sent::Recheck(_)]),
+        "{:?}",
+        machine.sockets.sent()
+    );
+}
+
+#[tokio::test]
+async fn a_recheck_carries_the_askers_trace_to_the_machine() {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing::Instrument as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+    let _guard = tracing::subscriber::set_default(subscriber);
+    let machine = machine(vec![], false);
+    let recheck = crate::teammates::TeammateHostRecheck {
+        recheck_teammate_host: LAPTOP,
+        trace_context: [(
+            "traceparent".to_owned(),
+            "00-11111111111111111111111111111111-2222222222222222-01".to_owned(),
+        )]
+        .into_iter()
+        .collect(),
+    };
+
+    machine
+        .delivery
+        .recheck_host(LAPTOP)
+        .instrument(recheck.span())
+        .await;
+
+    let sent = machine.sockets.sent();
+    let [Sent::Recheck(Some(traceparent))] = sent.as_slice() else {
+        panic!("expected one recheck with a traceparent, got {sent:?}");
+    };
+    assert!(
+        traceparent.starts_with("00-11111111111111111111111111111111-"),
+        "{traceparent}"
+    );
 }

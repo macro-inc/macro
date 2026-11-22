@@ -124,11 +124,24 @@ fn agents_changed_is_a_bare_hint() {
 }
 
 #[test]
-fn recheck_teammate_host_is_a_bare_hint() {
+fn recheck_teammate_host_is_a_hint_carrying_only_its_trace() {
+    let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
     assert_eq!(
-        serde_json::to_value(ToRuntimeMessage::RecheckTeammateHost).unwrap(),
+        serde_json::to_value(ToRuntimeMessage::RecheckTeammateHost {
+            traceparent: Some(traceparent.to_owned()),
+        })
+        .unwrap(),
+        json!({ "type": "recheckTeammateHost", "traceparent": traceparent })
+    );
+    assert_eq!(
+        serde_json::to_value(ToRuntimeMessage::RecheckTeammateHost { traceparent: None }).unwrap(),
         json!({ "type": "recheckTeammateHost" })
     );
+    // As a service without the field sends it.
+    assert!(matches!(
+        serde_json::from_value(json!({ "type": "recheckTeammateHost" })).unwrap(),
+        ToRuntimeMessage::RecheckTeammateHost { traceparent: None }
+    ));
     assert_eq!(ACCEPTS_RECHECK_TEAMMATE_HOST, "recheck-teammate-host");
 }
 

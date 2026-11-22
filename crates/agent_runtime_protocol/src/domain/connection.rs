@@ -268,7 +268,7 @@ async fn run_runtime<H>(
                     }
                     // This side serves one agent and no triggers, and
                     // hosts no teammates.
-                    ToRuntimeMessage::AgentsChanged | ToRuntimeMessage::RecheckTeammateHost => {}
+                    ToRuntimeMessage::AgentsChanged | ToRuntimeMessage::RecheckTeammateHost { .. } => {}
                 }
             }
             result = probes.join_next(), if !probes.is_empty() => {

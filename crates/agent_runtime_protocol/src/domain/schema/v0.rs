@@ -172,10 +172,15 @@ pub enum ToRuntimeMessage {
     AgentsChanged,
     /// Check the machine's teammate hosting again now (the container
     /// engine, the floor, the isolation probe) and send a fresh
-    /// [`ToServerMessage::TeammateHost`] report. A hint with no payload, sent
-    /// when a person asks to check again; sent only to a runtime that listed
+    /// [`ToServerMessage::TeammateHost`] report. A hint, sent when a person
+    /// asks to check again; sent only to a runtime that listed
     /// [`ACCEPTS_RECHECK_TEAMMATE_HOST`].
-    RecheckTeammateHost,
+    RecheckTeammateHost {
+        /// W3C `traceparent` of the service's span that asked, so the
+        /// runtime's check joins its trace. Opaque ids only.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        traceparent: Option<String>,
+    },
     /// Run this agent teammate on the computer: write its environment where
     /// the guest's agent service reads it, which (re)starts the agent. Sent
     /// to a warm pool computer a purchase took for an agent; the agent's own

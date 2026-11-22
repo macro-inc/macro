@@ -983,23 +983,32 @@ async fn a_recheck_goes_only_to_a_runtime_that_listed_it() {
         },
     );
 
-    assert!(registry.recheck_teammate_host(HarnessId::TEST_A).await);
-    assert!(!registry.recheck_teammate_host(HarnessId::TEST_B).await);
+    let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+    assert!(
+        registry
+            .recheck_teammate_host(HarnessId::TEST_A, Some(traceparent.to_owned()))
+            .await
+    );
     assert!(
         !registry
-            .recheck_teammate_host(HarnessId::new_from_uuid(uuid::Uuid::now_v7()))
+            .recheck_teammate_host(HarnessId::TEST_B, None)
+            .await
+    );
+    assert!(
+        !registry
+            .recheck_teammate_host(HarnessId::new_from_uuid(uuid::Uuid::now_v7()), None)
             .await
     );
 
     assert!(matches!(
         listing.sent().as_slice(),
-        [ToRuntimeMessage::RecheckTeammateHost]
+        [ToRuntimeMessage::RecheckTeammateHost { traceparent: Some(sent) }] if sent == traceparent
     ));
     assert!(
         !older
             .sent()
             .iter()
-            .any(|message| matches!(message, ToRuntimeMessage::RecheckTeammateHost)),
+            .any(|message| matches!(message, ToRuntimeMessage::RecheckTeammateHost { .. })),
         "{:?}",
         older.sent()
     );

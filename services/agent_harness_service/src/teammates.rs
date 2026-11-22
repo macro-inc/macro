@@ -204,9 +204,10 @@ pub(crate) trait TeammateSockets: Send + Sync + 'static {
         traceparent: Option<String>,
     ) -> BoxFuture<'_, bool>;
 
-    /// Send `RecheckTeammateHost` to `harness`'s runtime, if it is connected
-    /// here and listed it; whether it was sent.
-    fn recheck(&self, harness: HarnessId) -> BoxFuture<'_, bool>;
+    /// Send `RecheckTeammateHost`, carrying the asker's `traceparent`, to
+    /// `harness`'s runtime, if it is connected here and listed it; whether
+    /// it was sent.
+    fn recheck(&self, harness: HarnessId, traceparent: Option<String>) -> BoxFuture<'_, bool>;
 }
 
 impl<Sender> TeammateSockets for agent_harness::outbound::runtime_registry::RuntimeRegistry<Sender>
@@ -248,8 +249,8 @@ where
         Box::pin(self.stop_teammate(harness, connection, install, traceparent))
     }
 
-    fn recheck(&self, harness: HarnessId) -> BoxFuture<'_, bool> {
-        Box::pin(self.recheck_teammate_host(harness))
+    fn recheck(&self, harness: HarnessId, traceparent: Option<String>) -> BoxFuture<'_, bool> {
+        Box::pin(self.recheck_teammate_host(harness, traceparent))
     }
 }
 
@@ -538,7 +539,9 @@ impl TeammateDelivery {
     /// Someone asked to check the machine's hosting again: ask its runtime,
     /// if this replica holds its socket. It answers with a fresh report.
     pub(crate) async fn recheck_host(&self, harness: HarnessId) {
-        let sent = self.sockets.recheck(harness).await;
+        // The consumer span adopted the asker's context: the runtime's
+        // check joins its trace.
+        let sent = self.sockets.recheck(harness, traceparent()).await;
         tracing::Span::current().record("sent", sent);
     }
 

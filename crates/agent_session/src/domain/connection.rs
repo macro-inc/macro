@@ -417,10 +417,13 @@ where
     }
 
     /// Ask the runtime to check its teammate hosting again now and send a
-    /// fresh report.
-    pub async fn recheck_teammate_host(&self) -> std::result::Result<(), TransportError> {
+    /// fresh report, its check joining the trace of `traceparent`.
+    pub async fn recheck_teammate_host(
+        &self,
+        traceparent: Option<String>,
+    ) -> std::result::Result<(), TransportError> {
         self.outbound
-            .send(ToRuntimeMessage::RecheckTeammateHost)
+            .send(ToRuntimeMessage::RecheckTeammateHost { traceparent })
             .await
     }
 
