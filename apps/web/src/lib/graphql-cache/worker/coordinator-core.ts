@@ -990,13 +990,22 @@ export class CoordinatorCore {
   }
 
   /** Refuses queued work, keeps every registered tab uncached, and waits for
-   * a tab that registers later to try again. */
+   * a tab that registers later to try again. An engine promised to a newer
+   * build has settled without the database, so the handover completes
+   * instead, as `resumeAfterLoss` does. */
   private failClosed(
     tabId: string,
     ownerEpoch: OwnerEpoch,
     nextDatabaseAction: DatabaseAction,
     reason: string
   ): CoordinatorAction[] {
+    if (this.supersedePending) {
+      this.stateValue = { kind: 'waiting-for-tab', nextDatabaseAction };
+      return [
+        { kind: 'close-engine-route', tabId, ownerEpoch },
+        ...this.completeSupersede(),
+      ];
+    }
     const actions: CoordinatorAction[] = this.queuedRequests
       .splice(0)
       .map(({ tabId: requester, request }) =>

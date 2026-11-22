@@ -344,6 +344,30 @@ describe('CoordinatorCore', () => {
     ]);
   });
 
+  it('completes the handover when the promised engine exits busy', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    grantStorage(core, 'tab-a', 1);
+    expect(core.supersede()).toEqual([]);
+    // Another context kept the files open, so the engine settles without
+    // them; it was promised to the newer build, which takes over now.
+    expect(core.storageBusy('tab-a', 1)).toEqual([
+      { kind: 'close-engine-route', tabId: 'tab-a', ownerEpoch: 1 },
+      {
+        kind: 'broadcast-cache-superseded',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+    expect(core.superseded).toBe(true);
+    expect(core.handingOver).toBe(true);
+    // Nothing is elected afterwards, not even for a tab that registers later.
+    expect(
+      core.registerTab('tab-c').some((item) => item.kind === 'elect-owner')
+    ).toBe(false);
+    expect(core.state.kind).toBe('waiting-for-tab');
+  });
+
   it('hands over instead of wiping after losing an engine promised to a newer build', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');
