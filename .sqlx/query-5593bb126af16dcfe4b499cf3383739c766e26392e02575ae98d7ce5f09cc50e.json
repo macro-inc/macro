@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                INSERT INTO import_entity\n                    (user_id, source, kind, foreign_id, status, initiator, metadata, parent_id,\n                     review_id)\n                VALUES ($1, $2, $3, $4, 'staged', 'chat', $5, $6, $7)\n                ON CONFLICT (user_id, source, foreign_id) DO UPDATE\n                SET kind = EXCLUDED.kind, metadata = EXCLUDED.metadata || jsonb_strip_nulls(jsonb_build_object(\n                        'personalFolderId', import_entity.metadata -> 'personalFolderId',\n                        'separateFolder', import_entity.metadata -> 'separateFolder')),\n                    parent_id = EXCLUDED.parent_id, status = 'staged',\n                    review_id = EXCLUDED.review_id, last_error = NULL, updated_at = NOW()\n                WHERE import_entity.status IN ('staged', 'discarded')\n                RETURNING id, user_id, team_id, source, kind, foreign_id, parent_id, review_id,\n                          status, initiator, metadata, entity_id, entity_type, last_error,\n                          waiting_on, created_at, updated_at\n                ",
+  "query": "\n                INSERT INTO import_entity\n                    (user_id, source, kind, foreign_id, status, initiator, metadata, parent_id,\n                     review_id, id)\n                VALUES ($1, $2, $3, $4, 'staged', 'chat', $5, $6, $7, $8)\n                ON CONFLICT (user_id, source, foreign_id) DO UPDATE\n                SET kind = EXCLUDED.kind, metadata = EXCLUDED.metadata || jsonb_strip_nulls(jsonb_build_object(\n                        'personalFolderId', import_entity.metadata -> 'personalFolderId',\n                        'separateFolder', import_entity.metadata -> 'separateFolder')),\n                    parent_id = EXCLUDED.parent_id, status = 'staged',\n                    review_id = EXCLUDED.review_id, last_error = NULL, updated_at = NOW()\n                WHERE import_entity.status IN ('staged', 'discarded')\n                RETURNING id, user_id, team_id, source, kind, foreign_id, parent_id, review_id,\n                          status, initiator, metadata, entity_id, entity_type, last_error,\n                          waiting_on, created_at, updated_at\n                ",
   "describe": {
     "columns": [
       {
@@ -97,6 +97,7 @@
         "Text",
         "Jsonb",
         "Uuid",
+        "Uuid",
         "Uuid"
       ]
     },
@@ -120,5 +121,5 @@
       false
     ]
   },
-  "hash": "b47f4c763b2238a34be6e2b7f44b1abf340b60ff24cb814241e241553c89118c"
+  "hash": "5593bb126af16dcfe4b499cf3383739c766e26392e02575ae98d7ce5f09cc50e"
 }

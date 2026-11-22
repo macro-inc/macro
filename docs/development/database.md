@@ -134,11 +134,17 @@ compatible with the service code currently deployed, not just the code in its PR
 
    The root recipe uses Just's `DATABASE_URL` variable, which defaults to the
    database on localhost:5432; exporting the environment variable does not
-   override it. For a dedicated test database, set the Just variable explicitly:
+   override it. For a dedicated test database, snapshot `.sqlx` first and verify
+   the container and port with `docker ps`. Set the Just variable explicitly and
+   inspect the resolved command before executing it:
 
    ```bash
+   nix develop --command just --dry-run --set DATABASE_URL "$DATABASE_URL" prepare_db
    nix develop --command just --set DATABASE_URL "$DATABASE_URL" prepare_db
    ```
+
+   A failed prepare can delete most cached entries. Restore the snapshot before
+   retrying, then check the resolved target again.
 
    Inspect `git status` after preparation and restore unrelated `.sqlx`
    deletions before committing; workspace preparation can omit entries for
