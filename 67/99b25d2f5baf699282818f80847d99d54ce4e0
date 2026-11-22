@@ -1,0 +1,37 @@
+crates/agent_code_mode/src/domain/documentation.rs
+  s_cd2738b611e99b::t_e93dadd48f3576 331
+crates/agent_code_mode/src/domain/models.rs
+  s_cd2738b611e99b::t_bf6fe44ee02ebd 364-367
+crates/agent_code_mode/src/inbound/toolset/dialect.rs
+  s_cd2738b611e99b::t_ccdb4507e962c0 88-91
+crates/agent_code_mode/src/inbound/toolset/dialect/permissions.md
+  s_cd2738b611e99b::t_296c80b41520c4 5,9-11
+crates/agent_code_mode/src/inbound/toolset/dialect/program.md
+  s_cd2738b611e99b::t_c3c5ea3070c668 3,9
+crates/agent_code_mode/src/inbound/toolset/dialect/test.rs
+  s_cd2738b611e99b::t_48965576a4ed18 21-27,74,77
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_cd2738b611e99b::t_3319fb0eb7d02c 422-424
+crates/ai_tools/src/test.rs
+  s_cd2738b611e99b::t_59d0193dc7bb42 1100,1104-1113
+crates/prompt/src/dialect.rs
+  s_cd2738b611e99b::t_c6b9cff7865c84 16-20,61-69
+crates/prompt/src/dialect/test.rs
+  s_cd2738b611e99b::t_b3c7c3da2b7a93 20-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6799b25d2f5baf699282818f80847d99d54ce4e0",
+  "prompts": {},
+  "sessions": {
+    "s_cd2738b611e99b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "160aae60-b056-44b3-9de2-02a74d7f232d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
