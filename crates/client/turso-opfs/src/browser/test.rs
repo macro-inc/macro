@@ -132,6 +132,7 @@ async fn clean_pair(database_name: &str) {
     recursive_remove(&root, database_name).await;
     recursive_remove(&root, &format!("{database_name}-wal")).await;
     recursive_remove(&root, &format!("{database_name}{ADOPTION_MARKER_SUFFIX}")).await;
+    recursive_remove(&root, &format!("{database_name}{ATTEMPTS_SUFFIX}")).await;
 }
 
 async fn replace_poisoned_registry_for_test() {

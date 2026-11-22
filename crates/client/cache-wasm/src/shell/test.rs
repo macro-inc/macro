@@ -3146,19 +3146,18 @@ async fn create_opfs_directory(name: &str) {
     .await;
 }
 
-/// The size of the OPFS file `name`, or `None` when there is none.
-async fn opfs_file_len(name: &str) -> Option<usize> {
+/// The text of the OPFS file `name`, or `None` when there is none.
+async fn opfs_file_text(name: &str) -> Option<String> {
     run_js(
         "return (async () => {
           const root = await navigator.storage.getDirectory();
-          try { return (await (await root.getFileHandle(name)).getFile()).size; }
+          try { return await (await (await root.getFileHandle(name)).getFile()).text(); }
           catch (error) { if (error.name === 'NotFoundError') return null; throw error; }
         })()",
         name,
     )
     .await
-    .as_f64()
-    .map(|size| size as usize)
+    .as_string()
 }
 
 /// Whether anything, a file or a directory, sits at `name` in the OPFS root.
@@ -3587,17 +3586,25 @@ async fn a_marker_that_never_reads_is_discarded_at_the_limit() {
     let own = database_identity(SCOPE);
     let older = cache_database_name(SCOPE, 11);
     let marker = format!("{own}-adopting");
-    let unread = format!("{own}-adopting-unread");
+    let attempts = format!("{own}-adopting-attempts");
+    let held = format!("{own}-held");
     older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     move_without_opening(SCOPE).await;
     remove_opfs_file(&marker).await;
     create_opfs_directory(&marker).await;
-    // Each recovery that cannot read the marker counts that beside it and
-    // keeps the files; past the limit the next one discards them, not
-    // knowing the version they moved at, so the cache can start.
+    // Neither the marker nor the attempt count reads: nothing bounds this
+    // recovery or says how old the adoption is, so it keeps everything.
+    rename_opfs_file(&attempts, &held).await;
+    assert!(recovery_open(SCOPE).await.is_err());
+    assert!(opfs_file_exists(&own).await);
+    rename_opfs_file(&held, &attempts).await;
+    assert_eq!(adoption_attempts(SCOPE).await, Some(0));
+    // Each recovery that cannot read the marker counts an attempt and keeps
+    // the files; past the limit the next one discards them, not knowing the
+    // version they moved at, so the cache can start.
     for count in 1..=RECOVERY_ATTEMPTS {
         assert!(recovery_open(SCOPE).await.is_err());
-        assert_eq!(opfs_file_len(&unread).await, Some(usize::from(count)));
+        assert_eq!(adoption_attempts(SCOPE).await, Some(count));
         assert!(opfs_file_exists(&own).await);
     }
     let (engine, report) = recovery_open(SCOPE)
@@ -3616,8 +3623,79 @@ async fn a_marker_that_never_reads_is_discarded_at_the_limit() {
     assert_eq!(queue_depth(&engine).await, "0");
     resolved(engine.close()).await;
     assert!(!opfs_entry_exists(&marker).await);
-    assert!(!opfs_file_exists(&unread).await);
+    assert!(!opfs_file_exists(&attempts).await);
     assert!(!opfs_file_exists(&older).await);
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
+#[wasm_bindgen_test(async)]
+async fn an_uncounted_recovery_decides_if_it_can_until_the_adoption_is_old() {
+    const SCOPE: &str = "cache-wasm-recovery-uncounted";
+    let own = database_identity(SCOPE);
+    let older = cache_database_name(SCOPE, 11);
+    let older_lock = owner_lock_for(&older);
+    let attempts = format!("{own}-adopting-attempts");
+    let held = format!("{own}-held");
+
+    // An attempt that cannot be counted while the older build holds its
+    // name: the files cannot go back yet, so it keeps them.
+    let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
+    move_without_opening(SCOPE).await;
+    rename_opfs_file(&attempts, &held).await;
+    hold_web_lock(&older_lock).await;
+    for _ in 0..=RECOVERY_ATTEMPTS {
+        assert!(recovery_open(SCOPE).await.is_err());
+        assert!(opfs_file_exists(&own).await);
+        assert!(!opfs_file_exists(&older).await);
+    }
+    // Once the lock is free it still hands them back whole.
+    release_held_web_lock().await;
+    let (engine, report) = recovery_open(SCOPE)
+        .await
+        .expect("uncounted recovery once the lock is free");
+    assert_eq!(
+        report.carry_forward,
+        Some(CarryForward::new(CarryForwardKind::Returned, 11))
+    );
+    resolved(engine.close()).await;
+    remove_opfs_file(&held).await;
+    remove_opfs_pair(&own).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("carry the returned database forward");
+    assert_eq!(
+        report.carry_forward,
+        Some(CarryForward::new(CarryForwardKind::Moved, 11))
+    );
+    assert_eq!(queue_depth(&engine).await, "1");
+    assert_eq!(test_generation(&engine).await, generation);
+    resolved(engine.close()).await;
+
+    // Past the age bound an uncounted attempt discards without opening
+    // anything, so attempts that cannot be counted cannot keep the cache
+    // from starting either.
+    older_database_with_a_queued_write(SCOPE, Flaw::None).await;
+    move_without_opening(SCOPE).await;
+    rename_opfs_file(&attempts, &held).await;
+    hold_web_lock(&older_lock).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(UNCOUNTED_RECOVERY_MS - 60_000));
+    assert!(recovery_open(SCOPE).await.is_err());
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(UNCOUNTED_RECOVERY_MS));
+    let result = recovery_open(SCOPE).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(0));
+    let (engine, report) = result.expect("uncounted recovery past the age bound");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::ResetStorageUncertain,
+            carry_forward: Some(CarryForward::new(CarryForwardKind::Discarded, 11)),
+        }
+    );
+    assert_eq!(queue_depth(&engine).await, "0");
+    resolved(engine.close()).await;
+    release_held_web_lock().await;
+    remove_opfs_file(&held).await;
+    assert!(!opfs_file_exists(&format!("{own}-adopting")).await);
     destroy_cache(SCOPE.into()).await.expect("destroy cache");
 }
 
@@ -3626,15 +3704,11 @@ async fn recovery_open(scope: &str) -> Result<(CacheEngine, OpenReport), JsValue
     open_cache_inner(scope.into(), None, true, None, false).await
 }
 
-/// The recovery attempts counted in this scope's adoption marker, or `None`
-/// when there is none.
+/// The recovery attempts counted for this scope's adoption, or `None` when
+/// no count sits beside its marker.
 async fn adoption_attempts(scope: &str) -> Option<u8> {
-    let mut owner = OpfsOwner::acquire(&database_identity(scope))
-        .await
-        .expect("acquire this build's identity");
-    let adoption = owner.read_adoption().await.expect("read the adoption");
-    owner.release().await.expect("release");
-    adoption.map(|adoption| adoption.attempts)
+    let count = opfs_file_text(&format!("{}-adopting-attempts", database_identity(scope))).await?;
+    u8::try_from(count.bytes().filter(|&byte| byte != b'-').count()).ok()
 }
 
 /// Leaves a database at the storage 11 identity holding a queued write and no
@@ -3745,7 +3819,7 @@ async fn a_recovery_stopped_after_reading_the_version_still_hands_the_files_back
     let mut owner = OpfsOwner::acquire(&own)
         .await
         .expect("acquire this build's identity");
-    owner.record_attempt().await.expect("count an attempt");
+    assert_eq!(owner.record_attempt().await.expect("count an attempt"), 1);
     let (owner, stored) = read_storage_version(owner).await.expect("read the version");
     assert!(matches!(stored, StoredVersion::Read(Some(11))));
     owner.release().await.expect("release");

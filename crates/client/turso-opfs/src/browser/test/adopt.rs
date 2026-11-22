@@ -248,6 +248,17 @@ async fn read_adoption(new: &str) -> Option<Adoption> {
 }
 
 /// Completes a split adoption into `new`, holding `old`'s lock when `locked`.
+/// Where the adoption into `new` came from and which of its files moved.
+async fn moved(new: &str) -> Option<(String, AdoptionState)> {
+    read_adoption(new)
+        .await
+        .map(|adoption| (adoption.previous_identity, adoption.state))
+}
+
+fn attempts_name(identity: &str) -> String {
+    format!("{identity}{ATTEMPTS_SUFFIX}")
+}
+
 async fn complete(old: &str, new: &str, locked: bool) -> CompleteOutcome {
     let mut owner = OpfsOwner::acquire(new).await.expect("owner");
     let lock = if locked {
@@ -301,12 +312,8 @@ async fn adopting_moves_the_complete_pair_and_keeps_its_rows() {
             "both files moved byte for byte"
         );
         assert_eq!(
-            read_adoption(&new).await,
-            Some(Adoption {
-                previous_identity: old.clone(),
-                state: AdoptionState::Complete,
-                attempts: 0,
-            })
+            moved(&new).await,
+            Some((old.clone(), AdoptionState::Complete))
         );
         assert_eq!(open_and_finish(&new).await, if live_wal { 41 } else { 42 });
         assert!(!marker_exists(&new).await);
@@ -572,10 +579,15 @@ fn a_marker_reads_back_only_as_written() {
             size: 4096 + 32,
             header: wal_header(4096, 9, |_| {}),
         },
-        attempts: 0,
+        adopted_at_ms: 1_795_000_000_123,
     };
     let bytes = marker.encode().expect("encode");
     assert_eq!(Marker::decode(&bytes), Some(marker.clone()));
+    assert_eq!(
+        &bytes[bytes.len() - 8..],
+        &1_795_000_000_123_u64.to_be_bytes(),
+        "the adoption time ends it"
+    );
     let empty = Marker {
         wal: WalFingerprint {
             size: 0,
@@ -587,61 +599,10 @@ fn a_marker_reads_back_only_as_written() {
         Marker::decode(&empty.encode().expect("encode")),
         Some(empty)
     );
-
-    let slots = usize::from(RESERVED_ATTEMPTS);
-    let slots_start = bytes.len() - slots;
-    assert_eq!(&bytes[slots_start..], b"--------", "free attempt slots");
-    assert_eq!(
-        Marker::decode(&bytes[..slots_start - 1]),
-        None,
-        "cut short before its slots"
-    );
-    assert_eq!(
-        Marker::decode(&bytes[..slots_start]),
-        Some(marker.clone()),
-        "slots cut short count nothing"
-    );
-    // Counted attempts fill the reserved slots, so the marker keeps its size
-    // until they run out; then it grows a byte per attempt.
-    let tried = Marker {
-        attempts: 2,
-        ..marker.clone()
-    };
-    let tried_bytes = tried.encode().expect("encode");
-    assert_eq!(tried_bytes.len(), bytes.len());
-    assert_eq!(&tried_bytes[slots_start..], b"++------");
-    assert_eq!(Marker::decode(&tried_bytes), Some(tried));
-    assert_eq!(Marker::next_attempt_offset(&bytes), Some(slots_start));
-    assert_eq!(
-        Marker::next_attempt_offset(&tried_bytes),
-        Some(slots_start + 2)
-    );
-    let full = Marker {
-        attempts: RESERVED_ATTEMPTS,
-        ..marker.clone()
-    }
-    .encode()
-    .expect("encode");
-    assert_eq!(full.len(), bytes.len());
-    assert_eq!(Marker::next_attempt_offset(&full), Some(full.len()));
-    let over = Marker {
-        attempts: RESERVED_ATTEMPTS + 1,
-        ..marker.clone()
-    };
-    let over_bytes = over.encode().expect("encode");
-    assert_eq!(over_bytes.len(), bytes.len() + 1);
-    assert_eq!(Marker::decode(&over_bytes), Some(over));
-    // Any byte but a free slot's counts, so a slot written halfway reads.
-    let mut halfway = bytes.clone();
-    halfway[slots_start] = 0;
-    assert_eq!(
-        Marker::decode(&halfway),
-        Some(Marker {
-            attempts: 1,
-            ..marker.clone()
-        }),
-        "a byte of any value"
-    );
+    assert_eq!(Marker::decode(&bytes[..bytes.len() - 1]), None, "cut short");
+    let mut longer = bytes.clone();
+    longer.push(b'+');
+    assert_eq!(Marker::decode(&longer), None, "a byte past its end");
     assert_eq!(Marker::decode(b""), None, "empty");
     let mut wrong_magic = bytes.clone();
     wrong_magic[0] ^= 1;
@@ -658,6 +619,19 @@ fn a_marker_reads_back_only_as_written() {
         None,
         "a header shorter than the WAL it fingerprints"
     );
+}
+
+#[wasm_bindgen_test]
+fn an_attempt_takes_the_first_free_slot_until_none_is_left() {
+    assert_eq!(next_attempt(&FREE_ATTEMPTS), (1, Some(0)));
+    assert_eq!(next_attempt(b"++------"), (3, Some(2)));
+    assert_eq!(next_attempt(b"+++++++-"), (8, Some(7)));
+    assert_eq!(next_attempt(b"++++++++"), (8, None), "full: counts 8");
+    // Any byte but a free slot's counts, so a slot written halfway reads.
+    assert_eq!(next_attempt(b"\0-------"), (2, Some(1)));
+    // Slots missing from a count cut short count as used.
+    assert_eq!(next_attempt(b"--"), (7, Some(0)));
+    assert_eq!(next_attempt(b""), (8, None));
 }
 
 #[wasm_bindgen_test]
@@ -691,14 +665,7 @@ async fn a_split_adoption_completes_only_with_the_wal_it_recorded() {
     write_pair(&old, 7).await;
     clean_pair(&new).await;
     adopt_and_stop(&old, &new).await;
-    assert_eq!(
-        read_adoption(&new).await,
-        Some(Adoption {
-            previous_identity: old.clone(),
-            state: AdoptionState::Split,
-            attempts: 0,
-        })
-    );
+    assert_eq!(moved(&new).await, Some((old.clone(), AdoptionState::Split)));
     assert_eq!(
         complete(&old, &new, false).await,
         CompleteOutcome::Completed
@@ -784,7 +751,7 @@ async fn stale_and_malformed_markers_read_as_no_adoption() {
                 size: 0,
                 header: Vec::new(),
             },
-            attempts: 0,
+            adopted_at_ms: 0,
         }
         .encode()
         .expect("encode")
@@ -793,18 +760,17 @@ async fn stale_and_malformed_markers_read_as_no_adoption() {
     for (case, bytes) in [
         ("garbage", b"not a marker".to_vec()),
         ("empty", Vec::new()),
-        (
-            "cut short",
-            valid[..valid.len() - usize::from(RESERVED_ATTEMPTS) - 1].to_vec(),
-        ),
+        ("cut short", valid[..valid.len() - 1].to_vec()),
         ("own identity", recorded(&new)),
         ("invalid identity", recorded("a/b")),
         ("reserved identity", recorded(&format!("{old}-wal"))),
     ] {
         write_pair(&new, 10).await;
         write_file(&marker_name(&new), &bytes).await;
+        write_file(&attempts_name(&new), b"+-------").await;
         assert_eq!(read_adoption(&new).await, None, "{case}");
         assert!(!marker_exists(&new).await, "{case}");
+        assert_eq!(read_file(&attempts_name(&new)).await, None, "{case}");
         assert_eq!(read_pair(&new).await, 10, "{case}: the files stay");
     }
     clean_pair(&new).await;
@@ -934,34 +900,46 @@ async fn discarding_or_wiping_ends_the_adoption() {
 }
 
 #[wasm_bindgen_test]
-async fn attempts_are_counted_in_the_marker_until_the_adoption_ends() {
+async fn attempts_are_counted_beside_the_marker_until_the_adoption_ends() {
     let (old, new) = identities("attempts");
     write_pair(&old, 20).await;
     clean_pair(&new).await;
+    // A count an earlier adoption left behind is not this one's.
+    write_file(&attempts_name(&new), b"++++++++").await;
+    let before = js_sys::Date::now() as u64;
     assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
-    let written = read_file(&marker_name(&new)).await.expect("marker");
+    let after = js_sys::Date::now() as u64;
+    let marker = read_file(&marker_name(&new)).await.expect("marker");
+    assert_eq!(
+        read_file(&attempts_name(&new)).await.as_deref(),
+        Some(&b"--------"[..]),
+        "written fresh before the move"
+    );
+    let adopted_at = read_adoption(&new).await.expect("adoption").adopted_at_ms;
+    assert!(
+        (before..=after).contains(&adopted_at),
+        "{before} <= {adopted_at} <= {after}"
+    );
     let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
     for counted in 1..=3 {
-        owner.record_attempt().await.expect("record attempt");
         assert_eq!(
-            owner.read_adoption().await.expect("read"),
-            Some(Adoption {
-                previous_identity: old.clone(),
-                state: AdoptionState::Complete,
-                attempts: counted,
-            })
+            owner.record_attempt().await.expect("record attempt"),
+            counted
         );
     }
     owner.release().await.expect("release");
-    // The adoption as written is untouched: each attempt filled a reserved
-    // slot in place.
-    let counted = read_file(&marker_name(&new)).await.expect("marker");
-    let slots_start = written.len() - usize::from(RESERVED_ATTEMPTS);
-    assert_eq!(counted.len(), written.len());
-    assert_eq!(&counted[..slots_start], &written[..slots_start]);
-    assert_eq!(&counted[slots_start..], b"+++-----");
+    assert_eq!(
+        read_file(&attempts_name(&new)).await.as_deref(),
+        Some(&b"+++-----"[..]),
+        "each attempt overwrote a free slot in place"
+    );
+    assert_eq!(
+        read_file(&marker_name(&new)).await.as_ref(),
+        Some(&marker),
+        "the marker is never written again"
+    );
 
-    // An attempt whose write fails counts nothing and leaves the marker whole.
+    // An attempt whose write fails counts nothing.
     let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
     FAIL_ATTEMPT_WRITE.with(|fail| fail.set(true));
     assert_eq!(
@@ -969,16 +947,23 @@ async fn attempts_are_counted_in_the_marker_until_the_adoption_ends() {
         Err(OpfsErrorKind::Write)
     );
     assert_eq!(
-        owner
-            .read_adoption()
-            .await
-            .expect("read")
-            .map(|adoption| adoption.attempts),
-        Some(3)
+        read_file(&attempts_name(&new)).await.as_deref(),
+        Some(&b"+++-----"[..])
     );
+    // Once every slot is used the count stays at eight without writing.
+    for counted in 4..=8 {
+        assert_eq!(owner.record_attempt().await.expect("record"), counted);
+    }
+    FAIL_ATTEMPT_WRITE.with(|fail| fail.set(true));
+    assert_eq!(owner.record_attempt().await.expect("full"), 8);
+    FAIL_ATTEMPT_WRITE.with(|fail| fail.set(false));
     owner.release().await.expect("release");
-    assert_eq!(read_file(&marker_name(&new)).await, Some(counted));
+    assert_eq!(
+        read_file(&attempts_name(&new)).await.as_deref(),
+        Some(&b"++++++++"[..])
+    );
     assert_eq!(open_and_finish(&new).await, 20);
+    assert_eq!(read_file(&attempts_name(&new)).await, None);
 
     // Nothing to count once the adoption ended.
     let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
@@ -1006,10 +991,7 @@ async fn a_read_cut_short_is_an_error_and_moves_or_removes_nothing() {
     );
     owner.release().await.expect("release");
     assert!(marker_exists(&new).await);
-    assert_eq!(
-        read_adoption(&new).await.map(|adoption| adoption.attempts),
-        Some(0)
-    );
+    assert_eq!(moved(&new).await, Some((old, AdoptionState::Complete)));
     clean_pair(&new).await;
 
     // A recorded WAL read short does not read as a different WAL: the split
@@ -1045,65 +1027,40 @@ async fn a_read_cut_short_is_an_error_and_moves_or_removes_nothing() {
 }
 
 #[wasm_bindgen_test]
-async fn unreadable_markers_are_counted_beside_them_until_they_go() {
+async fn attempts_are_counted_while_the_marker_does_not_read() {
     let (old, new) = identities("unread-count");
     write_pair(&old, 24).await;
     clean_pair(&new).await;
     assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
-    let unread = format!("{new}{UNREAD_MARKER_SUFFIX}");
     let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
-    for count in 1..=3 {
+    for counted in 1..=3 {
+        SHORT_READ.with(|short| short.set(1));
         assert_eq!(
-            owner.count_unreadable_adoption().await.expect("count"),
-            count
+            owner.read_adoption().await.map_err(|error| error.kind()),
+            Err(OpfsErrorKind::Read)
         );
+        assert_eq!(owner.record_attempt().await.expect("count"), counted);
     }
-    owner.release().await.expect("release");
-    assert_eq!(read_file(&unread).await.map(|bytes| bytes.len()), Some(3));
     // The count goes with the marker, however the adoption ends.
-    let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
     owner.discard_adoption().await.expect("discard");
     owner.release().await.expect("release");
-    assert_eq!(read_file(&unread).await, None);
+    assert_eq!(read_file(&attempts_name(&new)).await, None);
     clean_pair(&new).await;
 
+    // A wipe removes both, whatever sits at their names.
     let (old, new) = identities("unread-wipe");
     write_pair(&old, 25).await;
     clean_pair(&new).await;
     assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
-    let unread = format!("{new}{UNREAD_MARKER_SUFFIX}");
     let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
-    assert_eq!(owner.count_unreadable_adoption().await.expect("count"), 1);
+    assert_eq!(owner.record_attempt().await.expect("count"), 1);
     let owner = owner.recovery_wipe().await.expect("wipe");
     owner.remove_and_release().await.expect("remove");
-    assert_eq!(read_file(&unread).await, None);
+    assert_eq!(read_file(&attempts_name(&new)).await, None);
     assert!(!marker_exists(&new).await);
 
-    // A count that cannot be written is an error, and counts nothing.
-    let (old, new) = identities("unread-fails");
-    write_pair(&old, 26).await;
-    clean_pair(&new).await;
-    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
-    let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
-    FAIL_ATTEMPT_WRITE.with(|fail| fail.set(true));
-    assert_eq!(
-        owner
-            .count_unreadable_adoption()
-            .await
-            .map_err(|error| error.kind()),
-        Err(OpfsErrorKind::Write)
-    );
-    assert_eq!(owner.count_unreadable_adoption().await.expect("count"), 1);
-    owner.release().await.expect("release");
-    assert_eq!(open_and_finish(&new).await, 26);
-    assert_eq!(
-        read_file(&format!("{new}{UNREAD_MARKER_SUFFIX}")).await,
-        None
-    );
-    clean_pair(&new).await;
-
     // No database is named like a count, so none can alias one.
-    assert!(approved_paths(&format!("{old}{UNREAD_MARKER_SUFFIX}")).is_err());
+    assert!(approved_paths(&attempts_name(&old)).is_err());
 }
 
 #[wasm_bindgen_test]
