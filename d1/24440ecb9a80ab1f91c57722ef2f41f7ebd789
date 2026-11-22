@@ -1,0 +1,72 @@
+crates/connectors/AGENTS.md
+  s_be29728584c444::t_acea1128ade724 89-95
+crates/connectors/src/outbound/native/pg_server_repo.rs
+  s_be29728584c444::t_b4fb5c4e8c94e4 78-79,81-85,92
+  s_be29728584c444::t_fbefdb044f8c96 108,118-128,151-174,182,193-202,216,230
+.sqlx/query-1464f3933fd8f996ef8c7b108c5690b6f5b443320200ff6bed49249edfc3abd6.json
+  s_be29728584c444::t_7977b62c2497ac 3,30-34,48,52
+.sqlx/query-3d2981a5b87b0498d2421d005b0648216e1fc288f008e23908f5a2ab11e30147.json
+  s_be29728584c444::t_83af0408721a68 3,12,18
+.sqlx/query-cd5eefdef4113be202ed80b84b9dd453b5a922fbbfbbe09628fa13f414ec8803.json
+  s_be29728584c444::t_6376b132902089 1-15
+.sqlx/query-f6aa54299df132e55b63ae5538e42caa79b5a476c1f550a1e5600e45c9a3ca84.json
+  s_be29728584c444::t_699f4bfeaeb456 3,30-34,47,51
+crates/connectors/src/domain/service/test.rs
+  s_be29728584c444::t_9695a02a3b5e7a 977-1016
+crates/connectors/src/fake/source.rs
+  s_be29728584c444::t_6d44e96b587141 144-149,244,376-382,426-446
+crates/connectors/src/outbound/github_link.rs
+  s_be29728584c444::t_57b344c9f3e98f 196
+crates/connectors/src/outbound/github_link/test.rs
+  s_be29728584c444::t_5aab8c129d2a7d 94
+crates/connectors/src/outbound/native/memory_store.rs
+  s_be29728584c444::t_92e7dbc91ba962 67-79
+crates/connectors/src/outbound/native/models/server.rs
+  s_be29728584c444::t_60fcfe426404c4 64-68
+crates/connectors/src/outbound/native/models/server/test.rs
+  s_be29728584c444::t_4c417505cbb9e4 34-41,77
+crates/connectors/src/outbound/native/oauth.rs
+  s_be29728584c444::t_3ce50a9dd7bc0f 297
+crates/connectors/src/outbound/native/oauth/test.rs
+  s_be29728584c444::t_202326f74efac6 46-53
+crates/connectors/src/outbound/native/persisting_credential_store/test.rs
+  s_be29728584c444::t_965994e3cbb759 59-66,84
+crates/connectors/src/outbound/native/pg_server_repo/test.rs
+  s_be29728584c444::t_e9601c3b6803cf 47,233-284
+crates/connectors/src/outbound/native/ports.rs
+  s_be29728584c444::t_310439360a0c1d 53-61
+crates/connectors/src/outbound/native/server_access.rs
+  s_be29728584c444::t_f53f5182ba2d9c 40-41,93-99
+crates/connectors/src/outbound/native/server_access/test.rs
+  s_be29728584c444::t_0f810b78df0017 34-41,59
+crates/connectors/src/outbound/native/server_directory.rs
+  s_be29728584c444::t_d88165e73e3f61 128
+crates/connectors/src/outbound/native/server_directory/test.rs
+  s_be29728584c444::t_ea1df9ad022f12 44-51,111
+crates/connectors/src/outbound/native/sign_in/test.rs
+  s_be29728584c444::t_c8f68d2addd0d7 30
+crates/connectors/src/outbound/native/source.rs
+  s_be29728584c444::t_4f708477c9032a 18,26-27,29,33,36-39,66-69,106-118,173-177,350-360,362-366,368-370,372-391,408-420,428-434,436-440,474-528
+crates/connectors/src/outbound/native/source/test.rs
+  s_be29728584c444::t_8c13c3e4366da0 60,156-157,178-186,204-205,559-711
+crates/macro_db_client/migrations/20261122200405_mcp_servers_requires_sign_in.down.sql
+  s_be29728584c444::t_855e71c473261f 1
+crates/macro_db_client/migrations/20261122200405_mcp_servers_requires_sign_in.up.sql
+  s_be29728584c444::t_675eb093f8c426 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d124440ecb9a80ab1f91c57722ef2f41f7ebd789",
+  "prompts": {},
+  "sessions": {
+    "s_be29728584c444": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5746c7bf-29e9-4305-95dc-24b74d8dccb4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
