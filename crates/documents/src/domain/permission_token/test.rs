@@ -172,3 +172,37 @@ async fn no_send_background_document_grants_keep_edit_access() {
         AccessLevel::Edit
     );
 }
+
+#[tokio::test]
+async fn a_legacy_mention_document_grant_is_read_only_without_a_new_scope() {
+    use agent_correlation::{
+        context::{Attribution, scope_attribution},
+        scope::SessionScope,
+    };
+    for scope in [None, Some(SessionScope::NoSend)] {
+        let token = scope_attribution(
+            Attribution {
+                channel_mention_id: Some(Uuid::from_u128(909)),
+                scope,
+                ..Attribution::default()
+            },
+            async {
+                encode_principal_permission_token(
+                    &CreationPrincipal::User(user()),
+                    "skill-fixture".into(),
+                    AccessLevel::Edit,
+                    SECRET,
+                )
+                .unwrap()
+            },
+        )
+        .await;
+        assert_eq!(
+            decode_permission_token(&token, SECRET)
+                .unwrap()
+                .access_level,
+            AccessLevel::View,
+            "legacy mention scope {scope:?} must not mint a writable grant"
+        );
+    }
+}
