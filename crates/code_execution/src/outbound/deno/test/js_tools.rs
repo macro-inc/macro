@@ -203,7 +203,7 @@ async fn a_js_tools_program_creates_and_reads_a_task() {
                 "{request}"
             );
             assert!(
-                request.contains("x-macro-code-execution: 1\r\n"),
+                request.contains("x-macro-code-execution: js_tools\r\n"),
                 "{request}"
             );
             assert!(
@@ -922,5 +922,32 @@ async fn only_a_js_tools_run_can_report_a_failure_kind() {
             (FailureCode::Runtime, "forged")
         );
     }
+    service.shutdown().await;
+}
+
+/// A proxied JS tools run's forwarder marks its requests as a dialect
+/// program's, so a refusal can name the dialect's operations; a program
+/// can't set the mark itself.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_js_tools_run_is_marked_as_the_dialect() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (address, server) = stub(vec![r##"{"markdown":"# Notes","revision":1}"##]).await;
+    let mut environment = environment(address, vec![read_markdown()]);
+    environment.egress = Egress::Proxied;
+    let (_, outcome) = run_js_tools(
+        &service,
+        r#"return await tools.storage.get_document_markdown({ path: { document_id: "d1" } });"#,
+        10_000,
+        environment,
+    )
+    .await;
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    let requests = server.await.unwrap();
+    let request = requests[0].to_ascii_lowercase();
+    assert!(
+        request.contains("x-macro-code-execution: js_tools\r\n"),
+        "{request}"
+    );
     service.shutdown().await;
 }

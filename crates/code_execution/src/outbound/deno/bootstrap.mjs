@@ -277,7 +277,8 @@ try {
       }
       // Marks the request as a program's, not a person's in the app, so an API
       // can ask it to confirm what a person would have chosen by opening it.
-      request.headers.set("x-macro-code-execution", "1");
+      // A dialect program says so, so a refusal names its operations.
+      request.headers.set("x-macro-code-execution", language === "js_tools" ? "js_tools" : "1");
       // A dry run's backstop: a request to an SDK origin that didn't come
       // through the gate is sent only if a read matches its route.
       if (dryRun && request.method !== "GET" && request.method !== "HEAD") {

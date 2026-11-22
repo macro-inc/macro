@@ -59,3 +59,17 @@ fn a_signed_owner_routine_step_is_not_an_agent_run_even_with_the_header() {
     // Still a program run: only a person may decide reviews and approvals.
     assert!(is_program_run(CredentialAttribution::Routine, &program));
 }
+
+#[test]
+fn only_a_dialect_programs_header_marks_it_as_one() {
+    let mut dialect = HeaderMap::new();
+    dialect.insert(CODE_EXECUTION_HEADER, DIALECT_PROGRAM.parse().unwrap());
+    let mut typescript = HeaderMap::new();
+    typescript.insert(CODE_EXECUTION_HEADER, "1".parse().unwrap());
+
+    assert!(from_dialect_program(&dialect));
+    assert!(!from_dialect_program(&typescript));
+    assert!(!from_dialect_program(&HeaderMap::new()));
+    // Still a program run either way.
+    assert!(is_agent_run(CredentialAttribution::Person, &dialect));
+}

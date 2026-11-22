@@ -319,6 +319,7 @@ impl DenoRunner {
                     self.egress.clone(),
                     &job.environment.endpoints.hosts,
                     &job.environment.trace_headers,
+                    egress::code_execution_marker(language),
                 )
                 .await
                 .map_err(internal)?,

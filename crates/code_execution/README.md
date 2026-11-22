@@ -243,8 +243,9 @@ child before deleting scratch. API writes already accepted by a service may
 complete afterward and must not be blindly retried. SDK operation events carry only an operation name, request identity and status.
 They are bounded diagnostics, not proof of a committed action. Console output
 and progress are program-authored and may be incomplete. W3C trace context and
-`x-macro-code-execution: 1` are sent on every request to a configured service
-origin, whatever credential the request carries. That header is how an API tells a program's
+`x-macro-code-execution` (`1`, or `js_tools` for a JavaScript tools program) are
+sent on every request to a configured service origin, whatever credential the
+request carries. That header is how an API tells a program's
 request from the person's, so in every run `fetch` is the only way out. Raw
 sockets, listeners and servers (`Deno.connect`, `listen`, `serve` and the like),
 WebSocket and EventSource, `Deno[Deno.internal]` and `process`'s
