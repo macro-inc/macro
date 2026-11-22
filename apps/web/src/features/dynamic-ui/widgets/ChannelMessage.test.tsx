@@ -139,4 +139,18 @@ describe('ChannelMessage', () => {
     expect(view.queryByText('Thread')).toBeNull();
     view.getByRole('button', { name: 'Open in channel' });
   });
+
+  it('reads "Thread" when the view title only restates the channel', () => {
+    channelNames = { 'channel-1': 'launch-planning' };
+    const view = render(() => (
+      <ChannelMessage
+        channelId="channel-1"
+        messageId="message-1"
+        caption="Thread in #launch-planning"
+      />
+    ));
+    view.getByText('launch-planning');
+    view.getByText('Thread');
+    expect(view.queryByText('Thread in #launch-planning')).toBeNull();
+  });
 });

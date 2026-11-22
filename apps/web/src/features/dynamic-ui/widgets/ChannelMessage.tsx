@@ -32,6 +32,17 @@ export function ChannelMessage(props: ChannelMessageProps) {
       ? t('agentCards.channelFallback')
       : channelListName({ name, channelType: channelType() });
   };
+  // A view title that only restates the channel ("Thread in #launch-planning")
+  // would name it twice under the channel name, so the short form stands in.
+  const caption = () => {
+    const name = channelName();
+    const restatesChannel =
+      name !== undefined &&
+      props.caption?.toLowerCase().includes(name.toLowerCase());
+    return restatesChannel || props.caption === undefined
+      ? t('agentCards.channelThread')
+      : props.caption;
+  };
   const open = (messageId: string) =>
     openThreadMessage(
       orchestrator,
@@ -57,9 +68,7 @@ export function ChannelMessage(props: ChannelMessageProps) {
           </Item.Media>
           <Item.Content class="min-w-0 gap-0">
             <UiCard.Title class="truncate">{title()}</UiCard.Title>
-            <UiCard.Description>
-              {props.caption ?? t('agentCards.channelThread')}
-            </UiCard.Description>
+            <UiCard.Description>{caption()}</UiCard.Description>
           </Item.Content>
           <Item.Actions>
             {/* On a phone the label gives way to the channel name: an icon
