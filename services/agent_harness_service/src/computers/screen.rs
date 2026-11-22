@@ -31,6 +31,7 @@ use tracing::Instrument as _;
 pub mod access;
 pub mod guest_files;
 pub mod media;
+pub mod refreezes;
 mod rfb;
 mod socket;
 pub mod tunnel;
