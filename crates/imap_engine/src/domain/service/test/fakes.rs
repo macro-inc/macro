@@ -1,6 +1,8 @@
 use super::*;
 
 pub(crate) struct MemoryRepository {
+    pub(crate) revision: std::sync::atomic::AtomicI64,
+    pub(crate) scoped_acquire_errors: std::sync::atomic::AtomicU32,
     pub(crate) owner_claims: std::sync::atomic::AtomicU32,
     pub(crate) owner_gate: std::sync::Mutex<Option<Arc<tokio::sync::Semaphore>>>,
     pub(crate) owner_errors: std::sync::atomic::AtomicU32,
@@ -68,15 +70,26 @@ impl Repository for MemoryRepository {
                 .map_err(|_| Error::ConnectionUnavailable)?
                 .forget();
         }
+        let state = self.state.lock().unwrap();
         Ok(Account {
             binding,
             user_id: "owner".into(),
             ciphertext: Vec::new(),
-            state: self.state.lock().unwrap().clone(),
+            state: state.clone(),
             checkpoint: Default::default(),
-            revision: 0,
+            revision: self.revision.load(Ordering::Acquire),
             lease_id: Some(Uuid::now_v7()),
         })
+    }
+    async fn acquire_scoped(&self, binding: Binding, _: StateSelection) -> Result<Account, Error> {
+        if self
+            .scoped_acquire_errors
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+            .is_ok()
+        {
+            return Err(Error::AccountBusy);
+        }
+        self.acquire(binding).await
     }
     async fn read_scoped(&self, binding: Binding, _: StateSelection) -> Result<Account, Error> {
         let mut account = self.acquire(binding).await?;
@@ -103,8 +116,9 @@ impl Repository for MemoryRepository {
         {
             self.saved_unknown.store(true, Ordering::Release);
         }
-        *self.state.lock().unwrap() = account.state.clone();
-        account.revision += 1;
+        let mut state = self.state.lock().unwrap();
+        *state = account.state.clone();
+        account.revision = self.revision.fetch_add(1, Ordering::AcqRel) + 1;
         Ok(())
     }
     async fn renew(&self, account: &Account) -> Result<(), Error> {

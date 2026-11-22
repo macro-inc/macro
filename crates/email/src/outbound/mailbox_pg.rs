@@ -105,7 +105,7 @@ impl PgMailboxSync {
     }
 }
 
-fn db_error(error: sqlx::Error) -> MailboxError {
+pub(super) fn db_error(error: sqlx::Error) -> MailboxError {
     MailboxError::database(DatabaseFailure::from(&error))
 }
 
@@ -171,8 +171,12 @@ impl MailboxSyncRepository for PgMailboxSync {
     ) -> Result<Option<ImportCompleted>, MailboxError> {
         self.commit_catalog_lease(lease, folders).await
     }
-    async fn release_catalog(&self, lease: &CatalogLease, delay: u32) -> Result<(), MailboxError> {
-        self.release_catalog_lease(lease, delay).await
+    async fn release_catalog(
+        &self,
+        lease: &CatalogLease,
+        retry: SyncRetry,
+    ) -> Result<(), MailboxError> {
+        self.release_catalog_lease(lease, retry).await
     }
     async fn mark_no_mailbox(&self, lease: &CatalogLease) -> Result<u32, MailboxError> {
         self.mark_catalog_without_mailbox(lease).await
@@ -208,20 +212,41 @@ impl MailboxSyncRepository for PgMailboxSync {
         Self::lock_attachment_completion(&mut tx, lease.mailbox).await?;
         let advanced = sqlx::query!(
             r#"
-            UPDATE email_sync_streams s SET position = $4,
+            UPDATE
+                email_sync_streams s
+            SET
+                position = $4,
                 initial_complete = s.initial_complete OR $5,
                 -- A round's first page records the reader revision it started at,
                 -- and when: the claim that read it.
                 reader_revision = CASE WHEN s.position IS NULL THEN $7 ELSE s.reader_revision END,
                 round_started_at = CASE WHEN s.position IS NULL THEN s.lease_started_at ELSE s.round_started_at END,
                 last_completed_at = CASE WHEN $5 THEN now() ELSE last_completed_at END,
-                next_run_at = CASE WHEN $5 AND (s.notified_at IS NULL OR s.notified_at <= s.lease_started_at)
-                    THEN now() + interval '2 minutes' ELSE now() END,
+                next_run_at = CASE
+                    WHEN s.provider = 'IMAP' THEN CASE
+                        WHEN $5 AND s.notification_revision <= s.leased_notification_revision
+                            THEN now() + interval '2 minutes'
+                        ELSE now()
+                    END
+                    WHEN $5 AND (s.notified_at IS NULL OR s.notified_at <= s.lease_started_at)
+                        THEN now() + interval '2 minutes'
+                    ELSE now()
+                END,
                 -- A checkpoint that started reading after the notification has
                 -- answered it; a deferred or partial read leaves it pending.
-                notified_at = CASE WHEN $5 AND s.notified_at <= s.lease_started_at THEN NULL ELSE s.notified_at END,
+                notified_at = CASE
+                    WHEN s.provider = 'IMAP' THEN CASE
+                        WHEN $5 AND s.notification_revision <= s.leased_notification_revision THEN NULL
+                        ELSE s.notified_at
+                    END
+                    WHEN $5 AND s.notified_at <= s.lease_started_at THEN NULL
+                    ELSE s.notified_at
+                END,
                 lease_id = NULL, lease_until = NULL
-            FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3
+            FROM
+                email_links l
+            WHERE
+                s.id = $1 AND s.lease_id = $2 AND s.fence = $3
                 AND s.lease_until > now() AND s.link_id = l.id AND s.generation = l.sync_generation
                 AND l.is_sync_active AND l.grant_generation = $6
         "#,
@@ -231,7 +256,7 @@ impl MailboxSyncRepository for PgMailboxSync {
             position.expose(),
             complete,
             lease.mailbox.grant_generation,
-            page.reader_revision
+            page.reader_revision,
         )
         .execute(&mut *tx)
         .await
@@ -284,12 +309,27 @@ impl MailboxSyncRepository for PgMailboxSync {
     async fn reset_stream(&self, lease: &StreamLease) -> Result<(), MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_attachment_completion(&mut tx, lease.mailbox).await?;
-        let result = sqlx::query!(r#"
-            UPDATE email_sync_streams s SET position = NULL,initial_complete = false,attachments_rechecked = false,next_run_at = now(),lease_id = NULL,lease_until = NULL
-            FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3
-                AND s.lease_until > now() AND l.id = s.link_id AND l.sync_generation = s.generation
-                AND l.is_sync_active AND l.grant_generation = $4
-        "#,lease.id,lease.lease_id,lease.fence,lease.mailbox.grant_generation).execute(&mut *tx).await.map_err(db_error)?;
+        let result = sqlx::query!(
+            r#"
+                         UPDATE
+                             email_sync_streams s
+                         SET
+                             position = NULL,
+                             initial_complete = false,
+                             attachments_rechecked = false,
+                             next_run_at = GREATEST(now(), s.provider_retry_at),
+                             lease_id = NULL,
+                             lease_until = NULL
+                         FROM
+                             email_links l
+                         WHERE
+                             s.id = $1 AND s.lease_id = $2 AND s.fence = $3 AND s.lease_until > now() AND l.id = s.link_id AND l.sync_generation = s.generation AND l.is_sync_active AND l.grant_generation = $4
+                         "#,
+            lease.id,
+            lease.lease_id,
+            lease.fence,
+            lease.mailbox.grant_generation,
+        ).execute(&mut *tx).await.map_err(db_error)?;
         if result.rows_affected() != 1 {
             return Err(MailboxError::Stale);
         }
@@ -337,23 +377,72 @@ impl MailboxSyncRepository for PgMailboxSync {
     }
 
     async fn restart_live_pass(&self, lease: &StreamLease) -> Result<(), MailboxError> {
-        let result = sqlx::query!(r#"
-            UPDATE email_sync_streams s SET position = NULL,import_started_at = now(),next_run_at = now(),lease_id = NULL,lease_until = NULL
-            FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3
-                AND s.lease_until > now() AND l.id = s.link_id AND l.sync_generation = s.generation
-                AND l.is_sync_active AND l.grant_generation = $4
-        "#,lease.id,lease.lease_id,lease.fence,lease.mailbox.grant_generation).execute(&self.db).await.map_err(db_error)?;
+        let result = sqlx::query!(
+            r#"
+                         UPDATE
+                             email_sync_streams s
+                         SET
+                             position = NULL,
+                             import_started_at = now(),
+                             next_run_at = GREATEST(now(), s.provider_retry_at),
+                             lease_id = NULL,
+                             lease_until = NULL
+                         FROM
+                             email_links l
+                         WHERE
+                             s.id = $1 AND s.lease_id = $2 AND s.fence = $3 AND s.lease_until > now() AND l.id = s.link_id AND l.sync_generation = s.generation AND l.is_sync_active AND l.grant_generation = $4
+                         "#,
+            lease.id,
+            lease.lease_id,
+            lease.fence,
+            lease.mailbox.grant_generation,
+        ).execute(&self.db).await.map_err(db_error)?;
         if result.rows_affected() != 1 {
             return Err(MailboxError::Stale);
         }
         Ok(())
     }
 
-    async fn release_stream(&self, lease: &StreamLease, delay: u32) -> Result<(), MailboxError> {
-        sqlx::query!(r#"
-            UPDATE email_sync_streams SET lease_id = NULL, lease_until = NULL, next_run_at = now() + make_interval(secs => $4)
-            WHERE id = $1 AND lease_id = $2 AND fence = $3
-        "#,lease.id,lease.lease_id,lease.fence,f64::from(delay)).execute(&self.db).await.map_err(db_error)?;
+    async fn release_stream(
+        &self,
+        lease: &StreamLease,
+        retry: SyncRetry,
+    ) -> Result<(), MailboxError> {
+        sqlx::query!(
+            r#"
+            UPDATE
+                email_sync_streams
+            SET
+                lease_id = NULL,
+                lease_until = NULL,
+                provider_retry_at = CASE
+                    WHEN provider = 'IMAP' AND $5 THEN GREATEST(provider_retry_at, now() + make_interval(secs => $4))
+                    ELSE provider_retry_at
+                END,
+                next_run_at = CASE
+                    WHEN provider = 'IMAP' THEN GREATEST(
+                        CASE
+                            WHEN NOT $5 AND notification_revision > leased_notification_revision THEN clock_timestamp()
+                            ELSE now() + make_interval(secs => $4)
+                        END,
+                        provider_retry_at
+                    )
+                    ELSE now() + make_interval(secs => $4)
+                END
+            WHERE
+                id = $1
+                AND lease_id = $2
+                AND fence = $3
+            "#,
+            lease.id,
+            lease.lease_id,
+            lease.fence,
+            f64::from(retry.seconds()),
+            retry.is_provider(),
+        )
+        .execute(&self.db)
+        .await
+        .map_err(db_error)?;
         Ok(())
     }
 
@@ -367,7 +456,8 @@ impl MailboxSyncRepository for PgMailboxSync {
         // predicate it repeats, and stops at `queued` rows. Rows backed off
         // after failures of their own don't count: they would hold the walk
         // while nothing could be claimed.
-        let paced = sqlx::query!(r#"
+        let paced = sqlx::query!(
+            r#"
             WITH queued AS (
                 SELECT count(*) AS rows FROM (
                     SELECT 1 FROM email_message_reconciliation
@@ -376,9 +466,17 @@ impl MailboxSyncRepository for PgMailboxSync {
                     LIMIT $3
                 ) q
             )
-            UPDATE email_sync_streams s SET lease_id = NULL, lease_until = NULL, next_run_at = now() + make_interval(secs => $7)
+            UPDATE email_sync_streams s SET lease_id = NULL, lease_until = NULL, next_run_at = GREATEST(now() + make_interval(secs => $7), s.provider_retry_at)
             FROM queued WHERE queued.rows >= $3 AND s.id = $4 AND s.lease_id = $5 AND s.fence = $6
-        "#,lease.mailbox.link_id,lease.mailbox.sync_generation,i64::from(queued),lease.id,lease.lease_id,lease.fence,f64::from(delay))
+        "#,
+            lease.mailbox.link_id,
+            lease.mailbox.sync_generation,
+            i64::from(queued),
+            lease.id,
+            lease.lease_id,
+            lease.fence,
+            f64::from(delay),
+        )
             .execute(&self.db).await.map_err(db_error)?;
         Ok(paced.rows_affected() == 1)
     }

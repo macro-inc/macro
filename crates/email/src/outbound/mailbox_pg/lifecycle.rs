@@ -273,6 +273,36 @@ impl InboxLifecycleRepository for PgMailboxSync {
             return Err(InboxLifecycleError::Changed);
         }
         let link = current.link_id;
+        let provider_retry_at = sqlx::query_scalar!(
+            r#"
+            SELECT
+                max(s.provider_retry_at)
+            FROM
+                email_sync_streams s
+            LEFT JOIN LATERAL (
+                SELECT
+                    f.role
+                FROM
+                    email_mailbox_folders f
+                WHERE
+                    f.link_id = s.link_id
+                    AND f.provider_id = s.scope_id
+                    AND f.deleted_at IS NULL
+                LIMIT 1
+            ) f ON true
+            WHERE
+                s.link_id = $1
+                AND s.generation = $2
+                AND s.provider = 'IMAP'
+                AND s.provider_retry_at > now()
+                AND (s.kind = 'folder_catalog' OR f.role = 'inbox')
+            "#,
+            link,
+            current.sync_generation,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(failed)?;
         let result = match current.provider {
             UserProvider::Gmail => {
                 let existing=sqlx::query_scalar!("SELECT id FROM email_backfill_jobs WHERE link_id = $1 AND status IN ('Init','InProgress') LIMIT 1",link).fetch_optional(&mut *tx).await.map_err(failed)?;
@@ -280,6 +310,7 @@ impl InboxLifecycleRepository for PgMailboxSync {
                     InboxResync {
                         run_id: id,
                         already_in_progress: true,
+                        provider_retry_at,
                     }
                 } else {
                     let id = macro_uuid::generate_uuid_v7();
@@ -295,12 +326,14 @@ impl InboxLifecycleRepository for PgMailboxSync {
                         InboxResync {
                             run_id: id,
                             already_in_progress: false,
+                            provider_retry_at,
                         }
                     } else {
                         let id=sqlx::query_scalar!("SELECT id FROM email_backfill_jobs WHERE link_id = $1 AND status IN ('Init','InProgress') LIMIT 1",link).fetch_one(&mut *tx).await.map_err(failed)?;
                         InboxResync {
                             run_id: id,
                             already_in_progress: true,
+                            provider_retry_at,
                         }
                     }
                 }
@@ -313,10 +346,43 @@ impl InboxLifecycleRepository for PgMailboxSync {
                     .as_ref()
                     .map_or_else(macro_uuid::generate_uuid_v7, |stream| stream.id);
                 if !in_progress || stream.is_none() {
-                    sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id) VALUES ($1,$2,$3,'folder_catalog','mail') ON CONFLICT DO NOTHING",run_id,link,current.sync_generation).execute(&mut *tx).await.map_err(failed)?;
-                    sqlx::query!(r#"UPDATE email_sync_streams SET position = NULL,initial_complete = false, attachments_rechecked = false,scan_id = gen_random_uuid(),next_run_at = now(),fence = fence + 1,lease_id = NULL,lease_until = NULL,
-                            import_started_at = now(),import_completed_at = NULL
-                        WHERE link_id = $1 AND generation = $2 AND kind IN ('folder_catalog','mail_folder','contacts_catalog','contacts_profile','contacts')"#,link,current.sync_generation).execute(&mut *tx).await.map_err(failed)?;
+                    sqlx::query!(
+                        r#"
+                        INSERT INTO email_sync_streams (
+                            id, link_id, generation, kind, scope_id, provider_retry_at, next_run_at
+                        )
+                        VALUES ($1, $2, $3, 'folder_catalog', 'mail', $4, GREATEST(now(), $4))
+                        ON CONFLICT DO NOTHING
+                        "#,
+                        run_id,
+                        link,
+                        current.sync_generation,
+                        provider_retry_at,
+                    )
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(failed)?;
+                    sqlx::query!(
+                        r#"
+                        UPDATE
+                            email_sync_streams
+                        SET
+                            position = NULL,
+                            initial_complete = false,
+                            attachments_rechecked = false,
+                            scan_id = gen_random_uuid(),
+                            next_run_at = GREATEST(now(), provider_retry_at),
+                            fence = fence + 1,
+                            lease_id = NULL,
+                            lease_until = NULL,
+                            import_started_at = now(),
+                            import_completed_at = NULL
+                        WHERE
+                            link_id = $1 AND generation = $2 AND kind IN ('folder_catalog','mail_folder','contacts_catalog','contacts_profile','contacts')
+                        "#,
+                        link,
+                        current.sync_generation,
+                    ).execute(&mut *tx).await.map_err(failed)?;
                     // Each folder's new import round opens a live pass of its own.
                     sqlx::query!("DELETE FROM email_sync_streams WHERE link_id = $1 AND generation = $2 AND kind = 'mail_folder_live'",link,current.sync_generation)
                         .execute(&mut *tx).await.map_err(failed)?;
@@ -327,6 +393,7 @@ impl InboxLifecycleRepository for PgMailboxSync {
                 InboxResync {
                     run_id,
                     already_in_progress: in_progress && stream.is_some(),
+                    provider_retry_at,
                 }
             }
         };

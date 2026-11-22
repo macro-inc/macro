@@ -1,4 +1,5 @@
 export default {
+  providerPausedUntil: 'Paused by your provider until {{time}}',
   useAppPassword: 'Use an app password instead',
   googlePermissions: 'Keep email access enabled on Google’s permission screen.',
   addressUnverified:

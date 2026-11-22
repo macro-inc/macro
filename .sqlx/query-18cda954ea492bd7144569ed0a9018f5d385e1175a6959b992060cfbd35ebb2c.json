@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id, position, initial_complete, next_run_at)\n        SELECT id, $2, 1, 'mail_folder', id::text, 'kept-cursor', true, now() + interval '1 day'\n        FROM unnest($1::uuid[]) AS streams(id)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "18cda954ea492bd7144569ed0a9018f5d385e1175a6959b992060cfbd35ebb2c"
+}

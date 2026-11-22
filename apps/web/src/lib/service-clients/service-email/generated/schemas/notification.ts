@@ -6,6 +6,7 @@
  */
 import type { Binding } from './binding';
 import type { NotificationMailboxIssue } from './notificationMailboxIssue';
+import type { NotificationRevision } from './notificationRevision';
 import type { NotificationSyncRetryAt } from './notificationSyncRetryAt';
 
 /**
@@ -17,6 +18,8 @@ export interface Notification {
   /** A confirmed provider refusal; never inferred from a saved-password or KMS failure. */
   credentialsRejected: boolean;
   mailboxIssue?: NotificationMailboxIssue;
+  /** Optional for old senders; monotonic within this exact binding. */
+  revision?: NotificationRevision;
   /** Durable retry guidance; absent on normal wakeups and older notifications. */
   syncRetryAt?: NotificationSyncRetryAt;
 }

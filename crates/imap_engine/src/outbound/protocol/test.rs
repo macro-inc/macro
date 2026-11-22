@@ -421,6 +421,8 @@ async fn lost_real_smtp_final_reply_is_unknown_and_a_restarted_engine_never_retr
     };
     let proxy = fault::Proxy::start(fault::Fault::LoseFinal).await;
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),

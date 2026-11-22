@@ -66,6 +66,7 @@ impl PgMailboxSync {
                             AND s.kind = 'mail_folder'
                             AND NOT s.initial_complete
                             AND s.next_run_at <= now()
+                            AND (s.provider_retry_at IS NULL OR s.provider_retry_at <= now())
                             AND (s.next_run_at,
                                 s.id) >= (
                                 SELECT
@@ -85,6 +86,7 @@ impl PgMailboxSync {
                                         AND r.kind = 'mail_folder'
                                         AND NOT r.initial_complete
                                         AND r.next_run_at <= now()
+                                        AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
                                     ORDER BY
                                         r.next_run_at,
                                         r.id
@@ -119,6 +121,7 @@ impl PgMailboxSync {
                                                 AND r.kind = 'mail_folder'
                                                 AND NOT r.initial_complete
                                                 AND r.next_run_at <= now()
+                                                AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
                                                 AND (r.lease_until IS NULL
                                                     OR r.lease_until < now())
                                                 OFFSET 0) scoped
@@ -166,6 +169,7 @@ impl PgMailboxSync {
                             AND s.generation = l.sync_generation
                             AND s.kind = 'mail_folder'
                             AND s.next_run_at <= now()
+                            AND (s.provider_retry_at IS NULL OR s.provider_retry_at <= now())
                             AND (s.next_run_at,
                                 s.id) >= (
                                 SELECT
@@ -184,6 +188,7 @@ impl PgMailboxSync {
                                         r.provider = $3::text::email_user_provider_enum
                                         AND r.kind = 'mail_folder'
                                         AND r.next_run_at <= now()
+                                        AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
                                     ORDER BY
                                         r.next_run_at,
                                         r.id
@@ -217,6 +222,7 @@ impl PgMailboxSync {
                                                 AND r.generation = l.sync_generation
                                                 AND r.kind = 'mail_folder'
                                                 AND r.next_run_at <= now()
+                                                AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
                                                 AND (r.lease_until IS NULL
                                                     OR r.lease_until < now())
                                                 OFFSET 0) scoped
@@ -273,6 +279,8 @@ impl PgMailboxSync {
                         lease_id = $1,
                         lease_until = now() + interval '3 minutes',
                     lease_started_at = clock_timestamp(),
+                    leased_notification_revision = s.notification_revision,
+                    provider_retry_at = NULL,
                     fence = fence + 1,
                     notified_traceparent = NULL
                     FROM
@@ -321,6 +329,7 @@ impl PgMailboxSync {
                             AND s.generation = l.sync_generation
                             AND s.kind = $2
                             AND s.next_run_at <= now()
+                            AND (s.provider_retry_at IS NULL OR s.provider_retry_at <= now())
                             AND (s.next_run_at,
                                 s.id) >= (
                                 SELECT
@@ -339,6 +348,7 @@ impl PgMailboxSync {
                                         r.provider = $3::text::email_user_provider_enum
                                         AND r.kind = $2
                                         AND r.next_run_at <= now()
+                                        AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
                                     ORDER BY
                                         r.next_run_at,
                                         r.id
@@ -372,6 +382,7 @@ impl PgMailboxSync {
                                                 AND r.generation = l.sync_generation
                                                 AND r.kind = $2
                                                 AND r.next_run_at <= now()
+                                                AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
                                                 AND (r.lease_until IS NULL
                                                     OR r.lease_until < now())
                                                 OFFSET 0) scoped
@@ -409,6 +420,8 @@ impl PgMailboxSync {
                         lease_id = $1,
                         lease_until = now() + interval '3 minutes',
                     lease_started_at = clock_timestamp(),
+                    leased_notification_revision = s.notification_revision,
+                    provider_retry_at = NULL,
                     fence = fence + 1,
                     notified_traceparent = NULL
                     FROM

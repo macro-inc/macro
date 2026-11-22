@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_sync_streams (\n            id, link_id, generation, kind, scope_id, position, next_run_at,\n            lease_id, lease_until, lease_started_at\n        )\n        SELECT\n            id, link_id, generation,\n            CASE WHEN n = 4 THEN 'folder_catalog' ELSE 'mail_folder' END,\n            'INBOX', 'kept-cursor',\n            CASE WHEN n IN (2, 3, 4) THEN now() - interval '1 minute' ELSE now() + interval '1 day' END,\n            $4, now() + interval '1 day', now() - interval '1 second'\n        FROM unnest($1::uuid[], $2::uuid[], $3::bigint[]) WITH ORDINALITY AS streams(id, link_id, generation, n)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "Int8Array",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "854dd579e77da87d6f1dc19883a27e4d9817c561672e7afa173f93044548ad32"
+}

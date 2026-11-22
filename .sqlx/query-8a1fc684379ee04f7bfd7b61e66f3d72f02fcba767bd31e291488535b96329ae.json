@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_sync_streams\n        SET notification_revision = notification_revision + 1,\n            notified_at = lease_started_at - interval '1 second'\n        WHERE link_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8a1fc684379ee04f7bfd7b61e66f3d72f02fcba767bd31e291488535b96329ae"
+}

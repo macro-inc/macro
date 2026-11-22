@@ -3,6 +3,8 @@ use super::*;
 #[tokio::test(start_paused = true)]
 async fn submission_admission_wait_is_bounded_without_marking_or_sending() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -51,6 +53,8 @@ async fn submission_admission_wait_is_bounded_without_marking_or_sending() {
 #[tokio::test(start_paused = true)]
 async fn smtp_receives_the_original_deadline_after_waiting_for_admission() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -113,6 +117,8 @@ async fn smtp_receives_the_original_deadline_after_waiting_for_admission() {
 #[tokio::test]
 async fn interactive_message_lookup_is_not_queued_behind_sync_admission() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -210,6 +216,8 @@ async fn ingestion_burst_does_not_queue_a_user_message_read() {
         .unwrap();
         let message_id = state.messages.keys().next().unwrap().clone();
         let repository = Arc::new(MemoryRepository {
+            revision: Default::default(),
+            scoped_acquire_errors: Default::default(),
             state: std::sync::Mutex::new(state),
             saved_unknown: AtomicBool::new(false),
             owner_available: AtomicBool::new(true),
@@ -292,6 +300,8 @@ async fn ingestion_burst_does_not_queue_a_user_message_read() {
 #[tokio::test(start_paused = true)]
 async fn queued_accounts_rotate_after_stalled_and_cancelled_sync_rounds() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -374,6 +384,8 @@ async fn queued_accounts_rotate_after_stalled_and_cancelled_sync_rounds() {
 #[tokio::test]
 async fn configured_sync_capacity_bounds_started_rounds_without_limiting_bindings() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -430,6 +442,8 @@ async fn configured_sync_capacity_bounds_started_rounds_without_limiting_binding
 #[tokio::test(start_paused = true)]
 async fn sync_state_loading_counts_toward_the_round_work_budget() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -493,6 +507,8 @@ async fn saturation_is_exportable_while_the_admission_wait_is_still_pending() {
     let capture = Capture::default();
     let subscriber = tracing_subscriber::registry().with(capture.clone());
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),

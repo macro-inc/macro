@@ -6,6 +6,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 mod claim_order;
 mod crm_cleanup;
 mod imap;
+mod imap_startup;
 mod import_pacing;
 mod import_reads;
 mod live_pass;

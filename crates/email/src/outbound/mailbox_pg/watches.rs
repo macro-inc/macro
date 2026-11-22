@@ -197,7 +197,21 @@ impl MailboxWatchRepository for PgMailboxSync {
         // due keeps its place: claims take the longest-due first, so moving it
         // to now would put it behind every stream that came due since, and a
         // mailbox notified more often than that line moves would never be read.
-        sqlx::query!("UPDATE email_sync_streams SET notified_at=clock_timestamp(),notified_traceparent=$3,next_run_at=LEAST(next_run_at,now()) WHERE link_id=$1 AND generation=$2 AND kind IN ('folder_catalog','mail_folder','mail_folder_live')",binding.link_id,binding.sync_generation,crate::trace_context::current())
+        sqlx::query!(
+            r#"
+            UPDATE
+                email_sync_streams
+            SET
+                notified_at=clock_timestamp(),
+                notified_traceparent=$3,
+                next_run_at=GREATEST(LEAST(next_run_at,now()),provider_retry_at)
+            WHERE
+                link_id=$1 AND generation=$2 AND kind IN ('folder_catalog','mail_folder','mail_folder_live')
+            "#,
+            binding.link_id,
+            binding.sync_generation,
+            crate::trace_context::current(),
+        )
             .execute(&mut *tx).await.map_err(db_error)?;
         if matches!(hint, WatchHint::Removed | WatchHint::Reauthorize) {
             sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1,failures=0 WHERE link_id=$1",binding.link_id)

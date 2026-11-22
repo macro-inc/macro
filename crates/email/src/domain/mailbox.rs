@@ -27,6 +27,7 @@ pub mod drafts;
 pub mod gmail_history;
 pub mod gmail_push;
 pub mod health;
+pub mod imap_catchup;
 pub mod imap_connection;
 pub mod imap_notifications;
 pub mod imap_settings;
@@ -263,6 +264,41 @@ pub enum SyncLease<'a> {
     Message(&'a MessageLease),
 }
 
+/// Provider pacing is a durable floor; local failures may yield to newer mail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncRetry {
+    Local(u32),
+    Provider(u32),
+}
+
+impl SyncRetry {
+    fn for_error(error: &MailboxError, seconds: u32) -> Self {
+        use email_api_client::domain::models::RateLimitOrigin;
+        match error {
+            MailboxError::Provider(EmailApiError::RateLimited { origin, .. }) => match origin {
+                RateLimitOrigin::Local => Self::Local(seconds),
+                RateLimitOrigin::Gate(_) | RateLimitOrigin::Provider { .. } => {
+                    Self::Provider(seconds)
+                }
+            },
+            _ => Self::Local(seconds),
+        }
+    }
+
+    pub fn seconds(self) -> u32 {
+        match self {
+            Self::Local(seconds) | Self::Provider(seconds) => seconds,
+        }
+    }
+
+    pub fn is_provider(self) -> bool {
+        match self {
+            Self::Local(_) => false,
+            Self::Provider(_) => true,
+        }
+    }
+}
+
 pub trait MailboxSyncRepository: Send + Sync + 'static {
     /// Extend only a still-current lease while a provider operation is in flight.
     fn renew(&self, lease: SyncLease<'_>) -> impl Future<Output = Result<(), MailboxError>> + Send;
@@ -280,7 +316,7 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
     fn release_catalog(
         &self,
         lease: &CatalogLease,
-        retry_after_seconds: u32,
+        retry: SyncRetry,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
     /// Marks the lease's link as having no mailbox the provider will serve,
     /// unless it already is, and answers how many seconds it has been
@@ -328,7 +364,7 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
     fn release_stream(
         &self,
         lease: &StreamLease,
-        retry_after_seconds: u32,
+        retry: SyncRetry,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
     /// Puts the stream back for `retry_after_seconds`, unread, while its
     /// mailbox has at least `queued` import messages due. Returns whether it
@@ -538,7 +574,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                 let delay = retry_seconds(&error);
                 let error = MailboxError::from(error);
                 self.repo
-                    .release_catalog(lease, delay)
+                    .release_catalog(lease, SyncRetry::for_error(&error, delay))
                     .await
                     .inspect_err(|release| {
                         record_failed(&span, lease.mailbox.link_id, release);
@@ -579,7 +615,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let delay =
             marked_seconds.clamp(NO_MAILBOX_FIRST_PROBE_SECONDS, NO_MAILBOX_PROBE_MAX_SECONDS);
         self.repo
-            .release_catalog(lease, delay)
+            .release_catalog(lease, SyncRetry::Local(delay))
             .await
             .inspect_err(|error| record_failed(&span, link_id, error))?;
         let error = MailboxError::NoMailbox;
@@ -726,7 +762,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                 };
                 record_stream(&span, delta_advanced, folder_initial_complete, cursor_reset);
                 self.repo
-                    .release_stream(lease, delay)
+                    .release_stream(lease, SyncRetry::for_error(&error, delay))
                     .await
                     .inspect_err(|release| {
                         record_failed(&span, lease.mailbox.link_id, release);

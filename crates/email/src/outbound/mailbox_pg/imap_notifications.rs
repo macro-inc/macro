@@ -7,6 +7,7 @@ impl ImapNotificationRepository for PgMailboxSync {
         &self,
         mailbox: MailboxKey,
         credentials_rejected: bool,
+        revision: Option<i64>,
         mailbox_issue: Option<models_email::service::link::MailboxIssue>,
         retry_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<(), MailboxError> {
@@ -16,7 +17,10 @@ impl ImapNotificationRepository for PgMailboxSync {
             SELECT
                 needs_reauth,
                 mailbox_issue,
-                mailbox_retry_at
+                mailbox_retry_at,
+                imap_notification_revision,
+                imap_notification_sync_generation,
+                imap_notification_grant_generation
             FROM
                 email_links
             WHERE
@@ -38,9 +42,38 @@ impl ImapNotificationRepository for PgMailboxSync {
         let Some(current) = current else {
             return Ok(());
         };
-        let requires_reconnect = credentials_rejected
-            || mailbox_issue
-                == Some(models_email::service::link::MailboxIssue::CredentialsUnreadable);
+        let accepts_health = revision.is_none_or(|incoming| {
+            current.imap_notification_sync_generation != Some(mailbox.sync_generation)
+                || current.imap_notification_grant_generation != Some(mailbox.grant_generation)
+                || current
+                    .imap_notification_revision
+                    .is_none_or(|seen| incoming >= seen)
+        });
+        if accepts_health && let Some(revision) = revision {
+            sqlx::query!(
+                r#"
+                UPDATE
+                    email_links
+                SET
+                    imap_notification_revision = $2,
+                    imap_notification_sync_generation = $3,
+                    imap_notification_grant_generation = $4
+                WHERE
+                    id = $1
+                "#,
+                mailbox.link_id,
+                revision,
+                mailbox.sync_generation,
+                mailbox.grant_generation,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        }
+        let requires_reconnect = accepts_health
+            && (credentials_rejected
+                || mailbox_issue
+                    == Some(models_email::service::link::MailboxIssue::CredentialsUnreadable));
         if requires_reconnect && !current.needs_reauth {
             sqlx::query!(
                 r#"
@@ -84,7 +117,7 @@ impl ImapNotificationRepository for PgMailboxSync {
         // not create another health edge after the database round-trip.
         let retry_changed = current.mailbox_retry_at.map(|at| at.timestamp_micros())
             != retry_at.map(|at| at.timestamp_micros());
-        if current.mailbox_issue != issue || retry_changed {
+        if accepts_health && (current.mailbox_issue != issue || retry_changed) {
             sqlx::query!(
                 r#"
                 UPDATE
@@ -126,8 +159,9 @@ impl ImapNotificationRepository for PgMailboxSync {
                     email_sync_streams
                 SET
                     notified_at = clock_timestamp(),
+                    notification_revision = notification_revision + 1,
                     notified_traceparent = $3,
-                    next_run_at = now()
+                    next_run_at = GREATEST(LEAST(next_run_at, clock_timestamp()), provider_retry_at)
                 WHERE
                     link_id = $1
                     AND generation = $2

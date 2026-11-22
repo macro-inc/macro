@@ -2,7 +2,7 @@ import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
 } from '@app/features/calendar/components/TurnOffCalendarDialog';
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_INBOX_RESYNC,
@@ -139,6 +139,16 @@ export function EmailCard(props: { class?: string } = {}) {
     setResyncingIds((prev) => new Set(prev).add(linkId));
     await resyncInbox(linkId).match(
       (res) => {
+        if (res.provider_retry_at) {
+          toast.alert(
+            t('imap.providerPausedUntil', {
+              time: new Date(res.provider_retry_at).toLocaleString(
+                formatLocale()
+              ),
+            })
+          );
+          return;
+        }
         toast.success(
           res.already_in_progress
             ? 'Sync already in progress'

@@ -38,9 +38,34 @@ impl Engine {
             stopped: cancellation.child_token(),
             current: None,
         };
-        let result = self
-            .account_loop(binding, owner, &cancellation, &wake, &mut watchers)
-            .await;
+        let lifetime = cancellation.child_token();
+        let hints_changed = Arc::new(tokio::sync::Notify::new());
+        let result = {
+            let work = self.account_loop(
+                binding,
+                owner,
+                &lifetime,
+                &wake,
+                &hints_changed,
+                &mut watchers,
+            );
+            let hints = self.retry_host_hints(binding, owner, &lifetime, &hints_changed);
+            tokio::pin!(work, hints);
+            tokio::select! {
+                result = &mut work => {
+                    lifetime.cancel();
+                    // Drain a bounded callback and any fenced ACK save before
+                    // dropping its future; a short command lease must not leak.
+                    let _ = hints.await;
+                    result
+                }
+                result = &mut hints => {
+                    lifetime.cancel();
+                    let drained = work.await;
+                    result.and(drained)
+                }
+            }
+        };
         watchers.stopped.cancel();
         if let Some(watcher) = &watchers.current {
             watcher.stop.cancel();
@@ -71,6 +96,7 @@ impl Engine {
         owner: Uuid,
         cancellation: &CancellationToken,
         wake: &Arc<tokio::sync::Notify>,
+        hints_changed: &Arc<tokio::sync::Notify>,
         watchers: &mut AccountWatchers,
     ) -> Result<(), Error> {
         let mut failures = 0u32;
@@ -89,6 +115,9 @@ impl Engine {
                     return Err(Error::Conflict);
                 }
                 self.execute_owned_sync(binding, owner, &round_stop).await?;
+                // Prompt one independent delivery attempt before IDLE without
+                // making provider progress wait for callback availability.
+                hints_changed.notify_one();
                 if !self.repository.claim_owner(binding, owner).await? {
                     return Err(Error::Conflict);
                 }
@@ -354,7 +383,7 @@ impl Engine {
             account.state.needs_reauth = true;
             account.state.mailbox_issue = issue;
             account.state.sync_retry_at = None;
-            account.state.notification_pending = true;
+            account.state.mark_notification_pending();
             self.repository.save_health(account).await?;
         }
         self.notify(account).await?;

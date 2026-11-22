@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_imap_host_catchup SET lease_until = now() - interval '1 second'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "a2d69df998466be7936afd19c5a9c3adcea37eb326babd5cd7573346abdbc60b"
+}

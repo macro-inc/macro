@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            email_sync_streams s\n        SET\n            next_run_at = GREATEST(LEAST(s.next_run_at, now()), s.provider_retry_at)\n        FROM\n            email_links l\n        WHERE\n            l.id = $1\n            AND l.grant_generation = $2\n            AND l.sync_generation = $3\n            AND l.is_sync_active\n            AND s.link_id = l.id\n            AND s.generation = l.sync_generation\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f39c609d80bd6cf8a604be6b65b3b9d49cb9487cb3f82e3509e126b7371d2c5c"
+}

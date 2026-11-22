@@ -198,3 +198,8 @@ inherits provider-throttle pacing. A pre-body refusal returns a typed command
 phase and recipient position, never an address or raw reply; abandon the whole
 recipient envelope before DATA. Clear the Unknown fence before returning a
 definite refusal, and never persist the new rejected response outcome.
+
+Retry durable host notifications independently of provider scans and IDLE. Retain
+no command lease or database connection during the bounded callback; clear pending
+only after an ACK for the observed revision. Drain the fenced save on shutdown.
+A callback outage must never freeze provider synchronization.

@@ -100,7 +100,7 @@ impl Engine {
                     .ok_or(Error::ConnectionUnavailable)?;
                 sync::gmail_projection(&mut a.state, &id, &facts, &location)?;
                 let version = a.state.messages.get(&id).map(|m| m.version.clone());
-                a.state.notification_pending = true;
+                a.state.mark_notification_pending();
                 self.repository.save(a).await?;
                 self.notify(a).await?;
                 return value(WriteReceipt { id, version });
@@ -168,7 +168,7 @@ impl Engine {
                         };
                         sync::gmail_projection(&mut a.state, &id, &facts, &physical)?;
                         let version = a.state.messages.get(&id).map(|m| m.version.clone());
-                        a.state.notification_pending = true;
+                        a.state.mark_notification_pending();
                         self.repository.save(a).await?;
                         self.notify(a).await?;
                         return value(WriteReceipt { id, version });
@@ -213,7 +213,7 @@ impl Engine {
                 push_change(&mut a.state, &source.folder.id, &id, false)?;
             }
             a.state.messages.insert(id.clone(), message);
-            a.state.notification_pending = true;
+            a.state.mark_notification_pending();
             self.repository.save(a).await?;
             self.notify(a).await?;
             value(WriteReceipt {

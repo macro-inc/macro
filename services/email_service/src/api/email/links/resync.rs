@@ -16,6 +16,9 @@ pub struct ResyncResponse {
     pub backfill_job_id: Uuid,
     /// True when a backfill was already running and this call was a no-op.
     pub already_in_progress: bool,
+    /// Provider pacing remains in force even when the owner requests a resync.
+    #[serde(default)]
+    pub provider_retry_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Re-syncs a linked inbox by enqueuing a fresh backfill.
@@ -57,6 +60,7 @@ pub async fn resync_link_handler(
     Ok(Json(ResyncResponse {
         backfill_job_id: result.run_id,
         already_in_progress: result.already_in_progress,
+        provider_retry_at: result.provider_retry_at,
     })
     .into_response())
 }

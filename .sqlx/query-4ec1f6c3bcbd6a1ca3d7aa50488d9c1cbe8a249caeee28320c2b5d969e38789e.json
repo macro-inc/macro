@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sync_streams SET notification_revision = 1, next_run_at = now() - interval '1 minute' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4ec1f6c3bcbd6a1ca3d7aa50488d9c1cbe8a249caeee28320c2b5d969e38789e"
+}

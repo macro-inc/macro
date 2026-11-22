@@ -437,3 +437,72 @@ deployment requires no operator action. A capped corruption incident needs
 the explicitly approved recovery described in the runbook. See the [repair runbook](../runbooks/email-provider-repair.md).
 
 Follow the [validation cap and recovery contract](../runbooks/email-provider-repair.md#validation-failures-and-the-constraint-cap).
+
+## Host catch-up after restart
+
+The engine's snapshot persists a pending host hint before delivery. A separate
+account task retries one bounded callback at a time with five-second exponential
+backoff capped at sixty seconds, independently of provider scans and IDLE. It
+retains no command lease or database connection during HTTP. An ACK clears the
+pending bit only under the original binding and observed state revision; a newer
+snapshot keeps its hint. A successful ACK is remembered while local contention
+prevents its fenced clear, avoiding repeated HTTP callbacks for that revision.
+The earliest pending time persists in the small account JSON state, so a new actor
+does not reset the alert age. Legacy rows without it use the current actor's age
+until the next durable change. Routine ownership loss stops delivery cleanly.
+Shutdown drains the bounded callback and fenced save.
+
+Notifications carry an optional engine revision. The host records the last health
+revision under its sync and grant generations and ignores reordered older health
+while retaining the stream wake. Old unversioned senders remain accepted for a
+mixed rollout or rollback; generation changes begin a new revision scope.
+
+Only the email pubsub worker requests startup catch-up. A global database lease
+and saved UUID cursor serialize fleet recovery, coalescing worker boots for five
+minutes. Each page examines at most sixteen streams, including up to eight due
+deferred ids. Locked or failed rows enter a bounded-backoff queue; deleted and
+ineligible ids are retired. The steady-state thirty-second cycle uses a partial
+index of unconsumed notification revisions, so an idle cycle does not scan every
+account. The dedicated catch-up pool adds one connection per worker replica;
+normal sync uses its existing pool. Statements are bounded to fifteen seconds,
+individual wake transactions to one second, and no provider I/O occurs in a page.
+
+Claims capture the current notification revision. Successful commits and local
+error releases cannot consume a newer wake. Startup catch-up always bumps the
+revision, including when a lease is already in flight; steady-state catch-up
+leaves already-due work in its existing queue position without another write.
+A provider retry floor is separate: every claim enforces it, so even an older
+writer moving the due timestamp cannot shorten it. The claim that honors an
+expired floor consumes it. Import pacing remains separate and unchanged.
+
+Resync returns the latest future Inbox/catalog deadline in its typed response; Mail
+settings says “Paused by your provider until …” instead of claiming work started.
+A verified reconnect carries the latest persisted future floor into the new
+generation's catalog. A changed password clears credential/size health without
+cancelling provider pacing. Provider deadlines are recorded on resync/activation
+spans as Unix milliseconds. Missing-mailbox probe delays remain local backoff,
+not a provider rate limit.
+
+The `imap.host_notification.flush` span reports attempt count, pending age and
+closed outcomes. `email.imap.catch_up` reports scanned, woken, deferred and failed
+counts plus deferred age and attempts. Code-only non-paging monitors flag pending
+callbacks or deferred work older than five minutes. Inspect callback status,
+worker availability, the singleton cursor and deferred counts; never clear
+cursors, provider floors or pending hints to silence an alert. Callback failure
+does not stop engine ingestion; catch-up recovers host projection without relying
+on another provider change.
+
+A reconnect racing a stale-generation provider release can miss that newly
+recorded floor and cause one early retry against the provider limit. No mail is
+lost or duplicated. Serialized handoff is tracked in `mac-zn2o`.
+
+[Restart catch-up query and migration evidence](../design/imap-restart-catchup-query-plans.json)
+covers 36 statements and 1,488 plan executions, with custom/generic plans and
+fresh/stale statistics on 100,000 synthetic links and about one million streams.
+It includes the production-major PostgreSQL 14 migration rehearsal on one million
+links and five million streams: constant defaults did not rewrite the heaps;
+concurrent index builds allowed writes. Waiting metadata DDL can queue new reads
+until its five-second lock timeout, even before obtaining its exclusive lock.
+These are local measurements, not production timing claims. Inherited wide-link
+claim fallback and reimport costs are compared with the previous head in the
+report; the new floor lookup uses a bounded full-key lateral join.

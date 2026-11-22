@@ -22,6 +22,8 @@ mod sqs_enqueuer;
 #[cfg(feature = "outbound")]
 pub use email_pg_repo::EmailPgRepo;
 #[cfg(all(feature = "outbound", feature = "mailbox"))]
+pub mod imap_catchup_pg;
+#[cfg(all(feature = "outbound", feature = "mailbox"))]
 pub mod mailbox_pg;
 #[cfg(feature = "http_client")]
 pub use email_service_http::EmailServiceHttpClient;

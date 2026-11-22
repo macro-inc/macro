@@ -472,3 +472,13 @@ mismatches and hourly capped-state heartbeats. Counters measure classifications,
 not distinct corrupt rows. Dimensions are env only; mailbox identifiers and
 message data are excluded. These resources are code only and require a separately
 approved deployment. Follow the [repair and recovery runbook](../../../docs/runbooks/email-provider-repair.md).
+
+## IMAP host catch-up
+
+`monitors/imap-host-catchup.ts` declares two span counters, one dashboard and
+two non-paging monitors. One counts callback attempts still pending after five
+minutes; the other counts catch-up pages with failed rows or deferred work aged
+at least five minutes. The ten-minute window can outlast recovery. These are
+repeated attempts, not distinct accounts, and only env is a metric dimension.
+They are code-only resources, not deployed by this PR. See
+[host catch-up triage](../../../docs/architecture/imap-engine.md#host-catch-up-after-restart).

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT provider_retry_at FROM email_sync_streams WHERE link_id = $1 AND scope_id = 'folder'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider_retry_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "d2e27bdf70a3dbca8bca45b18f934e114356f0a2398cb0348b99c20555a6f39e"
+}

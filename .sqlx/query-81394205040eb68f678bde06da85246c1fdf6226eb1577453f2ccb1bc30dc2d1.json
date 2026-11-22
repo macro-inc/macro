@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id\n            FROM\n                email_imap_host_catchup\n            WHERE\n                id = 1\n                AND lease_id = $1\n                AND lease_until > clock_timestamp()\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "81394205040eb68f678bde06da85246c1fdf6226eb1577453f2ccb1bc30dc2d1"
+}

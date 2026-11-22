@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                needs_reauth,\n                mailbox_issue,\n                mailbox_retry_at,\n                imap_notification_revision,\n                imap_notification_sync_generation,\n                imap_notification_grant_generation\n            FROM\n                email_links\n            WHERE\n                id = $1\n                AND provider = 'IMAP'\n                AND is_sync_active\n                AND sync_generation = $2\n                AND grant_generation = $3\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "needs_reauth",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "mailbox_issue",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "mailbox_retry_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "imap_notification_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "imap_notification_sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "imap_notification_grant_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "073c36bf8934ee14b94e4305938056d5ef4dad3b1ede02def321d3ff54fade1a"
+}

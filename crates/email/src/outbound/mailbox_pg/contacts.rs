@@ -194,8 +194,26 @@ impl AddressBookRepository for PgMailboxSync {
     async fn reset(&self, work: &AddressBookWork) -> Result<(), MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         lock_work(&mut tx, work).await?;
-        sqlx::query!("UPDATE email_sync_streams SET position = NULL,initial_complete = false,scan_id = $2,next_run_at = now(),lease_id = NULL,lease_until = NULL WHERE id = $1",work.stream.id,macro_uuid::generate_uuid_v7())
-            .execute(&mut *tx).await.map_err(db_error)?;
+        sqlx::query!(
+            r#"
+            UPDATE
+                email_sync_streams
+            SET
+                position = NULL,
+                initial_complete = false,
+                scan_id = $2,
+                next_run_at = GREATEST(now(), provider_retry_at),
+                lease_id = NULL,
+                lease_until = NULL
+            WHERE
+                id = $1
+            "#,
+            work.stream.id,
+            macro_uuid::generate_uuid_v7(),
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
         tx.commit().await.map_err(db_error)
     }
 
@@ -224,14 +242,44 @@ impl AddressBookRepository for PgMailboxSync {
         .execute(&mut *tx)
         .await
         .map_err(db_error)?;
-        sqlx::query!("UPDATE email_sync_streams SET next_run_at = now() WHERE link_id = $1 AND generation = $2 AND kind = 'contacts_catalog'",work.stream.mailbox.link_id,work.stream.mailbox.sync_generation)
-            .execute(&mut *tx).await.map_err(db_error)?;
+        sqlx::query!(
+            r#"
+            UPDATE
+                email_sync_streams
+            SET
+                next_run_at = GREATEST(now(), provider_retry_at)
+            WHERE
+                link_id = $1 AND generation = $2 AND kind = 'contacts_catalog'
+            "#,
+            work.stream.mailbox.link_id,
+            work.stream.mailbox.sync_generation,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
         tx.commit().await.map_err(db_error)
     }
 
     async fn release(&self, work: &AddressBookWork, delay: u32) -> Result<(), MailboxError> {
-        sqlx::query!("UPDATE email_sync_streams SET lease_id = NULL,lease_until = NULL,next_run_at = now() + make_interval(secs => $4) WHERE id = $1 AND lease_id = $2 AND fence = $3",work.stream.id,work.stream.lease_id,work.stream.fence,f64::from(delay))
-            .execute(&self.db).await.map_err(db_error)?;
+        sqlx::query!(
+            r#"
+            UPDATE
+                email_sync_streams
+            SET
+                lease_id = NULL,
+                lease_until = NULL,
+                next_run_at = GREATEST(now() + make_interval(secs => $4), provider_retry_at)
+            WHERE
+                id = $1 AND lease_id = $2 AND fence = $3
+            "#,
+            work.stream.id,
+            work.stream.lease_id,
+            work.stream.fence,
+            f64::from(delay),
+        )
+        .execute(&self.db)
+        .await
+        .map_err(db_error)?;
         Ok(())
     }
 
@@ -336,9 +384,28 @@ async fn finish_work(
     complete: bool,
     delay: u32,
 ) -> Result<(), MailboxError> {
-    sqlx::query!(r#"UPDATE email_sync_streams SET position = $2,initial_complete = initial_complete OR $3,
-        last_completed_at = CASE WHEN $3 THEN now() ELSE last_completed_at END,next_run_at = now() + make_interval(secs => $4),lease_id = NULL,lease_until = NULL WHERE id = $1"#,work.stream.id,position,complete,f64::from(delay))
-        .execute(&mut **tx).await.map_err(db_error)?;
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_sync_streams
+        SET
+            position = $2,
+            initial_complete = initial_complete OR $3,
+            last_completed_at = CASE WHEN $3 THEN now() ELSE last_completed_at END,
+            next_run_at = GREATEST(now() + make_interval(secs => $4), provider_retry_at),
+            lease_id = NULL,
+            lease_until = NULL
+        WHERE
+            id = $1
+        "#,
+        work.stream.id,
+        position,
+        complete,
+        f64::from(delay),
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(db_error)?;
     Ok(())
 }
 async fn upsert_source(

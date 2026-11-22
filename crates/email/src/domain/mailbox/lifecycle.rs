@@ -88,6 +88,8 @@ pub enum InboxRemoval {
 pub struct InboxResync {
     pub run_id: Uuid,
     pub already_in_progress: bool,
+    /// Latest future provider deadline for this binding's Inbox or catalog.
+    pub provider_retry_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -206,6 +208,10 @@ impl<R: InboxLifecycleRepository, E: InboxLifecycleEffects> InboxLifecycleServic
             )
             .await
     }
+    #[tracing::instrument(skip_all, name = "email.inbox.resync", fields(
+        mailbox.link_id = %link,
+        sync.provider_retry_at = tracing::field::Empty,
+    ))]
     pub async fn resync(
         &self,
         actor: &InboxActor,
@@ -218,7 +224,11 @@ impl<R: InboxLifecycleRepository, E: InboxLifecycleEffects> InboxLifecycleServic
         if snapshot.disconnecting {
             return Err(InboxLifecycleError::Disconnecting);
         }
-        self.repo.resync(actor, &snapshot).await
+        let result = self.repo.resync(actor, &snapshot).await?;
+        if let Some(until) = result.provider_retry_at {
+            tracing::Span::current().record("sync.provider_retry_at", until.timestamp_millis());
+        }
+        Ok(result)
     }
     pub async fn deleted_user(&self, owner: &str) -> Result<(), InboxLifecycleError> {
         let mut bindings = self.repo.bindings_for_deleted_user(owner).await?;

@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id,\n            position,\n            lease_id,\n            lease_until > clock_timestamp() AS \"lease_kept!\",\n            next_run_at <= clock_timestamp() AS \"due!\"\n        FROM email_sync_streams\n        WHERE id = ANY($1)\n        ORDER BY id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "position",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "lease_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "lease_kept!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "due!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "db8989a26209b9f877f4dea9dc1af55f50b40a06e48d9874ce94e7ce5990dd3b"
+}

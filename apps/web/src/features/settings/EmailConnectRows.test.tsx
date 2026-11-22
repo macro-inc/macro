@@ -1,7 +1,9 @@
 /** @vitest-environment jsdom */
 
+import { formatLocale } from '@app/lib/i18n';
 import type { Link } from '@service-email/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { okAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { EmailCard } from './Email';
@@ -10,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   startAddInbox: vi.fn(async () => {}),
   providers: vi.fn(async () => ({ outlook: true })),
   failure: vi.fn(),
+  success: vi.fn(),
+  alert: vi.fn(),
+  resync: vi.fn(),
   links: [] as Link[],
 }));
 const [connected, setConnected] = createSignal(false);
@@ -23,7 +28,7 @@ vi.mock('@core/email-link', () => ({
         return { links: mocks.links };
       },
     },
-    resyncInbox: vi.fn(),
+    resyncInbox: mocks.resync,
   }),
   useEmailLinksStatus: () => connected,
   useAddInboxFlow: () => mocks.startAddInbox,
@@ -34,11 +39,11 @@ vi.mock('@queries/auth/outlook-link', () => ({
   useImapAvailable: () => () => false,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_INBOX_RESYNC: false,
+  ENABLE_INBOX_RESYNC: true,
   ENABLE_INBOX_SYNC_STATUS: false,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { failure: mocks.failure, success: vi.fn() },
+  toast: { failure: mocks.failure, success: mocks.success, alert: mocks.alert },
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => undefined,
@@ -58,6 +63,13 @@ vi.mock('./SignatureSection', () => ({ clearSignatureState: vi.fn() }));
 
 beforeEach(() => {
   setConnected(false);
+  mocks.resync.mockImplementation(() =>
+    okAsync({
+      backfill_job_id: 'run',
+      already_in_progress: false,
+      provider_retry_at: null,
+    })
+  );
   mocks.links = [];
   setOutlookOffered(true);
   mocks.providers.mockResolvedValue({ outlook: true });
@@ -149,3 +161,46 @@ it.each([
     ).toBeNull();
   }
 );
+
+it('shows the provider pause deadline instead of claiming a resync started', async () => {
+  const until = '2099-01-02T03:04:00Z';
+  setConnected(true);
+  mocks.links = [
+    {
+      id: 'synthetic-link',
+      macro_id: 'me',
+      email_address: 'user@example.com',
+      fusionauth_user_id: 'synthetic-user',
+      provider: 'IMAP',
+      is_primary: true,
+      is_sync_active: true,
+      needs_reauth: false,
+      needs_calendar_permission: true,
+      calendar_disabled: false,
+      has_calendar_data: false,
+      sync_status: 'UP_TO_DATE',
+      settings: {},
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    },
+  ];
+  mocks.resync.mockImplementation(() =>
+    okAsync({
+      backfill_job_id: 'run',
+      already_in_progress: false,
+      provider_retry_at: until,
+    })
+  );
+  render(() => <EmailCard />);
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: /^Force sync user@example\.com$/,
+    })
+  );
+  await vi.waitFor(() =>
+    expect(mocks.alert).toHaveBeenCalledWith(
+      `Paused by your provider until ${new Date(until).toLocaleString(formatLocale())}`
+    )
+  );
+  expect(mocks.success).not.toHaveBeenCalled();
+});

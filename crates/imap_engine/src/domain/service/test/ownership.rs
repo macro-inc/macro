@@ -4,6 +4,8 @@ use super::*;
 async fn an_owner_lost_during_sync_queue_never_starts_provider_work() {
     for lost_after in [1, 361] {
         let repository = Arc::new(MemoryRepository {
+            revision: Default::default(),
+            scoped_acquire_errors: Default::default(),
             state: std::sync::Mutex::new(AccountState::default()),
             saved_unknown: AtomicBool::new(false),
             owner_available: AtomicBool::new(true),
@@ -59,6 +61,8 @@ async fn an_owner_lost_during_sync_queue_never_starts_provider_work() {
 #[tokio::test(start_paused = true)]
 async fn queued_actor_renews_ownership_before_the_lease_can_expire() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -108,6 +112,8 @@ async fn queued_actor_renews_ownership_before_the_lease_can_expire() {
 #[tokio::test(start_paused = true)]
 async fn failed_heartbeat_keeps_inflight_work_alive_until_its_lease_is_released() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -162,6 +168,8 @@ async fn failed_heartbeat_keeps_inflight_work_alive_until_its_lease_is_released(
 #[tokio::test(start_paused = true)]
 async fn real_owner_loss_aborts_provider_work_and_releases_the_command_lease() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -208,6 +216,8 @@ async fn real_owner_loss_aborts_provider_work_and_releases_the_command_lease() {
 async fn ownership_loss_drains_acquisition_before_releasing_without_provider_work() {
     let gate = Arc::new(tokio::sync::Semaphore::new(0));
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -254,6 +264,8 @@ async fn ownership_loss_drains_acquisition_before_releasing_without_provider_wor
 #[tokio::test(start_paused = true)]
 async fn a_stalled_heartbeat_does_not_suspend_the_round_or_its_cleanup() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),

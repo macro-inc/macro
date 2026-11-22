@@ -103,13 +103,13 @@ consent starts directly. A failed availability read keeps the retry action and
 never starts a provider automatically.
 When IMAP is available, open the incoming/outgoing server form, confirm both
 servers, enter the password or app password, then choose **Connect inbox**.
-Phones show the same fields full-screen.
+Phones show the same fields in the standard drawer with actions outside the scroll body.
 Incoming and outgoing passwords use the shared masked secret input. Reconnect
 starts with empty secret fields; revealing a field shows only newly typed text.
 Turning off a separate outgoing password forgets that typed value.
 During verification, **Connect inbox** stays in place with a loading indicator.
 Check idle, checking, refusal and retry on desktop and phone: the action keeps
-its label and width, and error copy wraps without being clipped.
+its width and position, and error copy wraps without being clipped.
 A verified sign-in refusal shows **Sign-in was rejected. Check your username
 and app password.** The provider's **Create an app password** link stays
 available. Server settings and confirmation remain; re-enter the cleared
@@ -126,6 +126,11 @@ unchanged open inbox without navigating or reloading. Repeat with signal
 notifications disabled.
 
 Open **Settings → Email** to check import progress, reconnect or disconnect.
+When **Force sync** encounters provider pacing, it shows **Paused by your provider
+until** with the localized deadline. It does not say a resync started. Reconnecting
+with a new password preserves that provider wait.
+**Change login details** opens the bound IMAP link; its primary action says
+**Reconnect** and starts with empty password fields.
 Known custom Google Workspace and Microsoft 365 domains use domain-only MX
 hints. Unknown hosts keep the provider chooser; provider hints never bypass
 the user's enrollment availability policy.

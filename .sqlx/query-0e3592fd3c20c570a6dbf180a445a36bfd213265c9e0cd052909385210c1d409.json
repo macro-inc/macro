@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        INSERT INTO email_sync_streams (\n                            id, link_id, generation, kind, scope_id, provider_retry_at, next_run_at\n                        )\n                        VALUES ($1, $2, $3, 'folder_catalog', 'mail', $4, GREATEST(now(), $4))\n                        ON CONFLICT DO NOTHING\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0e3592fd3c20c570a6dbf180a445a36bfd213265c9e0cd052909385210c1d409"
+}

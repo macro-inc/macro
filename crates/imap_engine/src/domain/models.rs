@@ -523,6 +523,9 @@ pub struct AccountState {
     /// A callback still needs delivery; journal polling remains a recovery path.
     #[serde(default)]
     pub notification_pending: bool,
+    /// First durable pending time, retained across retries and actor restarts.
+    #[serde(default)]
+    pub notification_pending_since: Option<DateTime<Utc>>,
     /// UTC day of the persisted account send-attempt cap.
     #[serde(default)]
     pub send_day: Option<chrono::NaiveDate>,
@@ -819,6 +822,9 @@ pub struct Notification {
     pub binding: Binding,
     /// A confirmed provider refusal; never inferred from a saved-password or KMS failure.
     pub credentials_rejected: bool,
+    /// Optional for old senders; monotonic within this exact binding.
+    #[serde(default)]
+    pub revision: Option<i64>,
     /// Separate sync health, cleared after a complete successful snapshot.
     #[serde(default)]
     pub mailbox_issue: Option<models_email::service::link::MailboxIssue>,
@@ -828,6 +834,18 @@ pub struct Notification {
 }
 
 impl AccountState {
+    /// Keep the earliest durable pending time while coalescing further changes.
+    pub fn mark_notification_pending(&mut self) {
+        self.notification_pending_since.get_or_insert_with(Utc::now);
+        self.notification_pending = true;
+    }
+
+    /// Clear delivery intent and its age only after the host acknowledges it.
+    pub fn clear_notification_pending(&mut self) {
+        self.notification_pending = false;
+        self.notification_pending_since = None;
+    }
+
     /// A reconnect requirement is not necessarily a provider authentication refusal.
     pub fn credential_issue(&self) -> Option<Error> {
         self.needs_reauth.then_some(
@@ -849,6 +867,7 @@ impl AccountState {
             sync_size_failures: self.sync_size_failures,
             sync_retry_at: self.sync_retry_at,
             notification_pending: self.notification_pending,
+            notification_pending_since: self.notification_pending_since,
             send_day: self.send_day,
             sends_today: self.sends_today,
             send_penalty_until: self.send_penalty_until,

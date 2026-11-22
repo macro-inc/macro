@@ -219,6 +219,25 @@ async fn verified_reconnect_clears_old_health_without_replacing_the_link(db: PgP
     .execute(&db)
     .await
     .unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE email_sync_streams
+        SET provider_retry_at = now() + interval '1 hour',
+            next_run_at = now() + interval '1 hour'
+        WHERE link_id = $1
+        "#,
+        first.binding.link_id,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let floor = sqlx::query_scalar!(
+        "SELECT max(provider_retry_at) FROM email_sync_streams WHERE link_id = $1",
+        first.binding.link_id,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
     let mut request = input(4);
     request.link_id = Some(first.binding.link_id);
     let attempt = repo
@@ -252,4 +271,13 @@ async fn verified_reconnect_clears_old_health_without_replacing_the_link(db: PgP
     assert!(state.mailbox_retry_at.is_none());
     assert_eq!(state.sync_generation, first.binding.sync_generation + 1);
     assert_eq!(state.grant_generation, first.binding.grant_generation + 1);
+    let carried = sqlx::query_scalar!(
+        "SELECT provider_retry_at FROM email_sync_streams WHERE link_id = $1 AND generation = $2 AND kind = 'folder_catalog'",
+        first.binding.link_id,
+        state.sync_generation,
+    ).fetch_one(&db).await.unwrap();
+    assert_eq!(
+        carried, floor,
+        "a new password must not reset provider pacing"
+    );
 }

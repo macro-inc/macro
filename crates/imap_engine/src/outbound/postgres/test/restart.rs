@@ -42,6 +42,8 @@ async fn graceful_restart_releases_both_leases_before_their_expiry(pool: PgPool)
     };
     let repository = Arc::new(PgRepository::new(pool));
     let fake = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),

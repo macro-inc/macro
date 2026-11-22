@@ -282,6 +282,8 @@ fn initial_pages_use_keyset_and_later_changes_remain_visible() {
 #[tokio::test]
 async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_restart() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -417,6 +419,8 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
 #[tokio::test]
 async fn a_send_deadline_pauses_other_attempts_but_never_replays_the_unknown_one() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -622,6 +626,8 @@ mod gmail;
 async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_and_many_later_messages()
  {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
@@ -745,6 +751,8 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
 #[tokio::test]
 async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capacity() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(false),
@@ -782,6 +790,8 @@ async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capa
 #[tokio::test]
 async fn a_definite_refusal_clears_the_unknown_fence_without_persisting_new_outcome_vocabulary() {
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),

@@ -470,3 +470,13 @@ IMAP submission refuses an entire envelope before DATA when any RCPT is refused.
 Forward its optional typed phase/class/recipient position unchanged into the
 durable send_rejected detail; never infer the phase from sanitized prose or put
 an address in logs. Keep AccountBusy local and preserve provider retry hints.
+
+The pubsub worker alone runs IMAP host catch-up (`imap_runtime::catch_up`), through
+the domain service and a dedicated one-connection pool. This adds one database
+connection per worker replica; API replicas do not start fleet scans. One global
+lease serializes bounded pages and preserves their cursor across restarts. See
+[host restart recovery](../../docs/architecture/imap-engine.md#host-catch-up-after-restart).
+
+IMAP activation carries the last generation's persisted future provider floor
+into its new catalog stream. Resync returns that deadline to Mail settings;
+credential changes do not bypass provider pacing.

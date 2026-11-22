@@ -401,12 +401,19 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
             .fetch_one(&mut *tx).await.map_err(unavailable)?;
         if link.had_no_mailbox && !restart {
             // The same grant, so no new generation resets the work the mark
-            // held: make it due at once, as the catalog commit that finds the
-            // mailbox does.
+            // held: wake it without moving earlier than a provider retry floor,
+            // as the catalog commit that finds the mailbox does.
             sqlx::query!(
-                "UPDATE email_sync_streams SET next_run_at = now() WHERE link_id = $1 AND generation = $2 AND next_run_at > now()",
+                r#"
+                UPDATE
+                    email_sync_streams
+                SET
+                    next_run_at = GREATEST(now(), provider_retry_at)
+                WHERE
+                    link_id = $1 AND generation = $2 AND next_run_at > now()
+                "#,
                 link_id,
-                link.sync_generation
+                link.sync_generation,
             )
             .execute(&mut *tx)
             .await

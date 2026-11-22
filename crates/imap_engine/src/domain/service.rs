@@ -12,6 +12,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
+mod host_notifications;
 mod recent;
 use uuid::Uuid;
 
@@ -437,7 +438,7 @@ impl Engine {
                 a.state.sync_size_failures = a.state.sync_size_failures.saturating_add(1);
                 let hours = 1i64 << u32::from(a.state.sync_size_failures.saturating_sub(1).min(5));
                 a.state.sync_retry_at = Some(now + Duration::hours(hours.min(24)));
-                a.state.notification_pending = true;
+                a.state.mark_notification_pending();
                 self.repository.save_health(a).await?;
                 self.notify(a).await?;
                 return Err(Error::SnapshotTooLarge);
@@ -448,7 +449,7 @@ impl Engine {
         a.state.sync_retry_at = None;
         a.state.sync_size_failures = 0;
         merge_snapshot(&mut a.state, remote)?;
-        a.state.notification_pending = true;
+        a.state.mark_notification_pending();
         self.repository.save(a).await?;
         self.reconcile_sent(a, &c).await?;
         self.notify(a).await
@@ -503,21 +504,9 @@ impl Engine {
             return Ok(());
         }
         if let Some(notifier) = &self.notifier {
-            match notifier
-                .notify(Notification {
-                    binding: a.binding,
-                    credentials_rejected: a.state.needs_reauth
-                        && a.state.mailbox_issue
-                            != Some(
-                                models_email::service::link::MailboxIssue::CredentialsUnreadable,
-                            ),
-                    mailbox_issue: a.state.mailbox_issue,
-                    sync_retry_at: a.state.sync_retry_at,
-                })
-                .await
-            {
+            match notifier.notify(host_notifications::notification(a)).await {
                 Ok(()) => {
-                    a.state.notification_pending = false;
+                    a.state.clear_notification_pending();
                     self.repository.save_health(a).await?;
                 }
                 Err(error) => tracing::warn!(?error, "IMAP wakeup remains pending"),

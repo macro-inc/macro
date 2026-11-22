@@ -72,10 +72,13 @@ impl InboxHealthRepository for PgInboxHealth {
         result.map_err(|_| MailboxError::Persistence)
     }
     async fn wake_streams(&self, binding: &InboxHealthBinding) -> Result<(), MailboxError> {
-        sqlx::query!(r#"UPDATE email_sync_streams s SET next_run_at = now() FROM email_links l WHERE l.id = $1
-            AND l.grant_generation = $2 AND l.sync_generation = $3 AND l.is_sync_active AND s.link_id = l.id AND s.generation = l.sync_generation"#,binding.link.id,binding.grant_generation,binding.sync_generation)
-            .execute(&self.db).await.map_err(|_|MailboxError::Persistence)?;
-        Ok(())
+        wake_bound_streams(
+            &self.db,
+            binding.link.id,
+            binding.grant_generation,
+            binding.sync_generation,
+        )
+        .await
     }
 }
 
@@ -156,4 +159,39 @@ impl<T: MailboxTokenSource, B: MacroEventBroker, C: ContactsIngress + ContactLis
         .await
         .map_err(|_| MailboxError::Persistence)
     }
+}
+
+#[cfg(test)]
+mod test;
+
+async fn wake_bound_streams(
+    db: &sqlx::PgPool,
+    link: Uuid,
+    grant_generation: i64,
+    sync_generation: i64,
+) -> Result<(), MailboxError> {
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_sync_streams s
+        SET
+            next_run_at = GREATEST(LEAST(s.next_run_at, now()), s.provider_retry_at)
+        FROM
+            email_links l
+        WHERE
+            l.id = $1
+            AND l.grant_generation = $2
+            AND l.sync_generation = $3
+            AND l.is_sync_active
+            AND s.link_id = l.id
+            AND s.generation = l.sync_generation
+        "#,
+        link,
+        grant_generation,
+        sync_generation,
+    )
+    .execute(db)
+    .await
+    .map_err(|_| MailboxError::Persistence)?;
+    Ok(())
 }

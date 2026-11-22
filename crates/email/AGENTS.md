@@ -872,3 +872,16 @@ defaulted checkpoint count that resets on progress, preserving real Retry-After
 values for provider throttling. Optional send_refusal checkpoint/status details
 are projected only with a current send_rejected issue; recipient positions use
 the frozen To, Cc, Bcc order and contain no additional personal data.
+
+IMAP host catch-up lives in `domain/mailbox/imap_catchup.rs` behind its repository
+port; only the pubsub worker composes the dedicated one-connection adapter. Keep
+startup scans globally leased and cursored, steady-state scans restricted to
+unconsumed hint revisions, and deferred stream ids within the same page budget.
+Compare notification revisions on release; local contention may yield to a newer
+hint, but the nullable provider retry floor and import pacing remain authoritative.
+
+Startup catch-up must advance the hint revision even for an already-due stream
+with a live lease; steady-state pending catch-up preserves its queue order.
+Resync exposes the future Inbox/catalog provider floor in its typed result;
+a longer Archive-only pause must not describe the Inbox as paused. Keep
+missing-mailbox probe backoff Local, separate from provider pacing.

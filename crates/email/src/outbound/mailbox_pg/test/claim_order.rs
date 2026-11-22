@@ -1,6 +1,7 @@
 //! Which due folder stream a claim takes: import rounds go ahead of finished
 //! folders that came due a little earlier, never of ones due much earlier.
 
+use crate::domain::mailbox::SyncRetry;
 use crate::domain::mailbox::live_pass::StreamKind;
 use crate::domain::mailbox::{MailboxSyncRepository, StreamLease};
 use crate::outbound::mailbox_pg::PgMailboxSync;
@@ -76,7 +77,9 @@ async fn a_finished_folder_due_past_the_head_start_waits_for_no_round_that_came_
             break;
         }
         before_poll.push(lease.mailbox.link_id);
-        repo.release_stream(&lease, 0).await.unwrap();
+        repo.release_stream(&lease, SyncRetry::Local(0))
+            .await
+            .unwrap();
     }
     assert_eq!(
         before_poll,

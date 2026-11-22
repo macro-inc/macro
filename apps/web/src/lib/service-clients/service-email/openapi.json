@@ -7844,6 +7844,11 @@
               }
             ]
           },
+          "revision": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Optional for old senders; monotonic within this exact binding."
+          },
           "syncRetryAt": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -8161,6 +8166,11 @@
             "type": "string",
             "format": "uuid",
             "description": "Opaque ID of the backfill job or provider sync stream driving the resync.\nthe one already in progress."
+          },
+          "provider_retry_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Provider pacing remains in force even when the owner requests a resync."
           }
         }
       },

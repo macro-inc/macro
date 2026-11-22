@@ -176,7 +176,7 @@ impl FolderReimportRepository for PgMailboxSync {
             r#"
             UPDATE email_sync_streams s SET position = NULL, initial_complete = false,
                 attachments_rechecked = s.attachments_rechecked AND NOT $5,
-                next_run_at = now(), fence = s.fence + 1, lease_id = NULL, lease_until = NULL
+                next_run_at = GREATEST(now(), s.provider_retry_at), fence = s.fence + 1, lease_id = NULL, lease_until = NULL
             FROM email_mailbox_folders f
             WHERE s.link_id = $1 AND s.generation = $2 AND s.kind = 'mail_folder'
                 AND f.link_id = s.link_id AND f.provider_id = s.scope_id AND f.deleted_at IS NULL
@@ -188,7 +188,7 @@ impl FolderReimportRepository for PgMailboxSync {
             mailbox.sync_generation,
             revision,
             phase == ReimportPhase::InboxAndSent,
-            last_phase
+            last_phase,
         )
         .fetch_all(&mut *tx)
         .await

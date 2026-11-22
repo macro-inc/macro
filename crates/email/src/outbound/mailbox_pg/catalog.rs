@@ -23,6 +23,7 @@ impl PgMailboxSync {
                     AND s.generation = l.sync_generation
                     AND s.kind = 'folder_catalog'
                     AND s.next_run_at <= now()
+                    AND (s.provider_retry_at IS NULL OR s.provider_retry_at <= now())
                     AND (s.next_run_at,
                         s.id) >= (
                         SELECT
@@ -41,6 +42,7 @@ impl PgMailboxSync {
                                 r.provider = $2::text::email_user_provider_enum
                                 AND r.kind = 'folder_catalog'
                                 AND r.next_run_at <= now()
+                                AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
                             ORDER BY
                                 r.next_run_at,
                                 r.id
@@ -73,6 +75,7 @@ impl PgMailboxSync {
                                         AND r.generation = l.sync_generation
                                         AND r.kind = 'folder_catalog'
                                         AND r.next_run_at <= now()
+                                        AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
                                         AND (r.lease_until IS NULL
                                             OR r.lease_until < now())
                                         OFFSET 0) scoped
@@ -107,8 +110,10 @@ impl PgMailboxSync {
             SET
                 lease_id = $1,
                 lease_until = now() + interval '3 minutes',
-            lease_started_at = clock_timestamp(),
-            fence = fence + 1
+                lease_started_at = clock_timestamp(),
+                leased_notification_revision = s.notification_revision,
+                provider_retry_at = NULL,
+                fence = fence + 1
             FROM
                 candidate c,
                 email_links l
@@ -165,16 +170,32 @@ impl PgMailboxSync {
         }
         let advanced = sqlx::query!(
             r#"
-            UPDATE email_sync_streams s SET initial_complete = true,last_completed_at = now(),
-                next_run_at = CASE WHEN notified_at > lease_started_at THEN now() ELSE now() + interval '5 minutes' END,lease_id = NULL,lease_until = NULL
-            FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3
+            UPDATE
+                email_sync_streams s
+            SET
+                initial_complete = true,
+                last_completed_at = now(),
+                next_run_at = CASE
+                    WHEN s.provider = 'IMAP' THEN CASE
+                        WHEN s.notification_revision > s.leased_notification_revision THEN now()
+                        ELSE now() + interval '5 minutes'
+                    END
+                    WHEN notified_at > lease_started_at THEN now()
+                    ELSE now() + interval '5 minutes'
+                END,
+                lease_id = NULL,
+                lease_until = NULL
+            FROM
+                email_links l
+            WHERE
+                s.id = $1 AND s.lease_id = $2 AND s.fence = $3
                 AND s.lease_until > now() AND l.id = s.link_id AND s.generation = l.sync_generation
                 AND l.is_sync_active AND l.grant_generation = $4
         "#,
             lease.id,
             lease.lease_id,
             lease.fence,
-            lease.mailbox.grant_generation
+            lease.mailbox.grant_generation,
         )
         .execute(&mut *tx)
         .await
@@ -310,9 +331,16 @@ impl PgMailboxSync {
             == 1;
         if found_mailbox {
             sqlx::query!(
-                "UPDATE email_sync_streams SET next_run_at = now() WHERE link_id = $1 AND generation = $2 AND kind <> 'folder_catalog' AND next_run_at > now()",
+                r#"
+                UPDATE
+                    email_sync_streams
+                SET
+                    next_run_at = GREATEST(now(), provider_retry_at)
+                WHERE
+                    link_id = $1 AND generation = $2 AND kind <> 'folder_catalog' AND next_run_at > now()
+                "#,
                 lease.mailbox.link_id,
-                lease.mailbox.sync_generation
+                lease.mailbox.sync_generation,
             )
             .execute(&mut *tx)
             .await
@@ -370,12 +398,43 @@ impl PgMailboxSync {
     pub(super) async fn release_catalog_lease(
         &self,
         lease: &CatalogLease,
-        delay: u32,
+        retry: SyncRetry,
     ) -> Result<(), MailboxError> {
-        sqlx::query!(r#"
-            UPDATE email_sync_streams SET lease_id = NULL,lease_until = NULL,next_run_at = now() + make_interval(secs => $4)
-            WHERE id = $1 AND lease_id = $2 AND fence = $3
-        "#,lease.id,lease.lease_id,lease.fence,f64::from(delay)).execute(&self.db).await.map_err(db_error)?;
+        sqlx::query!(
+            r#"
+            UPDATE
+                email_sync_streams
+            SET
+                lease_id = NULL,
+                lease_until = NULL,
+                provider_retry_at = CASE
+                    WHEN provider = 'IMAP' AND $5 THEN GREATEST(provider_retry_at, now() + make_interval(secs => $4))
+                    ELSE provider_retry_at
+                END,
+                next_run_at = CASE
+                    WHEN provider = 'IMAP' THEN GREATEST(
+                        CASE
+                            WHEN NOT $5 AND notification_revision > leased_notification_revision THEN clock_timestamp()
+                            ELSE now() + make_interval(secs => $4)
+                        END,
+                        provider_retry_at
+                    )
+                    ELSE now() + make_interval(secs => $4)
+                END
+            WHERE
+                id = $1
+                AND lease_id = $2
+                AND fence = $3
+            "#,
+            lease.id,
+            lease.lease_id,
+            lease.fence,
+            f64::from(retry.seconds()),
+            retry.is_provider(),
+        )
+        .execute(&self.db)
+        .await
+        .map_err(db_error)?;
         Ok(())
     }
 }

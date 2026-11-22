@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE\n                email_imap_host_catchup\n            SET\n                startup_requested_at = clock_timestamp(),\n                available_at = LEAST(available_at, now())\n            WHERE\n                id = 1\n                AND startup_requested_at IS NULL\n                AND (last_startup_completed_at IS NULL\n                    OR last_startup_completed_at < now() - make_interval(secs => $1))\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3a3e33206892edc1cd0fdea78d982faa13ecf0a34c7d7b04bfb15c6113bbee5f"
+}

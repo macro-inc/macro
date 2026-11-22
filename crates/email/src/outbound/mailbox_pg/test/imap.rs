@@ -32,7 +32,9 @@ async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evalu
         .unwrap()
         .unwrap();
     assert_eq!(immediate.mailbox.link_id, imap_link);
-    imap.release_stream(&immediate, 0).await.unwrap();
+    imap.release_stream(&immediate, SyncRetry::Local(0))
+        .await
+        .unwrap();
     let lease = outlook
         .claim_stream(Uuid::from_u128(45), StreamKind::MailFolder)
         .await
@@ -224,6 +226,7 @@ async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPo
                 grant_generation: 1,
             },
             credentials_rejected: true,
+            revision: None,
             mailbox_issue: None,
             sync_retry_at: None,
         })
@@ -252,6 +255,7 @@ async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPo
                 grant_generation: 1,
             },
             credentials_rejected: false,
+            revision: None,
             mailbox_issue: None,
             sync_retry_at: None,
         })
@@ -281,6 +285,7 @@ async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPo
                     grant_generation: 1,
                 },
                 credentials_rejected: true,
+                revision: None,
                 mailbox_issue: None,
                 sync_retry_at: None,
             })
@@ -619,6 +624,7 @@ async fn size_health_is_fenced_edge_triggered_and_cleared_without_reauth(db: PgP
             .receive(Notification {
                 binding,
                 credentials_rejected: false,
+                revision: None,
                 mailbox_issue: Some(MailboxIssue::SnapshotTooLarge),
                 sync_retry_at: Some(retry_at),
             })
@@ -632,6 +638,7 @@ async fn size_health_is_fenced_edge_triggered_and_cleared_without_reauth(db: PgP
                 ..binding
             },
             credentials_rejected: false,
+            revision: None,
             mailbox_issue: None,
             sync_retry_at: None,
         })
@@ -678,6 +685,7 @@ async fn size_health_is_fenced_edge_triggered_and_cleared_without_reauth(db: PgP
         .receive(Notification {
             binding,
             credentials_rejected: false,
+            revision: None,
             mailbox_issue: Some(MailboxIssue::SnapshotTooLarge),
             sync_retry_at: Some(retry_at + chrono::Duration::hours(1)),
         })
@@ -703,6 +711,7 @@ async fn size_health_is_fenced_edge_triggered_and_cleared_without_reauth(db: PgP
         .receive(Notification {
             binding,
             credentials_rejected: false,
+            revision: None,
             mailbox_issue: None,
             sync_retry_at: None,
         })
@@ -763,6 +772,7 @@ async fn unreadable_credentials_require_reconnect_without_claiming_a_provider_re
             .receive(Notification {
                 binding,
                 credentials_rejected: false,
+                revision: None,
                 mailbox_issue: Some(MailboxIssue::CredentialsUnreadable),
                 sync_retry_at: None,
             })
@@ -777,6 +787,7 @@ async fn unreadable_credentials_require_reconnect_without_claiming_a_provider_re
                 ..binding
             },
             credentials_rejected: true,
+            revision: None,
             mailbox_issue: None,
             sync_retry_at: None,
         })
@@ -819,4 +830,89 @@ async fn unreadable_credentials_require_reconnect_without_claiming_a_provider_re
     .await
     .unwrap();
     assert_eq!(events, 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reordered_host_hints_cannot_clear_newer_mailbox_health(db: PgPool) {
+    use imap_engine::domain::models::{Binding, Notification};
+    use models_email::service::link::MailboxIssue;
+    let (_, link) = fixture(&db).await;
+    sqlx::query!(
+        "UPDATE email_links SET provider = 'IMAP' WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let service = crate::domain::mailbox::imap_notifications::ImapNotificationService(
+        PgMailboxSync::new(db.clone()),
+    );
+    let binding = Binding {
+        link_id: link,
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    for (revision, issue) in [(2, Some(MailboxIssue::SnapshotTooLarge)), (1, None)] {
+        let mut value = serde_json::to_value(Notification {
+            binding,
+            credentials_rejected: false,
+            revision: None,
+            mailbox_issue: issue,
+            sync_retry_at: None,
+        })
+        .unwrap();
+        value["revision"] = serde_json::json!(revision);
+        service
+            .receive(serde_json::from_value(value).unwrap())
+            .await
+            .unwrap();
+    }
+    let issue = sqlx::query_scalar!("SELECT mailbox_issue FROM email_links WHERE id = $1", link)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(issue.as_deref(), Some("snapshot_too_large"));
+    service
+        .receive(Notification {
+            binding,
+            credentials_rejected: true,
+            revision: Some(0),
+            mailbox_issue: None,
+            sync_retry_at: None,
+        })
+        .await
+        .unwrap();
+    let reauth = sqlx::query_scalar!("SELECT needs_reauth FROM email_links WHERE id = $1", link)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert!(
+        !reauth,
+        "an older refusal cannot park a newer healthy binding"
+    );
+    sqlx::query!(
+        "UPDATE email_links SET sync_generation = 2 WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    service
+        .receive(Notification {
+            binding: Binding {
+                sync_generation: 2,
+                ..binding
+            },
+            credentials_rejected: false,
+            revision: Some(1),
+            mailbox_issue: None,
+            sync_retry_at: None,
+        })
+        .await
+        .unwrap();
+    let issue = sqlx::query_scalar!("SELECT mailbox_issue FROM email_links WHERE id = $1", link)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert!(issue.is_none(), "a new binding starts a new revision scope");
 }

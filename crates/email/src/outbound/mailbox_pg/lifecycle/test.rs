@@ -942,3 +942,78 @@ async fn a_disconnect_behind_a_share_locked_link_fails_fast_then_disconnects(db:
     assert!(!row.is_sync_active);
     assert!(row.disconnect_requested_at.is_some());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_imap_resync_reports_and_preserves_the_provider_pause(db: PgPool) {
+    let (repo, link, _) = shared(&db).await;
+    sqlx::query!(
+        "UPDATE email_links SET provider = 'IMAP' WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE email_sync_streams
+        SET provider_retry_at = now() + interval '1 hour',
+            next_run_at = now() + interval '1 hour',
+            initial_complete = true
+        WHERE link_id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_mailbox_folders (link_id, provider_id, display_name, role, catalog_generation)
+        VALUES ($1, 'folder', 'Inbox', 'inbox', 1), ($1, 'archive', 'Archive', 'archive', 1)
+        "#,
+        link,
+    ).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_sync_streams (
+            id, link_id, generation, kind, scope_id, initial_complete, provider_retry_at, next_run_at
+        )
+        VALUES ($1, $2, 1, 'mail_folder', 'archive', true, now() + interval '2 hours', now() + interval '2 hours')
+        "#,
+        Uuid::now_v7(),
+        link,
+    ).execute(&db).await.unwrap();
+    let floor = sqlx::query_scalar!(
+        "SELECT provider_retry_at FROM email_sync_streams WHERE link_id = $1 AND scope_id = 'folder'",
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(floor.is_some());
+    let service = InboxLifecycleService::new(repo.clone(), Effects);
+    let requested = service.resync(&actor("remaining"), link).await.unwrap();
+    assert_eq!(requested.provider_retry_at, floor);
+    let catalog = sqlx::query!(
+        r#"
+        SELECT provider_retry_at, next_run_at >= provider_retry_at AS "paced!"
+        FROM email_sync_streams
+        WHERE id = $1
+        "#,
+        requested.run_id,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(catalog.provider_retry_at, floor);
+    assert!(catalog.paced);
+    sqlx::query!(
+        "UPDATE email_sync_streams SET provider_retry_at = NULL, initial_complete = true WHERE link_id = $1 AND scope_id <> 'archive'",
+        link,
+    ).execute(&db).await.unwrap();
+    let ready_inbox = service.resync(&actor("remaining"), link).await.unwrap();
+    assert!(
+        ready_inbox.provider_retry_at.is_none(),
+        "a paused Archive must not claim Inbox is paused"
+    );
+}

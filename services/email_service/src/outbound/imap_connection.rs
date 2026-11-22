@@ -299,6 +299,10 @@ impl ImapConnectionRepository for PgImapConnections {
             .ok_or(ImapConnectionError::Changed)
     }
 
+    #[tracing::instrument(skip_all, name = "email.imap.connection.activate", fields(
+        mailbox.link_id = %attempt.binding.link_id,
+        sync.provider_retry_at = tracing::field::Empty,
+    ))]
     async fn activate(&self, attempt: &ImapConnectionAttempt) -> Result<Uuid, ImapConnectionError> {
         let mut tx = self.0.begin().await.map_err(failure)?;
         sqlx::query!(
@@ -389,6 +393,28 @@ impl ImapConnectionRepository for PgImapConnections {
         {
             return Err(ImapConnectionError::Changed);
         }
+        // A changed password does not cancel an already persisted provider wait.
+        let provider_retry_at = sqlx::query_scalar!(
+            r#"
+            SELECT
+                max(provider_retry_at)
+            FROM
+                email_sync_streams
+            WHERE
+                link_id = $1
+                AND generation = $2
+                AND provider = 'IMAP'
+                AND provider_retry_at > now()
+            "#,
+            attempt.binding.link_id,
+            expected,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(failure)?;
+        if let Some(until) = provider_retry_at {
+            tracing::Span::current().record("sync.provider_retry_at", until.timestamp_millis());
+        }
         sqlx::query!(
             r#"
             UPDATE
@@ -456,14 +482,17 @@ impl ImapConnectionRepository for PgImapConnections {
         .map_err(failure)?;
         sqlx::query!(
             r#"
-            INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id)
-                VALUES ($1, $2, $3, 'folder_catalog', 'mail')
+            INSERT INTO email_sync_streams (
+                id, link_id, generation, kind, scope_id, provider_retry_at, next_run_at
+            )
+            VALUES ($1, $2, $3, 'folder_catalog', 'mail', $4, GREATEST(now(), $4))
             ON CONFLICT
                 DO NOTHING
             "#,
             macro_uuid::generate_uuid_v7(),
             attempt.binding.link_id,
             attempt.binding.sync_generation,
+            provider_retry_at,
         )
         .execute(&mut *tx)
         .await

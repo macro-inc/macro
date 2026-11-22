@@ -1965,6 +1965,10 @@ export type Notification = {
     credentialsRejected: boolean;
     mailboxIssue?: null | MailboxIssue;
     /**
+     * Optional for old senders; monotonic within this exact binding.
+     */
+    revision?: number | null;
+    /**
      * Durable retry guidance; absent on normal wakeups and older notifications.
      */
     syncRetryAt?: string | null;
@@ -2061,6 +2065,10 @@ export type ResyncResponse = {
      * the one already in progress.
      */
     backfill_job_id: string;
+    /**
+     * Provider pacing remains in force even when the owner requests a resync.
+     */
+    provider_retry_at?: string | null;
 };
 
 /**

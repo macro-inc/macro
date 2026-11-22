@@ -9,6 +9,7 @@ pub trait ImapNotificationRepository: Send + Sync + 'static {
         &self,
         mailbox: MailboxKey,
         credentials_rejected: bool,
+        revision: Option<i64>,
         mailbox_issue: Option<models_email::service::link::MailboxIssue>,
         retry_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
@@ -21,7 +22,10 @@ impl<R: ImapNotificationRepository> ImapNotificationService<R> {
         notification: imap_engine::domain::models::Notification,
     ) -> Result<(), MailboxError> {
         let binding = notification.binding;
-        if binding.sync_generation < 1 || binding.grant_generation < 1 {
+        if binding.sync_generation < 1
+            || binding.grant_generation < 1
+            || notification.revision.is_some_and(|revision| revision < 0)
+        {
             return Err(MailboxError::Stale);
         }
         self.0
@@ -32,6 +36,7 @@ impl<R: ImapNotificationRepository> ImapNotificationService<R> {
                     grant_generation: binding.grant_generation,
                 },
                 notification.credentials_rejected,
+                notification.revision,
                 notification.mailbox_issue,
                 notification.sync_retry_at,
             )

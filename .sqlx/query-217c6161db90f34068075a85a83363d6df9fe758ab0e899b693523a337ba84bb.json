@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        CREATE FUNCTION fail_first_catchup_row() RETURNS trigger LANGUAGE plpgsql AS $$\n        BEGIN\n            IF NEW.id = '00000000-0000-0000-0000-000000000001'::uuid THEN\n                RAISE EXCEPTION USING ERRCODE = '57014', MESSAGE = 'synthetic statement timeout';\n            END IF;\n            RETURN NEW;\n        END\n        $$\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "217c6161db90f34068075a85a83363d6df9fe758ab0e899b693523a337ba84bb"
+}

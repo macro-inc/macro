@@ -301,6 +301,8 @@ fn indexed_engine(transport: Arc<ProtocolTransport>) -> Arc<crate::domain::servi
         fingerprint: "synthetic".into(),
     });
     let repository = Arc::new(MemoryRepository {
+        revision: Default::default(),
+        scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(state),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
