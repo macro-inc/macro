@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use async_graphql::{EmptySubscription, Object, Schema};
 use models_properties::{
-    PropertyOwner,
+    DataType, PropertyOwner,
     api::requests::SetPropertyValue,
     service::{
         entity_property_with_definition::EntityPropertyWithDefinition,
@@ -29,7 +29,7 @@ const TARGET: Uuid = Uuid::from_u128(3);
 enum Call {
     Create(Value),
     DeleteDefinition(Uuid),
-    AddOption(Uuid, Value),
+    AddOption(Uuid, Option<Uuid>, Value),
     UpdateOption(Uuid, Uuid, Value),
     DeleteOption(Uuid, Uuid),
     EnsureTagSet(TagScope),
@@ -103,16 +103,13 @@ impl PropertyCatalogWriter for FakeWriter {
     async fn create_property_definition(
         &self,
         request: CreatePropertyDefinitionRequest,
-    ) -> Result<PropertyDefinitionWithOptions, PropertiesErr> {
+    ) -> Result<PropertyDefinition, PropertiesErr> {
         self.record(Call::Create(to_json(&request)))?;
         let data_type = match request.data_type {
             PropertyDataType::SelectString { .. } => DataType::SelectString,
             _ => DataType::String,
         };
-        Ok(PropertyDefinitionWithOptions {
-            definition: definition(data_type),
-            property_options: vec![option(OPTION, "Lead")],
-        })
+        Ok(definition(data_type))
     }
 
     async fn delete_property_definition(&self, id: Uuid) -> Result<(), PropertiesErr> {
@@ -122,10 +119,11 @@ impl PropertyCatalogWriter for FakeWriter {
     async fn add_property_option(
         &self,
         id: Uuid,
+        option_id: Option<Uuid>,
         request: AddPropertyOptionRequest,
     ) -> Result<PropertyOption, PropertiesErr> {
-        self.record(Call::AddOption(id, to_json(&request)))?;
-        Ok(option(OPTION, "Lead"))
+        self.record(Call::AddOption(id, option_id, to_json(&request)))?;
+        Ok(option(option_id.unwrap_or(OPTION), "Lead"))
     }
 
     async fn update_property_option(
@@ -239,17 +237,13 @@ async fn create_maps_a_select_definition_to_the_rest_request() {
             scope: TEAM, displayName: "Stage", dataType: SELECT_STRING,
             isMultiSelect: true,
             options: [{ displayOrder: 0, value: { string: "Lead" } }]
-        }) { id dataType options { id } } }"#,
+        }) { id dataType } }"#,
     )
     .await;
     assert!(errors.is_empty(), "{errors:?}");
     assert_eq!(
         data["createPropertyDefinition"],
-        json!({
-            "id": DEFINITION.to_string(),
-            "dataType": "SELECT_STRING",
-            "options": [{ "id": OPTION.to_string() }],
-        })
+        json!({ "id": DEFINITION.to_string(), "dataType": "SELECT_STRING" })
     );
     assert_eq!(
         writer.calls(),
@@ -316,25 +310,39 @@ async fn create_refuses_malformed_input_before_the_writer() {
 #[tokio::test]
 async fn option_writes_carry_the_definition_and_option_ids() {
     let writer = FakeWriter::default();
-    let (data, errors) = run(
+    for mutation in [
+        format!(
+            r##"mutation {{ addPropertyOption(input: {{ propertyDefinitionId: "{DEFINITION}", displayOrder: 2, value: {{ string: "Lead" }}, color: "#ff0000" }}) {{ id }} }}"##
+        ),
+        format!(
+            r#"mutation {{ updatePropertyOption(input: {{ propertyDefinitionId: "{DEFINITION}", optionId: "{OPTION}", value: "Won" }}) {{ id }} }}"#
+        ),
+    ] {
+        let (_, errors) = run(writer.clone(), &mutation).await;
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+    let (removed, errors) = run(
         writer.clone(),
         &format!(
-            r##"mutation {{
-                add: addPropertyOption(input: {{ propertyDefinitionId: "{DEFINITION}", displayOrder: 2, value: {{ string: "Lead" }}, color: "#ff0000" }}) {{ id }}
-                update: updatePropertyOption(input: {{ propertyDefinitionId: "{DEFINITION}", optionId: "{OPTION}", value: "Won" }}) {{ id }}
-                remove: deletePropertyOption(propertyDefinitionId: "{DEFINITION}", optionId: "{OPTION}") {{ graphqlTypeName entityId }}
-                drop: deletePropertyDefinition(propertyDefinitionId: "{DEFINITION}") {{ graphqlTypeName entityId }}
-            }}"##
+            r#"mutation {{ deletePropertyOption(propertyDefinitionId: "{DEFINITION}", optionId: "{OPTION}") {{ graphqlTypeName entityId }} }}"#
         ),
     )
     .await;
     assert!(errors.is_empty(), "{errors:?}");
     assert_eq!(
-        data["remove"],
+        removed["deletePropertyOption"],
         json!({ "graphqlTypeName": "GraphqlPropertyOption", "entityId": OPTION.to_string() })
     );
+    let (dropped, errors) = run(
+        writer.clone(),
+        &format!(
+            r#"mutation {{ deletePropertyDefinition(propertyDefinitionId: "{DEFINITION}") {{ graphqlTypeName entityId }} }}"#
+        ),
+    )
+    .await;
+    assert!(errors.is_empty(), "{errors:?}");
     assert_eq!(
-        data["drop"],
+        dropped["deletePropertyDefinition"],
         json!({ "graphqlTypeName": "GraphqlPropertyDefinition", "entityId": DEFINITION.to_string() })
     );
     assert_eq!(
@@ -342,6 +350,7 @@ async fn option_writes_carry_the_definition_and_option_ids() {
         [
             Call::AddOption(
                 DEFINITION,
+                None,
                 to_json(&AddPropertyOptionRequest::SelectString {
                     option: AddStringOptionRequest {
                         display_order: 2,
@@ -362,6 +371,81 @@ async fn option_writes_carry_the_definition_and_option_ids() {
             Call::DeleteOption(DEFINITION, OPTION),
             Call::DeleteDefinition(DEFINITION),
         ]
+    );
+}
+
+#[tokio::test]
+async fn an_add_with_a_client_id_creates_the_option_under_it() {
+    let writer = FakeWriter::default();
+    let (data, errors) = run(
+        writer.clone(),
+        &format!(
+            r#"mutation {{ addPropertyOption(input: {{ id: "{TARGET}", propertyDefinitionId: "{DEFINITION}", displayOrder: 0, value: {{ string: "Lead" }} }}) {{ id }} }}"#
+        ),
+    )
+    .await;
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(
+        data["addPropertyOption"],
+        json!({ "id": TARGET.to_string() })
+    );
+    assert!(matches!(
+        writer.calls().as_slice(),
+        [Call::AddOption(DEFINITION, Some(TARGET), _)]
+    ));
+}
+
+#[tokio::test]
+async fn one_operation_runs_at_most_one_catalog_write() {
+    let delete =
+        format!(r#"deletePropertyDefinition(propertyDefinitionId: "{DEFINITION}") {{ entityId }}"#);
+    for mutation in [
+        format!("mutation {{ a: {delete} b: {delete} }}"),
+        format!(
+            r#"mutation {{ a: {delete} ...more }} fragment more on PropertyCatalogMutationRoot {{ ensureTagSet(scope: USER) {{ scope }} }}"#
+        ),
+        format!("mutation {{ a: {delete} ... on PropertyCatalogMutationRoot {{ b: {delete} }} }}"),
+    ] {
+        let writer = FakeWriter::default();
+        let (_, errors) = run(writer.clone(), &mutation).await;
+        assert!(!errors.is_empty(), "{mutation}");
+        assert!(
+            errors.iter().all(|err| err["code"] == json!("BAD_REQUEST")),
+            "{errors:?}"
+        );
+        assert!(writer.calls().is_empty(), "{mutation}");
+    }
+}
+
+#[tokio::test]
+async fn a_malformed_id_is_a_bad_request_that_does_not_echo_it() {
+    let writer = FakeWriter::default();
+    let (_, errors) = run(
+        writer.clone(),
+        r#"mutation { deletePropertyOption(propertyDefinitionId: "macro|someone@example.com", optionId: "x") { entityId } }"#,
+    )
+    .await;
+    assert_eq!(
+        errors,
+        [json!({ "message": "`propertyDefinitionId` is not a valid id", "code": "BAD_REQUEST" })]
+    );
+    assert!(writer.calls().is_empty());
+}
+
+#[tokio::test]
+async fn deletion_markers_name_the_canonical_id() {
+    let upper = DEFINITION.to_string().to_uppercase();
+    let (data, errors) = run(
+        FakeWriter::default(),
+        &format!(
+            r#"mutation {{ deletePropertyDefinition(propertyDefinitionId: "{upper}") {{ entityId }} }}"#
+        ),
+    )
+    .await;
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(
+        data["deletePropertyDefinition"]["entityId"],
+        json!(DEFINITION.to_string())
     );
 }
 
