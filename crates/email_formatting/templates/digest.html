@@ -182,7 +182,7 @@
                           word-break: break-word;
                         "
                       >
-                        {% for line in notif.body.lines() %}{% if !loop.first %}<br />{% endif %}{{ line }}{% endfor %}
+                        {% for line in notif.body_lines() %}{% if !loop.first %}<br />{% endif %}{{ line }}{% endfor %}
                       </p>
                     </td>
                   </tr>
