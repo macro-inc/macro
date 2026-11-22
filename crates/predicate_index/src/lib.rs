@@ -263,14 +263,15 @@ pub struct IndexDocument {
 }
 
 /// A sort fact computed from other facts of the same document: `target` copies
-/// the `source` sort value of a `profile` document that has every `required`
+/// the `source` sort value of a document of one of `profiles` that has every `required`
 /// exact fact. A projection applies it with [`SortFactDerivation::derive`], and
 /// storage applies the same rule to the documents it already holds, so adding
 /// one needs no reprojection of existing records.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SortFactDerivation {
-    /// Profile token of the documents it applies to.
-    pub profile: &'static str,
+    /// Profile tokens of the documents it applies to: every profile a
+    /// document holding these facts can be stored under.
+    pub profiles: &'static [&'static str],
     /// Sort attribute whose value is copied.
     pub source: &'static str,
     /// Sort attribute written.
@@ -282,7 +283,7 @@ pub struct SortFactDerivation {
 impl SortFactDerivation {
     /// The derived fact for `document`, if the rule applies to it.
     pub fn derive(&self, document: &IndexDocument) -> Option<IntegerFact> {
-        if document.profile.token().as_str() != self.profile {
+        if !self.profiles.contains(&document.profile.token().as_str()) {
             return None;
         }
         let has_required = self.required.iter().all(|(attribute, value)| {
@@ -320,7 +321,9 @@ impl SortFactDerivation {
             .join(",");
         format!(
             "{}:{}->{}[{required}]",
-            self.profile, self.source, self.target
+            self.profiles.join("|"),
+            self.source,
+            self.target
         )
     }
 }

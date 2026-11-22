@@ -387,7 +387,7 @@ fn effective_projection_rejects_an_unassigned_owner() {
 #[test]
 fn sort_fact_derivation_copies_the_source_only_when_every_required_fact_matches() {
     const RULE: SortFactDerivation = SortFactDerivation {
-        profile: "profile-v1",
+        profiles: &["profile-v1", "profile-v1b"],
         source: "source-ts",
         target: "target-ts",
         required: &[("visible", &[1]), ("kind", b"a")],
@@ -422,6 +422,9 @@ fn sort_fact_derivation_copies_the_source_only_when_every_required_fact_matches(
     let mut other_profile = base.clone();
     other_profile.profile = Profile::new(token("profile-v2"));
     assert_eq!(RULE.derive(&other_profile), None);
+    let mut second_profile = base.clone();
+    second_profile.profile = Profile::new(token("profile-v1b"));
+    assert_eq!(RULE.derive(&second_profile).map(|fact| fact.value), Some(7));
     let mut hidden = base.clone();
     hidden.exact_facts[0].value = ExactValue::new([0]).unwrap();
     assert_eq!(RULE.derive(&hidden), None);
@@ -433,6 +436,6 @@ fn sort_fact_derivation_copies_the_source_only_when_every_required_fact_matches(
     assert_eq!(RULE.derive(&no_source), None);
     assert_eq!(
         RULE.fingerprint(),
-        "profile-v1:source-ts->target-ts[visible=01,kind=61]"
+        "profile-v1|profile-v1b:source-ts->target-ts[visible=01,kind=61]"
     );
 }

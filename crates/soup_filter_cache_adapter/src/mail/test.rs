@@ -806,6 +806,15 @@ async fn inbox_view_sort<S: PredicateIndexStorage>(storage: S) {
         let Some(ProjectionState::Complete(document)) = state else {
             panic!("seeded thread {n} is complete")
         };
+        // Storage backfills only the profiles the rule names, so it must name
+        // the one Mail documents are stored under.
+        assert!(
+            vocabulary::INBOX_VIEW_DERIVATION
+                .profiles
+                .contains(&document.profile.token().as_str()),
+            "stored profile {:?}",
+            document.profile
+        );
         // Inbox-visible, with a message and an inbound timestamp.
         let expected = n.is_multiple_of(2) && n != 2 && n != 7;
         assert_eq!(inbox_view_fact(&document).is_some(), expected, "thread {n}");

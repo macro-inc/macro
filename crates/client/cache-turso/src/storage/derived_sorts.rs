@@ -63,7 +63,28 @@ pub(super) fn ensure_version(connection: &Db) -> Result<(), TursoStorageError> {
     })
 }
 
+/// `?start, ?start+1, ...` for `count` parameters.
+fn placeholders(start: usize, count: usize) -> String {
+    (start..start + count)
+        .map(|index| format!("?{index}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// `first` followed by every profile the derivation applies to.
+fn with_profiles(first: Vec<Value>, derivation: &SortFactDerivation) -> Vec<Value> {
+    first
+        .into_iter()
+        .chain(derivation.profiles.iter().map(|profile| text(profile)))
+        .collect()
+}
+
 fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoStorageError> {
+    let profiles = derivation.profiles.len();
+    // Statements that bind the target alone take the profiles from ?2, those
+    // that bind the target and the source from ?3.
+    let after_target = placeholders(2, profiles);
+    let after_source = placeholders(3, profiles);
     for tables in [AUTHORITATIVE, OPTIMISTIC] {
         let Tables {
             documents,
@@ -73,15 +94,14 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
         driver::execute(
             connection,
             &format!(
-                "DELETE FROM {sorts} WHERE attribute = ?1 AND document_id IN (SELECT id FROM {documents} WHERE profile = ?2)"
+                "DELETE FROM {sorts} WHERE attribute = ?1 AND document_id IN (SELECT id FROM {documents} WHERE profile IN ({after_target}))"
             ),
-            vec![text(derivation.target), text(derivation.profile)],
+            with_profiles(vec![text(derivation.target)], derivation),
         )?;
-        let mut parameters = vec![
-            text(derivation.target),
-            text(derivation.source),
-            text(derivation.profile),
-        ];
+        let mut parameters = with_profiles(
+            vec![text(derivation.target), text(derivation.source)],
+            derivation,
+        );
         let mut required = String::new();
         for (attribute, value) in derivation.required {
             let attribute_parameter = parameters.len() + 1;
@@ -95,7 +115,7 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
         driver::execute(
             connection,
             &format!(
-                "INSERT INTO {sorts} (document_id, attribute, value) SELECT s.document_id, ?1, s.value FROM {sorts} AS s JOIN {documents} AS d ON d.id = s.document_id WHERE s.attribute = ?2 AND d.profile = ?3{required}"
+                "INSERT INTO {sorts} (document_id, attribute, value) SELECT s.document_id, ?1, s.value FROM {sorts} AS s JOIN {documents} AS d ON d.id = s.document_id WHERE s.attribute = ?2 AND d.profile IN ({after_source}){required}"
             ),
             parameters,
         )?;
@@ -104,17 +124,20 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
     // for the copy either.
     driver::execute(
         connection,
-        "DELETE FROM optimistic_uncertain_attributes WHERE attribute = ?1 AND document_id IN (SELECT id FROM optimistic_index_documents WHERE profile = ?2)",
-        vec![text(derivation.target), text(derivation.profile)],
+        &format!(
+            "DELETE FROM optimistic_uncertain_attributes WHERE attribute = ?1 AND document_id IN (SELECT id FROM optimistic_index_documents WHERE profile IN ({after_target}))"
+        ),
+        with_profiles(vec![text(derivation.target)], derivation),
     )?;
     driver::execute(
         connection,
-        "INSERT INTO optimistic_uncertain_attributes (document_id, attribute) SELECT u.document_id, ?1 FROM optimistic_uncertain_attributes AS u JOIN optimistic_index_documents AS d ON d.id = u.document_id WHERE u.attribute = ?2 AND d.profile = ?3",
-        vec![
-            text(derivation.target),
-            text(derivation.source),
-            text(derivation.profile),
-        ],
+        &format!(
+            "INSERT INTO optimistic_uncertain_attributes (document_id, attribute) SELECT u.document_id, ?1 FROM optimistic_uncertain_attributes AS u JOIN optimistic_index_documents AS d ON d.id = u.document_id WHERE u.attribute = ?2 AND d.profile IN ({after_source})"
+        ),
+        with_profiles(
+            vec![text(derivation.target), text(derivation.source)],
+            derivation,
+        ),
     )?;
     Ok(())
 }

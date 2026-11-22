@@ -15,9 +15,10 @@ pub fn partition() -> Token {
 /// message. The projection writes it as a sort fact only.
 pub const INBOX_VIEW_SORT: &str = "mail-inbox-view-ts";
 /// How the projection derives [`INBOX_VIEW_SORT`]. Storage applies the same
-/// rule to Mail documents written before it existed.
+/// rule to Mail documents written before it existed. Stored Mail documents
+/// carry the property-aware profile, which keeps every fact of this one.
 pub const INBOX_VIEW_DERIVATION: SortFactDerivation = SortFactDerivation {
-    profile: PROFILE,
+    profiles: &[PROFILE, crate::properties::MAIL_PROFILE],
     source: "mail-inbox-ts",
     target: INBOX_VIEW_SORT,
     required: &[("mail-inbox", &[1]), ("mail-has-message", &[1])],

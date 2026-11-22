@@ -9,6 +9,8 @@ const SOURCE: &str = "mail-inbox-ts";
 #[derive(Debug, Clone)]
 struct Shape {
     other_profile: bool,
+    /// Stored under the property-aware Mail profile, as current builds do.
+    property_profile: bool,
     inbox: Option<bool>,
     has_message: Option<bool>,
     inbox_ts: Option<i64>,
@@ -18,14 +20,16 @@ struct Shape {
 fn shape() -> impl Strategy<Value = Shape> {
     (
         prop::bool::weighted(0.1),
+        any::<bool>(),
         prop::option::of(any::<bool>()),
         prop::option::of(any::<bool>()),
         prop::option::of(-1_000i64..1_000),
         prop::option::of(-1_000i64..1_000),
     )
         .prop_map(
-            |(other_profile, inbox, has_message, inbox_ts, stale_target)| Shape {
+            |(other_profile, property_profile, inbox, has_message, inbox_ts, stale_target)| Shape {
                 other_profile,
+                property_profile,
                 inbox,
                 has_message,
                 inbox_ts,
@@ -37,8 +41,10 @@ fn shape() -> impl Strategy<Value = Shape> {
 fn profile_of(shape: &Shape) -> &'static str {
     if shape.other_profile {
         "soup-mail-v4"
+    } else if shape.property_profile {
+        item_filter_index::properties::MAIL_PROFILE
     } else {
-        INBOX_VIEW_DERIVATION.profile
+        INBOX_VIEW_DERIVATION.profiles[0]
     }
 }
 
@@ -214,6 +220,7 @@ fn reopening_an_older_cache_derives_facts_and_keeps_queued_writes() {
     let shapes = [
         Shape {
             other_profile: false,
+            property_profile: true,
             inbox: Some(true),
             has_message: Some(true),
             inbox_ts: Some(30),
@@ -221,6 +228,7 @@ fn reopening_an_older_cache_derives_facts_and_keeps_queued_writes() {
         },
         Shape {
             other_profile: false,
+            property_profile: true,
             inbox: Some(false),
             has_message: Some(true),
             inbox_ts: Some(20),
