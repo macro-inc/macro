@@ -1,0 +1,20 @@
+services/call_recording_preview_handler/src/db.rs
+  s_e4dab6ab069ba5::t_fe0d257d370ab9 8-9,42-54,57,253-279
+  s_e4dab6ab069ba5::t_098445dee73ee1 280-282
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1a02afb91d900dfbc6762052469a2a20ee50423f",
+  "prompts": {},
+  "sessions": {
+    "s_e4dab6ab069ba5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cd9cc4b6-e475-4672-bb0c-d61b5198aec2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
