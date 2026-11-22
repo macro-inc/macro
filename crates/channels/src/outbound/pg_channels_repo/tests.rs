@@ -488,8 +488,37 @@ fn joined_candidates_start_from_named_ids_or_teams() {
     );
     assert_eq!(
         pick(Expr::and(id(), channel_state(Done))),
-        want(JoinedKeyed, Some(Expr::and(id(), channel_state(Done))))
+        want(JoinedByChannel, Some(Expr::and(id(), channel_state(Done))))
     );
+    assert_eq!(
+        pick(Expr::and(team(), Expr::is_not(channel_state(Done)))),
+        want(
+            JoinedByChannel,
+            Some(Expr::and(team(), Expr::is_not(channel_state(Done))))
+        )
+    );
+    // Literals the SQL leaves out, and double negation, keep the id lookup.
+    let thread = || Expr::val(ChannelLiteral::ThreadId(CH2));
+    assert_eq!(
+        pick(Expr::is_not(Expr::is_not(id()))),
+        want(JoinedKeyed, Some(Expr::is_not(Expr::is_not(id()))))
+    );
+    assert_eq!(
+        pick(Expr::or(id(), thread())),
+        want(JoinedKeyed, Some(Expr::or(id(), thread())))
+    );
+    assert_eq!(
+        pick(Expr::is_not(Expr::or(Expr::is_not(id()), org()))),
+        want(
+            JoinedKeyed,
+            Some(Expr::is_not(Expr::or(Expr::is_not(id()), org())))
+        )
+    );
+    assert_eq!(
+        pick(Expr::is_not(Expr::and(id(), org()))),
+        want(Joined, Some(Expr::is_not(Expr::and(id(), org()))))
+    );
+    assert_eq!(pick(thread()), want(Joined, Some(thread())));
     let either = Expr::or(participant(true), participant(false));
     assert_eq!(
         pick(Expr::and(id(), either.clone())),

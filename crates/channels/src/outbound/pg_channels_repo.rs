@@ -515,7 +515,8 @@ static CHANNEL_LIST_PREFIX: &str = r#"
 "#;
 
 /// Candidate set of channels the viewer participates in, for a filter on the
-/// viewer's notification state ([`build_channel_notification_state_clause`]).
+/// viewer's notification state ([`build_channel_notification_state_clause`]),
+/// including one that also names ids or teams.
 ///
 /// The same unfenced join every joined page used before
 /// [`CHANNEL_LIST_PREFIX`]. On statistics that put the viewer at one
@@ -911,17 +912,38 @@ fn channel_filter_names_channels(expr: &Expr<ChannelLiteral>) -> bool {
 /// Whether every channel the filter can match is one it names with
 /// [`ChannelLiteral::ChannelId`] or belongs to a team it names with
 /// [`ChannelLiteral::TeamId`], so an index on `comms_channels` can find them.
+///
+/// Judges the predicate [`build_channel_list_filter`] renders: literals it
+/// leaves out (a sender, mention, thread or `importance: true`) drop out of
+/// their AND or OR here too, and a NOT flips which side keys, so
+/// `NOT NOT id` and `id OR sender` still read the one channel.
 #[cfg(feature = "list")]
 fn channel_filter_keys_channels(expr: &Expr<ChannelLiteral>) -> bool {
-    expr.collapse_frames(|frame: filter_ast::ExprFrame<bool, _>| match frame {
-        filter_ast::ExprFrame::And(a, b) => a || b,
-        filter_ast::ExprFrame::Or(a, b) => a && b,
-        filter_ast::ExprFrame::Not(_) => false,
+    /// Whether the rendered subtree keys channels, and whether its negation
+    /// does; `None` when it renders to nothing.
+    type Keys = Option<(bool, bool)>;
+    let either = |a: Keys, b: Keys, join: fn((bool, bool), (bool, bool)) -> (bool, bool)| match (
+        a, b,
+    ) {
+        (None, other) | (other, None) => other,
+        (Some(a), Some(b)) => Some(join(a, b)),
+    };
+    expr.collapse_frames(|frame: filter_ast::ExprFrame<Keys, _>| match frame {
+        filter_ast::ExprFrame::And(a, b) => either(a, b, |a, b| (a.0 || b.0, a.1 && b.1)),
+        filter_ast::ExprFrame::Or(a, b) => either(a, b, |a, b| (a.0 && b.0, a.1 || b.1)),
+        filter_ast::ExprFrame::Not(a) => a.map(|(keys, negation_keys)| (negation_keys, keys)),
         filter_ast::ExprFrame::Literal(
             ChannelLiteral::ChannelId(_) | ChannelLiteral::TeamId(_),
-        ) => true,
-        filter_ast::ExprFrame::Literal(_) => false,
+        ) => Some((true, false)),
+        filter_ast::ExprFrame::Literal(
+            ChannelLiteral::ThreadId(_)
+            | ChannelLiteral::Mention(_)
+            | ChannelLiteral::Sender(_)
+            | ChannelLiteral::Importance(true),
+        ) => None,
+        filter_ast::ExprFrame::Literal(_) => Some((false, false)),
     })
+    .is_some_and(|(keys, _)| keys)
 }
 
 /// Whether the filter mentions [`ChannelLiteral::NotificationState`] anywhere.
@@ -1000,11 +1022,14 @@ impl ChannelCandidates {
             };
             return (candidates, Some(expr));
         }
+        // Notification state comes first: behind the keyed fence the planner
+        // can read the viewer's notifications once per candidate channel
+        // (team AND NOT done ran past the 15 s timeout on stale statistics).
         match drop_required_participation(&expr) {
-            Some(rest) if channel_filter_keys_channels(&rest) => (Self::JoinedKeyed, Some(rest)),
             Some(rest) if channel_filter_mentions_notification_state(&rest) => {
                 (Self::JoinedByChannel, Some(rest))
             }
+            Some(rest) if channel_filter_keys_channels(&rest) => (Self::JoinedKeyed, Some(rest)),
             rest => (Self::Joined, rest),
         }
     }
