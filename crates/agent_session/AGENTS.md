@@ -90,8 +90,9 @@ before the next real prompt attempts to attach quiet events.
 Discovery uses bounded cursor pages so callers can
 advance past unavailable sessions. Quiet batches bind to the actual prompt action ID;
 notification-only turns record `PrompterKind::System` and no human authority,
-except a batch of only `app.connected` events after a turn that acted for the
-owner, which the harness records as `Program` for the owner (see
+except a batch of only `app.connected` events after the owner's turn that
+offered those apps' connect buttons, which the harness records as `Program`
+for the owner (see
 `agent_harness`'s `continues_for_owner`).
 A prompt from a program (`ControlPrincipal::Program`, including a session
 created with a first prompt) or a routine's agent step, and a queued prompt a

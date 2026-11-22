@@ -62,7 +62,8 @@ advertised by its app slug. The `app.connected` resume check
 (`outbound/connected_apps.rs`) reads the same service's `status`. Never
 filter connections by source, flag or `enabled` here. A wake made only of
 `app.connected` events continues the owner's own work when the turn before it
-acted for the owner: `stage_notifications` opens it as a `Program` turn for
+acted for the owner and ended offering each app's `<m-connect-app>` button:
+`stage_notifications` opens it as a `Program` turn for
 them (`domain/app_connections.rs` `continues_for_owner`), so their own calls
 are not held as a bot's. Any other wake, or one after someone else's turn,
 acts for nobody.
