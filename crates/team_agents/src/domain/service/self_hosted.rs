@@ -6,11 +6,15 @@ use super::*;
 /// Installs offboarded per sweep round.
 const OFFBOARD_PAGE: u32 = 100;
 
-/// How long a pending revoke may take (the agent's keys, then a repository
-/// token from agent_git) while it holds the install's row lock. Past it the
-/// revoke gives up: its transaction rolls back, `revoke_pending` stays set,
-/// nothing is delivered meanwhile, and the next sweep retries.
-const REVOKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// How long one agent's pending revoke may take (its keys, then a
+/// repository token from agent_git) while it holds the install's row lock.
+/// Past it the revoke gives up: its transaction rolls back, `revoke_pending`
+/// stays set, nothing is delivered meanwhile, and the next sweep retries.
+/// Per agent, and well under the 10 s an unpair's call to
+/// `POST /internal/teammate_hosts/{harness_id}/offboard` waits
+/// (document_storage_service's `teammate_host_offboarding::TIMEOUT`), which
+/// also only runs after every agent on the machine is parked.
+const REVOKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// A pending revoke took longer than [`REVOKE_TIMEOUT`].
 #[derive(Debug, thiserror::Error)]
@@ -599,16 +603,33 @@ where
             .installs
             .unentitled_installs_on(harness, OFFBOARD_PAGE)
             .await?;
-        let mut offboarded = 0;
+        // Park them all first: parking is one write each, so a slow revoke
+        // (bounded per agent) never keeps the machine's other agents
+        // running, even if the caller gives up meanwhile.
+        let mut parked = Vec::new();
         for install in &installs {
-            match self.offboard(install).await {
-                Ok(()) => offboarded += 1,
+            match self.installs.park(&install.agent).await {
+                Ok(Some(install)) => parked.push(install),
+                Ok(None) => {}
                 Err(error) => {
-                    tracing::error!(install_id = %install.install_id, error = ?error, "could not take an agent off its machine");
+                    tracing::error!(install_id = %install.install_id, error = ?error, "could not park an agent off its machine");
                 }
             }
         }
-        Ok(offboarded)
+        if !parked.is_empty() {
+            tracing::info!(
+                parked = parked.len(),
+                "parked the agent teammates of an unpaired machine"
+            );
+            // It stops them as no longer its own.
+            self.runtimes.installs_changed(harness).await;
+        }
+        for install in &parked {
+            if let Err(error) = self.finish_revoke(install).await {
+                tracing::error!(install_id = %install.install_id, error = ?error, "could not revoke an agent's credentials; the sweep retries");
+            }
+        }
+        Ok(parked.len())
     }
 
     /// Offboard every install on a machine that may no longer host it, and

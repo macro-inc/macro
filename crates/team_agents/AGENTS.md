@@ -136,7 +136,9 @@ delivered until the old machine's keys and repository token are revoked. A
 revoke runs under `begin_revoke`, which locks the row and rechecks
 `revoke_pending` (`SELECT … AND revoke_pending FOR UPDATE`) and clears it in
 the same transaction (`HeldRevoke::done`), so a sweep holding a stale copy of
-the row skips it instead of voiding the key the new machine was minted since. Only the agent's inviter or
+the row skips it instead of voiding the key the new machine was minted since.
+Each agent's revoke under the lock is bounded by `REVOKE_TIMEOUT` (5 s); past
+it the transaction rolls back and `revoke_pending` stays for the sweep. Only the agent's inviter or
 the current machine's owner may move it. A machine whose owner is no longer
 an owner or admin of the agent's team, or that was unpaired, gets nothing more
 (`issue_install` checks `host_entitled`), and its agents are parked: at once
@@ -144,7 +146,10 @@ by `InstallOffboarding::offboard_unentitled` when the team service reports a
 removal or demotion (`teams::domain::member_access`), and by the internal
 `POST /internal/teammate_hosts/{harness_id}/offboard` (`offboard_host`, only
 that machine's installs) that document_storage_service calls after an unpair
-(`harnesses::domain::retired`); authentication_service's 60 s
+(`harnesses::domain::retired`, a 10 s client timeout). `offboard_host` parks
+every agent on the machine first and only then revokes each (5 s each), so a
+slow revoke or the caller giving up leaves the rest parked, the slow one
+`revoke_pending`; authentication_service's 60 s
 sweep (`offboard_unentitled_hosts`) backs both. Parking: `park` waits for a
 delivery in flight and sets `parked_at` and `revoke_pending`, then the
 credentials are revoked; `installs_on` leaves a parked install out, so its

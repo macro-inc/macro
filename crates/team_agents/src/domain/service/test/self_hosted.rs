@@ -1436,3 +1436,56 @@ async fn a_revoke_whose_calls_hang_gives_up_and_stays_pending_for_the_sweep() {
     );
     assert!(!journal.entries().contains(&"install.revoked".to_owned()));
 }
+
+#[tokio::test(start_paused = true)]
+async fn one_hanging_revoke_doesnt_keep_the_machines_other_agents_running() {
+    let (service, journal, _) = self_hosted_service();
+    // Ada's revoke hangs (her repository token never comes back); Sam's
+    // doesn't.
+    let ada = service
+        .create(
+            receipt(),
+            CreateTeamAgent {
+                purchase_key: "invite-2".to_owned(),
+                name: "Ada".to_owned(),
+                ..own(LAPTOP)
+            },
+        )
+        .await
+        .unwrap();
+    let sam = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    service.installs.unentitled.lock().unwrap().push(LAPTOP);
+    let hanging = GatedRepos {
+        journal: journal.clone(),
+        gated: std::sync::atomic::AtomicBool::new(true),
+        entered: Arc::new(tokio::sync::Notify::new()),
+        release: Arc::new(tokio::sync::Notify::new()),
+    };
+    let keys = FakeApiKeys(journal.clone(), Arc::default());
+    let runtimes = FakeRuntimes(journal.clone());
+    let offboarding = crate::domain::service::self_hosted::Offboarding {
+        repository: &service.repository,
+        api_keys: &keys,
+        repos: &hanging,
+        installs: &service.installs,
+        runtimes: &runtimes,
+    };
+
+    // The unpair's call to the auth service gives up after 10 s, network
+    // and parking included: the round must end well inside it.
+    let unpair_call = std::time::Duration::from_secs(10);
+    let headroom = std::time::Duration::from_secs(2);
+    let parked = tokio::time::timeout(unpair_call - headroom, offboarding.offboard_host(LAPTOP))
+        .await
+        .expect("the round ends inside the unpair call's budget");
+    assert_eq!(parked.unwrap(), 2);
+
+    let ada = install_of(&service, &ada);
+    let sam = install_of(&service, &sam);
+    assert!(
+        ada.parked() && sam.parked(),
+        "both stopped: {ada:?} {sam:?}"
+    );
+    assert!(!sam.revoke_pending, "Sam's credentials revoked");
+    assert!(ada.revoke_pending, "Ada's left for the sweep");
+}
