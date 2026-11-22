@@ -1950,7 +1950,9 @@ When the session has opened a pull request, a compact `#N` status chip
 appears in the header (top right) and in the side-panel Details. Click it
 to open the pull request on GitHub; once GitHub has synced it, the chip
 previews it on hover. The icon and status word follow open / merged /
-closed. Merging happens from the PR entity's top bar or from a channel
+closed. Until GitHub has synced the PR (or on a stack that never syncs it) its
+status is unknown: the chip shows only `#N` with a grey icon, never a guessed
+status. Merging happens from the PR entity's top bar or from a channel
 Magic Chip's PR row, not from this header chip.
 
 Agent prose sets the documents, sessions, pull requests, and contacts it
@@ -2519,7 +2521,8 @@ model lets the composer use the chat's saved model before applying its default.
 
 Agent header PR chips resolve their GitHub URL once and receive saved PR metadata
 through connection gateway. A newly opened PR can remain unresolved until its
-webhook sync completes; its chip should then appear without a page refresh.
+webhook sync completes; its chip shows only `#N` until then and should gain
+its status without a page refresh.
 Verify status changes (open/merged/closed) while the chip stays mounted, and
 verify that reconnecting the gateway catches up changes missed while disconnected.
 There is no periodic PR lookup polling.

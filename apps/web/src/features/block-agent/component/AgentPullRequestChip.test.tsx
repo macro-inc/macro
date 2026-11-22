@@ -115,8 +115,7 @@ it('shows a GitHub fallback without suspending while the webhook mapping is pend
   ));
   const link = screen.getByRole('link');
   expect(link.getAttribute('href')).toBe(url);
-  expect(link.textContent).toContain('#6303');
-  expect(link.textContent).toContain('Open');
+  expect(link.textContent).toBe('#6303');
   expect(screen.queryByText('Loading chip')).toBeNull();
   resolve(
     err([{ code: 'NOT_FOUND', message: 'Not synced' }]) as Awaited<Lookup>
@@ -161,4 +160,79 @@ it('opens the synced PR on GitHub and follows later status changes', async () =>
   expect(screen.getByRole('button').textContent).toContain('Merged');
   rendered.unmount();
   client.clear();
+});
+
+it('shows only the number, with a neutral icon, when GitHub has not synced the PR', async () => {
+  vi.useFakeTimers();
+  type Lookup = ReturnType<
+    typeof storageServiceClient.getForeignEntityBySource
+  >;
+  vi.mocked(storageServiceClient.getForeignEntityBySource).mockResolvedValue(
+    err([{ code: 'NOT_FOUND', message: 'Not synced' }]) as Awaited<Lookup>
+  );
+  render(() => (
+    <QueryClientProvider client={queryClient}>
+      <AgentPullRequestChip url={url} />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(1);
+
+  const link = screen.getByRole('link');
+  expect(link.getAttribute('href')).toBe(url);
+  expect(link.textContent).toBe('#6303');
+  expect(link.querySelector('svg')?.getAttribute('class')).toContain(
+    'text-ink-muted'
+  );
+  expect(link.querySelector('.text-success')).toBeNull();
+});
+
+it.each([
+  ['open', 'Open', 'text-success'],
+  ['merged', 'Merged', 'text-note'],
+  ['closed', 'Closed', 'text-failure'],
+])('shows a synced %s PR as %s', async (status, word, color) => {
+  vi.useFakeTimers();
+  type Lookup = ReturnType<
+    typeof storageServiceClient.getForeignEntityBySource
+  >;
+  vi.mocked(storageServiceClient.getForeignEntityBySource).mockResolvedValue(
+    err([{ code: 'NOT_FOUND', message: 'Not synced' }]) as Awaited<Lookup>
+  );
+  render(() => (
+    <QueryClientProvider client={queryClient}>
+      <AgentPullRequestChip url={url} />
+    </QueryClientProvider>
+  ));
+  await handlePullRequestUpdated(entity(status));
+  await vi.advanceTimersByTimeAsync(1);
+
+  const chip = screen.getByRole('button');
+  expect(chip.textContent).toBe(`#6303${word}`);
+  expect(screen.getByText(word).getAttribute('class')).toContain(color);
+});
+
+it('shows a synced PR without a status the same neutral way', async () => {
+  vi.useFakeTimers();
+  type Lookup = ReturnType<
+    typeof storageServiceClient.getForeignEntityBySource
+  >;
+  vi.mocked(storageServiceClient.getForeignEntityBySource).mockResolvedValue(
+    err([{ code: 'NOT_FOUND', message: 'Not synced' }]) as Awaited<Lookup>
+  );
+  render(() => (
+    <QueryClientProvider client={queryClient}>
+      <AgentPullRequestChip url={url} />
+    </QueryClientProvider>
+  ));
+  await handlePullRequestUpdated({
+    ...entity('open'),
+    metadata: { name: 'Add the header chip', number: 6303 },
+  });
+  await vi.advanceTimersByTimeAsync(1);
+
+  const chip = screen.getByRole('button');
+  expect(chip.textContent).toBe('#6303');
+  expect(chip.querySelector('svg')?.getAttribute('class')).toContain(
+    'text-ink-muted'
+  );
 });
