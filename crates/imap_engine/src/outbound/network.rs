@@ -27,6 +27,70 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_LITERAL: usize = 25 * 1024 * 1024;
 const MAX_LINE: usize = 32 * 1024 * 1024;
 
+/// A hard response budget, reset explicitly at protocol command boundaries.
+#[derive(Clone, Copy)]
+pub(crate) enum ResponseLimit {
+    Metadata,
+    Catalog,
+    Source,
+    Reply,
+}
+impl ResponseLimit {
+    fn bytes(self) -> usize {
+        match self {
+            Self::Metadata => 16 * 1024 * 1024,
+            Self::Catalog | Self::Reply => 4 * 1024 * 1024,
+            Self::Source => 26 * 1024 * 1024,
+        }
+    }
+}
+
+struct ReadMeter {
+    limit: usize,
+    used: usize,
+    lifetime: usize,
+}
+impl Default for ReadMeter {
+    fn default() -> Self {
+        Self {
+            limit: ResponseLimit::Metadata.bytes(),
+            used: 0,
+            lifetime: 0,
+        }
+    }
+}
+impl ReadMeter {
+    fn arm(&mut self, limit: ResponseLimit) {
+        self.limit = limit.bytes();
+        self.used = 0;
+    }
+    fn charge(&mut self, bytes: usize) -> io::Result<()> {
+        self.used = self.used.saturating_add(bytes);
+        self.lifetime = self.lifetime.saturating_add(bytes);
+        if self.used > self.limit {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "mail response limit",
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Protocol framing resets only response bytes; line/literal guards remain intact.
+pub(crate) trait ResponseReader: AsyncRead + Unpin {
+    fn begin_response(&mut self, limit: ResponseLimit);
+}
+impl ResponseReader for Stream {
+    fn begin_response(&mut self, limit: ResponseLimit) {
+        self.meter.arm(limit);
+    }
+}
+#[cfg(test)]
+impl ResponseReader for tokio::io::DuplexStream {
+    fn begin_response(&mut self, _: ResponseLimit) {}
+}
+
 /// A local-only endpoint override, injected by the composition root, never an API caller.
 #[derive(Clone, Default)]
 pub struct LocalEndpoints {
@@ -215,7 +279,7 @@ impl Connector {
             permit,
             line: Vec::new(),
             literal: 0,
-            total: 0,
+            meter: ReadMeter::default(),
         })
     }
 }
@@ -229,9 +293,16 @@ pub struct Stream {
     attempt: Option<circuit::Attempt>,
     line: Vec<u8>,
     literal: usize,
-    total: usize,
+    meter: ReadMeter,
 }
 impl Stream {
+    pub(crate) fn response_bytes(&self) -> usize {
+        self.meter.used
+    }
+    pub(crate) fn lifetime_bytes(&self) -> usize {
+        self.meter.lifetime
+    }
+
     /// Wrap a pre-TLS stream with the same line and literal limits.
     fn plain(
         socket: TcpStream,
@@ -244,7 +315,7 @@ impl Stream {
             attempt: Some(attempt),
             line: Vec::new(),
             literal: 0,
-            total: 0,
+            meter: ReadMeter::default(),
         }
     }
 }
@@ -263,12 +334,10 @@ impl AsyncRead for Stream {
         match Pin::new(&mut self.inner).poll_read(cx, buf) {
             Poll::Ready(Ok(())) => {
                 let bytes = &buf.filled()[before..];
-                self.total = self.total.saturating_add(bytes.len());
-                if self.total > 512 * 1024 * 1024 {
-                    return Poll::Ready(Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "mail response limit",
-                    )));
+                if let Err(error) = self.meter.charge(bytes.len()) {
+                    // AsyncRead must not expose newly filled bytes with Err.
+                    buf.set_filled(before);
+                    return Poll::Ready(Err(error));
                 }
                 for byte in bytes {
                     if self.literal > 0 {
@@ -277,6 +346,7 @@ impl AsyncRead for Stream {
                     }
                     self.line.push(*byte);
                     if self.line.len() > MAX_LINE {
+                        buf.set_filled(before);
                         return Poll::Ready(Err(io::Error::new(
                             io::ErrorKind::InvalidData,
                             "mail line limit",
@@ -304,6 +374,7 @@ impl AsyncRead for Stream {
                                 && rest.is_empty()
                             {
                                 if n > MAX_LITERAL {
+                                    buf.set_filled(before);
                                     return Poll::Ready(Err(io::Error::new(
                                         io::ErrorKind::InvalidData,
                                         "mail literal limit",
@@ -336,3 +407,6 @@ impl AsyncWrite for Stream {
         Pin::new(&mut self.inner).poll_shutdown(cx)
     }
 }
+
+#[cfg(test)]
+mod test;

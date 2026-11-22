@@ -1,5 +1,5 @@
 //! Real IMAP and SMTP protocol adapters; all connections use pinned verified TLS.
-use super::network::{Connector, Stream};
+use super::network::{Connector, ResponseLimit, ResponseReader, Stream};
 mod commands;
 mod folder_roles;
 mod gmail;
@@ -16,7 +16,7 @@ use chrono::Utc;
 use futures::{StreamExt, TryStreamExt};
 use sha2::{Digest, Sha256};
 use tokio::{
-    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
+    io::{AsyncWrite, AsyncWriteExt},
     time::{Duration, timeout},
 };
 use tracing::Instrument;
@@ -24,6 +24,17 @@ use wire::{address, command, flag_name, imap_error, line, quoted, response, with
 
 const IO_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_MESSAGES: usize = 1_000_000;
+
+/// Explicit command boundaries keep pooled sockets independent of lifetime bytes.
+trait BoundedResponses {
+    fn limit_response(&mut self, limit: ResponseLimit) -> &mut Self;
+}
+impl BoundedResponses for Session<Stream> {
+    fn limit_response(&mut self, limit: ResponseLimit) -> &mut Self {
+        self.get_mut().begin_response(limit);
+        self
+    }
+}
 
 /// IMAP/SMTP transport with no plaintext or arbitrary-port mode.
 pub struct ProtocolTransport {
@@ -59,10 +70,12 @@ impl ProtocolTransport {
         let socket = self.connector.tcp(&login.endpoint).await?;
         let stream = if login.endpoint.tls == TlsMode::StartTls {
             let mut plain = socket;
+            plain.begin_response(ResponseLimit::Reply);
             let greeting = line(&mut plain).await?;
             if !greeting.starts_with(b"* OK") {
                 return Err(Error::ConnectionUnavailable);
             }
+            plain.begin_response(ResponseLimit::Reply);
             plain
                 .write_all(b"m1 CAPABILITY\r\n")
                 .await
@@ -83,6 +96,7 @@ impl ProtocolTransport {
                     break;
                 }
             }
+            plain.begin_response(ResponseLimit::Reply);
             plain
                 .write_all(b"m2 STARTTLS\r\n")
                 .await
@@ -93,11 +107,14 @@ impl ProtocolTransport {
             self.connector.tls(&login.endpoint, plain).await?
         } else {
             let mut stream = self.connector.tls(&login.endpoint, socket).await?;
+            stream.begin_response(ResponseLimit::Reply);
             if !line(&mut stream).await?.starts_with(b"* OK") {
                 return Err(Error::ConnectionUnavailable);
             }
             stream
         };
+        let mut stream = stream;
+        stream.begin_response(ResponseLimit::Reply);
         let client = async_imap::Client::new(stream);
         let mut session = async {
             timeout(
@@ -123,6 +140,7 @@ impl ProtocolTransport {
         .await?;
         // Capabilities obtained before STARTTLS are untrusted; query again after TLS+login.
         session
+            .limit_response(ResponseLimit::Metadata)
             .capabilities()
             .await
             .map_err(|e| imap_error(e, false))?;
@@ -131,6 +149,7 @@ impl ProtocolTransport {
 
     async fn folders(&self, session: &mut Session<Stream>) -> Result<Vec<(Folder, String)>, Error> {
         let names = session
+            .limit_response(ResponseLimit::Catalog)
             .list(Some(""), Some("*"))
             .await
             .map_err(|e| imap_error(e, false))?
@@ -226,6 +245,7 @@ impl MailTransport for ProtocolTransport {
             };
             preferences.retain_listed(catalog.iter().map(|(folder, _)| folder.id.as_str()));
             let capabilities = session
+                .limit_response(ResponseLimit::Metadata)
                 .capabilities()
                 .await
                 .map_err(|e| imap_error(e, false))?;
@@ -305,6 +325,7 @@ impl MailTransport for ProtocolTransport {
                 use crate::domain::folder_health::{FolderStatus, PhantomFolder};
                 let previous = known.folders.get(&folder.id);
                 let status = session
+                    .limit_response(ResponseLimit::Metadata)
                     .status(&path, "(UIDVALIDITY UIDNEXT MESSAGES)")
                     .await;
                 let status = match status {
@@ -323,9 +344,15 @@ impl MailTransport for ProtocolTransport {
                     None
                 } else {
                     match if condstore {
-                        session.select_condstore(&path).await
+                        session
+                            .limit_response(ResponseLimit::Metadata)
+                            .select_condstore(&path)
+                            .await
                     } else {
-                        session.select(&path).await
+                        session
+                            .limit_response(ResponseLimit::Metadata)
+                            .select(&path)
+                            .await
                     } {
                         Ok(selected) => Some(selected),
                         Err(async_imap::error::Error::No(_)) => None,
@@ -356,6 +383,7 @@ impl MailTransport for ProtocolTransport {
                 folder.total_items = Some(selected.exists);
                 let epoch = selected.uid_validity.ok_or(Error::ConnectionUnavailable)?;
                 let mut uids = session
+                    .limit_response(ResponseLimit::Metadata)
                     .uid_search("ALL")
                     .await
                     .map_err(|e| imap_error(e, false))?
@@ -404,14 +432,19 @@ impl MailTransport for ProtocolTransport {
                         Some(n) => format!("({fields}) (CHANGEDSINCE {n})"),
                         None => format!("({fields})"),
                     };
-                    let mut fetched = timeout(IO_TIMEOUT, session.uid_fetch(set, &query))
-                        .await
-                        .map_err(|_| Error::ConnectionUnavailable)?
-                        .map_err(|e| imap_error(e, false))?
-                        .take(1001)
-                        .try_collect::<Vec<_>>()
-                        .await
-                        .map_err(|e| imap_error(e, false))?;
+                    let mut fetched = timeout(
+                        IO_TIMEOUT,
+                        session
+                            .limit_response(ResponseLimit::Metadata)
+                            .uid_fetch(set, &query),
+                    )
+                    .await
+                    .map_err(|_| Error::ConnectionUnavailable)?
+                    .map_err(|e| imap_error(e, false))?
+                    .take(1001)
+                    .try_collect::<Vec<_>>()
+                    .await
+                    .map_err(|e| imap_error(e, false))?;
                     if fetched.len() > chunk.len() {
                         return Err(Error::Throttled);
                     }
@@ -454,6 +487,7 @@ impl MailTransport for ProtocolTransport {
                             // A new UID is always read, even if a broken server omits it from CHANGEDSINCE.
                             fetched.extend(
                                 session
+                                    .limit_response(ResponseLimit::Metadata)
                                     .uid_fetch(uid.to_string(), format!("({fields})"))
                                     .await
                                     .map_err(|e| imap_error(e, false))?
@@ -483,6 +517,7 @@ impl MailTransport for ProtocolTransport {
                                 .map_err(|_| Error::ConnectionUnavailable)?
                         } else {
                             let source = session
+                                .limit_response(ResponseLimit::Metadata)
                                 .uid_fetch(uid.to_string(), "BODY.PEEK[HEADER]")
                                 .await
                                 .map_err(|e| imap_error(e, false))?
@@ -535,13 +570,17 @@ impl MailTransport for ProtocolTransport {
             if let Some(plan) = gmail_plan {
                 plan.project(&mut result, &preferences, &selected_folders);
             }
-            session.logout().await.map_err(|e| imap_error(e, false))?;
+            session
+                .limit_response(ResponseLimit::Metadata)
+                .logout()
+                .await
+                .map_err(|e| imap_error(e, false))?;
             Ok(result)
         })
         .await
         .map_err(|_| Error::ConnectionUnavailable)?
     }
-    #[tracing::instrument(skip_all, err)]
+    #[tracing::instrument(skip_all, fields(mail.response.bytes = tracing::field::Empty, mail.connection.read_bytes = tracing::field::Empty), err)]
     async fn message(
         &self,
         c: &Credentials,
@@ -561,6 +600,7 @@ impl MailTransport for ProtocolTransport {
         timeout(IO_TIMEOUT, async {
             let mut session = self.command_session(c).await?;
             let selected = session
+                .limit_response(ResponseLimit::Metadata)
                 .select(folder)
                 .await
                 .map_err(|e| imap_error(e, false))?;
@@ -568,6 +608,7 @@ impl MailTransport for ProtocolTransport {
                 return Err(Error::Conflict);
             }
             let fetched = session
+                .limit_response(ResponseLimit::Source)
                 .uid_fetch(uid.to_string(), "(UID RFC822.SIZE BODY.PEEK[])")
                 .await
                 .map_err(|e| imap_error(e, false))?
@@ -585,6 +626,15 @@ impl MailTransport for ProtocolTransport {
             {
                 return Err(Error::MessageTooLarge);
             }
+            let span = tracing::Span::current();
+            span.record(
+                "mail.response.bytes",
+                i64::try_from(session.get_mut().response_bytes()).unwrap_or(i64::MAX),
+            );
+            span.record(
+                "mail.connection.read_bytes",
+                i64::try_from(session.get_mut().lifetime_bytes()).unwrap_or(i64::MAX),
+            );
             self.return_command(c, session).await;
             Ok(bytes)
         })
@@ -595,6 +645,7 @@ impl MailTransport for ProtocolTransport {
     async fn wait_change(&self, c: &Credentials, idle_seconds: u64) -> Result<(), Error> {
         let mut session = self.imap(&c.imap).await?;
         let capabilities = session
+            .limit_response(ResponseLimit::Metadata)
             .capabilities()
             .await
             .map_err(|e| imap_error(e, false))?;
@@ -617,6 +668,7 @@ impl MailTransport for ProtocolTransport {
         timeout(Duration::from_secs(300), async {
             let mut session = self.imap(&c.imap).await?;
             let capabilities = session
+                .limit_response(ResponseLimit::Metadata)
                 .capabilities()
                 .await
                 .map_err(|e| imap_error(e, false))?;
@@ -626,9 +678,11 @@ impl MailTransport for ProtocolTransport {
                 return Ok(());
             }
             session
+                .limit_response(ResponseLimit::Metadata)
                 .select(folder)
                 .await
                 .map_err(|e| imap_error(e, false))?;
+            session.get_mut().begin_response(ResponseLimit::Metadata);
             let mut idle = session.idle();
             idle.init().await.map_err(|e| imap_error(e, false))?;
             {
@@ -640,7 +694,11 @@ impl MailTransport for ProtocolTransport {
                 .await
                 .map_err(|_| Error::ConnectionUnavailable)?
                 .map_err(|e| imap_error(e, false))?;
-            session.logout().await.map_err(|e| imap_error(e, false))?;
+            session
+                .limit_response(ResponseLimit::Metadata)
+                .logout()
+                .await
+                .map_err(|e| imap_error(e, false))?;
             Ok(())
         })
         .await
@@ -724,13 +782,20 @@ impl ProtocolTransport {
         action: RemoteAction,
     ) -> Result<RemoteWriteReceipt, Error> {
         let capabilities = session
+            .limit_response(ResponseLimit::Metadata)
             .capabilities()
             .await
             .map_err(|e| imap_error(e, false))?;
         let selected = if capabilities.has_str("CONDSTORE") {
-            session.select_condstore(folder).await
+            session
+                .limit_response(ResponseLimit::Metadata)
+                .select_condstore(folder)
+                .await
         } else {
-            session.select(folder).await
+            session
+                .limit_response(ResponseLimit::Metadata)
+                .select(folder)
+                .await
         }
         .map_err(|e| imap_error(e, false))?;
         if selected.uid_validity != Some(epoch) {
@@ -776,6 +841,7 @@ impl ProtocolTransport {
                     return Err(Error::Invalid);
                 }
                 let existing = session
+                    .limit_response(ResponseLimit::Metadata)
                     .uid_fetch(uid.to_string(), "(FLAGS)")
                     .await
                     .map_err(|e| imap_error(e, false))?
@@ -801,6 +867,7 @@ impl ProtocolTransport {
             }
             RemoteAction::GmailLabels { add, remove } => {
                 if !session
+                    .limit_response(ResponseLimit::Metadata)
                     .capabilities()
                     .await
                     .map_err(|e| imap_error(e, false))?
@@ -844,6 +911,7 @@ impl ProtocolTransport {
                     expected.filter(|m| *m > 0 && selected.highest_modseq.is_some())
                 {
                     let current = session
+                        .limit_response(ResponseLimit::Metadata)
                         .uid_fetch(uid.to_string(), "(UID MODSEQ)")
                         .await
                         .map_err(|e| imap_error(e, false))?
@@ -856,6 +924,7 @@ impl ProtocolTransport {
                     }
                 }
                 let capabilities = session
+                    .limit_response(ResponseLimit::Metadata)
                     .capabilities()
                     .await
                     .map_err(|e| imap_error(e, false))?;
@@ -866,6 +935,7 @@ impl ProtocolTransport {
                     destination_uid =
                         identity::transfer(&mut session, uid, &destination, false).await?;
                     session
+                        .limit_response(ResponseLimit::Metadata)
                         .uid_store(uid.to_string(), "+FLAGS.SILENT (\\Deleted)")
                         .await
                         .map_err(|e| imap_error(e, false))?
@@ -875,6 +945,7 @@ impl ProtocolTransport {
                         .map_err(|e| imap_error(e, false))?;
                     // UID EXPUNGE targets exactly this UID; ordinary EXPUNGE would delete other clients' mail.
                     session
+                        .limit_response(ResponseLimit::Metadata)
                         .run_command_and_check_ok(format!("UID EXPUNGE {uid}"))
                         .await
                         .map_err(|e| imap_error(e, false))?;
@@ -888,7 +959,7 @@ impl ProtocolTransport {
     }
 }
 
-async fn ehlo<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<Vec<u8>, Error> {
+async fn ehlo<S: ResponseReader + AsyncWrite>(stream: &mut S) -> Result<Vec<u8>, Error> {
     stream
         .write_all(b"EHLO macro.com\r\n")
         .await
@@ -905,15 +976,21 @@ impl ProtocolTransport {
     async fn verify_inner(&self, c: &Credentials) -> Result<ServerFeatures, Error> {
         let mut session = self.imap(&c.imap).await?;
         session
+            .limit_response(ResponseLimit::Metadata)
             .select("INBOX")
             .await
             .map_err(|e| imap_error(e, false))?;
         let _ = self.folders(&mut session).await?;
         let caps = session
+            .limit_response(ResponseLimit::Metadata)
             .capabilities()
             .await
             .map_err(|e| imap_error(e, false))?;
-        session.logout().await.map_err(|e| imap_error(e, false))?;
+        session
+            .limit_response(ResponseLimit::Metadata)
+            .logout()
+            .await
+            .map_err(|e| imap_error(e, false))?;
         let (mut smtp, extensions) = self.smtp_with_features(&c.smtp).await?;
         command(&mut smtp, b"QUIT\r\n", 221).await?;
         Ok(ServerFeatures {

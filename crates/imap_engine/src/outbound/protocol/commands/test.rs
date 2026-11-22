@@ -20,6 +20,11 @@ struct Peer {
 }
 
 async fn peer() -> Peer {
+    peer_with_source(b"Message-ID: <synthetic@example.net>\r\n\r\nTest body\r\n".to_vec()).await
+}
+
+async fn peer_with_source(source: Vec<u8>) -> Peer {
+    let source = Arc::new(source);
     let (tls, pem) = smtp::retry_test::tls_config();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -51,6 +56,7 @@ async fn peer() -> Peer {
             let seen = seen.clone();
             let stored = stored.clone();
             let closing = closing.clone();
+            let source = source.clone();
             peers.spawn(async move {
                 let mut socket = tokio_rustls::TlsAcceptor::from(tls).accept(socket).await.unwrap();
                 socket.write_all(b"* OK synthetic IMAP\r\n").await.unwrap();
@@ -90,7 +96,7 @@ async fn peer() -> Peer {
                         } else {
                             let _ = fetching.send(());
                             gate.acquire().await.unwrap().forget();
-                            b"Message-ID: <synthetic@example.net>\r\n\r\nTest body\r\n"
+                            source.as_slice()
                         };
                         let section = if header_only { "HEADER" } else { "" };
                         let flags = if seen.load(Ordering::SeqCst) { "\\Seen" } else { "" };
@@ -567,5 +573,24 @@ async fn apply_admission_is_retryable_but_a_lost_store_reply_is_uncertain() {
         Err(ApplyError::Uncertain(Error::ConnectionUnavailable))
     ));
     assert_eq!(stores.load(Ordering::SeqCst), 1);
+    server.abort();
+}
+
+#[tokio::test]
+async fn a_pooled_connection_can_read_more_than_512_mib_across_bounded_commands() {
+    let Peer {
+        transport,
+        credentials,
+        release,
+        maximum,
+        server,
+        ..
+    } = peer_with_source(vec![b'x'; 20 * 1024 * 1024]).await;
+    release.add_permits(30);
+    for _ in 0..30 {
+        let source = transport.source(&credentials, "INBOX", 1, 1).await.unwrap();
+        assert_eq!(source.len(), 20 * 1024 * 1024);
+    }
+    assert_eq!(maximum.load(Ordering::SeqCst), 1);
     server.abort();
 }

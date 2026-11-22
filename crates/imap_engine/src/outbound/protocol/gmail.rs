@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 pub(super) async fn all_path(session: &mut Session<Stream>) -> Result<Option<String>, Error> {
     let names = session
+        .limit_response(ResponseLimit::Catalog)
         .list(Some(""), Some("*"))
         .await
         .map_err(|e| imap_error(e, false))?

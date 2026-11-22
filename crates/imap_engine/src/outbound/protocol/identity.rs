@@ -19,6 +19,7 @@ pub(super) async fn fetch_native(
     };
     // `uids` is built exclusively from typed u32 values, never an inbound string.
     let tag = session
+        .limit_response(ResponseLimit::Metadata)
         .run_command(format!("UID FETCH {uids} ({fields})"))
         .await
         .map_err(|e| imap_error(e, false))?;
@@ -95,6 +96,7 @@ pub(super) async fn transfer(
     use imap_proto::{ResponseCode, rfc4315::UidSetMember};
     let verb = if moving { "MOVE" } else { "COPY" };
     let tag = session
+        .limit_response(ResponseLimit::Metadata)
         .run_command(format!("UID {verb} {uid} {}", quoted(destination)?))
         .await
         .map_err(|e| imap_error(e, false))?;
@@ -144,6 +146,7 @@ pub(super) async fn store(
     query: &str,
 ) -> Result<(), Error> {
     let tag = session
+        .limit_response(ResponseLimit::Metadata)
         .run_command(format!("UID STORE {uid} {query}"))
         .await
         .map_err(|e| imap_error(e, false))?;

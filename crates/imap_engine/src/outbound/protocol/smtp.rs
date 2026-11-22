@@ -303,7 +303,7 @@ impl ProtocolTransport {
 }
 
 #[tracing::instrument(name = "smtp.connection.reuse", skip_all, fields(smtp.phase = "rset"), err(level = "warn"))]
-async fn check_reuse<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<(), Error> {
+async fn check_reuse<S: ResponseReader + AsyncWrite>(stream: &mut S) -> Result<(), Error> {
     timeout(Duration::from_secs(3), command(stream, b"RSET\r\n", 250))
         .await
         .map_err(|_| Error::ConnectionTimedOut)?
@@ -351,7 +351,7 @@ fn international_headers(wire: &str) -> Result<bool, Error> {
 }
 
 /// Deliver on an already authenticated connection using only its negotiated capabilities.
-async fn deliver<S: AsyncRead + AsyncWrite + Unpin>(
+async fn deliver<S: ResponseReader + AsyncWrite>(
     stream: &mut S,
     extensions: &Extensions,
     from: &str,
@@ -447,7 +447,7 @@ async fn deliver<S: AsyncRead + AsyncWrite + Unpin>(
 }
 
 #[tracing::instrument(name = "smtp.submission.command", skip_all, fields(smtp.phase = phase), err)]
-async fn submission_command<S: AsyncRead + AsyncWrite + Unpin>(
+async fn submission_command<S: ResponseReader + AsyncWrite>(
     stream: &mut S,
     bytes: &[u8],
     expected: u16,
@@ -478,7 +478,7 @@ mod transcript_test;
 
 // Authentication replies have different semantics from message-submission replies.
 #[tracing::instrument(name = "smtp.authenticate", skip_all, fields(mail.stage = "smtp-auth"), err)]
-async fn authenticate<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(
+async fn authenticate<S: ResponseReader + tokio::io::AsyncWrite>(
     stream: &mut S,
     extensions: &Extensions,
     login: &Login,
@@ -521,7 +521,7 @@ async fn authenticate<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(
     Ok(())
 }
 
-async fn auth_command<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(
+async fn auth_command<S: ResponseReader + tokio::io::AsyncWrite>(
     stream: &mut S,
     bytes: &[u8],
     expected: u16,

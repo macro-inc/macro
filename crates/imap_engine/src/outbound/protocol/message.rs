@@ -11,13 +11,20 @@ impl ProtocolTransport {
         timeout(IO_TIMEOUT, async {
             let mut session = self.command_session(c).await?;
             let capabilities = session
+                .limit_response(ResponseLimit::Metadata)
                 .capabilities()
                 .await
                 .map_err(|e| imap_error(e, false))?;
             let selected = if capabilities.has_str("CONDSTORE") {
-                session.select_condstore(folder).await
+                session
+                    .limit_response(ResponseLimit::Metadata)
+                    .select_condstore(folder)
+                    .await
             } else {
-                session.select(folder).await
+                session
+                    .limit_response(ResponseLimit::Metadata)
+                    .select(folder)
+                    .await
             }
             .map_err(|e| imap_error(e, false))?;
             if selected.uid_validity != Some(epoch) {
@@ -36,6 +43,7 @@ impl ProtocolTransport {
                 "(UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER])"
             };
             let fetched = session
+                .limit_response(ResponseLimit::Metadata)
                 .uid_fetch(uid.to_string(), query)
                 .await
                 .map_err(|e| imap_error(e, false))?

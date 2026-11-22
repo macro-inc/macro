@@ -156,3 +156,10 @@ Organization writes return ApplyError::NotStarted only before command-session
 admission; every failure afterward is Uncertain. Never promote a post-write busy
 error into a retry. RecentInbox retries only deferred bodies once outside global
 admission and reports AccountBusy when the whole requested batch remains busy.
+
+Arm transport response budgets explicitly at every command: metadata 16 MiB,
+catalog/SMTP reply 4 MiB, full source 26 MiB. Lifetime read bytes are telemetry,
+not a socket lifetime cap. Keep the independent 25 MiB literal and 32 MiB line
+guards. IMAP borrowing commands use limit_response; IDLE arms before moving the
+session, and plaintext STARTTLS exchanges arm each reply. Never infer boundaries
+by inspecting outgoing login or authentication payloads.

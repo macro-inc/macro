@@ -1,6 +1,7 @@
 //! Bounded protocol framing and closed error conversion shared by mail transports.
 use super::IO_TIMEOUT;
 use crate::domain::models::Error;
+use crate::outbound::network::{ResponseLimit, ResponseReader};
 use async_imap::types::Flag;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
@@ -68,7 +69,8 @@ pub(super) async fn line<S: AsyncRead + Unpin>(s: &mut S) -> Result<Vec<u8>, Err
     .await
     .map_err(|_| Error::ConnectionUnavailable)?
 }
-pub(super) async fn response<S: AsyncRead + Unpin>(s: &mut S) -> Result<(u16, Vec<u8>), Error> {
+pub(super) async fn response<S: ResponseReader>(s: &mut S) -> Result<(u16, Vec<u8>), Error> {
+    s.begin_response(ResponseLimit::Reply);
     let mut lines = Vec::new();
     let mut expected = None;
     for _ in 0..100 {
@@ -95,7 +97,7 @@ pub(super) async fn response<S: AsyncRead + Unpin>(s: &mut S) -> Result<(u16, Ve
     }
     Err(Error::ConnectionUnavailable)
 }
-pub(super) async fn command<S: AsyncRead + AsyncWrite + Unpin>(
+pub(super) async fn command<S: ResponseReader + AsyncWrite>(
     s: &mut S,
     bytes: &[u8],
     expected: u16,

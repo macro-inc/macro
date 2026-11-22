@@ -31,11 +31,13 @@ impl ProtocolTransport {
             .find(|(f, _)| f.role == FolderRole::Sent)
         {
             let selected = session
+                .limit_response(ResponseLimit::Metadata)
                 .select(&path)
                 .await
                 .map_err(|e| imap_error(e, false))?;
             let query = format!("HEADER Message-ID {}", quoted(message_id)?);
             let candidates = session
+                .limit_response(ResponseLimit::Metadata)
                 .uid_search(query)
                 .await
                 .map_err(|e| imap_error(e, false))?;
@@ -50,6 +52,7 @@ impl ProtocolTransport {
                     .collect::<Vec<_>>()
                     .join(",");
                 let headers = session
+                    .limit_response(ResponseLimit::Metadata)
                     .uid_fetch(set, "(UID BODY.PEEK[HEADER])")
                     .await
                     .map_err(|e| imap_error(e, false))?
@@ -75,6 +78,7 @@ impl ProtocolTransport {
                 // Inspect a bounded recent UID window before risking another APPEND.
                 let start = selected.uid_next.unwrap_or(1).saturating_sub(200).max(1);
                 let recent = session
+                    .limit_response(ResponseLimit::Metadata)
                     .uid_fetch(format!("{start}:*"), "(UID BODY.PEEK[HEADER])")
                     .await
                     .map_err(|e| imap_error(e, false))?
@@ -103,12 +107,14 @@ impl ProtocolTransport {
                 copied = true;
             }
             let server_saves_copy = session
+                .limit_response(ResponseLimit::Metadata)
                 .capabilities()
                 .await
                 .map_err(|e| imap_error(e, false))?
                 .has_str("X-GM-EXT-1");
             if found.is_empty() && !server_saves_copy && allow_append {
                 session
+                    .limit_response(ResponseLimit::Metadata)
                     .append(&path, Some("(\\Seen)"), None, mime)
                     .await
                     .map_err(|e| imap_error(e, false))?;

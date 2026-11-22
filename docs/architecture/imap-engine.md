@@ -261,3 +261,18 @@ checkpoint serialization rather than serializing the rows again. These bytes
 measure loaded metadata, not network transfer. Closed acquisition outcomes
 separate lock contention, an existing lease, a stale fence, statement timeout,
 idle timeout and other unavailability; database text and row content are omitted.
+
+### Per-command transport accounting
+
+The stream meters bytes per explicitly armed protocol response, rather than
+closing a healthy pooled connection after 512 MiB of lifetime reads. IMAP
+commands declare a 16 MiB metadata, 4 MiB catalog, or 26 MiB full-source budget;
+SMTP framing arms a 4 MiB reply budget. IDLE and plaintext STARTTLS boundaries
+are explicit too. No credentials or outgoing command payloads are inspected.
+The 25 MiB literal and 32 MiB line guards remain independent. Source spans
+record response bytes and lifetime connection read bytes as counts only.
+
+A synthetic TLS regression reads thirty 20 MiB sources over one pooled socket;
+separate stream tests reject a single oversized response, literal, or line.
+Lifetime accounting is not a daily transfer budget or resumable backfill. Those
+remain in the stacked synchronization follow-up.

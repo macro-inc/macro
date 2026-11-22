@@ -103,9 +103,12 @@ impl ProtocolTransport {
         };
         if let Some(mut previous) = previous {
             // A failed liveness check has not emitted a user command and can safely reconnect.
-            if timeout(Duration::from_secs(10), previous.noop())
-                .await
-                .is_ok_and(|r| r.is_ok())
+            if timeout(
+                Duration::from_secs(10),
+                previous.limit_response(ResponseLimit::Metadata).noop(),
+            )
+            .await
+            .is_ok_and(|r| r.is_ok())
             {
                 previous.permit = Some(permit);
                 return Ok(previous);
