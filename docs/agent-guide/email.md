@@ -113,7 +113,8 @@ servers, enter the password or app password, then choose **Connect inbox**.
 Phones show the same fields in the standard drawer with actions outside the scroll body.
 Incoming and outgoing passwords use the shared masked secret input. Reconnect
 starts with empty secret fields; revealing a field shows only newly typed text.
-Turning off a separate outgoing password forgets that typed value.
+Turning off a separate outgoing password forgets that typed value. App-password
+fields disable browser autocomplete, and the credential form excludes analytics capture.
 During verification, **Connect inbox** stays in place with a loading indicator.
 Check idle, checking, refusal and retry on desktop and phone: the action keeps
 its width and position, and error copy wraps without being clipped.

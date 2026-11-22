@@ -90,6 +90,10 @@ it('binds reconnect to its inbox, requires confirmation again when a destination
   const incomingPassword = await screen.findByLabelText(
     'Password or app password'
   );
+  expect(incomingPassword.getAttribute('autocomplete')).toBe('off');
+  expect(
+    incomingPassword.closest('form')?.classList.contains('ph-no-capture')
+  ).toBe(true);
   const confirm = screen.getByRole('checkbox', { name: /I trust/ });
   expect(incomingPassword).toHaveProperty('disabled', true);
   fireEvent.click(confirm);
@@ -112,6 +116,7 @@ it('binds reconnect to its inbox, requires confirmation again when a destination
   });
   fireEvent.click(screen.getByLabelText('Use a separate outgoing password'));
   const outgoingPassword = screen.getByLabelText('Outgoing password');
+  expect(outgoingPassword.getAttribute('autocomplete')).toBe('off');
   fireEvent.input(outgoingPassword, {
     target: { value: 'outgoing-app-password' },
   });
@@ -326,13 +331,13 @@ it('keeps reconnect secrets empty and forgets an unselected outgoing password', 
   ));
   const incoming = await screen.findByLabelText('Password or app password');
   expect(incoming).toHaveProperty('value', '');
-  expect(incoming.getAttribute('autocomplete')).toBe('current-password');
+  expect(incoming.getAttribute('autocomplete')).toBe('off');
   fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
   const separate = screen.getByLabelText('Use a separate outgoing password');
   fireEvent.click(separate);
   const outgoing = screen.getByLabelText('Outgoing password');
   expect(outgoing).toHaveProperty('value', '');
-  expect(outgoing.getAttribute('autocomplete')).toBe('current-password');
+  expect(outgoing.getAttribute('autocomplete')).toBe('off');
   fireEvent.input(outgoing, { target: { value: 'temporary-test-secret' } });
   fireEvent.click(separate);
   fireEvent.click(separate);

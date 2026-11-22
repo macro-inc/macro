@@ -495,7 +495,7 @@ function ConnectForm(props: ImapConnectProps) {
         <Panel.Body scroll={!isMobile()} class="p-5">
           <form
             id={formId}
-            class="flex flex-col gap-4"
+            class="ph-no-capture flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               fireAndForget(submit(event), 'imap-connection');
@@ -647,7 +647,7 @@ function ConnectForm(props: ImapConnectProps) {
                       id={passwordId}
                       required
                       disabled={!confirmed() || busy()}
-                      autocomplete="current-password"
+                      autocomplete="off"
                       value={password()}
                       onValueChange={setPassword}
                     />
@@ -675,7 +675,7 @@ function ConnectForm(props: ImapConnectProps) {
                         id={smtpPasswordId}
                         required
                         disabled={!confirmed() || busy()}
-                        autocomplete="current-password"
+                        autocomplete="off"
                         value={smtpPassword()}
                         onValueChange={setSmtpPassword}
                       />

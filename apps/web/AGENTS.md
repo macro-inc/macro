@@ -2150,6 +2150,7 @@ holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide
 
 - Label reconnect actions Reconnect, stack server fields at full dialog width,
   and show the same labelled port/TLS choice in the menu and selected value.
+- Keep the IMAP credential form ph-no-capture and app-password fields autocomplete off.
 - Keep IMAP connect action labels mounted through verification with Button
   loading, and reserve a wrapping error area so refusal/retry does not shift
   the footer. Avoid fixed action widths or clipped error copy.
