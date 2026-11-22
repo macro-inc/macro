@@ -538,15 +538,29 @@ describe('import review', () => {
       reviewId: 'review',
       errorKind: null,
       imported: 2,
+      failures: [
+        {
+          importId: 'onboarding',
+          title: 'Onboarding',
+          kind: 'page',
+          reason: "Notion couldn't be reached.",
+        },
+      ],
     };
     setup({ item: { status: 'completed' } });
 
     expect(
       screen.getByLabelText("Failed: Notion couldn't be reached.")
     ).toBeTruthy();
-    expect(screen.getByText('Onboarding')).toBeTruthy();
+    const plan = screen.getByRole('list', { name: 'Import plan' });
+    expect(within(plan).getByText('Onboarding')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe(
+      'Imported 2 of 3 objects'
+    );
     // The reason is visible text, not a tooltip, so touch shows it too.
-    expect(screen.getByText("Notion couldn't be reached.")).toBeTruthy();
+    expect(
+      within(plan).getByText("Notion couldn't be reached.")
+    ).toBeTruthy();
   });
 
   it('offers to reconnect only when the connection was lost', () => {

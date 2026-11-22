@@ -52,7 +52,7 @@ test('shows a failed import beside a running one and collapses', async ({
   const tray = page.getByRole('region', { name: 'Imports' });
   await expect(tray.getByRole('listitem')).toHaveCount(2);
   await expect(tray.getByRole('listitem', { name: 'Jira' })).toContainText(
-    'Import failed: Jira no longer accepts Macro’s connection'
+    'Failed: Jira access lost'
   );
   await tray
     .getByRole('listitem', { name: 'Jira' })

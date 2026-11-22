@@ -67,8 +67,8 @@ while something is moving) toggles the list (**Hide imports** / **Show imports**
 source and its phase: `Scanning 120 pages` (Linear and Jira: `Reading N
 issues`, Slack: `Finding channels`), `Deciding on N items`, `Waiting for your
 approval`, `Importing 31 of 124` with a percentage, then `Imported`, `Import
-failed` (with its reason from the run's failure kind, such as `Import failed:
-Notion no longer accepts Macro’s connection`) or `Import cancelled`. **Open the <Source> import** opens the agent
+failed` (or a short reason from the run's failure kind, such as `Failed:
+Notion access lost`) or `Import cancelled`. **Open the <Source> import** opens the agent
 session presenting the review, once one does; Slack rows have no session.
 A failed row offers **Reconnect <Source>** when the connection was revoked,
 expired or unusable, and **View details** (its review) otherwise; a partly

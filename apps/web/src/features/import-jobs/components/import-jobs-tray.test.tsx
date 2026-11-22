@@ -40,11 +40,7 @@ describe('import jobs tray', () => {
       },
     ]);
     const row = screen.getByRole('listitem', { name: 'Notion' });
-    expect(
-      within(row).getByText(
-        'Import failed: Macro couldn’t use your Notion connection'
-      )
-    ).toBeTruthy();
+    expect(within(row).getByText('Failed: couldn’t use Notion')).toBeTruthy();
     expect(within(row).queryByRole('progressbar')).toBeNull();
     // Nothing is moving, so the pill has no ring either.
     expect(
@@ -108,5 +104,40 @@ describe('a failed import offers what to do next', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View details' }));
     expect(onOpen).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: /Reconnect/ })).toBeNull();
+  });
+});
+
+describe('failed import labels', () => {
+  it('stay short enough for two lines beside the row actions', () => {
+    for (const errorKind of [
+      'not_found',
+      'forbidden',
+      'access_lost',
+      'connection_unavailable',
+      'not_connected',
+      'rate_limited',
+      'unreachable',
+      'usage_refused',
+      'interrupted',
+      'internal',
+      null,
+    ] as const) {
+      cleanup();
+      tray([
+        {
+          key: `notion:failed:${errorKind}`,
+          source: 'notion',
+          phase: { kind: 'failed', errorKind },
+          sessionId: undefined,
+          dismissable: true,
+        },
+      ]);
+      const row = screen.getByRole('listitem', { name: 'Notion' });
+      const label = row.querySelector('[data-slot="item-description"]');
+      expect(
+        label?.textContent?.length ?? 0,
+        String(errorKind)
+      ).toBeLessThanOrEqual(40);
+    }
   });
 });

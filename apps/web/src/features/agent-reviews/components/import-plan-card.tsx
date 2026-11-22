@@ -83,6 +83,7 @@ function PhaseStatus(props: {
   source: ImportDraft['source'];
 }) {
   const imported = () => props.progress?.imported ?? 0;
+  const failedCount = () => props.progress?.failures.length ?? 0;
   const total = () =>
     imported() +
     (props.progress?.waiting ?? 0) +
@@ -134,7 +135,13 @@ function PhaseStatus(props: {
         ))
         .with('completed', () => (
           <p role="status" class="text-sm text-ink">
-            Imported {plural(imported(), 'object')}
+            <Show
+              when={failedCount() > 0}
+              fallback={<>Imported {plural(imported(), 'object')}</>}
+            >
+              Imported {imported()} of{' '}
+              {plural(imported() + failedCount(), 'object')}
+            </Show>
           </p>
         ))
         .with('stopped', () => (
