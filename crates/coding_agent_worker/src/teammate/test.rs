@@ -1241,6 +1241,71 @@ async fn an_unreachable_engine_is_checked_again_every_thirty_seconds() {
 }
 
 #[test]
+fn macrods_starting_together_all_write_the_seccomp_profile() {
+    // Several macrods share `~/.macrod` and start at once: each writes the
+    // profile, every write succeeds, and the file is always whole.
+    let directory = tempfile::tempdir().unwrap();
+    let teammates = directory.path().join("teammates");
+    let contents = super::SECCOMP_PROFILE.as_bytes();
+    let writers = 8;
+    let start = std::sync::Barrier::new(writers);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..writers)
+            .map(|_| {
+                scope.spawn(|| {
+                    start.wait();
+                    for _ in 0..50 {
+                        super::store::write_file(&teammates, "teammate-seccomp.json", contents)?;
+                    }
+                    Ok::<_, rootcause::Report>(())
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap().unwrap();
+        }
+    });
+    assert_eq!(
+        std::fs::read(teammates.join("teammate-seccomp.json")).unwrap(),
+        contents
+    );
+    // Nothing left beside it.
+    assert_eq!(std::fs::read_dir(&teammates).unwrap().count(), 1);
+}
+
+#[test]
+fn writers_racing_with_different_contents_leave_one_whole_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let contents: Vec<Vec<u8>> = (0..8u8).map(|writer| vec![writer; 64 * 1024]).collect();
+    let start = std::sync::Barrier::new(contents.len());
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = contents
+            .iter()
+            .map(|mine| {
+                let start = &start;
+                let directory = directory.path();
+                scope.spawn(move || {
+                    start.wait();
+                    for _ in 0..20 {
+                        super::store::write_file(directory, "profile.json", mine)?;
+                    }
+                    Ok::<_, rootcause::Report>(())
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap().unwrap();
+        }
+    });
+    let written = std::fs::read(directory.path().join("profile.json")).unwrap();
+    assert!(
+        contents.contains(&written),
+        "the file is one writer's whole contents"
+    );
+    assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+}
+
+#[test]
 fn engine_versions_are_compared_by_major_and_minor() {
     assert!(version_at_least("29.5.1", (24, 0)));
     assert!(version_at_least("24.0.0", (24, 0)));

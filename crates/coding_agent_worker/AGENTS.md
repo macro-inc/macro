@@ -150,9 +150,12 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   keeps its backoff and leaves a 77/79 install down until a new delivery.
   A restarted macrod adopts a running container
   with the kept delivery's labels. Store: `~/.macrod/teammates/<harness>/
-  <install>/` (0700; `agent.env` 0644 for uid 1000, written by rename). The
+  <install>/` (0700; `agent.env` 0644 for uid 1000). Every store file is written to a
+  temp file of its own (pid + random suffix), fsynced and renamed, so
+  macrods sharing `~/.macrod` can write at once. The
   seccomp profile is `nix/macro-box/files/teammate-seccomp.json`, built in
-  and written to `~/.macrod/teammates/teammate-seccomp.json`. Spans
+  and written to `~/.macrod/teammates/teammate-seccomp.json` (skipped when
+  it's already there, whole). Spans
   (to the ingest): `teammate.run`, `teammate.stop` (joined to the message's
   `traceparent`), `teammate.pull` (outcome), `teammate.start` (attempt,
   previous exit, image id, rollback reason), `teammate.checkpoint`,

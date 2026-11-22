@@ -223,9 +223,18 @@ pub fn teammates_directory() -> rootcause::Result<PathBuf> {
 /// Write a file macrod owns into `directory` (created 0700), whole, mode
 /// 0644, and return its path.
 pub fn write_file(directory: &Path, name: &str, contents: &[u8]) -> rootcause::Result<PathBuf> {
+    use std::os::unix::fs::PermissionsExt as _;
+
     create_private_directory(directory)?;
     let path = directory.join(name);
-    write_whole(&path, contents, 0o644)?;
+    // Every macrod sharing the directory writes the same file when it
+    // starts: one already there and whole needs no write.
+    let unchanged = std::fs::metadata(&path)
+        .is_ok_and(|metadata| metadata.permissions().mode() & 0o777 == 0o644)
+        && std::fs::read(&path).is_ok_and(|existing| existing == contents);
+    if !unchanged {
+        write_whole(&path, contents, 0o644)?;
+    }
     Ok(path)
 }
 
@@ -242,25 +251,40 @@ fn create_private_directory(directory: &Path) -> rootcause::Result<()> {
     Ok(())
 }
 
-/// Write `contents` to a sibling and rename it over `path`, so `path` only
-/// ever holds a whole file.
+/// Write `contents` to a sibling of its own and rename it over `path`, so
+/// `path` only ever holds a whole file, even with other processes (macrods
+/// sharing `~/.macrod`) writing it at the same time.
 fn write_whole(path: &Path, contents: &[u8], mode: u32) -> rootcause::Result<()> {
     use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 
-    let partial = path.with_extension("partial");
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(mode)
-        .open(&partial)
-        .context(format!("could not open {}", partial.display()))?;
-    // The mode is set again: `open` applies the umask.
-    std::fs::set_permissions(&partial, std::fs::Permissions::from_mode(mode))
-        .context(format!("could not set the mode of {}", partial.display()))?;
-    file.write_all(contents)
-        .and_then(|()| file.sync_all())
-        .context(format!("could not write {}", partial.display()))?;
-    std::fs::rename(&partial, path).context(format!("could not write {}", path.display()))?;
-    Ok(())
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    // This writer's own: no other process or thread opens or renames it.
+    let partial = path.with_file_name(format!(
+        ".{name}.{}.{:016x}.partial",
+        std::process::id(),
+        rand::random::<u64>()
+    ));
+    let written = (|| {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(mode)
+            .open(&partial)
+            .context(format!("could not open {}", partial.display()))?;
+        // The mode is set again: `open` applies the umask.
+        std::fs::set_permissions(&partial, std::fs::Permissions::from_mode(mode))
+            .context(format!("could not set the mode of {}", partial.display()))?;
+        file.write_all(contents)
+            .and_then(|()| file.sync_all())
+            .context(format!("could not write {}", partial.display()))?;
+        std::fs::rename(&partial, path).context(format!("could not write {}", path.display()))?;
+        Ok(())
+    })();
+    if written.is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    written
 }
