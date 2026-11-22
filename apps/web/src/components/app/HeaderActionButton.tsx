@@ -52,7 +52,7 @@ export function HeaderActionButton(props: {
       class={cn(
         !iconOnly() && 'px-2',
         // Icon-only in a narrow split header, or when the row hides labels
-        // (`HEADER_LABELS_HIDDEN` on a `group/header-labels` ancestor).
+        // (`data-labels-hidden` on a `group/header-labels` ancestor).
         !iconOnly() &&
           !counted() &&
           '@max-[600px]/split-header:p-0 group-data-[labels-hidden]/header-labels:p-0',
