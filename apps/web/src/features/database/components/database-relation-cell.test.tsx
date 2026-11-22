@@ -403,7 +403,8 @@ describe('opening a related record from its chip', () => {
       screen.getByRole('button', { name: 'Show 16 more Customers' })
     );
     expect(screen.getAllByRole('button', { name: /^Open / })).toHaveLength(21);
-    expect(screen.queryByText('+1')).toBeNull();
+    // A wide panel still caps at twenty: CSS hides the 21st and shows the count.
+    expect(screen.getByText('+1')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Show \d+ more/ })).toBeNull();
     fireEvent.click(
       screen.getByRole('button', { name: 'Show fewer Customers' })
