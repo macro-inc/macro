@@ -38,6 +38,7 @@ const gatedOperationSchema = z.object({
 
 const permissionHoldSchema = z.object({
   source: z.string().optional(),
+  module: z.string().optional(),
   permission: z.object({
     executionId: z.string().nullish(),
     operations: z.array(gatedOperationSchema),
@@ -88,6 +89,8 @@ const showPermissionsResultSchema = z.object({
 export type PermissionHold = {
   /** The program, for "View program". */
   source?: string;
+  /** The TypeScript module beside it, shown with it; it reaches no network. */
+  module?: string;
   /** The operations set to Ask that it may call. */
   operations: GatedOperation[];
 };
@@ -98,6 +101,7 @@ export function parsePermissionHold(args: unknown): PermissionHold | undefined {
   if (!parsed.success) return undefined;
   return {
     source: parsed.data.source,
+    module: parsed.data.module,
     operations: parsed.data.permission.operations,
   };
 }

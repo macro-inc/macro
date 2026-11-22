@@ -150,11 +150,23 @@ export function PermissionApprovalRequest(props: {
                     : t('agentPermissionsChat.viewProgram')}
                 </Button>
                 <Show when={showProgram()}>
-                  {/* Long lines wrap: the person approves all of it, so
-                      none of it may sit past the card's edge. */}
-                  <pre class="mt-1 max-h-60 overflow-y-auto rounded-lg bg-ink/3 p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-ink-muted [overflow-wrap:anywhere]">
-                    {source()}
-                  </pre>
+                  <Show
+                    when={hold()?.module}
+                    fallback={<ProgramText text={source()} />}
+                  >
+                    {(module) => (
+                      <>
+                        <ProgramPartLabel>
+                          {t('agentPermissionsChat.programPart')}
+                        </ProgramPartLabel>
+                        <ProgramText text={source()} />
+                        <ProgramPartLabel>
+                          {t('agentPermissionsChat.modulePart')}
+                        </ProgramPartLabel>
+                        <ProgramText text={module()} />
+                      </>
+                    )}
+                  </Show>
                 </Show>
               </>
             )}
@@ -172,5 +184,24 @@ export function PermissionApprovalRequest(props: {
       onDeny={() => answer('deny')}
       onCancel={() => answer('cancel')}
     />
+  );
+}
+
+/**
+ * One part of a held program. Long lines wrap: the person approves all of
+ * it, so none of it may sit past the card's edge.
+ */
+function ProgramText(props: { text: string }) {
+  return (
+    <pre class="mt-1 max-h-60 overflow-y-auto rounded-lg bg-ink/3 p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-ink-muted [overflow-wrap:anywhere]">
+      {props.text}
+    </pre>
+  );
+}
+
+/** Names a part of a program that has two: what it runs, and its module. */
+function ProgramPartLabel(props: { children: string }) {
+  return (
+    <p class="mt-2 text-xs font-medium text-ink-muted">{props.children}</p>
   );
 }

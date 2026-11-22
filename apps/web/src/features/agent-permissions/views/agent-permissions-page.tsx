@@ -52,7 +52,7 @@ type PageData =
     };
 
 /**
- * An agent's permissions: what it may do in its JS tools programs, per group and
+ * An agent's permissions: what it may do in its programs, per group and
  * action, with each group's individual tools. Changes save on each click.
  */
 export function AgentPermissionsPage(props: {

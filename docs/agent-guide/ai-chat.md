@@ -1835,7 +1835,9 @@ Agents → Permissions) before it runs. The cards name no language:
   program that may:` and the operations set to Ask, by group, each with its
   action, name and (on a wide card) `service.operation`; more than six fold
   behind **Show N more**. A note links `<Agent>'s permissions` (for people who
-  can edit the agent) and **View program** reveals the source. Only the
+  can edit the agent) and **View program** reveals the source; a program sent
+  with a TypeScript module shows both, under **Program** and **Module, with no
+  network**. Only the
   approver the hold names may answer: **Decline**, **Allow for this session**
   (stops asking for these operations until the session ends) or **Approve**.
   Anyone else sees `Waiting for <name> to approve` and, with edit access,

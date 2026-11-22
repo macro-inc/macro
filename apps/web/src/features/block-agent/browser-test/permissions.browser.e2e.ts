@@ -109,16 +109,17 @@ test('the permissions page says which programs it covers', async ({
 }) => {
   await page.goto(fixture('view=page'));
   await expect(
-    page.getByText('Applies to JS tools programs only, for now.')
+    page.getByText('Applies to every program Scout runs.')
   ).toBeVisible();
   await expect(
-    page.getByText(
-      'What Scout may do in the JS tools programs it runs for you.',
-      { exact: false }
-    )
+    page.getByText('What Scout may do in the programs it runs for you.', {
+      exact: false,
+    })
   ).toBeVisible();
   await expect(
-    page.getByText('Scout’s plain JavaScript programs', { exact: false })
+    page.getByText('Scout’s other tools and your connected apps', {
+      exact: false,
+    })
   ).toBeVisible();
   await page.getByRole('button', { name: /Email/ }).first().click();
   const send = page.getByRole('radiogroup', { name: 'Email: Send' });

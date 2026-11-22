@@ -40,7 +40,13 @@ const JS_TOOLS_PROGRAM = {
   language: 'js_tools',
 };
 // The held program; each test may swap in another language's.
-const held = vi.hoisted(() => ({ program: { source: '', language: '' } }));
+const held = vi.hoisted(() => ({
+  program: { source: '', language: '' } as {
+    source: string;
+    language: string;
+    module?: string;
+  },
+}));
 
 vi.mock('../context/AgentSessionContext', () => ({
   useOptionalAgentSession: () => ({
@@ -56,6 +62,7 @@ vi.mock('../context/AgentSessionContext', () => ({
             approvalId: 'approval-1',
             arguments: {
               source: held.program.source,
+              module: held.program.module,
               permission: {
                 language: held.program.language,
                 operations: [SEND],
@@ -165,6 +172,19 @@ describe('PermissionApprovalRequest', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(toggle);
     expect(screen.getByText(JS_TOOLS_PROGRAM.source)).toBeTruthy();
+  });
+
+  it('shows the program and its module, each named', () => {
+    held.program = {
+      ...JS_TOOLS_PROGRAM,
+      module: 'export const greeting = "hello";',
+    };
+    renderRequest();
+    fireEvent.click(screen.getByRole('button', { name: 'View program' }));
+    expect(screen.getByText('Program')).toBeTruthy();
+    expect(screen.getByText(JS_TOOLS_PROGRAM.source)).toBeTruthy();
+    expect(screen.getByText('Module, with no network')).toBeTruthy();
+    expect(screen.getByText('export const greeting = "hello";')).toBeTruthy();
   });
 
   it('lets anyone else only stop waiting', () => {

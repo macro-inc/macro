@@ -276,6 +276,7 @@ export * from './executionReceiptPermission';
 export * from './executionRecord';
 export * from './executionRecordActingAs';
 export * from './executionRecordError';
+export * from './executionRecordModule';
 export * from './executionRecordPermission';
 export * from './executionRecordSdkFingerprint';
 export * from './executionRecordTurnId';

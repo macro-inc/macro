@@ -36,6 +36,8 @@ export default {
   waitingNoteOnly: '{{name}} answers this.',
   viewProgram: 'View program',
   hideProgram: 'Hide program',
+  programPart: 'Program',
+  modulePart: 'Module, with no network',
   decline: 'Decline',
   allowForSession: 'Allow for this session',
   approve: 'Approve',

@@ -5,7 +5,10 @@ import { ExecutionReceipt } from '@service-cognition/generated/tools/schemas';
 export const isExecutionId = (value: string) =>
   /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value);
 
-/** The program and, when the agent chose one, the requested execution ID. */
+/**
+ * The program (its source and, for a JS tools program, its module) and,
+ * when the agent chose one, the requested execution ID.
+ */
 export function codeExecutionInput(part: MessagePart) {
   const input =
     part.kind === 'tool_use' && 'input' in part.detail
@@ -24,7 +27,25 @@ export function codeExecutionInput(part: MessagePart) {
     isExecutionId(input.execution_id)
       ? input.execution_id
       : undefined;
-  return { executionId: requested, source: input.source };
+  const module =
+    'module' in input && typeof input.module === 'string'
+      ? input.module
+      : undefined;
+  return { executionId: requested, source: input.source, module };
+}
+
+/**
+ * Whether a saved record holds this call's program, so a record saved under
+ * a reused ID never shows as this call's.
+ */
+export function isRecordOfProgram(
+  record: { source: string; module?: string | null },
+  program: { source: string; module?: string }
+): boolean {
+  return (
+    record.source === program.source &&
+    (record.module ?? undefined) === program.module
+  );
 }
 
 /** The tool's receipt, once the server has replied. */

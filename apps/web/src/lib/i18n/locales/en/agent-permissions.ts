@@ -2,7 +2,7 @@
 export default {
   title: 'Permissions',
   description:
-    'What {{agent}} may do in the JS tools programs it runs for you. <b>Allow</b> runs without asking, <b>Ask</b> waits for your approval, <b>Never</b> refuses the program before it runs.',
+    'What {{agent}} may do in the programs it runs for you. <b>Allow</b> runs without asking, <b>Ask</b> waits for your approval, <b>Never</b> refuses the program before it runs.',
   settingsChanged: {
     one: '{{count}} setting changed',
     other: '{{count}} settings changed',
@@ -10,9 +10,9 @@ export default {
   setByAgentCount: { other: '{{count}} set by {{agent}} itself' },
   reset: 'Reset permissions',
   nothingToReset: 'Everything is already Always allow',
-  scopeLead: 'Applies to JS tools programs only, for now.',
+  scopeLead: 'Applies to every program {{agent}} runs.',
   scopeBody:
-    '{{agent}}’s plain JavaScript programs, its other tools and your connected apps aren’t covered: they work as before, even where a setting says Never.',
+    'A program reaches Macro only through steps these settings check; the code it runs on the side can’t reach Macro at all. {{agent}}’s other tools and your connected apps aren’t covered: they work as before, even where a setting says Never.',
   readOnly: 'Only people who can edit {{agent}} can change these.',
   searchLabel: 'Search permissions',
   searchPlaceholder: 'Search groups and tools',
@@ -105,7 +105,7 @@ export default {
   cancel: 'Cancel',
 
   sectionDescription:
-    'What this agent may do in its JS tools programs. Changes save right away.',
+    'What this agent may do in its programs. Changes save right away.',
   restrictionCount: {
     one: '{{count}} restriction',
     other: '{{count}} restrictions',

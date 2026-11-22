@@ -8,9 +8,10 @@ import { Button } from '@ui';
 import { type Component, type ComponentProps, type JSX, Show } from 'solid-js';
 
 /**
- * Permissions only cover the programs the harness checks before they run
- * (JS tools), not the agent's plain JavaScript ones, its other tools or
- * connected apps; the note says so plainly.
+ * Permissions cover every program the agent runs: each reaches Macro only
+ * through operations the harness checks before it runs, and its TypeScript
+ * module can't reach Macro at all. The agent's other tools and connected
+ * apps aren't covered; the note says so plainly.
  */
 export function PermissionsScopeNote(props: { agent: string }) {
   return (
@@ -20,7 +21,9 @@ export function PermissionsScopeNote(props: { agent: string }) {
         class="mt-[3px] size-4 shrink-0 text-ink-extra-muted"
       />
       <span>
-        <span class="text-ink">{t('agentPermissions.scopeLead')}</span>{' '}
+        <span class="text-ink">
+          {t('agentPermissions.scopeLead', { agent: props.agent })}
+        </span>{' '}
         {t('agentPermissions.scopeBody', { agent: props.agent })}
       </span>
     </p>

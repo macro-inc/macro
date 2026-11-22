@@ -7528,6 +7528,10 @@
             "$ref": "#/components/schemas/ProgramLanguage",
             "description": "The language `source` is written in; historical records are JavaScript.\nJavaScript, the default, is left out, so records of JavaScript\nprograms serialize as they did before languages."
           },
+          "module": {
+            "type": ["string", "null"],
+            "description": "A JS tools program's TypeScript module, read with `get` and `call`;\nabsent for every other program, so their records read as before."
+          },
           "permission": {
             "oneOf": [
               {

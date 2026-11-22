@@ -1,6 +1,7 @@
 import {
   codeExecutionId,
   codeExecutionInput,
+  isRecordOfProgram,
 } from '@app/features/block-agent/state/code-execution';
 import { isCodeExecution } from '@app/features/block-agent/state/tool-groups';
 import type { AgentActivityRow } from '@macro-inc/lexical-core';
@@ -36,7 +37,7 @@ export function createCodeActivityRows(
       const input = codeExecutionInput(part);
       const executionId = codeExecutionId(part);
       return input && executionId
-        ? [{ executionId, source: input.source, id: part.id }]
+        ? [{ executionId, program: input, id: part.id }]
         : [];
     });
   });
@@ -51,7 +52,9 @@ export function createCodeActivityRows(
       const query = queries[index];
       const record = query && !query.isPending ? query.data : undefined;
       const activity =
-        record?.source === call.source ? record.activity : undefined;
+        record && isRecordOfProgram(record, call.program)
+          ? record.activity
+          : undefined;
       if (!activity?.length) return;
       replacements.set(
         call.id,

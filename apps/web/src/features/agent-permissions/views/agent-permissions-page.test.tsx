@@ -84,11 +84,11 @@ describe('AgentPermissionsPage', () => {
   it('says plainly which programs the settings cover and what they miss', async () => {
     renderPage();
     expect(
-      await screen.findByText('Applies to JS tools programs only, for now.')
+      await screen.findByText('Applies to every program Scout runs.')
     ).toBeTruthy();
     expect(
       screen.getByText(
-        /Scout’s plain JavaScript programs, its other tools and your connected apps aren’t covered: they work as before, even where a setting says Never\./
+        /Scout’s other tools and your connected apps aren’t covered: they work as before, even where a setting says Never\./
       )
     ).toBeTruthy();
   });

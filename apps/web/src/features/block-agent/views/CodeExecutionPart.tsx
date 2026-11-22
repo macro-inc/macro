@@ -28,6 +28,8 @@ export function CodeExecutionPart(props: {
     executionId,
     query,
     source,
+    program,
+    isThisProgram,
     record,
     error,
   } = useCodeExecutionRecord(
@@ -54,10 +56,11 @@ export function CodeExecutionPart(props: {
           const call = `${sessionId}:${toolCallId}`;
           if (loggedCall === call) return;
           loggedCall = call;
+          const module = program()?.module;
           console.log(
             '[Code mode] ExecuteCode',
             { sessionId, executionId, toolCallId },
-            `\n${source}`
+            module ? `\n${source}\n// module\n${module}` : `\n${source}`
           );
         }
       )
@@ -142,10 +145,7 @@ export function CodeExecutionPart(props: {
             record={record()}
             error={error()}
             loading={Boolean(executionId()) && query.isPending}
-            unavailable={
-              query.isError ||
-              (query.isSuccess && query.data.source !== source())
-            }
+            unavailable={query.isError || (query.isSuccess && !isThisProgram())}
           />
         </Suspense>
       </Match>

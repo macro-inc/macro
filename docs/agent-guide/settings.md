@@ -1242,9 +1242,11 @@ same page for the Macro persona (the new Macro bot id), and
 to a group, action or tool. The section and button are absent while the
 flag is off or the API answers 404, and on the create form; an open page
 closes when the flag turns off, and a link waits until it is on. The page's
-note says the settings apply to the agent's JS tools programs only,
-and that its plain JavaScript programs, other tools and connected apps aren't
-covered, even where a setting says Never.
+note says the settings apply to every program the agent runs (`Applies to
+every program <agent> runs.`): a program reaches Macro only through steps the
+settings check, and the code it runs on the side can't reach Macro at all; the
+agent's other tools and connected apps aren't covered, even where a setting
+says Never.
 
 The header counts the saved settings by who made them (`2 settings changed ·
 1 set by <agent> itself`). The page lists every permission group as a

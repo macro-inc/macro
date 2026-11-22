@@ -9,6 +9,7 @@ import type { ExecutionActivity } from './executionActivity';
 import type { ExecutionId } from './executionId';
 import type { ExecutionRecordActingAs } from './executionRecordActingAs';
 import type { ExecutionRecordError } from './executionRecordError';
+import type { ExecutionRecordModule } from './executionRecordModule';
 import type { ExecutionRecordPermission } from './executionRecordPermission';
 import type { ExecutionRecordSdkFingerprint } from './executionRecordSdkFingerprint';
 import type { ExecutionRecordTurnId } from './executionRecordTurnId';
@@ -36,6 +37,9 @@ export interface ExecutionRecord {
 JavaScript, the default, is left out, so records of JavaScript
 programs serialize as they did before languages. */
   language?: ProgramLanguage;
+  /** A JS tools program's TypeScript module, read with `get` and `call`;
+absent for every other program, so their records read as before. */
+  module?: ExecutionRecordModule;
   permission?: ExecutionRecordPermission;
   /** JSON returned by the program, if successful. */
   result?: unknown;

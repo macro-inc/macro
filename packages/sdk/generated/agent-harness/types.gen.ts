@@ -2080,6 +2080,11 @@ export type ExecutionRecord = {
      * programs serialize as they did before languages.
      */
     language?: ProgramLanguage;
+    /**
+     * A JS tools program's TypeScript module, read with `get` and `call`;
+     * absent for every other program, so their records read as before.
+     */
+    module?: string | null;
     permission?: null | ExecutionPermission;
     /**
      * JSON returned by the program, if successful.
