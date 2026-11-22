@@ -80,6 +80,8 @@ export default {
   noticeUnknown: 'That didn’t work. Try again.',
   noticePasteUnsupported:
     'Couldn’t paste: the computer’s clipboard takes only Western European characters. Type it instead.',
+  noticeTakeOverUnavailable:
+    'Couldn’t check that you may take over; try again.',
   noticeAgentNotPausable:
     'Couldn’t pause the agent on this computer, so it can’t be taken over right now.',
 

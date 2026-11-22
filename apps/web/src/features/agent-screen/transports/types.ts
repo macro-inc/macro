@@ -98,6 +98,11 @@ export type ScreenErrorCode =
    * viewer still watches; another attempt may work.
    */
   | 'agentNotPausable'
+  /**
+   * Take over refused: the server couldn't check this viewer may drive (a
+   * failed access check). Per attempt; the socket stays open.
+   */
+  | 'takeOverUnavailable'
   /** A code this client doesn't know (a newer harness). */
   | 'unknown'
   /** The viewer's own: a paste the guest's clipboard can't take. */

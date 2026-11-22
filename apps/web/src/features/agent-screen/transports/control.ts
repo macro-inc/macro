@@ -60,6 +60,7 @@ const serverMessageSchema = z.discriminatedUnion('type', [
         'badMessage',
         'inputFailed',
         'agentNotPausable',
+        'takeOverUnavailable',
         // What any other code becomes.
         'unknown',
       ]),

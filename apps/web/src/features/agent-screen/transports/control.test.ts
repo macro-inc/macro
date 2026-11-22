@@ -119,6 +119,19 @@ describe('parseServerMessage', () => {
       code: 'agentNotPausable',
       message: 'could not freeze the agent',
     });
+    expect(
+      parseServerMessage(
+        JSON.stringify({
+          type: 'error',
+          code: 'takeOverUnavailable',
+          message: 'access check failed',
+        })
+      )
+    ).toEqual({
+      type: 'error',
+      code: 'takeOverUnavailable',
+      message: 'access check failed',
+    });
   });
 });
 

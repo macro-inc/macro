@@ -345,6 +345,31 @@ describe('the screen viewer while a drive drops', () => {
 });
 
 describe('a refused Take over', () => {
+  it('says the access check failed, and leaves Take over to try again', async () => {
+    vi.useFakeTimers();
+    const connections: Connection[] = [];
+    const { unmount } = renderView(AgentScreen, connections);
+    await vi.advanceTimersByTimeAsync(0);
+    connections[0].handlers.onState({ ...state(true), driver: null });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Take over/ }));
+    connections[0].handlers.onError({
+      code: 'takeOverUnavailable',
+      message: 'access check failed',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(
+      screen.getByText('Couldn’t check that you may take over; try again.')
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('button', { name: /^Take over/ })
+        .hasAttribute('disabled')
+    ).toBe(false);
+    unmount();
+  });
+
   it('stops taking over and says it did not work when the answer is a code this client does not know', async () => {
     vi.useFakeTimers();
     const connections: Connection[] = [];

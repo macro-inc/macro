@@ -17,6 +17,9 @@ export function ScreenNotice(props: { notice: ScreenError | undefined }) {
       .with('tunnelFailed', () => t('agentScreen.noticeTunnelFailed'))
       .with('tooManySockets', () => t('agentScreen.noticeTooManySockets'))
       .with('agentNotPausable', () => t('agentScreen.noticeAgentNotPausable'))
+      .with('takeOverUnavailable', () =>
+        t('agentScreen.noticeTakeOverUnavailable')
+      )
       .with('unknown', () => t('agentScreen.noticeUnknown'))
       .with('pasteUnsupported', () => t('agentScreen.noticePasteUnsupported'))
       // A message the client sent wrong: nothing the person can do.

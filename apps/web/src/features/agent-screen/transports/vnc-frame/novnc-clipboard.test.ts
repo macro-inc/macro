@@ -45,6 +45,9 @@ class XvncShapedServer implements RfbChannel {
   private readonly filter = createRfbClientFilter();
   private handshake = 0;
   extendedClipboard = false;
+  /** Every SetPixelFormat: bits per pixel, depth, true colour. */
+  pixelFormats: { bitsPerPixel: number; depth: number; trueColour: boolean }[] =
+    [];
 
   send(data: ArrayBufferLike | ArrayBufferView) {
     const chunk = ArrayBuffer.isView(data)
@@ -97,6 +100,14 @@ class XvncShapedServer implements RfbChannel {
           new TextEncoder().encode('desk')
         )
       );
+      return;
+    }
+    if (message[0] === 0 && message.length >= 20) {
+      this.pixelFormats.push({
+        bitsPerPixel: message[4],
+        depth: message[5],
+        trueColour: message[7] !== 0,
+      });
       return;
     }
     if (message[0] !== 2) return;
@@ -222,6 +233,17 @@ describe('noVNC with an Xvnc-shaped clipboard', () => {
       rfb.disconnect();
     }
   );
+
+  it('asks only for 32-bit true colour, the one pixel format the harness lets through', async () => {
+    const { server, rfb } = await viewer();
+    // Let the client's first messages arrive.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(server.pixelFormats.length).toBeGreaterThan(0);
+    for (const format of server.pixelFormats) {
+      expect(format).toEqual({ bitsPerPixel: 32, depth: 24, trueColour: true });
+    }
+    rfb.disconnect();
+  });
 
   it("isn't offered the extended clipboard, which view-only noVNC can't skip", async () => {
     const { server, rfb } = await viewer();
