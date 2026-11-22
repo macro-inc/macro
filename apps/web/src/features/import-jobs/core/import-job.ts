@@ -2,6 +2,7 @@ import type {
   ImportRun,
   ImportSource,
   NotionImportReport,
+  RunErrorKind,
 } from '@service-cognition/import';
 import { match } from 'ts-pattern';
 
@@ -17,8 +18,8 @@ export type ImportJobPhase =
   | { kind: 'importing'; done: number; total: number }
   | { kind: 'importingChannels'; channels: number }
   | { kind: 'completed' }
-  /** `reason` is the server's explanation, when it gave one. */
-  | { kind: 'failed'; reason: string | null }
+  /** `errorKind` says why, when the server recorded it. */
+  | { kind: 'failed'; errorKind: RunErrorKind | null }
   | { kind: 'cancelled' };
 
 /** How long a run that stopped moving stays in the tray. */
@@ -119,7 +120,10 @@ export function importJobPhase(
       return { kind: 'importing', done, total: done + remaining };
     })
     .with('completed', () => ({ kind: 'completed' }))
-    .with('failed', () => ({ kind: 'failed', reason: run.error ?? null }))
+    .with('failed', () => ({
+      kind: 'failed',
+      errorKind: run.error_kind ?? null,
+    }))
     .with('dismissed', () => ({ kind: 'cancelled' }))
     .exhaustive();
 }

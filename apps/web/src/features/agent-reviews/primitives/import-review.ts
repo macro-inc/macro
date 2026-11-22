@@ -85,8 +85,9 @@ export function createImportReview(sources: ImportReviewSources) {
     // none: this review's plan can no longer be approved. That failure may
     // come from a later plan than the one this card showed; its reason is
     // still why nothing here can be imported.
+    const status = item()?.status;
     if (
-      item()?.status === 'pending' &&
+      (status === 'pending' || status === 'dismissed') &&
       report.status === 'failed' &&
       report.reviewId === null
     )

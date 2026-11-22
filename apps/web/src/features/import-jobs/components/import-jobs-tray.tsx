@@ -6,7 +6,7 @@ import IconSlack from '@icon/slack-color.svg';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import CaretUp from '@icon/system/regular/caret-up.svg';
 import X from '@icon/system/regular/x.svg';
-import type { ImportSource } from '@service-cognition/import';
+import type { ImportSource, RunErrorKind } from '@service-cognition/import';
 import { Button, cn, Item, ProgressRing, Surface } from '@ui';
 import { type Component, Index, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -53,12 +53,37 @@ function phaseLabel(source: ImportSource, phase: ImportJobPhase): string {
       t('importJobs.importingChannels', { count: channels })
     )
     .with({ kind: 'completed' }, () => t('importJobs.completed'))
-    .with({ kind: 'failed' }, ({ reason }) =>
-      reason
-        ? t('importJobs.failedBecause', { reason })
-        : t('importJobs.failed')
-    )
+    .with({ kind: 'failed' }, ({ errorKind }) => failedLabel(source, errorKind))
     .with({ kind: 'cancelled' }, () => t('importJobs.cancelled'))
+    .exhaustive();
+}
+
+/** Why a run failed, from its kind; never the server's raw error. */
+function failedLabel(
+  source: ImportSource,
+  errorKind: RunErrorKind | null
+): string {
+  const name = SOURCES[source].name;
+  return match(errorKind)
+    .with('access_lost', () =>
+      t('importJobs.failedAccessLost', { source: name })
+    )
+    .with('connection_unavailable', () =>
+      t('importJobs.failedConnectionUnavailable', { source: name })
+    )
+    .with('not_connected', () =>
+      t('importJobs.failedNotConnected', { source: name })
+    )
+    .with('not_found', () => t('importJobs.failedNotFound', { source: name }))
+    .with('forbidden', () => t('importJobs.failedForbidden', { source: name }))
+    .with('rate_limited', () =>
+      t('importJobs.failedRateLimited', { source: name })
+    )
+    .with('unreachable', () =>
+      t('importJobs.failedUnreachable', { source: name })
+    )
+    .with('usage_refused', () => t('importJobs.failedUsageRefused'))
+    .with('internal', null, () => t('importJobs.failed'))
     .exhaustive();
 }
 
@@ -191,7 +216,9 @@ export function ImportJobsTray(props: {
             }
             onClick={() => props.onExpandedChange(!props.expanded)}
           >
-            <ProgressRing fraction={overallFraction(props.jobs)} />
+            <Show when={props.jobs.some((job) => !job.dismissable)}>
+              <ProgressRing fraction={overallFraction(props.jobs)} />
+            </Show>
             <span>{t('importJobs.summary', { count: props.jobs.length })}</span>
             <CaretUp
               class={cn(

@@ -95,26 +95,24 @@ describe('importJob', () => {
     expect(job.dismissable).toBe(false);
   });
 
-  it('says why a run failed', () => {
+  it('says why a run failed, by its kind', () => {
     const failed = importJob(
       {
         source: 'notion',
         status: 'failed',
         updated_at: '2026-11-06T11:00:00Z',
-        error: "Macro couldn't use your Notion connection; reconnect Notion",
+        error: 'raw proxy detail',
+        error_kind: 'access_lost',
       },
       { report: undefined, slackChannelsImporting: 0 }
     );
-    expect(failed.phase).toEqual({
-      kind: 'failed',
-      reason: "Macro couldn't use your Notion connection; reconnect Notion",
-    });
+    expect(failed.phase).toEqual({ kind: 'failed', errorKind: 'access_lost' });
 
     const unexplained = importJob(
       { source: 'jira', status: 'failed', updated_at: '2026-11-06T11:00:00Z' },
       { report: undefined, slackChannelsImporting: 0 }
     );
-    expect(unexplained.phase).toEqual({ kind: 'failed', reason: null });
+    expect(unexplained.phase).toEqual({ kind: 'failed', errorKind: null });
   });
 });
 

@@ -47,7 +47,12 @@ import type {
   RunStatus,
 } from './generated/schemas';
 
-export type { ImportKind, ImportRun, ImportSource } from './generated/schemas';
+export type {
+  ImportKind,
+  ImportRun,
+  ImportSource,
+  RunErrorKind,
+} from './generated/schemas';
 
 export type ImportEntityStatus =
   | 'staged'

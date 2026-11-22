@@ -97,6 +97,7 @@ export function decodeImportProgress(
     reviewId: report.reviewId ?? null,
     status: report.status ?? null,
     error: report.error ?? null,
+    errorKind: report.errorKind ?? null,
     scanned: report.scanned
       ? {
           pages: report.scanned.pages,

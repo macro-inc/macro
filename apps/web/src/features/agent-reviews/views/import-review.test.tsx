@@ -28,7 +28,14 @@ const imports = vi.hoisted(() => {
     report: NotionImportReport | undefined;
     cancel: Mock;
     open: Mock;
-  } = { entities: [], report: undefined, cancel: vi.fn(), open: vi.fn() };
+    connect: Mock;
+  } = {
+    entities: [],
+    report: undefined,
+    cancel: vi.fn(),
+    open: vi.fn(),
+    connect: vi.fn(),
+  };
   return state;
 });
 vi.mock('@components/app/split-layout/layout', () => ({
@@ -40,6 +47,9 @@ vi.mock('@core/component/EntityIcon', () => ({
   EntityIcon: (props: { targetType: string }) => (
     <span data-icon={props.targetType} />
   ),
+}));
+vi.mock('@queries/pipedream-connectors', () => ({
+  connectPipedreamApp: imports.connect,
 }));
 vi.mock('@queries/import', () => ({
   useImportQuery: () => ({
@@ -57,6 +67,27 @@ vi.mock('@queries/import', () => ({
   }),
   useCancelWorkspaceImportMutation: () => ({ mutateAsync: imports.cancel }),
 }));
+
+/** A Notion run whose plan failed; tests set its kind. */
+const FAILED: NotionImportReport = {
+  status: 'failed',
+  error: 'Notion object not found or not shared with the connection',
+  reviewId: null,
+  onTeam: false,
+  pages: 0,
+  dataSources: 0,
+  copy: 0,
+  tasks: 0,
+  skip: 0,
+  hand: 0,
+  documents: 0,
+  databases: 0,
+  databaseRows: 0,
+  taskRows: 0,
+  imported: 0,
+  waiting: 0,
+  writing: 0,
+};
 
 function entity(
   id: string,
@@ -125,6 +156,8 @@ beforeEach(() => {
   imports.report = undefined;
   imports.cancel.mockReset();
   imports.open.mockReset();
+  imports.connect.mockReset();
+  imports.connect.mockResolvedValue('connected');
   vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal(
     'ResizeObserver',
@@ -356,36 +389,36 @@ describe('import review', () => {
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
   });
 
-  it('shows why planning failed instead of an empty plan', async () => {
+  it('says planning failed, with what to do, instead of an empty plan', async () => {
     // Planning a new plan clears the run's review, so the failed run names none.
     imports.entities = [];
     imports.report = {
-      status: 'failed',
-      error: 'Notion object not found or not shared with the connection',
-      reviewId: null,
-      onTeam: false,
-      pages: 0,
-      dataSources: 0,
-      copy: 0,
-      tasks: 0,
-      skip: 0,
-      hand: 0,
-      documents: 0,
-      databases: 0,
-      databaseRows: 0,
-      taskRows: 0,
-      imported: 0,
-      waiting: 0,
-      writing: 0,
+      ...FAILED,
+      error: `proxy said: ${'account apn_1 not found; '.repeat(40)}`,
+      errorKind: 'connection_unavailable',
     };
     const decide = setup();
 
-    expect(screen.getByRole('alert').textContent).toBe(
-      "Couldn't plan the import: Notion object not found or not shared with the connection"
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toBe(
+      "Couldn't plan this import.Macro couldn’t use your Notion connection. Reconnect Notion, then plan the import again."
     );
+    // The detail is clamped and never the server's raw error.
+    expect(within(alert).getByText(/Macro couldn’t use/).className).toContain(
+      'line-clamp-3'
+    );
+    expect(screen.queryByText(/apn_1/)).toBeNull();
     expect(screen.queryByText(/nothing/i)).toBeNull();
     expect(screen.queryByText('The plan has no objects to show.')).toBeNull();
     expect(screen.queryByRole('button', { name: /^Import/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Notion' }));
+    await waitFor(() =>
+      expect(imports.connect).toHaveBeenCalledWith({
+        appSlug: 'notion',
+        serverName: 'Notion',
+      })
+    );
 
     // The owner can still dismiss it, so the review does not stay pending.
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
@@ -396,34 +429,70 @@ describe('import review', () => {
     );
   });
 
-  it('shows why planning failed after the plan was presented, hiding its rows', () => {
+  it('offers to reconnect only when the connection was lost', () => {
+    for (const errorKind of [
+      'access_lost',
+      'connection_unavailable',
+    ] as const) {
+      imports.report = { ...FAILED, errorKind };
+      setup();
+      expect(
+        screen.getByRole('button', { name: 'Reconnect Notion' })
+      ).toBeTruthy();
+      cleanup();
+    }
+    for (const errorKind of [
+      'not_found',
+      'forbidden',
+      'not_connected',
+      'rate_limited',
+      'unreachable',
+      'usage_refused',
+      'internal',
+      null,
+    ] as const) {
+      imports.report = { ...FAILED, errorKind };
+      setup();
+      expect(screen.getByRole('alert').textContent).toContain(
+        "Couldn't plan this import."
+      );
+      expect(
+        screen.queryByRole('button', { name: 'Reconnect Notion' }),
+        String(errorKind)
+      ).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('shows a plan that failed after it was presented without its rows', () => {
     imports.report = {
-      status: 'failed',
-      error: 'Notion was unreachable',
+      ...FAILED,
       reviewId: 'review',
-      onTeam: false,
-      pages: 1,
-      dataSources: 1,
-      copy: 1,
-      tasks: 1,
-      skip: 1,
-      hand: 1,
-      documents: 1,
-      databases: 1,
-      databaseRows: 0,
-      taskRows: 0,
-      imported: 0,
-      waiting: 0,
-      writing: 0,
+      errorKind: 'unreachable',
     };
     setup();
 
     expect(screen.getByRole('alert').textContent).toBe(
-      "Couldn't plan the import: Notion was unreachable"
+      "Couldn't plan this import.Notion couldn’t be reached. Try again later."
     );
     expect(screen.queryByRole('list', { name: 'Import plan' })).toBeNull();
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(screen.queryByRole('button', { name: /^Import/ })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Reconnect Notion' })
+    ).toBeNull();
+  });
+
+  it('keeps the failure on a dismissed review and no rows waiting', () => {
+    imports.report = { ...FAILED, errorKind: 'access_lost' };
+    setup({ item: { status: 'dismissed' } });
+
+    expect(screen.getByRole('alert').textContent).toBe(
+      "Couldn't plan this import. Dismissed.Notion no longer accepts Macro’s connection. Reconnect Notion, then plan the import again."
+    );
+    expect(screen.queryByRole('list', { name: 'Import plan' })).toBeNull();
+    expect(screen.queryByText('Waiting')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
   });
 
   it('saves who each object is shared with, down the tree', async () => {

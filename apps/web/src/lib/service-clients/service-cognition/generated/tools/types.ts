@@ -3749,6 +3749,21 @@ export type RunStatus =
   | 'failed'
   | 'dismissed';
 /**
+ * Why a run failed, as a closed set readers branch on instead of the error
+ * text. Stored in `import_run.error_kind`; `None` on runs that failed
+ * before it was recorded.
+ */
+export type RunErrorKind =
+  | 'not_found'
+  | 'forbidden'
+  | 'access_lost'
+  | 'connection_unavailable'
+  | 'not_connected'
+  | 'rate_limited'
+  | 'unreachable'
+  | 'usage_refused'
+  | 'internal';
+/**
  * What an imported item is in its source system. Each source has its own
  * kinds; a Notion database and a Notion page, or a Linear project and a
  * Linear issue, are tracked and deduplicated separately.
@@ -11237,6 +11252,11 @@ export interface NotionImportReport {
    * Why the run failed, when it did.
    */
   error?: string | null;
+  /**
+   * The kind of failure, when the run failed and it was recorded. Show
+   * the user copy for this, not `error`.
+   */
+  errorKind?: RunErrorKind | null;
   /**
    * What planning has found in Notion so far, while it is `running`.
    */

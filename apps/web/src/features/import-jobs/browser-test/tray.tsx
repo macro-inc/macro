@@ -89,6 +89,7 @@ function failJira() {
     source: 'jira',
     status: 'failed',
     error: 'Jira refused the request',
+    error_kind: 'access_lost',
     updated_at: new Date().toISOString(),
     review_session_id: 'jira-session',
   });

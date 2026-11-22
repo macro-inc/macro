@@ -19,15 +19,12 @@ function tray(jobs: ImportJob[]) {
 }
 
 describe('import jobs tray', () => {
-  it('says why an import failed, with no progress spinner', () => {
+  it('says why an import failed, with no progress ring', () => {
     tray([
       {
         key: 'notion:failed:1',
         source: 'notion',
-        phase: {
-          kind: 'failed',
-          reason: "Macro couldn't use your Notion connection; reconnect Notion",
-        },
+        phase: { kind: 'failed', errorKind: 'connection_unavailable' },
         sessionId: undefined,
         dismissable: true,
       },
@@ -35,10 +32,16 @@ describe('import jobs tray', () => {
     const row = screen.getByRole('listitem', { name: 'Notion' });
     expect(
       within(row).getByText(
-        "Import failed: Macro couldn't use your Notion connection; reconnect Notion"
+        'Import failed: Macro couldn’t use your Notion connection'
       )
     ).toBeTruthy();
     expect(within(row).queryByRole('progressbar')).toBeNull();
+    // Nothing is moving, so the pill has no ring either.
+    expect(
+      screen
+        .getByRole('button', { name: 'Hide imports' })
+        .querySelector('svg circle')
+    ).toBeNull();
     expect(
       within(row).getByRole('button', { name: 'Dismiss the Notion import' })
     ).toBeTruthy();
@@ -49,7 +52,7 @@ describe('import jobs tray', () => {
       {
         key: 'jira:failed:1',
         source: 'jira',
-        phase: { kind: 'failed', reason: null },
+        phase: { kind: 'failed', errorKind: null },
         sessionId: undefined,
         dismissable: true,
       },

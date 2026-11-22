@@ -11,6 +11,7 @@ import {
   initiallyCollapsed,
   isShared,
   planCounts,
+  planFailureCopy,
   planningStatus,
   planSummary,
   planTotals,
@@ -298,6 +299,7 @@ describe('importReviewPhase', () => {
     reviewId: 'review',
     status: 'importing',
     error: null,
+    errorKind: null,
     scanned: null,
     onTeam: true,
     counts: planCounts(entries),
@@ -331,28 +333,80 @@ describe('importReviewPhase', () => {
         { status: 'dismissed', error: null },
         undefined
       )
-    ).toEqual({ kind: 'dismissed' });
+    ).toEqual({ kind: 'dismissed', planFailure: null });
   });
 
-  it('says why when planning failed before the plan was approved', () => {
+  it('says planning failed, by its kind, before the plan was approved', () => {
     const pending = { status: 'pending', error: null } as const;
     expect(
       importReviewPhase({ presentedAt: 1 }, pending, {
         ...progress,
         status: 'failed',
-        error: 'Notion object not found or not shared with the connection',
+        error: 'raw provider detail',
+        errorKind: 'access_lost',
       })
-    ).toEqual({
-      kind: 'planFailed',
-      error: 'Notion object not found or not shared with the connection',
-    });
+    ).toEqual({ kind: 'planFailed', errorKind: 'access_lost' });
     expect(
       importReviewPhase({ presentedAt: 1 }, pending, {
         ...progress,
         status: 'failed',
-        error: null,
+        error: 'from a host that recorded no kind',
+        errorKind: null,
       })
-    ).toEqual({ kind: 'planFailed', error: null });
+    ).toEqual({ kind: 'planFailed', errorKind: null });
+  });
+
+  it('keeps the planning failure on a dismissed review', () => {
+    const dismissed = { status: 'dismissed', error: null } as const;
+    expect(
+      importReviewPhase({ presentedAt: 1 }, dismissed, {
+        ...progress,
+        status: 'failed',
+        errorKind: 'connection_unavailable',
+      })
+    ).toEqual({
+      kind: 'dismissed',
+      planFailure: { errorKind: 'connection_unavailable' },
+    });
+    expect(
+      importReviewPhase({ presentedAt: 1 }, dismissed, {
+        ...progress,
+        status: 'ready',
+      })
+    ).toEqual({ kind: 'dismissed', planFailure: null });
+  });
+
+  it('explains each failure kind, offering a reconnect only for a lost connection', () => {
+    expect(planFailureCopy('notion', 'access_lost')).toEqual({
+      headline: "Couldn't plan this import.",
+      detail:
+        'Notion no longer accepts Macro’s connection. Reconnect Notion, then plan the import again.',
+      reconnect: true,
+    });
+    expect(planFailureCopy('notion', 'connection_unavailable')).toEqual({
+      headline: "Couldn't plan this import.",
+      detail:
+        'Macro couldn’t use your Notion connection. Reconnect Notion, then plan the import again.',
+      reconnect: true,
+    });
+    expect(planFailureCopy('linear', null)).toEqual({
+      headline: "Couldn't plan this import.",
+      detail: null,
+      reconnect: false,
+    });
+    for (const kind of [
+      'not_found',
+      'forbidden',
+      'not_connected',
+      'rate_limited',
+      'unreachable',
+      'usage_refused',
+      'internal',
+    ] as const) {
+      const copy = planFailureCopy('notion', kind);
+      expect(copy.reconnect, kind).toBe(false);
+      expect(copy.detail, kind).toBeTruthy();
+    }
   });
 
   it('follows the run once the plan is approved', () => {
@@ -394,6 +448,7 @@ describe('planning', () => {
     reviewId: 'review',
     status: 'running',
     error: null,
+    errorKind: null,
     scanned: { pages: 40, databases: 12 },
     onTeam: true,
     counts: planCounts([]),

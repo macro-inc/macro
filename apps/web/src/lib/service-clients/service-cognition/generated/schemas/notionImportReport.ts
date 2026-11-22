@@ -6,6 +6,7 @@
  */
 import type { NotionImporter } from './notionImporter';
 import type { NotionImportReportError } from './notionImportReportError';
+import type { NotionImportReportErrorKind } from './notionImportReportErrorKind';
 import type { NotionImportReportReviewId } from './notionImportReportReviewId';
 import type { NotionImportReportScanned } from './notionImportReportScanned';
 import type { NotionImportReportStatus } from './notionImportReportStatus';
@@ -56,6 +57,7 @@ planning is still `running`.
   documents: number;
   /** Why the run failed, when it did. */
   error?: NotionImportReportError;
+  errorKind?: NotionImportReportErrorKind;
   /** Objects that failed to import, with the failure. */
   failures?: NotionReportItem[];
   /**

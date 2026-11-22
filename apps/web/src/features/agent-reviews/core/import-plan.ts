@@ -1,4 +1,5 @@
 import type { ImportDraft as SavedImportDraft } from '@service-agent-reviews/generated/types';
+import type { RunErrorKind } from '@service-cognition/import';
 import { match } from 'ts-pattern';
 import type { Review, ReviewItem } from './review';
 
@@ -80,6 +81,8 @@ export type ImportProgress = {
     | 'dismissed'
     | null;
   error: string | null;
+  /** Why the run failed, when it did and the server recorded the kind. */
+  errorKind: RunErrorKind | null;
   /** What planning has found in Notion so far, while it reads it. */
   scanned: { pages: number; databases: number } | null;
   /** Without a team, everything stays with the owner. */
@@ -96,13 +99,17 @@ export type ImportReviewPhase =
   | { kind: 'planning' }
   | { kind: 'plan' }
   /** Planning failed before the plan was approved; nothing can be approved. */
-  | { kind: 'planFailed'; error: string | null }
+  | { kind: 'planFailed'; errorKind: RunErrorKind | null }
   | { kind: 'starting' }
   | { kind: 'importing' }
   | { kind: 'completed' }
   | { kind: 'stopped' }
   | { kind: 'failed'; error: string }
-  | { kind: 'dismissed' }
+  /** `planFailure` when the plan had failed before it was dismissed. */
+  | {
+      kind: 'dismissed';
+      planFailure: { errorKind: RunErrorKind | null } | null;
+    }
   | { kind: 'unknown'; error: string | null };
 
 /**
@@ -559,6 +566,7 @@ export function progressFromEntries(
     reviewId,
     status: null,
     error: null,
+    errorKind: null,
     scanned: null,
     onTeam: true,
     counts: planCounts(entries),
@@ -593,7 +601,7 @@ export function importReviewPhase(
         .with('running', () => ({ kind: 'planning' }))
         .with('failed', () => ({
           kind: 'planFailed',
-          error: progress?.error ?? null,
+          errorKind: progress?.errorKind ?? null,
         }))
         .with('ready', 'importing', 'completed', 'dismissed', null, () => ({
           kind: 'plan',
@@ -601,7 +609,13 @@ export function importReviewPhase(
         .exhaustive()
     )
     .with('submitting', () => ({ kind: 'starting' }))
-    .with('dismissed', () => ({ kind: 'dismissed' }))
+    .with('dismissed', () => ({
+      kind: 'dismissed',
+      planFailure:
+        progress?.status === 'failed'
+          ? { errorKind: progress.errorKind ?? null }
+          : null,
+    }))
     .with('unknown', () => ({ kind: 'unknown', error: item.error ?? null }))
     .with('completed', () =>
       match(progress?.status ?? null)
@@ -630,4 +644,62 @@ export function sourceLabel(source: ImportDraft['source']): string {
     .with('linear', () => 'Linear')
     .with('jira', () => 'Jira')
     .exhaustive();
+}
+
+/** What a failed plan's card says: a plain first line, then what happened. */
+export type PlanFailureCopy = {
+  headline: string;
+  /** `null` when the server recorded no kind (an older host). */
+  detail: string | null;
+  /** Reconnecting the source is the way out. */
+  reconnect: boolean;
+};
+
+/** Copy for a plan that failed with `errorKind`; never the raw error. */
+export function planFailureCopy(
+  source: ImportDraft['source'],
+  errorKind: RunErrorKind | null
+): PlanFailureCopy {
+  const name = sourceLabel(source);
+  const detail = match(errorKind)
+    .returnType<string | null>()
+    .with(
+      'not_found',
+      () =>
+        `${name} said something in the plan is missing or isn’t shared with Macro.`
+    )
+    .with('forbidden', () => `${name} doesn’t let Macro read part of it.`)
+    .with(
+      'access_lost',
+      () =>
+        `${name} no longer accepts Macro’s connection. Reconnect ${name}, then plan the import again.`
+    )
+    .with(
+      'connection_unavailable',
+      () =>
+        `Macro couldn’t use your ${name} connection. Reconnect ${name}, then plan the import again.`
+    )
+    .with(
+      'not_connected',
+      () => `${name} isn’t connected. Connect it, then plan the import again.`
+    )
+    .with(
+      'rate_limited',
+      () =>
+        `${name} is limiting requests right now. Try again in a few minutes.`
+    )
+    .with('unreachable', () => `${name} couldn’t be reached. Try again later.`)
+    .with(
+      'usage_refused',
+      () => 'The AI work to plan it was refused. Check your plan’s usage.'
+    )
+    .with('internal', () => 'Something went wrong on Macro’s side. Try again.')
+    .with(null, () => null)
+    .exhaustive();
+  return {
+    headline: "Couldn't plan this import.",
+    detail,
+    reconnect:
+      errorKind === 'access_lost' || errorKind === 'connection_unavailable',
+  };
 }

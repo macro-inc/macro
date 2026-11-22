@@ -9,9 +9,11 @@ import {
   useImportQuery,
   useWorkspaceImportReportQuery,
 } from '@queries/import';
+import { connectPipedreamApp } from '@queries/pipedream-connectors';
 import { ResultAsync } from 'neverthrow';
+import { createSignal } from 'solid-js';
 import { ImportPlanCard } from '../components/import-plan-card';
-import type { ImportedCopy } from '../core/import-plan';
+import { type ImportedCopy, sourceLabel } from '../core/import-plan';
 import type { Review, ReviewActions } from '../core/review';
 import { createImportReview } from '../primitives/import-review';
 import {
@@ -55,7 +57,28 @@ export function ImportReview(props: {
         }))
       ).isOk(),
   });
+  // Reconnecting runs the app's own connect flow for the source again; the
+  // owner then asks the agent to plan again.
+  const [reconnecting, setReconnecting] = createSignal(false);
+  const [reconnectFailed, setReconnectFailed] = createSignal(false);
+  async function reconnect() {
+    if (reconnecting()) return;
+    setReconnecting(true);
+    setReconnectFailed(false);
+    const outcome = await ResultAsync.fromPromise(
+      connectPipedreamApp({
+        appSlug: source(),
+        serverName: sourceLabel(source()),
+      }),
+      () => ({ kind: 'connect-failed' as const })
+    );
+    setReconnectFailed(outcome.isErr());
+    setReconnecting(false);
+  }
   const alert = () =>
+    (reconnectFailed()
+      ? `${sourceLabel(source())} could not be reconnected. Try again.`
+      : undefined) ??
     review.error() ??
     review.validation() ??
     (review.stopFailed()
@@ -118,6 +141,12 @@ export function ImportReview(props: {
         onApprove={() => fireAndForget(review.approve(), 'agent-reviews')}
         onDismiss={() => fireAndForget(review.dismiss(), 'agent-reviews')}
         onStop={() => fireAndForget(review.stop(), 'agent-reviews')}
+        onReconnect={
+          props.canAct
+            ? () => fireAndForget(reconnect(), 'agent-reviews')
+            : undefined
+        }
+        reconnecting={reconnecting()}
       />
     </section>
   );
