@@ -33,6 +33,26 @@ describe('session request errors', () => {
     expect(error.message).toContain('Connect GitHub to Macro');
   });
 
+  it('names a create under a taken id by code, and only that 409', async () => {
+    await agentHarnessServiceClient.create({});
+    expect(
+      await errorHandler()(
+        new Response('this id is already taken', {
+          status: 409,
+          headers: { 'content-type': 'text/plain' },
+        })
+      )
+    ).toMatchObject({ code: 'SESSION_ID_TAKEN', status: 409 });
+    expect(
+      await errorHandler()(
+        new Response('this bot already has a session for this thread', {
+          status: 409,
+          headers: { 'content-type': 'text/plain' },
+        })
+      )
+    ).toMatchObject({ code: 'HTTP_ERROR', status: 409 });
+  });
+
   it('preserves the service reason when a control request is rejected', async () => {
     await agentHarnessServiceClient.control('session-1', {
       type: 'setModel',

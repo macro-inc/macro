@@ -100,12 +100,17 @@ vi.mock('../ui', () => ({
   ComposerNotice: (props: { text: string }) => <p>{props.text}</p>,
   UnconfirmedSendCard: (props: {
     text: string;
+    sending?: boolean;
     onSendAgain: () => void;
     onDismiss: () => void;
   }) => (
     <div data-testid="unconfirmed">
       <p>{props.text}</p>
-      <button type="button" onClick={() => props.onSendAgain()}>
+      <button
+        type="button"
+        data-sending={props.sending ? 'true' : 'false'}
+        onClick={() => props.onSendAgain()}
+      >
         Send anyway
       </button>
       <button type="button" onClick={() => props.onDismiss()}>
@@ -624,6 +629,31 @@ describe('a message the harness does not take', () => {
     );
     await vi.waitFor(() =>
       expect(mocks.dropUnconfirmed).toHaveBeenCalledWith('a')
+    );
+  });
+
+  it('sends an unconfirmed prompt again only once while that send is in flight', async () => {
+    const action = { type: 'prompt', prompt: 'Run the tests' };
+    mocks.unconfirmed = () => [{ actionId: 'a', action }];
+    let answer!: (value: unknown) => void;
+    mocks.issue.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      })
+    );
+    render(() => <AgentComposer />);
+    const button = screen.getByRole('button', { name: 'Send anyway' });
+    button.click();
+    button.click();
+
+    await vi.waitFor(() =>
+      expect(button.getAttribute('data-sending')).toBe('true')
+    );
+    button.click();
+    expect(mocks.issue).toHaveBeenCalledTimes(1);
+    answer(ok({ actionId: 'b', status: 'sent' }));
+    await vi.waitFor(() =>
+      expect(button.getAttribute('data-sending')).toBe('false')
     );
   });
 

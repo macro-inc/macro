@@ -250,7 +250,7 @@ export function createAgentSession(
   createEffect(() => {
     const session = live();
     const read = () =>
-      setUnconfirmed(session ? [...session.unconfirmed()] : []);
+      setUnconfirmed(session ? [...session.unconfirmed(options.userId())] : []);
     read();
     if (session) onCleanup(session.subscribeUnconfirmed(read));
   });

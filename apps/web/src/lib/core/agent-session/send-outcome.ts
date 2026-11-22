@@ -1,6 +1,7 @@
 import { AI_USAGE_LIMIT_ERROR } from '@app/lib/service-clients/ai-usage-limit';
 import type { ResultError } from '@core/util/result';
 import { NO_RUNTIME_ACCESS_ERROR } from '@service-agent-harness/no-runtime-access';
+import { SESSION_ID_TAKEN } from '@service-agent-harness/session-id-taken';
 
 /**
  * Codes the harness answers with when it refused an action before doing any
@@ -14,6 +15,7 @@ const REFUSAL_CODES: ReadonlySet<string> = new Set([
   'NOT_FOUND',
   'CONFLICT',
   'GONE',
+  SESSION_ID_TAKEN,
 ]);
 
 /**

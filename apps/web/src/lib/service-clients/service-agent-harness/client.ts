@@ -45,6 +45,7 @@ import {
   type NO_RUNTIME_ACCESS_ERROR,
   readNoRuntimeAccessError,
 } from './no-runtime-access';
+import { SESSION_ID_TAKEN, SESSION_ID_TAKEN_TEXT } from './session-id-taken';
 
 export type {
   ArchiveCause,
@@ -79,6 +80,23 @@ const sessionAiError: ErrorResponseHandler<
   (await readAiUsageLimitError(response)) ??
   (await readNoRuntimeAccessError(response)) ??
   (await sessionError(response));
+
+const sessionCreateError: ErrorResponseHandler<
+  | typeof AI_USAGE_LIMIT_ERROR
+  | typeof NO_RUNTIME_ACCESS_ERROR
+  | typeof SESSION_ID_TAKEN
+> = async (response) => {
+  if (
+    response.status === 409 &&
+    (await response.clone().text()).trim() === SESSION_ID_TAKEN_TEXT
+  )
+    return {
+      code: SESSION_ID_TAKEN,
+      status: 409,
+      message: SESSION_ID_TAKEN_TEXT,
+    };
+  return sessionAiError(response);
+};
 
 export const PROVIDER_CREDENTIAL_REJECTED =
   'PROVIDER_CREDENTIAL_REJECTED' as const;
@@ -179,12 +197,14 @@ export const agentHarnessServiceClient = {
   create(request: CreateAgentSessionRequest) {
     return fetchWithToken<
       CreateAgentSessionResponse,
-      typeof AI_USAGE_LIMIT_ERROR | typeof NO_RUNTIME_ACCESS_ERROR
+      | typeof AI_USAGE_LIMIT_ERROR
+      | typeof NO_RUNTIME_ACCESS_ERROR
+      | typeof SESSION_ID_TAKEN
     >(`${agentHarnessHost}/agent-sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
-      errorResponseHandler: sessionAiError,
+      errorResponseHandler: sessionCreateError,
     });
   },
 

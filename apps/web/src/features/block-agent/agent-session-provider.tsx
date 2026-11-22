@@ -1,4 +1,10 @@
 import { usePending } from '@app/observability/flow';
+import {
+  dropUnconfirmedSends,
+  subscribeUnconfirmedSends,
+  type UnconfirmedSend,
+  unconfirmedSends,
+} from '@core/agent-session/unconfirmed-sends';
 /** App-facing composition for the agent session and its controllers. */
 
 import { createInteractionController } from '@app/features/agent-interactions/primitives/create-interaction-controller';
@@ -24,6 +30,7 @@ import {
   type Accessor,
   createEffect,
   createSignal,
+  onCleanup,
   type ParentProps,
   Suspense,
 } from 'solid-js';
@@ -64,6 +71,20 @@ export function AgentSessionProvider(
   });
 
   const userId = useUserId();
+  // A create whose outcome stayed unknown leaves its first prompt held under
+  // the block's id, with no session to show it in: the error view does.
+  const [startupHeld, setStartupHeld] = createSignal<UnconfirmedSend[]>([]);
+  createEffect(() => {
+    const id = props.blockId;
+    const user = userId();
+    if (!failed()) {
+      setStartupHeld([]);
+      return;
+    }
+    const read = () => setStartupHeld(unconfirmedSends(id, user));
+    read();
+    onCleanup(subscribeUnconfirmedSends(id, read));
+  });
   const live = createAgentSession(sessionId, {
     userId,
     provisioning: pending,
@@ -191,6 +212,9 @@ export function AgentSessionProvider(
           pending,
           initialInput: initialInput(),
           startupError: error,
+          startupHeld,
+          dropStartupHeld: (actionId) =>
+            dropUnconfirmedSends(props.blockId, [actionId]),
           session: live.session,
           bot: live.bot,
           metadata: live.metadata,

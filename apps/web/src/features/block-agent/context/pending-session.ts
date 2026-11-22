@@ -52,7 +52,8 @@ import type {
   CreateAgentSessionRequest,
   PromptAttachment,
 } from '@service-agent-harness/generated/schemas';
-import { ok } from 'neverthrow';
+import { SESSION_ID_TAKEN } from '@service-agent-harness/session-id-taken';
+import { err, ok } from 'neverthrow';
 import { type Accessor, createSignal } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
 import { issueSessionAction } from '../queries/issue-session-action';
@@ -63,10 +64,6 @@ import {
 
 /** Waits before asking again for a create that got no clear answer. */
 const CREATE_RETRY_DELAYS_MS = [1_000, 3_000];
-
-/** The harness's answer to a create under an id that already has a session. */
-const isIdTaken = (error: { code: string; status?: number; message: string }) =>
-  error.status === 409 && error.message === 'this id is already taken';
 
 export type PendingSession = {
   /** The session's id, once the create has made it real. */
@@ -249,48 +246,98 @@ export function startPendingSession(
     } satisfies CreateAgentSessionRequest);
 
   // A create with no clear answer may have made the session, and started its
-  // first prompt with it. Asked again under the same id it either makes it
-  // now or answers that the id is taken, which proves the first one did: the
-  // session is adopted, and a prompt that rode the create is unconfirmed.
-  // Only a definite refusal lets a warm id fall back to a fresh one, since
-  // that create made nothing.
+  // first prompt with it. It is asked again under the same id: it either makes
+  // it now or answers that the id is taken. Taken after an unclear try, by a
+  // session this person owns, proves that try made it, so it is adopted and
+  // a prompt that rode it is unconfirmed. Taken on the first try is a warm id
+  // the harness could not hand over (expired, or another tab's), so it is a
+  // refusal like any other. Once a try was unclear, nothing later is a
+  // refusal: the first may have landed, so it never forks to a fresh id and
+  // never hands the prompt back.
   const createSession = async (): Promise<{
     result: Awaited<ReturnType<typeof create>>;
     adopted: boolean;
+    /** Some try may have made the session under `id`. */
+    unknown: boolean;
   }> => {
-    let result = await create(id);
+    const attempt = async (
+      sessionId: string
+    ): Promise<Awaited<ReturnType<typeof create>>> => {
+      try {
+        return await create(sessionId);
+      } catch (error: unknown) {
+        console.warn('[agent-session] create threw', error);
+        return err([
+          {
+            name: 'Error',
+            code: 'NETWORK_ERROR',
+            message: 'Could not reach the agent service.',
+          },
+        ]);
+      }
+    };
+    let result = await attempt(id);
+    let unclear = false;
     for (const delay of CREATE_RETRY_DELAYS_MS) {
       if (!result.isErr() || !isUnknownOutcome(result.error)) break;
+      unclear = true;
       trace?.stage('create_retry');
       await new Promise((resolve) => setTimeout(resolve, delay));
-      result = await create(id);
+      result = await attempt(id);
     }
-    if (result.isErr() && result.error.some(isIdTaken)) {
-      const existing = await agentHarnessServiceClient.get(id);
-      if (existing.isOk())
-        return { result: ok({ session: existing.value }), adopted: true };
+    if (!result.isErr()) return { result, adopted: false, unknown: false };
+    const taken = result.error.some((error) => error.code === SESSION_ID_TAKEN);
+    if (taken && unclear) {
+      const existing = await agentHarnessServiceClient
+        .get(id)
+        .catch(() => undefined);
+      if (existing?.isOk()) {
+        if (options.userId && existing.value.ownerId === options.userId)
+          return {
+            result: ok({ session: existing.value }),
+            adopted: true,
+            unknown: false,
+          };
+        // Someone else's: this person's tries never made it.
+        return warmId
+          ? { result: await attempt(uuidv7()), adopted: false, unknown: false }
+          : { result, adopted: false, unknown: false };
+      }
+      // It exists but could not be read: still unconfirmed.
+      return { result, adopted: false, unknown: true };
     }
-    if (warmId && result.isErr() && !isUnknownOutcome(result.error))
-      return { result: await create(uuidv7()), adopted: false };
-    return { result, adopted: false };
+    if (unclear || isUnknownOutcome(result.error))
+      return { result, adopted: false, unknown: true };
+    // An expired or failed reservation must not prevent ordinary creation.
+    if (warmId)
+      return {
+        result: await attempt(uuidv7()),
+        adopted: false,
+        unknown: false,
+      };
+    return { result, adopted: false, unknown: false };
   };
 
   fireAndForget(
     traced(() =>
       createSession()
-        .then(async ({ result, adopted }) => {
-          if (result.isErr() && isUnknownOutcome(result.error)) {
-            // It may have started: keep the prompt where its session will
-            // show it, never back in the box.
-            if (promptActionId && firstPrompt)
-              holdUnconfirmedSend(id, {
-                actionId: promptActionId,
-                action: firstPrompt,
-              });
+        .then(async ({ result, adopted, unknown }) => {
+          if (result.isErr() && unknown && promptActionId && firstPrompt) {
+            // The prompt rode the create and may have started: it stays on
+            // the card the error view shows, never back in the box.
+            holdUnconfirmedSend(id, options.userId, {
+              actionId: promptActionId,
+              action: firstPrompt,
+            });
             failUnconfirmed(
-              options.prompt?.trim()
-                ? `We couldn't confirm the chat was started. Check your chats before sending it again. Your message: ${options.prompt.trim()}`
-                : "We couldn't confirm the chat was started. Check your chats before trying again."
+              'The chat may not have been created, and your message may have been sent. Check your chats before sending it again.'
+            );
+            return;
+          }
+          if (result.isErr() && unknown) {
+            // Only the create was lost; the prompt waits to be sent after it.
+            fail(
+              'The chat may not have been created. Check your chats before starting it again.'
             );
             return;
           }
@@ -359,7 +406,7 @@ export function startPendingSession(
               const userId = options.userId ?? result.value.session.ownerId;
               if (promptActionId && firstPrompt && adopted) {
                 // Whether the first create started it is unknown.
-                holdUnconfirmedSend(created, {
+                holdUnconfirmedSend(created, options.userId, {
                   actionId: promptActionId,
                   action: firstPrompt,
                 });

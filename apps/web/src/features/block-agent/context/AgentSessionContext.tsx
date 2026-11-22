@@ -34,6 +34,9 @@ export type AgentSessionState = {
   /** Unsent context from the action that opened this session. */
   initialInput?: string;
   startupError: Accessor<string | undefined>;
+  /** A first prompt a failed create may have started, held until dismissed. */
+  startupHeld?: Accessor<UnconfirmedSend[]>;
+  dropStartupHeld?: (actionId: string) => void;
   /** Session metadata, absent until the load resolves. */
   session: Accessor<AgentSessionResponse | undefined>;
   /** The bot the session runs as, absent until the fold is acquired. */

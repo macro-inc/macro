@@ -20,6 +20,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { NotificationSource } from '@notifications/notification-source';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { isSessionArchived } from '@service-agent-harness/session-archive';
@@ -29,6 +30,7 @@ import {
   type Accessor,
   createEffect,
   createSignal,
+  For,
   on,
   type ParentProps,
   Show,
@@ -38,6 +40,7 @@ import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
+import { UnconfirmedSendCard } from '../ui/UnconfirmedSendCard';
 import { AgentSessionHeader } from '../views/agent-session-header';
 import { MobileAgentSessionHeader } from '../views/mobile/redesigned-session-header/redesigned-session-header';
 import { AgentComposer } from './AgentComposer';
@@ -132,6 +135,8 @@ function AgentBlockContent(props: {
     pending,
     retryLoad,
     startupError,
+    startupHeld,
+    dropStartupHeld,
   } = useAgentSession();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
@@ -172,11 +177,40 @@ function AgentBlockContent(props: {
           }
         >
           {(error) => (
-            <EmptyStatePanel
-              centered
-              title="Unable to start this agent"
-              description={error()}
-            />
+            <div class="flex size-full flex-col">
+              <EmptyStatePanel
+                centered
+                title="Unable to start this agent"
+                description={error()}
+              />
+              <div class="mx-auto w-full max-w-2xl px-4">
+                <For each={startupHeld?.() ?? []}>
+                  {(held) => (
+                    <UnconfirmedSendCard
+                      text={
+                        held.action.type === 'prompt' ? held.action.prompt : ''
+                      }
+                      attachmentCount={
+                        held.action.type === 'prompt'
+                          ? (held.action.attachments?.length ?? 0)
+                          : 0
+                      }
+                      onCopy={() =>
+                        fireAndForget(
+                          navigator.clipboard.writeText(
+                            held.action.type === 'prompt'
+                              ? held.action.prompt
+                              : ''
+                          ),
+                          'agent-block'
+                        )
+                      }
+                      onDismiss={() => dropStartupHeld?.(held.actionId)}
+                    />
+                  )}
+                </For>
+              </div>
+            </div>
           )}
         </Show>
       }

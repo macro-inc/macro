@@ -172,6 +172,7 @@ vi.mock('@queries/agent-session/log', () => ({
   forgetAgentSessionLog: logSource.forget,
 }));
 
+import { clearComposerStorage } from '@core/auth/clear-composer-storage';
 import {
   AgentSession,
   AgentSessionAccessDenied,
@@ -187,6 +188,7 @@ import {
 } from './unconfirmed-sends';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
+const USER = 'macro|wolf@macro.com';
 
 function row(n: number): AgentSessionLogEntryDto {
   return {
@@ -492,7 +494,10 @@ describe('AgentSession', () => {
     try {
       await live.load();
 
-      const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+      const issuing = live.issue(
+        { type: 'prompt', prompt: 'hi' },
+        { userId: USER }
+      );
       // The wait, the queue read, the grace for a dispatch, the log read.
       await vi.advanceTimersByTimeAsync(13_000);
       const result = await issuing;
@@ -505,7 +510,7 @@ describe('AgentSession', () => {
       );
       const actionId = (speculation as { actionId: string }).actionId;
       expect(inputs().at(-1)).toEqual({ kind: 'retracted', actionId });
-      expect(live.unconfirmed().map((send) => send.actionId)).toEqual([
+      expect(live.unconfirmed(USER).map((send) => send.actionId)).toEqual([
         actionId,
       ]);
     } finally {
@@ -587,7 +592,10 @@ describe('AgentSession', () => {
       try {
         await live.load();
 
-        const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
         await vi.advanceTimersByTimeAsync(10_000);
         const result = await issuing;
 
@@ -616,7 +624,10 @@ describe('AgentSession', () => {
       try {
         await live.load();
 
-        const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
         await vi.advanceTimersByTimeAsync(10_000);
         // Dispatched from the queue meanwhile: gone from it, its row arriving.
         fold.pushSession.mockResolvedValueOnce([confirmed(actionId)]);
@@ -646,7 +657,10 @@ describe('AgentSession', () => {
       const live = AgentSession.acquire(SESSION);
       await live.load();
 
-      const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+      const issuing = live.issue(
+        { type: 'prompt', prompt: 'hi' },
+        { userId: USER }
+      );
       await settle();
       fold.pushSession.mockResolvedValueOnce([confirmed(actionId)]);
       deliver(row(2));
@@ -676,7 +690,10 @@ describe('AgentSession', () => {
         if (broken === 'log')
           logSource.fetched.mockRejectedValueOnce(new Error('offline'));
 
-        const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
         if (broken === 'released') {
           await vi.advanceTimersByTimeAsync(5_000);
           live.release();
@@ -700,7 +717,7 @@ describe('AgentSession', () => {
         );
         expect(check?.ends).toBe(1);
         // Kept past the instance that checked it.
-        expect(unconfirmedSends(SESSION)).toEqual([
+        expect(unconfirmedSends(SESSION, USER)).toEqual([
           expect.objectContaining({ action: { type: 'prompt', prompt: 'hi' } }),
         ]);
       } finally {
@@ -716,7 +733,10 @@ describe('AgentSession', () => {
       try {
         await live.load();
 
-        const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
         await vi.advanceTimersByTimeAsync(9_000);
         expect(inputs().filter((input) => input.kind === 'retracted')).toEqual(
           []
@@ -773,7 +793,10 @@ describe('AgentSession', () => {
           ])
         );
 
-        const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
         await vi.advanceTimersByTimeAsync(14_000);
         const result = await issuing;
 
@@ -781,7 +804,7 @@ describe('AgentSession', () => {
           actionId,
           status: 'sent',
         });
-        expect(live.unconfirmed()).toEqual([]);
+        expect(live.unconfirmed(USER)).toEqual([]);
       } finally {
         live.release();
         vi.useRealTimers();
@@ -797,7 +820,10 @@ describe('AgentSession', () => {
       const first = AgentSession.acquire(SESSION);
       try {
         await first.load();
-        const issuing = first.issue({ type: 'prompt', prompt: 'hi' });
+        const issuing = first.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
         await vi.advanceTimersByTimeAsync(14_000);
         await issuing;
       } finally {
@@ -808,7 +834,7 @@ describe('AgentSession', () => {
       const again = AgentSession.acquire(SESSION);
       try {
         await again.load();
-        expect(again.unconfirmed()).toEqual([
+        expect(again.unconfirmed(USER)).toEqual([
           expect.objectContaining({ action: { type: 'prompt', prompt: 'hi' } }),
         ]);
       } finally {
@@ -818,7 +844,7 @@ describe('AgentSession', () => {
     });
 
     it('lets a prompt kept across a reload go when its row arrives later', async () => {
-      holdUnconfirmedSend(SESSION, {
+      holdUnconfirmedSend(SESSION, USER, {
         actionId: 'kept',
         action: { type: 'prompt', prompt: 'hi' },
       });
@@ -826,19 +852,58 @@ describe('AgentSession', () => {
       const live = AgentSession.acquire(SESSION);
       try {
         await live.load();
-        expect(live.unconfirmed()).toHaveLength(1);
+        expect(live.unconfirmed(USER)).toHaveLength(1);
 
         fold.pushSession.mockResolvedValueOnce([confirmed('kept')]);
         deliver(row(3));
-        await vi.waitFor(() => expect(live.unconfirmed()).toEqual([]));
+        await vi.waitFor(() => expect(live.unconfirmed(USER)).toEqual([]));
         expect(localStorage.length).toBe(0);
       } finally {
         live.release();
       }
     });
 
+    it('shows a held prompt only to the person who sent it, and forgets it on sign-out', async () => {
+      holdUnconfirmedSend(SESSION, USER, {
+        actionId: 'kept',
+        action: { type: 'prompt', prompt: 'hi' },
+      });
+      const live = AgentSession.acquire(SESSION);
+      try {
+        expect(live.unconfirmed('macro|someone-else@macro.com')).toEqual([]);
+        expect(live.unconfirmed(USER)).toHaveLength(1);
+        clearComposerStorage();
+        expect(live.unconfirmed(USER)).toEqual([]);
+      } finally {
+        live.release();
+      }
+    });
+
+    it("keeps two tabs' held prompts apart, and lets old ones expire", () => {
+      vi.useFakeTimers();
+      try {
+        holdUnconfirmedSend(SESSION, USER, {
+          actionId: 'tab-a',
+          action: { type: 'prompt', prompt: 'a' },
+        });
+        // Another tab writes its own key; nothing reads and rewrites a list.
+        holdUnconfirmedSend(SESSION, USER, {
+          actionId: 'tab-b',
+          action: { type: 'prompt', prompt: 'b' },
+        });
+        forgetUnconfirmedSendsInMemory();
+        expect(
+          unconfirmedSends(SESSION, USER).map((send) => send.actionId)
+        ).toEqual(['tab-a', 'tab-b']);
+        vi.advanceTimersByTime(8 * 24 * 60 * 60 * 1000);
+        expect(unconfirmedSends(SESSION, USER)).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('lets a kept prompt go when the loaded log already has it', async () => {
-      holdUnconfirmedSend(SESSION, {
+      holdUnconfirmedSend(SESSION, USER, {
         actionId: 'kept',
         action: { type: 'prompt', prompt: 'hi' },
       });
@@ -847,7 +912,7 @@ describe('AgentSession', () => {
       const live = AgentSession.acquire(SESSION);
       try {
         await live.load();
-        expect(live.unconfirmed()).toEqual([]);
+        expect(live.unconfirmed(USER)).toEqual([]);
         expect(localStorage.length).toBe(0);
       } finally {
         live.release();
@@ -869,15 +934,18 @@ describe('AgentSession', () => {
         const changes = vi.fn();
         live.subscribeUnconfirmed(changes);
 
-        const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+        const issuing = live.issue(
+          { type: 'prompt', prompt: 'hi' },
+          { userId: USER }
+        );
         await vi.advanceTimersByTimeAsync(14_000);
         await issuing;
-        expect(live.unconfirmed()).toHaveLength(1);
+        expect(live.unconfirmed(USER)).toHaveLength(1);
 
         fold.pushSession.mockResolvedValueOnce([confirmed(actionId)]);
         deliver(row(3));
         await vi.advanceTimersByTimeAsync(0);
-        expect(live.unconfirmed()).toEqual([]);
+        expect(live.unconfirmed(USER)).toEqual([]);
         expect(changes).toHaveBeenCalledTimes(2);
       } finally {
         live.release();

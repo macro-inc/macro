@@ -314,18 +314,26 @@ export function AgentComposer(props: {
     if (sent.refusal && sessionId() === sentTo) setRefusal(sent.refusal);
   };
 
-  // An unconfirmed prompt sent again on purpose, as a new send. Its card
-  // stays until the new send is taken, so a refusal keeps the text and files
-  // on it, with the reason above the input.
+  // An unconfirmed prompt sent again on purpose, as a new send, one at a
+  // time per card. Its card stays until the new send is taken, so a refusal
+  // keeps the text and files on it, with the reason above the input.
+  const [resending, setResending] = createSignal<string[]>([]);
   const sendAgain = async (sent: UnconfirmedSend) => {
-    const sentTo = sessionId();
-    setRefusal(undefined);
-    const outcome = await act(sent.action, 'The message could not be sent');
-    if (outcome.taken) {
-      dropUnconfirmed(sent.actionId);
-      return;
+    if (resending().includes(sent.actionId)) return;
+    setResending((all) => [...all, sent.actionId]);
+    try {
+      const sentTo = sessionId();
+      setRefusal(undefined);
+      const outcome = await act(sent.action, 'The message could not be sent');
+      if (outcome.taken) {
+        dropUnconfirmed(sent.actionId);
+        return;
+      }
+      if (outcome.refusal && sessionId() === sentTo)
+        setRefusal(outcome.refusal);
+    } finally {
+      setResending((all) => all.filter((id) => id !== sent.actionId));
     }
-    if (outcome.refusal && sessionId() === sentTo) setRefusal(outcome.refusal);
   };
 
   // Focus plumbing between the input and the queue list above it: Up at the
@@ -419,6 +427,7 @@ export function AgentComposer(props: {
               )
             }
             onSendAgain={() => fireAndForget(sendAgain(sent), 'agent-composer')}
+            sending={resending().includes(sent.actionId)}
             onDismiss={() => dropUnconfirmed(sent.actionId)}
           />
         )}

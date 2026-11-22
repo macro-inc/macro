@@ -2424,13 +2424,21 @@ must stay hidden; subsequent live messages must still appear.
   the session was let go, the send is unconfirmed: the text stays out of the box
   and a "Not confirmed" card above the input keeps it, with Copy, Dismiss, and
   Send again (which first says the agent may get it twice). The card goes away
-  when the prompt's row reaches the log, also after a reload: the card is kept
-  per session in local storage, outside the session object, so a reload, a
-  session leaving memory, or one let go mid-check still shows it. A refused
-  Send again keeps the card. A new chat's first prompt follows the same rule:
-  a create with no clear answer is asked again under the same id (a 409 "id
-  taken" proves the first one made it, so it is adopted with its prompt on the
-  card), never under a fresh warm-fallback id, and never handed back. Each check is one `agent.prompt.send_check` span under the prompt's
+  when the prompt's row reaches the log, also after a reload. Each held send
+  is its own local-storage key, scoped to the person who sent it (another
+  account on the browser never sees it; sign-out clears them), expiring after
+  7 days, at most 10 per session. A refused Send again keeps the card; Send
+  again runs one resend at a time and the card's buttons wait for it.
+- A new chat's create with no clear answer is asked again under the same id.
+  "Id taken" after an unclear try, on a session this person owns, means the
+  first try made it: it is adopted and a first prompt that rode the create
+  goes on the card. "Id taken" on the first try is a warm id the harness
+  couldn't hand over (expired, or another tab's): it falls back to a fresh id
+  as before. Once any try was unclear nothing later counts as a refusal: no
+  fresh id, no draft handed back. If the prompt rode the create, the error
+  view says the chat may not have been created and shows the card (Copy,
+  Dismiss); if it didn't, the prompt was never sent and comes back as the
+  draft. Each check is one `agent.prompt.send_check` span under the prompt's
   trace, with its outcome (sent / unknown) and each phase's duration.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.

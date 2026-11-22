@@ -398,15 +398,22 @@ describe('pending navigation ownership', () => {
       message: 'Agent request failed (HTTP 504).',
     };
     const taken = {
-      code: 'HTTP_ERROR',
+      code: 'SESSION_ID_TAKEN',
       status: 409,
       message: 'this id is already taken',
     };
+    harness.get.mockImplementationOnce(async (sessionId: string) =>
+      ok({ id: sessionId, ownerId: 'macro|me@macro.com' })
+    );
     harness.create
       .mockResolvedValueOnce(err([gatewayTimeout]))
       .mockResolvedValueOnce(err([taken]));
     const onFailure = vi.fn();
-    const id = startPendingSession({ prompt: 'Hello', onFailure });
+    const id = startPendingSession({
+      prompt: 'Hello',
+      onFailure,
+      userId: 'macro|me@macro.com',
+    });
     await vi.advanceTimersByTimeAsync(2_000);
 
     const ids = harness.create.mock.calls.map(([request]) => request.id);
@@ -414,11 +421,52 @@ describe('pending navigation ownership', () => {
     expect(onFailure).not.toHaveBeenCalled();
     expect(pendingSession(id)?.sessionId()).toBe(id);
     // Whether the first create started the prompt is unknown: kept, not lost.
-    expect(unconfirmedSends(id)).toEqual([
+    expect(unconfirmedSends(id, 'macro|me@macro.com')).toEqual([
       expect.objectContaining({
         action: expect.objectContaining({ type: 'prompt', prompt: 'Hello' }),
       }),
     ]);
+  });
+
+  it.each([
+    ['the session it made cannot be read', 'unreadable'],
+    ['a retry is refused', 'refused'],
+  ])('keeps a lost first create unconfirmed when %s', async (_name, then) => {
+    const gatewayTimeout = {
+      code: 'HTTP_ERROR',
+      status: 504,
+      message: 'Agent request failed (HTTP 504).',
+    };
+    harness.create
+      .mockResolvedValueOnce(err([gatewayTimeout]))
+      .mockResolvedValueOnce(
+        err([
+          then === 'unreadable'
+            ? {
+                code: 'HTTP_ERROR',
+                status: 409,
+                message: 'this id is already taken',
+              }
+            : {
+                code: 'HTTP_ERROR',
+                status: 422,
+                message: 'owner is not a known user',
+              },
+        ])
+      );
+    harness.get.mockResolvedValueOnce(err([gatewayTimeout]));
+    const onFailure = vi.fn();
+    const id = startPendingSession({
+      prompt: 'Hello',
+      onFailure,
+      userId: 'macro|me@macro.com',
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(harness.create).toHaveBeenCalledTimes(2);
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(pendingSession(id)?.error()).toContain('may not have been created');
+    expect(unconfirmedSends(id, 'macro|me@macro.com')).toHaveLength(1);
   });
 
   it('never falls back to a new id, or hands the prompt back, when creates get no clear answer', async () => {
@@ -432,15 +480,19 @@ describe('pending navigation ownership', () => {
       ])
     );
     const onFailure = vi.fn();
-    const id = startPendingSession({ prompt: 'Hello', onFailure });
+    const id = startPendingSession({
+      prompt: 'Hello',
+      onFailure,
+      userId: 'macro|me@macro.com',
+    });
     await vi.advanceTimersByTimeAsync(10_000);
 
     expect(
       new Set(harness.create.mock.calls.map(([request]) => request.id))
     ).toEqual(new Set([id]));
     expect(onFailure).not.toHaveBeenCalled();
-    expect(pendingSession(id)?.error()).toContain('Hello');
-    expect(unconfirmedSends(id)).toHaveLength(1);
+    expect(pendingSession(id)?.error()).toContain('may not have been created');
+    expect(unconfirmedSends(id, 'macro|me@macro.com')).toHaveLength(1);
   });
 
   it('forgets a failed create when its error view unmounts', async () => {

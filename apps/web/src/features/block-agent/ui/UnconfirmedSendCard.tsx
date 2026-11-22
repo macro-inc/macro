@@ -16,8 +16,11 @@ export interface UnconfirmedSendCardProps {
   text: string;
   /** How many files rode it. */
   attachmentCount: number;
+  /** A resend of it is in flight: its choices wait for the answer. */
+  sending?: boolean;
   onCopy: () => void;
-  onSendAgain: () => void;
+  /** Absent where there is no session to send it in again. */
+  onSendAgain?: () => void;
   onDismiss: () => void;
 }
 
@@ -76,6 +79,7 @@ export function UnconfirmedSendCard(props: UnconfirmedSendCardProps) {
                 type="button"
                 variant="ghost"
                 size="sm"
+                disabled={props.sending}
                 onClick={props.onDismiss}
               >
                 {t('agentSend.dismiss')}
@@ -88,15 +92,18 @@ export function UnconfirmedSendCard(props: UnconfirmedSendCardProps) {
               >
                 {t('agentSend.copy')}
               </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                ref={sendAgain}
-                onClick={() => confirm(true)}
-              >
-                {t('agentSend.sendAgain')}
-              </Button>
+              <Show when={props.onSendAgain}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  ref={sendAgain}
+                  disabled={props.sending}
+                  onClick={() => confirm(true)}
+                >
+                  {t('agentSend.sendAgain')}
+                </Button>
+              </Show>
             </>
           }
         >
@@ -107,6 +114,7 @@ export function UnconfirmedSendCard(props: UnconfirmedSendCardProps) {
             type="button"
             variant="ghost"
             size="sm"
+            disabled={props.sending}
             onClick={() => confirm(false)}
           >
             {t('agentSend.cancel')}
@@ -116,7 +124,8 @@ export function UnconfirmedSendCard(props: UnconfirmedSendCardProps) {
             variant="secondary"
             size="sm"
             ref={sendAnyway}
-            onClick={props.onSendAgain}
+            disabled={props.sending}
+            onClick={() => props.onSendAgain?.()}
           >
             {t('agentSend.sendAnyway')}
           </Button>

@@ -75,6 +75,7 @@ import { publishSessionTurn } from './session-turn';
 import { typedInClientId } from './ui-client';
 import {
   dropUnconfirmedSends,
+  hasUnconfirmedSends,
   holdUnconfirmedSend,
   subscribeUnconfirmedSends,
   type UnconfirmedSend,
@@ -543,7 +544,7 @@ export class AgentSession {
         })
         .with({ outcome: 'unknown' }, () => {
           trace?.end('unconfirmed');
-          holdUnconfirmedSend(this.id, { actionId, action });
+          holdUnconfirmedSend(this.id, options.userId, { actionId, action });
           return err([
             {
               name: 'Error',
@@ -757,8 +758,8 @@ export class AgentSession {
    * this instance and across reloads; one leaves when its row reaches the
    * log, or when {@link dropUnconfirmed} lets it go.
    */
-  unconfirmed(): readonly UnconfirmedSend[] {
-    return unconfirmedSends(this.id);
+  unconfirmed(userId: string | undefined): readonly UnconfirmedSend[] {
+    return unconfirmedSends(this.id, userId);
   }
 
   /** Follow {@link unconfirmed}. */
@@ -1307,7 +1308,7 @@ export class AgentSession {
       }
       const projectionStartedAt = performance.now();
       for (const listener of this.listeners) listener(events);
-      if (unconfirmedSends(this.id).length > 0) this.confirmArrived(events);
+      if (hasUnconfirmedSends(this.id)) this.confirmArrived(events);
       if (snapshot) {
         this.trace.projected(
           projectionStartedAt,
