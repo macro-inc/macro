@@ -110,12 +110,18 @@ for (const provider of PROVIDERS) {
       expect(noiseResponse?.status()).toBe(200);
       await noiseResponse?.finished();
       await expect.poll(() => rowIds(page)).toEqual([photos.id]);
-      await row(page, photos.id).click({ button: 'right' });
       const signal = page.getByRole('menuitem', {
         name: 'Sender → Signal',
         exact: true,
       });
-      await expect(signal).toBeVisible();
+      // Noise can replace its first row while settling after the response.
+      // Establish the open menu before taking the baseline for any wake.
+      await expect(async () => {
+        if (!(await signal.isVisible())) {
+          await row(page, photos.id).click({ button: 'right' });
+        }
+        await expect(signal).toBeVisible({ timeout: 3_000 });
+      }).toPass({ timeout: 20_000 });
       // The tab may replace its first rows while settling. Start the unchanged-
       // refresh baseline on the row whose menu is now open.
       const original = await row(page, photos.id).elementHandle();
