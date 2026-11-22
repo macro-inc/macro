@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { type Api, unique } from './harness/api';
 import { conversationRow } from './harness/channel';
 import {
-  couldNotLoad,
+  expectNotHeld,
   expectShown,
   findRow,
   leaveAlone,
@@ -83,7 +83,7 @@ async function expectOnlySecondHeld(
   const inside = await openFromList(page, channels[1]);
   await expectShown(inside, [texts[1]]);
   await conversationRow(page, channels[0].name).click();
-  await expect(couldNotLoad(page)).toBeVisible({ timeout: 20_000 });
+  await expectNotHeld(page);
 }
 
 // If this fails, a device fetches more unread channels than the forty it
@@ -216,5 +216,5 @@ test('PRE-05 a channel not opened for thirty days is no longer on the device, an
   await findRow(page, old);
   await goOffline(page.context());
   await conversationRow(page, old.name).click();
-  await expect(couldNotLoad(page)).toBeVisible({ timeout: 20_000 });
+  await expectNotHeld(page);
 });

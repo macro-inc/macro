@@ -13,6 +13,7 @@ import {
 import {
   expect,
   failsSometimes,
+  knownDefect,
   LOCAL_SYNC_BUILD,
   test,
 } from './harness/fixtures';
@@ -87,6 +88,9 @@ test('OFF-02 a channel the device has never held says it cannot load offline, an
   ada,
   ben,
 }) => {
+  // Product defect, on a build that keeps channels on the device: with no
+  // connection the channel goes on loading and never says it cannot load.
+  knownDefect('on');
   const { elsewhere } = await shortChannel(ada, ben);
   const page = await pageFor('ben');
   await new Conversation(page, elsewhere.id).open();
@@ -416,6 +420,9 @@ test('OFF-12 going back to a link to an old message read while connected shows i
   ben,
   history,
 }) => {
+  // Product defect, on a build that keeps channels on the device: gone back
+  // to with no connection, the link goes on loading and shows no message.
+  knownDefect('on');
   const elsewhere = await ada.createChannel({ members: [ben.person] });
   await ada.post(elsewhere.id, 'elsewhere');
   const target = history.messages[14];

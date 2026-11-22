@@ -284,7 +284,7 @@ export async function checkBrowserSeesConnection(): Promise<void> {
       });
     if (!(await online())) {
       throw new Error(
-        'The browser reports no connection before any test cut it (navigator.onLine is false). Run the suite where the browser has a network interface with a route, not loopback alone.'
+        'The browser reports no connection before any test cut it (navigator.onLine is false). Run the suite where the browser has a network interface with an address, not loopback alone.'
       );
     }
     await context.setOffline(true);

@@ -129,4 +129,14 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   counts itself offline from the start: `navigator.onLine` is false and no
   `offline` or `online` event ever fires, so the app never learns that a test
   cut its connection. Global setup refuses to run there; give the namespace
-  an interface with an address and a default route.
+  an interface with an address. A default route is not needed, and one to a
+  gateway that never answers makes requests to outside hosts take three
+  seconds to fail.
+- An unread refresh in the background waits while `navigator.onLine` is false,
+  so on such a runner a mention never got its count (UNR-05 was listed as a
+  known defect for that reason alone). Suspect the runner first when a defect
+  shows on both builds and only here.
+- With no connection, a build that keeps channels on the device goes on
+  loading a channel it does not hold and never says it cannot load (OFF-02):
+  a test about which channels are held uses `expectNotHeld`, which takes
+  either.

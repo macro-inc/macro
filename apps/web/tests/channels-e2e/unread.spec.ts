@@ -195,10 +195,6 @@ test('UNR-05 a mention of me in a channel I do not have open shows a count of me
   people,
   pageFor,
 }) => {
-  // Product defect: the row of a channel shows only the plain unread dot
-  // for a mention, never the "1 unread mention" count the list has for it,
-  // although the service holds the unseen mention.
-  knownDefect('both');
   const made = await channelsNamed(ada, [people.ben], 'open', 'other');
   await ada.post(made.other, 'earlier');
   await new ChannelView(page, made.open).open();

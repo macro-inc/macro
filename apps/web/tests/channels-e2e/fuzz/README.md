@@ -150,3 +150,15 @@ FUZZ_CASES=<work directory>/shrunk.json FUZZ_TRACE=1 \
   deleted; whether the services still list it was not checked.
 - `compare.ts` counts a finding as shared when both builds have one of the
   same kind and shape, whatever the step; the steps are in each result.
+
+## Known fault in the model
+
+The model of the build without the flag says a write made with no connection
+is lost. That was observed on a runner whose browser never learned it was
+offline. A browser that does learn it holds such a write while the page stays
+open and sends it when the connection is back, so on a correct runner that
+build's sequences with a cut end with messages its model does not have
+(`not delivered after reconnecting: a message the model does not have`), and
+the `intended` class no longer says what it was meant to. Until the model
+holds such a write for as long as the page lives, read that build's findings
+after a cut as the model's fault, not the app's.
