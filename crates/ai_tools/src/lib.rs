@@ -1,5 +1,6 @@
 #![recursion_limit = "256"]
 
+use agent_code_mode::domain::CodeModeKind;
 use agent_session::inbound::toolset::{ReadAgentSession, coding_agent_toolset};
 use ai_toolset::AsyncToolCollection;
 mod frontend_compat;
@@ -282,6 +283,49 @@ pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     tools_for_inner(AiHost::AgentSession, true)
 }
 
+/// The prompts of a code-mode agent session that is taught `kind`, beside
+/// [`tools_for_agent_code_mode`]'s toolset, which is the same for both kinds.
+/// TypeScript sessions get that function's prompts, unchanged. Dialect
+/// sessions get the dialect's session prompt and no SDK area guidance, which
+/// is written for `macro.*`, so a routed turn's prompt is the same.
+pub fn agent_code_mode_prompts(kind: CodeModeKind) -> CodeModePrompts {
+    let tools = tools_for_agent_code_mode();
+    match kind {
+        CodeModeKind::TypeScript => CodeModePrompts {
+            prompt: tools.prompt.to_string(),
+            routed_prompt: tools.routed_prompt.to_string(),
+        },
+        CodeModeKind::Dialect => {
+            let prompt = format!(
+                "{}{}",
+                prompt::dialect::session_tool_use_prompt(),
+                deferred_section(&tools.deferred)
+            );
+            CodeModePrompts {
+                routed_prompt: prompt.clone(),
+                prompt,
+            }
+        }
+    }
+}
+
+/// A code-mode agent session's prompts for one [`CodeModeKind`].
+pub struct CodeModePrompts {
+    /// With how each area of Macro works inline, where the kind has it.
+    pub prompt: String,
+    /// For turns that route SDK entities.
+    pub routed_prompt: String,
+}
+
+/// The prompt section listing `deferred` tools, empty when there are none.
+fn deferred_section(deferred: &[ai_toolset::SearchableTool]) -> String {
+    let catalog: Vec<(&str, &str)> = deferred
+        .iter()
+        .map(|tool| (tool.name.as_str(), tool.description.as_str()))
+        .collect();
+    prompt::deferred_tools::render(&catalog).unwrap_or_default()
+}
+
 /// Existing agent-session tools exposed through the code-mode capability policy.
 pub fn code_mode_tools() -> Arc<AiToolSet> {
     tools_for(AiHost::AgentSession).toolset
@@ -397,11 +441,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
             inline_guides(GuideHost::Direct),
         ),
     };
-    let catalog: Vec<(&str, &str)> = deferred
-        .iter()
-        .map(|tool| (tool.name.as_str(), tool.description.as_str()))
-        .collect();
-    let deferred_section = prompt::deferred_tools::render(&catalog).unwrap_or_default();
+    let deferred_section = deferred_section(&deferred);
     let prompt = format!("{tools_prompt}{guides}{deferred_section}");
     // Only code-mode sessions route SDK entities per turn.
     let routed_prompt = if code_mode_direct {

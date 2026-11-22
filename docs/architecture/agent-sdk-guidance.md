@@ -38,6 +38,15 @@ public MCP: shared rules + databases, CRM and document-content guides;
             DescribeCodeTools returns entities with their guide
 ```
 
+A turn taught the dialect (`CodeModeKind::Dialect`, programs that call
+`tools.*`) gets none of this: the SDK guidance is written for `macro.*`.
+Its prompt is `prompt::dialect::session_tool_use_prompt` with no area guides
+(`ai_tools::agent_code_mode_prompts`), `select_documentation` returns nothing
+for it, and `DescribeCodeTools` / `ReadCodeDocs` serve the hand-written
+dialect guides in `crates/agent_code_mode/src/inbound/toolset/dialect/`
+(`toolset_with_js_tools`). Programs find operations with `search()`. The
+session preamble is `prompt::dialect::agent_session_prompt`.
+
 The selection runs in the turn's pre-turn join, alongside the memory fetch.
 Its span records the Jev calls (`batches`), selected entities, bytes and
 status. A call that fails or misses the deadline loses only its own entities;

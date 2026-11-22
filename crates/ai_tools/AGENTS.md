@@ -12,6 +12,10 @@ execution, display) that don't belong to a single domain.
 - `src/lib.rs`: the composition point — imports each domain crate's
   `inbound::toolset` module and builds the combined `AsyncToolCollection`
   and frontend schema set.
+- `agent_code_mode_prompts(kind)`: a code-mode agent session's prompts per
+  `CodeModeKind`. TypeScript is `tools_for_agent_code_mode`'s prompt,
+  unchanged; the dialect is `prompt::dialect::session_tool_use_prompt` and
+  the deferred tools, without the SDK's area guidance (written for `macro.*`).
 - `ReadAgentSession` is eager across chat, agent sessions, and MCP, and is also
   in the base toolset every host and memory research share; keep its
   registration covered by the host tests.

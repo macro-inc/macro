@@ -366,6 +366,9 @@ struct NativeTools {
     /// [`Self::prompt`] without area guidance, for turns that route SDK
     /// entities.
     routed_prompt: String,
+    /// The prompt of a turn taught the dialect, routed or not
+    /// ([`ai_tools::agent_code_mode_prompts`]).
+    dialect_prompt: String,
     deferred: Arc<[ai_toolset::SearchableTool]>,
     /// Every native tool's name, for the opening line's model to guess the
     /// direction a reply will take.
@@ -397,6 +400,10 @@ impl NativeTools {
             ),
             prompt: tools.prompt.to_string(),
             routed_prompt: tools.routed_prompt.to_string(),
+            dialect_prompt: ai_tools::agent_code_mode_prompts(
+                agent_code_mode::domain::CodeModeKind::Dialect,
+            )
+            .prompt,
             deferred: tools.deferred,
             tool_names,
         }
@@ -755,12 +762,16 @@ async fn drive_turn(
         };
         let (user_memory, sdk_docs, loaded_skills) =
             tokio::join!(fetch_user_memory(memory, &owner), docs, loaded_skills);
-        let mut prompt = system_prompt(
-            if routed {
+        let tools_prompt = match code_mode_kind {
+            agent_code_mode::domain::CodeModeKind::TypeScript if routed => {
                 &native_tools.routed_prompt
-            } else {
-                &native_tools.prompt
-            },
+            }
+            agent_code_mode::domain::CodeModeKind::TypeScript => &native_tools.prompt,
+            agent_code_mode::domain::CodeModeKind::Dialect => &native_tools.dialect_prompt,
+        };
+        let mut prompt = system_prompt(
+            code_mode_kind,
+            tools_prompt,
             session_id,
             delivery,
             identity.as_ref(),
@@ -1104,6 +1115,7 @@ fn elapsed_ms(since: tokio::time::Instant) -> u64 {
 /// opener gives every session of its kind the same ones (every routine
 /// draft's), so they are read back from the cache across those sessions.
 fn system_prompt(
+    kind: agent_code_mode::domain::CodeModeKind,
     tools_prompt: &impl std::fmt::Display,
     session_id: agent_session::domain::model::AgentSessionId,
     delivery: ReplyDelivery,
@@ -1137,10 +1149,15 @@ fn system_prompt(
             prompt.push_shared(PromptSection::SessionInstructions, instructions);
         }
     } else {
-        prompt.push_shared(
-            PromptSection::Preamble,
-            &prompt::agent_session::PROMPT.to_string(),
-        );
+        let preamble = match kind {
+            agent_code_mode::domain::CodeModeKind::TypeScript => {
+                prompt::agent_session::PROMPT.to_string()
+            }
+            agent_code_mode::domain::CodeModeKind::Dialect => {
+                prompt::dialect::agent_session_prompt().to_owned()
+            }
+        };
+        prompt.push_shared(PromptSection::Preamble, &preamble);
         prompt.push_shared(PromptSection::MacroPrompt, &tools_prompt.to_string());
         if let Some(identity) = &identity {
             prompt.push(PromptSection::Identity, identity);

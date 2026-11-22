@@ -199,6 +199,7 @@ async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gat
 fn instructions_are_a_delimited_section_after_the_standing_prompt() {
     let session = AgentSessionId::new();
     let prompt = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
         &TOOLS,
         session,
         ReplyDelivery::Streamed,
@@ -240,6 +241,7 @@ fn an_unseen_turn_reads_its_own_short_prompt() {
         handle: "grunk".to_owned(),
     };
     let prompt = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
         &TOOLS,
         session,
         ReplyDelivery::Unseen,
@@ -267,6 +269,7 @@ fn an_unseen_turn_reads_its_own_short_prompt() {
 #[test]
 fn an_unseen_turn_caches_its_instructions_with_the_shared_block() {
     let prompt = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
         &TOOLS,
         AgentSessionId::new(),
         ReplyDelivery::Unseen,
@@ -290,6 +293,7 @@ fn an_unseen_turn_caches_its_instructions_with_the_shared_block() {
         "\n<user_memory>\nprefers Rust\n</user_memory>"
     );
     let other = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
         &TOOLS,
         AgentSessionId::new(),
         ReplyDelivery::Unseen,
@@ -348,6 +352,7 @@ fn identity_opens_the_session_part_and_does_not_need_instructions() {
         handle: "grunk".to_owned(),
     };
     let prompt = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
         &TOOLS,
         session,
         ReplyDelivery::Streamed,
@@ -371,6 +376,7 @@ fn identity_opens_the_session_part_and_does_not_need_instructions() {
 fn memory_follows_instructions_rather_than_preceding_them() {
     let session = AgentSessionId::new();
     let prompt = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
         &TOOLS,
         session,
         ReplyDelivery::Streamed,
@@ -400,6 +406,7 @@ fn sessions_share_everything_before_their_identity() {
         handle: "grunk".to_owned(),
     };
     let first = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
         &TOOLS,
         session,
         ReplyDelivery::Streamed,
@@ -408,6 +415,7 @@ fn sessions_share_everything_before_their_identity() {
         Some("prefers Rust"),
     );
     let second = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
         &TOOLS,
         session,
         ReplyDelivery::Streamed,
@@ -444,6 +452,7 @@ fn sessions_share_everything_before_their_identity() {
 fn no_instructions_means_no_section() {
     let session = AgentSessionId::new();
     let prompt = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
         &TOOLS,
         session,
         ReplyDelivery::Streamed,
@@ -463,6 +472,7 @@ fn no_instructions_means_no_section() {
 fn empty_instructions_add_no_section() {
     let session = AgentSessionId::new();
     let prompt = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
         &TOOLS,
         session,
         ReplyDelivery::Streamed,
@@ -480,8 +490,24 @@ fn empty_instructions_add_no_section() {
 #[test]
 fn a_whole_reply_is_told_no_opening_line_was_shown_without_splitting_the_cache() {
     let session = AgentSessionId::new();
-    let streamed = system_prompt(&TOOLS, session, ReplyDelivery::Streamed, None, None, None);
-    let whole = system_prompt(&TOOLS, session, ReplyDelivery::Whole, None, None, None);
+    let streamed = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
+        &TOOLS,
+        session,
+        ReplyDelivery::Streamed,
+        None,
+        None,
+        None,
+    );
+    let whole = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
+        &TOOLS,
+        session,
+        ReplyDelivery::Whole,
+        None,
+        None,
+        None,
+    );
 
     assert_eq!(streamed.shared(), whole.shared());
     assert!(!streamed.to_string().contains(opener::NOT_OPENED));
@@ -965,4 +991,29 @@ async fn a_tool_that_uses_nobodys_access_still_asks_the_gate() {
     assert_eq!(result, serde_json::json!("WebSearch"));
     assert_eq!(*gate.asked.lock().unwrap(), ["WebFetch", "WebSearch"]);
     assert_eq!(*inner.0.lock().unwrap(), [("WebSearch".to_owned(), search)]);
+}
+
+/// A turn taught the dialect opens with the session preamble that names
+/// dialect operations; a TypeScript turn's is today's.
+#[test]
+fn the_session_preamble_follows_the_turns_code_mode_kind() {
+    use agent_code_mode::domain::CodeModeKind;
+    let session = AgentSessionId::new();
+    let prompt = |kind| {
+        system_prompt(
+            kind,
+            &TOOLS,
+            session,
+            ReplyDelivery::Streamed,
+            None,
+            None,
+            None,
+        )
+        .to_string()
+    };
+    let typescript = prompt(CodeModeKind::TypeScript);
+    assert!(typescript.contains(&prompt::agent_session::PROMPT.to_string()));
+    let dialect = prompt(CodeModeKind::Dialect);
+    assert!(dialect.contains(prompt::dialect::agent_session_prompt()));
+    assert!(!dialect.contains("macro.connectedApps"));
 }

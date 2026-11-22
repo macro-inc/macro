@@ -1093,3 +1093,40 @@ fn code_mode_reads_memory_and_activity_through_the_sdk() {
     }
     assert!(!code_mode.toolset.tools.contains_key("ReadActivity"));
 }
+
+#[test]
+fn each_code_mode_kind_gets_its_own_session_prompt() {
+    let code = tools_for_agent_code_mode();
+    // A TypeScript session's prompts are today's.
+    let typescript = agent_code_mode_prompts(CodeModeKind::TypeScript);
+    assert_eq!(typescript.prompt, code.prompt.to_string());
+    assert_eq!(typescript.routed_prompt, code.routed_prompt.to_string());
+    assert!(
+        typescript
+            .prompt
+            .contains(&prompt::code_mode::PROMPT.to_string())
+    );
+    assert!(
+        !typescript
+            .prompt
+            .contains(&prompt::code_mode::DIALECT_PROMPT.to_string())
+    );
+
+    let dialect = agent_code_mode_prompts(CodeModeKind::Dialect);
+    assert_eq!(dialect.prompt, dialect.routed_prompt);
+    assert!(
+        dialect
+            .prompt
+            .starts_with(prompt::dialect::session_tool_use_prompt())
+    );
+    assert!(dialect.prompt.contains("tools.<service>.<operation>"));
+    // Neither the TypeScript section nor the SDK's area guidance, which is
+    // written for `macro.*`.
+    assert!(!dialect.prompt.contains("macro.search"));
+    assert!(!dialect.prompt.contains("ReadCodeDocs` for"));
+    assert!(!dialect.prompt.contains("How Macro databases work"));
+    // The deferred tools are listed for both.
+    let deferred = deferred_section(&code.deferred);
+    assert!(!deferred.is_empty());
+    assert!(dialect.prompt.ends_with(&deferred));
+}
