@@ -1,0 +1,23 @@
+infra/packages/shared/src/ai_tools.ts
+  s_3914374278f0d7::t_e17129482407e5 17-32,120
+infra/packages/shared/src/index.ts
+  s_3914374278f0d7::t_eefd33bc7fc4bb 68
+infra/stacks/cloud-storage-service/index.ts
+  s_3914374278f0d7::t_420d606d678726 9,338-342,385,397-400
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ce7d74116a420d2991be52431e6097416cd57508",
+  "prompts": {},
+  "sessions": {
+    "s_3914374278f0d7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "90c04e27-af28-4468-b988-a2674fe22d3c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
