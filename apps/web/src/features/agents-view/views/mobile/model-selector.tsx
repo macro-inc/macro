@@ -339,7 +339,8 @@ export function MobileModelSelector() {
                   <ModelIcon model={state.model} />
                   <span class="flex-1">{t('agentControls.model')}</span>
                   <span class="max-w-32 truncate text-ink-subtle">
-                    {catalogModelLabel(state.model, state.models)}
+                    {state.models.find((option) => option.id === state.model)
+                      ?.label ?? catalogModelLabel(state.model, state.models)}
                   </span>
                   <CaretRight class="size-4" />
                 </MobileDrawer.Item>
