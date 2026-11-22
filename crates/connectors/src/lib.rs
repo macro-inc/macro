@@ -22,6 +22,9 @@ pub mod composition;
 pub mod domain;
 #[cfg(any(test, feature = "test-fakes"))]
 pub mod fake;
+/// The `/connectors` HTTP API, the vendor callback routes, and the agent
+/// connector tools.
+pub mod inbound;
 /// The adapters for each source of connections.
 pub mod outbound;
 mod overlay;

@@ -5310,6 +5310,7 @@ dependencies = [
  "macro_user_id",
  "mcp_toolset",
  "model-error-response",
+ "model_user",
  "oauth2",
  "proptest",
  "redis",

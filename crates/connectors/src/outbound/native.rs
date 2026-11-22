@@ -15,5 +15,8 @@ mod source;
 pub(crate) use source::NativeSource;
 pub(crate) use source::is_github;
 
+/// Finishing a sign-in to a server by URL, for the OAuth callback route.
+pub(crate) mod sign_in;
+
 #[cfg(test)]
 pub(crate) mod memory_store;

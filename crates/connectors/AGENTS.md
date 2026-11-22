@@ -34,9 +34,19 @@ and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
   off). Tool loading answers without a source whose store is down; listing
   and API lookups fail instead.
 - `src/composition.rs`: `build(config, pool, redis, auth_service)`, the only
-  place the sources, the overlay catalog and the flag reader are constructed.
-  Call it once per process; the flag, overlay and Connect catalog caches live
-  in what it returns.
+  place the sources, the overlay catalog and the flag reader are constructed;
+  `compose` also returns the app catalog and the server sign-ins the routes
+  need. Call one of them once per process; the flag, overlay and Connect
+  catalog caches live in what it returns.
+- `src/inbound/`: `axum_router.rs`, the authenticated `/connectors` API
+  (list, add a server, catalog, connect, complete, update, remove; connector
+  keys are `app/{slug}` or `server/{base64url url}`, see `dto.rs`);
+  `callbacks.rs`, the public routes third parties call at fixed paths (MCP
+  OAuth callback and client metadata, Connect's consent page, Pipedream's
+  webhook); `toolset.rs`, the `DiscoverConnectors` and `ConnectMcpServer`
+  tools. None names a source. `src/domain/discovery.rs` (the catalog) and
+  `src/domain/sign_in.rs` (finishing a sign-in by URL) are the services they
+  use beside `service.rs`.
 - `src/fake.rs` (feature `test-fakes`): `FakeConnectors`, the real services
   over in-memory sources, for consumers' tests. Use it instead of a
   hand-written fake store.

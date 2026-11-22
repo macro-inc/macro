@@ -8,6 +8,7 @@
 //! one holds a connection.
 
 pub(crate) mod catalog;
+pub mod discovery;
 #[cfg_attr(
     not(test),
     expect(
@@ -20,3 +21,4 @@ pub(crate) mod policy;
 pub(crate) mod ports;
 pub(crate) mod resolve;
 pub mod service;
+pub mod sign_in;

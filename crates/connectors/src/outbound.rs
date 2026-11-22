@@ -1,3 +1,6 @@
+/// The catalog's directory over the hosted app directory.
+pub(crate) mod app_directory;
+
 /// The native stack: MCP servers users connect to directly.
 pub mod native;
 
