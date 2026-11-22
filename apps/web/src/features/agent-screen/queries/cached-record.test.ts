@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import { describe, expect, it } from 'vitest';
 import { cachedRecord } from './cached-record';
 
@@ -30,5 +31,23 @@ describe('cachedRecord', () => {
 
   it('drops a record a successful refetch no longer has', () => {
     expect(cachedRecord({ isPending: false, data: [] }, isOne)).toBeUndefined();
+  });
+
+  it('drops the record when the refetch says it is gone or not ours', () => {
+    for (const code of ['FORBIDDEN', 'NOT_FOUND']) {
+      const refused = {
+        isPending: false,
+        error: new ThrownResultError([{ code, message: code }]),
+        data: [owned],
+      };
+      expect(cachedRecord(refused, isOne)).toBeUndefined();
+    }
+    // A transient failure keeps it.
+    const flaky = {
+      isPending: false,
+      error: new ThrownResultError([{ code: 'SERVER_ERROR', message: '500' }]),
+      data: [owned],
+    };
+    expect(cachedRecord(flaky, isOne)).toBe(owned);
   });
 });
