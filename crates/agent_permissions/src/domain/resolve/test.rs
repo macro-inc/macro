@@ -454,3 +454,82 @@ fn unknown_groups_and_tools_are_named() {
         ]
     );
 }
+
+/// The registry's `channel_admin` operations, each as it was classified
+/// before the move (in `channels`, same action) and as it is now.
+fn channel_admin_moves() -> Vec<(CatalogEntry, CatalogEntry)> {
+    let moved: Vec<(CatalogEntry, CatalogEntry)> = agent_permission_registry::operations()
+        .filter(|(_, _, operation)| operation.group == "channel_admin")
+        .map(|(service, operation, classification)| {
+            (
+                entry(service, operation, "channels", classification.action),
+                entry(service, operation, "channel_admin", classification.action),
+            )
+        })
+        .collect();
+    assert!(
+        !moved.is_empty(),
+        "the registry has channel_admin operations"
+    );
+    moved
+}
+
+/// What the channel administration migration does to a policy: each
+/// `channels:<action>` rule gains a `channel_admin:<action>` copy.
+fn with_channel_admin_copies(saved: &[Rule]) -> Vec<Rule> {
+    let mut copied = saved.to_vec();
+    for rule in saved {
+        if let Target::GroupAction { group, action } = &rule.target
+            && group == "channels"
+        {
+            copied.push(Rule {
+                target: Target::GroupAction {
+                    group: "channel_admin".to_owned(),
+                    action: *action,
+                },
+                ..rule.clone()
+            });
+        }
+    }
+    copied
+}
+
+#[test]
+fn channel_admin_moves_keep_every_operations_state() {
+    let moves = channel_admin_moves();
+
+    let send_never = [group_rule("channels", Action::Send, Never)];
+    let copied = with_channel_admin_copies(&send_never);
+    for (_, now) in moves.iter().filter(|(_, now)| now.action == Action::Send) {
+        assert_eq!(
+            effective(&Layer::new(&copied), &Layer::new(&[]), now),
+            (Never, Origin::GroupAction),
+            "{}.{}",
+            now.service,
+            now.operation
+        );
+    }
+
+    let saved = [
+        group_rule("channels", Action::Send, Never),
+        group_rule("channels", Action::Read, Ask),
+        group_rule("channels", Action::Update, Ask),
+        group_rule("channels", Action::Destroy, Never),
+        tool_rule("storage", "join_channel", Ask),
+        agent_tool_rule("storage", "list_channel_bots", Never),
+    ];
+    let overlay = [group_rule("channels", Action::Update, Never)];
+    let (copied, copied_overlay) = (
+        with_channel_admin_copies(&saved),
+        with_channel_admin_copies(&overlay),
+    );
+    for (before, now) in &moves {
+        assert_eq!(
+            effective(&Layer::new(&copied), &Layer::new(&copied_overlay), now),
+            effective(&Layer::new(&saved), &Layer::new(&overlay), before),
+            "{}.{}",
+            now.service,
+            now.operation
+        );
+    }
+}

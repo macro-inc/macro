@@ -8,6 +8,7 @@ import EnvelopeIcon from '@icon/system/regular/envelope-simple.svg';
 import FileTextIcon from '@icon/system/regular/file-text.svg';
 import FolderIcon from '@icon/system/regular/folder-simple.svg';
 import GearIcon from '@icon/system/regular/gear-six.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
 import KeyIcon from '@icon/system/regular/key.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
@@ -28,6 +29,7 @@ const GROUP_ICONS: Record<string, Icon> = {
   email: EnvelopeIcon,
   calendar: CalendarIcon,
   channels: ChatIcon,
+  channel_admin: HashIcon,
   calls: PhoneCallIcon,
   external_chats: ChatsIcon,
   contacts: UsersIcon,

@@ -92,3 +92,81 @@ fn only_self_restriction_is_always_allowed() {
         .collect();
     assert_eq!(always, ["agent-harness.tighten_agent_tool_permissions"]);
 }
+
+/// Channel administration left `channels` for `channel_admin`, each operation
+/// keeping the action it had there. A migration copied every saved
+/// `channels:<action>` rule to `channel_admin:<action>`, so a moved
+/// operation resolves exactly as before only while its action is unchanged:
+/// this table is the operations and actions they had in `channels`.
+#[test]
+fn channel_admin_moves_keep_every_operations_action() {
+    const MOVED: [(&str, Action); 16] = [
+        ("add_channel_bot", Action::Send),
+        ("add_participants", Action::Send),
+        ("cancel_channel_access_request", Action::Update),
+        ("create_channel", Action::Send),
+        ("delete_channel", Action::Destroy),
+        ("get_channel_access_request", Action::Read),
+        ("get_channel_join_link", Action::Read),
+        ("get_my_channel_access_request", Action::Read),
+        ("join_channel", Action::Send),
+        ("leave_channel", Action::Send),
+        ("list_channel_bots", Action::Read),
+        ("patch_channel", Action::Send),
+        ("remove_participants", Action::Send),
+        ("request_channel_access", Action::Send),
+        ("resolve_channel_access_request", Action::Send),
+        ("set_channel_picture", Action::Send),
+    ];
+
+    for (operation_id, action) in MOVED {
+        let moved = operation("storage", operation_id)
+            .unwrap_or_else(|| panic!("storage.{operation_id} is classified"));
+        assert_eq!(moved.group, "channel_admin", "storage.{operation_id}");
+        assert_eq!(
+            moved.action, action,
+            "storage.{operation_id} kept its action"
+        );
+    }
+
+    let in_channel_admin: BTreeSet<String> = operations()
+        .filter(|(_, _, operation)| operation.group == "channel_admin")
+        .map(|(service, operation_id, _)| format!("{service}.{operation_id}"))
+        .collect();
+    let pinned: BTreeSet<String> = MOVED
+        .iter()
+        .map(|(operation_id, _)| format!("storage.{operation_id}"))
+        .collect();
+    assert_eq!(
+        in_channel_admin, pinned,
+        "an operation joining channel_admin later needs no copied rule; add it here"
+    );
+
+    let ids: Vec<&str> = groups().iter().map(|group| group.id.as_str()).collect();
+    let channels = ids.iter().position(|id| *id == "channels");
+    assert_eq!(
+        ids.iter().position(|id| *id == "channel_admin"),
+        channels.map(|at| at + 1),
+        "channel_admin is listed right after channels"
+    );
+}
+
+/// Messaging stays in `channels`: these send something people read.
+#[test]
+fn channel_messaging_stays_in_channels() {
+    for operation_id in [
+        "create_entity_mention",
+        "entity_message_create",
+        "entity_message_edit",
+        "entity_message_patch_thread",
+        "entity_message_react",
+        "entity_message_typing",
+        "post_activity",
+        "post_channel_bot_webhook",
+    ] {
+        let kept = operation("storage", operation_id)
+            .unwrap_or_else(|| panic!("storage.{operation_id} is classified"));
+        assert_eq!(kept.group, "channels", "storage.{operation_id}");
+        assert_eq!(kept.action, Action::Send, "storage.{operation_id}");
+    }
+}

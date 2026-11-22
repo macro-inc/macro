@@ -408,3 +408,82 @@ async fn a_gate_reads_the_policy_and_overlay_as_one_snapshot(pool: PgPool) {
     );
     assert!(overlay.is_empty());
 }
+
+/// Migration `20261122220000` copies each saved `channels:<action>` rule to
+/// `channel_admin:<action>` with its state, flags and author, keeps one
+/// already there, and leaves every other row alone. `sqlx::test` has run it
+/// on empty tables, so the fixtures are loaded and it is run again.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("permissions", "channel_admin_copy")
+    )
+)]
+async fn the_channel_admin_migration_copies_every_channels_rule(pool: PgPool) {
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20261122220000_agent_tool_permission_channel_admin.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let agent = sqlx::query_scalar!(
+        r#"SELECT concat_ws(' ', kind, target, state, coalesce(updated_by, '-'), via_agent,
+                  restriction_only, extract(epoch FROM updated_at)::bigint) AS "row!"
+           FROM agent_tool_permission WHERE bot_id = $1 ORDER BY kind, target"#,
+        AGENT.as_uuid(),
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        agent,
+        [
+            "group_action channel_admin:destroy ask - f f 1767484800",
+            "group_action channel_admin:read ask - t t 1767398400",
+            "group_action channel_admin:send never macro|perm-owner@example.com f f 1767323045",
+            "group_action channels:destroy never - f f 1767571200",
+            "group_action channels:read ask - t t 1767398400",
+            "group_action channels:send never macro|perm-owner@example.com f f 1767323045",
+            "group_action email:send never - f f 1767571200",
+            "tool storage.join_channel ask - f f 1767571200",
+        ]
+    );
+
+    let persona = sqlx::query_scalar!(
+        r#"SELECT concat_ws(' ', persona_id, kind, target, state, via_agent, restriction_only,
+                  extract(epoch FROM updated_at)::bigint) AS "row!"
+           FROM persona_tool_permission WHERE user_id = $1 ORDER BY kind, target"#,
+        OWNER,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        persona,
+        [
+            "91000000-0000-0000-0000-0000000000aa group_action channel_admin:update ask t t 1769904000",
+            "91000000-0000-0000-0000-0000000000aa group_action channels:update ask t t 1769904000",
+            "91000000-0000-0000-0000-0000000000aa group_action documents:destroy never f f 1769904000",
+        ]
+    );
+
+    let session = sqlx::query_scalar!(
+        r#"SELECT concat_ws(' ', kind, target, state, coalesce(set_by, '-'),
+                  extract(epoch FROM created_at)::bigint) AS "row!"
+           FROM agent_session_tool_permission WHERE agent_session_id = $1 ORDER BY kind, target"#,
+        SESSION,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        session,
+        [
+            "group_action channel_admin:create never macro|perm-other@example.com 1772323200",
+            "group_action channels:create never macro|perm-other@example.com 1772323200",
+            "tool storage.delete_channel ask - 1772323200",
+        ]
+    );
+}

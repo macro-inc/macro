@@ -40,7 +40,15 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
   holds exactly the operations a program can call, so the permissions page
   offers no setting that does nothing.
 - New group: add it to `groups` (stable `id`, never renamed: settings are
-  stored under it) and move operations into it.
+  stored under it) and move operations into it, each keeping its action. A
+  move needs a migration that copies every saved `<old>:<action>` rule to
+  `<new>:<action>` in each permission table, or the moved operations lose
+  their settings; pin the moved list in `src/test.rs`. `channel_admin` (moved
+  out of `channels`, migration `20261122220000`) is the example.
+- Channel operations: sending and reading messages, threads, mentions,
+  reactions, DMs and channel labels are `channels`; creating, deleting and
+  renaming a channel, its picture, members, join links, access requests and
+  channel bots are `channel_admin`.
 
 ## Checks
 
