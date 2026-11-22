@@ -181,24 +181,26 @@ impl EntityAccessService for Grants {
 
 /// RATER and FLAG_OFF can view the session and the channel; STRANGER can't.
 fn app() -> (Router, crate::test_support::FakeRepo) {
-    let mut world = World::default();
-    world.sessions = FakeSessions(HashMap::from([(
-        SESSION,
-        SessionFacts {
-            bot_id: bot_id::MACRO_NEW_BOT_ID,
-            harness: "macro".to_owned(),
-            model: "claude-opus-5-5".to_owned(),
-        },
-    )]));
-    world.messages = FakeMessages(HashMap::from([(
-        BOT_MESSAGE,
-        message(
+    let world = World {
+        sessions: FakeSessions(HashMap::from([(
+            SESSION,
+            SessionFacts {
+                bot_id: bot_id::MACRO_NEW_BOT_ID,
+                harness: "macro".to_owned(),
+                model: "claude-opus-5-5".to_owned(),
+            },
+        )])),
+        messages: FakeMessages(HashMap::from([(
             BOT_MESSAGE,
-            MessageParent::Channel(CHANNEL),
-            ChannelSender::new_from_bot(BotId::TEST_A),
-            "Done.",
-        ),
-    )]));
+            message(
+                BOT_MESSAGE,
+                MessageParent::Channel(CHANNEL),
+                ChannelSender::new_from_bot(BotId::TEST_A),
+                "Done.",
+            ),
+        )])),
+        ..World::default()
+    };
     let (service, repo) = world.service();
 
     let mut grants = HashMap::new();

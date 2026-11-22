@@ -46,6 +46,5 @@ bot_id = { path = "../bot_id", features = ["test-utils"] }
 channel_sender = { path = "../channel_sender" }
 macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
-model_user = { path = "../model_user" }
 tokio = { workspace = true }
 tower = { workspace = true }

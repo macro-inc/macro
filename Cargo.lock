@@ -503,7 +503,6 @@ dependencies = [
  "macro_user_id",
  "mention_utils",
  "messages",
- "model_user",
  "rootcause",
  "serde",
  "serde_json",

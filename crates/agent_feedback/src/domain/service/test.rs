@@ -82,16 +82,17 @@ fn retraction(id: u128) -> RetractRequest {
 
 /// A session run by the in-process Macro bot.
 fn world_with_session() -> World {
-    let mut world = World::default();
-    world.sessions = crate::test_support::FakeSessions(HashMap::from([(
-        SESSION,
-        SessionFacts {
-            bot_id: MACRO_NEW_BOT_ID,
-            harness: "macro".to_owned(),
-            model: "claude-opus-5-5".to_owned(),
-        },
-    )]));
-    world
+    World {
+        sessions: crate::test_support::FakeSessions(HashMap::from([(
+            SESSION,
+            SessionFacts {
+                bot_id: MACRO_NEW_BOT_ID,
+                harness: "macro".to_owned(),
+                model: "claude-opus-5-5".to_owned(),
+            },
+        )])),
+        ..World::default()
+    }
 }
 
 #[tokio::test]
@@ -319,49 +320,50 @@ async fn a_receipt_for_another_kind_of_entity_or_no_person_is_forbidden() {
 /// A channel with an owned bot's reply linked to its session, a teammate's
 /// message, and a person's message.
 fn world_with_channel() -> World {
-    let mut world = World::default();
-    world.sessions = crate::test_support::FakeSessions(HashMap::from([(
-        OTHER_SESSION,
-        SessionFacts {
-            bot_id: BotId::TEST_A,
-            harness: "claude_code".to_owned(),
-            model: "claude-sonnet-5-5".to_owned(),
-        },
-    )]));
-    world.accounts = crate::test_support::FakeAccounts(HashSet::from([TEAMMATE.to_owned()]));
     let parent = MessageParent::Channel(CHANNEL);
-    world.messages = crate::test_support::FakeMessages(HashMap::from([
-        (
-            BOT_MESSAGE,
-            message(
+    World {
+        sessions: crate::test_support::FakeSessions(HashMap::from([(
+            OTHER_SESSION,
+            SessionFacts {
+                bot_id: BotId::TEST_A,
+                harness: "claude_code".to_owned(),
+                model: "claude-sonnet-5-5".to_owned(),
+            },
+        )])),
+        accounts: crate::test_support::FakeAccounts(HashSet::from([TEAMMATE.to_owned()])),
+        messages: crate::test_support::FakeMessages(HashMap::from([
+            (
                 BOT_MESSAGE,
-                parent.clone(),
-                ChannelSender::new_from_bot(BotId::TEST_A),
-                &format!(
-                    "<m-agent-session-mention>{{\"id\":\"{OTHER_SESSION}\",\"label\":\"\"}}</m-agent-session-mention>\nDone: the PR is up."
+                message(
+                    BOT_MESSAGE,
+                    parent.clone(),
+                    ChannelSender::new_from_bot(BotId::TEST_A),
+                    &format!(
+                        "<m-agent-session-mention>{{\"id\":\"{OTHER_SESSION}\",\"label\":\"\"}}</m-agent-session-mention>\nDone: the PR is up."
+                    ),
                 ),
             ),
-        ),
-        (
-            TEAMMATE_MESSAGE,
-            message(
+            (
                 TEAMMATE_MESSAGE,
-                parent.clone(),
-                ChannelSender::new_from_user(user(TEAMMATE)),
-                "I filed the ticket.",
+                message(
+                    TEAMMATE_MESSAGE,
+                    parent.clone(),
+                    ChannelSender::new_from_user(user(TEAMMATE)),
+                    "I filed the ticket.",
+                ),
             ),
-        ),
-        (
-            PERSON_MESSAGE,
-            message(
+            (
                 PERSON_MESSAGE,
-                parent,
-                ChannelSender::new_from_user(user(PERSON)),
-                "thanks!",
+                message(
+                    PERSON_MESSAGE,
+                    parent,
+                    ChannelSender::new_from_user(user(PERSON)),
+                    "thanks!",
+                ),
             ),
-        ),
-    ]));
-    world
+        ])),
+        ..World::default()
+    }
 }
 
 #[tokio::test]
