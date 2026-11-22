@@ -12,12 +12,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sha2::{Digest as _, Sha256};
 use tokio::sync::broadcast;
 
-use uuid::Uuid;
-
 use super::models::{
-    Access, Caller, DriveEnd, DriveId, EndReason, IssuedTicket, Lease, Mode, PendingNotice,
-    RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver, ThawFailed, ThawSettled, Thawed,
-    TicketRequest, TicketSecret,
+    Access, Caller, DriveEnd, DriveId, EndReason, IssuedTicket, Lease, Mode, NoticeClaim,
+    PendingNotice, RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver, ThawFailed,
+    ThawSettled, Thawed, TicketRequest, TicketSecret,
 };
 use super::ports::{DriverSignal, LeaseChanges, People, ScreenAccess, ScreenRepo, TicketHash};
 
@@ -458,12 +456,21 @@ where
         let deadline = started + bound;
         let mut waited = false;
         loop {
-            let lease = self
-                .repo
-                .agent_lease(agent)
-                .await
-                .map_err(ScreenError::internal)?;
-            let Some(lease) = self.live(lease).await? else {
+            // The reads (and a lapse's release) count against the bound too:
+            // a stalled database answers the request in time, held.
+            let read = async {
+                let lease = self
+                    .repo
+                    .agent_lease(agent)
+                    .await
+                    .map_err(ScreenError::internal)?;
+                self.live(lease).await
+            };
+            let Ok(lease) = tokio::time::timeout_at(deadline, read).await else {
+                span.record("screen.hold", "timed_out");
+                return Ok(Hold::TimedOut);
+            };
+            let Some(lease) = lease? else {
                 let hold = if waited {
                     Hold::Released {
                         waited: started.elapsed(),
@@ -659,7 +666,10 @@ where
     }
 
     /// Mark an open socket as still there; due every [`SESSION_TOUCH_EVERY`].
-    pub async fn touch_session(&self, id: SessionId) -> Result<(), ScreenError> {
+    /// False when its row was ended meanwhile (another socket found it
+    /// stale and ended it as lost): it no longer keeps the computer awake,
+    /// so the socket must end.
+    pub async fn touch_session(&self, id: SessionId) -> Result<bool, ScreenError> {
         self.repo
             .touch_session(id)
             .await
@@ -681,29 +691,32 @@ where
     }
 
     /// The request carrying these notices failed: the next one carries them.
-    pub async fn notices_returned(&self, ids: &[Uuid]) -> Result<(), ScreenError> {
-        if ids.is_empty() {
+    pub async fn notices_returned(&self, claims: &[NoticeClaim]) -> Result<(), ScreenError> {
+        if claims.is_empty() {
             return Ok(());
         }
         self.repo
-            .unclaim_notices(ids)
+            .unclaim_notices(claims)
             .await
             .map_err(ScreenError::internal)
     }
 
     /// The request carrying these notices succeeded: they are delivered.
-    pub async fn notices_delivered(&self, ids: &[Uuid]) -> Result<(), ScreenError> {
-        if ids.is_empty() {
+    pub async fn notices_delivered(&self, claims: &[NoticeClaim]) -> Result<(), ScreenError> {
+        if claims.is_empty() {
             return Ok(());
         }
         self.repo
-            .delete_notices(ids)
+            .delete_notices(claims)
             .await
             .map_err(ScreenError::internal)
     }
 
     /// `lease` if it still holds; a lapsed one is released, with its
-    /// hand-back recorded and the guest told.
+    /// hand-back recorded and the guest told. A lapsed one that a take-over
+    /// replaced before the release ran is still the computer's lease: the
+    /// release removes nothing, and the replacement is read and returned
+    /// while it holds.
     async fn live(&self, lease: Option<Lease>) -> Result<Option<Lease>, ScreenError> {
         let Some(lease) = lease else {
             return Ok(None);
@@ -720,8 +733,14 @@ where
             self.signal
                 .released(released.computer_id, released.drive_id())
                 .await;
+            return Ok(None);
         }
-        Ok(None)
+        let replacement = self
+            .repo
+            .lease(lease.computer_id)
+            .await
+            .map_err(ScreenError::internal)?;
+        Ok(replacement.filter(|replacement| replacement.is_live(Utc::now())))
     }
 }
 

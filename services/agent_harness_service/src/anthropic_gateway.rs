@@ -428,23 +428,26 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
         .await
         .inspect_err(|error| tracing::warn!(error = ?error, "anthropic request failed"));
 
-    // The model has the notices only once it accepted the request; a
-    // refused or failed one gives them to the next.
+    // The model has the notices only once its answer finished: a refused or
+    // failed request, a stream that broke or ended in an `error` event after
+    // its 200, or a body that broke gives them to the next request.
+    let notices = state
+        .screens
+        .as_ref()
+        .filter(|_| !carried_notices.is_empty())
+        .map(|screens| CarriedNotices {
+            screens: Arc::clone(screens),
+            claims: carried_notices,
+        });
     let accepted = upstream
         .as_ref()
         .is_ok_and(|upstream| upstream.status().is_success());
-    if let Some(screens) = &state.screens
-        && !carried_notices.is_empty()
-    {
-        let settled = if accepted {
-            screens.notices_delivered(&carried_notices).await
-        } else {
-            screens.notices_returned(&carried_notices).await
-        };
-        if let Err(error) = settled {
-            tracing::warn!(error = ?error, accepted, "could not settle screen notices");
-        }
-    }
+    let notices = if accepted {
+        notices
+    } else {
+        settle(notices, false).await;
+        None
+    };
     let upstream = upstream.map_err(|_| Rejection::UPSTREAM_UNREACHABLE)?;
 
     let status = upstream.status();
@@ -479,11 +482,14 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
         let (caller, chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
         let metering = meter.map(|meter| (meter, SseUsage::default()));
         tokio::spawn(
-            pump(Box::pin(upstream.bytes_stream()), metering, caller).instrument(span.clone()),
+            pump(Box::pin(upstream.bytes_stream()), metering, notices, caller)
+                .instrument(span.clone()),
         );
         Body::from_stream(tokio_stream::wrappers::ReceiverStream::new(chunks))
     } else {
-        let bytes = read_limited(upstream).await?;
+        let read = read_limited(upstream).await;
+        settle(notices, read.is_ok()).await;
+        let bytes = read?;
         if let Some(mut meter) = meter
             && let Some(usage) = usage::from_json_body(&bytes)
         {
@@ -522,15 +528,43 @@ async fn authenticate_brain(
 type UpstreamChunks =
     Pin<Box<dyn futures::Stream<Item = reqwest::Result<axum::body::Bytes>> + Send>>;
 
+/// Screen notices a request carried, settled once its answer finished.
+struct CarriedNotices {
+    screens: Arc<crate::computers::screen::Screens>,
+    claims: Vec<computer_screen::domain::models::NoticeClaim>,
+}
+
+/// Delete the notices when the model's answer `finished`, or give them to
+/// the next request.
+async fn settle(notices: Option<CarriedNotices>, finished: bool) {
+    let Some(CarriedNotices { screens, claims }) = notices else {
+        return;
+    };
+    let settled = if finished {
+        screens.notices_delivered(&claims).await
+    } else {
+        screens.notices_returned(&claims).await
+    };
+    if let Err(error) = settled {
+        tracing::warn!(error = ?error, finished, "could not settle screen notices");
+    }
+}
+
 /// Streams `upstream` to the caller while metering it. When the caller hangs
 /// up, keeps reading (for at most [`DRAIN_TIMEOUT`]) so the final usage is
-/// still recorded: an abort must not skip output billing.
+/// still recorded: an abort must not skip output billing. The carried
+/// notices are settled once the stream ends, before the caller sees its end:
+/// delivered only when the message stopped and no chunk broke.
 async fn pump(
     mut upstream: UpstreamChunks,
     mut metering: Option<(UsageMeter, SseUsage)>,
+    notices: Option<CarriedNotices>,
     caller: tokio::sync::mpsc::Sender<Result<axum::body::Bytes, std::io::Error>>,
 ) {
+    let mut broke = false;
+    let mut drained = true;
     while let Some(chunk) = upstream.next().await {
+        broke |= chunk.is_err();
         observe(&mut metering, &chunk);
         if caller
             .send(chunk.map_err(std::io::Error::other))
@@ -539,15 +573,21 @@ async fn pump(
         {
             let drain = async {
                 while let Some(chunk) = upstream.next().await {
+                    broke |= chunk.is_err();
                     observe(&mut metering, &chunk);
                 }
             };
             if tokio::time::timeout(DRAIN_TIMEOUT, drain).await.is_err() {
+                drained = false;
                 tracing::warn!("anthropic stream outlived its drain after the caller hung up");
             }
-            return;
+            break;
         }
     }
+    let stopped = metering
+        .as_ref()
+        .is_some_and(|(_, parser)| parser.stopped());
+    settle(notices, stopped && drained && !broke).await;
 }
 
 fn observe(

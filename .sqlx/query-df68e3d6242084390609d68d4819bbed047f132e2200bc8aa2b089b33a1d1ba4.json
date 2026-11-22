@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                    DELETE FROM computer_screen_driver_leases\n                    WHERE computer_id = $1 AND expires_at <= now()\n                    RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at\n                    ",
+  "query": "\n                    DELETE FROM computer_screen_driver_leases\n                    WHERE computer_id = $1 AND expires_at <= clock_timestamp()\n                    RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at\n                    ",
   "describe": {
     "columns": [
       {
@@ -54,5 +54,5 @@
       false
     ]
   },
-  "hash": "c2f99eff645f9ba7860b9a92c03e86023783cb352ad5e937ca88646417e2f703"
+  "hash": "df68e3d6242084390609d68d4819bbed047f132e2200bc8aa2b089b33a1d1ba4"
 }

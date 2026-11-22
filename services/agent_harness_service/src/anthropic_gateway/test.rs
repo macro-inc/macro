@@ -706,6 +706,16 @@ mod brain_route {
 
     /// Answers every request with `status`, recording the bodies.
     async fn upstream_answering(status: StatusCode) -> (String, Arc<Mutex<Vec<String>>>) {
+        upstream_answering_with(status, "application/json", UPSTREAM_JSON).await
+    }
+
+    /// Answers every request with `status` and `body` of `content_type`,
+    /// recording the bodies.
+    async fn upstream_answering_with(
+        status: StatusCode,
+        content_type: &'static str,
+        answer: &'static str,
+    ) -> (String, Arc<Mutex<Vec<String>>>) {
         let seen = Arc::new(Mutex::new(Vec::<String>::new()));
         let recorded = seen.clone();
         let app = Router::new().fallback(move |request: Request| {
@@ -716,12 +726,11 @@ mod brain_route {
                     .lock()
                     .unwrap()
                     .push(String::from_utf8(body.to_vec()).unwrap());
-                let mut response = Response::new(Body::from(UPSTREAM_JSON));
+                let mut response = Response::new(Body::from(answer));
                 *response.status_mut() = status;
-                response.headers_mut().insert(
-                    header::CONTENT_TYPE,
-                    HeaderValue::from_static("application/json"),
-                );
+                response
+                    .headers_mut()
+                    .insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
                 response
             }
         });
@@ -794,8 +803,8 @@ mod brain_route {
         agent: &MacroUserIdStr<'_>,
     ) -> usize {
         let claimed = screens.claim_notices(agent).await.unwrap();
-        let ids: Vec<_> = claimed.iter().map(|pending| pending.id).collect();
-        screens.notices_returned(&ids).await.unwrap();
+        let claims: Vec<_> = claimed.iter().map(|pending| pending.claim).collect();
+        screens.notices_returned(&claims).await.unwrap();
         claimed.len()
     }
 
@@ -847,6 +856,43 @@ mod brain_route {
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert!(accepted_bodies.lock().unwrap()[0].contains("signed you in"));
+        assert_eq!(waiting(&screens, &agent).await, 0);
+    }
+
+    /// A stream that answers 200 and then fails, as an overloaded model
+    /// does, never delivered the notices it carried; one that stops does.
+    #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+    async fn a_screen_notice_waits_when_the_stream_ends_in_an_error(pool: sqlx::PgPool) {
+        const OVERLOADED: &str = "event: message_start\n\
+data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-haiku-4-5-20251001\",\"content\":[],\"usage\":{\"input_tokens\":25,\"output_tokens\":1}}}\n\
+\n\
+event: error\n\
+data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n\
+\n";
+        let screens = crate::computers::screen::test_screens(pool).await;
+        handed_back(&screens).await;
+        let agent = MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned();
+
+        let (overloaded, bodies) =
+            upstream_answering_with(StatusCode::OK, "text/event-stream", OVERLOADED).await;
+        let response = gateway_with_screens(&overloaded, Arc::clone(&screens))
+            .await
+            .oneshot(brain_message("mak_agent"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert!(bodies.lock().unwrap()[0].contains("macro-runtime-notice"));
+        assert_eq!(waiting(&screens, &agent).await, 2);
+
+        let (finishing, _) =
+            upstream_answering_with(StatusCode::OK, "text/event-stream", UPSTREAM_SSE).await;
+        let response = gateway_with_screens(&finishing, Arc::clone(&screens))
+            .await
+            .oneshot(brain_message("mak_agent"))
+            .await
+            .unwrap();
+        to_bytes(response.into_body(), usize::MAX).await.unwrap();
         assert_eq!(waiting(&screens, &agent).await, 0);
     }
 

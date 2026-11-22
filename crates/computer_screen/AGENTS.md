@@ -41,7 +41,9 @@ agent's brain waiting while a person drives.
   parallel opens can pass a cap by a few.
 - A take-over takes the lease only when it is free, lapsed or the same
   user's: the upsert is guarded, so two people taking over at once never both
-  drive.
+  hold it. The guard, the renewal and the lapse read `clock_timestamp()`,
+  not `now()`: `now()` is the transaction's start, before any wait on the
+  lease row.
 - A lease lapses `LEASE_TTL` after its last renewal (driver input renews it
   at most every 15 s) or take-over. Whoever next reads it
   (`ScreenService::lease`, `hold_agent`, `take_over`) releases it, which
@@ -75,7 +77,14 @@ agent's brain waiting while a person drives.
   requests those are). `claim_notices` claims them for one request for
   `NOTICE_CLAIMED_FOR` (`FOR UPDATE SKIP LOCKED`), so two concurrent
   requests never carry the same one; the request's success deletes them
-  (`notices_delivered`) and its failure gives them back (`notices_returned`).
+  (`notices_delivered`) and its failure gives them back (`notices_returned`),
+  each by its `NoticeClaim` (id and `claimed_until`), so a request whose
+  claim ran out never gives back a later request's claim.
+- `hold_agent`'s bound covers its reads too, and a lapsed lease that a
+  take-over replaced before its release ran holds the agent: `live` reads
+  the replacement when the release removes nothing.
+- `touch_session` says whether the socket's row is still open; a socket
+  whose row another socket ended as `lost` ends.
 - Tickets are stored as SHA-256 only; the secret exists in one HTTP response.
   Each carries the issuing request's `traceparent`, so the socket's span joins
   that trace.

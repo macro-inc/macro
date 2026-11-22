@@ -7,15 +7,14 @@
 //! of the runtime (asking a person, a call's brain) nor a tool-less side
 //! call of Claude Code's takes them. Each is claimed by one request at a
 //! time, so two concurrent requests never both carry it; the caller
-//! acknowledges them once the model accepted the request, and gives them
-//! back when it didn't.
+//! acknowledges them once the model's answer finished, and gives them back
+//! when it didn't.
 
 use axum::body::Bytes;
 use axum::http::HeaderMap;
-use computer_screen::domain::models::{AgentNotice, PendingNotice};
+use computer_screen::domain::models::{AgentNotice, NoticeClaim, PendingNotice};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value;
-use uuid::Uuid;
 
 use crate::computers::screen::Screens;
 
@@ -39,8 +38,9 @@ fn main_loop(headers: &HeaderMap, request: &Value) -> bool {
     marked && offers_tools
 }
 
-/// `body` with the agent's pending notices in it, and the ids to
-/// acknowledge once upstream accepted it (or give back when it didn't). A
+/// `body` with the agent's pending notices in it, and the claims to
+/// acknowledge once upstream's answer finished (or give back when it
+/// didn't). A
 /// request that isn't the main loop, a body without a user message, or a
 /// failed read goes as it came and leaves the notices for the next one.
 pub(super) async fn deliver(
@@ -48,7 +48,7 @@ pub(super) async fn deliver(
     headers: &HeaderMap,
     screens: &Screens,
     agent: &MacroUserIdStr<'_>,
-) -> (Bytes, Vec<Uuid>) {
+) -> (Bytes, Vec<NoticeClaim>) {
     let Ok(mut request) = serde_json::from_slice::<Value>(&body) else {
         return (body, Vec::new());
     };
@@ -69,16 +69,16 @@ pub(super) async fn deliver(
         notices = pending.len(),
         "delivering screen notices to the agent"
     );
-    let ids: Vec<Uuid> = pending.iter().map(|pending| pending.id).collect();
+    let claims: Vec<NoticeClaim> = pending.iter().map(|pending| pending.claim).collect();
     let notices: Vec<AgentNotice> = pending
         .into_iter()
         .map(|PendingNotice { notice, .. }| notice)
         .collect();
     insert(&mut request, &notices);
     match serde_json::to_vec(&request) {
-        Ok(rewritten) => (Bytes::from(rewritten), ids),
+        Ok(rewritten) => (Bytes::from(rewritten), claims),
         Err(_) => {
-            if let Err(error) = screens.notices_returned(&ids).await {
+            if let Err(error) = screens.notices_returned(&claims).await {
                 tracing::warn!(error = ?error, "could not give screen notices back");
             }
             (body, Vec::new())

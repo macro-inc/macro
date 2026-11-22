@@ -19,9 +19,9 @@ use super::{
     THAW_FAILURES_BEFORE_DEAD_MAN,
 };
 use crate::domain::models::{
-    Access, AgentNotPaused, Caller, DriveEnd, DriveId, EndReason, Lease, Mode, NoticeName,
-    OwedThaw, PendingNotice, Person, RedeemedTicket, Release, ScreenGrant, SessionId, Surface,
-    TakeOver, ThawFailed, ThawSettled, Thawed, TicketRequest, TicketSecret, Transport,
+    Access, AgentNotPaused, Caller, DriveEnd, DriveId, EndReason, Lease, Mode, NoticeClaim,
+    NoticeName, OwedThaw, PendingNotice, Person, RedeemedTicket, Release, ScreenGrant, SessionId,
+    Surface, TakeOver, ThawFailed, ThawSettled, Thawed, TicketRequest, TicketSecret, Transport,
 };
 use crate::domain::ports::{DriverSignal, People, ScreenAccess, ScreenRepo, TicketHash};
 use crate::outbound::lease_changes::PgLeaseChanges;
@@ -84,6 +84,11 @@ impl DriverSignal for RecordedSignal {
 struct ObservedRepo {
     inner: PgScreenRepo,
     agent_lease_read: Arc<Notify>,
+    /// Answered by the next agent lease read instead of the database: a
+    /// read that happened before what the test does next.
+    earlier_agent_lease: Mutex<Option<Lease>>,
+    /// Agent lease reads never answer: a stalled database.
+    agent_lease_stalls: AtomicBool,
 }
 
 impl ScreenRepo for ObservedRepo {
@@ -159,7 +164,14 @@ impl ScreenRepo for ObservedRepo {
         &self,
         agent: &MacroUserIdStr<'_>,
     ) -> Result<Option<Lease>, PgScreenError> {
-        let lease = self.inner.agent_lease(agent).await;
+        if self.agent_lease_stalls.load(Ordering::SeqCst) {
+            std::future::pending::<()>().await;
+        }
+        let earlier = self.earlier_agent_lease.lock().unwrap().take();
+        let lease = match earlier {
+            Some(earlier) => Ok(Some(earlier)),
+            None => self.inner.agent_lease(agent).await,
+        };
         self.agent_lease_read.notify_one();
         lease
     }
@@ -173,12 +185,12 @@ impl ScreenRepo for ObservedRepo {
         self.inner.claim_notices(agent, kept, claim_for).await
     }
 
-    async fn delete_notices(&self, ids: &[Uuid]) -> Result<(), PgScreenError> {
-        self.inner.delete_notices(ids).await
+    async fn delete_notices(&self, claims: &[NoticeClaim]) -> Result<(), PgScreenError> {
+        self.inner.delete_notices(claims).await
     }
 
-    async fn unclaim_notices(&self, ids: &[Uuid]) -> Result<(), PgScreenError> {
-        self.inner.unclaim_notices(ids).await
+    async fn unclaim_notices(&self, claims: &[NoticeClaim]) -> Result<(), PgScreenError> {
+        self.inner.unclaim_notices(claims).await
     }
 
     async fn lapsed_leases(&self) -> Result<Vec<ComputerId>, PgScreenError> {
@@ -222,7 +234,7 @@ impl ScreenRepo for ObservedRepo {
         self.inner.end_lost_sessions(computer, fresh).await
     }
 
-    async fn touch_session(&self, id: SessionId) -> Result<(), PgScreenError> {
+    async fn touch_session(&self, id: SessionId) -> Result<bool, PgScreenError> {
         self.inner.touch_session(id).await
     }
 
@@ -335,6 +347,8 @@ async fn service_with(
         ObservedRepo {
             inner: PgScreenRepo::new(pool),
             agent_lease_read: Arc::clone(&agent_lease_read),
+            earlier_agent_lease: Mutex::new(None),
+            agent_lease_stalls: AtomicBool::new(false),
         },
         signal.clone(),
         changes,
@@ -438,8 +452,8 @@ async fn the_agent_waits_for_the_hand_back(pool: PgPool) {
     let notices = service.claim_notices(&agent()).await.unwrap();
     assert_eq!(notices.len(), 2);
     assert_eq!(notices[1].notice.note.as_deref(), Some("done"));
-    let ids: Vec<Uuid> = notices.iter().map(|pending| pending.id).collect();
-    service.notices_delivered(&ids).await.unwrap();
+    let claims: Vec<NoticeClaim> = notices.iter().map(|pending| pending.claim).collect();
+    service.notices_delivered(&claims).await.unwrap();
     assert!(service.claim_notices(&agent()).await.unwrap().is_empty());
 }
 
@@ -865,6 +879,61 @@ async fn the_hold_gives_up_at_its_bound(pool: PgPool) {
     let driver = grant(Mode::Drive);
     let session = service.open_session(&driver).await.unwrap();
     service.take_over(&driver, session).await.unwrap();
+
+    let hold = service
+        .hold_agent(&agent(), Duration::from_millis(50))
+        .await
+        .unwrap();
+
+    assert_eq!(hold, Hold::TimedOut);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_hold_gives_up_at_its_bound_while_the_database_stalls(pool: PgPool) {
+    let (service, _, _) = service(pool).await;
+    service
+        .repo
+        .agent_lease_stalls
+        .store(true, Ordering::SeqCst);
+
+    let hold = tokio::time::timeout(
+        Duration::from_secs(5),
+        service.hold_agent(&agent(), Duration::from_millis(50)),
+    )
+    .await
+    .expect("the hold outlived its bound while its read stalled")
+    .unwrap();
+
+    assert_eq!(hold, Hold::TimedOut);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_lapsed_lease_replaced_before_its_release_still_holds_the_agent(pool: PgPool) {
+    let (service, _, _) = service(pool.clone()).await;
+    let alice = grant(Mode::Drive);
+    let alice_session = service.open_session(&alice).await.unwrap();
+    let TakeOver::Taken(mut lapsed) = service.take_over(&alice, alice_session).await.unwrap()
+    else {
+        panic!("alice could not take over");
+    };
+    sqlx::query!(
+        "UPDATE computer_screen_driver_leases SET expires_at = now() - interval '1 second'"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    lapsed.expires_at = Utc::now() - chrono::Duration::seconds(1);
+    let bob = ScreenGrant {
+        user_id: MacroUserIdStr::try_from("macro|bob@example.com".to_owned()).unwrap(),
+        ..grant(Mode::Drive)
+    };
+    let bob_session = service.open_session(&bob).await.unwrap();
+    assert!(matches!(
+        service.take_over(&bob, bob_session).await.unwrap(),
+        TakeOver::Taken(_)
+    ));
+    // The hold read alice's lapsed lease just before bob took over.
+    *service.repo.earlier_agent_lease.lock().unwrap() = Some(lapsed);
 
     let hold = service
         .hold_agent(&agent(), Duration::from_millis(50))

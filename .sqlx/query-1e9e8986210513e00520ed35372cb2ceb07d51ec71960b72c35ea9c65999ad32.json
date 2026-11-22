@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE computer_screen_agent_notices notice SET claimed_until = NULL\n            FROM unnest($1::uuid[], $2::timestamptz[]) AS claim(id, until)\n            WHERE notice.id = claim.id AND notice.claimed_until = claim.until\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e9e8986210513e00520ed35372cb2ceb07d51ec71960b72c35ea9c65999ad32"
+}
