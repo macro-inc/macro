@@ -159,6 +159,14 @@ fn narrowest(first: Option<SessionScope>, second: Option<SessionScope>) -> Optio
     }
 }
 
+/// The scopes of the tokens beside the authenticating one: the narrowest,
+/// and whether any caps document tokens.
+#[derive(Default, Clone, Copy)]
+struct OtherScopes {
+    narrowest: Option<SessionScope>,
+    caps_document_tokens: bool,
+}
+
 /// Hold the request to the scopes the tokens beside the authenticating one
 /// sign or are stored with (`state`, when there is a database to look their
 /// correlations up in), and name the narrowest of them.
@@ -167,11 +175,12 @@ async fn other_tokens_scope(
     specs: Option<&[&str]>,
     others: &[MacroApiToken],
     parts: &Parts,
-) -> Result<Option<SessionScope>, CorrelationRejection> {
-    let mut scope = None;
+) -> Result<OtherScopes, CorrelationRejection> {
+    let mut scopes = OtherScopes::default();
     for token in others {
         let signed = checked_signed_scope(Some(token), parts, specs)?;
-        scope = narrowest(scope, signed.known());
+        scopes.narrowest = narrowest(scopes.narrowest, signed.known());
+        scopes.caps_document_tokens |= caps(signed.known());
         let Some(state) = state else {
             continue;
         };
@@ -182,10 +191,15 @@ async fn other_tokens_scope(
             return Err(CorrelationRejection(CorrelationError::OutOfScope));
         }
         if let Some(stored) = correlation.and_then(|correlation| correlation.scope) {
-            scope = narrowest(scope, Some(stored));
+            scopes.narrowest = narrowest(scopes.narrowest, Some(stored));
+            scopes.caps_document_tokens |= caps(Some(stored));
         }
     }
-    Ok(scope)
+    Ok(scopes)
+}
+
+fn caps(scope: Option<SessionScope>) -> bool {
+    scope.is_some_and(SessionScope::caps_document_tokens_to_view)
 }
 
 /// Whether the request is inside both the signed and the stored scope, with
@@ -384,9 +398,12 @@ async fn propagate_request(
             correlation
                 .and_then(|(_, correlation)| correlation.scope)
                 .or(signed.known()),
-            others_scope,
+            others_scope.narrowest,
         ),
         verb: correlation_id.and_then(|_| sdk_verb(&parts)),
+        caps_document_tokens: others_scope.caps_document_tokens
+            || caps(signed.known())
+            || caps(correlation.and_then(|(_, correlation)| correlation.scope)),
     };
     let handling = answer_sharing_refusals(next.run(Request::from_parts(parts, body)));
     crate::context::scope_attribution(attribution, handling)

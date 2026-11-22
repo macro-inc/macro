@@ -11,6 +11,8 @@ GET /voices/{model}/sample  # plays a voice sample billed to the team
 GET /agent-repositories/branches  # fetches a caller-chosen git remote from Macro's servers
 
 [auth]
+GET /team/invites  # invite ids are join tokens
+GET /team/user/invites  # invite ids are join tokens
 GET /email/fusionauth/verify/{verification_id}  # verifies an email address
 GET /email/verify/{verification_id}  # verifies an email address
 GET /merge/verify/{code}  # merges accounts
@@ -37,6 +39,10 @@ GET /email/attachments/{id}/document_id  # uploads the attachment as a document 
 GET /opens/{token}  # an open-tracking pixel: records an open
 
 [storage]
+GET /webhook/events/stream  # streams the account's broker events, unbounded
+GET /webhook/webhooks  # an outbound endpoint's auth headers
+GET /webhook/webhooks/{webhook_id}  # an outbound endpoint's auth headers
+GET /whatsapp/pairing/{id}  # a WhatsApp pairing QR code
 GET /harness-pairings/{code}  # a pairing code for connecting a computer
 GET /foreign_entity/by_source/{source}/{foreign_entity_id}  # its id is a wildcard path (owner/repo/pull/12) no typed placeholder can bound
 GET /github/install-sync  # syncs a GitHub installation

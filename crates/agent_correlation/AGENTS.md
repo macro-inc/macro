@@ -41,14 +41,27 @@ code, not in its prompt. The harness also signs the scope into the credential
   job everything (fails closed); a signed-scope-only service a job reads
   uses `enforce_signed_scope_serving` (static files). The test
   `every_service_declares_the_specs_it_serves` holds every service to it.
-  No scope shares. Plain `enforce_signed_scope` binds no specs, so it
-  refuses an allowlisted scope everything. The unfurl service validates no
-  attribution: its `[unfurl]` refusals hold only if the run is given no
-  unfurl host. Under a scope whose `caps_document_tokens_to_view` is true
-  (`job`), `documents::encode_permission_token` mints view-only document
-  tokens that also sign the scope (`agent_scope`); a new default-deny scope
-  adds its arm there too. Collab-surface tokens have their own encoder and
-  are on no allowlist. `generation`:
+  An allowlist's writes are session-bound: their `{session_id}` must be the
+  correlation's session (`OwnSession`, checked by `propagate`, the
+  extractor and every other token's correlation; refused without one), so
+  a scoped program writes only into its own session.
+  No scope shares, and none puts an agent to work
+  (`may_assign_agents`, checked by `properties` on assignment and project
+  filing, `create_task` and `task_templates`; `agent_trigger` also starts
+  no session for an event whose `agent_scope` is set, which
+  `macro_event_broker::Event` records from the request). Every scope is
+  refused the GETs that write (`GET_WRITES`, `is_get_write`: joining a team,
+  verifying, turning an attachment into a document, memory enrollment).
+  Plain `enforce_signed_scope` binds no specs, so it refuses an allowlisted
+  scope everything. The unfurl service validates no attribution: a scoped
+  run gets no unfurl host and always goes through the egress proxy
+  (harness `run_endpoints`, `EgressRollout::egress_for`). Under a scope whose
+  `caps_document_tokens_to_view` is true (`job`), document tokens
+  (`documents::encode_permission_token`, which also signs `agent_scope`)
+  and collab-surface tokens (`encode_surface_token`) grant view only; the
+  cap holds if any token the request carries is under such a scope
+  (`Attribution::caps_document_tokens`). A new default-deny scope adds its
+  arm to each predicate. `generation`:
   reads by method, its own writes, and `POST_READS`; `no_send` (a background
   run that sends nothing): anything but `SENDS`, the requests that reach
   someone else, carry data out (web fetch and search), or start work with

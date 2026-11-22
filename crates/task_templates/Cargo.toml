@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation" }
 chrono = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 models_properties = { path = "../models_properties" }

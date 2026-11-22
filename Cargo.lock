@@ -1071,6 +1071,7 @@ name = "agent_trigger"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "agent_correlation",
  "agent_session",
  "ai_billing",
  "ai_usage",
@@ -4933,6 +4934,7 @@ dependencies = [
 name = "collab_surface"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "axum",
  "chrono",
  "entity_access",
@@ -16717,6 +16719,7 @@ name = "properties"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -21172,6 +21175,7 @@ dependencies = [
 name = "task_templates"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "chrono",
  "macro_uuid",
  "models_properties",

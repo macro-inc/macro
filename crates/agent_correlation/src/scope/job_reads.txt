@@ -55,9 +55,7 @@ GET /team/computers/offers
 GET /team/computers/purchase-offers
 GET /team/computers/rollout
 GET /team/computers/usage
-GET /team/invites
 GET /team/user
-GET /team/user/invites
 GET /team_agents
 GET /team_agents/{agent_user_id}/voice
 GET /user/language
@@ -351,13 +349,9 @@ GET /threads/{thread_id}/channel-shares
 GET /user-api-keys
 GET /user_document_view_location/{document_id}
 GET /v2/documents/{document_id}/permissions
-GET /webhook/events/stream
-GET /webhook/webhooks
-GET /webhook/webhooks/{webhook_id}
 GET /whatsapp/account
 GET /whatsapp/chats
 GET /whatsapp/lookups/{id}
-GET /whatsapp/pairing/{id}
 POST /calendar-events/preview
 POST /call/record/preview
 POST /channel-labels/preview

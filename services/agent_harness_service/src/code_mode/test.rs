@@ -224,6 +224,10 @@ fn the_dry_run_scope_is_every_sdk_read_and_no_write() {
         if key.starts_with("unfurl.") {
             continue;
         }
+        // A GET that writes is refused to every scope.
+        if agent_correlation::scope::is_get_write(&operation.method, &concrete(&operation.path)) {
+            continue;
+        }
         assert_eq!(
             scope.allows(&operation.method, &concrete(&operation.path)),
             !operation.write,
@@ -253,6 +257,10 @@ fn the_generation_scope_matches_the_sdk_catalog() {
     for (key, operation) in code_execution::domain::operations() {
         // No scoped run is given unfurl's host (`run_endpoints`).
         if key.starts_with("unfurl.") {
+            continue;
+        }
+        // A GET that writes is refused to every scope.
+        if agent_correlation::scope::is_get_write(&operation.method, &concrete(&operation.path)) {
             continue;
         }
         let allowed = scope.allows(&operation.method, &concrete(&operation.path));

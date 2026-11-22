@@ -46,9 +46,7 @@ pub fn encode_permission_token(
         .map_err(|e| DocumentError::Internal(anyhow::anyhow!("invalid user id: {e}")))?;
 
     let scope = agent_correlation::context::current_scope();
-    let access_level = if scope
-        .is_some_and(agent_correlation::scope::SessionScope::caps_document_tokens_to_view)
-    {
+    let access_level = if agent_correlation::context::caps_document_tokens_to_view() {
         AccessLevel::View
     } else {
         access_level

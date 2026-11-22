@@ -415,6 +415,33 @@ const ANY_WRITE: &[(&str, &str)] = &[
     ("GET", "/items/soup/graphql/ws"),
 ];
 
+/// GETs that write: they join, verify, create or record something. Every
+/// scope is refused them, though a scope otherwise reads by method. Paths as
+/// the SDK's specs name them.
+const GET_WRITES: &[(&str, &str)] = &[
+    ("GET", "/team/join/{id}"),
+    ("GET", "/email/attachments/{id}/document_id"),
+    ("GET", "/email/fusionauth/verify/{id}"),
+    ("GET", "/email/verify/{id}"),
+    ("GET", "/merge/verify/{id}"),
+    ("GET", "/opens/{id}"),
+    ("GET", "/github/install-sync"),
+    ("GET", "/call/{id}"),
+    ("GET", "/call/join/{id}"),
+    ("GET", "/memory"),
+    ("GET", "/memory/explicit"),
+];
+
+/// Whether a GET with `path` writes ([`GET_WRITES`]), so no scope makes it.
+/// Placeholders are typed ([`typed_matches`]), so `/call/{id}` doesn't take
+/// `/call/meetings`.
+pub fn is_get_write(method: &str, path: &str) -> bool {
+    let method = if method == "HEAD" { "GET" } else { method };
+    GET_WRITES.iter().any(|(listed, template)| {
+        *listed == method && typed_matches(path, template, OwnSession::Unchecked)
+    })
+}
+
 /// Requests a generation session may make besides reads by method: its own
 /// tools and drafting email. Paths as the SDK sends them, `{…}` one segment.
 const GENERATION_WRITES: &[(&str, &str)] = &[
@@ -523,7 +550,7 @@ impl SessionScope {
         method: &str,
         path: &str,
     ) -> bool {
-        if listed(ANY_WRITE, method, path) {
+        if listed(ANY_WRITE, method, path) || is_get_write(method, path) {
             return false;
         }
         // A default-deny scope reads only what its lists name, like any
@@ -545,6 +572,16 @@ impl SessionScope {
             Self::DryRun => listed(POST_READS, method, path),
             // Answered by its allowlist above.
             Self::Job => false,
+        }
+    }
+
+    /// Whether a request under the scope may put an agent to work: assign
+    /// an agent or bot to a task, or file a task into a project, whose
+    /// agents it inherits. None may: the agent's session runs with the
+    /// person's full access, outside the scope.
+    pub fn may_assign_agents(self) -> bool {
+        match self {
+            Self::Generation | Self::NoSend | Self::DryRun | Self::Job => false,
         }
     }
 
@@ -623,7 +660,11 @@ impl SignedScope {
         match self {
             Self::Unscoped => true,
             Self::Known(scope) => scope.allows_within(specs, own, method, path),
-            Self::Unknown => reads_by_method(method) && !listed(ANY_WRITE, method, path),
+            Self::Unknown => {
+                reads_by_method(method)
+                    && !listed(ANY_WRITE, method, path)
+                    && !is_get_write(method, path)
+            }
         }
     }
 

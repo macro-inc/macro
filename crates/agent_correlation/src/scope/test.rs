@@ -953,3 +953,33 @@ fn a_job_writes_only_into_its_own_session() {
         &view(other)
     ));
 }
+
+/// A GET that writes (joining a team, turning an attachment into a
+/// document, enrolling memory refresh) is refused to every scope, a newer
+/// one included, though they otherwise read by method.
+#[test]
+fn no_scope_makes_a_get_that_writes() {
+    let id = "0192f1a0-0000-7000-8000-000000000001";
+    for path in [
+        format!("/auth/team/join/{id}"),
+        format!("/email/attachments/{id}/document_id"),
+        "/cognition/memory".to_owned(),
+        "/memory/explicit".to_owned(),
+        format!("/dss/call/join/{id}"),
+    ] {
+        for scope in [
+            SessionScope::Generation,
+            SessionScope::NoSend,
+            SessionScope::DryRun,
+            SessionScope::Job,
+        ] {
+            assert!(
+                !scope.allows_on(Some(ALL_SPECS), "GET", &path),
+                "{scope:?} {path}"
+            );
+        }
+        assert!(!SignedScope::Unknown.allows("GET", &path), "{path}");
+    }
+    assert!(SessionScope::NoSend.allows("GET", "/memory/activity"));
+    assert!(SessionScope::NoSend.allows("GET", "/dss/call/meetings"));
+}
