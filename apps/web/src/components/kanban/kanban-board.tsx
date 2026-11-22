@@ -370,14 +370,29 @@ function Columns(props: {
         <Key each={virtualItems()} by="key">
           {(item) => {
             const key = item().key;
+            let slot: HTMLDivElement | undefined;
+
+            createEffect(
+              on(
+                () => item().index,
+                () => {
+                  // Lanes are sized in rem, so a larger root font widens them.
+                  queueMicrotask(() => {
+                    if (slot?.isConnected) {
+                      virtualizer.measureElement(slot);
+                    }
+                  });
+                }
+              )
+            );
+
             return (
               <div
-                class="absolute top-0 h-full"
+                ref={slot}
+                data-index={item().index}
+                class="absolute top-0 h-full w-84"
                 data-kanban-board-column={key}
-                style={{
-                  left: `${item().start}px`,
-                  width: `${item().size}px`,
-                }}
+                style={{ left: `${item().start}px` }}
               >
                 <Show when={key === END_COLUMN_KEY}>{props.endColumn?.()}</Show>
                 <Show when={columnsById().get(String(key))}>
@@ -425,7 +440,7 @@ function Column(props: {
         canReorder={props.canReorder}
         onKeyDown={props.onKeyDown}
         aria-labelledby={headerId}
-        class="max-h-full min-h-0 w-84"
+        class="max-h-full min-h-0 w-full"
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
       >
