@@ -2,7 +2,7 @@ import type { CalendarEvent } from '@app/features/calendar/types';
 import { isSameLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { formatLocale, t } from '@app/lib/i18n';
 import { Layer } from '@ui';
-import { For } from 'solid-js';
+import { createUniqueId, For } from 'solid-js';
 import type { MonthBar, MonthDay } from '../../core/phone-month-layout';
 import './month-grid.css';
 
@@ -22,6 +22,7 @@ export function MonthGrid(props: {
   isSupported: (date: Date) => boolean;
   onPick: (date: Date, element: HTMLButtonElement) => void;
 }) {
+  const descriptionId = createUniqueId();
   const fullDate = (date: Date) =>
     date.toLocaleDateString(formatLocale(), { dateStyle: 'full' });
   return (
@@ -76,6 +77,11 @@ export function MonthGrid(props: {
                           day.date.getMonth() !== props.month.getMonth(),
                       }}
                       aria-label={fullDate(day.date)}
+                      aria-describedby={
+                        day.events.length
+                          ? `${descriptionId}-${day.date.getTime()}`
+                          : undefined
+                      }
                       aria-pressed={
                         !!props.selected &&
                         isSameLocalDate(day.date, props.selected)
@@ -85,6 +91,17 @@ export function MonthGrid(props: {
                         props.onPick(day.date, event.currentTarget)
                       }
                     >
+                      <span
+                        class="sr-only"
+                        id={`${descriptionId}-${day.date.getTime()}`}
+                      >
+                        {day.events
+                          .map(
+                            (event) =>
+                              event.title || t('calendar.agendaUntitled')
+                          )
+                          .join('; ')}
+                      </span>
                       <span
                         class="phone-month-date"
                         classList={{

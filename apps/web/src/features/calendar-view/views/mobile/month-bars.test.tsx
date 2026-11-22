@@ -11,6 +11,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PhoneMonthBars } from './month-bars';
 
@@ -181,4 +182,82 @@ it('navigates an external focus request beyond a five-week face before opening i
     expect(actions.navigateToDate).toHaveBeenCalledWith(new Date(2026, 11, 8))
   );
   expect(screen.queryByRole('dialog', { name: 'Day events' })).toBeNull();
+});
+
+it.each(['tap', 'dismiss then tap'])(
+  'lets %s supersede unresolved focus and ignores its late event',
+  async (action) => {
+    const [events, setEvents] = createSignal<CalendarEvent[]>([]);
+    const handled = vi.fn();
+    render(() => (
+      <PhoneMonthBars
+        range={undefined}
+        initialDate={new Date(2026, 10, 20)}
+        events={events()}
+        showWeekends
+        timeFormat="12-hour"
+        focusTarget={{
+          requestId: 3,
+          requestedAt: Date.now(),
+          eventId: 'event',
+          occurrenceKey: '2026-11-20',
+          date: new Date(2026, 10, 20),
+        }}
+        onFocusHandled={handled}
+        onSelect={actions.select}
+      />
+    ));
+    const sheet = await screen.findByRole('dialog', { name: 'Day events' });
+    if (action === 'dismiss then tap') {
+      await waitFor(() =>
+        expect(sheet.contains(document.activeElement)).toBe(true)
+      );
+      fireEvent.keyDown(sheet, { key: 'Escape' });
+      await waitFor(() =>
+        expect(sheet.hasAttribute('data-closing')).toBe(true)
+      );
+    }
+    // JSDOM retains transitioning layers; dispatch the next day intent directly.
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Tuesday, November 24, 2026',
+        hidden: true,
+      })
+    );
+    expect(
+      screen.getByRole('button', { name: 'Open day view' }).textContent
+    ).toContain('November 24');
+    expect(handled).toHaveBeenCalledWith(3);
+    setEvents([EVENT]);
+    expect(actions.select).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('button', { name: 'Open day view' }).textContent
+    ).toContain('November 24');
+  }
+);
+
+it('announces event titles including overflow through the day button description', () => {
+  const events = Array.from({ length: 7 }, (_, index) => ({
+    ...EVENT,
+    id: `event-${index}`,
+    title: `Review ${index + 1}`,
+  }));
+  render(() => (
+    <PhoneMonthBars
+      range={undefined}
+      initialDate={new Date(2026, 10, 20)}
+      events={events}
+      showWeekends
+      timeFormat="12-hour"
+      onFocusHandled={() => {}}
+      onSelect={actions.select}
+    />
+  ));
+  expect(
+    screen.getByRole('button', {
+      name: 'Friday, November 20, 2026',
+      description:
+        'Review 1; Review 2; Review 3; Review 4; Review 5; Review 6; Review 7',
+    })
+  ).toBeTruthy();
 });

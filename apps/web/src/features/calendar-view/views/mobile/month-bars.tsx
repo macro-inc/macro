@@ -48,8 +48,10 @@ export function PhoneMonthBars(props: {
   const [sheetState, setSheetState] = createStore<{
     open: boolean;
     pickedMonth?: string;
+    ignoredFocus?: number;
   }>({ open: false });
   const setOpen = (open: boolean) => setSheetState('open', open);
+  let handledFocus: number | undefined;
   const [sheet, setSheet] = createSignal<HTMLDivElement>();
   const [today, setToday] = createSignal(new Date());
   const timer = setInterval(() => setToday(new Date()), 60_000);
@@ -66,7 +68,12 @@ export function PhoneMonthBars(props: {
     dayCount: () => range().dayCount,
     events: () => props.events,
     showWeekends: () => props.showWeekends,
-    focusDate: () => props.focusTarget?.date,
+    focusDate: () => {
+      const target = props.focusTarget;
+      return target?.requestId === sheetState.ignoredFocus
+        ? undefined
+        : target?.date;
+    },
   });
   const capacity = () => phoneMonthBarCapacity(size.height, range().weekCount);
   const weeks = createMemo(() => {
@@ -79,13 +86,26 @@ export function PhoneMonthBars(props: {
     });
   });
   const supported = getCalendarSupportedRange();
+  const cancelPendingFocus = () => {
+    const target = props.focusTarget;
+    if (!target) return;
+    const alreadyHandled = handledFocus === target.requestId;
+    handledFocus = target.requestId;
+    setSheetState('ignoredFocus', target.requestId);
+    if (!alreadyHandled) props.onFocusHandled(target.requestId);
+  };
+  const changeSheetOpen = (open: boolean) => {
+    if (!open) cancelPendingFocus();
+    setOpen(open);
+  };
   const selectEvent = (event: CalendarEvent, element: HTMLElement) => {
     batch(() => {
+      cancelPendingFocus();
       setOpen(false);
       props.onSelect(event, element);
     });
   };
-  const pick = (date: Date) => {
+  const openDaySheet = (date: Date) => {
     const interaction = beginInteraction('calendar.month.day.open');
     try {
       month.pick(date);
@@ -94,7 +114,12 @@ export function PhoneMonthBars(props: {
       interaction.end();
     }
   };
-  let handledFocus: number | undefined;
+  const pick = (date: Date) => {
+    batch(() => {
+      cancelPendingFocus();
+      openDaySheet(date);
+    });
+  };
   let navigatedFocus: string | undefined;
   createEffect(() => {
     const target = props.focusTarget;
@@ -109,7 +134,7 @@ export function PhoneMonthBars(props: {
       }
       return;
     }
-    pick(target.date);
+    openDaySheet(target.date);
     const root = sheet();
     const event = month
       .events()
@@ -125,6 +150,7 @@ export function PhoneMonthBars(props: {
   });
   const openDay = () => {
     const date = month.selected();
+    cancelPendingFocus();
     setOpen(false);
     batch(() => {
       navigation.gotoDate(date);
@@ -133,6 +159,7 @@ export function PhoneMonthBars(props: {
   };
   const createOnDay = () => {
     const date = month.selected();
+    cancelPendingFocus();
     setOpen(false);
     const interaction = beginInteraction('calendar.month.create');
     try {
@@ -165,7 +192,7 @@ export function PhoneMonthBars(props: {
         date={month.selected()}
         events={month.events()}
         timeFormat={props.timeFormat}
-        onOpenChange={setOpen}
+        onOpenChange={changeSheetOpen}
         onOpenDay={openDay}
         onCreate={createOnDay}
         onSelect={selectEvent}

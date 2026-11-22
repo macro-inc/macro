@@ -41,7 +41,9 @@ bars are half-opacity. Shared week lanes keep multi-day bars continuous, and +N
 counts events that do not fit. Titles cut at whole-word boundaries. Hiding weekends
 widens the five remaining columns. Tapping a date opens its event sheet without
 leaving Month; the title opens Day and + creates on that date. Event links open the
-same visible event rows. Dates outside the supported occurrence range are disabled.
+same visible event rows. A day tap or sheet dismissal cancels older pending event focus,
+so late data cannot reopen the previous day. Each date announces all its event titles,
+including overflow, to screen readers. Dates outside the supported occurrence range are disabled.
 Desktop event creation and editing use one 384px composer, not a second split.
 Anchored, pinned, and agent-draft placements have separate view components over
 shared fields and setup; pinning retains the field tree. The registered legacy

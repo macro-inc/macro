@@ -124,7 +124,7 @@ host lives in `../block-calendar/`.
   depth. Keep navigation outside and the opening hour label inside the viewport.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
-- Keep the phone Month switch in `../calendar-view/calendar-month.tsx`; render Bars through `views/mobile/month-bars.tsx` over a Sunday-start, five/six-week range, shared span lanes and overflow counts. Keep the old PhoneMonth unwired. Open the picked day's sheet without leaving Month; only its title changes to Day. Preserve the bounded source and visible-row focus path.
+- Keep the phone Month switch in `../calendar-view/calendar-month.tsx`; render Bars through `views/mobile/month-bars.tsx` over a Sunday-start, five/six-week range, shared span lanes and overflow counts. Keep the old PhoneMonth unwired. Open the picked day's sheet without leaving Month; only its title changes to Day. Let explicit day taps and sheet dismissal retire pending focus requests. Give each day an accessible description of all its event titles, including overflow. Preserve the bounded source and visible-row focus path.
 - Host phone navigation through the shell's `NavigationSheet`, as Email does;
   `views/mobile/calendar-sidebar.tsx` keeps Email's fixed title header above views,
   account calendars, booking links, and a fixed `MobileDrawer.Section` Settings footer.
