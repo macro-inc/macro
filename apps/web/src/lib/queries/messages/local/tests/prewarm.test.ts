@@ -6,6 +6,7 @@ import {
   CHANNEL_EVICTION_AGE_MS,
   evictIdleChannels,
   runChannelPrewarm,
+  runChannelPrewarmPass,
 } from '../prewarm';
 import { devicePage, fakeHost } from './fixtures';
 
@@ -225,5 +226,96 @@ describe('evictIdleChannels', () => {
         { signal: new AbortController().signal }
       )
     ).toBe(0);
+  });
+});
+
+describe('runChannelPrewarmPass', () => {
+  const fetchPage: FetchChannelServerPage = async () => ({
+    page: { entries: [], olderCursor: null, newerCursor: null, seq: '4' },
+    cached: Promise.resolve(),
+  });
+  const run = (lists: string[][], signal = new AbortController().signal) => {
+    const host = fakeHost(() => devicePage([], { covered: false }));
+    const fetched = vi.fn(fetchPage);
+    const load = vi.fn(async () => lists.shift() ?? []);
+    const pass = runChannelPrewarmPass(host, load, {
+      signal,
+      delayMs: 0,
+      fetchPage: fetched,
+    });
+    const warmed = () => fetched.mock.calls.map(([input]) => input.channelId);
+    return { pass, load, warmed };
+  };
+
+  it('warms a channel that was listed only after the pass began', async () => {
+    const { pass, load, warmed } = run([
+      ['a', 'b'],
+      ['late', 'a', 'b'],
+      ['late', 'a', 'b'],
+    ]);
+    expect(await pass).toMatchObject({ fetched: 3, failed: 0 });
+    expect(warmed()).toEqual(['a', 'b', 'late']);
+    // The look that found nothing new ended the pass.
+    expect(load).toHaveBeenCalledTimes(3);
+  });
+
+  it('asks once more when the lists have not changed, and no further', async () => {
+    const { pass, load, warmed } = run([['a'], ['a'], ['never asked']]);
+    await pass;
+    expect(warmed()).toEqual(['a']);
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops asking after the allowed follow-ups', async () => {
+    const { pass, load } = run([['a'], ['b'], ['c'], ['d']]);
+    expect(await pass).toMatchObject({ fetched: 3 });
+    expect(load).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps what it warmed when the second look fails, and waits for quiet before it', async () => {
+    const host = fakeHost(() => devicePage([], { covered: false }));
+    const load = vi
+      .fn<() => Promise<string[]>>()
+      .mockResolvedValueOnce(['a'])
+      .mockRejectedValueOnce(new Error('list failed'));
+    const order: string[] = [];
+    const outcome = await runChannelPrewarmPass(
+      host,
+      async () => {
+        order.push('list');
+        return load();
+      },
+      {
+        signal: new AbortController().signal,
+        delayMs: 0,
+        fetchPage,
+        ready: async () => {
+          order.push('quiet');
+        },
+      }
+    );
+    expect(outcome).toMatchObject({ fetched: 1, failed: 0 });
+    // The first list is asked at once; the channel and the second look wait.
+    expect(order).toEqual(['list', 'quiet', 'quiet', 'list']);
+  });
+
+  it('fails the pass when the first look fails', async () => {
+    const host = fakeHost(() => devicePage([], { covered: false }));
+    await expect(
+      runChannelPrewarmPass(
+        host,
+        async () => {
+          throw new Error('list failed');
+        },
+        { signal: new AbortController().signal, delayMs: 0, fetchPage }
+      )
+    ).rejects.toThrow('list failed');
+  });
+
+  it('does not ask for the lists with no connection', async () => {
+    onlineManager.setOnline(false);
+    const { pass, load } = run([['a']]);
+    expect(await pass).toMatchObject({ fetched: 0 });
+    expect(load).not.toHaveBeenCalled();
   });
 });
