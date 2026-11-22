@@ -124,6 +124,15 @@ fn agents_changed_is_a_bare_hint() {
 }
 
 #[test]
+fn recheck_teammate_host_is_a_bare_hint() {
+    assert_eq!(
+        serde_json::to_value(ToRuntimeMessage::RecheckTeammateHost).unwrap(),
+        json!({ "type": "recheckTeammateHost" })
+    );
+    assert_eq!(ACCEPTS_RECHECK_TEAMMATE_HOST, "recheck-teammate-host");
+}
+
+#[test]
 fn model_probe_messages_carry_no_session_id_and_no_correlation() {
     let request = ToRuntimeMessage::ModelProbeRequest;
     let response = ToServerMessage::ModelProbeResponse {

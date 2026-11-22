@@ -144,6 +144,12 @@ pub const ACCEPTS_APPLY_AGENT: &str = "apply-agent";
 /// [`ToServerMessage::TeammateHost`] report says which, or why not.
 pub const ACCEPTS_TEAMMATE_CONTAINER: &str = "teammate-container";
 
+/// The [`RUNTIME_ACCEPTS_HEADER`] entry for
+/// [`ToRuntimeMessage::RecheckTeammateHost`]. A runtime set up to host
+/// teammates lists it whether or not its engine answers, so a machine whose
+/// engine was down can be asked to check again.
+pub const ACCEPTS_RECHECK_TEAMMATE_HOST: &str = "recheck-teammate-host";
+
 /// Agent Service to Agent Runtime traffic on the logical protocol stream.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -164,6 +170,12 @@ pub enum ToRuntimeMessage {
     /// once rather than at its next poll. Runtimes that do not serve
     /// triggers ignore it.
     AgentsChanged,
+    /// Check the machine's teammate hosting again now (the container
+    /// engine, the floor, the isolation probe) and send a fresh
+    /// [`ToServerMessage::TeammateHost`] report. A hint with no payload, sent
+    /// when a person asks to check again; sent only to a runtime that listed
+    /// [`ACCEPTS_RECHECK_TEAMMATE_HOST`].
+    RecheckTeammateHost,
     /// Run this agent teammate on the computer: write its environment where
     /// the guest's agent service reads it, which (re)starts the agent. Sent
     /// to a warm pool computer a purchase took for an agent; the agent's own

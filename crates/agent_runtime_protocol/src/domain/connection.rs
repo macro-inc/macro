@@ -266,8 +266,9 @@ async fn run_runtime<H>(
                             let _ = outbound.send(ToServerMessage::ModelProbeResponse { result });
                         });
                     }
-                    // This side serves one agent and no triggers.
-                    ToRuntimeMessage::AgentsChanged => {}
+                    // This side serves one agent and no triggers, and
+                    // hosts no teammates.
+                    ToRuntimeMessage::AgentsChanged | ToRuntimeMessage::RecheckTeammateHost => {}
                 }
             }
             result = probes.join_next(), if !probes.is_empty() => {
