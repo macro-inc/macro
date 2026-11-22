@@ -27,6 +27,7 @@ import {
 } from './context/screen-context';
 import { createScreenInput } from './primitives/screen-input';
 import { createScreenSession } from './primitives/screen-session';
+import { cachedRecord } from './queries/cached-record';
 import { requestScreenTicket } from './queries/screen-tickets';
 import { VNC_TRANSPORT } from './transports/vnc';
 import { AgentScreen } from './views/agent-screen';
@@ -51,15 +52,11 @@ function AgentScreenModelProvider(props: {
   const computers = useComputersQuery(() => true);
   const setPower = useSetComputerPowerMutation();
 
-  // Guarded reads: an unguarded `data` suspends the whole screen.
+  // Kept through a failed refetch, so Take over and Turn on stay.
   const harness = () =>
-    harnesses.isSuccess
-      ? harnesses.data.find((each) => each.id === props.harnessId)
-      : undefined;
+    cachedRecord(harnesses, (each) => each.id === props.harnessId);
   const computer = () =>
-    computers.isSuccess
-      ? computers.data.find((each) => each.harnessId === props.harnessId)
-      : undefined;
+    cachedRecord(computers, (each) => each.harnessId === props.harnessId);
 
   // Driving needs Manage. A computer belongs to its team, and the harness
   // list reports Manage as `owner` access for the team's owner and its admins
