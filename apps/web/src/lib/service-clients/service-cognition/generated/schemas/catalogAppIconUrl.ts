@@ -6,6 +6,6 @@
  */
 
 /**
- * Enable or disable the server.
+ * Its icon.
  */
-export type UpdateServerRequestEnabled = boolean | null;
+export type CatalogAppIconUrl = string | null;

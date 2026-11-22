@@ -14,13 +14,11 @@ import {
   type AI_USAGE_LIMIT_ERROR,
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
-import type {
-  AddServerRequest,
-  CatalogPage,
-  Connector,
-  ConnectStep,
-  UpdateConnectorRequest,
-} from './connector-types';
+import type { AddServerRequest } from './generated/schemas/addServerRequest';
+import type { CatalogPage } from './generated/schemas/catalogPage';
+import type { ConnectStep } from './generated/schemas/connectStep';
+import type { Connector } from './generated/schemas/connector';
+import type { UpdateConnectorRequest } from './generated/schemas/updateConnectorRequest';
 import type { DatabaseQueryAnswer } from './generated/schemas/databaseQueryAnswer';
 import type { DatabaseQueryRequest } from './generated/schemas/databaseQueryRequest';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
@@ -143,9 +141,9 @@ export const cognitionApiServiceClient = {
 
   /** Every app and server the user holds, with where they stand. */
   async listConnectors() {
-    return (
-      await dcsFetch<Connector[]>(`/connectors`, { method: 'GET' })
-    ).map((result) => result);
+    return (await dcsFetch<Connector[]>(`/connectors`, { method: 'GET' })).map(
+      (result) => result
+    );
   },
 
   /** Add a server by URL; one at an app's address comes back as that app. */

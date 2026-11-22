@@ -6,6 +6,6 @@
  */
 
 /**
- * One-line description of the app.
+ * A new display name.
  */
-export type PipedreamCatalogEntryResponseDescription = string | null;
+export type UpdateConnectorRequestName = string | null;

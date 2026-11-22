@@ -5,7 +5,7 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
   AddServerRequest,
   Connector,
-} from '@service-cognition/connector-types';
+} from '@service-cognition/generated/schemas';
 import { useMutation } from '@tanstack/solid-query';
 import {
   dropConnector,

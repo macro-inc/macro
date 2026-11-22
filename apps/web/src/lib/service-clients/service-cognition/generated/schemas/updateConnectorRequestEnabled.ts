@@ -5,9 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type DeleteMcpServerParams = {
-  /**
-   * The server URL to delete.
-   */
-  url: string;
-};
+/**
+ * Turn it on or off.
+ */
+export type UpdateConnectorRequestEnabled = boolean | null;

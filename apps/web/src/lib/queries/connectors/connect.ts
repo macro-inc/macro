@@ -15,7 +15,7 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
   Connector,
   ConnectStep,
-} from '@service-cognition/connector-types';
+} from '@service-cognition/generated/schemas';
 import { Result } from 'neverthrow';
 import { match } from 'ts-pattern';
 import {

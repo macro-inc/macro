@@ -5,7 +5,7 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
   CatalogApp,
   CatalogPage,
-} from '@service-cognition/connector-types';
+} from '@service-cognition/generated/schemas';
 import {
   type InfiniteData,
   infiniteQueryOptions,
@@ -56,13 +56,14 @@ function connectorCatalogQueryOptions(search: string) {
 }
 
 /** Browse or search the apps the user can connect, most popular first. */
-export function useConnectorCatalogQuery(search: () => string) {
+function useConnectorCatalogQuery(search: () => string) {
   return useInfiniteQuery(() => connectorCatalogQueryOptions(search().trim()));
 }
 
 async function fetchIconPage() {
   return await throwOnErr(
-    async () => await cognitionApiServiceClient.browseConnectorCatalog({ limit: 50 })
+    async () =>
+      await cognitionApiServiceClient.browseConnectorCatalog({ limit: 50 })
   );
 }
 

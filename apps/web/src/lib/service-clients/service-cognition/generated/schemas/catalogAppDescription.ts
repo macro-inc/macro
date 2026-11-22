@@ -6,6 +6,6 @@
  */
 
 /**
- * New name for the server.
+ * One line on what connecting it enables.
  */
-export type UpdateServerRequestServerName = string | null;
+export type CatalogAppDescription = string | null;

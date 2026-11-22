@@ -1,5 +1,5 @@
 import type { openPipedreamConnectUI } from '@core/pipedream/connect-ui';
-import type { Connector } from '@service-cognition/connector-types';
+import type { Connector } from '@service-cognition/generated/schemas';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

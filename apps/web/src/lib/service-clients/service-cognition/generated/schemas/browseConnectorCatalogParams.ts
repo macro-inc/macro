@@ -5,17 +5,17 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type BrowsePipedreamMcpCatalogParams = {
+export type BrowseConnectorCatalogParams = {
   /**
-   * Search query to filter apps by name. Omit to browse.
+   * Filter apps by name; omit to browse.
    */
   search?: string;
   /**
-   * Opaque pagination cursor from a previous response.
+   * The cursor from the previous page.
    */
   cursor?: string;
   /**
-   * Page size (default 20, max 50).
+   * Page size, 1 to 50 (default 20).
    * @minimum 0
    */
   limit?: number;

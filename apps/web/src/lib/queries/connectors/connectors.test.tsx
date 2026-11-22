@@ -7,7 +7,7 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
   Connector,
   ConnectorStatus,
-} from '@service-cognition/connector-types';
+} from '@service-cognition/generated/schemas';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
@@ -111,7 +111,9 @@ afterEach(() => {
 
 describe('useConnectors', () => {
   it('is not ready, and lists nothing, until the server answers', async () => {
-    let answer!: (value: Awaited<ReturnType<typeof client.listConnectors>>) => void;
+    let answer!: (
+      value: Awaited<ReturnType<typeof client.listConnectors>>
+    ) => void;
     client.listConnectors.mockReturnValue(
       new Promise((resolve) => {
         answer = resolve;

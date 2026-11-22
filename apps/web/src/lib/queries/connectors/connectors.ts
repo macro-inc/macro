@@ -6,7 +6,7 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
   Connector,
   ConnectorStatus,
-} from '@service-cognition/connector-types';
+} from '@service-cognition/generated/schemas';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { unwrap } from 'solid-js/store';
@@ -16,8 +16,7 @@ export type {
   CatalogApp,
   Connector,
   ConnectorStatus,
-  ConnectStep,
-} from '@service-cognition/connector-types';
+} from '@service-cognition/generated/schemas';
 
 /** The key of the one app whose connection is the Macro GitHub account link. */
 export const GITHUB_CONNECTOR_KEY = 'app/github';
@@ -36,7 +35,7 @@ async function fetchConnectors() {
   );
 }
 
-export function connectorsQueryOptions() {
+function connectorsQueryOptions() {
   return queryOptions({
     queryKey: connectorKeys.list.queryKey,
     queryFn: fetchConnectors,

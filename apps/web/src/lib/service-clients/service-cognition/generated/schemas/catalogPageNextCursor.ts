@@ -6,6 +6,6 @@
  */
 
 /**
- * Cursor for the next page. Absent on the last page.
+ * The cursor for the next page; absent on the last.
  */
-export type PipedreamCatalogResponseNextCursor = string | null;
+export type CatalogPageNextCursor = string | null;
