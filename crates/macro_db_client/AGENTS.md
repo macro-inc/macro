@@ -58,7 +58,7 @@ foreign key: the contacts worker removes them on account deletion.
 
 `agent_response_feedback` (migration `20261122135223`) is an append-only log of
 ratings of agent responses owned by `crates/agent_feedback`: no foreign key to
-the rated session, message or run (ratings are eval history), and rows cascade
+the rated session, message, run or suggestion (ratings are eval history), and rows cascade
 only with the rater's `"User"` row.
 
 ## Boundaries

@@ -92,8 +92,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
 - `src/agent_feedback.rs`: ratings of agent responses (`crates/agent_feedback`)
   under `/agent-feedback` and the internal `/internal/agent-feedback/events`
   export, behind `enable-agent-response-feedback` on the shared flag client
-  (no `POSTHOG_API_KEY`: off). Adapts the session repository and
-  `scheduled_action::ExecutionRecords` to the crate's ports; its OpenAPI is
+  (no `POSTHOG_API_KEY`: off). Adapts the session repository,
+  `scheduled_action::ExecutionRecords` and the suggestions repository to the
+  crate's ports; its OpenAPI is
   merged into `api::swagger::ApiDoc`.
 - `src/computers/moves.rs`: `POST /internal/computers/{id}/move` `{"toHost"}`
   and `GET /internal/computers/{id}/moves` (internal API key only): start and
