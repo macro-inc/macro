@@ -3,6 +3,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import MinusIcon from '@icon/system/regular/minus.svg';
+import StopIcon from '@icon/system/regular/stop.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
 import {
@@ -69,6 +70,9 @@ function OutcomeIcon(props: { outcome: RunOutcome }) {
         </Match>
         <Match when={props.outcome === 'nothing'}>
           <MinusIcon class="size-3.5 text-ink-muted" />
+        </Match>
+        <Match when={props.outcome === 'stopped'}>
+          <StopIcon class="size-3.5 text-ink-muted" />
         </Match>
         <Match when={props.outcome === 'running'}>
           <ClockIcon class="size-3.5 text-ink-muted" />

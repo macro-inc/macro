@@ -25,6 +25,7 @@ const OUTCOME_LABEL: Record<RunOutcome, string> = {
   running: 'Running',
   succeeded: 'Succeeded',
   failed: 'Failed',
+  stopped: 'Stopped',
   skipped: 'Skipped',
   nothing: 'Changed nothing',
 };
