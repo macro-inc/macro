@@ -7,6 +7,10 @@
 import type {
   AgentActivityPage,
   AgentConversationsDto,
+  AgentFeedbackExportEventsParams,
+  AgentFeedbackRetractMessageParams,
+  AgentFeedbackRetractRunParams,
+  AgentFeedbackRetractTurnParams,
   AgentModeChoiceRequest,
   AgentModeChoiceResponse,
   AgentRepositoriesResponse,
@@ -54,14 +58,18 @@ import type {
   EditQueuedActionRequest,
   ErrorResponse,
   ExecutionRecord,
+  ExportPage,
   ExtractInputRequest,
   ExtractInputResponse,
+  FeedbackErrorBody,
+  FeedbackState,
   GetAgentSessionActivityParams,
   LinkedTaskResponse,
   LinkTaskRequest,
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
+  MyFeedbackResponse,
   OpenInApp,
   PresentView,
   PreviewAgentSessionsRequest,
@@ -70,6 +78,7 @@ import type {
   PullRequestsSessionsResponse,
   PullRequestUrl,
   PullRequestUrls,
+  RateFeedbackBody,
   RenameAgentSessionRequest,
   RetryAgentConversationTurnRequest,
   ReviewDecision,
@@ -611,6 +620,830 @@ export const retryAgentConversationTurn = async (
     status: res.status,
     headers: res.headers,
   } as retryAgentConversationTurnResponse;
+};
+
+/**
+ * @summary The caller's current ratings of a session's replies.
+ */
+export type agentFeedbackMyTurnFeedbackResponse200 = {
+  data: MyFeedbackResponse;
+  status: 200;
+};
+
+export type agentFeedbackMyTurnFeedbackResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type agentFeedbackMyTurnFeedbackResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type agentFeedbackMyTurnFeedbackResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type agentFeedbackMyTurnFeedbackResponse503 = {
+  data: FeedbackErrorBody;
+  status: 503;
+};
+
+export type agentFeedbackMyTurnFeedbackResponseSuccess =
+  agentFeedbackMyTurnFeedbackResponse200 & {
+    headers: Headers;
+  };
+export type agentFeedbackMyTurnFeedbackResponseError = (
+  | agentFeedbackMyTurnFeedbackResponse401
+  | agentFeedbackMyTurnFeedbackResponse403
+  | agentFeedbackMyTurnFeedbackResponse404
+  | agentFeedbackMyTurnFeedbackResponse503
+) & {
+  headers: Headers;
+};
+
+export type agentFeedbackMyTurnFeedbackResponse =
+  | agentFeedbackMyTurnFeedbackResponseSuccess
+  | agentFeedbackMyTurnFeedbackResponseError;
+
+export const getAgentFeedbackMyTurnFeedbackUrl = (sessionId: string) => {
+  return `/agent-feedback/agent-sessions/${sessionId}/mine`;
+};
+
+export const agentFeedbackMyTurnFeedback = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<agentFeedbackMyTurnFeedbackResponse> => {
+  const res = await fetch(getAgentFeedbackMyTurnFeedbackUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentFeedbackMyTurnFeedbackResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentFeedbackMyTurnFeedbackResponse;
+};
+
+/**
+ * @summary Rate the agent's reply in one turn of a session.
+ */
+export type agentFeedbackRateTurnResponse200 = {
+  data: FeedbackState;
+  status: 200;
+};
+
+export type agentFeedbackRateTurnResponse400 = {
+  data: FeedbackErrorBody;
+  status: 400;
+};
+
+export type agentFeedbackRateTurnResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type agentFeedbackRateTurnResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type agentFeedbackRateTurnResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type agentFeedbackRateTurnResponse409 = {
+  data: FeedbackErrorBody;
+  status: 409;
+};
+
+export type agentFeedbackRateTurnResponse503 = {
+  data: FeedbackErrorBody;
+  status: 503;
+};
+
+export type agentFeedbackRateTurnResponseSuccess =
+  agentFeedbackRateTurnResponse200 & {
+    headers: Headers;
+  };
+export type agentFeedbackRateTurnResponseError = (
+  | agentFeedbackRateTurnResponse400
+  | agentFeedbackRateTurnResponse401
+  | agentFeedbackRateTurnResponse403
+  | agentFeedbackRateTurnResponse404
+  | agentFeedbackRateTurnResponse409
+  | agentFeedbackRateTurnResponse503
+) & {
+  headers: Headers;
+};
+
+export type agentFeedbackRateTurnResponse =
+  | agentFeedbackRateTurnResponseSuccess
+  | agentFeedbackRateTurnResponseError;
+
+export const getAgentFeedbackRateTurnUrl = (
+  sessionId: string,
+  turn: number
+) => {
+  return `/agent-feedback/agent-sessions/${sessionId}/turns/${turn}`;
+};
+
+export const agentFeedbackRateTurn = async (
+  sessionId: string,
+  turn: number,
+  rateFeedbackBody: RateFeedbackBody,
+  options?: RequestInit
+): Promise<agentFeedbackRateTurnResponse> => {
+  const res = await fetch(getAgentFeedbackRateTurnUrl(sessionId, turn), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rateFeedbackBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentFeedbackRateTurnResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentFeedbackRateTurnResponse;
+};
+
+/**
+ * @summary Retract the caller's rating of the agent's reply in one turn.
+ */
+export type agentFeedbackRetractTurnResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type agentFeedbackRetractTurnResponse400 = {
+  data: FeedbackErrorBody;
+  status: 400;
+};
+
+export type agentFeedbackRetractTurnResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type agentFeedbackRetractTurnResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type agentFeedbackRetractTurnResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type agentFeedbackRetractTurnResponse409 = {
+  data: FeedbackErrorBody;
+  status: 409;
+};
+
+export type agentFeedbackRetractTurnResponse503 = {
+  data: FeedbackErrorBody;
+  status: 503;
+};
+
+export type agentFeedbackRetractTurnResponseSuccess =
+  agentFeedbackRetractTurnResponse204 & {
+    headers: Headers;
+  };
+export type agentFeedbackRetractTurnResponseError = (
+  | agentFeedbackRetractTurnResponse400
+  | agentFeedbackRetractTurnResponse401
+  | agentFeedbackRetractTurnResponse403
+  | agentFeedbackRetractTurnResponse404
+  | agentFeedbackRetractTurnResponse409
+  | agentFeedbackRetractTurnResponse503
+) & {
+  headers: Headers;
+};
+
+export type agentFeedbackRetractTurnResponse =
+  | agentFeedbackRetractTurnResponseSuccess
+  | agentFeedbackRetractTurnResponseError;
+
+export const getAgentFeedbackRetractTurnUrl = (
+  sessionId: string,
+  turn: number,
+  params: AgentFeedbackRetractTurnParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-feedback/agent-sessions/${sessionId}/turns/${turn}?${stringifiedParams}`
+    : `/agent-feedback/agent-sessions/${sessionId}/turns/${turn}`;
+};
+
+export const agentFeedbackRetractTurn = async (
+  sessionId: string,
+  turn: number,
+  params: AgentFeedbackRetractTurnParams,
+  options?: RequestInit
+): Promise<agentFeedbackRetractTurnResponse> => {
+  const res = await fetch(
+    getAgentFeedbackRetractTurnUrl(sessionId, turn, params),
+    {
+      ...options,
+      method: 'DELETE',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentFeedbackRetractTurnResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentFeedbackRetractTurnResponse;
+};
+
+/**
+ * @summary Rate an agent's message in a channel, DM, thread or discussion.
+ */
+export type agentFeedbackRateMessageResponse200 = {
+  data: FeedbackState;
+  status: 200;
+};
+
+export type agentFeedbackRateMessageResponse400 = {
+  data: FeedbackErrorBody;
+  status: 400;
+};
+
+export type agentFeedbackRateMessageResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type agentFeedbackRateMessageResponse403 = {
+  data: FeedbackErrorBody;
+  status: 403;
+};
+
+export type agentFeedbackRateMessageResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type agentFeedbackRateMessageResponse409 = {
+  data: FeedbackErrorBody;
+  status: 409;
+};
+
+export type agentFeedbackRateMessageResponse422 = {
+  data: FeedbackErrorBody;
+  status: 422;
+};
+
+export type agentFeedbackRateMessageResponse503 = {
+  data: FeedbackErrorBody;
+  status: 503;
+};
+
+export type agentFeedbackRateMessageResponseSuccess =
+  agentFeedbackRateMessageResponse200 & {
+    headers: Headers;
+  };
+export type agentFeedbackRateMessageResponseError = (
+  | agentFeedbackRateMessageResponse400
+  | agentFeedbackRateMessageResponse401
+  | agentFeedbackRateMessageResponse403
+  | agentFeedbackRateMessageResponse404
+  | agentFeedbackRateMessageResponse409
+  | agentFeedbackRateMessageResponse422
+  | agentFeedbackRateMessageResponse503
+) & {
+  headers: Headers;
+};
+
+export type agentFeedbackRateMessageResponse =
+  | agentFeedbackRateMessageResponseSuccess
+  | agentFeedbackRateMessageResponseError;
+
+export const getAgentFeedbackRateMessageUrl = (
+  parentType: string,
+  parentId: string,
+  messageId: string
+) => {
+  return `/agent-feedback/messages/${parentType}/${parentId}/items/${messageId}`;
+};
+
+export const agentFeedbackRateMessage = async (
+  parentType: string,
+  parentId: string,
+  messageId: string,
+  rateFeedbackBody: RateFeedbackBody,
+  options?: RequestInit
+): Promise<agentFeedbackRateMessageResponse> => {
+  const res = await fetch(
+    getAgentFeedbackRateMessageUrl(parentType, parentId, messageId),
+    {
+      ...options,
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(rateFeedbackBody),
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentFeedbackRateMessageResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentFeedbackRateMessageResponse;
+};
+
+/**
+ * @summary Retract the caller's rating of an agent's message.
+ */
+export type agentFeedbackRetractMessageResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type agentFeedbackRetractMessageResponse400 = {
+  data: FeedbackErrorBody;
+  status: 400;
+};
+
+export type agentFeedbackRetractMessageResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type agentFeedbackRetractMessageResponse403 = {
+  data: FeedbackErrorBody;
+  status: 403;
+};
+
+export type agentFeedbackRetractMessageResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type agentFeedbackRetractMessageResponse409 = {
+  data: FeedbackErrorBody;
+  status: 409;
+};
+
+export type agentFeedbackRetractMessageResponse422 = {
+  data: FeedbackErrorBody;
+  status: 422;
+};
+
+export type agentFeedbackRetractMessageResponse503 = {
+  data: FeedbackErrorBody;
+  status: 503;
+};
+
+export type agentFeedbackRetractMessageResponseSuccess =
+  agentFeedbackRetractMessageResponse204 & {
+    headers: Headers;
+  };
+export type agentFeedbackRetractMessageResponseError = (
+  | agentFeedbackRetractMessageResponse400
+  | agentFeedbackRetractMessageResponse401
+  | agentFeedbackRetractMessageResponse403
+  | agentFeedbackRetractMessageResponse404
+  | agentFeedbackRetractMessageResponse409
+  | agentFeedbackRetractMessageResponse422
+  | agentFeedbackRetractMessageResponse503
+) & {
+  headers: Headers;
+};
+
+export type agentFeedbackRetractMessageResponse =
+  | agentFeedbackRetractMessageResponseSuccess
+  | agentFeedbackRetractMessageResponseError;
+
+export const getAgentFeedbackRetractMessageUrl = (
+  parentType: string,
+  parentId: string,
+  messageId: string,
+  params: AgentFeedbackRetractMessageParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-feedback/messages/${parentType}/${parentId}/items/${messageId}?${stringifiedParams}`
+    : `/agent-feedback/messages/${parentType}/${parentId}/items/${messageId}`;
+};
+
+export const agentFeedbackRetractMessage = async (
+  parentType: string,
+  parentId: string,
+  messageId: string,
+  params: AgentFeedbackRetractMessageParams,
+  options?: RequestInit
+): Promise<agentFeedbackRetractMessageResponse> => {
+  const res = await fetch(
+    getAgentFeedbackRetractMessageUrl(parentType, parentId, messageId, params),
+    {
+      ...options,
+      method: 'DELETE',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentFeedbackRetractMessageResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentFeedbackRetractMessageResponse;
+};
+
+/**
+ * @summary The caller's current ratings of agents' messages on one parent.
+ */
+export type agentFeedbackMyMessageFeedbackResponse200 = {
+  data: MyFeedbackResponse;
+  status: 200;
+};
+
+export type agentFeedbackMyMessageFeedbackResponse400 = {
+  data: FeedbackErrorBody;
+  status: 400;
+};
+
+export type agentFeedbackMyMessageFeedbackResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type agentFeedbackMyMessageFeedbackResponse403 = {
+  data: FeedbackErrorBody;
+  status: 403;
+};
+
+export type agentFeedbackMyMessageFeedbackResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type agentFeedbackMyMessageFeedbackResponse503 = {
+  data: FeedbackErrorBody;
+  status: 503;
+};
+
+export type agentFeedbackMyMessageFeedbackResponseSuccess =
+  agentFeedbackMyMessageFeedbackResponse200 & {
+    headers: Headers;
+  };
+export type agentFeedbackMyMessageFeedbackResponseError = (
+  | agentFeedbackMyMessageFeedbackResponse400
+  | agentFeedbackMyMessageFeedbackResponse401
+  | agentFeedbackMyMessageFeedbackResponse403
+  | agentFeedbackMyMessageFeedbackResponse404
+  | agentFeedbackMyMessageFeedbackResponse503
+) & {
+  headers: Headers;
+};
+
+export type agentFeedbackMyMessageFeedbackResponse =
+  | agentFeedbackMyMessageFeedbackResponseSuccess
+  | agentFeedbackMyMessageFeedbackResponseError;
+
+export const getAgentFeedbackMyMessageFeedbackUrl = (
+  parentType: string,
+  parentId: string
+) => {
+  return `/agent-feedback/messages/${parentType}/${parentId}/mine`;
+};
+
+export const agentFeedbackMyMessageFeedback = async (
+  parentType: string,
+  parentId: string,
+  options?: RequestInit
+): Promise<agentFeedbackMyMessageFeedbackResponse> => {
+  const res = await fetch(
+    getAgentFeedbackMyMessageFeedbackUrl(parentType, parentId),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentFeedbackMyMessageFeedbackResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentFeedbackMyMessageFeedbackResponse;
+};
+
+/**
+ * @summary The caller's current ratings of a routine's runs.
+ */
+export type agentFeedbackMyRunFeedbackResponse200 = {
+  data: MyFeedbackResponse;
+  status: 200;
+};
+
+export type agentFeedbackMyRunFeedbackResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type agentFeedbackMyRunFeedbackResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type agentFeedbackMyRunFeedbackResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type agentFeedbackMyRunFeedbackResponse503 = {
+  data: FeedbackErrorBody;
+  status: 503;
+};
+
+export type agentFeedbackMyRunFeedbackResponseSuccess =
+  agentFeedbackMyRunFeedbackResponse200 & {
+    headers: Headers;
+  };
+export type agentFeedbackMyRunFeedbackResponseError = (
+  | agentFeedbackMyRunFeedbackResponse401
+  | agentFeedbackMyRunFeedbackResponse403
+  | agentFeedbackMyRunFeedbackResponse404
+  | agentFeedbackMyRunFeedbackResponse503
+) & {
+  headers: Headers;
+};
+
+export type agentFeedbackMyRunFeedbackResponse =
+  | agentFeedbackMyRunFeedbackResponseSuccess
+  | agentFeedbackMyRunFeedbackResponseError;
+
+export const getAgentFeedbackMyRunFeedbackUrl = (id: string) => {
+  return `/agent-feedback/routines/${id}/mine`;
+};
+
+export const agentFeedbackMyRunFeedback = async (
+  id: string,
+  options?: RequestInit
+): Promise<agentFeedbackMyRunFeedbackResponse> => {
+  const res = await fetch(getAgentFeedbackMyRunFeedbackUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentFeedbackMyRunFeedbackResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentFeedbackMyRunFeedbackResponse;
+};
+
+/**
+ * @summary Rate one run of a routine.
+ */
+export type agentFeedbackRateRunResponse200 = {
+  data: FeedbackState;
+  status: 200;
+};
+
+export type agentFeedbackRateRunResponse400 = {
+  data: FeedbackErrorBody;
+  status: 400;
+};
+
+export type agentFeedbackRateRunResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type agentFeedbackRateRunResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type agentFeedbackRateRunResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type agentFeedbackRateRunResponse409 = {
+  data: FeedbackErrorBody;
+  status: 409;
+};
+
+export type agentFeedbackRateRunResponse422 = {
+  data: FeedbackErrorBody;
+  status: 422;
+};
+
+export type agentFeedbackRateRunResponse503 = {
+  data: FeedbackErrorBody;
+  status: 503;
+};
+
+export type agentFeedbackRateRunResponseSuccess =
+  agentFeedbackRateRunResponse200 & {
+    headers: Headers;
+  };
+export type agentFeedbackRateRunResponseError = (
+  | agentFeedbackRateRunResponse400
+  | agentFeedbackRateRunResponse401
+  | agentFeedbackRateRunResponse403
+  | agentFeedbackRateRunResponse404
+  | agentFeedbackRateRunResponse409
+  | agentFeedbackRateRunResponse422
+  | agentFeedbackRateRunResponse503
+) & {
+  headers: Headers;
+};
+
+export type agentFeedbackRateRunResponse =
+  | agentFeedbackRateRunResponseSuccess
+  | agentFeedbackRateRunResponseError;
+
+export const getAgentFeedbackRateRunUrl = (id: string, runId: string) => {
+  return `/agent-feedback/routines/${id}/runs/${runId}`;
+};
+
+export const agentFeedbackRateRun = async (
+  id: string,
+  runId: string,
+  rateFeedbackBody: RateFeedbackBody,
+  options?: RequestInit
+): Promise<agentFeedbackRateRunResponse> => {
+  const res = await fetch(getAgentFeedbackRateRunUrl(id, runId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rateFeedbackBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentFeedbackRateRunResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentFeedbackRateRunResponse;
+};
+
+/**
+ * @summary Retract the caller's rating of a routine run.
+ */
+export type agentFeedbackRetractRunResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type agentFeedbackRetractRunResponse400 = {
+  data: FeedbackErrorBody;
+  status: 400;
+};
+
+export type agentFeedbackRetractRunResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type agentFeedbackRetractRunResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type agentFeedbackRetractRunResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type agentFeedbackRetractRunResponse409 = {
+  data: FeedbackErrorBody;
+  status: 409;
+};
+
+export type agentFeedbackRetractRunResponse422 = {
+  data: FeedbackErrorBody;
+  status: 422;
+};
+
+export type agentFeedbackRetractRunResponse503 = {
+  data: FeedbackErrorBody;
+  status: 503;
+};
+
+export type agentFeedbackRetractRunResponseSuccess =
+  agentFeedbackRetractRunResponse204 & {
+    headers: Headers;
+  };
+export type agentFeedbackRetractRunResponseError = (
+  | agentFeedbackRetractRunResponse400
+  | agentFeedbackRetractRunResponse401
+  | agentFeedbackRetractRunResponse403
+  | agentFeedbackRetractRunResponse404
+  | agentFeedbackRetractRunResponse409
+  | agentFeedbackRetractRunResponse422
+  | agentFeedbackRetractRunResponse503
+) & {
+  headers: Headers;
+};
+
+export type agentFeedbackRetractRunResponse =
+  | agentFeedbackRetractRunResponseSuccess
+  | agentFeedbackRetractRunResponseError;
+
+export const getAgentFeedbackRetractRunUrl = (
+  id: string,
+  runId: string,
+  params: AgentFeedbackRetractRunParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-feedback/routines/${id}/runs/${runId}?${stringifiedParams}`
+    : `/agent-feedback/routines/${id}/runs/${runId}`;
+};
+
+export const agentFeedbackRetractRun = async (
+  id: string,
+  runId: string,
+  params: AgentFeedbackRetractRunParams,
+  options?: RequestInit
+): Promise<agentFeedbackRetractRunResponse> => {
+  const res = await fetch(getAgentFeedbackRetractRunUrl(id, runId, params), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentFeedbackRetractRunResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentFeedbackRetractRunResponse;
 };
 
 /**
@@ -4755,6 +5588,91 @@ export const claudeSignOut = async (
     status: res.status,
     headers: res.headers,
   } as claudeSignOutResponse;
+};
+
+/**
+ * @summary Every stored rating, change and retraction in `(createdAt, id)` order, a
+page at a time, for evals. Internal API key only.
+ */
+export type agentFeedbackExportEventsResponse200 = {
+  data: ExportPage;
+  status: 200;
+};
+
+export type agentFeedbackExportEventsResponse400 = {
+  data: FeedbackErrorBody;
+  status: 400;
+};
+
+export type agentFeedbackExportEventsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type agentFeedbackExportEventsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type agentFeedbackExportEventsResponse503 = {
+  data: FeedbackErrorBody;
+  status: 503;
+};
+
+export type agentFeedbackExportEventsResponseSuccess =
+  agentFeedbackExportEventsResponse200 & {
+    headers: Headers;
+  };
+export type agentFeedbackExportEventsResponseError = (
+  | agentFeedbackExportEventsResponse400
+  | agentFeedbackExportEventsResponse401
+  | agentFeedbackExportEventsResponse403
+  | agentFeedbackExportEventsResponse503
+) & {
+  headers: Headers;
+};
+
+export type agentFeedbackExportEventsResponse =
+  | agentFeedbackExportEventsResponseSuccess
+  | agentFeedbackExportEventsResponseError;
+
+export const getAgentFeedbackExportEventsUrl = (
+  params?: AgentFeedbackExportEventsParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/internal/agent-feedback/events?${stringifiedParams}`
+    : `/internal/agent-feedback/events`;
+};
+
+export const agentFeedbackExportEvents = async (
+  params?: AgentFeedbackExportEventsParams,
+  options?: RequestInit
+): Promise<agentFeedbackExportEventsResponse> => {
+  const res = await fetch(getAgentFeedbackExportEventsUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentFeedbackExportEventsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentFeedbackExportEventsResponse;
 };
 
 /**
