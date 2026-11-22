@@ -816,7 +816,7 @@ form for it records a `soup.rest_fallback` span (attributes
 `soup.rest_fallback` warning per reason and shape
 (`lib/queries/soup/graphql/rest-fallback.ts`). The shape names only the sort,
 grouping, email view and targets, never ids or values (an unknown email view
-shows as `other`); the reason names filter keys but never their values. A request made with
+shows as `other`); the reason holds fixed text only: no filter value and no unrecognized literal key. A request made with
 `transport: 'rest'` is a choice, not a fallback, and is not recorded.
 
 Without the cache, writes read mounted Soup lists again

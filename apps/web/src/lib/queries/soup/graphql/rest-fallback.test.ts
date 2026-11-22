@@ -49,6 +49,9 @@ it.each([
   ['file association', { df: { l: { fa: `assoc:${SECRET_ID}` } } }],
   ['email view', { emailView: SECRET_ID }],
   ['literal key', { calf: { l: { [SECRET_ID]: true } } }],
+  // A key that reads like a name is a value too.
+  ['named literal key', { df: { l: { SecretName: true } } }],
+  ['CRM association key', { crma: { SecretName: 'id' } }],
 ])(
   'keeps a rejected %s out of the fallback reason and shape',
   (_case, body) => {
@@ -58,6 +61,7 @@ it.each([
     });
     expect(fallback).toBeDefined();
     expect(JSON.stringify(fallback)).not.toContain(SECRET_ID);
+    expect(JSON.stringify(fallback)).not.toContain('SecretName');
   }
 );
 

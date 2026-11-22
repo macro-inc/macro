@@ -9,7 +9,7 @@ import {
 /** Why a Soup list read REST instead of GraphQL, without any filter values. */
 export type SoupRestFallback = {
   /** The translator's fixed reason, e.g. `sort_method touched_by_me`; it
-   * names filter keys but never their values. */
+   * holds no filter value and no unrecognized key. */
   reason: string;
   /** Sort, grouping, email view and filter targets of the request. */
   shape: string;
