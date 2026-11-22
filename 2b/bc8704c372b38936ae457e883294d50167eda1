@@ -1,0 +1,19 @@
+crates/connectors/src/domain/service.rs
+  s_3d0d2ab631115e::t_e79adfd9171ae5 653-654,656-657,685-687
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2bbc8704c372b38936ae457e883294d50167eda1",
+  "prompts": {},
+  "sessions": {
+    "s_3d0d2ab631115e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47cbba1b-dd9c-4ec5-856a-6bdc8e70e56c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
