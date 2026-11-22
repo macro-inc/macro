@@ -85,7 +85,7 @@ flowchart LR
 
 | State | Meaning |
 | --- | --- |
-| `provisioning` | Being created; a retry of the same request or the sweep finishes it. |
+| `provisioning` | Being created; a retry of the same request or the sweep finishes it. A provider that keeps failing it for a day leaves it `failed` (`unavailable`). |
 | `active` | The agent can read and send. |
 | `failed` | Creating it stopped (`not_configured`, `address_taken`, `quota_exceeded`, `rejected`); the same request retries. |
 | `paused` | Kept with its mail; the agent can neither read nor send. |
@@ -94,7 +94,9 @@ flowchart LR
 
 - Provisioning is idempotent per `requestId`: the row is reserved first, the
   provider create carries an idempotency key and an owner tag, and a lost create
-  is found again by its tag. A create conflict is a taken address only when
+  is found again by its tag. Only an empty tag-filtered listing counts as
+  "nothing under the tag"; a listing with inboxes but none carrying it is
+  retried, since the provider's filter isn't then doing what it should. A create conflict is a taken address only when
   its code is exactly `address_taken`; any other conflict (an idempotent
   create still in flight) is retried under the same key. The provider
   documents no `409` codes for creating an inbox, so the list is confirmed

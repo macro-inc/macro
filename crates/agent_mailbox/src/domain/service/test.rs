@@ -2958,3 +2958,34 @@ async fn a_lookalike_of_a_reserved_word_in_the_display_name_is_dropped_too() {
 
     assert_eq!(world.repository.row(view.id).display_name, None);
 }
+
+#[tokio::test]
+async fn provisioning_the_provider_keeps_refusing_gives_up_after_a_day_as_failed() {
+    let world = world();
+    world.vendor.fail_next("create", ProviderError::Unavailable);
+    let first = world.service.provision(request(ADA, 1, "ada")).await;
+    let soon = Utc::now() + Duration::hours(1);
+    world.vendor.fail_next("create", ProviderError::Unavailable);
+    world.service.sweep(soon).await.unwrap();
+    let after_an_hour = world.service.status(&user(ADA)).await.unwrap();
+    let later = Utc::now() + Duration::days(2);
+    world.vendor.fail_next("create", ProviderError::Unavailable);
+    world.service.sweep(later).await.unwrap();
+    let after_two_days = world.service.status(&user(ADA)).await.unwrap();
+
+    assert!(
+        matches!(first, Err(AgentMailboxError::Unavailable) | Ok(_)),
+        "{first:?}"
+    );
+    assert_eq!(
+        after_an_hour.state,
+        MailboxState::Provisioning,
+        "still retried"
+    );
+    assert_eq!(after_two_days.state, MailboxState::Failed, "retries end");
+    assert_eq!(
+        after_two_days.last_error,
+        Some(ProvisioningFailure::Unavailable)
+    );
+    assert_eq!(world.vendor.live_mailbox_count(), 0);
+}

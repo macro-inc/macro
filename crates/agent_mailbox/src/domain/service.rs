@@ -65,6 +65,22 @@ pub const SEND_RETRY_WINDOW: Duration = Duration::hours(1);
 /// stays bound to its message for as long as it can be retried.
 pub const SEND_RETENTION: Duration = Duration::days(400);
 
+/// Provisioning stops retrying transient provider failures this long after the
+/// mailbox was reserved, and marks it failed: the provider's idempotency
+/// replay window is 24 hours.
+pub const PROVISIONING_GIVE_UP_AFTER: Duration = Duration::days(1);
+
+/// How long ago a mailbox was reserved, from its UUIDv7 id.
+fn mailbox_age(id: AgentMailboxId, now: DateTime<Utc>) -> Duration {
+    let reserved =
+        id.0.get_timestamp()
+            .map(|timestamp| timestamp.to_unix())
+            .and_then(|(seconds, nanos)| {
+                DateTime::<Utc>::from_timestamp(i64::try_from(seconds).ok()?, nanos)
+            });
+    reserved.map_or(Duration::zero(), |reserved| now - reserved)
+}
+
 /// How often one replica prunes send records for the whole cluster.
 pub const PRUNE_EVERY: Duration = Duration::minutes(1);
 
@@ -276,7 +292,7 @@ where
             mailbox.state,
             MailboxState::Provisioning | MailboxState::Failed
         ) {
-            self.advance(mailbox.id).await?;
+            self.advance(mailbox.id, Utc::now()).await?;
         }
         // The request's own mailbox, whatever happened to it since: a retry of
         // an old request never answers with a newer mailbox.
@@ -321,13 +337,21 @@ where
     /// paused or released meanwhile keeps that state; nothing is revoked
     /// here, so a stored credential is only ever revoked by a release.
     #[tracing::instrument(name = "agent_mailbox.advance", skip_all, fields(agent_mailbox.id = %id, outcome = tracing::field::Empty), err)]
-    async fn advance(&self, id: AgentMailboxId) -> Result<(), AgentMailboxError> {
-        let result = self.advance_steps(id).await;
+    async fn advance(
+        &self,
+        id: AgentMailboxId,
+        now: DateTime<Utc>,
+    ) -> Result<(), AgentMailboxError> {
+        let result = self.advance_steps(id, now).await;
         record_outcome(&result);
         result
     }
 
-    async fn advance_steps(&self, id: AgentMailboxId) -> Result<(), AgentMailboxError> {
+    async fn advance_steps(
+        &self,
+        id: AgentMailboxId,
+        now: DateTime<Utc>,
+    ) -> Result<(), AgentMailboxError> {
         let advanced = self
             .with_lease(id, async |mut mailbox, token| {
                 if !matches!(
@@ -354,7 +378,7 @@ where
                             }
                             provisioned
                         }
-                        Err(error) => return self.stop(&mailbox, token, error).await,
+                        Err(error) => return self.stop(&mailbox, token, error, now).await,
                     },
                 };
                 mailbox.provider_mailbox_id = Some(provisioned.id.clone());
@@ -366,7 +390,7 @@ where
                         .apply_guardrails(&provisioned.id, self.limits.per_hour)
                         .await
                     {
-                        return self.stop(&mailbox, token, error).await;
+                        return self.stop(&mailbox, token, error, now).await;
                     }
 
                     // A key derived from the mailbox id: a retry
@@ -378,7 +402,7 @@ where
                         .await
                     {
                         Ok(grant) => grant,
-                        Err(error) => return self.stop(&mailbox, token, error).await,
+                        Err(error) => return self.stop(&mailbox, token, error, now).await,
                     };
                     let encrypted = self
                         .cipher
@@ -472,8 +496,16 @@ where
         mailbox: &AgentMailbox,
         token: LeaseToken,
         error: ProviderError,
+        now: DateTime<Utc>,
     ) -> Result<(), AgentMailboxError> {
+        // Transient failures are retried, but not forever: a mailbox still
+        // provisioning a day after it was reserved (its id is a UUIDv7, so
+        // it carries that time) stops as failed, where the caller sees it.
+        let given_up = mailbox_age(mailbox.id, now) > PROVISIONING_GIVE_UP_AFTER;
         let (state, failure) = match error {
+            ProviderError::Throttled | ProviderError::Unavailable if given_up => {
+                (MailboxState::Failed, ProvisioningFailure::Unavailable)
+            }
             ProviderError::Throttled | ProviderError::Unavailable => {
                 (MailboxState::Provisioning, ProvisioningFailure::Unavailable)
             }
@@ -719,7 +751,7 @@ where
         for mailbox in due {
             let id = mailbox.id;
             let outcome = match mailbox.state {
-                MailboxState::Provisioning => self.advance(id).await,
+                MailboxState::Provisioning => self.advance(id, now).await,
                 MailboxState::Releasing => self.tear_down(id, now).await,
                 MailboxState::Paused => self.expire_paused(id, paused_before, now).await,
                 MailboxState::Active | MailboxState::Failed | MailboxState::Released => Ok(()),

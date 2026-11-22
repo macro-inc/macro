@@ -382,10 +382,13 @@ async fn a_lost_create_is_never_matched_to_another_owners_inbox() {
 
     let found = adapter
         .find_mailbox(AgentMailboxId(Uuid::from_u128(9)))
-        .await
-        .unwrap();
+        .await;
 
-    assert_eq!(found, None);
+    // Neither inbox is taken for it, and the unfiltered listing proves nothing.
+    assert!(
+        matches!(found, Err(ProviderError::Unavailable)),
+        "{found:?}"
+    );
 }
 
 #[tokio::test]
@@ -520,4 +523,45 @@ async fn revoking_all_access_skips_the_credential_already_revoked() {
         .revoke_all_access(&inbox_id(), Some(&ProviderGrantId("stored".to_owned())))
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn a_listing_with_no_inbox_under_the_tag_proves_nothing_and_is_retried() {
+    let other_tag = format!("macro-agent-mailbox:{}", Uuid::from_u128(8));
+    let (server, adapter) = adapter().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/inboxes"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {"inboxes": [{"inbox_id": "someone-else", "email": "x@example.net", "tags": [other_tag]}], "count": 1}
+        })))
+        .mount(&server)
+        .await;
+
+    let found = adapter
+        .find_mailbox(AgentMailboxId(Uuid::from_u128(9)))
+        .await;
+
+    assert!(
+        matches!(found, Err(ProviderError::Unavailable)),
+        "{found:?}"
+    );
+}
+
+#[tokio::test]
+async fn an_empty_filtered_listing_means_no_inbox_under_the_tag() {
+    let (server, adapter) = adapter().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/inboxes"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"data": {"inboxes": [], "count": 0}})),
+        )
+        .mount(&server)
+        .await;
+
+    let found = adapter
+        .find_mailbox(AgentMailboxId(Uuid::from_u128(9)))
+        .await
+        .unwrap();
+
+    assert!(found.is_none());
 }

@@ -57,6 +57,9 @@ behind provider-neutral ports. Design: `docs/design/agent-mailboxes.md`.
   `claim_sweep_job`; add a job there rather than running it on every replica.
 - Team-wide caps take a per-team advisory lock before the mailbox row lock;
   keep that order everywhere.
+- `find_mailbox` answers `None` only on an empty filtered listing; any other
+  listing without the tag is `Unavailable`. Creating or replacing on a guess
+  could leave a lost create behind.
 - Provider idempotency keys come from `provider_key(mailbox, operation)`;
   never send the agent's key or a mailbox id raw.
 - Every send and reply needs the owner's quoted approval (`OwnerApproval`),

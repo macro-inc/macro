@@ -435,9 +435,12 @@ impl MailboxProvisioner for DeadSimple {
         let first = owned.next();
         if first.is_none() && listed > 0 {
             // The provider listed inboxes but none carries the tag: its tag
-            // filter or field isn't what this adapter expects, and a lost
-            // create can't be found.
+            // filter or field isn't what this adapter expects, so "nothing
+            // under the tag" is not proven, and a caller deciding to create
+            // or replace on it could leave a lost create behind. Only an
+            // empty filtered listing means none.
             tracing::warn!(agent_mailbox.id = %owner_tag, listed, "provider tag listing matched no inbox");
+            return Err(ProviderError::Unavailable);
         }
         if owned.next().is_some() {
             tracing::error!(agent_mailbox.id = %owner_tag, "two provider inboxes carry one mailbox's owner tag");
