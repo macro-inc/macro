@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import ArrowsDownUpIcon from '@icon/system/regular/arrows-down-up.svg';
 import ArrowsOutIcon from '@icon/system/regular/arrows-out-cardinal.svg';
@@ -10,7 +11,7 @@ import PauseIcon from '@icon/system/regular/pause.svg';
 import StopIcon from '@icon/system/regular/stop.svg';
 import { Button } from '@ui/components/Button';
 import { Tabs } from '@ui/components/Tabs';
-import { createSignal, Match, Show, Switch } from 'solid-js';
+import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ControlLostBanner } from '../../components/control-lost-banner';
 import { HandBackDialog } from '../../components/hand-back-dialog';
@@ -27,7 +28,9 @@ import { ScreenPicture } from '../shared/screen-picture';
  * The screen viewer on phones and tablets, with full take-over (D6): two
  * fingers always zoom and pan the local view; one finger follows the mode the
  * driver picks (View, Touch, Scroll). Portrait stacks the picture over the
- * controls; landscape puts the controls in a rail beside it.
+ * controls; landscape puts the controls in a rail beside it. It takes the
+ * whole screen: the app's dock and New button stand down while it shows, so
+ * a stray tap can't leave a drive.
  */
 export function MobileAgentScreen(props: { model: AgentScreenModel }) {
   const { session, input } = props.model;
@@ -41,6 +44,16 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
     const at = input.loupePoint();
     return at !== undefined && at.y > 120;
   };
+
+  // In portrait the picture starts filling the view, readable, rather than
+  // as a strip with empty space around it; Fit shows all of it again.
+  let filled = false;
+  createEffect(() => {
+    const box = input.pictureBox();
+    if (filled || !box || box.width === 0) return;
+    filled = true;
+    if (window.innerHeight > window.innerWidth) input.fill();
+  });
 
   const modes = () => [
     {
@@ -71,6 +84,8 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
 
   return (
     <div class="flex size-full min-h-0 flex-col bg-panel pt-(--mobile-content-inset-top) pb-[var(--safe-bottom,0px)] landscape:flex-row">
+      <FloatRegion region="accessory" />
+      <FloatRegion region="dock" priority={100} />
       <MobileHeader
         trailing={
           <MobileHeader.Island>
@@ -90,7 +105,7 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
 
       <ScreenPicture
         model={props.model}
-        class="aspect-video w-full shrink-0 landscape:aspect-auto landscape:h-full landscape:flex-1"
+        class="min-h-0 w-full flex-1 landscape:h-full"
       >
         <Show when={live()}>
           <ZoomControl
@@ -103,20 +118,17 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
         </Show>
       </ScreenPicture>
 
-      <div class="flex min-h-0 flex-1 flex-col overflow-y-auto landscape:w-64 landscape:flex-none landscape:border-l landscape:border-edge-divider">
+      <div class="flex max-h-[60%] shrink-0 flex-col overflow-y-auto landscape:max-h-none landscape:w-64 landscape:border-l landscape:border-edge-divider">
         <div
-          class="flex items-center gap-2 px-3 py-2"
-          classList={{ 'bg-amber-bg text-amber-ink': !!driver() && live() }}
+          class="flex items-center gap-2 border-y px-3 py-2"
+          classList={{
+            'border-amber font-medium text-amber-ink': !!driver() && live(),
+            'border-transparent': !(driver() && live()),
+          }}
         >
+          {/* The header names the desktop; this line only says what the agent does. */}
           <span class="flex min-w-0 grow items-center gap-1.5 text-sm">
-            <Show
-              when={driver() && live()}
-              fallback={
-                <span class="truncate">
-                  {screenTitle(props.model.agentName())}
-                </span>
-              }
-            >
+            <Show when={driver() && live()}>
               <Show
                 when={session.store.server?.agentHeld}
                 fallback={<CursorIcon class="size-4 shrink-0" />}
@@ -261,11 +273,7 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
         {/* As on desktop: while driving, it hands back first. */}
         <Show when={live()}>
           <div class="px-3 py-2">
-            <Button
-              size="md"
-              variant="danger-ghost"
-              onClick={() => session.stop()}
-            >
+            <Button size="md" variant="ghost" onClick={() => session.stop()}>
               <StopIcon class="size-4" />
               {t('agentScreen.stopWatching')}
             </Button>
