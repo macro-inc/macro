@@ -41,6 +41,9 @@ export function createPendingChanges(capabilities: {
     return saved.isOk();
   };
 
+  const sendOnceDecided = async (change: Promise<ToolPermissionChange>) =>
+    send(await change);
+
   const settle = (key: string, outcome: Promise<boolean>) => {
     if (latest[key] !== outcome) return;
     delete latest[key];
@@ -65,7 +68,7 @@ export function createPendingChanges(capabilities: {
     setPending(key, shown);
     // A decided change is sent now, so clicks reach the queue in order.
     const outcome =
-      change instanceof Promise ? change.then(send) : send(change);
+      change instanceof Promise ? sendOnceDecided(change) : send(change);
     latest[key] = outcome;
     await outcome;
     settle(key, outcome);
@@ -101,13 +104,18 @@ export function createPendingChanges(capabilities: {
       const actionKey = targetKey(action);
       const actionPending = pending[actionKey];
       const actionOutcome = latest[actionKey];
-      const change =
-        actionPending && actionOutcome
-          ? actionOutcome.then((ok) =>
-              changeForTool(ok ? actionPending : saved, tool, state)
-            )
-          : changeForTool(saved, tool, state);
-      return apply(toolTarget(tool), state, change);
+      if (!actionPending || !actionOutcome) {
+        return apply(
+          toolTarget(tool),
+          state,
+          changeForTool(saved, tool, state)
+        );
+      }
+      const decided = async () => {
+        const actionSaved = await actionOutcome;
+        return changeForTool(actionSaved ? actionPending : saved, tool, state);
+      };
+      return apply(toolTarget(tool), state, decided());
     },
   };
 }

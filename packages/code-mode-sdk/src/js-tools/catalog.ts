@@ -337,19 +337,19 @@ export function buildCatalog(sources: CatalogSources): Catalog {
           });
           continue;
         }
-        // Programs reach only what the TypeScript SDK chose to expose.
         const generated = generatedKey(sources, service, httpMethod, path);
         const sdkMethod = generated?.slice(service.length + 1);
-        if (sdkMethod && sources.excluded[service]?.includes(sdkMethod)) {
-          skipped.push({ service, operationId, reason: EXCLUDED_REASON });
-          continue;
-        }
-
         const parameters = [
           ...(item.parameters ?? []),
           ...(operation.parameters ?? []),
         ];
-        const reason = unsupported(operation, parameters);
+        // Programs reach only what the TypeScript SDK chose to expose.
+        const excluded =
+          sdkMethod !== undefined &&
+          (sources.excluded[service] ?? []).includes(sdkMethod);
+        const reason = excluded
+          ? EXCLUDED_REASON
+          : unsupported(operation, parameters);
         if (reason) {
           skipped.push({ service, operationId, reason });
           continue;
