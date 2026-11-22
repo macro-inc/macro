@@ -1941,4 +1941,88 @@ describe('createScreenSession', () => {
       dispose();
     });
   });
+
+  it('does not re-send a hand-back to a newer drive the same person took in another tab', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+    const lease = {
+      driver: { name: 'Alice', isYou: true },
+      agentHeld: true,
+      waking: false,
+      transport: 'vnc' as const,
+      viewers: 1,
+      leaseId: 'lease-1',
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      connections[0].handlers.onState({ ...lease, drivingHere: true });
+      session.handBack('done');
+      connections[0].handlers.onEnded('connectionLost');
+      await vi.advanceTimersByTimeAsync(500);
+      // Meanwhile the same person took over in another tab: a new drive.
+      connections[1].handlers.onState({
+        ...lease,
+        leaseId: 'lease-2',
+        drivingHere: false,
+      });
+      expect(connections[1].controls).toEqual([]);
+      // And it stays forgotten if lease-1's id came back later.
+      connections[1].handlers.onState({ ...lease, drivingHere: false });
+      expect(connections[1].controls).toEqual([]);
+      dispose();
+    });
+  });
+
+  it('forgets a hand-back the person overrode with Take over', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+    const lease = {
+      driver: { name: 'Alice', isYou: true },
+      agentHeld: true,
+      waking: false,
+      transport: 'vnc' as const,
+      viewers: 1,
+      leaseId: 'lease-1',
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      connections[0].handlers.onState({ ...lease, drivingHere: true });
+      // The hand-back never lands (the server failed it); the person drives on.
+      session.handBack('done');
+      session.takeOver();
+      connections[0].handlers.onState({ ...lease, drivingHere: true });
+      connections[0].handlers.onEnded('connectionLost');
+      await vi.advanceTimersByTimeAsync(500);
+      connections[1].handlers.onState({ ...lease, drivingHere: false });
+      // The dropped drive is won back, and no stale hand-back goes out.
+      expect(connections[1].controls).toEqual(['takeOver']);
+      dispose();
+    });
+  });
 });

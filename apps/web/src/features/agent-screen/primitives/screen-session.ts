@@ -185,13 +185,21 @@ export function createScreenSession(options: ScreenSessionOptions) {
    * meanwhile must not win the drive back; the next connection sends the
    * hand-back again instead.
    */
-  let pendingHandBack: { note: string | null } | undefined;
+  let pendingHandBack:
+    | { note: string | null; leaseId: string | null | undefined }
+    | undefined;
   /** The connection (generation) the pending hand-back was last sent on. */
   let handBackSentOn: number | undefined;
   const finishHandBack = () => {
     // Until this connection says whose lease it is, nothing is known.
     if (!pendingHandBack || !session || !store.server) return;
-    if (!ownLease()) {
+    // Only the drive this tab handed back: a newer one the same person took
+    // (another tab) is theirs to keep.
+    const lease = store.server.leaseId;
+    const handedBack = pendingHandBack.leaseId;
+    const sameLease =
+      handedBack == null || lease == null || lease === handedBack;
+    if (!ownLease() || !sameLease) {
       pendingHandBack = undefined;
       return;
     }
@@ -476,7 +484,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
             });
           },
           onEnded: (reason) => {
-            if (current !== generation) return;
+            // Once per connection, whatever its transport reports.
+            if (current !== generation || endedByServer) return;
             endedByServer = true;
             record('computer.screen.ended', { reason });
             endConnectionSpan(reason);
@@ -779,6 +788,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
     takeOver() {
       if (!session || !options.canDrive()) return;
       record('computer.screen.take_over');
+      // Driving on: a hand-back that never landed is no longer wanted.
+      pendingHandBack = undefined;
       setStore({
         takingOver: true,
         takeOvers: store.takeOvers + 1,
@@ -798,7 +809,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
       // while driving; after a lapse the banner's buttons let go.)
       if (!ownLease()) return;
       handedBackHere = true;
-      pendingHandBack = { note };
+      pendingHandBack = { note, leaseId: store.server?.leaseId };
       handBackSentOn = generation;
       session?.handBack(note);
     },
