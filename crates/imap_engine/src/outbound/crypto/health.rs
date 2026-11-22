@@ -91,11 +91,12 @@ impl Health {
         // its SpansMetric rather than querying sampled indexed spans.
         let span = tracing::info_span!(
             "imap.credentials.classification",
-            credentials.unreadable_count = 1_u64,
+            credentials.unreadable_count = tracing::field::Empty,
             credentials.fleet_guard = guarded,
             credentials.observed_accounts = self.0.len(),
             credentials.unreadable_accounts = unreadable
         );
+        span.record("credentials.unreadable_count", 1_u64);
         span.in_scope(|| {
             if guarded {
                 tracing::error!("Saved-credential fleet guard blocked automatic reconnect parking");
