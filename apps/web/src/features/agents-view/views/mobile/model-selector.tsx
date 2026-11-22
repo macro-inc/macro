@@ -334,6 +334,12 @@ export function MobileModelSelector() {
                 <MobileDrawer.Item onClick={() => setPage('model')}>
                   <ModelIcon model={state.model} />
                   <span class="flex-1">{t('agentControls.model')}</span>
+                  <span class="max-w-32 truncate text-ink-subtle">
+                    {
+                      state.models.find((option) => option.id === state.model)
+                        ?.label
+                    }
+                  </span>
                   <CaretRight class="size-4" />
                 </MobileDrawer.Item>
               </Show>
