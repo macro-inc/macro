@@ -1480,6 +1480,70 @@ where
         Ok(option)
     }
 
+    #[tracing::instrument(
+        skip(self, user_id, team, request),
+        fields(request = ?request),
+        err
+    )]
+    async fn add_property_option_with_id(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+        request: &AddPropertyOptionRequest,
+    ) -> Result<PropertyOption, PropertiesErr> {
+        if option_id.is_nil() {
+            return Err(PropertiesErr::Validation(
+                "option id must not be nil".to_string(),
+            ));
+        }
+        let (display_order, option_value, color) = self
+            .prepare_property_option(user_id, team, property_definition_id, request)
+            .await?;
+
+        let inserted = self
+            .repository
+            .create_property_option_with_id(
+                option_id,
+                property_definition_id,
+                display_order,
+                option_value.clone(),
+                color,
+            )
+            .await
+            .map_err(anyhow::Error::from)?;
+        if let Some(option) = inserted {
+            tracing::info!(
+                option_id = %option.id,
+                display_order = option.display_order,
+                "successfully added property option"
+            );
+            self.publish_property_event(Self::property_option_created_event(&option, user_id));
+            return Ok(option);
+        }
+
+        // The id is taken. A retry of this same add finds its own option and
+        // answers with it; any other row keeps the id and the request fails.
+        let existing = self
+            .repository
+            .get_property_option(option_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        match existing {
+            Some(option)
+                if option.property_definition_id == property_definition_id
+                    && option.value == option_value =>
+            {
+                tracing::info!(option_id = %option.id, "property option add replayed");
+                Ok(option)
+            }
+            _ => Err(PropertiesErr::Validation(
+                "option id is already in use".to_string(),
+            )),
+        }
+    }
+
     async fn get_or_create_property_option(
         &self,
         user_id: &MacroUserIdStr<'_>,

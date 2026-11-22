@@ -221,6 +221,55 @@ pub async fn insert_property_option(
     })
 }
 
+/// Inserts a property option under an id the client minted, unless a row
+/// already has that id. Returns `None` without writing when the id is taken,
+/// so a replayed request can be told apart from a new one.
+#[tracing::instrument(skip(executor, value, color), err)]
+pub async fn insert_property_option_unless_id_taken(
+    executor: impl PgExecutor<'_>,
+    id: Uuid,
+    property_definition_id: Uuid,
+    display_order: i32,
+    value: PropertyOptionValue,
+    color: Option<String>,
+) -> Result<Option<PropertyOption>, PropertyQueryError> {
+    let (number_value, string_value) = value.to_db_values();
+
+    let row = sqlx::query!(
+        r#"
+        INSERT INTO property_options (
+            id,
+            property_definition_id,
+            display_order,
+            number_value,
+            string_value,
+            color
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id, created_at, updated_at
+        "#,
+        id,
+        property_definition_id,
+        display_order,
+        number_value,
+        string_value,
+        color.clone()
+    )
+    .fetch_optional(executor)
+    .await?;
+
+    Ok(row.map(|row| PropertyOption {
+        id: row.id,
+        property_definition_id,
+        display_order,
+        value,
+        color,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    }))
+}
+
 /// Resolve an option without overwriting an existing option's metadata.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_or_create_property_option(

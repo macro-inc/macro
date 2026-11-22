@@ -168,6 +168,17 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         color: Option<String>,
     ) -> impl Future<Output = Result<PropertyOption, Self::Err>> + Send;
 
+    /// Create a property option under an id the caller minted. Returns `None`
+    /// without writing when a row already has that id.
+    fn create_property_option_with_id(
+        &self,
+        option_id: Uuid,
+        property_definition_id: Uuid,
+        display_order: i32,
+        value: PropertyOptionValue,
+        color: Option<String>,
+    ) -> impl Future<Output = Result<Option<PropertyOption>, Self::Err>> + Send;
+
     /// Resolve by exact value, inserting if absent. Concurrent calls return the
     /// same option; an existing option's color and display order are preserved.
     fn get_or_create_property_option(

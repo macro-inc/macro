@@ -272,6 +272,27 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
+    #[tracing::instrument(skip(self, value, color), err)]
+    async fn create_property_option_with_id(
+        &self,
+        option_id: Uuid,
+        property_definition_id: Uuid,
+        display_order: i32,
+        value: PropertyOptionValue,
+        color: Option<String>,
+    ) -> Result<Option<PropertyOption>, Self::Err> {
+        property_option_queries::insert_property_option_unless_id_taken(
+            &self.pool,
+            option_id,
+            property_definition_id,
+            display_order,
+            value,
+            color,
+        )
+        .await
+        .map_err(anyhow::Error::from)
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn get_or_create_property_option(
         &self,
