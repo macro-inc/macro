@@ -387,6 +387,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
   const liveTimes: Record<string, number[]> = {};
   let sequences = 0;
   let stepCount = 0;
+  const resetCount = [0, 0];
   const laneViewers = world.viewers.filter((v) => v.role === 'lane');
 
   const runLane = async (viewerKey: string, laneIndex: number) => {
@@ -465,6 +466,8 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
           const liveStart = Date.now();
           const reached: (number | null)[][] = specs.map(() => [null, null]);
           const lastLive: (Row[] | null)[][] = specs.map(() => [null, null]);
+          // Each side's last snapshot state, for the evidence of a miss.
+          const lastMeta: (string | null)[][] = specs.map(() => [null, null]);
           while (Date.now() - liveStart < LIVE_BOUND_MS) {
             for (let i = 0; i < specs.length; i++) {
               for (const side of [0, 1]) {
@@ -472,6 +475,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
                 const snap = await probeSnapLive(lanes.live[side], ids[i]);
                 if (!snap) continue;
                 lastLive[i][side] = project(snap);
+                lastMeta[i][side] = `${snap.transport}${snap.error ? ` error ${snap.error.slice(0, 160)}` : ''} settled=${snap.settled} entities=${snap.entities.length}`;
                 if (snap.settled && sameRows(lastLive[i][side] ?? [], raw[i][side])) reached[i][side] = Date.now() - liveStart;
               }
             }
@@ -527,7 +531,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
               // and its fresh read, as key@notifiedAt in list order.
               const compact = (rows: Row[] | null) => (rows ?? []).map((r) => `${r.key}@${r.notifiedAt ?? '-'}`);
               const evidence = (checks.liveRows as unknown[] | undefined) ?? [];
-              evidence.push({ spec: i, oldLive: compact(lastLive[i][0]), oldFresh: compact(raw[i][0]), newLive: compact(lastLive[i][1]), newFresh: compact(raw[i][1]) });
+              evidence.push({ spec: i, oldMeta: lastMeta[i][0], newMeta: lastMeta[i][1], oldLive: compact(lastLive[i][0]), oldFresh: compact(raw[i][0]), newLive: compact(lastLive[i][1]), newFresh: compact(raw[i][1]) });
               checks.liveRows = evidence;
             }
             else if (tOld.length || tNew.length) {
@@ -618,6 +622,12 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
         log(`sequences: lane ${viewerKey} finished sequence ${s + 1}/${sequencesPerLane}`);
       }
     } finally {
+      // Storage resets the probe saw (it reopened its readers each time).
+      for (const [side, lane] of lanes.live.entries()) {
+        const reopens = await lane.page.evaluate(() => (window as never as { __proofProbe: { resetReopens: () => unknown[] } }).__proofProbe.resetReopens()).catch(() => []);
+        for (const r of reopens) record('resets.jsonl', { lane: viewerKey, side: side === 0 ? 'old' : 'new', ...(r as object) });
+        resetCount[side] += reopens.length;
+      }
       for (const lanePair of Object.values(lanes)) await Promise.all(lanePair.map((lane: Lane) => lane.context.close().catch(() => undefined)));
     }
   };
@@ -628,7 +638,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
       return [key, { n: times.length, within: ok.length, p50: ok[Math.floor(ok.length / 2)] ?? null, p95: ok[Math.floor(ok.length * 0.95)] ?? null, max: ok[ok.length - 1] ?? null }];
     })
   );
-  return { sequences, steps: stepCount, stepOutcomes: steps, classes: Object.fromEntries(classes), live: liveStats };
+  return { sequences, steps: stepCount, stepOutcomes: steps, classes: Object.fromEntries(classes), live: liveStats, storageResets: { old: resetCount[0], new: resetCount[1] } };
 }
 
 /** Concurrent load for the whole run: notifications to other viewers through

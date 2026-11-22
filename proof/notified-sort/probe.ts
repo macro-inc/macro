@@ -6,7 +6,7 @@
 // cache, like any other caller in that page.
 
 import { SoupNotificationsDocument } from "@service-storage/graphql/generated/graphql";
-import { getGraphqlSoupClient } from "@service-storage/graphql-soup";
+import { getGraphqlSoupCacheHost, getGraphqlSoupClient } from "@service-storage/graphql-soup";
 import { soupItemMatchesHomeTab } from "@app/features/home/queries/home-item-filter";
 import { buildHomeQuery } from '@app/features/home/queries/home-query';
 import {
@@ -196,7 +196,38 @@ async function read(
   }
 }
 
-const live = new Map<string, { query: Query; dispose: () => void; pages: number }>();
+const live = new Map<string, { query: Query; dispose: () => void; pages: number; args: SoupAstItemsQueryArgs; options: ReadOptions }>();
+
+/**
+ * A storage reset (the cache emptied: a sign-out wipe, or an engine restart
+ * while the page was parked, as at an access-token lapse) leaves a reader
+ * mounted outside the app's tree with no rows and nothing that reads again,
+ * while the app's own Home lists refill. Each reset reopens every mounted
+ * reader with the pages it had, so live checks compare what a list on screen
+ * shows; the count goes into the evidence.
+ */
+const RESET_REOPEN_DELAY_MS = 2000;
+const resetReopens: { at: string; ids: string[] }[] = [];
+let resetWatch = false;
+function watchResets() {
+  if (resetWatch) return;
+  const host = getGraphqlSoupCacheHost();
+  if (!host) return;
+  resetWatch = true;
+  host.onCacheGenerationChanged((change: unknown) => {
+    if ((change as { storage?: string } | undefined)?.storage !== "reset") return;
+    const ids = [...live.keys()];
+    resetReopens.push({ at: new Date().toISOString(), ids });
+    // After the reset settles: a reader mounted inside the reset callback reads
+    // the emptied cache before the new session and never fetches.
+    setTimeout(() => {
+      for (const id of ids) {
+        const entry = live.get(id);
+        if (entry) openLive(id, entry.args, { ...entry.options, maxPages: entry.pages }).catch(() => undefined);
+      }
+    }, RESET_REOPEN_DELAY_MS);
+  });
+}
 
 /** Opens a reader that stays mounted, like a list on screen. */
 async function openLive(
@@ -205,9 +236,10 @@ async function openLive(
   options: ReadOptions = {}
 ): Promise<ProbeSnapshot> {
   closeLive(id);
+  watchResets();
   const started = Date.now();
   const { query, dispose } = mount(args, options);
-  const entry = { query, dispose, pages: 1 };
+  const entry = { query, dispose, pages: 1, args, options };
   live.set(id, entry);
   const deadline = started + (options.timeoutMs ?? 60_000);
   await waitSettled(query, deadline);
@@ -366,7 +398,43 @@ async function notificationSource(limit = 500) {
   }));
 }
 
+/** A mounted reader's own state, for diagnosing a list that empties. */
+function liveDebug(id: string) {
+  const q = live.get(id)?.query as unknown as Record<string, unknown> | undefined;
+  if (!q) return null;
+  const read = (k: string) => { try { const v = q[k]; return typeof v === "function" ? (v as () => unknown)() : v; } catch (e) { return `throws ${String(e)}`; } };
+  const data = q.data as { entities?: unknown[] } | undefined;
+  return {
+    entities: data?.entities?.length ?? null,
+    isFetching: read("isFetching"), isLoading: read("isLoading"), hasPageData: read("hasPageData"),
+    cacheStatus: read("cacheStatus"), hasNextPage: read("hasNextPage"), transport: read("transport"),
+    error: q.error ? String((q.error as { message?: string }).message ?? q.error) : null,
+  };
+}
+
+/** Cache generation changes since the probe loaded, with their time. */
+const generations: { at: string; change: unknown }[] = [];
+function watchGenerations() {
+  const host = getGraphqlSoupCacheHost();
+  if (!host) return false;
+  host.onCacheGenerationChanged((change: unknown) => generations.push({ at: new Date().toISOString(), change }));
+  return true;
+}
+
+/** Empties the normalized cache the way a sign-out wipe does (a storage reset). */
+async function clearCache() {
+  const host = getGraphqlSoupCacheHost();
+  if (!host) return "no host";
+  await host.clear();
+  return "cleared";
+}
+
 const probe = {
+  resetReopens: () => resetReopens,
+  liveDebug,
+  clearCache,
+  generations: () => generations,
+  watchGenerations,
   notificationSource,
   findInCache,
   read,

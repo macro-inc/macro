@@ -37,13 +37,26 @@ const homeSpec: ReadSpec = { source: { kind: 'home', tab: (process.env.DBG_TAB a
 const baseSpec: ReadSpec = process.env.DBG_SPEC ? JSON.parse(readFileSync(process.env.DBG_SPEC, 'utf8')) : homeSpec;
 const spec: ReadSpec = process.env.DBG_GROUP ? { ...baseSpec, groupBy: { type: process.env.DBG_GROUP } } : baseSpec;
 const apps = await Promise.all([
-  startApp('old', process.env.PROOF_OLD_WORKTREE ?? '', portBase, env, join(here, 'probe.ts'), out),
+  startApp('old', process.env.PROOF_OLD_WORKTREE ?? '', portBase, process.env.DBG_OLD_FLAG_OFF ? { ...env, notifiedSort: false } : env, join(here, 'probe.ts'), out),
   startApp('new', process.env.PROOF_NEW_WORKTREE ?? '', portBase + 1, env, join(here, 'probe.ts'), out),
 ]);
 const browser = await launchBrowser();
 try {
   const live = await Promise.all(apps.map((app) => openLane(browser, app, user)));
   const raw = await Promise.all(apps.map((app) => openLane(browser, app, user)));
+  // Every failed response and every auth call on each page, as it happens.
+  for (const [label, lanes] of [["live", live], ["raw", raw]] as const) {
+    for (const lane of lanes) {
+      lane.page.on("websocket", (ws) => { const at = () => new Date().toISOString(); console.log(`${at()} ${label} ${lane.side} ws open ${new URL(ws.url()).pathname}`); ws.on("close", () => console.log(`${at()} ${label} ${lane.side} ws close ${new URL(ws.url()).pathname}`)); });
+      lane.page.on("response", (r) => {
+        const path = new URL(r.url()).pathname;
+        if (r.status() >= 400 || /auth|token|refresh|login/.test(path)) console.log(`${new Date().toISOString()} ${label} ${lane.side} ${r.status()} ${r.request().method()} ${path}`);
+      });
+    }
+  }
+  // DBG_IDLE (seconds) leaves the pages idle before any list mounts, as a
+  // sequence lane waits while its other pages open.
+  if (process.env.DBG_IDLE) await new Promise((r) => setTimeout(r, Number(process.env.DBG_IDLE) * 1000));
   // DBG_ALSO (signal or noise) mounts a second Home list in the live tab first,
   // as a sequence lane does: an entity cached by it is no longer a cache miss.
   const also = process.env.DBG_ALSO as 'signal' | 'noise' | undefined;
@@ -59,7 +72,7 @@ try {
         const b = project(fresh[side]);
         const where = (rows: typeof a) => { const at = rows.findIndex((r) => r.key.endsWith(watched!)); return at < 0 ? "-" : `${at}@${rows[at].notifiedAt}`; };
         const has = watched ? ` live=${where(a)} fresh=${where(b)}` : "";
-        return `${side ? 'new' : 'old'}${has} ${sameRows(a, b) ? 'same' : `live ${a.length} fresh ${b.length} settled=${snaps[side]?.settled} ${rowsDiff(a, b)} tokens=${discrepancies(a, b).join(",")}${process.env.DBG_ROWS ? `\n    live:  ${a.map((r) => `${r.key.split(":")[0]}:${r.key.slice(-6)}@${r.notifiedAt?.slice(11, 23)}`).join(" ")}\n    fresh: ${b.map((r) => `${r.key.split(":")[0]}:${r.key.slice(-6)}@${r.notifiedAt?.slice(11, 23)}`).join(" ")}` : ""}`}`;
+        return `${side ? 'new' : 'old'}${has} ${sameRows(a, b) ? `same(${a.length})` : `live ${a.length} fresh ${b.length} settled=${snaps[side]?.settled} ${rowsDiff(a, b)} tokens=${discrepancies(a, b).join(",")}${process.env.DBG_ROWS ? `\n    live:  ${a.map((r) => `${r.key.split(":")[0]}:${r.key.slice(-6)}@${r.notifiedAt?.slice(11, 23)}`).join(" ")}\n    fresh: ${b.map((r) => `${r.key.split(":")[0]}:${r.key.slice(-6)}@${r.notifiedAt?.slice(11, 23)}`).join(" ")}` : ""}`}`;
       });
       console.log(`${label} t=${t}s | ${line.join(' | ')}`);
       await new Promise((r) => setTimeout(r, 2000));
