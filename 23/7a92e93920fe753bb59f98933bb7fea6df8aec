@@ -1,0 +1,75 @@
+crates/agent_egress/src/outbound/macro_mcp.rs
+  s_4a75da6a1f28fa::t_061d3e7dcaf1cc 166,169,171-174
+  s_4a75da6a1f28fa::t_4efc73d8fe7196 20
+crates/agent_egress/src/domain/service.rs
+  s_4a75da6a1f28fa::t_ccdda05ec5af70 15-18,270,276,281-302,304-311,500-502,507-508,510-519,521,523-525,527,529-544
+crates/agent_egress/src/domain/model.rs
+  s_4a75da6a1f28fa::t_58ce5cb2a05711 30
+  s_4a75da6a1f28fa::t_4c8f1b52efdfa9 414-415,417-422,436-437,439-441,509,513,515-518,520-527,529-534
+  s_4a75da6a1f28fa::t_29a1b1dad8168c 29,231-236,248,250-252,312-327,348-349,351-354,357,359-365,374-375
+  s_4a75da6a1f28fa::t_03d4b6332274f9 452-498,514,519,528
+  s_4a75da6a1f28fa::t_ab4e4bdd49c1f0 867
+crates/agent_egress/src/inbound/axum_router.rs
+  s_4a75da6a1f28fa::t_22ff56c1695ef5 278,304
+crates/agent_egress/src/domain/ports.rs
+  s_4a75da6a1f28fa::t_cde4ed3ceef62b 18,50-51,58-62,68
+crates/agent_egress/src/outbound/mod.rs
+  s_4a75da6a1f28fa::t_1e6786bfdbf5eb 9-10
+crates/agent_egress/src/outbound/mcp_credentials.rs
+  s_4a75da6a1f28fa::t_a972a7c623958e 1-2,4-10,12-13,15-19,25,32-34,38,40,42-44,47,49-90,92-108,112-126,128,136,139-141,144,146-161,164
+  s_4a75da6a1f28fa::t_f6ba202c7c6c08 162-163
+crates/agent_egress/src/outbound/macro_mcp/test.rs
+  s_4a75da6a1f28fa::t_d8a6ce5a3b8019 78,104,134,155
+  s_4a75da6a1f28fa::t_81a8b0c2594688 3,156-161,185,206,236,271-277
+crates/agent_egress/src/domain/error.rs
+  s_4a75da6a1f28fa::t_22ff56c1695ef5 37-38,42-44,48-53,55-56
+crates/agent_egress/src/outbound/session_authority.rs
+  s_4a75da6a1f28fa::t_4f7a9a3b9026ee 30,125-127,139,160
+crates/agent_egress/src/domain/service/actor.rs
+  s_4a75da6a1f28fa::t_1ee5c6c3b3d56c 6-7,80-82,111-112,119-134,136,138-140,144-155,160-169,216-218,412,424-439,459-461
+  s_4a75da6a1f28fa::t_d36f83ed98b0bc 462-463
+Cargo.lock
+  s_4a75da6a1f28fa::t_789c485bc966e5 465
+crates/agent_egress/AGENTS.md
+  s_4a75da6a1f28fa::t_a9ec8969c1eebc 29-40
+crates/agent_egress/Cargo.toml
+  s_4a75da6a1f28fa::t_85476d887d2e6b 50-51,53-54,74-75
+crates/agent_egress/src/domain/service/test.rs
+  s_4a75da6a1f28fa::t_7ed440e5751dfc 8,58,86-99,105,107-108,110-111,121-122,139,147,151-159,198,216,220-223,237-246,255,383-385,387-416,419,424,433-436,548-551,553-554,558,563,568,570-571,587-604,752-753,755,770,772-775,971,1285
+crates/agent_egress/src/domain/service/test/actor.rs
+  s_4a75da6a1f28fa::t_886b3eda53170a 332-333,344,531-577
+crates/agent_egress/src/lib.rs
+  s_4a75da6a1f28fa::t_7697767c2c3214 8,25-29,42-46,48-49
+crates/agent_egress/src/outbound/actor_mcp.rs
+  s_4a75da6a1f28fa::t_f1e52164cbe694 116
+crates/agent_egress/src/outbound/mcp_credentials/test.rs
+  s_4a75da6a1f28fa::t_ce4ecd47f9f82d 2-8,10-13,15-16,22-23,26-27,30-36,39-45,48-51,54-59,64-65,68-82,88-89,92,94-97,99-106,108,110,113-115,117-125,127-140,144,147-148,150-151,155,158,161,163-271,273-275,277-314,317-336,338-388,390-391,393-402
+crates/agent_harness/AGENTS.md
+  s_4a75da6a1f28fa::t_b4b1341493f84c 54-62
+crates/agent_harness/Cargo.toml
+  s_4a75da6a1f28fa::t_47e76af6e2f1ce 110-111
+crates/agent_harness/src/outbound/connected_apps.rs
+  s_4a75da6a1f28fa::t_94c2e88397a3e6 1-2,6-7,15,18,20-21,25-28,32,34,38,44-51,53-59
+crates/agent_harness/src/outbound/connected_apps/test.rs
+  s_4a75da6a1f28fa::t_b5f61d3d923300 2,4-5,8-12,15-30,33-44,47-53,56,58-68,70-119,121-126,128-131,133-141
+crates/agent_harness/src/outbound/egress.rs
+  s_4a75da6a1f28fa::t_cccfd7ea4cd141 3-5,14,16-17,29-30,36,38,40-42,56-61,67-89,92-93,97,99
+crates/agent_harness/src/outbound/egress/test.rs
+  s_4a75da6a1f28fa::t_2e21c32145383e 3,9-10,13,15-18,21-29,33-38,41,47-66,73,75,77,94-97,100-102,104,107,114-116,118,120-121,124-126,128-139,141,144,152,158-159,162,164,166-209,378
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "237a92e93920fe753bb59f98933bb7fea6df8aec",
+  "prompts": {},
+  "sessions": {
+    "s_4a75da6a1f28fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8894189d-690b-4e89-b106-5810ebbf6c22",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
