@@ -4,6 +4,7 @@ import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import type { ComponentMeta } from '@components/app/split-layout/componentRegistry';
 import { PopoverSplitRenderer } from '@components/app/split-layout/components/PopoverSplitRenderer';
+import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
 import { ok } from 'neverthrow';
 import { createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -213,6 +214,12 @@ function Phone() {
   );
 }
 
+/** As the route does: the split (here the popover) is named after the agent. */
+function NamedViewer() {
+  useSplitDisplayName(() => agentName);
+  return <Viewer phone={false} />;
+}
+
 /** Popped out: the real popover renderer, as `popoverSplit({ wide })` opens it. */
 function PopOut() {
   const [meta, setMeta] = createStore<ComponentMeta>({});
@@ -222,7 +229,7 @@ function PopOut() {
     mount: {
       kind: 'component' as const,
       name: 'agent-screen',
-      element: () => <Viewer phone={false} />,
+      element: () => <NamedViewer />,
       meta,
       updateMeta: (data: Omit<ComponentMeta, 'kind'>) => setMeta(data),
     },

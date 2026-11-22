@@ -131,7 +131,8 @@ for (const theme of ['light', 'dark'] as const) {
       page,
     }) => {
       const errors = await open(page, `view=popout&theme=${theme}`);
-      const dialog = page.getByRole('dialog');
+      // Named, as the touch drawer is, so a screen reader says whose screen.
+      const dialog = page.getByRole('dialog', { name: 'Eve' });
       await expect(dialog.getByRole('status')).toHaveText('Live');
       await expect(dialog.getByText('Eve’s desktop')).toBeVisible();
       // No pop-out button inside a pop-out.
