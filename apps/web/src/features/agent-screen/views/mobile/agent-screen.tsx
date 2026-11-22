@@ -38,6 +38,11 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
   const [keysOpen, setKeysOpen] = createSignal(false);
 
   const live = () => session.store.status.kind === 'live';
+  // Stopped, refused or gone: the overlay's own action is the way back, and
+  // there is nothing to take over.
+  const over = () =>
+    session.store.status.kind === 'ended' ||
+    session.store.status.kind === 'denied';
   const driver = () => session.store.server?.driver;
   // Keep the zoom control away from the finger.
   const zoomAtTop = () => {
@@ -139,6 +144,9 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
             </Show>
           </span>
           <Switch>
+            <Match when={over()}>
+              <span />
+            </Match>
             <Match when={session.drivingMe()}>
               <Button
                 size="md"

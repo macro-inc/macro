@@ -11,7 +11,9 @@ agent harness's screen socket.
   over the lease the old view left; it is never written to a shared link.
 - The view is keyed on the harness id: switching computers remounts it.
 - Desktop shows it as a split beside the conversation, with Pop out in the
-  header. Phones show the full-screen layout (`views/mobile/`).
+  header. The pop-out is a wide dialog (`popoverSplit(…, { wide: true })`)
+  with the status pill and title in the view itself and the picture at 16:9.
+  Phones show the full-screen layout (`views/mobile/`).
 
 ## Entry points
 
@@ -27,8 +29,16 @@ Each appears only when the harness list gives the viewer access other than
 ## Watching
 
 - The status pill says Connecting, Waking (a hibernated computer), Live,
-  Reconnecting (the last picture greyed out), Asleep (Turn on, for managers)
-  or Ended.
+  Reconnecting, Asleep (Turn on, for managers) or Ended.
+- Reconnecting keeps the dropped connection's last picture, greyed out, until
+  the new one is live, and says "Showing the last picture" only when there is
+  one. After a connection that was steady drops, retries stay at most 2 s
+  apart, and are not capped, for a minute.
+- A computer with as many screens open as it allows ends the view with "Too
+  many screens are open for this computer" and **Try again**; it is not
+  retried on its own.
+- Once the view has ended (stopped, refused, gone) only the overlay's own
+  action shows: no Take over.
 - Members watch only: Take over is disabled with a lock and "Only owners and
   admins can take over". Owners and admins connect with a drive ticket.
 - A hidden tab says so to the server (a heartbeat). After two minutes hidden

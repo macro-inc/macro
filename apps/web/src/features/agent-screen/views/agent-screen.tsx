@@ -30,6 +30,11 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
   const [handingBack, setHandingBack] = createSignal(false);
 
   const live = () => session.store.status.kind === 'live';
+  // Stopped, refused or gone: the overlay's own action is the way back, and
+  // there is nothing to take over.
+  const over = () =>
+    session.store.status.kind === 'ended' ||
+    session.store.status.kind === 'denied';
   const driver = () => session.store.server?.driver;
   const isPopover = () => panel?.handle.isPopover() ?? false;
 
@@ -37,46 +42,73 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
     // Driving moves with the view instead of being handed back and lost.
     const continueDriving = session.carryLeaseAway();
     popoverSplit(
-      agentScreenContent(props.model.harnessId, { continueDriving })
+      agentScreenContent(props.model.harnessId, { continueDriving }),
+      { wide: true }
     );
     panel?.handle.close();
   };
 
+  const heading = () => (
+    <div
+      data-screen-heading=""
+      class="flex min-w-0 items-center gap-2"
+      classList={{ 'px-2': !isPopover() }}
+    >
+      <StatusPill
+        status={session.store.status}
+        driver={driverLabel(
+          session.drivingMe() || session.resumingDrive(),
+          session.drivingElsewhere(),
+          props.model.driverName()
+        )}
+      />
+      <span class="truncate text-sm font-semibold text-ink">
+        {screenTitle(props.model.agentName())}
+      </span>
+    </div>
+  );
+
   return (
-    <div class="flex size-full min-h-0 flex-col bg-panel">
-      <SplitHeaderLeft>
-        <div class="flex min-w-0 items-center gap-2 px-2">
-          <StatusPill
-            status={session.store.status}
-            driver={driverLabel(
-              session.drivingMe() || session.resumingDrive(),
-              session.drivingElsewhere(),
-              props.model.driverName()
-            )}
-          />
-          <span class="truncate text-sm font-semibold text-ink">
-            {screenTitle(props.model.agentName())}
-          </span>
-        </div>
-      </SplitHeaderLeft>
-      <SplitHeaderRight>
-        <Show when={!isPopover()}>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label={t('agentScreen.popOut')}
-            tooltip={t('agentScreen.popOut')}
-            onClick={popOut}
-          >
-            <ArrowSquareOutIcon class="size-4" />
-          </Button>
-        </Show>
-      </SplitHeaderRight>
+    <div
+      class="flex min-h-0 flex-col bg-panel"
+      classList={{ 'size-full': !isPopover() }}
+    >
+      {/* A popover has no split header: the heading is the view's own. */}
+      <Show
+        when={isPopover()}
+        fallback={
+          <>
+            <SplitHeaderLeft>{heading()}</SplitHeaderLeft>
+            <SplitHeaderRight>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label={t('agentScreen.popOut')}
+                tooltip={t('agentScreen.popOut')}
+                onClick={popOut}
+              >
+                <ArrowSquareOutIcon class="size-4" />
+              </Button>
+            </SplitHeaderRight>
+          </>
+        }
+      >
+        <div class="px-3 pt-3">{heading()}</div>
+      </Show>
 
       <div class="flex min-h-0 flex-1 flex-col gap-2 p-3">
+        {/*
+          Popped out, the dialog sizes to its content: the picture keeps the
+          desktop's 16:9 at the dialog's width, short enough to leave room for
+          the controls in 75% of the window.
+        */}
         <ScreenPicture
           model={props.model}
-          class="@container/screen min-h-48 flex-1 rounded-lg"
+          class={
+            isPopover()
+              ? '@container/screen aspect-video max-h-[calc(75vh-8rem)] w-full shrink-0 rounded-lg'
+              : '@container/screen min-h-48 flex-1 rounded-lg'
+          }
         >
           {/* A way back to fit after a trackpad pinch (Ctrl+wheel). */}
           <Show when={props.model.input.viewport().zoom > 1}>
@@ -138,6 +170,9 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
 
         <div class="flex flex-wrap items-center gap-2">
           <Switch>
+            <Match when={over()}>
+              <span />
+            </Match>
             <Match when={session.drivingMe()}>
               <Button
                 size="sm"
