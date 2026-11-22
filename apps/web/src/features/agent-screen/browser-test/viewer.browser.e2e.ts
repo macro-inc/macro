@@ -12,6 +12,46 @@ async function open(page: Page, query: string) {
   return errors;
 }
 
+/**
+ * WCAG contrast of an element's text against the first opaque background
+ * behind it, colours resolved by painting them (any CSS colour syntax).
+ */
+function textContrast(element: Element): number {
+  const rgb = (css: string) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('no 2d context');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, 1, 1);
+    context.fillStyle = css;
+    context.fillRect(0, 0, 1, 1);
+    return [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+  };
+  const luminance = ([r, g, b]: number[]) => {
+    const linear = (value: number) => {
+      const v = value / 255;
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+  };
+  let behind: Element | null = element;
+  let background = 'rgb(255, 255, 255)';
+  while (behind) {
+    const color = getComputedStyle(behind).backgroundColor;
+    if (color && color !== 'transparent' && !/rgba\(.*, 0\)$/.test(color)) {
+      background = color;
+      break;
+    }
+    behind = behind.parentElement;
+  }
+  const [lighter, darker] = [
+    luminance(rgb(getComputedStyle(element).color)),
+    luminance(rgb(background)),
+  ].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 async function shot(page: Page, name: string) {
   if (shots) await page.screenshot({ path: `${shots}/${name}.png` });
 }
@@ -33,6 +73,8 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(pill).toContainText('Hold Esc to hand back');
       // The header pill says who drives; this one doesn't repeat it.
       await expect(pill).not.toContainText('You’re driving');
+      // Amber text that reads: at least 4.5:1 on its background.
+      expect(await pill.evaluate(textContrast)).toBeGreaterThanOrEqual(4.5);
       await expect(page.getByRole('status')).toHaveText('You’re driving');
 
       const box = (await pill.boundingBox())!;
@@ -86,7 +128,7 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `desktop-600-other-${theme}`);
     });
 
-    test('the real DM top bar: the Offline chip yields before the agent name', async ({
+    test('the real DM top bar: the Offline chip, then the action labels, yield before the agent avatar and name', async ({
       page,
     }) => {
       const errors: string[] = [];
@@ -117,6 +159,28 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(chip).toHaveAttribute('title', 'Offline');
       await expect.poll(truncated).toBe(false);
       await shot(page, `dm-header-530-${theme}`);
+
+      // A narrow split beside the viewer: the actions give up their labels
+      // too, and the avatar and the name stay whole.
+      await page.goto(`${dmHeader}?width=440&theme=${theme}`, {
+        waitUntil: 'networkidle',
+      });
+      await expect(chip).toHaveAttribute('data-compact', '');
+      await expect(page.getByRole('button', { name: 'Screen' })).toBeVisible();
+      await expect(
+        page.locator('[data-header-action-label]').first()
+      ).toBeHidden();
+      await expect.poll(truncated).toBe(false);
+      const avatarClipped = await title.evaluate((span) => {
+        const avatar = span.previousElementSibling;
+        const sensor = span.closest('.overflow-hidden');
+        if (!avatar || !sensor) return true;
+        const inner = avatar.getBoundingClientRect();
+        const outer = sensor.getBoundingClientRect();
+        return inner.left < outer.left || inner.right > outer.right;
+      });
+      expect(avatarClipped).toBe(false);
+      await shot(page, `dm-header-440-${theme}`);
       expect(errors).toEqual([]);
     });
   });
@@ -148,6 +212,22 @@ for (const theme of ['light', 'dark'] as const) {
       expect(box.y + box.height).toBeLessThanOrEqual(1040);
       await shot(page, `popout-${theme}`);
       expect(errors).toEqual([]);
+    });
+
+    test('popped out while driving: the driving pill sits in the heading row, off the guest picture', async ({
+      page,
+    }) => {
+      await open(page, `view=popout&state=drive&theme=${theme}`);
+      const dialog = page.getByRole('dialog', { name: 'Eve' });
+      const pill = dialog.locator('[data-screen-driving-pill]');
+      await expect(pill).toContainText('Hold Esc to hand back');
+      const stage = (await dialog
+        .getByRole('img', { name: 'Eve’s desktop' })
+        .boundingBox())!;
+      const box = (await pill.boundingBox())!;
+      expect(box.y + box.height).toBeLessThanOrEqual(stage.y);
+      expect(box.height).toBeLessThan(30);
+      await shot(page, `popout-drive-${theme}`);
     });
 
     test('reconnecting keeps the last picture under the overlay', async ({
@@ -194,6 +274,8 @@ for (const theme of ['light', 'dark'] as const) {
 
       await page.getByRole('button', { name: 'Turn on' }).click();
       await expect(page.getByText('Turning Eve’s computer on…')).toBeVisible();
+      // The header chip names the same state.
+      await expect(page.getByRole('status')).toHaveText('Turning on');
       await expect(page.getByRole('button', { name: /Take over/ })).toHaveCount(
         0
       );
@@ -255,10 +337,13 @@ for (const theme of ['light', 'dark'] as const) {
           .getByRole('img', { name: 'Eve’s desktop' })
           .boundingBox())!;
         expect(stage.height).toBeGreaterThan(400);
-        if (state === 'drive')
-          await expect(
-            page.getByText('Eve is paused · tools held')
-          ).toBeVisible();
+        if (state === 'drive') {
+          const strip = page.getByText('Eve is paused · tools held');
+          await expect(strip).toBeVisible();
+          expect(await strip.evaluate(textContrast)).toBeGreaterThanOrEqual(
+            4.5
+          );
+        }
         await shot(page, `phone-${state}-${theme}`);
         expect(errors).toEqual([]);
       });
