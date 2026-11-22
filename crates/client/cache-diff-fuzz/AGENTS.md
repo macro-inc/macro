@@ -89,8 +89,9 @@ purpose (it says what).
   document, add `--wide-properties SHARE` to both sides: that share of email threads in
   responses (chosen by id) get 237 to 243 properties, each of its own definition, so their
   attributes land around the limit. Every copy of a wide thread carries the same properties,
-  so an optimistic copy that moves it in or out of the Inbox changes only the facts that
-  depend on that. It changes the cases generated; without it no extra draw is made.
+  so a copy at another revision (which can move it in or out of the Inbox, or change its
+  account or read state) never changes its property attributes. It changes the cases
+  generated; without it no extra draw is made.
 - `FUZZ_ARGS` goes to both sides; `FUZZ_ARGS_A` and `FUZZ_ARGS_B` to one each, for
   one build under two settings (e.g. `FUZZ_ARGS_B="--hot-capacity 16"` against
   itself: the hot tier is a cache, so its size must change nothing).
@@ -103,7 +104,8 @@ purpose (it says what).
   records OLD stored when the case writes them again, though their content is the same.
   `UPGRADE_FROM=OLDER` has a third side write the file instead, so two builds (a change and
   its base, or a mutant and its tip) both upgrade the same older build's file: what runs only
-  on such an open, like deriving a new sort fact in place, is compared too.
+  on such an open, like deriving a new sort fact in place, is compared too. The writer gets
+  `FUZZ_ARGS` but not `FUZZ_ARGS_A`, so `FUZZ_ARGS` may hold only options the older build has.
 - Downgrade and mixed builds: `CHAIN_A="a a" CHAIN_B="b a" fuzz.sh RUN FIRST COUNT OLD NEW`.
   Each side runs a chain of builds on one file (`a` is SIDE_A, `b` SIDE_B): the first
   runs the case on an empty file, each next one starts from what the one before left,
