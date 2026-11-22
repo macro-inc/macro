@@ -252,6 +252,34 @@ fn the_present_view_schema_is_the_view_itself() {
     assert!(schema.get("properties").is_none());
 }
 
+/// The example in the model's guidance is a view that decodes, so it cannot
+/// drift from the types.
+#[test]
+fn the_example_in_the_guidance_decodes() {
+    let guidance = present_view_schema();
+    let schema: serde_json::Value = serde_json::from_str(&guidance).expect("the schema is JSON");
+    let description = schema["description"].as_str().expect("a description");
+    let (_, after) = description
+        .split_once("passed as it is: `await execution.views.present(")
+        .expect("the example follows");
+    let (example, _) = after.split_once(")`").expect("the example ends");
+    let view: serde_json::Value = serde_json::from_str(example).expect("the example is JSON");
+    assert!(decode_view(&view).is_ok(), "{example}");
+}
+
+/// A view wrapped in a `view` property says how to unwrap it.
+#[test]
+fn a_wrapped_view_is_told_to_pass_the_view_itself() {
+    let wrapped = json!({ "view": { "widgets": [{ "type": "md", "markdown": "Hi" }] } });
+    assert_eq!(
+        decode_view(&wrapped),
+        Err(
+            r#"view is missing "widgets": pass the view itself, not wrapped in {view: ...}"#
+                .to_owned()
+        )
+    );
+}
+
 /// Maps are sorted: serde_json keeps insertion order only when a build
 /// unifies its `preserve_order` feature.
 #[test]
