@@ -2973,6 +2973,76 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it("labels a notified email thread by its own page's updatedAt, not the shared record's", async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    mapGraphqlSoupItemMock.mockImplementation((item) =>
+      item.__typename === 'GraphqlSoupEmailThread'
+        ? {
+            tag: 'emailThread',
+            data: { id: item.id, updatedAt: item.updatedAt },
+          }
+        : item
+    );
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'notified_at' }, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    const updatedAtOf = (id: string) =>
+      (
+        query.data()?.entities as
+          | { data: { id: string; updatedAt: string } }[]
+          | undefined
+      )?.find((entity) => entity.data.id === id)?.data.updatedAt;
+    const page = (updatedAt: string) => ({
+      user: {
+        soup: {
+          items: [
+            {
+              __typename: 'GraphqlSoupEmailThread',
+              id: 'thread',
+              createdAt: '2026-01-01T00:00:00Z',
+              updatedAt,
+            },
+          ],
+          nextCursor: null,
+          notifiedAt: [
+            {
+              graphqlTypeName: 'GraphqlSoupEmailThread',
+              entityId: 'thread',
+              notifiedAt: '2026-11-18T10:00:00Z',
+            },
+          ],
+        },
+      },
+    });
+    try {
+      fake.executions[0].next(page('2026-11-21T09:00:00Z'));
+      expect(updatedAtOf('thread')).toBe('2026-11-21T09:00:00Z');
+
+      // Another view (the Mail backfill reads All Mail) writes its own
+      // updatedAt into the thread's one cached record, which this page lists.
+      fake.executions[0].next(page('2026-11-17T08:00:00Z'), {
+        source: 'affected-cache-reread',
+        revision: REVISION_2,
+      });
+      expect(updatedAtOf('thread')).toBe('2026-11-21T09:00:00Z');
+
+      // The list's next network read decides again.
+      const refresh = query.refresh();
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
+      fake.executions[1].next(page('2026-11-22T07:00:00Z'));
+      await refresh;
+      expect(updatedAtOf('thread')).toBe('2026-11-22T07:00:00Z');
+    } finally {
+      dispose();
+      mapGraphqlSoupItemMock.mockImplementation((item) => item);
+    }
+  });
+
   it('keeps the newest notification time when two loaded pages list an item', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

@@ -99,12 +99,15 @@ export function createGraphqlSoupAstItemsQuery(
     fetched?: GraphqlSoupItem;
     /** The page's notification time for this item, on NOTIFIED_AT pages. */
     notifiedAt?: string;
+    /** An email thread's updatedAt as its NOTIFIED_AT page gave it. */
+    updatedAt?: string;
   };
   const records = createMemo((previous: ProjectionRow[]) => {
     const fetched = new Map(
       source.fetchedRecords().map((record) => [soupItemKey(record), record])
     );
     const stamps = source.fetchedNotifiedAt();
+    const emailTimes = source.fetchedEmailUpdatedAt();
     const visible = new Map(fetched);
     for (const record of source.data() ?? [])
       visible.set(soupItemKey(record), record);
@@ -113,27 +116,38 @@ export function createGraphqlSoupAstItemsQuery(
       const row = old.get(key);
       const baseline = fetched.get(key);
       const notifiedAt = stamps.get(key);
+      const updatedAt = emailTimes.get(key);
       return row?.record === record &&
         row.fetched === baseline &&
-        row.notifiedAt === notifiedAt
+        row.notifiedAt === notifiedAt &&
+        row.updatedAt === updatedAt
         ? row
-        : { key, record, fetched: baseline, notifiedAt };
+        : { key, record, fetched: baseline, notifiedAt, updatedAt };
     });
   }, []);
   const projected = createKeyedProjection(
     records,
     (row) => row.key,
-    ({ record, fetched, notifiedAt }) => {
+    ({ record, fetched, notifiedAt, updatedAt }) => {
       const sort = sortMethod();
       const showSupportedForeignEntities = showForeign();
       const view = { emailView: input()?.emailView };
       // REST items carry `notified_at` themselves; GraphQL lists it on the
       // page, since it orders this list rather than describing the record.
+      // A notified list also keeps the updatedAt its own page gave an email
+      // thread: the thread's one cached record holds whichever view wrote it
+      // last (the Mail backfill reads All Mail), and a done mail row is
+      // labelled by it.
       const mapItem = (value: GraphqlSoupItem) => {
         const mapped = mapGraphqlSoupItem(value, view);
-        return mapped && notifiedAt
-          ? { ...mapped, notified_at: notifiedAt }
-          : mapped;
+        if (!mapped || !notifiedAt) return mapped;
+        if (updatedAt && mapped.tag === 'emailThread')
+          return {
+            ...mapped,
+            notified_at: notifiedAt,
+            data: { ...mapped.data, updatedAt },
+          };
+        return { ...mapped, notified_at: notifiedAt };
       };
       const item = mapItem(record);
       const fetchedItem =
