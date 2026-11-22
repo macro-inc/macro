@@ -359,6 +359,8 @@ function reactionCard(
   who: string,
   latestSender: string | undefined
 ) {
+  // A mention row stays about the mention, as its badge does.
+  if (row.type !== 'channel_messages' && row.type !== 'channel_thread') return;
   const newest = row.content.notifications[0]?.notification_metadata;
   if (newest?.tag !== 'channel_message_reaction') return;
   const latest = newest.content;

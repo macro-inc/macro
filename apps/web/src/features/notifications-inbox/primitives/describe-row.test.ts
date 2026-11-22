@@ -465,6 +465,30 @@ describe('describeInboxCard', () => {
     });
   });
 
+  it('keeps a mention row about the mention when a reaction is newest', () => {
+    const card = describeInboxCard(
+      stack(
+        'channel_mention',
+        [
+          sent('2', 'channel_message_reaction', 'Ana', {
+            ...channel,
+            messageId: 'reply',
+            messageContent: 'My reply',
+            emoji: '👀',
+          }),
+          sent('1', 'channel_mention', 'Leo', {
+            ...channel,
+            messageId: 'root',
+            messageContent: 'Can you check this?',
+          }),
+        ],
+        'root'
+      ),
+      people
+    );
+    expect(card.what).toBe('Can you check this?');
+  });
+
   it('never credits an older reactor with the newest reaction', () => {
     const row = stack('channel_messages', [
       sent('2', 'channel_message_reaction', null as never, {
