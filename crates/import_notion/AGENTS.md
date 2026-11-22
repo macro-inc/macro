@@ -108,7 +108,9 @@ maps a data source onto Macro database columns and cells
   nonempty predicates, changed negative-contains literals, and negative option
   predicates whose source labels collapse onto one Macro option id. These losses
   broaden results, never hide source rows. The writer owns saved-view ids and
-  name uniqueness.
+  name uniqueness. Set ViewSetting at the translation site; diagnostic paths
+  never classify settings or become display labels. Unknown settings use Other
+  and a generic readable description, never a raw configuration key.
 
 ## Related
 

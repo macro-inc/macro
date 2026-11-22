@@ -52,7 +52,7 @@ pub struct ViewParent {
 }
 
 /// Documented view layouts; new types are reported as unsupported.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ViewType {
     /// A grid.
@@ -100,7 +100,7 @@ pub struct ViewColumnBinding {
 }
 
 /// Which part of the saved view could not be preserved.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ViewLossKind {
     /// A predicate or incomplete OR group was omitted, broadening the result.
@@ -124,14 +124,54 @@ impl std::fmt::Display for ViewLossKind {
     }
 }
 
+/// Semantic presentation setting, independent of diagnostic source paths.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ViewSetting {
+    /// Column visibility.
+    ColumnVisibility,
+    /// Column width.
+    ColumnWidth,
+    /// Grouping and lane order.
+    Grouping,
+    /// Quick-filter controls.
+    QuickFilters,
+    /// Cell wrapping.
+    WrapCells,
+    /// Card cover presentation.
+    Cover,
+    /// Weekend presentation.
+    ShowWeekends,
+    /// An unsupported display setting without a portable semantic name.
+    #[default]
+    #[serde(other)]
+    Other,
+}
+
+pub(super) fn setting_kind(key: &str) -> ViewSetting {
+    match key {
+        "visible" => ViewSetting::ColumnVisibility,
+        "width" => ViewSetting::ColumnWidth,
+        "group_by" | "sub_group_by" => ViewSetting::Grouping,
+        "quick_filters" => ViewSetting::QuickFilters,
+        "wrap_cells" => ViewSetting::WrapCells,
+        "cover" => ViewSetting::Cover,
+        "show_weekends" => ViewSetting::ShowWeekends,
+        _ => ViewSetting::Other,
+    }
+}
+
 /// One machine-readable loss associated with a path in the source view.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ViewLoss {
     /// Filter, sort, layout or setting.
     pub kind: ViewLossKind,
+    /// Semantic setting set at the translation boundary, never inferred from a path.
+    #[serde(default)]
+    pub setting: ViewSetting,
     /// JSON-style path to the unsupported source setting.
     pub path: String,
-    /// Explanation suitable for an import report.
+    /// Diagnostic detail for developers; reports render typed kind/setting.
     pub reason: String,
 }
 
@@ -150,6 +190,21 @@ pub struct TranslatedView {
 pub(super) fn loss(losses: &mut Vec<ViewLoss>, kind: ViewLossKind, path: &str, reason: &str) {
     losses.push(ViewLoss {
         kind,
+        setting: ViewSetting::Other,
+        path: path.to_owned(),
+        reason: reason.to_owned(),
+    });
+}
+
+pub(super) fn setting_loss(
+    losses: &mut Vec<ViewLoss>,
+    setting: ViewSetting,
+    path: &str,
+    reason: &str,
+) {
+    losses.push(ViewLoss {
+        kind: ViewLossKind::Setting,
+        setting,
         path: path.to_owned(),
         reason: reason.to_owned(),
     });

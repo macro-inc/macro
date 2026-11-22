@@ -44,7 +44,7 @@ pub(in crate::domain::service) struct Node {
     /// An unavailable dependency cannot be included in the write.
     pub unavailable: Option<String>,
     /// Fidelity losses retained in the report.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<crate::domain::models::FidelityWarning>,
 }
 
 /// The objects in scope, parents before children.

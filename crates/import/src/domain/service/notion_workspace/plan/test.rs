@@ -326,6 +326,7 @@ fn audit_snapshot_warnings_use_titles_without_raw_notion_ids() {
     assert!(
         node.warnings
             .iter()
-            .all(|warning| warning.contains("Budget") && !warning.contains(id('d').as_str()))
+            .all(|warning| warning.render().contains("Budget")
+                && !warning.render().contains(id('d').as_str()))
     );
 }

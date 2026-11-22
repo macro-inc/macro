@@ -16,9 +16,9 @@ pub(super) fn translate(
     };
     let Some(config) = view.configuration.as_ref().and_then(Value::as_object) else {
         if view.configuration.is_some() {
-            loss(
+            setting_loss(
                 losses,
-                ViewLossKind::Setting,
+                ViewSetting::Other,
                 "configuration",
                 "Configuration is not an object",
             );
@@ -98,9 +98,9 @@ pub(super) fn translate(
                         })
                         .collect();
                 } else {
-                    loss(
+                    setting_loss(
                         losses,
-                        ViewLossKind::Setting,
+                        ViewSetting::Grouping,
                         "configuration.group_by.sort",
                         "Notion lane order is unavailable or has no equivalent; using Macro's default lane order",
                     );
@@ -116,10 +116,17 @@ pub(super) fn translate(
                             "hide_empty_groups",
                         ],
                         "configuration.group_by",
+                        ViewSetting::Grouping,
                         losses,
                     );
                     if let Some(sort) = group.get("sort").and_then(Value::as_object) {
-                        remaining(sort, &["type"], "configuration.group_by.sort", losses);
+                        remaining(
+                            sort,
+                            &["type"],
+                            "configuration.group_by.sort",
+                            ViewSetting::Grouping,
+                            losses,
+                        );
                     }
                 }
                 RequestedLayout::Board {
@@ -187,7 +194,13 @@ pub(super) fn translate(
             }
         }
     };
-    remaining(config, &consumed, "configuration", losses);
+    remaining(
+        config,
+        &consumed,
+        "configuration",
+        ViewSetting::Other,
+        losses,
+    );
     result
 }
 
@@ -201,9 +214,9 @@ fn properties(
         return Vec::new();
     };
     let Some(properties) = value.as_array() else {
-        loss(
+        setting_loss(
             losses,
-            ViewLossKind::Setting,
+            ViewSetting::Other,
             "configuration.properties",
             "Properties must be an array",
         );
@@ -218,9 +231,9 @@ fn properties(
             .and_then(Value::as_str)
             .and_then(|id| column(columns, id))
         else {
-            loss(
+            setting_loss(
                 losses,
-                ViewLossKind::Setting,
+                ViewSetting::Other,
                 &path,
                 "Property has no imported column",
             );
@@ -231,6 +244,7 @@ fn properties(
                 property,
                 &["property_id", "visible", "width"],
                 &path,
+                ViewSetting::Other,
                 losses,
             );
         }
@@ -238,18 +252,18 @@ fn properties(
             .get("visible")
             .is_some_and(|value| !value.is_null() && !value.is_boolean())
         {
-            loss(
+            setting_loss(
                 losses,
-                ViewLossKind::Setting,
+                ViewSetting::ColumnVisibility,
                 &format!("{path}.visible"),
                 "Visibility must be a boolean",
             );
         }
         if property.get("visible") == Some(&Value::Bool(false)) {
             if kind == ViewType::Table {
-                loss(
+                setting_loss(
                     losses,
-                    ViewLossKind::Setting,
+                    ViewSetting::ColumnVisibility,
                     &format!("{path}.visible"),
                     "Macro table layouts cannot hide columns",
                 );
@@ -261,17 +275,17 @@ fn properties(
             .and_then(Value::as_u64)
             .and_then(|v| u32::try_from(v).ok());
         if width.is_some() && (width_px.is_none() || kind != ViewType::Table) {
-            loss(
+            setting_loss(
                 losses,
-                ViewLossKind::Setting,
+                ViewSetting::ColumnWidth,
                 &format!("{path}.width"),
                 "Column width is invalid or unavailable for this layout",
             );
         }
         if !seen.insert(binding.column) {
-            loss(
+            setting_loss(
                 losses,
-                ViewLossKind::Setting,
+                ViewSetting::Other,
                 &path,
                 "Repeated property omitted",
             );
@@ -293,13 +307,18 @@ fn remaining(
     object: &serde_json::Map<String, Value>,
     consumed: &[&str],
     path: &str,
+    context: ViewSetting,
     losses: &mut Vec<ViewLoss>,
 ) {
     for (key, value) in object {
         if !consumed.contains(&key.as_str()) && !value.is_null() {
-            loss(
+            setting_loss(
                 losses,
-                ViewLossKind::Setting,
+                if context == ViewSetting::Grouping {
+                    context
+                } else {
+                    setting_kind(key)
+                },
                 &format!("{path}.{key}"),
                 "Setting has no Macro equivalent",
             );

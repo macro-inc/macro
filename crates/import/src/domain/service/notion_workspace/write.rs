@@ -399,10 +399,17 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
         Ok(())
     }
 
-    /// Buffer phase warnings; only the phase boundary rewrites warning metadata.
-    pub async fn warn(&self, warnings: &[String]) -> anyhow::Result<()> {
-        self.warn_fidelity(&warnings.iter().cloned().map(Into::into).collect::<Vec<_>>())
-            .await
+    /// Record a semantic notice without pre-rendering its sentence.
+    pub async fn notice(
+        &self,
+        object: &NotionId,
+        source: &str,
+        kind: crate::domain::models::ImportNoticeKind,
+    ) -> anyhow::Result<()> {
+        self.warn_fidelity(&[crate::domain::models::FidelityWarning::Notice {
+            notice: crate::domain::models::ImportNotice::new(object, source, kind),
+        }])
+        .await
     }
 
     /// Forward another source's already counted warnings after its access check.

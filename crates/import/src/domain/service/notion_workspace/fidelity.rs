@@ -1,54 +1,78 @@
-//! User-facing fidelity sentences; source paths stay inside the translator.
-
+//! Typed fidelity construction; sentences are rendered only by the report model.
+use crate::domain::models::{FidelityWarning, PropertySnapshotKind, ViewWarning};
+use import_notion::domain::model::{NotionDataSource, NotionPropertyKind};
+use import_notion::domain::views::{NotionView, ViewLoss};
+use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
-use import_notion::domain::model::{NotionDataSource, NotionPropertyKind};
-use import_notion::domain::views::{NotionView, ViewLoss, ViewLossKind, ViewType};
-use serde_json::{Value, json};
-
-/// Schema losses are visible in both the staged plan and the final report.
-pub(super) fn property_warnings(source: &NotionDataSource, title: &str) -> Vec<String> {
-    source.properties.iter().filter_map(|property| match &property.kind {
-        NotionPropertyKind::Formula => Some(format!("Database “{title}”: “{}” is a fixed snapshot of the Notion formula, not a live formula.", property.name)),
-        NotionPropertyKind::Rollup => Some(format!("Database “{title}”: “{}” is a fixed snapshot of the Notion rollup, not a live rollup.", property.name)),
-        NotionPropertyKind::Unsupported { notion_type } => Some(format!("Database “{title}”: property “{}” was omitted because Notion {notion_type} properties are not supported.", property.name)),
-        _ => None,
-    }).collect()
+/// Build typed schema notices shared by planning and writing.
+pub(super) fn property_warnings(source: &NotionDataSource, title: &str) -> Vec<FidelityWarning> {
+    source
+        .properties
+        .iter()
+        .filter_map(|property| match &property.kind {
+            NotionPropertyKind::Formula | NotionPropertyKind::Rollup => {
+                Some(FidelityWarning::PropertySnapshot {
+                    source_id: source.id.clone(),
+                    property_id: property.id.clone(),
+                    source: title.into(),
+                    property: property.name.clone(),
+                    kind: if property.kind == NotionPropertyKind::Formula {
+                        PropertySnapshotKind::Formula
+                    } else {
+                        PropertySnapshotKind::Rollup
+                    },
+                })
+            }
+            NotionPropertyKind::Unsupported { notion_type } => {
+                Some(FidelityWarning::PropertyOmitted {
+                    source_id: source.id.clone(),
+                    property_id: property.id.clone(),
+                    source: title.into(),
+                    property: property.name.clone(),
+                    notion_type: notion_type.clone(),
+                })
+            }
+            _ => None,
+        })
+        .collect()
 }
 
-/// Preserve distinct loss counts even when their readable descriptions match.
+/// Group semantic view losses while keeping their distinct counts.
 pub(super) fn view_warnings(
     source: &NotionDataSource,
     title: &str,
     view: &NotionView,
     losses: &[ViewLoss],
-) -> Vec<String> {
+) -> Vec<FidelityWarning> {
     let mut grouped = BTreeMap::new();
     for loss in losses {
-        let known = grouped
-            .entry(view_loss(source, title, view, loss))
-            .or_insert((loss.kind, 0u32));
-        known.1 = known.1.saturating_add(1);
+        let warning = ViewWarning {
+            source_id: source.id.clone(),
+            view_id: view.id.clone(),
+            source: title.into(),
+            view: view.name.clone(),
+            kind: loss.kind,
+            setting: loss.setting,
+            layout: view.kind,
+            properties: property_names(source, view, loss),
+            count: 0,
+        };
+        let count = grouped.entry(warning).or_insert(0u32);
+        *count = count.saturating_add(1);
     }
     grouped
         .into_iter()
-        .map(|(message, (kind, count))| {
-            if count == 1 {
-                return message;
-            }
-            let details = match kind {
-                ViewLossKind::Filter => "filter conditions",
-                ViewLossKind::Sort => "sort rules",
-                ViewLossKind::Layout => "layout details",
-                ViewLossKind::Setting => "display settings",
-            };
-            format!("{message} {count} {details} were affected.")
+        .map(|(mut loss, count)| {
+            loss.count = count;
+            FidelityWarning::ViewLoss(loss)
         })
         .collect()
 }
 
-/// Use the closest source property context, never print its internal JSON path.
-fn view_loss(source: &NotionDataSource, title: &str, view: &NotionView, loss: &ViewLoss) -> String {
+// Paths are diagnostic locators for property context, never setting classifiers
+// or printable labels. The translator supplies all setting semantics.
+fn property_names(source: &NotionDataSource, view: &NotionView, loss: &ViewLoss) -> Vec<String> {
     let root = json!({"filter":view.filter,"sorts":view.sorts,"configuration":view.configuration});
     let mut current = &root;
     let mut property_context = None;
@@ -73,64 +97,7 @@ fn view_loss(source: &NotionDataSource, title: &str, view: &NotionView, loss: &V
     }
     let mut names = BTreeSet::new();
     property_titles(property_context.unwrap_or(current), source, &mut names);
-    let properties = names
-        .into_iter()
-        .map(|name| format!("“{name}”"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let context = if properties.is_empty() {
-        String::new()
-    } else {
-        format!(" for {properties}")
-    };
-    let detail = match loss.kind {
-        ViewLossKind::Filter => format!(
-            "the filter{context} could not be preserved exactly; this view may show additional rows"
-        ),
-        ViewLossKind::Sort => {
-            format!("the sort{context} was omitted; rows may appear in a different order")
-        }
-        ViewLossKind::Layout => {
-            let layout = match view.kind {
-                ViewType::Table => "table",
-                ViewType::Board => "board",
-                ViewType::Timeline => "timeline",
-                ViewType::List => "list",
-                ViewType::Calendar => "calendar",
-                ViewType::Gallery => "gallery",
-                ViewType::Form => "form",
-                ViewType::Chart => "chart",
-                ViewType::Map => "map",
-                ViewType::Dashboard => "dashboard",
-                ViewType::Unknown => "Notion",
-            };
-            format!("the {layout} layout is shown as a table")
-        }
-        ViewLossKind::Setting => {
-            if loss.path.ends_with(".visible") {
-                if view.kind == ViewType::Table {
-                    format!(
-                        "column visibility{context} could not be kept; imported table columns stay visible"
-                    )
-                } else {
-                    format!("column visibility{context} could not be preserved exactly")
-                }
-            } else if loss.path.ends_with(".width") {
-                format!("the column width{context} could not be kept")
-            } else if loss.path.contains("group_by") {
-                format!("the grouping or lane order{context} could not be preserved exactly")
-            } else {
-                let setting = loss.path.rsplit('.').next().unwrap_or("display");
-                let setting = if setting.contains(['[', ']']) || setting == "configuration" {
-                    "display".to_owned()
-                } else {
-                    setting.replace('_', " ")
-                };
-                format!("the {setting} setting{context} could not be kept")
-            }
-        }
-    };
-    format!("Database “{}”, view “{}”: {detail}.", title, view.name)
+    names.into_iter().map(str::to_owned).collect()
 }
 
 fn property_reference(value: &Value) -> Option<&str> {

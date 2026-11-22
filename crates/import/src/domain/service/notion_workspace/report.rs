@@ -54,11 +54,19 @@ pub(in crate::domain::service) fn report(
                 .map(serde_json::from_value::<crate::domain::models::FidelityWarning>)
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             for warning in crate::domain::models::FidelityWarning::merge(typed) {
-                let counted = matches!(
-                    warning,
+                let (counted, legacy_text) = match &warning {
                     crate::domain::models::FidelityWarning::References { .. }
-                        | crate::domain::models::FidelityWarning::OmittedOptions { .. }
-                );
+                    | crate::domain::models::FidelityWarning::OmittedOptions { .. } => {
+                        (true, false)
+                    }
+                    crate::domain::models::FidelityWarning::Text(_) => (false, true),
+                    crate::domain::models::FidelityWarning::SourceStopped { .. }
+                    | crate::domain::models::FidelityWarning::UnmappedPeople { .. }
+                    | crate::domain::models::FidelityWarning::ViewLoss(_)
+                    | crate::domain::models::FidelityWarning::PropertySnapshot { .. }
+                    | crate::domain::models::FidelityWarning::PropertyOmitted { .. }
+                    | crate::domain::models::FidelityWarning::Notice { .. } => (false, false),
+                };
                 let rendered = if counted {
                     format!("{}: {}", meta.title, warning.render())
                 } else {
@@ -66,7 +74,7 @@ pub(in crate::domain::service) fn report(
                 };
                 // Counts belong to distinct source rows; identical titles or
                 // totals must not hide a second source's losses.
-                if counted || !report.warnings.contains(&rendered) {
+                if !legacy_text || !report.warnings.contains(&rendered) {
                     report.warnings.push(rendered);
                 }
             }

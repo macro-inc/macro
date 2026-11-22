@@ -190,6 +190,8 @@ export function ImportPlanRow(props: {
   const hasRows = () =>
     props.node.kind === 'database' &&
     (props.node.sampleTitles.length > 0 || props.node.taskFields !== null);
+  const linkedFrom = () =>
+    props.node.linkedFrom?.length ? props.node.linkedFrom : props.node.inlineOn;
   const indent = () => `${Math.min(props.node.depth, MAX_INDENT_LEVEL) * 12}px`;
   return (
     <li
@@ -269,23 +271,12 @@ export function ImportPlanRow(props: {
           <span class="truncate text-sm" title={props.node.title}>
             {props.node.title || 'Untitled'}
           </span>
-          <Show when={props.node.linkedFrom?.length}>
+          <Show when={linkedFrom()?.length}>
             <span
               class="truncate text-xs text-ink-muted"
-              title={props.node.linkedFrom?.join(', ')}
+              title={linkedFrom()?.join(', ')}
             >
-              Linked from {props.node.linkedFrom?.join(', ')}
-            </span>
-          </Show>
-          {/* The agent picks these up, so their reason is worth reading. */}
-          <Show
-            when={!props.node.linkedFrom?.length && props.node.inlineOn?.length}
-          >
-            <span
-              class="truncate text-xs text-ink-muted"
-              title={props.node.inlineOn?.join(', ')}
-            >
-              Linked from {props.node.inlineOn?.join(', ')}
+              Linked from {linkedFrom()?.join(', ')}
             </span>
           </Show>
           <Show when={props.node.decision === 'hand' && props.node.reason}>

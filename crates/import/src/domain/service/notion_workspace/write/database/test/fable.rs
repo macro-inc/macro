@@ -49,6 +49,36 @@ async fn fable_unmapped_people_are_reported_without_losing_mapped_people_or_doub
             },
         ),
     ]);
+    // A prior process left the loss receipt, but never wrote this row.
+    let receipt = crate::domain::models::SourceLossFact {
+        object: notion.rows[0].id.clone(),
+        detail: crate::domain::models::SourceLossDetail::UnmappedPeople {
+            source: "Tasks".into(),
+            property_id: "owner".into(),
+            property: "Owner".into(),
+            count: 2,
+        },
+    };
+    store
+        .record_written(
+            &user,
+            &[WrittenObject {
+                import_id: item.import_id,
+                kind: WrittenKind::Loss,
+                object: serde_json::to_string(&receipt).unwrap(),
+                macro_id: item.import_id,
+            }],
+        )
+        .await
+        .unwrap();
+    assert!(
+        !store
+            .written(&user, &[item.import_id])
+            .await
+            .unwrap()
+            .iter()
+            .any(|fact| fact.kind == WrittenKind::Row)
+    );
     for _ in 0..2 {
         let known = store.written(&user, &[item.import_id]).await.unwrap();
         write_database(
@@ -92,7 +122,10 @@ async fn fable_unmapped_people_are_reported_without_losing_mapped_people_or_doub
         1,
         "unmapped assignments must have one cumulative loss line"
     );
-    assert!(people[0].contains('2') && people[0].contains("Tasks"));
+    assert_eq!(
+        people[0].as_str(),
+        "2 people assignments in database “Tasks”, property “Owner”, could not be matched to Macro users and were omitted."
+    );
     assert!(
         warnings
             .iter()
@@ -231,5 +264,60 @@ async fn fable_repeated_filter_losses_keep_their_count_when_paths_are_hidden() {
                 && line.contains("Owner")
                 && line.contains("2 filter conditions")),
         "removing paths must not silently merge distinct losses"
+    );
+}
+
+#[tokio::test]
+async fn typed_new_view_and_property_warnings_are_structured_in_the_ledger() {
+    let notion = template();
+    let writer = FakeWriter::default();
+    let store = FakeStore::default();
+    let user = user();
+    let item = source_item("Tasks");
+    write_database(
+        &notion,
+        &writer,
+        &user,
+        &item,
+        Uuid::from_u128(42),
+        false,
+        &PeopleMap::new(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
+        &Progress::new(&store, &user, item.import_id, &[]),
+        &Cancel::default(),
+        None,
+    )
+    .await
+    .unwrap();
+    let warnings = store.typed_warnings.lock().unwrap();
+    assert!(
+        warnings
+            .iter()
+            .all(|warning| !matches!(warning, crate::domain::models::FidelityWarning::Text(_))),
+        "fresh imports must not emit legacy Text warnings"
+    );
+    let values: Vec<_> = warnings
+        .iter()
+        .map(|warning| serde_json::to_value(warning).unwrap())
+        .collect();
+    assert!(
+        values.iter().any(
+            |warning| warning.get("view").and_then(serde_json::Value::as_str)
+                == Some("Active tasks")
+        ),
+        "view loss must be structured, not a Text sentence"
+    );
+    assert!(
+        values.iter().any(
+            |warning| warning.get("kind").and_then(serde_json::Value::as_str) == Some("formula")
+        ),
+        "snapshot kind must be structured"
+    );
+    assert!(
+        values.iter().any(|warning| warning
+            .get("notion_type")
+            .and_then(serde_json::Value::as_str)
+            == Some("button")),
+        "omitted properties must be structured"
     );
 }

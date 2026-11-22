@@ -1,5 +1,6 @@
 //! Discover page-level review dependencies without reading any source rows.
 
+use crate::domain::models::{FidelityWarning, ImportNotice, ImportNoticeKind};
 use std::collections::{HashMap, HashSet};
 
 use futures::{StreamExt, stream};
@@ -26,12 +27,12 @@ pub(crate) struct Discovery {
     pub inventory: Inventory,
     pub dependencies: HashMap<NotionId, Dependency>,
     pub inline_on: HashMap<NotionId, Vec<NotionId>>,
-    pub warnings: HashMap<NotionId, Vec<String>>,
+    pub warnings: HashMap<NotionId, Vec<FidelityWarning>>,
 }
 
 struct PageScan {
     dependencies: HashMap<NotionId, Dependency>,
-    warnings: HashMap<NotionId, Vec<String>>,
+    warnings: HashMap<NotionId, Vec<FidelityWarning>>,
     inline_on: HashMap<NotionId, Vec<NotionId>>,
 }
 
@@ -111,14 +112,28 @@ async fn scan_pages<Api: NotionApi>(
         let losses = scan.warnings.entry(page.clone()).or_default();
         match outcome {
             Some(Ok(resolved)) => {
-                losses.extend(resolved.warnings);
+                losses.extend(
+                    resolved
+                        .warnings
+                        .into_iter()
+                        .map(|notice| FidelityWarning::Notice { notice }),
+                );
                 for occurrence in resolved.body.occurrences {
-                    losses.extend(occurrence.losses.iter().map(|loss| {
-                        format!(
-                            "Page \"{title}\", database \"{}\": {loss}.",
-                            occurrence.title
-                        )
-                    }));
+                    losses.extend(
+                        occurrence
+                            .losses
+                            .iter()
+                            .map(|loss| FidelityWarning::Notice {
+                                notice: ImportNotice::new(
+                                    &page,
+                                    &title,
+                                    ImportNoticeKind::PageDatabaseOccurrence {
+                                        database: occurrence.title.clone(),
+                                        loss: loss.clone(),
+                                    },
+                                ),
+                            }),
+                    );
                     for reference in occurrence.sources {
                         let origins = scan.inline_on.entry(reference.id.clone()).or_default();
                         if !origins.contains(&page) {
@@ -155,7 +170,13 @@ async fn scan_pages<Api: NotionApi>(
                 let Some(reason) = read_failure(&error) else {
                     return Err(error.into());
                 };
-                losses.push(format!("Page \"{title}\": database references could not be checked because {reason}. The page remains in the plan."));
+                losses.push(FidelityWarning::Notice {
+                    notice: ImportNotice::new(
+                        &page,
+                        &title,
+                        ImportNoticeKind::ReferencesUnavailable { reason },
+                    ),
+                });
             }
             None => cancel.ensure_running()?,
         }
@@ -173,7 +194,7 @@ async fn load_dependencies<Api: NotionApi>(
     api: &Api,
     inventory: &mut Inventory,
     candidates: HashMap<NotionId, Dependency>,
-    warnings: &mut HashMap<NotionId, Vec<String>>,
+    warnings: &mut HashMap<NotionId, Vec<FidelityWarning>>,
     cancel: &Cancel,
     progress: &(dyn Fn(InventoryProgress) + Send + Sync),
 ) -> anyhow::Result<HashMap<NotionId, Dependency>> {
@@ -196,7 +217,16 @@ async fn load_dependencies<Api: NotionApi>(
             Some(Ok(source)) if !source.in_trash => {
                 dependency.title = source.title.clone();
                 dependency.url = source.database_id.url();
-                warnings.entry(id.clone()).or_default().push(format!("Database \"{}\": rows will be read when imported; no row count was available from this scan.", dependency.title));
+                warnings
+                    .entry(id.clone())
+                    .or_default()
+                    .push(FidelityWarning::Notice {
+                        notice: ImportNotice::new(
+                            &id,
+                            &dependency.title,
+                            ImportNoticeKind::DependencyRowsUnknown,
+                        ),
+                    });
                 inventory.data_sources.push(DataSourceSummary {
                     source,
                     row_count: 0,

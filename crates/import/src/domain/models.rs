@@ -11,7 +11,8 @@ use uuid::Uuid;
 mod notion_loss;
 mod notion_run;
 pub use notion_loss::{
-    FidelityWarning, ReferenceLossReason, SourceLossDetail, SourceLossFact, SourceStopReason,
+    FidelityWarning, ImportNotice, ImportNoticeKind, PropertySnapshotKind, ReferenceLossReason,
+    SourceLossDetail, SourceLossFact, SourceStopReason, ViewWarning,
 };
 mod notion_sharing;
 pub use notion_run::{

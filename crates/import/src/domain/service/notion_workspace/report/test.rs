@@ -558,3 +558,32 @@ fn review_counted_warnings_remain_scoped_to_their_containing_sources() {
             .any(|warning| warning.contains("Roadmap") && warning.contains("3 references"))
     );
 }
+
+#[test]
+fn typed_people_counts_from_identically_named_sources_stay_distinct() {
+    use crate::domain::models::FidelityWarning;
+    let mut source = row(
+        "Tasks",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    source.metadata["warnings"] = serde_json::json!([FidelityWarning::UnmappedPeople {
+        source: "Tasks".into(),
+        property: "Owner".into(),
+        count: 2
+    }]);
+    let mut other = source.clone();
+    other.id = Uuid::now_v7();
+    other.foreign_id = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".into();
+    let report = report(None, &[source, other]);
+    assert_eq!(
+        report.warnings,
+        vec![
+            "2 people assignments in database “Tasks”, property “Owner”, could not be matched to Macro users and were omitted.",
+            "2 people assignments in database “Tasks”, property “Owner”, could not be matched to Macro users and were omitted.",
+        ]
+    );
+}

@@ -515,3 +515,39 @@ fn negative_filters_on_collapsed_options_are_omitted_to_keep_source_rows() {
 }
 
 mod whitespace;
+
+#[test]
+fn typed_view_settings_are_explicit_at_the_translation_boundary() {
+    let view:NotionView=serde_json::from_value(json!({"id":"00000000-0000-4000-8000-000000000001","name":"Active tasks","type":"table","parent":{"database_id":"00000000-0000-4000-8000-000000000002"},"configuration":{"properties":[{"property_id":"owner","visible":false}],"future_key":true}})).unwrap();
+    let binding = ViewColumnBinding {
+        property_id: "owner".into(),
+        property_name: "Owner".into(),
+        column: ColumnId::from_uuid(Uuid::from_u128(1)),
+        kind: ColumnKind::Text,
+        options: BTreeMap::new(),
+        snapshot: false,
+    };
+    let losses = translate(&view, &[binding]).losses;
+    let visibility = losses
+        .iter()
+        .find(|loss| loss.path.ends_with(".visible"))
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(visibility)
+            .unwrap()
+            .get("setting")
+            .and_then(serde_json::Value::as_str),
+        Some("column_visibility")
+    );
+    let other = losses
+        .iter()
+        .find(|loss| loss.path.ends_with("future_key"))
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(other)
+            .unwrap()
+            .get("setting")
+            .and_then(serde_json::Value::as_str),
+        Some("other")
+    );
+}

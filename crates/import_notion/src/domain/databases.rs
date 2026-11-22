@@ -50,7 +50,7 @@ pub struct OccurrenceSource {
 }
 
 /// Why a specific object could not be used, distinct from transient API failure.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ReadFailure {
     /// Missing or not shared with the connection.
@@ -78,7 +78,7 @@ impl std::fmt::Display for ReadFailure {
 }
 
 /// A placement loss that the import review/report must retain.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum DatabaseLoss {
     /// The tag has no parseable container id; keep a named link to its page.

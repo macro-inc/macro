@@ -4,6 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::domain::models::{FidelityWarning, ImportNotice, ImportNoticeKind};
 use futures::{FutureExt, StreamExt, stream};
 use import_notion::domain::inventory::all_rows;
 use import_notion::domain::macro_cells::{
@@ -168,6 +169,9 @@ pub(in super::super) async fn write_prepared_database<
     cancel.ensure_running()?;
     let current = api.data_source(&item.notion_id).await?;
     let mut losses = Vec::new();
+    let notice = |kind| FidelityWarning::Notice {
+        notice: ImportNotice::new(&item.notion_id, &item.title, kind),
+    };
     let mut plan = plan.clone();
     for column in &mut plan.columns {
         if let Some(property) = current
@@ -180,7 +184,9 @@ pub(in super::super) async fn write_prepared_database<
     }
     for property in &source.properties {
         if !current.properties.iter().any(|now| now == property) {
-            losses.push(format!("Database {}: property {} changed after planning; only values fitting the planned schema are written", item.title, property.name));
+            losses.push(notice(ImportNoticeKind::PropertyChanged {
+                property: property.name.clone(),
+            }));
         }
     }
     for property in &current.properties {
@@ -189,16 +195,15 @@ pub(in super::super) async fn write_prepared_database<
             .iter()
             .any(|before| before.id == property.id)
         {
-            losses.push(format!("Database {}: property {} added after planning; values are omitted from the reserved schema", item.title, property.name));
+            losses.push(notice(ImportNoticeKind::PropertyAdded {
+                property: property.name.clone(),
+            }));
         }
     }
     let drained = all_rows(api, &item.notion_id).await?;
     tracing::Span::current().record("rows_read_write", drained.rows_read as i64);
     if !drained.complete {
-        losses.push(format!(
-            "Database {}: Notion returned an incomplete write-time row query",
-            item.title
-        ));
+        losses.push(notice(ImportNoticeKind::WriteScanIncomplete));
     }
     let rows = &drained.rows;
     for column in &plan.columns {
@@ -210,10 +215,12 @@ pub(in super::super) async fn write_prepared_database<
                 )
             })
         {
-            losses.push(format!("Database {}: property {} acquired an end date after planning; only its start date fits the reserved Date column", item.title, column.property));
+            losses.push(notice(ImportNoticeKind::DateEndDrift {
+                property: column.property.clone(),
+            }));
         }
     }
-    progress.warn(&losses).await?;
+    progress.warn_fidelity(&losses).await?;
     if share {
         writer
             .share_with_team(user, SharedEntity::Database(created.database_id))
@@ -618,14 +625,15 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                         Ok(body) => body,
                         Err(error) => {
                             progress.loss(crate::domain::models::SourceLossFact {
-                            object: row.id.clone(),
-                            detail: crate::domain::models::SourceLossDetail::Text {
-                                message: format!(
-                                    "Page {}: content could not be read; its database row was kept",
-                                    row.title
-                                ),
-                            },
-                        })?;
+                                object: row.id.clone(),
+                                detail: crate::domain::models::SourceLossDetail::Notice {
+                                    notice: ImportNotice::new(
+                                        &row.id,
+                                        &row.title,
+                                        ImportNoticeKind::RowBodyUnavailable,
+                                    ),
+                                },
+                            })?;
                             return Err(error);
                         }
                     };
@@ -773,7 +781,7 @@ pub(in super::super) struct PageColumn {
     id: ColumnId,
     /// Its name, distinct from the data source's own columns.
     name: String,
-    /// The table's other columns, in order; the page column goes before them.
+    /// Title first, then the table's other planned columns; Page goes after the title.
     order: Vec<ColumnId>,
 }
 

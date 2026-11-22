@@ -1,5 +1,6 @@
 //! Resolve inline placements, preserving sources and container tab order.
 
+use crate::domain::models::{ImportNotice, ImportNoticeKind};
 use std::collections::{HashMap, HashSet};
 
 use import_notion::domain::databases::{
@@ -52,7 +53,7 @@ impl ViewTab {
 pub(super) struct ResolvedPage {
     pub body: PageDatabases,
     pub views: HashMap<NotionId, Vec<ViewTab>>,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<ImportNotice>,
     pub unavailable: HashMap<NotionId, ReadFailure>,
 }
 
@@ -86,9 +87,10 @@ pub(super) async fn enrich<Api: NotionApi>(
             Err(error) => match read_failure(&error) {
                 Some(reason) => {
                     unavailable.insert(key.container_id.clone(), reason);
-                    warnings.push(format!(
-                        "Database {}: views unavailable ({reason})",
-                        occurrence.title
+                    warnings.push(ImportNotice::new(
+                        &key.container_id,
+                        &occurrence.title,
+                        ImportNoticeKind::ContainerViewsUnavailable { reason },
                     ));
                 }
                 None => return Err(error),
@@ -106,7 +108,11 @@ pub(super) async fn enrich<Api: NotionApi>(
             .retain(|loss| *loss != DatabaseLoss::NeedsViews);
         for tab in tabs.iter().filter_map(ViewTab::view) {
             if tab.parent.database_id != key.container_id {
-                warnings.push(format!("View {}: container identity mismatch", tab.name));
+                warnings.push(ImportNotice::new(
+                    &tab.id,
+                    &tab.name,
+                    ImportNoticeKind::ViewContainerMismatch,
+                ));
                 continue;
             }
             if let Some(source) = &tab.data_source_id

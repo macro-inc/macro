@@ -274,7 +274,7 @@ where
                         reuse_database(writer, store, user, &item.notion_id, database, &progress).await?
                     };
                     if matches!(destination, DatabaseDestination::Fallback(NotionDatabaseFallback::NoAccess)) {
-                        progress.warn(&[format!("Database {}: database view access unavailable; occurrences retain Notion links", item.title)]).await?;
+                        progress.notice(&item.notion_id,&item.title,crate::domain::models::ImportNoticeKind::DatabaseViewAccessUnavailable).await?;
                     }
                     reserved.destination = Some(destination);
                 }
@@ -288,7 +288,7 @@ where
                 TeamClaim::Linked { entity_id, entity_type } if entity_type == write::DATABASE_ENTITY => {
                     let destination = reuse_database(writer, store, user, &item.notion_id, entity_id.parse()?, &progress).await?;
                     if matches!(destination, DatabaseDestination::Fallback(NotionDatabaseFallback::NoAccess)) {
-                        progress.warn(&[format!("Database {}: database view access unavailable; occurrences retain Notion links", item.title)]).await?;
+                        progress.notice(&item.notion_id,&item.title,crate::domain::models::ImportNoticeKind::DatabaseViewAccessUnavailable).await?;
                     }
                     reserved.destination = Some(destination);
                     return Ok(());
@@ -314,7 +314,7 @@ where
                 let row_sources: Vec<&str> = item.dependency_of.iter()
                     .filter_map(|id| source_titles.get(id.as_str()).copied()).collect();
                 if row_sources.len() == item.dependency_of.len() {
-                    progress.warn(&[format!("Database {}: filed at the Notion folder because it is only referenced from rows of {}", item.title, row_sources.join(", "))]).await?;
+                    progress.notice(&item.notion_id,&item.title,crate::domain::models::ImportNoticeKind::RowsOnlyPlacement {sources:row_sources.into_iter().map(str::to_owned).collect()}).await?;
                 }
             }
             reserved.destination = Some(DatabaseDestination::Ready(ImportedDatabase { database_id: database.created.database_id, table: database.created.table, views: database.views.iter().copied().collect() }));

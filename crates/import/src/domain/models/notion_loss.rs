@@ -5,6 +5,21 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use import_notion::domain::model::{NotionId, OptionMatch};
 use serde::{Deserialize, Serialize};
 
+mod notices;
+mod views;
+pub use notices::{ImportNotice, ImportNoticeKind};
+pub use views::ViewWarning;
+
+/// The computation whose value is retained as a fixed snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PropertySnapshotKind {
+    /// A Notion formula.
+    Formula,
+    /// A Notion rollup.
+    Rollup,
+}
+
 /// Why an occurrence used a link or an approximate view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -78,7 +93,7 @@ impl std::fmt::Display for SourceStopReason {
 impl std::error::Error for SourceStopReason {}
 
 /// Private metadata accepts existing text notes and cumulative typed counts.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum FidelityWarning {
     /// A source stopped without changing incompatible columns or exposing rows.
@@ -88,7 +103,7 @@ pub enum FidelityWarning {
         /// Typed reason for stopping this source.
         reason: SourceStopReason,
     },
-    /// Existing provider, schema and view translation notes.
+    /// Legacy prose decoded from older rows; new writers use typed variants.
     Text(String),
     /// Occurrence losses counted from durable, distinct occurrence facts.
     References {
@@ -119,13 +134,48 @@ pub enum FidelityWarning {
         /// Cumulative omitted assignments.
         count: u32,
     },
+    /// A counted saved-view loss with translator-provided semantics.
+    ViewLoss(ViewWarning),
+    /// A formula or rollup imported as a fixed value.
+    PropertySnapshot {
+        /// Source identity, never printed.
+        source_id: NotionId,
+        /// Source property identity, never printed.
+        property_id: String,
+        /// Database display title.
+        source: String,
+        /// Property display title.
+        property: String,
+        /// Formula or rollup.
+        kind: PropertySnapshotKind,
+    },
+    /// A source property without an importable Macro representation.
+    PropertyOmitted {
+        /// Source identity, never printed.
+        source_id: NotionId,
+        /// Source property identity, never printed.
+        property_id: String,
+        /// Database display title.
+        source: String,
+        /// Property display title.
+        property: String,
+        /// Source's unsupported property type, such as button.
+        notion_type: String,
+    },
+    /// A typed source/body/planning notice.
+    Notice {
+        /// Semantic notice and object identity.
+        notice: ImportNotice,
+    },
 }
 
+#[cfg(test)]
 impl From<String> for FidelityWarning {
     fn from(value: String) -> Self {
         Self::Text(value)
     }
 }
+#[cfg(test)]
 impl From<&str> for FidelityWarning {
     fn from(value: &str) -> Self {
         Self::Text(value.to_owned())
@@ -140,8 +190,21 @@ impl FidelityWarning {
         let mut references: BTreeMap<_, u32> = BTreeMap::new();
         let mut options: BTreeMap<_, u32> = BTreeMap::new();
         let mut people: BTreeMap<_, u32> = BTreeMap::new();
+        let mut views: BTreeMap<_, u32> = BTreeMap::new();
+        let mut structured = BTreeSet::new();
         for warning in warnings {
             match warning {
+                Self::ViewLoss(mut loss) => {
+                    let count = loss.count;
+                    loss.count = 0;
+                    let known = views.entry(loss).or_default();
+                    *known = (*known).max(count);
+                }
+                warning @ (Self::PropertySnapshot { .. }
+                | Self::PropertyOmitted { .. }
+                | Self::Notice { .. }) => {
+                    structured.insert(warning);
+                }
                 Self::SourceStopped { title, reason } => {
                     stopped.insert((title, reason));
                 }
@@ -209,12 +272,41 @@ impl FidelityWarning {
                         count,
                     }),
             )
+            .chain(views.into_iter().map(|(mut loss, count)| {
+                loss.count = count;
+                Self::ViewLoss(loss)
+            }))
+            .chain(structured)
             .collect()
     }
 
     /// A warning suitable for users, never a serialized enum or raw object id.
     pub fn render(&self) -> String {
         match self {
+            Self::ViewLoss(loss) => loss.render(),
+            Self::PropertySnapshot {
+                source,
+                property,
+                kind,
+                ..
+            } => {
+                let computation = match kind {
+                    PropertySnapshotKind::Formula => "formula",
+                    PropertySnapshotKind::Rollup => "rollup",
+                };
+                format!(
+                    "Database “{source}”: “{property}” is a fixed snapshot of the Notion {computation}, not a live {computation}."
+                )
+            }
+            Self::PropertyOmitted {
+                source,
+                property,
+                notion_type,
+                ..
+            } => format!(
+                "Database “{source}”: property “{property}” was omitted because Notion {notion_type} properties are not supported."
+            ),
+            Self::Notice { notice } => notice.render(),
             Self::SourceStopped {
                 title,
                 reason: SourceStopReason::NotionPersistentFailure,
@@ -329,7 +421,12 @@ pub enum SourceLossDetail {
         /// Number of omitted assignments on this row.
         count: u32,
     },
-    /// A body-resolution note that must survive skipping an already written body.
+    /// A typed body-resolution notice persisted with its completed body.
+    Notice {
+        /// Structured note with stable identity.
+        notice: ImportNotice,
+    },
+    /// A legacy body-resolution sentence retained for older ledger rows.
     Text {
         /// Human-readable detail retained across resume.
         message: String,
@@ -375,6 +472,7 @@ impl SourceLossFact {
                 bounded(source);
                 bounded(property);
             }
+            SourceLossDetail::Notice { notice } => notice.bound_text(bounded),
             SourceLossDetail::Text { message } => bounded(message),
         }
     }
@@ -382,6 +480,7 @@ impl SourceLossFact {
     /// Count unique facts from completed rows together with this phase's new facts.
     pub fn warnings(facts: impl IntoIterator<Item = Self>) -> Vec<FidelityWarning> {
         let mut text = BTreeSet::new();
+        let mut notices = BTreeSet::new();
         let mut references: BTreeMap<_, u32> = BTreeMap::new();
         let mut options: BTreeMap<_, u32> = BTreeMap::new();
         let mut people: BTreeMap<_, u32> = BTreeMap::new();
@@ -408,6 +507,9 @@ impl SourceLossFact {
                 } => {
                     let known = people.entry((source, property, fact.object)).or_default();
                     *known = (*known).max(count);
+                }
+                SourceLossDetail::Notice { notice } => {
+                    notices.insert(notice);
                 }
                 SourceLossDetail::Text { message } => {
                     text.insert(message);
@@ -447,6 +549,11 @@ impl SourceLossFact {
                     count,
                 }
             }))
+            .chain(
+                notices
+                    .into_iter()
+                    .map(|notice| FidelityWarning::Notice { notice }),
+            )
             .collect()
     }
 }

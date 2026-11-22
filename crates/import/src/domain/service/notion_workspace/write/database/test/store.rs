@@ -5,6 +5,7 @@ use super::*;
 #[derive(Default)]
 pub(super) struct FakeStore {
     pub(super) warnings: Mutex<Vec<String>>,
+    pub(super) typed_warnings: Mutex<Vec<crate::domain::models::FidelityWarning>>,
     pub(super) warning_updates: std::sync::atomic::AtomicUsize,
     pub(super) written: Mutex<Vec<WrittenObject>>,
     pub(super) notices: Mutex<HashMap<(Uuid, Uuid), crate::domain::ports::TaskImportNoticeReason>>,
@@ -99,6 +100,10 @@ impl WrittenObjects for FakeStore {
     ) -> crate::domain::ports::Result<()> {
         self.warning_updates
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.typed_warnings
+            .lock()
+            .unwrap()
+            .extend_from_slice(warnings);
         let mut stored = self.warnings.lock().unwrap();
         for warning in warnings {
             let warning = warning.render();

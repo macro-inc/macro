@@ -110,9 +110,9 @@ pub fn translate(view: &NotionView, columns: &[ViewColumnBinding]) -> Translated
                 | "dashboard_view_id"
         ) && !value.is_null()
         {
-            loss(
+            setting_loss(
                 &mut losses,
-                ViewLossKind::Setting,
+                setting_kind(key),
                 key,
                 "View setting has no Macro equivalent",
             );

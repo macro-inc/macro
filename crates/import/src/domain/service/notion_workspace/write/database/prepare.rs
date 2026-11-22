@@ -6,6 +6,7 @@ use models_databases::views::ViewId;
 
 use super::super::super::databases::{ViewTab, read_failure, read_views};
 use super::*;
+use crate::domain::models::ImportNoticeKind;
 
 /// Source snapshot and ready destination for the write phase.
 pub(in super::super::super) struct PreparedDatabase {
@@ -46,7 +47,13 @@ pub(in super::super::super) async fn prepare_database<
         .get(WrittenKind::SchemaMetadata)
         .is_some_and(|recorded| recorded != metadata)
     {
-        progress.warn(&[format!("Database {}: property names or options changed; preserving the reserved schema and matching values by option id when available, otherwise by name", item.title)]).await?;
+        progress
+            .notice(
+                &item.notion_id,
+                &item.title,
+                ImportNoticeKind::SchemaMetadataDrift,
+            )
+            .await?;
     }
     let stop = if progress
         .get(WrittenKind::SchemaPlan)
@@ -65,7 +72,7 @@ pub(in super::super::super) async fn prepare_database<
         return Err(reason.into());
     }
     progress
-        .warn(&super::super::super::fidelity::property_warnings(
+        .warn_fidelity(&super::super::super::fidelity::property_warnings(
             &source,
             &item.title,
         ))
@@ -86,10 +93,11 @@ pub(in super::super::super) async fn prepare_database<
             import_notion::domain::model::RowsNext::End => break,
             import_notion::domain::model::RowsNext::Truncated => {
                 progress
-                    .warn(&[format!(
-                        "Database {}: Notion returned an incomplete date-range scan",
-                        item.title
-                    )])
+                    .notice(
+                        &item.notion_id,
+                        &item.title,
+                        ImportNoticeKind::DateScanIncomplete,
+                    )
                     .await?;
                 break;
             }
@@ -101,10 +109,11 @@ pub(in super::super::super) async fn prepare_database<
         Err(error) => match read_failure(&error) {
             Some(reason) => {
                 progress
-                    .warn(&[format!(
-                        "Database {}: saved views unavailable ({reason})",
-                        item.title
-                    )])
+                    .notice(
+                        &item.notion_id,
+                        &item.title,
+                        ImportNoticeKind::SavedViewsUnavailable { reason },
+                    )
                     .await?;
                 Vec::new()
             }
@@ -117,11 +126,14 @@ pub(in super::super::super) async fn prepare_database<
             ViewTab::Ready(view) => readable.push(*view),
             ViewTab::Unavailable { reason, .. } => {
                 progress
-                    .warn(&[format!(
-                        "Database {}, saved tab {}: {reason}",
-                        item.title,
-                        index + 1
-                    )])
+                    .notice(
+                        &item.notion_id,
+                        &item.title,
+                        ImportNoticeKind::TabUnavailable {
+                            tab: index + 1,
+                            reason,
+                        },
+                    )
                     .await?
             }
         }
@@ -187,7 +199,7 @@ pub(in super::super::super) async fn prepare_database<
     for view in presets {
         if view.data_source_id.as_ref() != Some(&item.notion_id) {
             progress
-                .warn(&[format!("View {}: source identity mismatch", view.name)])
+                .notice(&view.id, &view.name, ImportNoticeKind::ViewSourceMismatch)
                 .await?;
             continue;
         }
@@ -198,7 +210,7 @@ pub(in super::super::super) async fn prepare_database<
             &view,
             &translated.losses,
         );
-        progress.warn(&warnings).await?;
+        progress.warn_fidelity(&warnings).await?;
         let approximated = translated
             .losses
             .iter()

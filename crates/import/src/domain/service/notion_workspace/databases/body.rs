@@ -6,7 +6,9 @@ use models_databases::views::ViewId;
 
 use super::super::write::Progress;
 use super::*;
-use crate::domain::models::{ReferenceLossReason, SourceLossDetail, SourceLossFact};
+use crate::domain::models::{
+    ImportNotice, ImportNoticeKind, ReferenceLossReason, SourceLossDetail, SourceLossFact,
+};
 use crate::domain::ports::{
     NotionDatabaseFallback, NotionDatabaseOccurrence, NotionDatabaseTarget, WrittenObjects,
 };
@@ -39,14 +41,24 @@ pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
     let mut unresolved = 0i64;
     for occurrence in &resolved.body.occurrences {
         for loss in &occurrence.losses {
-            warnings.push(format!("Database {}: {loss}", occurrence.title));
+            warnings.push(ImportNotice::new(
+                occurrence
+                    .key
+                    .as_ref()
+                    .map(|key| &key.container_id)
+                    .unwrap_or(page),
+                &occurrence.title,
+                ImportNoticeKind::DatabaseOccurrence { loss: loss.clone() },
+            ));
         }
         let Some(key) = &occurrence.key else {
             reference(occurrence, ReferenceLossReason::Unresolved)?;
             unresolved += 1;
-            warnings.push(
-                "Database occurrence has no container identity; retained Notion link".to_owned(),
-            );
+            warnings.push(ImportNotice::new(
+                page,
+                &occurrence.title,
+                ImportNoticeKind::MissingContainerIdentity,
+            ));
             continue;
         };
         let fallback = |reason| NotionDatabaseTarget::Fallback(reason);
@@ -176,10 +188,10 @@ pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
             &format!("[{label}]({})", occurrence.fallback_url(page)),
         );
     }
-    for message in warnings {
+    for notice in warnings {
         progress.loss(SourceLossFact {
             object: page.clone(),
-            detail: SourceLossDetail::Text { message },
+            detail: SourceLossDetail::Notice { notice },
         })?;
     }
     tracing::Span::current().record("occurrences", databases.len() as i64);
