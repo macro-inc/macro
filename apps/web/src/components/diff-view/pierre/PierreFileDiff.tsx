@@ -46,6 +46,12 @@ const BASE_OPTIONS = {
   lineHoverHighlight: 'line',
 } satisfies FileDiffOptions<string>;
 
+// Pierre pins the gutter "+" to the number column's right edge, flush with
+// the code; on a lit line (a focused note, a code link) it stays shown, so
+// the code keeps a small gap from it.
+const GUTTER_UTILITY_CSS =
+  '[data-line] { padding-inline-start: calc(1ch + 6px); }';
+
 export function PierreFileDiff(props: {
   path: string;
   diff: FileDiffMetadata;
@@ -117,7 +123,9 @@ export function PierreFileDiff(props: {
     ...BASE_OPTIONS,
     diffStyle: props.diffStyle,
     themeType: props.themeType,
-    unsafeCSS: props.unsafeCSS,
+    unsafeCSS: props.onSelectLines
+      ? `${GUTTER_UTILITY_CSS}${props.unsafeCSS ?? ''}`
+      : props.unsafeCSS,
     renderAnnotation,
     enableGutterUtility: props.onSelectLines !== undefined,
     onGutterUtilityClick: props.onSelectLines
