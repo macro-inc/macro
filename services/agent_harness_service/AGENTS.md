@@ -384,6 +384,10 @@ produce events, independently of public session control.
 
 - `RenderCanvas` promotes only its explicit top-level `modelMedia` contract to at most two bounded native PNG blocks; pixels are removed from text and structured JSON, nested scene media is never promoted, and this adapter never fetches image URLs.
 
+- `src/code_mode/test/channel_mention_egress.rs`: actual mention issuance with
+  the egress flag off, plus a pinned-Deno unfurl refusal regression against a
+  local gateway stand-in. The Deno CI lane explicitly selects this module.
+
 ## Checks
 
 - `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Add
