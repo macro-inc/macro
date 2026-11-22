@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     AgentNotice, DriveEnd, DriveId, Driver, EndReason, Lease, NoticeName, OwedThaw, PendingNotice,
-    RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver,
+    RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver, ThawSettled,
 };
 use crate::domain::ports::{ScreenRepo, TicketHash};
 
@@ -258,12 +258,6 @@ impl ScreenRepo for PgScreenRepo {
             SELECT lease.computer_id
             FROM computer_screen_driver_leases lease
             WHERE lease.computer_id = ANY($1) AND lease.expires_at > now()
-            UNION
-            SELECT drive.computer_id
-            FROM computer_screen_drives drive
-            WHERE drive.computer_id = ANY($1)
-              AND drive.ended_at > now() - interval '1 day'
-              AND drive.thawed_at IS NULL
             "#,
             &ids,
             fresh_seconds,
@@ -498,6 +492,21 @@ impl ScreenRepo for PgScreenRepo {
                 .await?;
                 (row, None)
             }
+            Release::Unpaused { started_at } => {
+                let row = sqlx::query_as!(
+                    LeaseRow,
+                    r#"
+                    DELETE FROM computer_screen_driver_leases
+                    WHERE computer_id = $1 AND started_at = $2
+                    RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at
+                    "#,
+                    computer.as_uuid(),
+                    started_at,
+                )
+                .fetch_optional(&mut *tx)
+                .await?;
+                (row, None)
+            }
             Release::Refused { session_id } => {
                 let row = sqlx::query_as!(
                     LeaseRow,
@@ -657,10 +666,10 @@ impl ScreenRepo for PgScreenRepo {
     async fn owed_thaws(&self) -> Result<Vec<OwedThaw>, PgScreenError> {
         let rows = sqlx::query!(
             r#"
-            SELECT id, computer_id, started_at
+            SELECT id, computer_id, started_at, ended_at AS "ended_at!", thaw_failures
             FROM computer_screen_drives
-            WHERE ended_at IS NOT NULL AND thawed_at IS NULL
-            ORDER BY ended_at
+            WHERE ended_at IS NOT NULL AND thaw_settled_at IS NULL
+            ORDER BY thaw_tried_at NULLS FIRST, ended_at
             LIMIT 500
             "#
         )
@@ -674,20 +683,67 @@ impl ScreenRepo for PgScreenRepo {
                     row: row.id,
                     computer_id,
                     drive: DriveId::of(computer_id, row.started_at),
+                    ended_at: row.ended_at,
+                    failures: u32::try_from(row.thaw_failures).unwrap_or(0),
                 }
             })
             .collect())
     }
 
     #[tracing::instrument(skip_all, err)]
-    async fn mark_thawed(&self, row: Uuid) -> Result<(), PgScreenError> {
+    async fn settle_thaw(&self, row: Uuid, settled: ThawSettled) -> Result<(), PgScreenError> {
         sqlx::query!(
-            "UPDATE computer_screen_drives SET thawed_at = now() WHERE id = $1 AND thawed_at IS NULL",
+            r#"
+            UPDATE computer_screen_drives
+            SET thaw_settled_at = now(), thaw_settled = $2, thaw_tried_at = now()
+            WHERE id = $1 AND thaw_settled_at IS NULL
+            "#,
             row,
+            settled.as_ref(),
         )
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn thaw_tried(&self, row: Uuid, failed: bool) -> Result<(), PgScreenError> {
+        sqlx::query!(
+            r#"
+            UPDATE computer_screen_drives
+            SET thaw_tried_at = now(),
+                thaw_failures = thaw_failures + CASE WHEN $2 THEN 1 ELSE 0 END
+            WHERE id = $1
+            "#,
+            row,
+            failed,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(computer.id = %computer), err)]
+    async fn drive_end(
+        &self,
+        computer: ComputerId,
+        started_at: DateTime<Utc>,
+    ) -> Result<Option<DriveEnd>, PgScreenError> {
+        let reason = sqlx::query_scalar!(
+            "SELECT end_reason FROM computer_screen_drives WHERE computer_id = $1 AND started_at = $2",
+            computer.as_uuid(),
+            started_at,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .flatten();
+        reason
+            .map(|reason| {
+                reason
+                    .parse()
+                    .map_err(|_| PgScreenError::Corrupt("drive end reason"))
+            })
+            .transpose()
     }
 
     #[tracing::instrument(skip_all, fields(notices = ids.len()), err)]

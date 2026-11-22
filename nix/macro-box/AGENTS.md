@@ -152,7 +152,10 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   its own. The harness asks over the fleet's exec. A restart asked for while
   frozen (`macro-agent-restart`) waits for the thaw. The agent's Xvnc runs
   with `-SendPrimary=0`. `checks.macro-box-agent-pause` tests the helper
-  against a fake systemctl, including a late thaw racing a newer freeze.
+  against a fake systemctl, including a late thaw racing a newer freeze. No
+  CI job builds the macro-box checks (`macro-box-agent-pause`,
+  `macro-box-boot`): run `nix build .#checks.x86_64-linux.<check>` by hand
+  when you change `nix/macro-box`.
 - agent.env is a systemd credential (`LoadCredential`), never process
   environment: the runtime reads `MUPPET_CREDENTIALS_FILE`
   (`/run/credentials/macro-agent.service/agent.env`). The runtime contract

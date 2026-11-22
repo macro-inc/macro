@@ -236,11 +236,13 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `nix/macro-box/files/macro-agent-pause`; `frozen`/`idle` let it start,
   anything else refuses it with `agentNotPausable`), sends `keep <drive>` on
   each lease renewal (the guest thaws the agent itself 3 minutes after the
-  last), and `thaw <drive>` after (a few tries off the request path, then
-  `ScreenService::reap` until the guest confirms; `superseded` means a newer
-  drive froze it). A computer that isn't running is never exec'd into: its
-  thaw stays owed. An agent computer whose image has no helper answers
-  `failed`. A take-over whose access check fails answers
+  last; a keep answering `thawed`, `superseded` or `failed` freezes again,
+  and when that fails the drive ends through `ScreenService::freeze_lost`
+  and the driver gets `agentNotPausable`), and `thaw <drive>` after (a few
+  tries off the request path, then `ScreenService::reap`; `superseded` means
+  a newer drive froze it). A computer that isn't running is never exec'd
+  into. An agent computer whose image has no helper fails a freeze and has
+  nothing to keep or thaw (`idle`). A take-over whose access check fails answers
   `takeOverUnavailable` and keeps the socket. It
   keeps `/home/macro/agent/state/screen-driver` (`human` while someone
   drives; only each computer's latest change, written a few computers at a

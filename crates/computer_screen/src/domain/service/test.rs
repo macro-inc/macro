@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -15,11 +16,12 @@ use uuid::Uuid;
 
 use super::{
     HOLD_RECHECK, Hold, MAX_SOCKETS_PER_VIEWER, MAX_TICKETS_PER_WINDOW, ScreenError, ScreenService,
+    THAW_FAILURES_BEFORE_DEAD_MAN,
 };
 use crate::domain::models::{
-    Access, AgentNotPaused, Caller, DriveId, EndReason, Lease, Mode, NoticeName, OwedThaw,
-    PendingNotice, Person, RedeemedTicket, Release, ScreenGrant, SessionId, Surface, TakeOver,
-    ThawFailed, Thawed, TicketRequest, TicketSecret, Transport,
+    Access, AgentNotPaused, Caller, DriveEnd, DriveId, EndReason, Lease, Mode, NoticeName,
+    OwedThaw, PendingNotice, Person, RedeemedTicket, Release, ScreenGrant, SessionId, Surface,
+    TakeOver, ThawFailed, ThawSettled, Thawed, TicketRequest, TicketSecret, Transport,
 };
 use crate::domain::ports::{DriverSignal, People, ScreenAccess, ScreenRepo, TicketHash};
 use crate::outbound::lease_changes::PgLeaseChanges;
@@ -28,12 +30,14 @@ use crate::outbound::pg::{PgScreenError, PgScreenRepo};
 const COMPUTER: ComputerId = ComputerId::new_from_uuid(Uuid::from_u128(0xC0));
 
 /// What the guest was told, in order; with `.1` set, its agent can't be
-/// frozen; `.2` is how its next thaws fail (none: they work).
+/// frozen; `.2` is how its next thaws fail (none: they work; `NotRunning`:
+/// no computer runs); thaws on the computers in `.3` always fail.
 #[derive(Clone, Default)]
 struct RecordedSignal(
     Arc<Mutex<Vec<String>>>,
     Arc<AtomicBool>,
     Arc<Mutex<Option<ThawFailed>>>,
+    Arc<Mutex<HashSet<ComputerId>>>,
 );
 
 impl DriverSignal for RecordedSignal {
@@ -57,7 +61,17 @@ impl DriverSignal for RecordedSignal {
         self.0.lock().unwrap().push("released".to_owned());
     }
 
-    async fn thaw(&self, _computer: ComputerId, _drive: &DriveId) -> Result<Thawed, ThawFailed> {
+    async fn running(&self, computers: &[ComputerId]) -> Result<HashSet<ComputerId>, ThawFailed> {
+        Ok(match *self.2.lock().unwrap() {
+            Some(ThawFailed::NotRunning) => HashSet::new(),
+            _ => computers.iter().copied().collect(),
+        })
+    }
+
+    async fn thaw(&self, computer: ComputerId, _drive: &DriveId) -> Result<Thawed, ThawFailed> {
+        if self.3.lock().unwrap().contains(&computer) {
+            return Err(ThawFailed::Failed);
+        }
         self.0.lock().unwrap().push("thaw".to_owned());
         match *self.2.lock().unwrap() {
             Some(failed) => Err(failed),
@@ -175,8 +189,20 @@ impl ScreenRepo for ObservedRepo {
         self.inner.owed_thaws().await
     }
 
-    async fn mark_thawed(&self, row: Uuid) -> Result<(), PgScreenError> {
-        self.inner.mark_thawed(row).await
+    async fn settle_thaw(&self, row: Uuid, settled: ThawSettled) -> Result<(), PgScreenError> {
+        self.inner.settle_thaw(row, settled).await
+    }
+
+    async fn thaw_tried(&self, row: Uuid, failed: bool) -> Result<(), PgScreenError> {
+        self.inner.thaw_tried(row, failed).await
+    }
+
+    async fn drive_end(
+        &self,
+        computer: ComputerId,
+        started_at: DateTime<Utc>,
+    ) -> Result<Option<DriveEnd>, PgScreenError> {
+        self.inner.drive_end(computer, started_at).await
     }
 
     async fn open_sockets(
@@ -450,7 +476,7 @@ async fn a_take_over_that_cannot_freeze_the_agent_never_starts(pool: PgPool) {
 /// Ended drives whose agent's thaw the guest hasn't answered.
 async fn owed(pool: &PgPool) -> i64 {
     sqlx::query_scalar!(
-        r#"SELECT count(*) AS "owed!" FROM computer_screen_drives WHERE ended_at IS NOT NULL AND thawed_at IS NULL"#
+        r#"SELECT count(*) AS "owed!" FROM computer_screen_drives WHERE ended_at IS NOT NULL AND thaw_settled_at IS NULL"#
     )
     .fetch_one(pool)
     .await
@@ -512,9 +538,9 @@ async fn a_thaw_that_never_landed_is_retried_however_long_ago(pool: PgPool) {
     assert_eq!(owed(&pool).await, 0);
 }
 
-/// A computer that sleeps while its agent is frozen keeps the thaw owed,
-/// and counts as in use meanwhile; once it runs again, the next round
-/// thaws it.
+/// A computer that sleeps while its agent is frozen keeps the thaw owed
+/// (and may sleep: its own timer thaws the agent on resume); once it runs
+/// again, the next round thaws it.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_computer_asleep_while_frozen_is_thawed_once_it_runs(pool: PgPool) {
     let (service, signal, _) = service(pool.clone()).await;
@@ -534,23 +560,166 @@ async fn a_computer_asleep_while_frozen_is_thawed_once_it_runs(pool: PgPool) {
     service.reap().await.unwrap();
     assert_eq!(owed(&pool).await, 1);
     let repo = PgScreenRepo::new(pool.clone());
-    assert_eq!(
+    assert!(
         repo.computers_in_use(&[COMPUTER], Duration::from_secs(120))
             .await
-            .unwrap(),
-        vec![COMPUTER],
-        "an owed thaw keeps the computer in use"
+            .unwrap()
+            .is_empty(),
+        "an owed thaw doesn't keep the computer awake"
     );
 
     *signal.2.lock().unwrap() = None;
     service.reap().await.unwrap();
 
     assert_eq!(owed(&pool).await, 0);
-    assert!(
-        repo.computers_in_use(&[COMPUTER], Duration::from_secs(120))
-            .await
-            .unwrap()
-            .is_empty()
+}
+
+/// A thaw that keeps failing while the computer runs stops being retried
+/// once the guest's own timer has certainly thawed the agent.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_thaw_failing_past_the_guests_timer_settles(pool: PgPool) {
+    let (service, signal, _) = service(pool.clone()).await;
+    let driver = grant(Mode::Drive);
+    let session = service.open_session(&driver).await.unwrap();
+    service.take_over(&driver, session).await.unwrap();
+    *signal.2.lock().unwrap() = Some(ThawFailed::Failed);
+    service
+        .hand_back(COMPUTER, driver.user_id.clone(), None)
+        .await
+        .unwrap();
+
+    for round in 1..THAW_FAILURES_BEFORE_DEAD_MAN {
+        service.reap().await.unwrap();
+        assert_eq!(owed(&pool).await, 1, "round {round}");
+    }
+    service.reap().await.unwrap();
+
+    assert_eq!(owed(&pool).await, 0);
+    let settled = sqlx::query_scalar!("SELECT thaw_settled FROM computer_screen_drives")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(settled.as_deref(), Some("deadMan"));
+}
+
+/// A thaw owed for over a week settles without asking the guest.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_owed_thaw_expires(pool: PgPool) {
+    let (service, signal, _) = service(pool.clone()).await;
+    let driver = grant(Mode::Drive);
+    let session = service.open_session(&driver).await.unwrap();
+    service.take_over(&driver, session).await.unwrap();
+    *signal.2.lock().unwrap() = Some(ThawFailed::NotRunning);
+    service
+        .hand_back(COMPUTER, driver.user_id.clone(), None)
+        .await
+        .unwrap();
+    sqlx::query!("UPDATE computer_screen_drives SET ended_at = now() - interval '8 days'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    service.reap().await.unwrap();
+
+    assert_eq!(owed(&pool).await, 0);
+    let settled = sqlx::query_scalar!("SELECT thaw_settled FROM computer_screen_drives")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(settled.as_deref(), Some("expired"));
+}
+
+/// 501 thaws that never land (an old image, a broken guest) rotate behind
+/// a new one, which still settles in the next round.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_backlog_of_dead_thaws_never_starves_a_new_one(pool: PgPool) {
+    let (service, signal, _) = service(pool.clone()).await;
+    let stuck = ComputerId::new_from_uuid(Uuid::from_u128(0xDEAD));
+    signal.3.lock().unwrap().insert(stuck);
+    let session = Uuid::now_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO computer_screen_sessions (id, harness_id, computer_id, user_id, transport, surface, mode)
+        VALUES ($1, $2, $3, 'macro|alice@example.com', 'vnc', 'desktop', 'drive')
+        "#,
+        session,
+        HarnessId::TEST_A.as_uuid(),
+        stuck.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO computer_screen_drives (id, computer_id, session_id, user_id, started_at, ended_at, end_reason, thaw_tried_at)
+        SELECT gen_random_uuid(), $1, $2, 'macro|alice@example.com',
+               now() - make_interval(mins => n + 10), now() - make_interval(mins => n), 'lapsed',
+               now() - make_interval(secs => n)
+        FROM generate_series(1, 501) AS n
+        "#,
+        stuck.as_uuid(),
+        session,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let driver = grant(Mode::Drive);
+    let live = service.open_session(&driver).await.unwrap();
+    service.take_over(&driver, live).await.unwrap();
+    service
+        .hand_back(COMPUTER, driver.user_id.clone(), None)
+        .await
+        .unwrap();
+
+    service.reap().await.unwrap();
+
+    let settled = sqlx::query_scalar!(
+        "SELECT thaw_settled FROM computer_screen_drives WHERE computer_id = $1",
+        COMPUTER.as_uuid(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(settled.as_deref(), Some("thawed"));
+}
+
+/// When the guest let the agent run mid-drive and it can't be frozen again,
+/// the drive ends as unpaused, with the agent's hand-back notice; a stale
+/// report about another drive changes nothing.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_lost_freeze_ends_its_drive(pool: PgPool) {
+    let (service, signal, _) = service(pool.clone()).await;
+    let driver = grant(Mode::Drive);
+    let session = service.open_session(&driver).await.unwrap();
+    let TakeOver::Taken(lease) = service.take_over(&driver, session).await.unwrap() else {
+        panic!("not taken");
+    };
+    let other = DriveId::of(COMPUTER, lease.started_at - chrono::Duration::seconds(5));
+
+    service.freeze_lost(COMPUTER, &other).await.unwrap();
+    assert!(service.lease(COMPUTER).await.unwrap().is_some());
+
+    service
+        .freeze_lost(COMPUTER, &lease.drive_id())
+        .await
+        .unwrap();
+
+    assert_eq!(service.lease(COMPUTER).await.unwrap(), None);
+    assert_eq!(
+        service.drive_end(&lease).await.unwrap(),
+        Some(DriveEnd::Unpaused)
+    );
+    assert_eq!(
+        signal.0.lock().unwrap().last().map(String::as_str),
+        Some("released")
+    );
+    let notices = service.claim_notices(&agent()).await.unwrap();
+    assert_eq!(
+        notices
+            .iter()
+            .map(|pending| pending.notice.name)
+            .collect::<Vec<_>>(),
+        vec![NoticeName::TakeOver, NoticeName::HandBack]
     );
 }
 

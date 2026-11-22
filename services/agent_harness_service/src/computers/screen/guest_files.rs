@@ -22,11 +22,12 @@ use harness_id::HarnessId;
 use hosted_runtimes::domain::ids::ComputerId;
 use hosted_runtimes::domain::ports::GUEST_USER;
 use tokio::io::AsyncReadExt as _;
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::Instrument as _;
 
-use super::tunnel::{ComputerPower, GuestExec, ScreenWaker, TunnelError};
+use super::tunnel::{GuestExec, ScreenWaker, TunnelError};
 
 /// The agent's state directory, under its home.
 const STATE_DIRECTORY: &str = "agent/state";
@@ -48,9 +49,10 @@ const CONCURRENT_WRITES: usize = 8;
 const WRITE_SCRIPT: &str = r#"dir=$(dirname "$1"); [ -d "$dir" ] || exit 0; [ "$(cat "$1" 2>/dev/null)" = "$2" ] && exit 0; printf '%s\n' "$2" > "$1.tmp" && mv -f "$1.tmp" "$1""#;
 const REMOVE_SCRIPT: &str = r#"rm -f "$1""#;
 /// Ask the pause helper to `$1` (freeze, keep or thaw) the agent for drive
-/// `$2`. A computer with no helper says `idle` when it isn't an agent's
-/// (nothing to pause), and `failed` when it is (an image from before it).
-const PAUSE_SCRIPT: &str = r#"sock=/run/macro-agent-pause/sock; if [ -S "$sock" ]; then printf '%s %s\n' "$1" "$2" | socat -t 25 - "UNIX-CONNECT:$sock"; elif [ -d "$3" ]; then echo failed; else echo idle; fi"#;
+/// `$2`. A computer with no helper can't freeze anything: a freeze fails on
+/// an agent's computer (an image from before the helper) and is idle on any
+/// other, and a keep or thaw there has nothing to do.
+const PAUSE_SCRIPT: &str = r#"sock=/run/macro-agent-pause/sock; if [ -S "$sock" ]; then printf '%s %s\n' "$1" "$2" | socat -t 25 - "UNIX-CONNECT:$sock"; elif [ "$1" = freeze ] && [ -d "$3" ]; then echo failed; else echo idle; fi"#;
 /// How long a freeze or thaw may take: systemd freezes a cgroup within a
 /// few seconds.
 const PAUSE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -87,6 +89,18 @@ pub struct GuestFiles {
     changes: Option<Arc<PendingChanges>>,
     guest: Option<Guest>,
     tasks: TaskTracker,
+    lost: mpsc::UnboundedSender<LostFreeze>,
+    lost_freezes: Arc<Mutex<Option<mpsc::UnboundedReceiver<LostFreeze>>>>,
+}
+
+/// A drive whose agent the guest let run and couldn't freeze again: the
+/// harness ends it (`ScreenService::freeze_lost`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LostFreeze {
+    /// The computer.
+    pub computer_id: ComputerId,
+    /// The drive.
+    pub drive: DriveId,
 }
 
 /// How the harness reaches computers' guests, and whether they run.
@@ -102,11 +116,15 @@ impl GuestFiles {
     /// Reach guests through `guest`, on a worker tracked by `tasks` that
     /// stops with `shutdown`; without a fleet nothing is written or frozen.
     pub fn new(guest: Option<Guest>, tasks: &TaskTracker, shutdown: CancellationToken) -> Self {
+        let (lost, lost_freezes) = mpsc::unbounded_channel();
+        let lost_freezes = Arc::new(Mutex::new(Some(lost_freezes)));
         let Some(guest) = guest else {
             return Self {
                 changes: None,
                 guest: None,
                 tasks: tasks.clone(),
+                lost,
+                lost_freezes,
             };
         };
         let writer = Arc::clone(&guest.exec);
@@ -136,7 +154,18 @@ impl GuestFiles {
             changes: Some(changes),
             guest: Some(guest),
             tasks: tasks.clone(),
+            lost,
+            lost_freezes,
         }
+    }
+
+    /// The drives whose freeze was lost, for the one task that ends them;
+    /// `None` once taken.
+    pub fn lost_freezes(&self) -> Option<mpsc::UnboundedReceiver<LostFreeze>> {
+        self.lost_freezes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
     }
 
     fn queue(&self, change: DriverChange) {
@@ -239,6 +268,8 @@ enum PauseAnswer {
     Idle,
     /// A newer drive froze the agent since; this one is done.
     Superseded,
+    /// Nothing is frozen: the guest's own timer thawed the agent.
+    Thawed,
     /// The computer isn't running.
     Asleep,
     /// It couldn't, or said something else.
@@ -287,6 +318,7 @@ async fn ask_pause(
             "running" => PauseAnswer::Running,
             "idle" => PauseAnswer::Idle,
             "superseded" => PauseAnswer::Superseded,
+            "thawed" => PauseAnswer::Thawed,
             _ => PauseAnswer::Failed,
         },
         Ok(Ok(Some((code, _)))) => {
@@ -307,27 +339,56 @@ async fn ask_pause(
 }
 
 impl Guest {
-    /// Thaw `computer`'s agent for `drive`, unless the computer sleeps.
+    /// Thaw `computer`'s agent for `drive`; the caller knows it runs.
     async fn thaw(&self, computer: ComputerId, drive: &DriveId) -> Result<Thawed, ThawFailed> {
-        match self.power.power(computer).await {
-            Ok(ComputerPower::Running) => {}
-            Ok(ComputerPower::NotRunning) => return Err(ThawFailed::NotRunning),
-            Err(error) => {
-                tracing::warn!(error = %error, "could not tell whether the computer runs");
-                return Err(ThawFailed::Failed);
-            }
-        }
         let span = tracing::info_span!("computer.screen.thaw", computer.id = %computer, screen.pause = tracing::field::Empty);
         match ask_pause(self.exec.as_ref(), computer, "thaw", drive)
             .instrument(span)
             .await
         {
-            PauseAnswer::Running | PauseAnswer::Idle => Ok(Thawed::Running),
+            PauseAnswer::Running | PauseAnswer::Idle | PauseAnswer::Thawed => Ok(Thawed::Running),
             PauseAnswer::Superseded => Ok(Thawed::Superseded),
             PauseAnswer::Asleep => Err(ThawFailed::NotRunning),
             PauseAnswer::Frozen | PauseAnswer::Failed => Err(ThawFailed::Failed),
         }
     }
+
+    /// Whether `computer` runs; a failed read counts as not.
+    async fn runs(&self, computer: ComputerId) -> bool {
+        match self.power.awake().await {
+            Ok(awake) => awake.contains(&computer),
+            Err(error) => {
+                tracing::warn!(error = %error, "could not tell whether the computer runs");
+                false
+            }
+        }
+    }
+}
+
+/// Keep `drive` frozen: re-arm the guest's timer, and when the guest says
+/// the agent isn't frozen for this drive (its timer fired during an exec
+/// outage, or a late freeze of another drive took the fence), freeze it
+/// again; when that fails too, the drive is lost.
+async fn keep_frozen(
+    exec: &dyn GuestExec,
+    computer: ComputerId,
+    drive: &DriveId,
+    lost: &mpsc::UnboundedSender<LostFreeze>,
+) {
+    let kept = ask_pause(exec, computer, "keep", drive).await;
+    if matches!(kept, PauseAnswer::Frozen | PauseAnswer::Idle) {
+        return;
+    }
+    tracing::warn!(answer = ?kept, "the agent wasn't frozen for its drive; freezing it again");
+    let refrozen = ask_pause(exec, computer, "freeze", drive).await;
+    if matches!(refrozen, PauseAnswer::Frozen | PauseAnswer::Idle) {
+        return;
+    }
+    tracing::warn!(answer = ?refrozen, "the agent couldn't be frozen again; ending the drive");
+    let _ = lost.send(LostFreeze {
+        computer_id: computer,
+        drive: drive.clone(),
+    });
 }
 
 impl DriverSignal for GuestFiles {
@@ -347,6 +408,7 @@ impl DriverSignal for GuestFiles {
             }
             PauseAnswer::Running
             | PauseAnswer::Superseded
+            | PauseAnswer::Thawed
             | PauseAnswer::Asleep
             | PauseAnswer::Failed => Err(AgentNotPaused),
         }
@@ -359,9 +421,10 @@ impl DriverSignal for GuestFiles {
         let (exec, computer, drive) =
             (Arc::clone(&guest.exec), lease.computer_id, lease.drive_id());
         let span = tracing::info_span!("computer.screen.keep_frozen", computer.id = %computer, screen.pause = tracing::field::Empty);
+        let lost = self.lost.clone();
         self.tasks.spawn(
             async move {
-                ask_pause(exec.as_ref(), computer, "keep", &drive).await;
+                keep_frozen(exec.as_ref(), computer, &drive, &lost).await;
             }
             .instrument(span),
         );
@@ -375,6 +438,11 @@ impl DriverSignal for GuestFiles {
         // guest answers, and the guest's own timer thaws it regardless.
         self.tasks.spawn(
             async move {
+                // A sleeping computer is never exec'd into; reaping thaws it
+                // once it runs (and its own timer on resume).
+                if !guest.runs(computer).await {
+                    return;
+                }
                 for attempt in 0..THAW_ATTEMPTS {
                     if attempt > 0 {
                         tokio::time::sleep(THAW_RETRY_AFTER).await;
@@ -389,6 +457,19 @@ impl DriverSignal for GuestFiles {
             .in_current_span(),
         );
         self.queue(DriverChange::Released(computer));
+    }
+
+    async fn running(
+        &self,
+        computers: &[ComputerId],
+    ) -> Result<std::collections::HashSet<ComputerId>, ThawFailed> {
+        let Some(guest) = &self.guest else {
+            return Ok(computers.iter().copied().collect());
+        };
+        guest.power.awake().await.map_err(|error| {
+            tracing::warn!(error = %error, "could not tell which computers run");
+            ThawFailed::Failed
+        })
     }
 
     async fn thaw(&self, computer: ComputerId, drive: &DriveId) -> Result<Thawed, ThawFailed> {

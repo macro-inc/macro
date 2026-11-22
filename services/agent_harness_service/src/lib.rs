@@ -1473,19 +1473,21 @@ pub async fn run() -> anyhow::Result<()> {
     let computer_tasks = tokio_util::task::TaskTracker::new();
     // Watching and driving agents' screens; the hold below keeps an agent's
     // brain waiting while a person drives its computer.
+    let guest_files = computers::screen::guest_files::GuestFiles::new(
+        computer_operator
+            .clone()
+            .map(|operator| computers::screen::guest_files::Guest {
+                exec: operator.clone(),
+                power: operator,
+            }),
+        &computer_tasks,
+        service_shutdown.clone(),
+    );
+    let lost_freezes = guest_files.lost_freezes();
     let screens: Arc<computers::screen::Screens> =
         Arc::new(computer_screen::domain::service::ScreenService::new(
             computer_screen::outbound::pg::PgScreenRepo::new(pool.clone()),
-            computers::screen::guest_files::GuestFiles::new(
-                computer_operator
-                    .clone()
-                    .map(|operator| computers::screen::guest_files::Guest {
-                        exec: operator.clone(),
-                        power: operator,
-                    }),
-                &computer_tasks,
-                service_shutdown.clone(),
-            ),
+            guest_files,
             computer_screen::outbound::lease_changes::PgLeaseChanges::listen(
                 pool.clone(),
                 &computer_tasks,
@@ -1503,8 +1505,27 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             computers::screen::access::MacroPeople::new(pool.clone()),
         ));
-    // Releases lapsed leases and re-thaws recently released agents, in case
-    // the process that should have died first. One span per round.
+    // Ends drives whose agent the guest let run and couldn't freeze again.
+    if let Some(mut lost_freezes) = lost_freezes {
+        let screens = Arc::clone(&screens);
+        let shutdown = service_shutdown.clone();
+        computer_tasks.spawn(async move {
+            loop {
+                let lost = tokio::select! {
+                    () = shutdown.cancelled() => return,
+                    lost = lost_freezes.recv() => lost,
+                };
+                let Some(lost) = lost else {
+                    return;
+                };
+                if let Err(error) = screens.freeze_lost(lost.computer_id, &lost.drive).await {
+                    tracing::warn!(error = ?error, "could not end a drive whose freeze was lost");
+                }
+            }
+        });
+    }
+    // Releases lapsed leases and retries owed thaws, in case the process that
+    // should have thawed died first. One span per round.
     {
         let screens = Arc::clone(&screens);
         let shutdown = service_shutdown.clone();

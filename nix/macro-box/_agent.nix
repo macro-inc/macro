@@ -194,7 +194,8 @@ let
     ProtectHome = "tmpfs";
     # macro's group may enter it, and the agent runs in that group too; the
     # directory outlives the socket, so a recreated socket stays hidden.
-    InaccessiblePaths = [ "-${pauseState}" ];
+    # No "-": the agent doesn't start rather than start without the mask.
+    InaccessiblePaths = [ pauseState ];
     BindPaths = [ home ];
     ReadWritePaths = [ desktopRuntime ];
     PrivateTmp = true;
@@ -324,12 +325,10 @@ let
     ];
     text = builtins.readFile ./files/macro-agent-pause;
   };
+  # Through the helper, under its lock: a restart asked for while the agent
+  # is frozen runs at the thaw.
   restartAgent = pkgs.writeShellScript "macro-agent-restart" ''
-    if [ -e ${pauseState}/paused ]; then
-      touch ${pauseState}/restart
-      exit 0
-    fi
-    exec ${systemctl} restart --no-block macro-agent.service
+    exec ${lib.getExe pauseAgent} restart -
   '';
   waitForDisplay = pkgs.writeShellScript "wait-for-agent-display" ''
     until [ -S /tmp/.X11-unix/X${toString displayNumber} ]; do sleep 0.2; done

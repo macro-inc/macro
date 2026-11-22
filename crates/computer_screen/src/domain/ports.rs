@@ -1,5 +1,6 @@
 //! What the screen service needs from storage and from the guest.
 
+use std::collections::HashSet;
 use std::future::Future;
 use std::time::Duration;
 
@@ -10,8 +11,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    Access, AgentNotPaused, DriveId, EndReason, Lease, Mode, OwedThaw, PendingNotice, Person,
-    RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver, ThawFailed, Thawed,
+    Access, AgentNotPaused, DriveEnd, DriveId, EndReason, Lease, Mode, OwedThaw, PendingNotice,
+    Person, RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver, ThawFailed, ThawSettled,
+    Thawed,
 };
 
 /// The SHA-256 of a ticket secret: all storage ever sees of it.
@@ -138,12 +140,33 @@ pub trait ScreenRepo: Send + Sync + 'static {
     /// Computers whose lease lapsed, at most a few hundred.
     fn lapsed_leases(&self) -> impl Future<Output = Result<Vec<ComputerId>, Self::Err>> + Send;
 
-    /// Ended drives whose agent no thaw has been confirmed for, oldest first,
-    /// at most a few hundred.
+    /// Ended drives whose thaw isn't settled, the least recently tried
+    /// first, at most a few hundred: a backlog that never settles rotates
+    /// behind new rows rather than starving them.
     fn owed_thaws(&self) -> impl Future<Output = Result<Vec<OwedThaw>, Self::Err>> + Send;
 
-    /// The guest answered a thaw for this drive.
-    fn mark_thawed(&self, row: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Settle this drive's thaw.
+    fn settle_thaw(
+        &self,
+        row: Uuid,
+        settled: ThawSettled,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// A thaw of this drive was tried and didn't settle; `failed` when the
+    /// computer ran and the guest didn't thaw.
+    fn thaw_tried(
+        &self,
+        row: Uuid,
+        failed: bool,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// How the drive of `computer` that started at `started_at` ended, if it
+    /// has.
+    fn drive_end(
+        &self,
+        computer: ComputerId,
+        started_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<DriveEnd>, Self::Err>> + Send;
 
     /// Forget notices that reached the agent.
     fn delete_notices(&self, ids: &[Uuid]) -> impl Future<Output = Result<(), Self::Err>> + Send;
@@ -206,7 +229,14 @@ pub trait DriverSignal: Send + Sync + 'static {
     /// drive a newer one superseded leaves the newer freeze alone.
     fn released(&self, computer: ComputerId, drive: DriveId) -> impl Future<Output = ()> + Send;
 
-    /// Thaw the agent for `drive` now, and say how it came out.
+    /// Which of `computers` run now (a sleeping one is never exec'd into).
+    fn running(
+        &self,
+        computers: &[ComputerId],
+    ) -> impl Future<Output = Result<HashSet<ComputerId>, ThawFailed>> + Send;
+
+    /// Thaw the agent for `drive` now, on a computer that runs, and say how
+    /// it came out.
     fn thaw(
         &self,
         computer: ComputerId,

@@ -26,7 +26,8 @@ exit 0
 EOF
 cat >"$work/systemd-run" <<'EOF'
 #!/usr/bin/env bash
-# Records what the dead-man timer would run.
+# Records what the dead-man timer would run; fails while told to.
+[ -e "$FAKE/cannot-arm" ] && exit 1
 printf '%s\n' "${@: -2}" | tr '\n' ' ' >"$FAKE/armed"
 EOF
 # This bash, not /usr/bin/env's: the nix build sandbox has no /usr/bin/env.
@@ -47,6 +48,7 @@ ask() {
     MACRO_AGENT_PAUSE_SYSTEMCTL=$work/systemctl \
     MACRO_AGENT_PAUSE_SYSTEMD_RUN=$work/systemd-run \
     MACRO_AGENT_PAUSE_SELF=helper \
+    MACRO_AGENT_PAUSE_LOCK_WAIT=1 \
     bash "$helper" "$@"
 }
 
@@ -104,6 +106,49 @@ reset
 expect "a drive that isn't hex is refused" "$(ask freeze 'a;b')" refused
 expect "an unknown verb is refused" "$(ask unpause aa)" refused
 expect "a request on stdin works like arguments" "$(echo 'freeze aa' | ask)" frozen
+
+reset
+ask freeze aa >/dev/null
+ask autothaw aa >/dev/null
+expect "a keep after the timer fired says the agent thawed" "$(ask keep aa)" thawed
+
+reset
+touch "$work/fake/cannot-arm"
+expect "a freeze whose timer can't be armed fails" "$(ask freeze aa)" failed
+expect "and leaves the agent running" "$(frozen)" running
+expect "and nothing frozen for the drive" "$([ -e "$work/run/paused" ] && echo paused || echo none)" none
+
+reset
+ask freeze aa >/dev/null
+touch "$work/fake/cannot-arm"
+expect "a keep whose timer can't be re-armed fails" "$(ask keep aa)" failed
+
+reset
+# A freeze that outlived the harness's wait comes in after the next drive's:
+# the next drive's keep finds it superseded, so the harness freezes again,
+# which takes the fence and the timer back.
+ask freeze bb >/dev/null
+ask freeze aa >/dev/null
+expect "a late freeze makes the live drive's keep superseded" "$(ask keep bb)" superseded
+expect "freezing again for the live drive" "$(ask freeze bb)" frozen
+expect "takes the timer back" "$(cat "$work/fake/armed")" "autothaw bb "
+expect "and the late drive's thaw is superseded" "$(ask thaw aa)" superseded
+expect "the live drive stays frozen" "$(frozen)" frozen
+
+reset
+ask freeze aa >/dev/null
+expect "a restart while frozen waits" "$(ask restart -)" deferred
+expect "until the thaw, which restarts" "$(ask thaw aa; cat "$work/fake/restarted")" "running
+restarted"
+reset
+expect "a restart while running restarts at once" "$(ask restart -)" restarted
+
+reset
+exec 8>"$work/run/lock"
+flock 8
+expect "a request that can't get the lock fails" "$(ask freeze aa)" failed
+flock -u 8
+exec 8>&-
 
 # A slow late thaw racing a newer freeze, twenty times: whatever the order, the
 # newer drive stays frozen.
