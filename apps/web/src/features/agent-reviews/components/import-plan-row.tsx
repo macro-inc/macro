@@ -202,7 +202,7 @@ export function ImportPlanRow(props: {
       )}
     >
       <div
-        class="flex min-w-0 items-center gap-1.5 py-1 pr-1 touch:min-h-[44px]"
+        class="flex min-w-0 items-center gap-1.5 py-1 pr-1 touch:min-h-[44px] mobile:flex-wrap"
         style={{ 'padding-left': indent() }}
       >
         <Show
@@ -267,13 +267,21 @@ export function ImportPlanRow(props: {
             .exhaustive()}
           size="xs"
         />
-        <span class="flex min-w-0 flex-1 flex-col">
-          <span class="truncate text-sm" title={props.node.title}>
+        <span
+          class={cn(
+            'flex min-w-0 flex-1 flex-col',
+            linkedFrom()?.length && 'mobile:contents'
+          )}
+        >
+          <span
+            class="truncate text-sm mobile:min-w-0 mobile:flex-1"
+            title={props.node.title}
+          >
             {props.node.title || 'Untitled'}
           </span>
           <Show when={linkedFrom()?.length}>
             <span
-              class="truncate text-xs text-ink-muted"
+              class="truncate text-xs text-ink-muted mobile:order-last mobile:basis-full mobile:whitespace-normal mobile:wrap-break-word"
               title={linkedFrom()?.join(', ')}
             >
               Linked from {linkedFrom()?.join(', ')}

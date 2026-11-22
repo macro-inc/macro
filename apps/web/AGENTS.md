@@ -1812,7 +1812,11 @@ a parent must not opt in external children. Refresh the saved review when new
 dependencies arrive, keeping them excluded until its defaults are saved. Use
 ordinary inclusion and sharing controls;
 unavailable by-hand rows stay disabled and show their reason. Desktop and touch
-use the same row layout. While any rows are undecided, the summary says
+keep the same controls; phone rows wrap **Linked from** onto its own full-width
+line below them. On phones, the counted notices disclosure starts collapsed
+before the tree in both the card and full review; expanding it preserves every
+warning. Desktop keeps inline labels and starts the same counted notices disclosure expanded.
+While any rows are undecided, the summary says
 **Deciding what to import…** rather than describing an empty import. Imported
 approximated views use a short **≈** suffix; never parse user-visible view names
 to infer typed view state.

@@ -34,7 +34,9 @@ const imports = vi.hoisted(() => {
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: imports.open }),
 }));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+vi.mock('@core/mobile/isMobile', () => ({
+  isMobile: () => window.innerWidth < 640,
+}));
 // The real icon table loads every block, which opens app connections.
 vi.mock('@core/component/EntityIcon', () => ({
   EntityIcon: (props: { targetType: string }) => (
@@ -71,6 +73,7 @@ function entity(
     shared?: boolean;
     sharedReason?: string;
     shareable?: boolean;
+    dependencyOf?: string[];
     alreadyImported?: { by: string; entityId: string; entityType: string };
   },
   overrides: Partial<ImportEntity> = {}
@@ -97,6 +100,7 @@ function entity(
 }
 
 beforeEach(() => {
+  vi.stubGlobal('innerWidth', 1024);
   imports.entities = [
     entity('wiki', null, 'Wiki', { decision: 'copy' }),
     entity('roadmap', 'wiki', 'Roadmap', {
@@ -200,6 +204,85 @@ function setup(
 }
 
 describe('import review', () => {
+  it.each([390, 1024])(
+    'keeps the linked-page label and controls at %i pixels',
+    (width) => {
+      vi.stubGlobal('innerWidth', width);
+      const title = 'Engineering Handbook and quarterly planning';
+      imports.entities = [
+        entity('handbook', null, title, { decision: 'copy' }),
+        entity('tasks', null, 'Tasks', {
+          decision: 'copy',
+          rows: 4,
+          dependencyOf: ['notion-handbook'],
+        }),
+      ];
+      setup();
+      const row = screen.getByText('Tasks').closest('li')!;
+      const label = within(row).getByText(`Linked from ${title}`);
+      const controls = within(row).getByRole('checkbox').closest('li')!
+        .firstElementChild!;
+      expect(controls.contains(label)).toBe(true);
+      expect(label.classList.contains('mobile:basis-full')).toBe(true);
+      expect(label.classList.contains('mobile:whitespace-normal')).toBe(true);
+      expect(label.classList.contains('mobile:order-last')).toBe(true);
+      expect(within(row).getByText('Link')).toBeTruthy();
+      expect(within(row).getByText('Only you')).toBeTruthy();
+    }
+  );
+
+  it.each([390, 1024])(
+    'keeps notices available before the tree at %i pixels',
+    async (width) => {
+      vi.stubGlobal('innerWidth', width);
+      imports.report = {
+        status: 'completed',
+        reviewId: 'review',
+        pages: 3,
+        dataSources: 1,
+        copy: 1,
+        tasks: 1,
+        skip: 1,
+        hand: 1,
+        documents: 1,
+        databases: 1,
+        databaseRows: 0,
+        taskRows: 0,
+        imported: 2,
+        waiting: 0,
+        writing: 0,
+        warnings: Array.from(
+          { length: 22 },
+          (_, index) => `Notice ${index + 1}`
+        ),
+      };
+      setup({ item: { status: 'completed' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Open full review' }));
+      const dialog = await screen.findByRole('dialog');
+      const tree = within(dialog).getByRole('list', { name: 'Import plan' });
+      const toggle = within(dialog).getByText('22 notices');
+      const disclosure = toggle.closest('details')!;
+      expect(disclosure.open).toBe(width !== 390);
+      expect(
+        within(dialog)
+          .getByRole('list', { name: 'Import warnings', hidden: true })
+          .closest('details')
+      ).toBe(disclosure);
+      expect(
+        disclosure.compareDocumentPosition(tree) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      fireEvent.click(toggle);
+      expect(disclosure.open).toBe(width === 390);
+      if (!disclosure.open) fireEvent.click(toggle);
+      const warnings = within(dialog).getByRole('list', {
+        name: 'Import warnings',
+      });
+      expect(within(warnings).getAllByRole('listitem')).toHaveLength(22);
+      expect(within(tree).getByText('Wiki')).toBeTruthy();
+    }
+  );
+
   it('saves what the owner leaves out and imports the rest', async () => {
     const decide = setup();
     expect(

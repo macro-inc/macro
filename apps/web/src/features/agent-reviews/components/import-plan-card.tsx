@@ -1,3 +1,4 @@
+import { isMobile } from '@core/mobile/isMobile';
 import IconJira from '@icon/import/jira.svg';
 import IconNotion from '@icon/import/notion.svg';
 import IconLinear from '@icon/mcp-linear.svg';
@@ -291,11 +292,16 @@ function PlanContents(
       </header>
       <PlanTotals totals={props.totals} />
       <Show when={props.progress?.warnings?.length}>
-        <ul aria-label="Import warnings" class="text-xs text-ink-muted">
-          <For each={props.progress?.warnings}>
-            {(warning) => <li>{warning}</li>}
-          </For>
-        </ul>
+        <details open={!isMobile()} class="min-w-0 text-xs text-ink-muted">
+          <summary class="min-h-11 content-center">
+            {plural(props.progress?.warnings?.length ?? 0, 'notice')}
+          </summary>
+          <ul aria-label="Import warnings" class="wrap-break-word">
+            <For each={props.progress?.warnings}>
+              {(warning) => <li>{warning}</li>}
+            </For>
+          </ul>
+        </details>
       </Show>
       <Show when={props.alert}>
         <div class="flex flex-wrap items-center gap-2">
