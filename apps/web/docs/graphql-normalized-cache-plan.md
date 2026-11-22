@@ -433,15 +433,17 @@ an open since the last accepted readiness kept files an interrupted storage
 upgrade moved (`movedFilesKept` on `activation-failed`, from the ordinary open
 or a recovery, beside any failure code including `storage-busy`), or when an
 open that reached storage ended without a report (the database watchdog, an
-`engine-fatal`, a lost tab or worker) and no open that reached storage has
-reported since, the end of the retries is never terminal, whatever failure
+`engine-fatal`, a rejected readiness proof, a lost tab or worker) and no open
+that reached storage has reported since with anything but `storage-busy`, the
+end of the retries is never terminal, whatever failure
 ends them: the coordinator keeps the scope and its `wipe-before-open`
 requirement, fails closed as for an unavailable lock (`owner-lock-unavailable`,
 `cache-unavailable`, telemetry `ownerEvent: recovery-deferred`), and each later
 registration runs the same recovery once rather than five times. A busy exit
-fails closed without deferring, so the registration after it runs all five;
-one that follows a promised handover to a newer build completes the handover
-instead. A terminal
+fails closed without deferring, so the registration after it runs all five
+unless an earlier one deferred; a busy exit or a navigation departure that
+follows a promised handover to a newer build completes the handover instead.
+A terminal
 failure would quarantine the scope and strand the moved files with their
 queue; the Rust side bounds these recoveries by count and age
 (`crates/client/README.md#storage-upgrades`). Accepted readiness resets the

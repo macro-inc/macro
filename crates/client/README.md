@@ -149,9 +149,10 @@ adoption began, is never written again. An attempt that cannot be counted
 decides as any other, and only where it would keep the files does it look at
 that time: ten minutes after the adoption began it discards them instead, so
 those are bounded too, though a later attempt might still have sent them back.
-The browser's clock measures that time in either direction: a jump forward, or
-back by ten minutes or more, brings it early, and a smaller jump back postpones
-it by the size of the jump. An attempt that
+The browser's clock measures that time in either direction: a jump forward
+brings it early, and a jump back postpones it by the size of the jump, unless it
+lands ten minutes or more before the adoption began, which ends the wait at
+once. An attempt that
 could not read the adoption and cannot count reads it again before it looks at
 the time, and decides as above if it now reads, so a read that fails once never
 discards files that could go back. When it still does not read but the marker
@@ -172,8 +173,10 @@ within one page load. Until an open succeeds, it never gives up a scope where
 an open kept moved files, whatever ended the retries: a recovery that kept
 them again, or failures that never reached storage, such as assets that did
 not load. An open that reached storage and ended without a report counts the
-same until an open that reaches storage reports: the database watchdog, a
-fatal error, or a lost tab or worker says nothing of what it kept. Giving up
+same until a later open that reaches storage reports a failure other than
+`storage-busy`, or one succeeds: the database watchdog, a fatal error, a
+rejected readiness proof, or a lost tab or worker says nothing of what it kept.
+Giving up
 would quarantine the scope and open a different database on the next load,
 leaving the moved files and their queue behind. Instead the
 coordinator keeps the scope and the pending recovery, refuses queued requests
@@ -182,8 +185,8 @@ recovery (backoff doubling to 30 seconds with 20% jitter, so at most 36
 seconds, and on reconnect or return to the tab) registers again. After that
 first deferral each registration runs one recovery, not five, so a page waits
 for one open before it runs uncached again; the attempts go on counting. A
-busy exit (below) is not a deferral, so the next registration after one still
-runs all five.
+busy exit (below) does not defer by itself, so the registration after one runs
+all five unless an earlier one deferred since the last accepted readiness.
 Requests sent meanwhile wait for that open as they wait for any activation:
 the 10-second request timeout starts only after it, so the startup budgets
 bound the wait (five minutes for the assets, then the lock and the 20-second

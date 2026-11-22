@@ -779,9 +779,11 @@ const RECOVERY_ATTEMPTS: u8 = 3;
 /// How long after an adoption began a recovery whose attempt could not be
 /// counted keeps files it cannot decide on. Past it such a recovery discards
 /// them instead, so attempts that cannot be counted are bounded too. It
-/// still decides first: files that can go back go back, however old. A clock
-/// set back by as much counts as time passed, so a skewed clock can only
-/// shorten the wait, never make it endless.
+/// still decides first: files that can go back go back, however old. The age
+/// is the clock's distance from the adoption in either direction, so a clock
+/// set forward ends the wait early; one set back postpones it by as much,
+/// unless it lands this far before the adoption, which ends it at once. Either
+/// way the wait stays finite.
 const UNCOUNTED_RECOVERY_MS: u64 = 10 * 60 * 1000;
 
 #[cfg(test)]
