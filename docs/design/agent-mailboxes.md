@@ -72,8 +72,9 @@ flowchart LR
 - **Names.** A role name (`admin`, `postmaster`, `abuse`, `support`, the CA
   domain-validation addresses and the like) is never taken as is: the mailbox
   gets the suffixed form. A display name that names Macro or an administrator
-  is left off. A display name may use only letters, digits, spaces and
-  `. , - ' ( ) &`, so the From phrase can never show an address or a
+  is left off, compatibility forms (fullwidth letters) included. A display
+  name may use only letters, digits, spaces and `. - ' ( ) &` (no comma: it
+  needs a quoted phrase, and the provider's quoting is unverified), so the From phrase can never show an address or a
   lookalike of one, an RFC 2047 encoded word, or a format character.
 - **Provider content is data.** Headers, the provider's prompt-injection score and
   any provider event never grant access or trigger an action.
@@ -94,12 +95,16 @@ flowchart LR
 - Provisioning is idempotent per `requestId`: the row is reserved first, the
   provider create carries an idempotency key and an owner tag, and a lost create
   is found again by its tag. A create conflict is a taken address only when
-  the provider names it so; any other conflict (an idempotent create still in
-  flight) is retried under the same key, and a taken address is first checked
+  its code is exactly `address_taken`; any other conflict (an idempotent
+  create still in flight) is retried under the same key. The provider
+  documents no `409` codes for creating an inbox, so the list is confirmed
+  with the live check. A taken address is first checked
+  against the tag, and a taken address is first checked
   against the tag, so one request never makes two provider mailboxes. A taken
   address retries once with a short suffix. A new request replaces a failed
-  mailbox that never reached the provider, so a mailbox whose addresses were
-  all taken gets a new suffix.
+  mailbox that recorded no provider mailbox and that the provider has nothing
+  under the owner tag for, so a mailbox whose addresses were all taken gets a
+  new suffix and nothing the provider made is left behind.
 - Provider-side steps run under a per-mailbox lease whose token fences every
   write they record, so overlapping provisioning attempts, a release and the
   sweep never interleave at the provider. A release that starts while a create

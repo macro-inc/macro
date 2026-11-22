@@ -190,24 +190,8 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
             return Ok(Reservation::Existing(existing));
         }
         if let Some(other) = Self::live_mailbox_of(&mut *transaction, &request.agent).await? {
-            // A new request replaces a failed mailbox that never reached the
-            // provider and that no attempt holds: it has nothing to release,
-            // and a new mailbox id gets a new address suffix.
-            let replaced = sqlx::query!(
-                r#"
-                UPDATE agent_mailboxes
-                SET state = 'released', updated_at = now()
-                WHERE id = $1 AND state = 'failed' AND provider_mailbox_id IS NULL
-                  AND (lease_expires_at IS NULL OR lease_expires_at < now())
-                "#,
-                other.id.0,
-            )
-            .execute(&mut *transaction)
-            .await?;
-            if replaced.rows_affected() == 0 {
-                transaction.commit().await?;
-                return Ok(Reservation::AgentHasMailbox(other));
-            }
+            transaction.commit().await?;
+            return Ok(Reservation::AgentHasMailbox(other));
         }
         let live = sqlx::query_scalar!(
             // A failed mailbox that never reached the provider holds no
@@ -871,6 +855,21 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         .execute(&self.pool)
         .await?;
         Ok(result.rows_affected() == 1)
+    }
+
+    async fn release_failed_unreached(&self, id: AgentMailboxId) -> Result<bool, Self::Err> {
+        let released = sqlx::query!(
+            r#"
+            UPDATE agent_mailboxes
+            SET state = 'released', updated_at = now()
+            WHERE id = $1 AND state = 'failed' AND provider_mailbox_id IS NULL
+              AND (lease_expires_at IS NULL OR lease_expires_at < now())
+            "#,
+            id.0,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(released.rows_affected() == 1)
     }
 
     async fn claim_sweep_job(&self, job: SweepJob, every: Duration) -> Result<bool, Self::Err> {

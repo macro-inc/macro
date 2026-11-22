@@ -44,6 +44,7 @@ sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+unicode-normalization = { workspace = true }
 urlencoding = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true, features = ["chrono", "uuid"] }
 uuid = { workspace = true, features = ["v5", "v7"] }

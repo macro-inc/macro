@@ -64,10 +64,12 @@ behind provider-neutral ports. Design: `docs/design/agent-mailboxes.md`.
   credential it uses.
 - Provider content (headers, injection scores, webhooks) never authorizes anything.
 - A `402` from the provider is `NotConfigured`; the adapter never pays. A `409`
-  on create is `AddressTaken` only when its code names the address; any other
-  conflict is retried under the same key.
-- Display names are an allowlist (letters, digits, spaces, `. , - ' ( ) &`),
-  never a denylist: they become the From phrase.
+  on create is `AddressTaken` only for a code in `ADDRESS_TAKEN_CODES`
+  (`address_taken`, the fake's); the provider documents none, so add one only
+  once it is confirmed. Every other conflict is retried under the same key.
+- Display names are an allowlist (letters, digits, spaces, `. - ' ( ) &`),
+  never a denylist: they become the From phrase. The reserved-word check runs
+  on the NFKC form.
 - The scoped key is KMS ciphertext bound to the mailbox and user (CS-72).
   Deleting a row revokes nothing upstream: release revokes the key, then deletes.
 - Response shapes follow the provider's OpenAPI document and TypeScript SDK;

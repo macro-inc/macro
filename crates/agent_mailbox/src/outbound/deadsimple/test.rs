@@ -454,8 +454,12 @@ async fn a_conflict_on_send_or_reply_is_retryable_not_a_rejection() {
 async fn a_create_conflict_is_a_taken_address_only_when_the_provider_says_so() {
     for (code, taken) in [
         ("address_taken", true),
-        ("email_taken", true),
-        ("local_part_unavailable", true),
+        // Undocumented codes, however close they read, are retried under
+        // the same key rather than guessed as a taken address.
+        ("email_taken", false),
+        ("local_part_unavailable", false),
+        ("request_exists", false),
+        ("temporarily_unavailable", false),
         ("idempotency_key_in_use", false),
         ("request_in_progress", false),
         ("conflict", false),

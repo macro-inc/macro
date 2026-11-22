@@ -364,6 +364,14 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Release a failed mailbox that never recorded a provider mailbox and
+    /// that no attempt holds, so a new request can take the agent's place.
+    /// Returns whether it did.
+    fn release_failed_unreached(
+        &self,
+        id: AgentMailboxId,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Take this round of `job` for the whole cluster: true for exactly one
     /// caller per `every`, timed by the store's clock.
     fn claim_sweep_job(

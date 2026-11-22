@@ -584,6 +584,7 @@ html5ever = "0.26"
 serde_urlencoded = "0.7.1"
 strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
+unicode-normalization = "0.1.25"
 url = "2.5.0"
 zip = { version = "9.0.5", default-features = false, features = [
   "aes-crypto",

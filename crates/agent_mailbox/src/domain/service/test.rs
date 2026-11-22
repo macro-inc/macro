@@ -56,6 +56,8 @@ struct VendorState {
     conflict_after_next_create: bool,
     /// Every request that revokes a credential: (operation, grant).
     revocations: Vec<(&'static str, String)>,
+    /// Each grant ever minted, with the inbox it is scoped to.
+    grant_inbox: HashMap<String, String>,
 }
 
 #[derive(Clone, Default)]
@@ -219,6 +221,7 @@ impl MailboxProvisioner for FakeVendor {
         let key = format!("dse_scoped_{}", state.grants.len() + 1);
         state.grants.insert(grant.clone(), key.clone());
         state.keys.insert(key.clone(), mailbox.0.clone());
+        state.grant_inbox.insert(grant.clone(), mailbox.0.clone());
         state
             .granted_by_key
             .insert(idempotency_key, (grant.clone(), key.clone()));
@@ -238,9 +241,23 @@ impl MailboxProvisioner for FakeVendor {
     async fn revoke_all_access(
         &self,
         mailbox: &ProviderMailboxId,
-        _already_revoked: Option<&ProviderGrantId>,
+        already_revoked: Option<&ProviderGrantId>,
     ) -> Result<(), ProviderError> {
         let mut state = self.0.lock().unwrap();
+        // The listing still shows a key revoked a moment ago, as a provider's
+        // eventually consistent listing may: only `already_revoked` skips it.
+        let listed: Vec<String> = state
+            .grant_inbox
+            .iter()
+            .filter(|(grant, inbox)| {
+                *inbox == &mailbox.0 && already_revoked.is_none_or(|skip| &skip.0 != *grant)
+            })
+            .map(|(grant, _)| grant.clone())
+            .filter(|grant| state.revoked_grants.contains(grant))
+            .collect();
+        for grant in listed {
+            state.revocations.push(("revoke_listed", grant));
+        }
         let scoped: Vec<String> = state
             .keys
             .iter()
@@ -527,17 +544,10 @@ impl AgentMailboxRepository for FakeRepository {
         {
             return Ok(Reservation::Existing(row.mailbox.clone()));
         }
-        let now = Utc::now();
-        if let Some(row) = state.rows.iter_mut().find(|row| {
+        if let Some(row) = state.rows.iter().find(|row| {
             row.mailbox.agent == request.agent && row.mailbox.state != MailboxState::Released
         }) {
-            let replaceable = row.mailbox.state == MailboxState::Failed
-                && row.mailbox.provider_mailbox_id.is_none()
-                && row.lease.is_none_or(|(_, until)| until < now);
-            if !replaceable {
-                return Ok(Reservation::AgentHasMailbox(row.mailbox.clone()));
-            }
-            row.mailbox.state = MailboxState::Released;
+            return Ok(Reservation::AgentHasMailbox(row.mailbox.clone()));
         }
         let team_live = state
             .rows
@@ -1020,6 +1030,19 @@ impl AgentMailboxRepository for FakeRepository {
         row.mailbox.paused_at = Some(now);
         row.updated_at = now;
         Ok(true)
+    }
+
+    async fn release_failed_unreached(&self, id: AgentMailboxId) -> Result<bool, FakeError> {
+        let now = Utc::now();
+        Ok(self.with_row(id, |row| {
+            let unreached = row.mailbox.state == MailboxState::Failed
+                && row.mailbox.provider_mailbox_id.is_none()
+                && row.lease.is_none_or(|(_, until)| until < now);
+            if unreached {
+                row.mailbox.state = MailboxState::Released;
+            }
+            unreached
+        }))
     }
 
     async fn claim_sweep_job(&self, job: SweepJob, _every: Duration) -> Result<bool, FakeError> {
@@ -2448,6 +2471,8 @@ async fn a_malformed_display_name_is_refused() {
         "Ada\u{202E}elpmaxe.knab",
         "Ada\u{200B}",
         "Ada\u{E000}",
+        // A comma needs the From phrase quoted; the provider's quoting is unverified.
+        "Doe, Jane",
     ] {
         let request = ProvisionRequest {
             display_name: Some(name.to_owned()),
@@ -2887,4 +2912,49 @@ async fn a_failed_deferral_does_not_end_the_sweep_round() {
         1,
         "the round still pruned"
     );
+}
+
+#[tokio::test]
+async fn a_failed_mailbox_whose_create_did_reach_the_provider_is_not_replaced() {
+    let world = world();
+    world.vendor.fail_next("create", ProviderError::Rejected);
+    let failed = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    // The provider made the inbox after all, and the answer was lost.
+    world.vendor.0.lock().unwrap().mailboxes.insert(
+        "inbox-late".to_owned(),
+        VendorMailbox {
+            address: "ada@fake-vendor.invalid".to_owned(),
+            tag: failed.id,
+            deleted: false,
+        },
+    );
+
+    let refused = world.service.provision(request(ADA, 2, "ada")).await;
+
+    assert!(
+        matches!(refused, Err(AgentMailboxError::AlreadyProvisioned)),
+        "{refused:?}"
+    );
+    assert_eq!(world.repository.row(failed.id).state, MailboxState::Failed);
+    assert_eq!(world.vendor.live_mailbox_count(), 1, "no second inbox");
+}
+
+#[tokio::test]
+async fn a_lookalike_of_a_reserved_word_in_the_display_name_is_dropped_too() {
+    let world = world();
+    let view = world
+        .service
+        .provision(ProvisionRequest {
+            // Fullwidth "Macro Support".
+            display_name: Some("\u{FF2D}\u{FF41}\u{FF43}\u{FF52}\u{FF4F} Support".to_owned()),
+            ..request(ADA, 1, "ada")
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(world.repository.row(view.id).display_name, None);
 }

@@ -324,20 +324,15 @@ async fn failure(response: Response, operation: Operation) -> ProviderError {
     error
 }
 
-/// Whether a create conflict's error code is about the address itself.
+/// Create-conflict codes that mean the address itself is taken. The
+/// provider's documentation lists no `409` for `POST /v1/inboxes`, so this
+/// holds only the code the fake vendor uses; add a code only once the provider
+/// confirms it. Every other conflict is retried under the same key.
+const ADDRESS_TAKEN_CODES: [&str; 1] = ["address_taken"];
+
+/// Whether a create conflict's error code says the address is taken.
 fn names_the_address(code: &str) -> bool {
-    let code = code.to_ascii_lowercase();
-    !code.contains("idempoten")
-        && [
-            "address",
-            "email",
-            "local_part",
-            "taken",
-            "exists",
-            "unavailable",
-        ]
-        .iter()
-        .any(|word| code.contains(word))
+    ADDRESS_TAKEN_CODES.contains(&code)
 }
 
 async fn send_request(request: RequestBuilder) -> Result<Response, ProviderError> {

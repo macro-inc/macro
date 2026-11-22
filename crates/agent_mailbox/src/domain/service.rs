@@ -217,7 +217,7 @@ where
             .map_err(internal)?
             .ok_or(AgentMailboxError::NotAnAgent)?;
 
-        let reservation = self
+        let mut reservation = self
             .repository
             .reserve(
                 &request,
@@ -227,6 +227,36 @@ where
             )
             .await
             .map_err(internal)?;
+        // A new request replaces a failed mailbox that never reached the
+        // provider: a new mailbox id gets a new address suffix. Only if the
+        // provider has nothing under its owner tag (a create whose answer was
+        // lost), so nothing it made is ever left behind.
+        if let Reservation::AgentHasMailbox(other) = &reservation
+            && other.state == MailboxState::Failed
+            && other.provider_mailbox_id.is_none()
+            && self
+                .vendor
+                .find_mailbox(other.id)
+                .await
+                .map_err(mail_error)?
+                .is_none()
+            && self
+                .repository
+                .release_failed_unreached(other.id)
+                .await
+                .map_err(internal)?
+        {
+            reservation = self
+                .repository
+                .reserve(
+                    &request,
+                    AgentMailboxId::generate(),
+                    team,
+                    MAX_TEAM_MAILBOXES,
+                )
+                .await
+                .map_err(internal)?;
+        }
         let mailbox = match reservation {
             Reservation::New(mailbox) => mailbox,
             // A request id is the caller's; one reused for another agent is
@@ -1118,8 +1148,9 @@ const RESERVED_DISPLAY_WORDS: &[&str] = &[
 /// Punctuation a display name may use besides letters, digits and spaces.
 /// Everything else is refused, so the From phrase can never show an address
 /// (`@`, `<`, `>` and their lookalikes), quote itself out, carry an RFC 2047
-/// encoded word (`=?`) or a format or private-use character.
-const DISPLAY_NAME_PUNCTUATION: [char; 7] = ['.', ',', '-', '\'', '(', ')', '&'];
+/// encoded word (`=?`) or a format or private-use character. No comma: it
+/// needs a quoted phrase, and the provider's quoting is unverified.
+const DISPLAY_NAME_PUNCTUATION: [char; 6] = ['.', '-', '\'', '(', ')', '&'];
 
 fn validate_display_name(name: &str) -> Result<(), AgentMailboxError> {
     let invalid = |reason: &str| Err(AgentMailboxError::Invalid(format!("display name {reason}")));
@@ -1133,12 +1164,16 @@ fn validate_display_name(name: &str) -> Result<(), AgentMailboxError> {
             || DISPLAY_NAME_PUNCTUATION.contains(&character)
     };
     if !name.chars().all(allowed) {
-        return invalid("may use only letters, digits, spaces and . , - ' ( ) &");
+        return invalid("may use only letters, digits, spaces and . - ' ( ) &");
     }
     Ok(())
 }
 
 fn names_a_reserved_role(name: &str) -> bool {
+    use unicode_normalization::UnicodeNormalization;
+    // Compatibility forms first, so fullwidth and other variants of a
+    // reserved word read as the word.
+    let name: String = name.nfkc().collect();
     name.split(|character: char| !character.is_alphanumeric() && character != '-')
         .any(|word| RESERVED_DISPLAY_WORDS.contains(&word.to_lowercase().as_str()))
 }
