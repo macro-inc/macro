@@ -1037,8 +1037,10 @@ rollbackable link until the server confirms deletion.
 Property catalog option edits and deletes, and definition deletes, are predicted.
 A new option is created under an id the client mints and sends; the server
 answers a replay of that id with the option it made, so the id is final. It
-is linked into the cached option, definition-with-options and tag-set lists,
-and a queued add resolves at once, reporting a later refusal by toast. Creating a definition, provisioning a tag set, and
+is linked into the cached option, definition-with-options and tag-set lists
+at once, but the add resolves only once the server has it (a queued add waits
+for its commit), so a caller never applies an option id to an entity that the
+server could still refuse. Creating a definition, provisioning a tag set, and
 sharing or replacing a tag wait for the server, then reload the mounted catalog
 lists they can change (`lib/queries/properties/catalog`).
 
