@@ -1092,8 +1092,16 @@ reaction do not notify.
 
 In Home, reactions belong to the message's thread row: a top-level message uses
 its own row, and a reply uses its parent thread. Verify that an incoming reaction
-brings that row back into the inbox, displays the reaction and channel name, and
-opens the reacted-to message. Marking the row done should clear its reaction
+brings that row back into the inbox and opens the reacted-to message.
+
+Every surface lays a reaction out like Slack's Activity item: who reacted, then
+**Reacted 👍 to:** and the message, then where (`#channel`, a group chat's
+name, nothing for a DM). Check it on the inbox card (several reactions to one
+message stack as one card naming everyone and every emoji), the touch Home
+card, a desktop notification, and the push and email digest, which take it
+from `ChannelMessageReactionMetadata`'s title and body. The push and desktop
+notification cut the message at 80 characters so the channel line stays in
+view. Marking the row done should clear its reaction
 notifications along with the other notifications for that thread.
 
 ## Marking notifications done in the channel gutter
