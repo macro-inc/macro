@@ -79,7 +79,7 @@ const sameRows = (a, b) => same(rowsOnly(a), rowsOnly(b));
 
 export async function runOptimism(h) {
   const { CONFIG, R, log, sleep, login, openSide, loadHarness, ev, harnessError, firstLine, STAMP } = h;
-  R.optimism = { scenarios: [], checks: {}, failures: [], oldStale: [] };
+  R.optimism = { scenarios: [], checks: {}, failures: [], oldStale: [], landMs: [] };
   const tag = `opt-${CONFIG.seed}-${STAMP}`;
   const email = (w) => `pc-opt-${tag}-${w}@opt-${tag}-${w}.fuzz.test`;
 
@@ -167,6 +167,9 @@ export async function runOptimism(h) {
     return { defs: defs.ok ? rowsOf('defs', defs.value) : '(failed)', tags: tags.ok ? rowsOf('tags', tags.value) : '(failed)' };
   }
 
+  // Writes the server answers (it names and places them): no optimistic row on either side.
+  const SERVER_ANSWERED = { createDef: 'created by the server, which assigns its id and place' };
+
   // One write in one mode, in one world.
   async function once(W, mode, name, vars) {
     const { s, s2 } = W;
@@ -185,6 +188,14 @@ export async function runOptimism(h) {
       o.requestsOffline = s.opt.seen.length;
       s.opt.mode = 'watch';
       await s.ctx.setOffline(false);
+      // TanStack resumes a paused write on the reconnect; the cache's queue
+      // sends a queued write when its retry delay (1 s, doubling per failed
+      // attempt) runs out, which an \`online\` wake does not shorten. Wait for
+      // the write to reach the server before reading anything, and record how
+      // long it took.
+      const back = Date.now();
+      o.landedAfterReconnect = await until(() => s.opt.seen.some((x) => x.mode !== 'offline'), 20000);
+      o.landMs = o.landedAfterReconnect ? Date.now() - back : null;
     } else {
       s.opt.mode = mode === 'failed' ? 'fail' : 'hold';
       await start(s, name, vars);
@@ -306,14 +317,20 @@ export async function runOptimism(h) {
         if (mode === 'failed') {
           check('NEW rolls back a failed write', sameRows(nc.post, nc.pre), { ...at, pre: nc.pre, post: nc.post });
           check('NEW rolls back in the other tab', sameRows(nc.post2, nc.pre2), { ...at, pre: nc.pre2, post: nc.post2 });
+        } else if (SERVER_ANSWERED[op]) {
+          // the server names it and places it, so neither side shows it before the answer
+          check('NEW shows nothing until the server answers, as on main', sameRows(nc.mid, nc.pre) && sameRows(oc.mid, oc.pre), { ...at, pre: nc.pre, mid: nc.mid, oldMid: oc.mid });
         } else {
           check('NEW shows the write while it is pending', !sameRows(nc.mid, nc.pre), { ...at, pre: nc.pre, mid: nc.mid });
           check('NEW pending state is the settled state', sameRows(nc.mid, nc.post), { ...at, mid: nc.mid, post: nc.post });
         }
         // offline: whether it waits or tries and fails, the write reaches the server once, after the reconnect
-        if (mode === 'offline') check('NEW lands the write once after the reconnect', nc.landed === 1, { ...at, offline: nc.requestsOffline, landed: nc.landed, requests: nc.requests });
+        if (mode === 'offline') {
+          check('NEW lands the write once after the reconnect', nc.landed === 1, { ...at, offline: nc.requestsOffline, landed: nc.landed, requests: nc.requests });
+          R.optimism.landMs.push({ op, old: oc.landMs, neu: nc.landMs });
+        }
         R.optimism.scenarios.push(sc);
-        log(`optimism ${id}: old ${oc.res.ok ? 'ok' : 'failed'}${oc.tab2Live ? ' tab2-live' : ''}, neu ${nc.res.ok ? 'ok' : 'failed'}${nc.tab2Live ? ` tab2-live ${nc.tab2Ms}ms` : ''}; pending shown old ${!sameRows(oc.mid, oc.pre)} neu ${!sameRows(nc.mid, nc.pre)}`);
+        log(`optimism ${id}: old ${oc.res.ok ? 'ok' : 'failed'}${oc.tab2Live ? ' tab2-live' : ''}, neu ${nc.res.ok ? 'ok' : 'failed'}${nc.tab2Live ? ` tab2-live ${nc.tab2Ms}ms` : ''}; pending shown old ${!sameRows(oc.mid, oc.pre)} neu ${!sameRows(nc.mid, nc.pre)}${mode === 'offline' ? `; landed after the reconnect old ${oc.landMs}ms neu ${nc.landMs}ms` : ''}`);
       } catch (e) {
         harnessError(`optimism ${id}: ${firstLine(e)}`);
         R.optimism.failures.push({ check: 'harness', mode, op, error: firstLine(e) });

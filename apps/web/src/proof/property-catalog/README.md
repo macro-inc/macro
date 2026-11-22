@@ -95,6 +95,38 @@ an optimistic-state check failed.
   its own); `state`
   (query state fields, or a reader missing on one side); and `diff`. Reader
   errors are compared whatever the data did.
+- `old-stale`: main's live readers miss some updates (an invalidation that
+  does not reach them) that the cache's live queries pick up. A live reader or
+  caller whose data differs counts as `old-stale` instead of `diff` only when
+  main's live copy differs from main's own cold mount, the head's live copy
+  equals the head's cold mount, and the two cold mounts agree; the staleness
+  record does the same when the head's stale keys are a subset of main's and
+  every extra one is excused that way. They are counted in `oldStale` by
+  operation and reader. A head that is stale itself, or whose cold mount
+  differs from main's, never qualifies, so the cache mutants still count.
+- `VALUE_DROPPED` (`run.mjs`) lists writes the head resolves with nothing
+  where main resolved with the changed option (`updateTag`, `updateOption`):
+  their hooks type the result `void`, so the type check proves no caller reads
+  it. Their result compares as `{ok, toasts}`; `valueDropped` counts them.
+- `DUMP=n` writes the first `n` differences (not ties or timestamp formats)
+  in full, both sides, to `out/<run>/dump.jsonl`. It can hold account
+  addresses; sanitize it before sharing.
+- `OPTIMISM=1` (`run.sh optimism`, `optimism.mjs`) runs every catalog write
+  (add, rename and delete an option, create and delete a definition, create,
+  rename and delete a tag) in one OLD and one NEW account, each with a second
+  tab of the same account open, in three ways: held (read while in flight,
+  then let through), failed (held, then answered 500), and offline (the
+  context goes offline and every catalog write it sends fails as a lost
+  connection, covering the cache engine's worker, which `setOffline` does not
+  reach; then it comes back). Readers are summarized by what a person sees.
+  Each case checks the result and toasts, the cold-mounted readers and the
+  server's catalog against main; that the head's settled readers equal its
+  own cold mount; that the write settles; on failure that both tabs roll back;
+  otherwise that the head shows the write while it is pending and that this
+  is the settled state; offline, that the write reaches the server exactly
+  once, after the reconnect. Settled live readers compare with main as above,
+  with main's staleness listed in `optimism.oldStale`. The first tab's state
+  reaching the second is reported per case (`tab2Live`, `tab2Ms`).
 - `MUTANT=drop-row|swap-order|alter-field|stale-cache|skip-live-update` plants a
   fault in the NEW path; `mutants` mode first runs a clean baseline of the same
   shape (a mutant run refuses a baseline without a passing verdict), and a mutant counts as caught only at a signature
@@ -203,6 +235,12 @@ The counts measure work attempted, not successes, and are not interchangeable:
   either order on either side, by readers and callers alike: the server gives
   no order between them, and the control run shows the old side doing the same
   against itself. A change that reordered only tied rows would pass.
+- Where main's live reader was stale (`old-stale`), the head is checked
+  against its own cold mount and main's cold mount, not against main's live
+  behavior.
+- Main's pending, failed and offline states are recorded, not required: the
+  optimism checks hold the head to rolling back, showing the write at once and
+  landing it once, which main's invalidate-on-settle hooks do not all do.
 
 ## Limits of the local stack
 
