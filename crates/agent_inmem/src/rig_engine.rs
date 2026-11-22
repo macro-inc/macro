@@ -591,6 +591,7 @@ async fn drive_turn(
     let TurnRequest {
         purpose,
         delivery,
+        memory_reader,
         session_id,
         awaiting,
         owner,
@@ -752,7 +753,7 @@ async fn drive_turn(
             )
         };
         let (user_memory, sdk_docs, loaded_skills) = tokio::join!(
-            fetch_user_memory(memory, &owner, memory_reader(delivery)),
+            fetch_user_memory(memory, &owner, memory_reader),
             docs,
             loaded_skills
         );
@@ -1194,17 +1195,6 @@ fn unseen_effort(
 /// again would repeat it, uncached, after a routing call.
 fn routes_documentation(delivery: ReplyDelivery, instructions: Option<&str>) -> bool {
     delivery != ReplyDelivery::Unseen || instructions.is_none_or(|text| text.trim().is_empty())
-}
-
-/// Who reads the owner's memory for a turn: the person, for a turn streamed
-/// to someone watching; otherwise (a mention's reply, a routine or
-/// suggestion session nobody watches) a program, which enrolls no one in
-/// daily memory refresh.
-fn memory_reader(delivery: ReplyDelivery) -> memory::domain::MemoryReader {
-    match delivery {
-        ReplyDelivery::Streamed => memory::domain::MemoryReader::Person,
-        ReplyDelivery::Whole | ReplyDelivery::Unseen => memory::domain::MemoryReader::Program,
-    }
 }
 
 /// The owner's memory block, or `None` when it is missing or failed to load.
