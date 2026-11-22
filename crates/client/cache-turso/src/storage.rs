@@ -3339,10 +3339,7 @@ fn migrate_previous_format(
     scope: &str,
     previous_namespace: &str,
 ) -> Result<(), TursoStorageError> {
-    let migratable = MIGRATABLE_CACHE_FORMAT_VERSIONS
-        .iter()
-        .any(|version| cache_namespace_at(scope, *version) == previous_namespace);
-    if !migratable {
+    if !migratable_namespace(scope, previous_namespace) {
         return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
     }
     driver::write_transaction(connection, || {
@@ -3359,6 +3356,43 @@ fn migrate_previous_format(
         Ok(())
     })
     .map_err(TursoStorageError::initialization)
+}
+
+/// Whether `namespace` is a previous cache format of `scope` that opening
+/// carries forward.
+fn migratable_namespace(scope: &str, namespace: &str) -> bool {
+    MIGRATABLE_CACHE_FORMAT_VERSIONS
+        .iter()
+        .any(|version| cache_namespace_at(scope, *version) == namespace)
+}
+
+/// Rejects a file that another scope wrote, or a cache format this build
+/// cannot carry forward, before any upgrade step commits to it: such a file
+/// resets as written.
+fn check_owner(connection: &Arc<Connection>, scope: &str) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        "SELECT key, value FROM meta WHERE key IN ('namespace', 'scope') ORDER BY key ASC",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let [namespace, stored_scope] = rows.as_slice() else {
+        return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
+    };
+    let namespace = meta_value(namespace, "namespace")?;
+    let owned = meta_value(stored_scope, "scope")? == scope
+        && (namespace == cache_namespace(scope) || migratable_namespace(scope, &namespace));
+    owned
+        .then_some(())
+        .ok_or_else(|| TursoStorageError::reset(PhysicalResetReason::Compatibility))
+}
+
+/// The value of a `meta` row read as `key, value`, which must be `key`'s.
+fn meta_value(row: &[Value], key: &str) -> Result<String, TursoStorageError> {
+    match (required_text(row, 0), required_text(row, 1)) {
+        (Ok(found), Ok(value)) if found == key => Ok(value),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Compatibility)),
+    }
 }
 
 /// What opening an existing or fresh database changed.
@@ -3426,7 +3460,9 @@ fn initialize(
     // Ordinary reopen only validates compatibility and pending writes. A changed
     // derived projection performs one bounded rebuild before serving queries.
     // An older storage version is upgraded first, so the checks below hold the
-    // upgraded file to exactly what a fresh file has.
+    // upgraded file to exactly what a fresh file has; one this scope does not
+    // own is never upgraded.
+    check_owner(connection, scope)?;
     let storage_upgraded_from = migration::upgrade(connection)?;
     validate_frozen_schema(connection)?;
     let metadata = driver::query(

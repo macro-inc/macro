@@ -266,6 +266,48 @@ fn versions_without_a_chain_and_failing_steps_still_reset() {
     });
 }
 
+/// A file another scope wrote, or one in a cache format this build cannot
+/// carry forward, resets before any step runs: the file stays exactly as the
+/// older build wrote it.
+#[test]
+fn a_file_this_scope_does_not_own_is_never_upgraded() {
+    block_on(async {
+        for (name, opened_as, sql) in [
+            ("other-scope", "other-scope", None),
+            (
+                "unknown-namespace",
+                "scope",
+                Some("UPDATE meta SET value = 'not-a-namespace' WHERE key = 'namespace'"),
+            ),
+        ] {
+            let database = TursoMemoryDatabase::new(format!("not-owned-{name}.db"));
+            let mut storage = database.open("scope").unwrap();
+            populate(&mut storage).await;
+            downgrade_to_storage_11(&mut storage);
+            if let Some(sql) = sql {
+                raw_execute(&storage, sql, Vec::new());
+            }
+            let schema = schema_rows(&storage.connection());
+            let rows = table_rows(&storage.connection());
+            storage.try_close().unwrap();
+            expect_reset_reason(database.open(opened_as), PhysicalResetReason::Compatibility);
+
+            let state = database.state.lock().unwrap();
+            let raw = Database::open(
+                state.io.clone(),
+                &database.path,
+                OpenOptions::new(Arc::new(SqliteDialect)),
+            )
+            .unwrap();
+            let connection = raw.connect().unwrap();
+            assert_eq!(stored_storage_version(&connection), 11, "case {name}");
+            assert_eq!(schema_rows(&connection), schema, "case {name}");
+            assert_eq!(table_rows(&connection), rows, "case {name}");
+            connection.close().unwrap();
+        }
+    });
+}
+
 /// The frozen-schema checks run inside the last step's transaction: a chain
 /// whose result they reject leaves the file exactly as the older build wrote
 /// it, still at the older version, so the browser can hand it back.

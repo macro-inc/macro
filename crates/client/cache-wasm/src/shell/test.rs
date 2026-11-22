@@ -2892,8 +2892,8 @@ async fn calendar_ranges_report_gaps_watermarks_and_uncertain_events_across_the_
 }
 
 /// Rewrites this build's closed database for `scope` as storage 11 wrote it,
-/// with a table no version has when `unknown_table`.
-async fn rewrite_closed_as_storage_11(scope: &str, unknown_table: bool) {
+/// with `flaw`.
+async fn rewrite_closed_as_storage_11(scope: &str, flaw: Flaw) {
     let owner = OpfsOwner::acquire(&database_identity(scope))
         .await
         .expect("acquire closed database");
@@ -2905,9 +2905,12 @@ async fn rewrite_closed_as_storage_11(scope: &str, unknown_table: bool) {
             .expect("closed database initializes");
     cache_turso::migration_test_hooks::rewrite_as_storage_11(&mut storage)
         .expect("rewrite as storage 11");
-    if unknown_table {
-        cache_turso::migration_test_hooks::add_unknown_table(&mut storage)
-            .expect("add an unknown table");
+    match flaw {
+        Flaw::None => {}
+        Flaw::UnknownTable => cache_turso::migration_test_hooks::add_unknown_table(&mut storage)
+            .expect("add an unknown table"),
+        Flaw::LostLayer => cache_turso::migration_test_hooks::drop_optimistic_layers(&mut storage)
+            .expect("drop the optimistic layers"),
     }
     let TursoStorageCloseOutcome::Healthy(closed) = storage.try_close().expect("close rewrite")
     else {
@@ -2945,7 +2948,7 @@ async fn an_older_storage_version_moves_forward_and_upgrades_in_place() {
     assert_eq!(cache_turso::oldest_upgradable_storage_version(), Some(11));
     let own = database_identity(SCOPE);
     let older = cache_database_name(SCOPE, 11);
-    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
 
     // While a context of that build holds it, this build starts empty, says
     // why, and leaves the older database alone.
@@ -3024,11 +3027,22 @@ async fn an_older_storage_version_moves_forward_and_upgrades_in_place() {
     destroy_cache(SCOPE.into()).await.expect("destroy cache");
 }
 
+/// What is wrong, if anything, with the older database a test leaves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Flaw {
+    None,
+    /// A table no version has: the upgrade's last step is rejected, so the
+    /// file stays at storage 11 and this build cannot open it.
+    UnknownTable,
+    /// The queued write lost its optimistic layer: the open finds the queue
+    /// inconsistent only after the upgrade committed.
+    LostLayer,
+}
+
 /// Leaves an older build's database for `scope` at the storage 11 identity,
-/// holding a cached query and a queued write, with nothing at this build's
-/// identity. With `unknown_table`, it also holds a table no version has, so
-/// this build cannot open it. Returns its generation.
-async fn older_database_with_a_queued_write(scope: &str, unknown_table: bool) -> Option<String> {
+/// holding a cached query and a queued write, and `flaw`, with nothing at
+/// this build's identity. Returns its generation.
+async fn older_database_with_a_queued_write(scope: &str, flaw: Flaw) -> Option<String> {
     let own = database_identity(scope);
     let older = cache_database_name(scope, 11);
     remove_opfs_pair(&older).await;
@@ -3045,7 +3059,7 @@ async fn older_database_with_a_queued_write(scope: &str, unknown_table: bool) ->
     queue_one_mutation(&engine).await;
     let generation = test_generation(&engine).await;
     resolved(engine.close()).await;
-    rewrite_closed_as_storage_11(scope, unknown_table).await;
+    rewrite_closed_as_storage_11(scope, flaw).await;
     move_opfs_pair(&own, &older).await;
     generation
 }
@@ -3186,7 +3200,7 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     // The worker stopped after the move, before the open finished, so the
     // coordinator asks for a recovery open: the files go back, not away, and
     // this build starts afresh, as it would have without the move.
-    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     move_without_opening(SCOPE).await;
     assert!(opfs_file_exists(&marker).await);
     let (engine, report) = open_cache_inner(SCOPE.into(), None, true, None, false)
@@ -3229,7 +3243,7 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     // After the same stop, an ordinary open completes the move instead, and
     // once it has opened, the files are this build's own: a later recovery
     // open discards them like any others.
-    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     move_without_opening(SCOPE).await;
     let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
         .await
@@ -3255,7 +3269,7 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     assert!(!opfs_file_exists(&older).await);
 
     // A moved database this build cannot open goes back as well.
-    older_database_with_a_queued_write(SCOPE, true).await;
+    older_database_with_a_queued_write(SCOPE, Flaw::UnknownTable).await;
     let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
         .await
         .expect("open beside an unusable older database");
@@ -3287,7 +3301,7 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
 async fn the_older_build_stays_out_while_moved_files_first_open() {
     const SCOPE: &str = "cache-wasm-carry-lock";
     let older = cache_database_name(SCOPE, 11);
-    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     let mut owner = OpfsOwner::acquire(&database_identity(SCOPE))
         .await
         .expect("acquire this build's identity");
@@ -3332,19 +3346,16 @@ async fn the_older_build_stays_out_while_moved_files_first_open() {
 }
 
 #[wasm_bindgen_test(async)]
-async fn moved_files_this_build_has_written_are_never_handed_back() {
-    const SCOPE: &str = "cache-wasm-carry-written";
-    const OTHER: &str = "cache-wasm-carry-written-other";
+async fn a_database_another_scope_wrote_goes_back_without_an_upgrade() {
+    const SCOPE: &str = "cache-wasm-carry-scope";
+    const OTHER: &str = "cache-wasm-carry-scope-other";
     let own = database_identity(SCOPE);
     let older = cache_database_name(SCOPE, 11);
-    let marker = format!("{own}-adopting");
-    let discarded = Some(CarryForward::new(CarryForwardKind::Discarded, 11));
-
-    // The upgrade committed storage 12 before a later check (here, the scope
-    // the file was written for) asked for a reset: the older build cannot
-    // open the file any more, so it is discarded, not handed back.
+    // A storage 11 file at this scope's older name that another scope wrote:
+    // the open resets before any step runs, so the file is still what the
+    // older build wrote and goes back to its name.
     remove_opfs_pair(&older).await;
-    older_database_with_a_queued_write(OTHER, false).await;
+    older_database_with_a_queued_write(OTHER, Flaw::None).await;
     move_opfs_pair(&cache_database_name(OTHER, 11), &older).await;
     let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
         .await
@@ -3353,6 +3364,44 @@ async fn moved_files_this_build_has_written_are_never_handed_back() {
         report,
         OpenReport {
             outcome: CacheOpenOutcome::ResetIncompatible,
+            carry_forward: Some(CarryForward::new(CarryForwardKind::Returned, 11)),
+        }
+    );
+    assert_eq!(queue_depth(&engine).await, "0");
+    resolved(engine.close()).await;
+    assert!(opfs_file_exists(&older).await);
+    assert!(!opfs_file_exists(&format!("{own}-adopting")).await);
+    let owner = OpfsOwner::acquire(&older)
+        .await
+        .expect("acquire the older name");
+    let (owner, stored) = read_storage_version(owner)
+        .await
+        .expect("read the returned file's version");
+    assert!(matches!(stored, StoredVersion::Read(Some(11))));
+    owner.release().await.expect("release the older name");
+    remove_opfs_pair(&older).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
+#[wasm_bindgen_test(async)]
+async fn moved_files_this_build_has_written_are_never_handed_back() {
+    const SCOPE: &str = "cache-wasm-carry-written";
+    let own = database_identity(SCOPE);
+    let older = cache_database_name(SCOPE, 11);
+    let marker = format!("{own}-adopting");
+    let discarded = Some(CarryForward::new(CarryForwardKind::Discarded, 11));
+
+    // The upgrade committed storage 12 before a later check (here, the
+    // queue's) asked for a reset: the older build cannot open the file any
+    // more, so it is discarded, not handed back.
+    older_database_with_a_queued_write(SCOPE, Flaw::LostLayer).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("open beside a database whose queue is inconsistent");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::ResetCorrupt,
             carry_forward: discarded,
         }
     );
@@ -3364,7 +3413,7 @@ async fn moved_files_this_build_has_written_are_never_handed_back() {
 
     // A worker stopped right after the upgrade committed, before the open
     // finished: the recovery open reads storage 12 and discards the files.
-    older_database_with_a_queued_write(SCOPE, false).await;
+    older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     cache_turso::migration_test_hooks::interrupt_after_steps(Some(1));
     let stopped = open_cache_inner(SCOPE.into(), None, false, None, false).await;
     cache_turso::migration_test_hooks::interrupt_after_steps(None);
@@ -3391,7 +3440,7 @@ async fn moved_files_this_build_has_written_are_never_handed_back() {
     // marker: an ordinary open reports the move resumed once and keeps the
     // files; a recovery open reads storage 12 and never hands them back.
     for recovery in [false, true] {
-        let generation = older_database_with_a_queued_write(SCOPE, false).await;
+        let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
         move_without_opening(SCOPE).await;
         upgrade_without_finishing(SCOPE).await;
         assert!(opfs_file_exists(&marker).await);
@@ -3432,7 +3481,7 @@ async fn a_move_stopped_between_its_renames_completes_on_the_next_open() {
     let older = cache_database_name(SCOPE, 11);
     // What a stop between the renames leaves: the main file and the marker
     // here, the WAL (empty, as a close leaves it) still at the older identity.
-    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     move_without_opening(SCOPE).await;
     rename_opfs_file(&format!("{own}-wal"), &format!("{older}-wal")).await;
     // The marker says the WAL was empty, so the main file is whole on its own
@@ -3461,7 +3510,7 @@ async fn a_move_stopped_between_its_renames_completes_on_the_next_open() {
 
     // The same stop, then a recovery open: the pair is completed and handed
     // back whole.
-    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     move_without_opening(SCOPE).await;
     rename_opfs_file(&format!("{own}-wal"), &format!("{older}-wal")).await;
     let (engine, report) = open_cache_inner(SCOPE.into(), None, true, None, false)
@@ -3495,7 +3544,7 @@ async fn an_unreadable_adoption_keeps_the_moved_files_and_fails_the_open() {
     let held = format!("{own}-held");
     // A move stopped between its renames, then a marker that cannot be read:
     // a directory where it belongs fails the read as an OPFS error would.
-    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     move_without_opening(SCOPE).await;
     rename_opfs_file(&format!("{own}-wal"), &format!("{older}-wal")).await;
     rename_opfs_file(&marker, &held).await;
@@ -3539,7 +3588,7 @@ async fn a_marker_that_never_reads_is_discarded_at_the_limit() {
     let older = cache_database_name(SCOPE, 11);
     let marker = format!("{own}-adopting");
     let unread = format!("{own}-adopting-unread");
-    older_database_with_a_queued_write(SCOPE, false).await;
+    older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     move_without_opening(SCOPE).await;
     remove_opfs_file(&marker).await;
     create_opfs_directory(&marker).await;
@@ -3623,7 +3672,7 @@ async fn recovery_keeps_moved_files_while_the_older_build_holds_its_lock() {
     // While a context of the older build holds its name, a recovery open
     // cannot hand the moved files back, so it fails and keeps them, counting
     // the attempt. Once the lock is free, the next one hands them back whole.
-    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     move_without_opening(SCOPE).await;
     hold_web_lock(&older_lock).await;
     for attempt in 1..=2 {
@@ -3659,7 +3708,7 @@ async fn recovery_keeps_moved_files_while_the_older_build_holds_its_lock() {
     // A lock that stays held cannot keep the cache from starting: once
     // RECOVERY_ATTEMPTS were counted, the next recovery discards the files
     // without opening them.
-    older_database_with_a_queued_write(SCOPE, false).await;
+    older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     move_without_opening(SCOPE).await;
     hold_web_lock(&older_lock).await;
     for _ in 0..RECOVERY_ATTEMPTS {
@@ -3689,7 +3738,7 @@ async fn a_recovery_stopped_after_reading_the_version_still_hands_the_files_back
     const SCOPE: &str = "cache-wasm-recovery-probe";
     let own = database_identity(SCOPE);
     let older = cache_database_name(SCOPE, 11);
-    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
     move_without_opening(SCOPE).await;
     // What a recovery stopped right after reading the version leaves: one
     // attempt counted, the files checkpointed, and the marker still there.

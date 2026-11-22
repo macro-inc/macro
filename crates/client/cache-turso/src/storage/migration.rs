@@ -293,6 +293,18 @@ pub mod test_hooks {
         }))
     }
 
+    /// Removes every queued write's optimistic layer, so the next open of
+    /// this database finds its queue inconsistent and must reset it, after
+    /// any upgrade step has committed.
+    pub fn drop_optimistic_layers(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
+        storage.require_healthy()?;
+        let connection = storage.connection();
+        storage.latch_result(driver::write_transaction(&connection, || {
+            driver::execute(&connection, "DELETE FROM optimistic_layers", Vec::new())?;
+            Ok(())
+        }))
+    }
+
     /// Removes the row that says which storage version wrote this database,
     /// so no open can tell, and the next open of it must reset it.
     pub fn forget_storage_version(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
