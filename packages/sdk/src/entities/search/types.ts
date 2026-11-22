@@ -19,7 +19,9 @@ import type { SearchOn } from './options';
 /**
  * The kinds of item one search can reach. `document` includes tasks;
  * `channel` covers channel names and the messages posted in them; `company`
- * is CRM, searched only when named.
+ * is CRM, searched only when named. A matching message comes back as a
+ * result of type `channel_message`, but `channel_message` is not a search
+ * type: search messages with `channel`.
  */
 export type SearchType =
   | 'document'
