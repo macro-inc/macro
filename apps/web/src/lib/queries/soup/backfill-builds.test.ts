@@ -245,9 +245,10 @@ type WriteContext = {
   lane: SoupBackfillParams;
   request: string;
   generation: string;
-  /** Older generations a reset ended just after a tab sampled them: that tab
-   * may still write under them, and loading discards what it writes. */
-  lateGenerations: ReadonlySet<string>;
+  /** Older generations a reset ended just after a tab sampled them, while a
+   * tab that was running then has not sampled again: it may still write under
+   * them, and loading discards what it writes. */
+  lateGenerations: { has: (generation: string) => boolean };
   /** Called with the generation of each write under an older one. */
   onLate?: (generation: string) => void;
   /** Answers the server gave, by the position a request started from. */
@@ -342,10 +343,26 @@ function writeError(
     if (next.storageGeneration !== null) {
       context.onLate?.(next.storageGeneration);
     }
-    return next.storageGeneration !== null &&
-      context.lateGenerations.has(next.storageGeneration)
-      ? null
-      : 'saved under an older storage generation';
+    if (
+      next.storageGeneration === null ||
+      !context.lateGenerations.has(next.storageGeneration)
+    ) {
+      return 'saved under an older storage generation';
+    }
+    // Its lock kept every tab that knew of the reset off this checkpoint.
+    if (previous?.storageGeneration === context.generation) {
+      return 'a late write over the current generation';
+    }
+    // Otherwise it is one runner step in the generation the tab sampled.
+    return writeError(
+      {
+        ...context,
+        generation: next.storageGeneration,
+        lateGenerations: { has: () => false },
+      },
+      previous,
+      next
+    );
   }
   if (
     previous === null ||
@@ -387,9 +404,10 @@ function writeError(
  * succeeded completed. Tabs also run whole suites (`runSoupBackfills`), alone
  * or two at once, leaving held lanes and revisiting them; when every suite of
  * a step finished, each of their lanes is completed. Storage may reset just
- * after any generation sample of a suite; a tab may then write under the
- * generation it sampled, and the app runs its suite again, as it does when
- * the cache generation changes.
+ * after any generation sample of a suite. Until each tab running then samples
+ * again, a write under that generation is checked as a runner step in it, and
+ * may not replace a checkpoint of the current one; the app then runs its
+ * suites again, as it does when the cache generation changes.
  */
 async function replay(
   changes: readonly LaneChange[],
@@ -488,9 +506,9 @@ async function replay(
         lane: owner.lane,
         request: requestOf(owner.build, owner.laneIndex),
         generation: `g${generation}`,
-        lateGenerations,
-        onLate: (late) => {
-          if (lateGenerations.has(late)) bump('late-write');
+        lateGenerations: late,
+        onLate: (generation) => {
+          if (late.has(generation)) bump('late-write');
         },
         served,
       },
@@ -522,13 +540,28 @@ async function replay(
   };
   /** Generation samples left before storage resets just after one. */
   let samplesUntilReset: number | null = null;
-  const lateGenerations = new Set<string>();
-  const host = {
+  /** Suite tabs running in this step. */
+  const running = new Set<number>();
+  /**
+   * Each generation a reset ended just after a sample, with the running tabs
+   * that have not sampled since: until they do, they may act on it.
+   */
+  const late = new Map<string, Set<number>>();
+  /** `tab` acts on a newer sample, or writes nothing more. */
+  const caughtUp = (tab: number) => {
+    for (const [stale, behind] of late) {
+      behind.delete(tab);
+      if (behind.size === 0) late.delete(stale);
+    }
+  };
+  /** The cache host as one tab sees it; -1 for single-lane runs. */
+  const hostOf = (tab: number) => ({
     currentStorageGeneration: async () => {
       tick();
+      caughtUp(tab);
       const sampled = `g${generation}`;
       if (samplesUntilReset === 0) {
-        lateGenerations.add(sampled);
+        late.set(sampled, new Set(running));
         reset();
       }
       if (samplesUntilReset !== null) {
@@ -537,7 +570,8 @@ async function replay(
       }
       return sampled;
     },
-  };
+  });
+  const host = hostOf(-1);
 
   /** The server's answer to a page request from `position`. */
   const serve = (build: Build, laneIndex: number, position: string) => {
@@ -645,10 +679,9 @@ async function replay(
       };
     };
     const savedGeneration = saved?.storageGeneration ?? null;
-    const late =
-      savedGeneration !== null && lateGenerations.has(savedGeneration);
+    const fromLate = savedGeneration !== null && late.has(savedGeneration);
     const dues = [due(savedGeneration === `g${generation}`)];
-    if (late) dues.push(due(true));
+    if (fromLate) dues.push(due(true));
     const matched = dues.find((option) => option.position === position);
     if (matched === undefined) {
       violations.push(
@@ -659,7 +692,7 @@ async function replay(
     const writer = pageWriter.get(key);
     if (
       matched.resumed === null ||
-      late ||
+      fromLate ||
       writer === undefined ||
       writer === build
     ) {
@@ -778,17 +811,23 @@ async function replay(
       violations.push(`${key} failed: ${String(exit.cause)}`);
     }
   };
-  /** Runs every lane of `build` as a leading tab does; true if it finished. */
-  const runSuite = async (build: Build, budget: number | null) => {
+  /**
+   * Runs every lane of `build` as the leading tab `id` does; true if it
+   * finished.
+   */
+  const runSuite = async (build: Build, budget: number | null, id: number) => {
     const tab = openTab(budget ?? Number.POSITIVE_INFINITY, { end: 'close' });
     const lanes = builds[build].map((_lane, laneIndex) =>
       paramsOf(build, laneIndex, tab)
     );
+    running.add(id);
     const exit = await asLeader(
       build,
       tab.close,
-      runSoupBackfills('user-1', host, lanes)
+      runSoupBackfills('user-1', hostOf(id), lanes)
     );
+    running.delete(id);
+    caughtUp(id);
     if (exit === undefined) return false;
     if (Exit.isFailure(exit) && !tab.ended && !tab.close.signal.aborted) {
       violations.push(`build ${build} suite failed: ${String(exit.cause)}`);
@@ -878,7 +917,7 @@ async function replay(
         const before = generation;
         samplesUntilReset = resetAtSample;
         const finished = await Promise.all(
-          tabs.map((build, index) => runSuite(build, pages[index] ?? null))
+          tabs.map((build, id) => runSuite(build, pages[id] ?? null, id))
         );
         samplesUntilReset = null;
         if (!finished.every(Boolean)) return;
@@ -889,7 +928,7 @@ async function replay(
         }
         // The app runs the suite again when the cache generation changes.
         const again = await Promise.all(
-          tabs.map((build) => runSuite(build, null))
+          tabs.map((build, id) => runSuite(build, null, id))
         );
         if (!again.every(Boolean)) return;
         checkFinished(tabs);
