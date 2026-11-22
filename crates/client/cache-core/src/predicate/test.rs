@@ -416,6 +416,22 @@ mod derived_sort_facts {
                 kind: ProjectionIncompleteKind::Missing,
             }
         );
+        assert_eq!(
+            apply_authoritative_exact_members(
+                Some(&ProjectionState::Complete(full.clone())),
+                &full.record_key,
+                &full.profile,
+                &full.partition,
+                &[flag("mail-inbox", false)],
+                &[flag("mail-inbox", true)],
+            ),
+            ProjectionState::Incomplete {
+                record_key: full.record_key.clone(),
+                profile: full.profile.clone(),
+                partition: full.partition.clone(),
+                kind: ProjectionIncompleteKind::Missing,
+            }
+        );
         let deleted = compose(
             &full,
             &[
