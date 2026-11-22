@@ -441,6 +441,30 @@ describe('describeInboxCard', () => {
     expect(describeInboxCard(row, people).who).toBe('Someone');
   });
 
+  it('shows the newest reaction of a row that mixes it with messages', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('2', 'channel_message_reaction', 'Ana', {
+          ...channel,
+          messageId: 'first',
+          messageContent: 'Release branch is cut',
+          emoji: '🎉',
+        }),
+        sent('1', 'channel_message_send', 'Leo', {
+          ...channel,
+          messageId: 'second',
+          messageContent: 'Anyone around?',
+        }),
+      ]),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Ana',
+      what: 'Reacted 🎉 to: Release branch is cut',
+      body: '#launch',
+    });
+  });
+
   it('never credits an older reactor with the newest reaction', () => {
     const row = stack('channel_messages', [
       sent('2', 'channel_message_reaction', null as never, {

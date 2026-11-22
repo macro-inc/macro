@@ -350,25 +350,27 @@ const spokenText = (notification: UnifiedNotification) =>
 /**
  * A row of reactions, laid out as Slack's Activity lays out a reaction: who
  * reacted, "Reacted 👍 🎉 to: …", then where. Reactions to one message gather
- * everyone and every emoji; reactions to several messages show the newest, and
- * the stack lists the rest. Any other row, reactions mixed with replies
- * included, has no reaction card.
+ * everyone and every emoji; any other row whose newest notification is a
+ * reaction (reactions to several messages, or mixed with messages) shows that
+ * newest reaction, as its badge does, and the stack lists the rest.
  */
 function reactionCard(
   row: NotificationInboxRow,
   who: string,
   latestSender: string | undefined
 ) {
+  const newest = row.content.notifications[0]?.notification_metadata;
+  if (newest?.tag !== 'channel_message_reaction') return;
+  const latest = newest.content;
   const reactions = row.content.notifications.flatMap(
     ({ notification_metadata: metadata }) =>
       metadata.tag === 'channel_message_reaction' ? [metadata.content] : []
   );
-  const [latest] = reactions;
-  if (!latest || reactions.length !== row.content.notifications.length) return;
   // A row loads only its newest notifications; older ones it can't see may be
-  // replies, so a part-loaded row speaks only for its newest reaction.
+  // messages, so a part-loaded row speaks only for its newest reaction.
   const oneMessage =
     row.count === reactions.length &&
+    reactions.length === row.content.notifications.length &&
     reactions.every(({ messageId }) => messageId === latest.messageId);
   const emoji = oneMessage
     ? [...new Set(reactions.map((reaction) => reaction.emoji))].join(' ')
