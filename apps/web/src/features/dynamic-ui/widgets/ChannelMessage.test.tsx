@@ -140,7 +140,7 @@ describe('ChannelMessage', () => {
     view.getByRole('button', { name: 'Open in channel' });
   });
 
-  it('reads "Thread" when the view title only restates the channel', () => {
+  it('reads "Thread" when the view title is only the channel', () => {
     channelNames = { 'channel-1': 'launch-planning' };
     const view = render(() => (
       <ChannelMessage
@@ -164,5 +164,18 @@ describe('ChannelMessage', () => {
       />
     ));
     view.getByText('What the devs decided');
+  });
+
+  it('keeps a fuller view title without its mention of the channel', () => {
+    channelNames = { 'channel-1': 'launch-planning' };
+    const view = render(() => (
+      <ChannelMessage
+        channelId="channel-1"
+        messageId="message-1"
+        caption="Pricing decisions in #launch-planning"
+      />
+    ));
+    view.getByText('launch-planning');
+    view.getByText('Pricing decisions');
   });
 });

@@ -15,13 +15,23 @@ export type ChannelMessageProps = Omit<WidgetOf<'channelMessage'>, 'type'> & {
   caption?: string;
 };
 
-/** The caption names the channel as a whole word ("dev", not "devs"). */
-function namesChannel(caption: string, name: string) {
+/**
+ * The caption without its mention of the channel, which heads the card:
+ * "Pricing decisions in #launch-planning" keeps "Pricing decisions". Only a
+ * whole-word mention counts ("dev", not "devs"). Empty when nothing is left.
+ */
+function withoutChannel(caption: string, name: string) {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(
-    `(^|[^\\p{L}\\p{N}_-])${escaped}($|[^\\p{L}\\p{N}_-])`,
-    'iu'
-  ).test(caption);
+  return caption
+    .replace(
+      new RegExp(
+        `(^|[^\\p{L}\\p{N}_-])(?:(?:in|from|on)\\s+)?#?${escaped}(?=$|[^\\p{L}\\p{N}_-])`,
+        'giu'
+      ),
+      '$1'
+    )
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s:,–—-]+|[\s:,–—-]+$/g, '');
 }
 
 /**
@@ -41,17 +51,17 @@ export function ChannelMessage(props: ChannelMessageProps) {
       ? t('agentCards.channelFallback')
       : channelListName({ name, channelType: channelType() });
   };
-  // A view title that only restates the channel ("Thread in #launch-planning")
-  // would name it twice under the channel name, so the short form stands in.
+  // The channel already heads the card, so the view title drops its mention
+  // of it; a title that was only that ("Thread in #…") reads "Thread".
   const caption = () => {
     const name = channelName();
-    const restatesChannel =
-      name !== undefined &&
-      props.caption !== undefined &&
-      namesChannel(props.caption, name);
-    return restatesChannel || props.caption === undefined
-      ? t('agentCards.channelThread')
-      : props.caption;
+    const rest =
+      props.caption !== undefined && name !== undefined
+        ? withoutChannel(props.caption, name)
+        : props.caption;
+    return rest && rest.toLowerCase() !== 'thread'
+      ? rest
+      : t('agentCards.channelThread');
   };
   const open = (messageId: string) =>
     openThreadMessage(
