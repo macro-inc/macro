@@ -29,7 +29,7 @@ activity = { path = "../activity", default-features = false, features = ["json_s
 agent = { path = "../agent" }
 agent_session = { path = "../agent_session", features = ["ai_tools"] }
 ai_usage = { path = "../ai_usage" }
-anthropic = { path = "../anthropic", features = ["toolset"] }
+anthropic = { path = "../anthropic" }
 static_file = { path = "../static_file", features = ["attachment"] }
 ai_toolset = { path = "../ai_toolset" }
 anyhow.workspace = true

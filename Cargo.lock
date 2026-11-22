@@ -1545,19 +1545,13 @@ dependencies = [
 name = "anthropic"
 version = "0.2.0"
 dependencies = [
- "ai_billing",
- "ai_toolset",
- "ai_usage",
- "anyhow",
  "async-openai",
  "async-stream",
- "async-trait",
  "chrono",
  "futures",
  "genai_telemetry",
  "lazy_static",
  "macro_env_var",
- "macro_user_id",
  "rand 0.9.4",
  "reqwest 0.13.4",
  "schemars 1.2.1",

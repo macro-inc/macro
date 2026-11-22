@@ -1391,8 +1391,7 @@ results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
 they remain discoverable through `DescribeCodeTools`. User-review
-tools, `AskUser`, connector discovery, tool loading for connected apps,
-and explicit provider code execution retain their direct lifecycle. Connected
+tools, `AskUser`, connector discovery, and tool loading for connected apps retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
 Sessions without a user owner can't run in-process turns at all.
