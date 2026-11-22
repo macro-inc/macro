@@ -51,7 +51,9 @@ the decision model also answers `shared` per object), stored on the run so an
 adopted plan keeps it. A user on a team must choose it
 (`ImportError::NotionSharingRequired` tells the agent to ask); a user without
 one plans `personal` without being asked, and the report's `onTeam` says
-which. Each
+which. A failed plan's tool answer (`FAILED_NEXT` in `inbound/toolset.rs`)
+gives the run's reason and tells the agent to explain it once and not plan
+again until asked, since a replan fails the same way. Each
 plan item records `shared`, `sharedReason` and `shareable`
 (`notion_workspace/sharing.rs`). The owner can flip items on the review card;
 the draft's `shared`/`personal` lists are written onto the rows before the

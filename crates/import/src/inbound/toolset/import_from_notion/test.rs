@@ -140,3 +140,17 @@ fn objects_waiting_on_a_teammate_are_explained_while_and_after_importing() {
         "The import finished: 4 objects imported. 2 are being imported by a teammate at the same time and link to their copies once those are written."
     );
 }
+
+#[test]
+fn a_failed_plan_is_explained_to_the_user_and_not_planned_again() {
+    let report = NotionImportReport {
+        status: Some(RunStatus::Failed),
+        error: Some("Macro couldn't use your Notion connection; reconnect Notion".into()),
+        ..NotionImportReport::default()
+    };
+
+    assert_eq!(
+        message(NotionImportAction::Plan, &report),
+        "The Notion import failed: Macro couldn't use your Notion connection; reconnect Notion. Tell the user in one sentence why it failed and what they can do about it. Do not plan again, check its status, or present a review until the user asks you to try again."
+    );
+}

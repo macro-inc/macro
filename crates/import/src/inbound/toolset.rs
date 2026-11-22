@@ -21,6 +21,10 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// What the agent does after a workspace plan failed: tell the user once,
+/// instead of planning again, which fails the same way.
+const FAILED_NEXT: &str = "Tell the user in one sentence why it failed and what they can do about it. Do not plan again, check its status, or present a review until the user asks you to try again.";
+
 mod import_from_notion;
 mod import_from_tracker;
 pub use import_from_tracker::{ImportFromJira, ImportFromLinear, TrackerImportResponse};

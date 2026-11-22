@@ -10,7 +10,7 @@ use import_notion::domain::model::{ImportScope, NotionId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::{ImportToolContext, import_error, tool_error};
+use super::{FAILED_NEXT, ImportToolContext, import_error, tool_error};
 use crate::domain::models::{NotionImportReport, NotionSharing, RunStatus};
 use crate::domain::ports::ImportError;
 use crate::domain::service::NotionWorkspaceImporter;
@@ -212,7 +212,7 @@ pub(super) fn message(action: NotionImportAction, report: &NotionImportReport) -
             waiting_on_teammates(report)
         ),
         (_, Some(RunStatus::Failed)) => format!(
-            "The Notion import failed: {}. Fix the cause and plan again.",
+            "The Notion import failed: {}. {FAILED_NEXT}",
             report.error.as_deref().unwrap_or("unknown error")
         ),
         (_, Some(RunStatus::Dismissed)) => "The last Notion import was cancelled.".to_string(),

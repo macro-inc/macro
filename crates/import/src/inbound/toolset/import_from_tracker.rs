@@ -1,5 +1,5 @@
 //! Workspace import tools for the two issue trackers.
-use super::{ImportToolContext, NotionImportAction, import_error, tool_error};
+use super::{FAILED_NEXT, ImportToolContext, NotionImportAction, import_error, tool_error};
 use crate::domain::{
     models::{ImportSource, NotionImportReport, NotionSharing, RunStatus},
     ports::ImportError,
@@ -171,7 +171,7 @@ fn message(
                 .unwrap_or_default()
         ),
         (_, Some(RunStatus::Failed)) => format!(
-            "The {name} import failed: {}. Fix the cause and plan again.",
+            "The {name} import failed: {}. {FAILED_NEXT}",
             report.error.as_deref().unwrap_or("unknown error")
         ),
         (_, Some(RunStatus::Dismissed)) => format!("The {name} import was cancelled."),
