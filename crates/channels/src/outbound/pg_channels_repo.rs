@@ -483,14 +483,32 @@ fn id_to_display_name(user_id: &MacroUserIdStr<'static>, name_lookup: &NameLooku
     }
 }
 
+/// Candidate set of channels the viewer participates in.
+///
+/// Reads the viewer's memberships, then each channel by primary key, with
+/// both behind `OFFSET 0` fences. A plain join lets the planner push a
+/// page's cursor onto `comms_channels` and scan that whole table for it,
+/// which on default cost settings it did for most keyset pages of a viewer
+/// in 15,000 channels. Fenced, a page reads the viewer's channels and no
+/// others, whatever the plan.
 #[cfg(feature = "list")]
 static CHANNEL_LIST_PREFIX: &str = r#"
     WITH user_channels AS (
         SELECT c.*, a.viewed_at
-        FROM comms_channels c
-        INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
+        FROM (
+            SELECT cp.channel_id
+            FROM comms_channel_participants cp
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            OFFSET 0
+        ) m
+        CROSS JOIN LATERAL (
+            SELECT c.*
+            FROM comms_channels c
+            WHERE c.id = m.channel_id
+            OFFSET 0
+        ) c
         LEFT JOIN comms_activity a ON a.channel_id = c.id AND a.user_id = $1
-        WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        WHERE TRUE
 "#;
 
 /// Candidate set used when the filter mentions [`ChannelLiteral::IsParticipant`]
