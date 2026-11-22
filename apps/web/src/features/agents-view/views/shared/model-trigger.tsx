@@ -13,8 +13,9 @@ export function UnifiedModelTrigger(props: {
 }) {
   const state = useUnifiedModelSelector();
   const custom = () => state.agent && state.agent.id !== MACRO_PERSONA_ID;
-  const name = () =>
-    custom() ? state.agent?.name : catalogModelLabel(state.model, state.models);
+  const model = () => catalogModelLabel(state.model, state.models);
+  // A custom agent's label may hide its model, so the tooltip names both.
+  const name = () => (custom() ? `${state.agent?.name} · ${model()}` : model());
   const effort = () =>
     state.effort?.options.length && state.effort.options.length > 1
       ? state.effort.options.find(
