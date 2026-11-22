@@ -11,6 +11,13 @@ import { MessageProvider, useMessage } from '../context';
 vi.mock('@channel/Mobile/message-action-drawer-context', () => ({
   useMessageActionDrawer: () => undefined,
 }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({
+    enabled: false,
+    loading: false,
+    payload: undefined,
+  }),
+}));
 vi.mock('@core/directive/touchHandler', () => ({ touchHandler: () => {} }));
 vi.mock('@core/util/message-send-motion', () => ({
   messageSendMotion: () => {},

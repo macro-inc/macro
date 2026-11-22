@@ -1,3 +1,5 @@
+import { AgentFeedbackScope } from '@app/features/agent-feedback/agent-feedback';
+import { MessageFeedbackDrawerRows } from '@app/features/agent-feedback/views/message-feedback-drawer-rows';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
@@ -25,6 +27,10 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import {
+  messageFeedbackSubject,
+  messageFeedbackSurface,
+} from '../Message/agent-feedback-subject';
 import { renderIcon } from '../Message/render-icon';
 import { useMessageActionDrawer } from './message-action-drawer-context';
 
@@ -202,108 +208,150 @@ export function ActionDrawer() {
     actionItems().filter((item) => item.onClick && item.destructive);
   const hasReactAction = () => actions()?.onReact !== undefined;
 
+  const feedbackSubject = () => {
+    const msg = message();
+    return msg ? messageFeedbackSubject(msg, drawerState.parent()) : undefined;
+  };
+  const feedbackSurface = () => {
+    const msg = message();
+    return msg ? messageFeedbackSurface(msg) : 'message_timeline';
+  };
+
   return (
-    <MobileDrawer
-      side="bottom"
-      open={drawerState.isOpen()}
-      closeOnOutsidePointerStrategy="pointerdown"
-      onOpenChange={(v) => {
-        if (!v) {
-          drawerState.close();
-          setShowEmojiSearch(false);
-        }
-      }}
-      preventScroll={false}
-      preventScrollbarShift={false}
-      restoreFocus={false}
-    >
-      <MobileDrawer.Portal>
-        <MobileDrawer.Overlay />
-        <MobileDrawer.Content
-          aria-label="Message actions"
-          class={showEmojiSearch() ? 'h-[80vh]' : undefined}
-        >
-          {/* Drag handle */}
-          <MobileDrawer.Handle />
-
-          <Show
-            when={!showEmojiSearch()}
-            fallback={
-              <EmojiSearchView
-                onSelect={(emoji) => handleReaction(emoji)}
-                onBack={() => setShowEmojiSearch(false)}
-              />
-            }
+    // The scope sits outside the sheet so the note it opens after a rating
+    // outlives the sheet closing.
+    <AgentFeedbackScope subject={feedbackSubject()} surface={feedbackSurface()}>
+      <MobileDrawer
+        side="bottom"
+        open={drawerState.isOpen()}
+        closeOnOutsidePointerStrategy="pointerdown"
+        onOpenChange={(v) => {
+          if (!v) {
+            drawerState.close();
+            setShowEmojiSearch(false);
+          }
+        }}
+        preventScroll={false}
+        preventScrollbarShift={false}
+        restoreFocus={false}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.Content
+            aria-label="Message actions"
+            class={showEmojiSearch() ? 'h-[80vh]' : undefined}
           >
-            {/* Emoji reaction row */}
-            <Show when={hasReactAction()}>
-              <div class="flex flex-row items-center justify-between px-3 pb-4 gap-1 shrink-0">
-                <For each={QUICK_REACTION_EMOJIS}>
-                  {(emoji) => (
-                    <button
-                      type="button"
-                      title={`React ${emoji}`}
-                      aria-label={`React ${emoji}`}
-                      class="size-12 flex items-center justify-center bg-edge rounded-full text-[28px]"
-                      onClick={(event) => {
-                        recordEmojiUsage(emoji);
-                        handleReaction(emoji, event);
-                      }}
-                    >
-                      {emoji}
-                    </button>
-                  )}
-                </For>
-                <button
-                  type="button"
-                  title="More reactions"
-                  aria-label="More reactions"
-                  class="size-12 bg-edge rounded-full flex items-center justify-center text-ink-muted"
-                  onClick={() => setShowEmojiSearch(true)}
-                >
-                  {renderIcon(SmileyIcon, 'size-[28px]')}
-                </button>
-              </div>
-            </Show>
+            {/* Drag handle */}
+            <MobileDrawer.Handle />
 
-            {/* Action sections scroll; the handle and reaction row stay pinned */}
-            <MobileDrawer.ScrollBody>
-              {/* Non-destructive actions */}
-              <Show when={nonDestructiveActions().length > 0}>
-                <MobileDrawer.Section class="flex flex-col shrink-0">
-                  <For each={nonDestructiveActions()}>
-                    {(action) => (
-                      <Show
-                        when={
-                          action.id !== 'copy-link' &&
-                          action.id !== 'copy-message-text'
-                        }
-                        fallback={
-                          <CopyButton
-                            as={MobileDrawer.Item}
+            <Show
+              when={!showEmojiSearch()}
+              fallback={
+                <EmojiSearchView
+                  onSelect={(emoji) => handleReaction(emoji)}
+                  onBack={() => setShowEmojiSearch(false)}
+                />
+              }
+            >
+              {/* Emoji reaction row */}
+              <Show when={hasReactAction()}>
+                <div class="flex flex-row items-center justify-between px-3 pb-4 gap-1 shrink-0">
+                  <For each={QUICK_REACTION_EMOJIS}>
+                    {(emoji) => (
+                      <button
+                        type="button"
+                        title={`React ${emoji}`}
+                        aria-label={`React ${emoji}`}
+                        class="size-12 flex items-center justify-center bg-edge rounded-full text-[28px]"
+                        onClick={(event) => {
+                          recordEmojiUsage(emoji);
+                          handleReaction(emoji, event);
+                        }}
+                      >
+                        {emoji}
+                      </button>
+                    )}
+                  </For>
+                  <button
+                    type="button"
+                    title="More reactions"
+                    aria-label="More reactions"
+                    class="size-12 bg-edge rounded-full flex items-center justify-center text-ink-muted"
+                    onClick={() => setShowEmojiSearch(true)}
+                  >
+                    {renderIcon(SmileyIcon, 'size-[28px]')}
+                  </button>
+                </div>
+              </Show>
+
+              {/* Action sections scroll; the handle and reaction row stay pinned */}
+              <MobileDrawer.ScrollBody>
+                <MessageFeedbackDrawerRows onDone={() => drawerState.close()} />
+                {/* Non-destructive actions */}
+                <Show when={nonDestructiveActions().length > 0}>
+                  <MobileDrawer.Section class="flex flex-col shrink-0">
+                    <For each={nonDestructiveActions()}>
+                      {(action) => (
+                        <Show
+                          when={
+                            action.id !== 'copy-link' &&
+                            action.id !== 'copy-message-text'
+                          }
+                          fallback={
+                            <CopyButton
+                              as={MobileDrawer.Item}
+                              data-message-action={action.id}
+                              onClick={async (event) => {
+                                const msg = message();
+                                if (!msg || !action.onClick) return false;
+                                return action.onClick({
+                                  message: msg,
+                                  event,
+                                  silent: true,
+                                });
+                              }}
+                              icon={
+                                <span class="size-5 flex items-center justify-center shrink-0">
+                                  {renderIcon(action.icon)}
+                                </span>
+                              }
+                            >
+                              {action.label}
+                            </CopyButton>
+                          }
+                        >
+                          <MobileDrawer.Item
+                            type="button"
                             data-message-action={action.id}
-                            onClick={async (event) => {
-                              const msg = message();
-                              if (!msg || !action.onClick) return false;
-                              return action.onClick({
-                                message: msg,
-                                event,
-                                silent: true,
-                              });
+                            ref={(el) => {
+                              const getTarget = action.getFocusTarget;
+                              if (getTarget)
+                                focusInput(el, () => ({ getTarget }));
                             }}
-                            icon={
-                              <span class="size-5 flex items-center justify-center shrink-0">
-                                {renderIcon(action.icon)}
-                              </span>
+                            onClick={(event) =>
+                              handleAction(action.onClick, event)
                             }
                           >
+                            <span class="size-5 flex items-center justify-center shrink-0">
+                              {renderIcon(action.icon)}
+                            </span>
                             {action.label}
-                          </CopyButton>
-                        }
-                      >
+                          </MobileDrawer.Item>
+                        </Show>
+                      )}
+                    </For>
+                  </MobileDrawer.Section>
+                </Show>
+
+                {/* Destructive actions */}
+                <Show when={destructiveActions().length > 0}>
+                  <MobileDrawer.Section class="flex flex-col shrink-0 mt-3">
+                    <For each={destructiveActions()}>
+                      {(action) => (
                         <MobileDrawer.Item
                           type="button"
                           data-message-action={action.id}
+                          class="text-failure-ink"
                           ref={(el) => {
                             const getTarget = action.getFocusTarget;
                             if (getTarget)
@@ -318,40 +366,15 @@ export function ActionDrawer() {
                           </span>
                           {action.label}
                         </MobileDrawer.Item>
-                      </Show>
-                    )}
-                  </For>
-                </MobileDrawer.Section>
-              </Show>
-
-              {/* Destructive actions */}
-              <Show when={destructiveActions().length > 0}>
-                <MobileDrawer.Section class="flex flex-col shrink-0 mt-3">
-                  <For each={destructiveActions()}>
-                    {(action) => (
-                      <MobileDrawer.Item
-                        type="button"
-                        data-message-action={action.id}
-                        class="text-failure-ink"
-                        ref={(el) => {
-                          const getTarget = action.getFocusTarget;
-                          if (getTarget) focusInput(el, () => ({ getTarget }));
-                        }}
-                        onClick={(event) => handleAction(action.onClick, event)}
-                      >
-                        <span class="size-5 flex items-center justify-center shrink-0">
-                          {renderIcon(action.icon)}
-                        </span>
-                        {action.label}
-                      </MobileDrawer.Item>
-                    )}
-                  </For>
-                </MobileDrawer.Section>
-              </Show>
-            </MobileDrawer.ScrollBody>
-          </Show>
-        </MobileDrawer.Content>
-      </MobileDrawer.Portal>
-    </MobileDrawer>
+                      )}
+                    </For>
+                  </MobileDrawer.Section>
+                </Show>
+              </MobileDrawer.ScrollBody>
+            </Show>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+    </AgentFeedbackScope>
   );
 }

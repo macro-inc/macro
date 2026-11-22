@@ -1,3 +1,5 @@
+import { AgentFeedbackScope } from '@app/features/agent-feedback/agent-feedback';
+import { MessageFeedbackIndicator } from '@app/features/agent-feedback/views/message-feedback-indicator';
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import { touchHandler } from '@core/directive/touchHandler';
 import type { MessageActions, MessageData } from '@core/messages/types';
@@ -7,6 +9,10 @@ import type { MessageParent } from '@service-storage/messages';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
+import {
+  messageFeedbackSubject,
+  messageFeedbackSurface,
+} from './agent-feedback-subject';
 import { useMessage } from './context';
 import type { ChannelMessageListMeta } from './list-meta';
 import { Message } from './Message';
@@ -90,6 +96,7 @@ function MessageFooter(props: { messageEditor?: MessageEditor }) {
     <Show when={!isEditingMessage(props.messageEditor, message().id)}>
       <Message.Attachments />
       <Message.Reactions />
+      <MessageFeedbackIndicator />
     </Show>
   );
 }
@@ -240,33 +247,38 @@ export function ChannelMessage(props: ChannelMessageProps) {
           touchHandler(el, () => ({
             touchClassName: 'channel-message-long-press-highlight',
             onLongPress: () =>
-              drawerManager?.open(props.message, props.actions),
+              drawerManager?.open(props.message, props.actions, props.parent),
           }));
         }}
       >
-        <Switch>
-          <Match when={props.message.deleted_at != null}>
-            <DeletedMessageLayout />
-          </Match>
-          <Match when={isGrouped()}>
-            <GroupedMessageLayout
-              renderContent={props.renderContent}
-              parent={props.parent}
-              inputMode={props.inputMode}
-              messageEditor={props.messageEditor}
-            />
-          </Match>
-          <Match when={true}>
-            <RegularMessageLayout
-              renderContent={props.renderContent}
-              parent={props.parent}
-              timestampFormat={props.timestampFormat}
-              inputMode={props.inputMode}
-              messageEditor={props.messageEditor}
-              hideTriggeredBy={props.hideTriggeredBy}
-            />
-          </Match>
-        </Switch>
+        <AgentFeedbackScope
+          subject={messageFeedbackSubject(props.message, props.parent)}
+          surface={messageFeedbackSurface(props.message)}
+        >
+          <Switch>
+            <Match when={props.message.deleted_at != null}>
+              <DeletedMessageLayout />
+            </Match>
+            <Match when={isGrouped()}>
+              <GroupedMessageLayout
+                renderContent={props.renderContent}
+                parent={props.parent}
+                inputMode={props.inputMode}
+                messageEditor={props.messageEditor}
+              />
+            </Match>
+            <Match when={true}>
+              <RegularMessageLayout
+                renderContent={props.renderContent}
+                parent={props.parent}
+                timestampFormat={props.timestampFormat}
+                inputMode={props.inputMode}
+                messageEditor={props.messageEditor}
+                hideTriggeredBy={props.hideTriggeredBy}
+              />
+            </Match>
+          </Switch>
+        </AgentFeedbackScope>
       </Message.Root>
     </MaybeSwipeToReplyRow>
   );
