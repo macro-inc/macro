@@ -28,8 +28,24 @@ viewer pattern), which apply to every type defined here.
   record says which. Joined-only lists must still filter on it.
 - `resolve_soup` runs a page with `channelReads: PRIMARY` on the
   `PrimaryChannelSoup` in the request data and errors when it is missing,
-  never falling back to the replica service. The cursor does not carry the
-  choice; continuations send it again.
+  never falling back to the replica service. It admits only channel directory
+  pages (`SoupRequest::is_channel_directory_page`: a timestamp sort, newest
+  first, at most 100 items, channel threads excluded, no `favoritesOnly: true`
+  and no CRM association of any kind (company, contact or activity), whether
+  `crmAssociation` or a `crmAssociated` literal anywhere in the document
+  filter (Soup resolves each record after the check, reading a company's or
+  contact's references through the channel repository; it rewrites a
+  document literal into the record's document ids, and `crmAssociation` also
+  restricts every source, channels included, to the record's entities; a CRM
+  email scope stays allowed), and no channel
+  filter or one admitting only channels it names by id, at most 100 id
+  literals with nothing beside them but at most two `isParticipant` literals
+  in the whole tree) and refuses the rest,
+  so the primary query stays bounded by the request. `soup.page` records
+  `outcome`, never error text: errors carry submitted filter values. Type the data by
+  the schema's service, `PrimaryChannelSoup<<Schema as SoupSchemaService>::Service>`
+  (`Arc<_>` in a shared schema), or the lookup misses. The cursor does not
+  carry the choice; continuations send it again.
 - Build `AgentSessionEntityLoader` and `PrimarySoupItemLoader` with `::new`,
   which rechecks the viewer's team. PRs are stored for the team; without it,
   a session row reads `pullRequestState: null` and overwrites the list's
