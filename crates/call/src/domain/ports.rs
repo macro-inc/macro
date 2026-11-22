@@ -73,10 +73,12 @@ pub trait CallRepository: Send + Sync + 'static {
         client: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Atomically archive a call whose only active participants have been programs for 60 seconds.
+    /// Atomically archive a call session whose only active participants have been programs for 60 seconds.
+    /// `room_name` names the session; see [`CallRepository::archive_call`].
     fn archive_call_if_program_only(
         &self,
         call_id: &Uuid,
+        room_name: &str,
     ) -> impl Future<Output = Result<Option<ArchivedCall>, CallError>> + Send;
 
     /// Persist an owner-bound room reservation and discard expired reservation metadata.
@@ -332,12 +334,14 @@ pub trait CallRepository: Send + Sync + 'static {
         egress_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Attach a recording started asynchronously. Persists on the active call,
-    /// or its archived record if the call ended during startup. Returns whether
-    /// it was attached to an active call; otherwise the caller must stop egress.
+    /// Attach a recording started asynchronously to the session in
+    /// `room_name`. Persists on the live session, or on the archived session
+    /// if it ended during startup. Returns whether it was attached to a live
+    /// session in that room; otherwise the caller must stop egress.
     fn attach_meeting_recording(
         &self,
         call_id: &Uuid,
+        room_name: &str,
         egress_id: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
@@ -364,31 +368,42 @@ pub trait CallRepository: Send + Sync + 'static {
     /// canonical team sharing (View for the creator's current team) in the same
     /// transaction. Calls without a channel must archive with team sharing off.
     /// Returns facts committed by the archive transaction.
+    ///
+    /// `room_name` names the live session to archive. A caller holding a
+    /// [`Call`] from before an archive and a resume would otherwise end the
+    /// next session; a live row in another room answers
+    /// [`CallError::NotFound`], as an already archived call does.
     fn archive_call(
         &self,
         call_id: &Uuid,
+        room_name: &str,
     ) -> impl Future<Output = Result<ArchivedCall, CallError>> + Send;
 
     /// Archive only if there are still no participants while holding the call lock.
+    /// `room_name` names the session; see [`CallRepository::archive_call`].
     fn archive_call_if_empty(
         &self,
         call_id: &Uuid,
+        room_name: &str,
     ) -> impl Future<Output = Result<Option<ArchivedCall>, CallError>> + Send;
 
-    /// Set the recording key on an archived call record.
-    fn set_recording_key(
-        &self,
-        call_record_id: &Uuid,
-        recording_key: &str,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Find a call record by its egress ID (for webhook handling).
+    /// Set the recording key on the archived session that recorded with this
+    /// egress: the call record's own (first) session, or a later one.
     ///
-    /// Returns the archived call record's `(call_id, channel_id)` context.
-    fn get_call_record_by_egress_id(
+    /// Returns the archived call record's `(call_id, channel_id)` context, or
+    /// `None` when no archived session has this egress.
+    fn set_recording_key_by_egress_id(
         &self,
         egress_id: &str,
+        recording_key: &str,
     ) -> impl Future<Output = Result<Option<(Uuid, Option<Uuid>)>, Self::Err>> + Send;
+
+    /// The call whose archived session ran in `room_name`, while no live
+    /// session uses that room: the room is left over from an ended session.
+    fn get_ended_session_call(
+        &self,
+        room_name: &str,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
     /// Set the recording key on an active call (by egress ID).
     ///
@@ -401,7 +416,8 @@ pub trait CallRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Set `recording_started_at` on whichever row currently owns the egress —
-    /// active `calls` first, then archived `call_records` — driven by the
+    /// active `calls` first, then archived `call_records`, then a later
+    /// archived session in `call_record_sessions` — driven by the
     /// `egress_started` webhook. Idempotent: only sets the column when it is
     /// still `NULL` so a duplicate or retried webhook can't overwrite a
     /// previously captured start time.
@@ -411,12 +427,14 @@ pub trait CallRepository: Send + Sync + 'static {
         started_at: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Insert a transcript segment for an active call. When `voice_id` is
-    /// `Some`, it's stored on the row so the call-finished pipeline can
-    /// resolve the speaker to a macro user.
+    /// Insert a transcript segment for the live session in `room_name`. When
+    /// `voice_id` is `Some`, it's stored on the row so the call-finished
+    /// pipeline can resolve the speaker to a macro user. A segment whose
+    /// session has ended is dropped.
     fn create_transcript_segment(
         &self,
         call_id: &Uuid,
+        room_name: &str,
         segment: &TranscriptSegmentRequest,
         voice_id: Option<Uuid>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;

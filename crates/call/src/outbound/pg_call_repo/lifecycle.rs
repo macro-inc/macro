@@ -7,6 +7,7 @@ impl PgCallRepo {
     pub(super) async fn archive_session(
         &self,
         call_id: &Uuid,
+        room_name: &str,
         require_empty: bool,
         program_only_before: Option<DateTime<Utc>>,
     ) -> Result<Option<ArchivedCall>, CallError> {
@@ -15,16 +16,19 @@ impl PgCallRepo {
         // sharing below, so take the shared guard before moving any rows.
         share_permission_db_utils::team_share::acquire_guard(&mut tx).await?;
 
-        // Fetch and lock the active call so concurrent archive_call callers serialize.
+        // Fetch and lock the live session so concurrent archive_call callers
+        // serialize. The room names the session: a caller still holding an
+        // earlier session of a resumed meeting finds nothing to archive.
         let call = sqlx::query!(
             r#"
             SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, meeting_id,
                    (SELECT title FROM call_meetings WHERE id = calls.meeting_id) AS meeting_title
             FROM calls
-            WHERE id = $1
+            WHERE id = $1 AND room_name = $2
             FOR UPDATE
             "#,
             call_id,
+            room_name,
         )
         .fetch_optional(tx.as_mut())
         .await?

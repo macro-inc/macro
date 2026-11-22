@@ -1701,7 +1701,7 @@ impl<
                         .map_err(|e| CallError::Internal(e.into()))?
                 {
                     tracing::info!(call_id = %call.id, room_name, "archiving call on room_finished");
-                    let archived = self.repo.archive_call(&call.id).await?;
+                    let archived = self.repo.archive_call(&call.id, &call.room_name).await?;
                     self.publish_archived_call_event(&archived, CallArchiveReason::RoomFinished);
 
                     // Fire-and-forget summarization now that the
@@ -1919,17 +1919,13 @@ impl<
                 let recording_key = extract_recording_key(file_url);
                 tracing::info!(egress_id, recording_key, "egress recording completed");
 
-                // Find the archived call record by egress_id and update the recording key.
+                // Store the key on the archived session that recorded it.
                 if let Some((call_id, channel_id)) = self
                     .repo
-                    .get_call_record_by_egress_id(egress_id)
+                    .set_recording_key_by_egress_id(egress_id, recording_key)
                     .await
                     .map_err(|e| CallError::Internal(e.into()))?
                 {
-                    self.repo
-                        .set_recording_key(&call_id, recording_key)
-                        .await
-                        .map_err(|e| CallError::Internal(e.into()))?;
                     self.publish_call_event(&CallMacroEvent::recording_ready(
                         CallRecordingReadyMetadata {
                             call_id,
@@ -2166,7 +2162,7 @@ impl<
         };
 
         self.repo
-            .create_transcript_segment(&call.id, &segment, voice_id)
+            .create_transcript_segment(&call.id, &call.room_name, &segment, voice_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 

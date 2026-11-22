@@ -160,7 +160,7 @@ async fn occupied_call_checks_program_only_expiry_before_staying_open() {
         .returning(|_| Box::pin(async { Ok(1) }));
     repo.expect_archive_call_if_program_only()
         .times(1)
-        .returning(|_| Box::pin(async { Ok(None) }));
+        .returning(|_, _| Box::pin(async { Ok(None) }));
     repo.expect_archive_call_if_empty().never();
     let service = join_service(repo, MockRtcClient::new());
 

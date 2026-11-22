@@ -279,7 +279,9 @@ async fn active_meetings_do_not_grant_discovery_from_an_earlier_session(pool: Pg
         .await
         .unwrap();
     repo.reconcile_guest(&call_id, guest, false).await.unwrap();
-    repo.archive_call(&call_id).await.unwrap();
+    repo.archive_call(&call_id, &call_id.to_string())
+        .await
+        .unwrap();
     assert!(repo.list_active_meetings(OWNER).await.unwrap().is_empty());
 
     let (next, _) = repo
@@ -337,7 +339,9 @@ async fn invitees_discover_only_the_invited_session_without_becoming_participant
     );
 
     repo.reconcile_guest(&call_id, guest, false).await.unwrap();
-    repo.archive_call(&call_id).await.unwrap();
+    repo.archive_call(&call_id, &call_id.to_string())
+        .await
+        .unwrap();
     assert!(
         repo.list_active_meetings(invitee.as_ref())
             .await

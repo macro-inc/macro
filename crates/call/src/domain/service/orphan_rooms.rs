@@ -3,10 +3,12 @@
 //! RTC tokens stay valid for hours and cannot be revoked, and the provider
 //! recreates a deleted room when a token for it connects. A client answering a
 //! stale ring therefore lands in a room no call tracks. A room is orphaned only
-//! when it is named after an archived call: call ids are never reused, so an
-//! archived call's room can never host a live session again. Every other room
-//! without an active call (meeting preparations, the get-or-create race's
-//! candidate room, rooms this deployment did not create) is left alone.
+//! when an archived session ran in it and no live session does: room names are
+//! never reused, so an ended session's room can never host a live session
+//! again. (A call id goes live again only when a scheduled meeting resumes, and
+//! then in a new room.) Every other room without an active call (meeting
+//! preparations, the get-or-create race's candidate room, rooms this deployment
+//! did not create) is left alone.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -53,19 +55,12 @@ where
     Vr: VoiceRepository + Clone,
     B: MacroEventBroker + Clone,
 {
-    /// The archived call a room without an active call belongs to.
+    /// The call whose ended session ran in a room without a live session.
     async fn archived_call_for_room(&self, room_name: &str) -> Result<Option<Uuid>, CallError> {
-        let Ok(call_id) = Uuid::parse_str(room_name) else {
-            return Ok(None);
-        };
-        let record = self
-            .repo
-            .get_call_record_by_call_id(&call_id)
+        self.repo
+            .get_ended_session_call(room_name)
             .await
-            .map_err(|e| CallError::Internal(e.into()))?;
-        Ok(record
-            .filter(|record| !record.is_active && record.room_name.as_deref() == Some(room_name))
-            .map(|record| record.call_id))
+            .map_err(|e| CallError::Internal(e.into()))
     }
 
     /// Handles a participant joining a room that has no active call: when the

@@ -22,7 +22,8 @@ impl<
 > CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
     /// Webhooks can beat the startup API response, especially if a call ends
-    /// immediately. Correlate rooms whose UUID is their call ID, including channel sessions.
+    /// immediately. Correlate the egress with the session that ran in its
+    /// room, live or ended, including channel sessions.
     #[tracing::instrument(err, skip_all)]
     pub(super) async fn link_meeting_recording_webhook(
         &self,
@@ -32,19 +33,22 @@ impl<
         let (Some(room_name), Some(egress_id)) = (room_name, egress_id) else {
             return Ok(());
         };
-        let Ok(call_id) = Uuid::parse_str(room_name) else {
-            return Ok(());
-        };
-        let record = self
+        let live = self
             .repo
-            .get_call_record_by_call_id(&call_id)
+            .get_call_by_room_name(room_name)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
-        if let Some(record) = record
-            && record.room_name.as_deref() == Some(room_name)
-        {
+        let call_id = match live {
+            Some(call) => Some(call.id),
+            None => self
+                .repo
+                .get_ended_session_call(room_name)
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?,
+        };
+        if let Some(call_id) = call_id {
             self.repo
-                .attach_meeting_recording(&call_id, egress_id)
+                .attach_meeting_recording(&call_id, room_name, egress_id)
                 .await
                 .map_err(|e| CallError::Internal(e.into()))?;
         }
@@ -600,9 +604,13 @@ impl<
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
         let archive = if remaining == 0 {
-            self.repo.archive_call_if_empty(&call.id).await
+            self.repo
+                .archive_call_if_empty(&call.id, &call.room_name)
+                .await
         } else {
-            self.repo.archive_call_if_program_only(&call.id).await
+            self.repo
+                .archive_call_if_program_only(&call.id, &call.room_name)
+                .await
         };
         let archived = match archive {
             Ok(Some(archived)) => archived,
@@ -732,9 +740,14 @@ pub(super) async fn start_meeting_recording<R: CallRepository, C: CallRtcClient>
             return;
         }
     };
-    let active = match repo.attach_meeting_recording(&call_id, &egress_id).await {
+    // A live row in another room is a later session of a resumed meeting:
+    // this recorder's session has ended.
+    let active = match repo
+        .attach_meeting_recording(&call_id, room_name, &egress_id)
+        .await
+    {
         Ok(true) => match repo.get_call_by_id(&call_id).await {
-            Ok(call) => call.is_some(),
+            Ok(call) => call.is_some_and(|call| call.room_name == room_name),
             Err(error) => {
                 tracing::error!(error=?error, "failed to confirm meeting is still active");
                 false

@@ -17,7 +17,8 @@ use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use super::super::test::{
-    CALL_ARCHIVED, CALL1, CH1, CH2, USER_A, give_user_a_team, repo, team_entity_access_count,
+    CALL_ARCHIVED, CALL1, CALL1_ROOM, CH1, CH2, USER_A, give_user_a_team, repo,
+    team_entity_access_count,
 };
 use crate::domain::models::{CallError, CallRecordPage, EditCallRecordRepoArgs};
 use crate::domain::ports::CallRepository;
@@ -462,7 +463,7 @@ async fn archive_translates_toggle_on_into_canonical_view(
     give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
     assert!(live_toggle(&pool, CALL1).await);
 
-    repo.archive_call(&CALL1).await?;
+    repo.archive_call(&CALL1, CALL1_ROOM).await?;
 
     assert_eq!(stored_team_share(&pool, CALL1).await, shared_view(1));
     assert_eq!(team_row_level(&pool, CALL1).await, Some(AccessLevel::View));
@@ -489,7 +490,7 @@ async fn archive_translates_toggle_off_into_unshared(pool: Pool<Postgres>) -> an
     repo.toggle_share_with_team(&CALL1).await?;
     assert!(!live_toggle(&pool, CALL1).await);
 
-    repo.archive_call(&CALL1).await?;
+    repo.archive_call(&CALL1, CALL1_ROOM).await?;
 
     assert_eq!(stored_team_share(&pool, CALL1).await, unshared());
     assert_eq!(team_entity_access_count(&pool, CALL1).await?, 0);
@@ -509,7 +510,7 @@ async fn archive_with_toggle_on_but_no_team_shares_nothing(
     let repo = repo(pool.clone());
     assert!(live_toggle(&pool, CALL1).await);
 
-    repo.archive_call(&CALL1).await?;
+    repo.archive_call(&CALL1, CALL1_ROOM).await?;
 
     assert_eq!(stored_team_share(&pool, CALL1).await, unshared());
     assert_eq!(team_entity_access_count(&pool, CALL1).await?, 0);
@@ -540,13 +541,13 @@ async fn archive_adopts_legacy_view_grant_and_leaves_other_levels(
         .await?
         .expect("call created");
     insert_legacy_team_row(&pool, adopted, AccessLevel::View).await?;
-    repo.archive_call(&adopted).await?;
+    repo.archive_call(&adopted, "adopted").await?;
     assert_eq!(stored_team_share(&pool, adopted).await, shared_view(1));
     assert_eq!(team_entity_access_count(&pool, adopted).await?, 1);
 
     // A grant above View is left for review; the archive itself still succeeds.
     insert_legacy_team_row(&pool, CALL1, AccessLevel::Edit).await?;
-    repo.archive_call(&CALL1).await?;
+    repo.archive_call(&CALL1, CALL1_ROOM).await?;
     assert_eq!(stored_team_share(&pool, CALL1).await, unshared());
     assert_eq!(team_row_level(&pool, CALL1).await, Some(AccessLevel::Edit));
     Ok(())

@@ -601,7 +601,7 @@ fn build_get_or_create_service<B: MacroEventBroker + Clone, Cn: ConnectionServic
     recording_enabled: bool,
 ) -> BaseGetOrCreateCallService<Cn, B> {
     repo.expect_archive_call_if_program_only()
-        .returning(|_| Box::pin(async { Ok(None) }));
+        .returning(|_, _| Box::pin(async { Ok(None) }));
     let service: BaseGetOrCreateCallService<Cn> = CallServiceImpl::new(
         repo,
         MockRtcClient::new(),
@@ -643,7 +643,7 @@ async fn get_or_create_call(
         background_repo
             .expect_attach_meeting_recording()
             .times(1)
-            .returning(|_, _| Box::pin(async { Ok(true) }));
+            .returning(|_, _, _| Box::pin(async { Ok(true) }));
         background_repo
             .expect_get_call_by_id()
             .times(1)
@@ -967,7 +967,7 @@ async fn join_while_in_other_call(
     Vec<(String, String)>,
 ) {
     repo.expect_archive_call_if_program_only()
-        .returning(|_| Box::pin(async { Ok(None) }));
+        .returning(|_, _| Box::pin(async { Ok(None) }));
     let rtc_client = MockRtcClient::new();
     let removed = rtc_client.removed.clone();
     let service: BaseGetOrCreateCallService<StubConnectionService> = CallServiceImpl::new(
@@ -1005,9 +1005,9 @@ async fn joining_a_call_switches_the_user_out_of_their_other_call() {
 async fn switching_out_as_the_last_participant_archives_the_other_call() {
     let mut repo = switching_repo(0);
     repo.expect_archive_call_if_empty()
-        .withf(|call_id| *call_id == SWITCHED_FROM_CALL_ID)
+        .withf(|call_id, _| *call_id == SWITCHED_FROM_CALL_ID)
         .times(1)
-        .returning(|_| Box::pin(async { Ok(None) }));
+        .returning(|_, _| Box::pin(async { Ok(None) }));
 
     let (response, _) = join_while_in_other_call(repo).await;
 
@@ -1056,7 +1056,7 @@ fn reconcile_repo(joined: DateTime<Utc>) -> MockCallRepository {
 
 async fn reconcile(mut repo: MockCallRepository, rtc_client: MockRtcClient) {
     repo.expect_archive_call_if_program_only()
-        .returning(|_| Box::pin(async { Ok(None) }));
+        .returning(|_, _| Box::pin(async { Ok(None) }));
     let service: BaseGetOrCreateCallService<StubConnectionService> = CallServiceImpl::new(
         repo,
         rtc_client,
@@ -1094,9 +1094,9 @@ async fn reconcile_marks_disconnected_people_left_and_archives_the_empty_call() 
         .times(1)
         .returning(|_| Box::pin(async { Ok(0) }));
     repo.expect_archive_call_if_empty()
-        .withf(|call_id| *call_id == RECONCILED_CALL_ID)
+        .withf(|call_id, _| *call_id == RECONCILED_CALL_ID)
         .times(1)
-        .returning(|_| Box::pin(async { Ok(None) }));
+        .returning(|_, _| Box::pin(async { Ok(None) }));
 
     // Only the transcription agent is left in the room.
     reconcile(
@@ -1263,7 +1263,7 @@ fn build_webhook_service_with_connection<Cn: ConnectionService>(
     event_broker: RecordingEventBroker,
 ) -> impl CallService + messages::domain::service::guest_chat::GuestCallAuthorizer {
     repo.expect_archive_call_if_program_only()
-        .returning(|_| Box::pin(async { Ok(None) }));
+        .returning(|_, _| Box::pin(async { Ok(None) }));
     let service: BaseWebhookCallService<Cn> = CallServiceImpl::new(
         repo,
         rtc_client,
@@ -1355,7 +1355,7 @@ async fn participant_left_publishes_last_participant_archived_event() {
         });
     repo.expect_archive_call_if_empty()
         .times(1)
-        .return_once(move |call_id| {
+        .return_once(move |call_id, _| {
             assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
             Box::pin(async move { Ok(Some(archived_call)) })
         });
@@ -1409,7 +1409,7 @@ async fn room_finished_publishes_room_finished_archived_event() {
         });
     repo.expect_archive_call()
         .times(1)
-        .return_once(move |call_id| {
+        .return_once(move |call_id, _| {
             assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
             Box::pin(async move { Ok(archived_call) })
         });
@@ -1440,7 +1440,7 @@ async fn failed_archive_does_not_publish_archived_event() {
     repo.expect_get_call_by_room_name()
         .times(1)
         .return_once(move |_| Box::pin(async move { Ok(Some(active_call)) }));
-    repo.expect_archive_call().times(1).returning(|_| {
+    repo.expect_archive_call().times(1).returning(|_, _| {
         Box::pin(async { Err(CallError::Internal(anyhow::anyhow!("archive failed"))) })
     });
 
@@ -1468,7 +1468,7 @@ async fn malformed_archived_creator_skips_event_without_undoing_archival() {
         .return_once(move |_| Box::pin(async move { Ok(Some(active_call)) }));
     repo.expect_archive_call()
         .times(1)
-        .return_once(move |_| Box::pin(async move { Ok(archived_call) }));
+        .return_once(move |_, _| Box::pin(async move { Ok(archived_call) }));
 
     let rtc_client = webhook_rtc_client("room_finished", None);
     let event_broker = RecordingEventBroker::default();
@@ -1617,23 +1617,17 @@ fn assert_recording_ready_event(event_broker: &RecordingEventBroker) {
 #[tokio::test]
 async fn archived_egress_ended_publishes_recording_ready_event() {
     let mut repo = MockCallRepository::new();
-    repo.expect_get_call_record_by_egress_id()
+    repo.expect_set_recording_key_by_egress_id()
         .times(1)
-        .returning(|egress_id| {
+        .returning(|egress_id, recording_key| {
             assert_eq!(egress_id, RECORDING_READY_EGRESS_ID);
+            assert_eq!(recording_key, RECORDING_READY_KEY);
             Box::pin(async {
                 Ok(Some((
                     ARCHIVED_EVENT_CALL_ID,
                     Some(ARCHIVED_EVENT_CHANNEL_ID),
                 )))
             })
-        });
-    repo.expect_set_recording_key()
-        .times(1)
-        .returning(|call_id, recording_key| {
-            assert_eq!(*call_id, ARCHIVED_EVENT_CALL_ID);
-            assert_eq!(recording_key, RECORDING_READY_KEY);
-            Box::pin(async { Ok(()) })
         });
     let rtc_client = egress_ended_rtc_client(
         Some(RECORDING_READY_EGRESS_ID),
@@ -1653,9 +1647,9 @@ async fn archived_egress_ended_publishes_recording_ready_event() {
 #[tokio::test]
 async fn active_egress_ended_does_not_publish_recording_ready_event() {
     let mut repo = MockCallRepository::new();
-    repo.expect_get_call_record_by_egress_id()
+    repo.expect_set_recording_key_by_egress_id()
         .times(1)
-        .returning(|egress_id| {
+        .returning(|egress_id, _| {
             assert_eq!(egress_id, RECORDING_READY_EGRESS_ID);
             Box::pin(async { Ok(None) })
         });
@@ -1704,9 +1698,9 @@ async fn egress_ended_with_missing_fields_does_not_publish_recording_ready_event
 #[tokio::test]
 async fn unknown_egress_ended_does_not_publish_recording_ready_event() {
     let mut repo = MockCallRepository::new();
-    repo.expect_get_call_record_by_egress_id()
+    repo.expect_set_recording_key_by_egress_id()
         .times(1)
-        .returning(|_| Box::pin(async { Ok(None) }));
+        .returning(|_, _| Box::pin(async { Ok(None) }));
     repo.expect_set_active_call_recording_key()
         .times(1)
         .returning(|_, _| Box::pin(async { Ok(false) }));
@@ -1728,17 +1722,7 @@ async fn unknown_egress_ended_does_not_publish_recording_ready_event() {
 #[tokio::test]
 async fn failed_recording_key_persistence_does_not_publish_recording_ready_event() {
     let mut repo = MockCallRepository::new();
-    repo.expect_get_call_record_by_egress_id()
-        .times(1)
-        .returning(|_| {
-            Box::pin(async {
-                Ok(Some((
-                    ARCHIVED_EVENT_CALL_ID,
-                    Some(ARCHIVED_EVENT_CHANNEL_ID),
-                )))
-            })
-        });
-    repo.expect_set_recording_key()
+    repo.expect_set_recording_key_by_egress_id()
         .times(1)
         .returning(|_, _| Box::pin(async { Err(anyhow::anyhow!("recording key write failed")) }));
     let rtc_client = egress_ended_rtc_client(
@@ -3263,6 +3247,8 @@ async fn summarized_event_reports_ai_name_persistence() {
 
 #[cfg(feature = "outbound")]
 const CALL1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
+/// The RTC room of `CALL1`'s live session in the `call_repo` fixture.
+const CALL1_ROOM: &str = "00000000-0000-0000-0000-000000000c01";
 #[cfg(feature = "outbound")]
 const MACRO_USER_A: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaaaa1);
 #[cfg(feature = "outbound")]
@@ -3938,6 +3924,7 @@ async fn enroll_stable_speaker_voices_links_all_voices_for_consistent_diarized_s
         call_repo
             .create_transcript_segment(
                 &CALL1,
+                CALL1_ROOM,
                 &TranscriptSegmentRequest {
                     segment_id: segment_id.to_string(),
                     speaker_id: speaker_id.to_string(),
@@ -3954,7 +3941,7 @@ async fn enroll_stable_speaker_voices_links_all_voices_for_consistent_diarized_s
             .await?;
     }
 
-    let archived = call_repo.archive_call(&CALL1).await?;
+    let archived = call_repo.archive_call(&CALL1, CALL1_ROOM).await?;
 
     super::enroll_stable_speaker_voices_for_call_record(&call_repo, &voice_repo, archived.call_id)
         .await;
@@ -4342,7 +4329,7 @@ async fn mixed_call_archives_only_after_both_users_and_guests_leave() {
         });
     repo.expect_archive_call_if_empty()
         .times(1)
-        .return_once(move |_| Box::pin(async move { Ok(Some(archived)) }));
+        .return_once(move |_, _| Box::pin(async move { Ok(Some(archived)) }));
 
     let user_left = CallWebhookEvent {
         event: "participant_left".to_string(),
@@ -4446,7 +4433,7 @@ async fn last_guest_leaving_archives_call_and_stops_recording() {
         .returning(|_| Box::pin(async { Ok(0) }));
     repo.expect_archive_call_if_empty()
         .times(1)
-        .return_once(move |_| Box::pin(async move { Ok(Some(archived)) }));
+        .return_once(move |_, _| Box::pin(async move { Ok(Some(archived)) }));
     let mut rtc = MockCallRtcClient::new();
     rtc.expect_verify_access_token()
         .times(1)

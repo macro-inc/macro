@@ -5,7 +5,7 @@ fn service(
     rtc: MockCallRtcClient,
 ) -> BaseWebhookCallService<StubConnectionService> {
     repo.expect_archive_call_if_program_only()
-        .returning(|_| Box::pin(async { Ok(None) }));
+        .returning(|_, _| Box::pin(async { Ok(None) }));
     CallServiceImpl::new(
         repo,
         rtc,
@@ -170,7 +170,7 @@ async fn previous_empty_call_cleanup_does_not_wait_for_media_teardown() {
         .returning(|_| Box::pin(async { Ok(0) }));
     repo.expect_archive_call_if_empty()
         .times(1)
-        .return_once(move |_| Box::pin(async move { Ok(Some(archived)) }));
+        .return_once(move |_, _| Box::pin(async move { Ok(Some(archived)) }));
     let (release, blocked) = tokio::sync::oneshot::channel();
     let (deleted, deletion) = tokio::sync::oneshot::channel();
     let mut rtc = MockCallRtcClient::new();
@@ -242,7 +242,7 @@ async fn meeting_allocation_does_not_wait_for_recording_or_transcription() {
     background_repo
         .expect_attach_meeting_recording()
         .times(1)
-        .return_once(move |id, egress| {
+        .return_once(move |id, _, egress| {
             assert_eq!(*id, call_id);
             assert_eq!(egress, "egress");
             Box::pin(async move { Ok(true) })
@@ -300,7 +300,7 @@ async fn late_meeting_recording_is_attached_before_it_is_stopped() {
         repo.expect_attach_meeting_recording()
             .times(1)
             .in_sequence(&mut sequence)
-            .returning(move |_, _| {
+            .returning(move |_, _, _| {
                 Box::pin(async move {
                     if attach_fails {
                         Err(anyhow::anyhow!("database unavailable"))
@@ -334,7 +334,7 @@ async fn meeting_recording_stops_if_call_ends_just_after_attachment() {
         .returning(|_, _| Box::pin(async { Ok("egress".to_string()) }));
     repo.expect_attach_meeting_recording()
         .times(1)
-        .returning(|_, _| Box::pin(async { Ok(true) }));
+        .returning(|_, _, _| Box::pin(async { Ok(true) }));
     repo.expect_get_call_by_id()
         .times(1)
         .returning(|_| Box::pin(async { Ok(None) }));
@@ -362,27 +362,32 @@ fn test_egress_config() -> EgressS3Config {
 
 #[tokio::test]
 async fn recording_webhook_can_link_before_the_startup_response() {
-    for (correct_room, channel_id) in [
-        (false, None),
-        (true, None),
-        (true, Some(STARTED_EVENT_CHANNEL_ID)),
-    ] {
-        let mut record = standalone_record(false);
-        record.channel_id = channel_id;
-        let call_id = record.call_id;
-        let room_name = call_id.to_string();
-        record.room_name = Some(if correct_room {
-            room_name.clone()
-        } else {
-            "different-room".to_string()
-        });
+    let call_id = STARTED_EVENT_CALL_ID;
+    // (session live in the room, an ended session ran in it)
+    for (live, ended) in [(true, false), (false, true), (false, false)] {
+        let room_name = Uuid::now_v7().to_string();
         let mut repo = MockCallRepository::new();
-        repo.expect_get_call_record_by_call_id()
+        let live_call = live.then(|| Call {
+            id: call_id,
+            channel_id: None,
+            room_name: room_name.clone(),
+            created_by: "macro|owner@example.com".to_string(),
+            created_at: Utc::now(),
+            egress_id: None,
+        });
+        repo.expect_get_call_by_room_name()
             .times(1)
-            .return_once(move |_| Box::pin(async move { Ok(Some(record)) }));
+            .return_once(move |_| Box::pin(async move { Ok(live_call) }));
+        repo.expect_get_ended_session_call()
+            .times(usize::from(!live))
+            .returning(move |_| Box::pin(async move { Ok(ended.then_some(call_id)) }));
+        let expected_room = room_name.clone();
         repo.expect_attach_meeting_recording()
-            .times(usize::from(correct_room))
-            .returning(|_, _| Box::pin(async { Ok(false) }));
+            .times(usize::from(live || ended))
+            .withf(move |id, room, egress| {
+                *id == call_id && room == expected_room && egress == "early-webhook-egress"
+            })
+            .returning(|_, _, _| Box::pin(async { Ok(false) }));
         let service: BaseWebhookCallService<StubConnectionService> = CallServiceImpl::new(
             repo,
             MockCallRtcClient::new(),
