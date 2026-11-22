@@ -5,12 +5,15 @@
 SET LOCAL lock_timeout = '3s';
 
 -- What was rated: one reply turn of an agent session, an agent's message in a
--- channel, DM, thread or discussion, or one run of a routine.
-CREATE TYPE agent_response_feedback_subject AS ENUM ('agent_session_turn', 'message', 'routine_run');
+-- channel, DM, thread or discussion, one run of a routine, or a suggestion an
+-- agent made the person.
+CREATE TYPE agent_response_feedback_subject AS ENUM
+    ('agent_session_turn', 'message', 'routine_run', 'suggestion');
 CREATE TYPE agent_response_rating AS ENUM ('up', 'down');
 -- Where the person saw the response; the only context the client reports.
 CREATE TYPE agent_response_feedback_surface AS ENUM
-    ('agents_view', 'agent_block', 'message_timeline', 'message_thread', 'routine_run');
+    ('agents_view', 'agent_block', 'message_timeline', 'message_thread', 'routine_run',
+     'suggestion_row', 'suggestion_tile', 'suggestion_draft');
 -- What produced the response: a first-party bot, a user- or team-owned bot,
 -- or an agent teammate posting as its own account.
 CREATE TYPE agent_response_agent_kind AS ENUM ('system_bot', 'owned_bot', 'teammate');
@@ -24,9 +27,9 @@ CREATE TABLE agent_response_feedback (
     id UUID PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES "User" (id) ON DELETE CASCADE,
     subject_kind agent_response_feedback_subject NOT NULL,
-    -- Agent session id, message parent id, or routine id.
+    -- Agent session id, message parent id, routine id, or suggestion id.
     container_id TEXT NOT NULL,
-    -- Agent session id, message id, or routine run id.
+    -- Agent session id, message id, routine run id, or suggestion id.
     subject_id UUID NOT NULL,
     -- The reply's turn; agent_session_turn only.
     turn INTEGER CHECK (turn >= 0),
@@ -36,7 +39,8 @@ CREATE TABLE agent_response_feedback (
     -- Context read server-side when the row was written, never from the client.
     -- message only: channel, document, call, ...
     message_parent_type TEXT,
-    -- The turn's session, a message's linked session, or a run's session.
+    -- The turn's session, a message's linked session, a run's session, or the
+    -- session that made a suggestion.
     agent_session_id UUID,
     -- bots.id, when a bot produced the response.
     agent_bot_id UUID,
