@@ -473,10 +473,13 @@ impl SoupRequest<EntityFilterAst> {
     /// continuation of a timestamp-sorted Soup, newest first, at most
     /// [`CHANNEL_DIRECTORY_PAGE_LIMIT`] items, with channel threads left out
     /// and a channel filter the request bounds (`channel_directory::bounded`).
-    /// It carries no favorites or CRM record scope: Soup turns either into
-    /// channel ids (as many as the favorites or the record hold) after this
-    /// check, and a CRM scope also reads the record's references through the
-    /// channel repository. Only such a page may read its channels from the
+    /// It carries no `favorites_only: true` and no CRM record, whether as the
+    /// request's association or as a `CrmAssociated` literal anywhere in its
+    /// document filter: Soup resolves either before any source query,
+    /// turning it into channel ids (as many as the favorites or the record
+    /// hold) and reading a record's references through the channel
+    /// repository. A CRM email scope is a separate field the email leg reads,
+    /// and stays allowed. Only such a page may read its channels from the
     /// primary database: it costs what one page of the REST channel list
     /// costs there.
     ///
@@ -489,7 +492,7 @@ impl SoupRequest<EntityFilterAst> {
             && self.sort_direction == SoupSortDirection::Desc
             && matches!(self.cursor, SoupQuery::Simple(_))
             && filter.favorites_only != Some(true)
-            && filter.crm_association.is_none()
+            && filter.crm_associations().is_empty()
             && exclusions::channel_thread(Some(filter))
             && channel_directory::bounded(filter.channel_filter.as_deref())
     }

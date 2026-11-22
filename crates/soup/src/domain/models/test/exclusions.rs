@@ -1,8 +1,10 @@
 use super::*;
 use entity_access::domain::models::EntityAccessReceipt;
+use item_filters::ast::LiteralTree;
 use item_filters::ast::channel::{ChannelLiteral, ChannelThreadLiteral};
 use item_filters::ast::crm_association::CrmAssociation;
 use item_filters::ast::crm_company::CrmCompanyLiteral;
+use item_filters::ast::document::DocumentLiteral;
 use item_filters::ast::foreign_entity::ForeignEntityLiteral;
 use models_pagination::CursorVal;
 
@@ -416,6 +418,11 @@ fn channel_directory_pages_admit_only_channel_filters_the_request_bounds() {
         Expr::or(named([1]), Expr::val(ChannelLiteral::IsParticipant(false))),
         Expr::is_not(named([1])),
         Expr::and(Expr::is_not(named([1])), either_participation()),
+        // NOT keeps every participation state it holds.
+        Expr::and(
+            named(1..=3),
+            Expr::is_not(Expr::and(either_participation(), either_participation())),
+        ),
         Expr::val(ChannelLiteral::TeamId(id(9))),
     ];
     for follow_up in [false, true] {
@@ -436,10 +443,31 @@ fn channel_directory_pages_admit_only_channel_filters_the_request_bounds() {
     }
 }
 
+/// A document filter that names `record`, negated when `negated`.
+fn documents_naming(record: CrmAssociation, negated: bool) -> LiteralTree<DocumentLiteral> {
+    let literal = Expr::val(DocumentLiteral::CrmAssociated(record));
+    Some(Arc::new(if negated {
+        Expr::is_not(literal)
+    } else {
+        literal
+    }))
+}
+
 #[test]
 fn channel_directory_pages_carry_no_scope_soup_turns_into_channel_ids() {
-    let scopes: [(&str, fn(&mut EntityFilterAst)); 4] = [
+    let scopes: [(&str, fn(&mut EntityFilterAst)); 7] = [
         ("favorites", |filter| filter.favorites_only = Some(true)),
+        // A record the document filter names is resolved the same way, even
+        // under NOT.
+        ("document company", |filter| {
+            filter.document_filter = documents_naming(CrmAssociation::Company(id(7)), false);
+        }),
+        ("document contact", |filter| {
+            filter.document_filter = documents_naming(CrmAssociation::Contact(id(7)), false);
+        }),
+        ("document company under NOT", |filter| {
+            filter.document_filter = documents_naming(CrmAssociation::Company(id(7)), true);
+        }),
         ("company", |filter| {
             filter.crm_association = Some(CrmAssociation::Company(id(7)));
         }),

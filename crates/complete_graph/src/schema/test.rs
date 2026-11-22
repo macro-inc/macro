@@ -2847,6 +2847,18 @@ async fn soup_channel_reads_primary_refuses_pages_that_are_not_directory_pages()
             scoped_directory_page("crmAssociation: {activity: true}"),
         ),
         (
+            "a CRM company in the document filter",
+            scoped_directory_page(
+                r#"documentFilter: {literal: {crmAssociated: {company: "00000000-0000-0000-0000-000000000007"}}}"#,
+            ),
+        ),
+        (
+            "a CRM contact under NOT in the document filter",
+            scoped_directory_page(
+                r#"documentFilter: {not: {literal: {crmAssociated: {contact: "00000000-0000-0000-0000-000000000007"}}}}"#,
+            ),
+        ),
+        (
             "more participation states than a page needs",
             directory_page(
                 ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
