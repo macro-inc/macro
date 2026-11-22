@@ -498,6 +498,14 @@ validation protects the predicate/collation; a pre-release local schema-12 shape
 without it is incompatible, since it already records version 12 and no step runs.
 No contacts store was introduced.
 
+Storage schema 13 adds `index_document_facts`, one canonical blob of each
+complete authoritative index document's facts. The authority sort window reads
+that one row per candidate and tests its partition's predicate in Rust, instead
+of seeking the fact tables once per fact; the fact tables stay for set-based
+lookups and the optimistic window. The registered 12 to 13 step creates the
+table and fills it from the fact tables in place, so records and queued writes
+stay, and browsers carry a `t12` database forward to `t13` before it runs.
+
 `cargo test -p cache-turso --test search` checks matching/ranking parity, including
 Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
 measurement with `cargo test -p cache-turso --test search -- --ignored --nocapture`.
