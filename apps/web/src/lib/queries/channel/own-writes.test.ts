@@ -382,6 +382,26 @@ describe('ownChannelWrites', () => {
     expect(own.writes()).toEqual({});
   });
 
+  it('ends a retention once a later read replaced every write it kept', () => {
+    vi.useFakeTimers();
+    const own = ownChannelWrites(new QueryClient());
+    const sent = own.send(ACCOUNT, [A, B]);
+    sent.settle({ [A]: written, [B]: null });
+    const retention = own.retain(sent.sequence);
+
+    settle(own, { [A]: { ...written, name: 'again' } });
+    // B is still the first read's.
+    expect(retention.signal.aborted).toBe(false);
+    settle(own, { [B]: written });
+    expect(retention.signal.aborted).toBe(true);
+
+    // Nothing of the first read is held: a retention taken now keeps nothing.
+    expect(own.retain(sent.sequence).signal.aborted).toBe(true);
+    retention.release();
+    vi.advanceTimersByTime(OWN_WRITE_HOLD_MS);
+    expect(own.writes()).toEqual({});
+  });
+
   it('ends every retention on clear, and takes none for a read sent before it', () => {
     vi.useFakeTimers();
     const own = ownChannelWrites(new QueryClient());

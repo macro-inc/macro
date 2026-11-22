@@ -4068,6 +4068,46 @@ describe("the viewer's own channel writes", () => {
     expect(ownChannelWrites(client).writes()).toEqual({});
   });
 
+  it('stops waiting on pages for a write a later write replaced while no pages could be read', async () => {
+    const primary = [
+      channelRecord('a', { name: 'first', updatedAt: UPDATED_MID }),
+    ];
+    const network = fakeNetwork([channelRecord('a', { name: 'before' })], {
+      primary,
+      failingPages: Number.POSITIVE_INFINITY,
+    });
+    const client = queryClient();
+    const directory = mountMemoryDirectory(network, client);
+    await vi.waitFor(() => expect(directory.complete()).toBe(false));
+    const unsubscribed = vi.fn();
+    const subscribe = client
+      .getQueryCache()
+      .subscribe.bind(client.getQueryCache());
+    vi.spyOn(client.getQueryCache(), 'subscribe').mockImplementation(
+      (listener) => {
+        const unsubscribe = subscribe(listener);
+        return () => {
+          unsubscribed();
+          unsubscribe();
+        };
+      }
+    );
+
+    await writeOf(client, network, ['a']);
+    expect(unsubscribed).not.toHaveBeenCalled();
+
+    // A later write reads the channel again and replaces the first write's
+    // record: the first write has nothing left to keep, so its wait on the
+    // pages ends while they still fail.
+    primary[0] = channelRecord('a', { name: 'second', updatedAt: UPDATED_MID });
+    await writeOf(client, network, ['a']);
+
+    expect(unsubscribed).toHaveBeenCalledTimes(1);
+    expect(
+      ownChannelWrites(client).writes()[channelUuid('a')]?.channel?.name
+    ).toBe('second');
+  });
+
   it('shows a later update by someone else over the write', async () => {
     const channels = [channelRecord('a', { name: 'before' })];
     const network = fakeNetwork(channels, {

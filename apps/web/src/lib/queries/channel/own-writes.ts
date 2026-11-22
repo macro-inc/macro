@@ -67,7 +67,9 @@ export type OwnChannelWrites = {
   /** Keeps the writes of the read sent at `sequence` past the end of their
    * hold until the returned retention is let go: a refresh still owes the
    * read that would show them. A source showing a write still lets it go.
-   * The retention's signal aborts once it is let go or the store clears. */
+   * The retention's signal aborts once it is let go, once none of those
+   * writes is held any longer (a later read replaced them all, or they were
+   * let go), or when the store clears. */
   retain: (sequence: number) => OwnWriteRetention;
   /** Lets every write go, drops the reads still in flight, and forgets the
    * order of every read sent so far: the storage the directories read was
@@ -118,8 +120,11 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
   >();
   let sequence = 0;
   let clearedAt = 0;
-  // Ends the holds whose writes all went or were replaced, and forgets the
-  // order of channels no read in flight was sent before.
+  // The sequences of the reads whose writes the store still holds.
+  const heldSequences = () =>
+    new Set(Object.values(untrack(writes)).map((write) => write.sequence));
+  // Ends the holds and retentions whose writes all went or were replaced,
+  // and forgets the order of channels no read in flight was sent before.
   const sweep = () => {
     const held = untrack(writes);
     for (const [hold, taken] of holds) {
@@ -127,6 +132,15 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
         continue;
       clearTimeout(hold);
       holds.delete(hold);
+    }
+    // A retention keeps nothing once no write of its read is held: ending it
+    // stops whatever waits to let it go.
+    const sequences = heldSequences();
+    for (const [at, kept] of retained) {
+      if (sequences.has(at)) continue;
+      retained.delete(at);
+      expired.delete(at);
+      for (const retention of kept) retention.abort();
     }
     let oldest = Number.POSITIVE_INFINITY;
     for (const read of inFlight.values())
@@ -194,7 +208,8 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
     release,
     retain(at) {
       const retention = new AbortController();
-      if (at <= clearedAt) {
+      // Cleared since, or none of its writes is still held: nothing to keep.
+      if (at <= clearedAt || !heldSequences().has(at)) {
         retention.abort();
         return { release() {}, signal: retention.signal };
       }
