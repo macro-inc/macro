@@ -1,0 +1,19 @@
+crates/code_execution/src/outbound/deno/test/js_tools.rs
+  s_374cba3c67d385::t_b2d504b91f039d 482
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f9f3a3d3d7fec6b5582102159285b1402807ce97",
+  "prompts": {},
+  "sessions": {
+    "s_374cba3c67d385": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a476132e-5ad0-443d-a5a7-bb920ca8fb53",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
