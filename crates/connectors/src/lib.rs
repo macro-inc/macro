@@ -17,6 +17,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashSet;
 use std::pin::Pin;
 
+pub mod domain;
 /// The adapters for each source of connections.
 pub mod outbound;
 mod overlay;

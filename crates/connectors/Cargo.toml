@@ -32,6 +32,7 @@ oauth2 = { version = "5.0", default-features = false }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 reqwest.workspace = true
 rmcp = { workspace = true, features = ["auth", "client", "transport-streamable-http-client-reqwest"] }
+rootcause.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -45,6 +46,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+proptest.workspace = true
 regex.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 tower = { workspace = true }

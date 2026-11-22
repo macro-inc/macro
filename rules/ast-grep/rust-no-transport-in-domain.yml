@@ -21,6 +21,11 @@ ignores:
   # not transport leakage. What this rule exists to catch — IntoResponse
   # impls and status-code mapping — stays in that crate's inbound adapter.
   - 'crates/agent_egress/src/domain/**'
+  # The connectors domain relays a sandbox's MCP request and a connected
+  # app's REST call: the upstream headers and the app's status and headers
+  # are the subject matter of its API port, so `http` is its domain language
+  # here too.
+  - 'crates/connectors/src/domain/**'
 rule:
   any:
     - kind: scoped_identifier
