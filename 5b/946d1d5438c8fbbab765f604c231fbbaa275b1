@@ -1,0 +1,31 @@
+apps/web/src/features/block-call/primitives/recording-sessions.test.ts
+  s_9671c7bc652ab5::t_40c6fc16b48360 1-159
+apps/web/src/features/block-call/primitives/recording-sessions.ts
+  s_9671c7bc652ab5::t_fb8b2685e4b106 54-56,58
+  s_9671c7bc652ab5::t_6f535348d4bc74 2-53,57,59-128
+  s_e4dab6ab069ba5::t_3da4bb72f049fb 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5b946d1d5438c8fbbab765f604c231fbbaa275b1",
+  "prompts": {},
+  "sessions": {
+    "s_9671c7bc652ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a46e4f3c-7142-45e8-9694-084925c538ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e4dab6ab069ba5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cd9cc4b6-e475-4672-bb0c-d61b5198aec2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
