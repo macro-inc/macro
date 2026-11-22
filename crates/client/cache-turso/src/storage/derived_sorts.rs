@@ -120,24 +120,48 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
             parameters,
         )?;
     }
-    // An optimistic row that cannot vouch for its source value cannot vouch
-    // for the copy either.
-    driver::execute(
+    derive_uncertainty(connection, derivation)
+}
+
+/// Gives each uncertain optimistic row the uncertainty composition gives a
+/// derived fact: as uncertain as its source and required facts. Rows store
+/// either a list of uncertain attributes or "all except" a certain list, so
+/// each is decoded and rewritten with the shared rule rather than in SQL.
+fn derive_uncertainty(
+    connection: &Db,
+    derivation: &SortFactDerivation,
+) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
         connection,
         &format!(
-            "DELETE FROM optimistic_uncertain_attributes WHERE attribute = ?1 AND document_id IN (SELECT id FROM optimistic_index_documents WHERE profile IN ({after_target}))"
+            "SELECT u.document_id, d.profile, u.attribute FROM optimistic_uncertain_attributes AS u JOIN optimistic_index_documents AS d ON d.id = u.document_id WHERE d.profile IN ({}) ORDER BY u.document_id",
+            placeholders(1, derivation.profiles.len())
         ),
-        with_profiles(vec![text(derivation.target)], derivation),
+        with_profiles(Vec::new(), derivation),
     )?;
-    driver::execute(
-        connection,
-        &format!(
-            "INSERT INTO optimistic_uncertain_attributes (document_id, attribute) SELECT u.document_id, ?1 FROM optimistic_uncertain_attributes AS u JOIN optimistic_index_documents AS d ON d.id = u.document_id WHERE u.attribute = ?2 AND d.profile IN ({after_source})"
-        ),
-        with_profiles(
-            vec![text(derivation.target), text(derivation.source)],
-            derivation,
-        ),
-    )?;
+    let mut documents: Vec<(i64, String, Vec<String>)> = Vec::new();
+    for row in &rows {
+        let document_id = required_i64(row, 0)?;
+        let attribute = required_text(row, 2)?;
+        match documents.last_mut() {
+            Some((last, _, attributes)) if *last == document_id => attributes.push(attribute),
+            _ => documents.push((document_id, required_text(row, 1)?, vec![attribute])),
+        }
+    }
+    for (document_id, profile, attributes) in documents {
+        let stored = parse_optimistic_uncertainty(attributes)?;
+        let profile = Profile::new(Token::new(&profile).map_err(|_| invariant())?);
+        let mut derived = stored.clone();
+        derivation.apply_uncertainty(&profile, &mut derived);
+        if derived == stored {
+            continue;
+        }
+        driver::execute(
+            connection,
+            "DELETE FROM optimistic_uncertain_attributes WHERE document_id = ?1",
+            vec![Value::from_i64(document_id)],
+        )?;
+        write_optimistic_uncertainty(connection, document_id, derived)?;
+    }
     Ok(())
 }

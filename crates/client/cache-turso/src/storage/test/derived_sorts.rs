@@ -263,3 +263,82 @@ fn reopening_an_older_cache_derives_facts_and_keeps_queued_writes() {
         storage.try_close().unwrap();
     });
 }
+
+fn uncertainty_rows(storage: &TursoStorage, document_id: i64) -> Vec<String> {
+    driver::query(
+        &storage.connection(),
+        "SELECT attribute FROM optimistic_uncertain_attributes WHERE document_id = ?1 ORDER BY attribute",
+        vec![Value::from_i64(document_id)],
+    )
+    .unwrap()
+    .iter()
+    .map(|row| required_text(row, 0).unwrap())
+    .collect()
+}
+
+/// Rows uncertain about everything except a list carry the derived fact in
+/// that list exactly when its source and required facts are on it.
+#[test]
+fn all_except_uncertainty_gets_the_derived_rule() {
+    let shape = Shape {
+        other_profile: false,
+        property_profile: true,
+        inbox: Some(true),
+        has_message: Some(true),
+        inbox_ts: Some(30),
+        stale_target: None,
+    };
+    let certain = |attribute: &str| format!("{UNCERTAINTY_CERTAIN_V1_PREFIX}{attribute}");
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("derived-all-except").unwrap();
+        let owner = storage.enqueue_mutation(queued("Owner")).await.unwrap();
+        store(
+            &storage,
+            &[shape.clone(), shape.clone(), shape],
+            Some(mutation_id_to_sql(owner).unwrap()),
+        );
+        // 1: every input certain. 2: the source uncertain, the copy wrongly
+        // listed certain. 3: a plain list naming only the source.
+        let rows = [
+            (1, UNCERTAINTY_ALL_V1.to_owned()),
+            (1, certain(SOURCE)),
+            (1, certain("mail-inbox")),
+            (1, certain("mail-has-message")),
+            (2, UNCERTAINTY_ALL_V1.to_owned()),
+            (2, certain("mail-inbox")),
+            (2, certain("mail-has-message")),
+            (2, certain(INBOX_VIEW_DERIVATION.target)),
+            (3, SOURCE.to_owned()),
+        ];
+        for (document_id, attribute) in rows {
+            raw_execute(
+                &storage,
+                "INSERT INTO optimistic_uncertain_attributes (document_id, attribute) VALUES (?1, ?2)",
+                vec![Value::from_i64(document_id), text(&attribute)],
+            );
+        }
+        forget_version(&storage);
+        crate::storage::derived_sorts::ensure_version(&storage.connection()).unwrap();
+
+        let mut expected = vec![
+            UNCERTAINTY_ALL_V1.to_owned(),
+            certain(SOURCE),
+            certain("mail-has-message"),
+            certain("mail-inbox"),
+            certain(INBOX_VIEW_DERIVATION.target),
+        ];
+        expected.sort();
+        assert_eq!(uncertainty_rows(&storage, 1), expected);
+        let mut expected = vec![
+            UNCERTAINTY_ALL_V1.to_owned(),
+            certain("mail-has-message"),
+            certain("mail-inbox"),
+        ];
+        expected.sort();
+        assert_eq!(uncertainty_rows(&storage, 2), expected);
+        assert_eq!(
+            uncertainty_rows(&storage, 3),
+            vec![SOURCE.to_owned(), INBOX_VIEW_DERIVATION.target.to_owned()]
+        );
+    });
+}
