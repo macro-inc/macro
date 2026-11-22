@@ -1,4 +1,4 @@
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
+import { ConnectorIcon } from '@core/connectors/ConnectorIcon';
 import type { SlashMenuMcp } from '@queries/slash-menu-mcps';
 import { cn } from '@ui';
 import { createEffect } from 'solid-js';
@@ -31,7 +31,7 @@ export function McpRow(props: {
       }}
     >
       <div class="mr-2 flex items-center">
-        <PipedreamConnectorIcon
+        <ConnectorIcon
           appSlug={props.item.appSlug ?? ''}
           class="size-4 shrink-0 text-ink-muted"
         />
