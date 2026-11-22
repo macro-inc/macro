@@ -34,7 +34,10 @@ shows a tool's override or its action's state.
 ## Gotchas
 
 - Setting a tool to its action's state sends `state: null`, so a saved tool
-  rule always means the tool differs; ↺ sends `null` too.
+  rule always means the tool differs; ↺ sends `null` too. While the action's
+  own change saves, the tool's waits for it (`PendingChanges.setTool`) and
+  compares with the state the action ends up in, so a failed action save
+  can't leave the tool following the wrong state.
 - The Macro persona's permissions use `MACRO_NEW_BOT_ID`, not
   `MACRO_AGENT_BOT_ID`.
 - Gate every entry point, and every read of the permissions API, on
