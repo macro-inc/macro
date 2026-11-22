@@ -23,8 +23,10 @@ import {
 import { type Accessor, createEffect, on } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { queryClient } from '../client';
+import { defaultQueryRetry } from '../retry';
 import { messageKeys } from './keys';
 import { channelReadNetworkMode, retryOnceOnline } from './local/flag';
+import { withSendsInHand } from './local/sends-in-hand';
 import {
   loadLocalChannelTimelinePage,
   resolveLocalChannelMessage,
@@ -94,8 +96,14 @@ export function fetchResolvedChannelMessage(
   thread_id: string;
   created_at: string;
 }> {
+  // With no connection the device still says where a message it holds sits.
+  const networkMode = channelReadNetworkMode(parent);
   return queryClient.fetchQuery({
     queryKey: messageKeys.resolveMessage(parent, messageId).queryKey,
+    networkMode,
+    ...(networkMode === 'offlineFirst' && {
+      retry: retryOnceOnline(defaultQueryRetry),
+    }),
     queryFn: async () => {
       if (parent.type === 'channel') {
         const local = await resolveLocalChannelMessage(parent.id, messageId);
@@ -207,6 +215,8 @@ async function fetchMessageTimelinePage(
   loadAroundMessageId: string | null,
   options: { signal?: AbortSignal; revalidate?: boolean } = {}
 ): Promise<MessageTimelinePage> {
+  // The page a channel opens with, which ends at its newest message.
+  const latest = !pageParam && !loadAroundMessageId;
   if (parent.type === 'channel') {
     // Channels read from the device cache when it can serve them; it answers
     // undefined for anyone still on REST and for a read it could not serve.
@@ -219,7 +229,7 @@ async function fetchMessageTimelinePage(
       revalidate: options.revalidate,
       signal: options.signal,
     });
-    if (local) return local;
+    if (local) return latest ? withSendsInHand(parent.id, local) : local;
   }
   const page = await entityMessagesClient.timeline(parent, {
     limit: pageParam ? 100 : 50,
@@ -230,7 +240,11 @@ async function fetchMessageTimelinePage(
     // roots used by Discussion, whose projection hides deleted threads.
     include_deleted_threads: parent.type === 'document',
   });
-  return normalizeMessageTimelinePageSenders(page);
+  const normalized = normalizeMessageTimelinePageSenders(page);
+  // The device could not answer; a message being sent through it still shows.
+  return parent.type === 'channel' && latest
+    ? withSendsInHand(parent.id, normalized)
+    : normalized;
 }
 
 export function messageTimelineQueryOptions(

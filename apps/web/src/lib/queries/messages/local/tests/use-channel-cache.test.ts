@@ -44,7 +44,7 @@ vi.mock('../pages', () => ({
 }));
 vi.mock('../prewarm', () => ({
   evictIdleChannels: vi.fn(),
-  runChannelPrewarm: vi.fn(),
+  runChannelPrewarmPass: vi.fn(),
 }));
 vi.mock('../prewarm-list', () => ({ loadPrewarmChannelIds: vi.fn() }));
 vi.mock('../unqueued-sends', () => ({

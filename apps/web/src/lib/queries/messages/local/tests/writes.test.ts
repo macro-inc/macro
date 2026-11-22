@@ -17,6 +17,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mapChannelMessage } from '../map';
 import { readDeviceChannelPage } from '../pages';
+import { resetSendsInHand, withSendsInHand } from '../sends-in-hand';
 import { unplacedSortKey } from '../sort-key';
 import { resetUnsettledReplies } from '../unsettled-replies';
 import {
@@ -296,6 +297,44 @@ describe('queued channel writes', () => {
     settle({ transactionId: '4', status: 'committed' });
 
     expect(await sending).toMatchObject({ id, content: 'hello' });
+  });
+
+  it('keeps a message being sent on the opening page until it is delivered or the cache is reset', async () => {
+    resetSendsInHand();
+    const empty = { entries: [], next_cursor: null, previous_cursor: null };
+    const shown = () =>
+      withSendsInHand(CHANNEL_ID, empty).entries.flatMap((entry) =>
+        entry.type === 'activity' ? [] : [entry.message.id]
+      );
+    for (const end of ['committed', 'reset'] as const) {
+      const stored = graphqlMessage(end === 'committed' ? 7 : 8);
+      const { client } = fakeClient(() => ({
+        disposition: { kind: 'queued', transactionId: '4' },
+      }));
+      const { host, settle, reset } = writeHost([stored]);
+      const sending = sendChannelMessage(
+        host,
+        {
+          channelId: CHANNEL_ID,
+          id: stored.id,
+          senderId: SENDER,
+          message: { content: 'hello' },
+        },
+        { client }
+      );
+      // On the page from the moment it is sent, before the queue answers.
+      expect(shown()).toEqual([stored.id]);
+      await Promise.resolve();
+      expect(shown()).toEqual([stored.id]);
+      if (end === 'committed') {
+        settle({ transactionId: '4', status: 'committed' });
+        await sending;
+      } else {
+        reset();
+        await expect(sending).rejects.toBeDefined();
+      }
+      expect(shown()).toEqual([]);
+    }
   });
 
   it('rejects a held write when the device cache is reset', async () => {

@@ -119,6 +119,56 @@ export async function runChannelPrewarm(
   });
 }
 
+/** How many times a pass asks again for channels listed since it began. */
+export const PREWARM_FOLLOW_UPS = 2;
+
+/**
+ * One pass: warms the listed channels, then asks for the lists again and
+ * warms the ones that were not on them before. A channel becomes unread on
+ * the server a moment after its message is stored, and a pass takes a while,
+ * so a channel that turned unread around its start is not on the first list;
+ * without the second look it would wait for the next pass, minutes away.
+ */
+export async function runChannelPrewarmPass(
+  host: ChannelPrewarmHost,
+  loadChannelIds: () => Promise<string[]>,
+  options: Parameters<typeof runChannelPrewarm>[2]
+): Promise<ChannelPrewarmOutcome> {
+  const total: ChannelPrewarmOutcome = {
+    fetched: 0,
+    caughtUp: 0,
+    failed: 0,
+    unavailable: false,
+  };
+  const listed = new Set<string>();
+  for (let round = 0; round <= PREWARM_FOLLOW_UPS; round += 1) {
+    // Offline the lists cannot be asked for; the pass after the reconnect runs.
+    if (options.signal.aborted || !onlineManager.isOnline()) break;
+    let asked: string[];
+    try {
+      // A second look waits for the person to leave the app alone, too.
+      if (round > 0) await options.ready?.(options.signal);
+      if (options.signal.aborted) break;
+      asked = await loadChannelIds();
+    } catch (error) {
+      // The channels already warmed stay warmed; only the first look fails the pass.
+      if (round === 0) throw error;
+      if (!options.signal.aborted) Telemetry.error(error);
+      break;
+    }
+    const channelIds = asked.filter((id) => !listed.has(id));
+    if (options.signal.aborted || channelIds.length === 0) break;
+    for (const id of channelIds) listed.add(id);
+    const outcome = await runChannelPrewarm(host, channelIds, options);
+    total.fetched += outcome.fetched;
+    total.caughtUp += outcome.caughtUp;
+    total.failed += outcome.failed;
+    total.unavailable = outcome.unavailable;
+    if (outcome.unavailable) break;
+  }
+  return total;
+}
+
 /**
  * Removes channels not opened for thirty days, with their messages. Resolves
  * to the number of channels removed.

@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => ({
   channelCacheAnswered: vi.fn(() => true),
   withUnsettledThreadReplies: vi.fn(),
   listQueuedReplies: vi.fn(),
+  withQueuedSends: vi.fn(),
+  pageLacksQueuedSends: vi.fn(),
+  refreshChannelViews: vi.fn(),
 }));
 
 vi.mock('../flag', () => ({
@@ -41,12 +44,16 @@ vi.mock('../unsettled-replies', () => ({
   pageHasQueuedReplies: vi.fn(async () => false),
   withUnsettledThreadReplies: mocks.withUnsettledThreadReplies,
 }));
+vi.mock('../queued-sends', () => ({
+  withQueuedSends: mocks.withQueuedSends,
+  pageLacksQueuedSends: mocks.pageLacksQueuedSends,
+}));
 vi.mock('../catch-up', () => ({
   MAX_PUSH_REREADS: 3,
   catchUpAndRefresh: mocks.catchUpAndRefresh,
   catchUpChannel: vi.fn(),
   pushesStored: mocks.pushesStored,
-  refreshChannelViews: vi.fn(),
+  refreshChannelViews: mocks.refreshChannelViews,
 }));
 
 const host = {
@@ -67,6 +74,10 @@ beforeEach(() => {
   mocks.channelCacheHost.mockReturnValue(host);
   mocks.catchUpAndRefresh.mockResolvedValue(undefined);
   mocks.listQueuedReplies.mockReturnValue(QUEUED);
+  mocks.withQueuedSends.mockImplementation(
+    async (_host, _channelId, read) => read
+  );
+  mocks.pageLacksQueuedSends.mockResolvedValue(false);
   mocks.withUnsettledThreadReplies.mockImplementation(
     async (_host, _channelId, read) => read
   );
@@ -118,6 +129,47 @@ describe('loadLocalChannelTimelinePage', () => {
 
     expect(await loadLocalChannelTimelinePage(read)).toEqual(page('server'));
     expect(mocks.pushesStored).not.toHaveBeenCalled();
+  });
+
+  it('puts the messages waiting in the queue into a page the device answered', async () => {
+    mocks.loadChannelPage.mockResolvedValue(devicePage('held', '7'));
+    mocks.pushesStored.mockResolvedValue(false);
+    mocks.withQueuedSends.mockResolvedValue(page('held and waiting'));
+
+    expect(await loadLocalChannelTimelinePage(read)).toEqual(
+      page('held and waiting')
+    );
+    expect(mocks.withQueuedSends).toHaveBeenCalledWith(
+      host,
+      CHANNEL_ID,
+      page('held')
+    );
+  });
+
+  it('leaves an older page as the device read it', async () => {
+    mocks.loadChannelPage.mockResolvedValue(devicePage('older', '7'));
+    mocks.pushesStored.mockResolvedValue(false);
+    const older = { created_at: '2026-01-01T00:00:00.000Z', id: 'm' };
+
+    await loadLocalChannelTimelinePage({ ...read, older });
+    expect(mocks.withQueuedSends).not.toHaveBeenCalled();
+  });
+
+  it('reads a server page again when a waiting message is missing from it', async () => {
+    mocks.loadChannelPage.mockResolvedValue({
+      page: page('server'),
+      source: 'server',
+      serverSeq: '9',
+      stored: Promise.resolve('9'),
+    });
+    mocks.pageLacksQueuedSends.mockResolvedValue(true);
+
+    // Answered at once, without the queue being asked first.
+    expect(await loadLocalChannelTimelinePage(read)).toEqual(page('server'));
+    expect(mocks.withQueuedSends).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(mocks.refreshChannelViews).toHaveBeenCalledWith(CHANNEL_ID)
+    );
   });
 
   it('stops when the read is cancelled during the wait', async () => {

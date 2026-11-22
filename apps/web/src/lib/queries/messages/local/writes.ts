@@ -30,6 +30,7 @@ import type {
 } from '@urql/core';
 import { ResultAsync } from 'neverthrow';
 import { mapChannelMessage } from './map';
+import { forgetSendInHand, noteSendInHand } from './sends-in-hand';
 import { CHANNEL_MESSAGE_TYPENAME, unplacedSortKey } from './sort-key';
 import { loadChannelMessage } from './thread';
 import { noteUnqueuedSend, pageIsLeaving } from './unqueued-sends';
@@ -278,7 +279,7 @@ export const WAITING_ANNOUNCE_MS = 1_000;
  * every message the server has placed, where the server will put it too unless
  * someone else's message arrives first.
  */
-function predictedMessage(
+export function predictedMessage(
   send: QueuedChannelSend,
   createdAt: string
 ): ChannelMessageFieldsFragment | undefined {
@@ -343,13 +344,15 @@ export function sendChannelMessage(
   const predicted = predictedMessage(send, createdAt);
   // Until the queue holds it, a reload would lose a message already shown.
   const note = noteUnqueuedSend(send, createdAt);
+  // Until it is delivered, a page read may lack a message already shown.
+  if (predicted) noteSendInHand(predicted);
   const rootId = send.message.thread_id;
   if (rootId && predicted) {
     // The root's record will not show the reply until the device catches up.
     noteOwnReply(send.channelId, rootId, mapChannelMessage(predicted));
   }
   return unlessPageLeft(
-    settledReply(
+    settledSend(
       send.id,
       queuedWrite(host, deps, {
         operation: 'channel.write.send',
@@ -389,18 +392,20 @@ export function sendChannelMessage(
   );
 }
 
-/** Keeps the note of a reply in step with what became of it. */
-async function settledReply(
-  replyId: string,
+/** Keeps the notes of a send in step with what became of it. */
+async function settledSend(
+  messageId: string,
   write: Promise<Message>
 ): Promise<Message> {
   try {
     const delivered = await write;
     ownReplyDelivered(delivered);
+    forgetSendInHand(messageId);
     return delivered;
   } catch (error) {
     // A page being left keeps the row; the note goes with the page.
-    forgetOwnReply(replyId);
+    forgetOwnReply(messageId);
+    forgetSendInHand(messageId);
     throw error;
   }
 }
