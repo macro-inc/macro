@@ -290,9 +290,23 @@ periodic walk requests synchronization. Watcher setup reads only the scoped
 catalog, without a command lease or a second discovery/login session. Without
 IDLE, SELECT comparison runs every thirty seconds and uses HIGHESTMODSEQ when
 CONDSTORE is advertised. UIDNEXT still detects new Spam and Trash arrivals.
-On servers with neither IDLE nor CONDSTORE, remote read/unread and flagged
-changes can wait for the periodic walk, up to thirty minutes; this is the
-trade-off for avoiding full scans on quiet accounts.
+While polling without CONDSTORE, remote read/unread and flagged changes can wait
+for the periodic walk, up to thirty minutes. This applies when IDLE is unavailable
+or a saturated host has no watch slot; it is the trade-off for avoiding full
+scans on quiet accounts. New mail remains detectable through UIDNEXT and counts.
+
+Each replica owns at most 150 actors and admits at most 25 new actors per
+thirty-second scheduler tick, retaining its already-owned bindings. Per-host
+watch admission is separately capped at 150 of the connector's 200 sockets,
+leaving 50 available to commands and verification. A primary or extra watch
+without a slot uses the cheap SELECT comparison every thirty seconds and
+retries IDLE admission next round; new mail can take up to thirty seconds under
+host saturation. Poll sockets close before the wait and do not occupy the
+reserve as idle cached connections. These limits are local to each replica.
+
+An actor's initial round still performs a full scan after a process restart.
+New-actor admission paces that wave; avoiding or spreading it further remains
+follow-up `mac-lcie`.
 
 An absent or refused physical baseline returns BaselineUnavailable. Recovery
 scans back off from thirty seconds, doubling to thirty minutes. That wait is

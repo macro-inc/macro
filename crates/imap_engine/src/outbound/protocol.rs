@@ -9,6 +9,7 @@ mod identity;
 mod idle;
 mod login;
 mod message;
+mod polling;
 mod sent;
 mod smtp;
 mod snapshot;
@@ -347,6 +348,11 @@ impl MailTransport for ProtocolTransport {
         committed: &FolderState,
         idle_seconds: u64,
     ) -> Result<WaitOutcome, Error> {
+        Connector::validate(&c.imap.endpoint, true)?;
+        let Some(watch) = self.connector.try_watch(&c.imap.endpoint)? else {
+            // Never consume the command reserve with a held IDLE socket.
+            return self.poll_folder(c, committed).await;
+        };
         let result = timeout(Duration::from_secs(300), async {
             let mut session = self.imap(&c.imap).await?;
             let capabilities = session
@@ -385,6 +391,8 @@ impl MailTransport for ProtocolTransport {
             // Without IDLE, poll this cheap SELECT comparison; do not rescan
             // headers merely because the bounded watch interval elapsed.
             if !capabilities.has_str("IDLE") {
+                drop(session);
+                drop(watch);
                 tokio::time::sleep(Duration::from_secs(30)).await;
                 return Ok((WaitOutcome::Restarted, false));
             }

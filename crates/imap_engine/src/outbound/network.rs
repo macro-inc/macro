@@ -160,12 +160,19 @@ pub struct LocalEndpoints {
     pub trust_root_pem: Option<String>,
 }
 
+// Watches have a separate admission budget within the total host sockets.
+#[derive(Clone)]
+struct HostBudget {
+    connections: Arc<tokio::sync::Semaphore>,
+    watches: Arc<tokio::sync::Semaphore>,
+}
+
 /// Pinned connector. Production construction does not accept any bypass.
 #[derive(Clone)]
 pub struct Connector {
     tls: Arc<ClientConfig>,
     local: LocalEndpoints,
-    hosts: Arc<Mutex<BTreeMap<String, Arc<tokio::sync::Semaphore>>>>,
+    hosts: Arc<Mutex<BTreeMap<String, HostBudget>>>,
     health: circuit::Health,
 }
 impl Connector {
@@ -231,23 +238,40 @@ impl Connector {
         }
         Ok(())
     }
+    fn host_budget(&self, host: &str) -> Result<HostBudget, Error> {
+        let mut hosts = self
+            .hosts
+            .lock()
+            .map_err(|_| Error::ConnectionUnavailable)?;
+        hosts.retain(|_, budget| {
+            Arc::strong_count(&budget.connections) > 1 || Arc::strong_count(&budget.watches) > 1
+        });
+        if hosts.len() >= 4096 && !hosts.contains_key(&host.to_ascii_lowercase()) {
+            return Err(Error::Throttled);
+        }
+        let budget = hosts
+            .entry(host.to_ascii_lowercase())
+            .or_insert_with(|| HostBudget {
+                connections: Arc::new(tokio::sync::Semaphore::new(200)),
+                watches: Arc::new(tokio::sync::Semaphore::new(150)),
+            });
+        Ok(budget.clone())
+    }
+
+    /// Admission is nonblocking; a saturated watch falls back to a short poll.
+    pub(crate) fn try_watch(
+        &self,
+        endpoint: &Endpoint,
+    ) -> Result<Option<tokio::sync::OwnedSemaphorePermit>, Error> {
+        let budget = self.host_budget(&endpoint.host)?;
+        Ok(budget.watches.try_acquire_owned().ok())
+    }
+
     /// Resolve once and connect to that checked numeric address; TLS still checks the hostname.
     pub async fn tcp(&self, e: &Endpoint) -> Result<Stream, Error> {
-        let semaphore = {
-            let mut hosts = self
-                .hosts
-                .lock()
-                .map_err(|_| Error::ConnectionUnavailable)?;
-            hosts.retain(|_, semaphore| Arc::strong_count(semaphore) > 1);
-            if hosts.len() >= 4096 && !hosts.contains_key(&e.host.to_ascii_lowercase()) {
-                return Err(Error::Throttled);
-            }
-            hosts
-                .entry(e.host.to_ascii_lowercase())
-                .or_insert_with(|| Arc::new(tokio::sync::Semaphore::new(200)))
-                .clone()
-        };
-        let permit = semaphore
+        let budget = self.host_budget(&e.host)?;
+        let permit = budget
+            .connections
             .try_acquire_owned()
             .map_err(|_| Error::Throttled)?;
         let key = format!("{}:{}", e.host.to_ascii_lowercase(), e.port);

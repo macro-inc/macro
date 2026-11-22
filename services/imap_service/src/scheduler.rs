@@ -29,7 +29,11 @@ pub(crate) async fn run(engine: Arc<Engine>, cancellation: CancellationToken, ta
     }
 }
 
-#[tracing::instrument(skip_all, name = "imap.schedule_accounts")]
+#[tracing::instrument(skip_all, name = "imap.schedule_accounts", fields(
+    scheduler.owned = tracing::field::Empty,
+    scheduler.admitted = tracing::field::Empty,
+    scheduler.new_candidates = tracing::field::Empty,
+))]
 async fn schedule_round(
     engine: &Arc<Engine>,
     cancellation: &CancellationToken,
@@ -60,7 +64,11 @@ async fn schedule_round(
         }
         keep
     });
-    for binding in pending_bindings(bindings, owners) {
+    let pending = pending_bindings(bindings, owners);
+    let span = tracing::Span::current();
+    span.record("scheduler.owned", owners.len());
+    span.record("scheduler.admitted", pending.len());
+    for binding in pending {
         let stopped = cancellation.child_token();
         let actor_stopped = stopped.clone();
         let actor_engine = engine.clone();
@@ -119,9 +127,15 @@ fn pending_bindings(
     bindings: Vec<Binding>,
     owners: &HashMap<Uuid, RunningAccount>,
 ) -> Vec<Binding> {
+    let new = bindings
+        .iter()
+        .filter(|binding| !owners.contains_key(&binding.link_id))
+        .count();
+    tracing::Span::current().record("scheduler.new_candidates", new);
     bindings
         .into_iter()
         .filter(|binding| !owners.contains_key(&binding.link_id))
+        .take(imap_engine::domain::models::AccountCapacity::DEFAULT.new_admissions(owners.len()))
         .collect()
 }
 

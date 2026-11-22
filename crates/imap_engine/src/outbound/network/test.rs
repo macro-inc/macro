@@ -1,6 +1,44 @@
 use super::*;
 use tokio::io::AsyncReadExt;
 
+#[test]
+fn two_hundred_account_watches_leave_capacity_for_commands_and_reuse_a_freed_slot() {
+    let connector = Connector::new(LocalEndpoints::default()).unwrap();
+    let endpoint = Endpoint {
+        host: "mail.example.net".into(),
+        port: 993,
+        tls: crate::domain::models::TlsMode::Implicit,
+        username: "reader@example.net".into(),
+    };
+    let mut watches = Vec::new();
+    let mut polling = 0;
+    for index in 0..205 {
+        let mut account = endpoint.clone();
+        account.username = format!("account-{index}@example.net");
+        match connector.try_watch(&account).unwrap() {
+            Some(permit) => watches.push(permit),
+            None => polling += 1,
+        }
+    }
+    assert_eq!(
+        watches.len(),
+        150,
+        "held watches must reserve fifty host sockets for commands"
+    );
+    assert_eq!(polling, 55);
+    let total = connector.host_budget(&endpoint.host).unwrap().connections;
+    let held = total.clone().try_acquire_many_owned(150).unwrap();
+    let send = total
+        .clone()
+        .try_acquire_owned()
+        .expect("send admitted with every watch slot occupied");
+    assert_eq!(total.available_permits(), 49);
+    assert!(connector.try_watch(&endpoint).unwrap().is_none());
+    drop(watches.pop());
+    assert!(connector.try_watch(&endpoint).unwrap().is_some());
+    drop((held, send, watches));
+}
+
 fn input(bytes: Vec<u8>) -> Stream {
     Stream {
         inner: Box::new(tokio::io::join(

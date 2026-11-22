@@ -21,6 +21,11 @@ shutdown. User-facing routes live in email_service.
 - The service requires a dedicated KMS key and internal key. It has no public
   gateway route and cannot decrypt credentials owned by another link or user.
 - Stop and drain tracked scheduler work on shutdown.
+- Keep code-level `AccountCapacity::DEFAULT` at 150 owned actors and 25 new
+  actors per thirty-second tick; retain existing owners when a cap is reached.
+  Host watches use 150 of 200 connector sockets. Beyond that, primary and extra
+  folders use a thirty-second SELECT poll, leaving 50 sockets for commands and
+  verification. A new-mail arrival can take up to thirty seconds under saturation.
 
 `SyncConcurrency::DEFAULT` is the typed code-level limit of 2. Tune it in a
 reviewed code change only after measuring round duration and memory; no new

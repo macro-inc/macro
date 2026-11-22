@@ -12,6 +12,33 @@ use zeroize::ZeroizeOnDrop;
 pub const MAX_FOLDER_CATALOG: usize = 1000;
 /// Maximum ordinary physical folders scanned per account.
 pub const MAX_MONITORED_FOLDERS: usize = 200;
+
+/// Replica-local actor capacity and paced admission during a restart or rollout.
+#[derive(Debug, Clone, Copy)]
+pub struct AccountCapacity {
+    owned: usize,
+    new_per_tick: usize,
+}
+
+impl AccountCapacity {
+    /// Code-level scheduling limits; changing them requires a measured review.
+    pub const DEFAULT: Self = Self {
+        owned: 150,
+        new_per_tick: 25,
+    };
+
+    /// New actors admitted after stale or finished owners have been removed.
+    pub fn new_admissions(self, retained: usize) -> usize {
+        self.owned.saturating_sub(retained).min(self.new_per_tick)
+    }
+
+    /// Include every live local actor, then at most the available new capacity.
+    /// A lower cap never evicts an actor that already owns its fenced lease.
+    pub fn binding_limit(self, retained: usize) -> Result<i64, Error> {
+        let new = self.new_admissions(retained);
+        i64::try_from(retained.checked_add(new).ok_or(Error::Invalid)?).map_err(|_| Error::Invalid)
+    }
+}
 /// Largest supported full RFC822 source, matching the existing transport limit.
 pub(crate) const MAX_MESSAGE_SOURCE_BYTES: u32 = 25 * 1024 * 1024;
 /// Keep aligned with the fenced five-minute PostgreSQL command lease (pinned by DB tests).

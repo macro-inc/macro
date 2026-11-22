@@ -269,6 +269,79 @@ async fn an_unselectable_physical_folder_requests_baseline_recovery() {
     assert_eq!(outcome, WaitOutcome::BaselineUnavailable);
 }
 
+#[tokio::test]
+async fn a_saturated_watch_polls_without_idle_and_reuses_a_freed_slot() {
+    let mut peer = peer(Arrival::Keepalives).await;
+    let mut watches = (0..150)
+        .map(|_| {
+            peer.transport
+                .connector
+                .try_watch(&peer.credentials.imap.endpoint)
+                .unwrap()
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let transport = peer.transport.clone();
+    let credentials = peer.credentials.clone();
+    let started = tokio::time::Instant::now();
+    let poll = tokio::spawn(async move {
+        transport
+            .wait_change(&credentials, &[committed_inbox()], 180)
+            .await
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), peer.idles.recv())
+            .await
+            .is_err(),
+        "a full host watch budget must never open IDLE"
+    );
+    drop(watches.pop());
+    let outcome = tokio::time::timeout(Duration::from_secs(34), poll)
+        .await
+        .expect("the cheap poll must finish within its thirty-second interval")
+        .unwrap()
+        .unwrap();
+    assert_eq!(outcome, WaitOutcome::Restarted);
+    assert!(started.elapsed() >= Duration::from_secs(30));
+    let transport = peer.transport.clone();
+    let credentials = peer.credentials.clone();
+    let rearmed = tokio::spawn(async move {
+        transport
+            .wait_change(&credentials, &[committed_inbox()], 180)
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(2), peer.idles.recv())
+        .await
+        .unwrap()
+        .expect("a freed watch slot must restore IDLE next round");
+    rearmed.abort();
+    let _ = rearmed.await;
+}
+
+#[tokio::test]
+async fn a_watch_over_host_capacity_still_detects_new_mail_from_select() {
+    let mut peer = peer(Arrival::BeforeSelect).await;
+    let _watches = (0..150)
+        .map(|_| {
+            peer.transport
+                .connector
+                .try_watch(&peer.credentials.imap.endpoint)
+                .unwrap()
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let outcome = tokio::time::timeout(
+        Duration::from_secs(2),
+        peer.transport
+            .wait_change(&peer.credentials, &[committed_inbox()], 180),
+    )
+    .await
+    .expect("an over-budget watch must still compare the folder's new-mail watermarks")
+    .unwrap();
+    assert_eq!(outcome, WaitOutcome::Changed);
+    assert!(peer.idles.try_recv().is_err());
+}
+
 struct LabCipher(Credentials);
 #[async_trait::async_trait]
 impl CredentialCipher for LabCipher {

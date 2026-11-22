@@ -262,7 +262,8 @@ impl Engine {
     pub async fn bindings(&self, retained_links: &[Uuid]) -> Result<Vec<Binding>, Error> {
         self.report_admission_saturation();
         self.transport.maintenance().await;
-        self.repository.bindings(2000, retained_links).await
+        let limit = AccountCapacity::DEFAULT.binding_limit(retained_links.len())?;
+        self.repository.bindings(limit, retained_links).await
     }
 
     /// Execute an operation using the trusted caller's workload class.
