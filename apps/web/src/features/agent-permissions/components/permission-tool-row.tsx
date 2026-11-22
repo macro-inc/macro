@@ -10,7 +10,8 @@ import { PermissionStateGlyph } from './permission-state-glyph';
 
 /** What a tool row says about how its state came about. */
 export type ToolRowStatus =
-  | { kind: 'inherits' }
+  /** No setting of its own: its state is its action's, "follows Read". */
+  | { kind: 'follows'; action: string }
   /** Its own rule, equal to its action's state today. */
   | { kind: 'own' }
   /** Its state differs from its action's. */
@@ -44,6 +45,11 @@ export function PermissionToolRow(props: {
       state: value.actionState,
     });
   };
+  const followsText = () => {
+    const value = status();
+    if (value.kind !== 'follows') return undefined;
+    return t('agentPermissions.follows', { action: value.action });
+  };
   return (
     <PermissionRow
       rowKey={props.rowKey}
@@ -56,6 +62,9 @@ export function PermissionToolRow(props: {
       }
       details={
         <>
+          <Show when={followsText()}>
+            {(text) => <span class="text-xs text-ink-muted">{text()}</span>}
+          </Show>
           <span class="min-w-0 truncate font-mono text-xs text-ink-extra-muted">
             {props.operation}
           </span>

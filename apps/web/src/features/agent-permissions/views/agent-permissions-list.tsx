@@ -287,7 +287,8 @@ export function AgentPermissionsList(props: {
           actionState: stateLabel(current.state),
         };
       }
-      return rule() ? { kind: 'own' } : { kind: 'inherits' };
+      if (rule()) return { kind: 'own' };
+      return { kind: 'follows', action: actionName(tool.action) };
     };
 
     // While its own change saves, the chosen state; else its override, else

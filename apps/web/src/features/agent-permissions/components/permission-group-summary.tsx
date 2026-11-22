@@ -7,7 +7,8 @@ import { PermissionStateGlyph } from './permission-state-glyph';
 
 /**
  * What a collapsed group allows, in words: "60 tools · ⊘ Never deletes ·
- * ✋ Asks before sending · 2 tools customized".
+ * ✋ Asks before sending · 2 tools customized", or once for the whole group
+ * when every action agrees: "60 tools · ✋ Asks for everything".
  */
 export function PermissionGroupSummary(props: {
   summary: GroupSummary;
@@ -19,7 +20,19 @@ export function PermissionGroupSummary(props: {
     const items: JSX.Element[] = [
       t('agentPermissions.toolCount', { count: summary.toolCount }),
     ];
-    for (const action of summary.nevers) {
+    const everything = summary.everything;
+    if (everything === 'ask' || everything === 'never') {
+      items.push(
+        <span class="inline-flex items-center gap-1">
+          <PermissionStateGlyph state={everything} class="size-3.5" />
+          {everything === 'ask'
+            ? t('agentPermissions.asksForEverything')
+            : t('agentPermissions.neverForEverything')}
+        </span>
+      );
+    }
+    const perAction = everything === undefined || everything === 'always';
+    for (const action of perAction ? summary.nevers : []) {
       items.push(
         <span class="inline-flex items-center gap-1">
           <PermissionStateGlyph state="never" class="size-3.5" />
@@ -27,7 +40,7 @@ export function PermissionGroupSummary(props: {
         </span>
       );
     }
-    for (const action of summary.asks) {
+    for (const action of perAction ? summary.asks : []) {
       items.push(
         <span class="inline-flex items-center gap-1">
           <PermissionStateGlyph state="ask" class="size-3.5" />

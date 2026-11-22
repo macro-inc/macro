@@ -118,6 +118,11 @@ export function actionPermission(
 
 export type GroupSummary = {
   toolCount: number;
+  /**
+   * The state every action the group has tools for is in, when they all
+   * agree ("Asks for everything").
+   */
+  everything?: ToolPermissionState;
   asks: PermissionAction[];
   nevers: PermissionAction[];
   /** Tools in the group with their own saved rule. */
@@ -148,9 +153,17 @@ export function groupSummary(
     return permission ? [permission] : [];
   });
   const groupRules = rules.filter((rule) => ruleGroup(rule, catalogGroup));
+  // Only the actions the group has tools for: an action with none can't
+  // make the agent do anything.
+  const used = actions.filter((permission) =>
+    catalogGroup.tools.some((tool) => tool.action === permission.action)
+  );
+  const states = new Set(used.map((permission) => permission.state));
+  const [agreed] = states;
 
   return {
     toolCount: catalogGroup.tools.length,
+    ...(states.size === 1 && agreed ? { everything: agreed } : {}),
     asks: actions
       .filter((permission) => permission.state === 'ask')
       .map((permission) => permission.action),
@@ -172,6 +185,8 @@ export function groupSummary(
 export function settingCounts(rules: readonly ToolPermissionRule[]) {
   return {
     total: rules.length,
+    /** Set by a person, not by the agent restricting itself. */
+    byPerson: rules.filter((rule) => !rule.viaAgent).length,
     byAgent: rules.filter((rule) => rule.viaAgent).length,
     tools: rules.filter((rule) => rule.target.kind === 'tool').length,
   };

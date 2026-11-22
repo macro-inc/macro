@@ -129,11 +129,13 @@ const CATALOG: ToolPermissionCatalog = {
   ],
 };
 
-// Saved group action settings; everything else is Always allow.
+// Saved group action settings; everything else is Always allow. Documents
+// asks for every action it has tools for, so its summary says so once.
 const saved: Record<string, ToolPermissionState> = {
   'email.send': 'ask',
   'email.destroy': 'never',
   'documents.update': 'ask',
+  'documents.destroy': 'ask',
 };
 
 function view(): AgentToolPermissions {

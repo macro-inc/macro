@@ -76,6 +76,5 @@ export default {
   cardUnavailable: 'Permissions aren’t available here.',
   cardLoadFailed: 'Couldn’t load these permissions.',
   tryAgain: 'Try again',
-  follows: 'follows {{action}}',
   loading: 'Loading permissions',
 };

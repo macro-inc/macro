@@ -169,9 +169,16 @@ export function AgentPermissionsPage(props: {
         signpost={
           <Show when={counts().total > 0}>
             <p class="flex flex-wrap items-center gap-x-1.5 text-xs text-ink-extra-muted">
-              {t('agentPermissions.settingsDiffer', { count: counts().total })}
+              {/* Settings people made, then the agent's own restrictions. */}
+              <Show when={counts().byPerson > 0}>
+                {t('agentPermissions.settingsChanged', {
+                  count: counts().byPerson,
+                })}
+              </Show>
               <Show when={counts().byAgent > 0}>
-                <span aria-hidden="true">·</span>
+                <Show when={counts().byPerson > 0}>
+                  <span aria-hidden="true">·</span>
+                </Show>
                 <span class="inline-flex items-center gap-1">
                   <RobotIcon aria-hidden="true" class="size-3.5" />
                   {t('agentPermissions.setByAgentCount', {

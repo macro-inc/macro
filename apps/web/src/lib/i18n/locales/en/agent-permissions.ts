@@ -3,9 +3,9 @@ export default {
   title: 'Permissions',
   description:
     'What {{agent}} may do in the JS tools programs it runs for you. <b>Allow</b> runs without asking, <b>Ask</b> waits for your approval, <b>Never</b> refuses the program before it runs.',
-  settingsDiffer: {
-    one: '{{count}} setting differs from Always allow',
-    other: '{{count}} settings differ from Always allow',
+  settingsChanged: {
+    one: '{{count}} setting changed',
+    other: '{{count}} settings changed',
   },
   setByAgentCount: { other: '{{count}} set by {{agent}} itself' },
   reset: 'Reset permissions',
@@ -51,6 +51,8 @@ export default {
   restrictedByAgent: 'Restricted by the agent',
   sessionLimited: 'Limited for this session',
   allAllowed: 'All allowed',
+  asksForEverything: 'Asks for everything',
+  neverForEverything: 'Never allowed',
   expandGroup: 'Show {{group}}',
 
   differCount: { one: '{{count}} differs', other: '{{count}} differ' },
@@ -68,6 +70,7 @@ export default {
   showMore: { other: 'Show {{count}} more' },
   toolDiffers: 'Differs · {{action}} is {{state}}',
   ownSetting: 'Own setting',
+  follows: 'follows {{action}}',
   useActionSetting: 'Use the {{action}} setting',
 
   saveFailed: "Couldn't save {{target}}",

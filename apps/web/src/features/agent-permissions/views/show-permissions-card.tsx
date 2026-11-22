@@ -337,25 +337,15 @@ function SelectionGroup(props: {
           actionState: stateLabel(current.state),
         };
       }
-      return rule() ? { kind: 'own' } : { kind: 'inherits' };
+      if (rule()) return { kind: 'own' };
+      return { kind: 'follows', action: actionName(tool.action) };
     };
     const shown = () =>
       props.pendingState(key) ?? override()?.state ?? actionState(tool.action);
     return (
       <PermissionToolRow
         rowKey={key}
-        label={
-          <>
-            {tool.label}
-            <Show when={status().kind === 'inherits'}>
-              <span class="ml-2 text-xs text-ink-extra-muted">
-                {t('agentPermissionsChat.follows', {
-                  action: actionName(tool.action),
-                })}
-              </span>
-            </Show>
-          </>
-        }
+        label={tool.label}
         operation={toolKey(tool)}
         controlLabel={tool.label}
         state={shown()}

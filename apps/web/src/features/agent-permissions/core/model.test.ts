@@ -84,12 +84,30 @@ describe('groupSummary', () => {
       sessionLimited: true,
     });
   });
+
+  it('says once what every action with tools agrees on', () => {
+    const email = CATALOG.groups[0];
+    const group = groupPermissions(VIEW, 'email');
+    if (!group) throw new Error('fixture has Email');
+    // Email has tools for Read and Send only; Create stays Always allow.
+    const asking = {
+      ...group,
+      actions: group.actions.map((action) =>
+        action.action === 'read' ? { ...action, state: 'ask' as const } : action
+      ),
+    };
+    expect(groupSummary(email, asking, []).everything).toBe('ask');
+    expect(
+      groupSummary(email, groupPermissions(VIEW, 'email'), []).everything
+    ).toBeUndefined();
+  });
 });
 
 describe('counts', () => {
   it('counts saved settings, agent-set ones and tool rules', () => {
     expect(settingCounts(VIEW.rules)).toEqual({
       total: 2,
+      byPerson: 1,
       byAgent: 1,
       tools: 1,
     });
