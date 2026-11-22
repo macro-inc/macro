@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { MacroClient } from '../../utils/client';
+import { AgentMailMessage } from './message';
 import { AgentMailboxNamespace } from './namespace';
 
 describe('agentMailbox', () => {
@@ -97,5 +98,66 @@ describe('agentMailbox', () => {
     expect(reads).toBe(0);
     expect(await message?.textBody()).toBe('The full body');
     expect(reads).toBe(1);
+  });
+
+  test('a send or reply without an idempotency key is refused before any request', async () => {
+    const requests: unknown[] = [];
+    const record = async (request: unknown) => {
+      requests.push(request);
+      return { data: { id: 'sent-1', threadId: 't-1' } };
+    };
+    const client = {
+      email: {
+        sendAgentMailboxMessage: record,
+        replyAgentMailboxMessage: record,
+      },
+    } as unknown as MacroClient;
+    const mailbox = new AgentMailboxNamespace(client);
+    // Code-mode programs are untyped: a missing key must fail, not mint one.
+    const untyped = {
+      to: ['a@example.com'],
+      subject: 'Hi',
+      textBody: 'x',
+      userConfirmation: 'yes',
+    } as unknown as Parameters<AgentMailboxNamespace['send']>[0];
+
+    await expect(mailbox.send(untyped)).rejects.toThrow('idempotencyKey');
+    await expect(
+      AgentMailMessage.byId(client, 'm-1').reply({
+        textBody: 'x',
+        userConfirmation: 'yes',
+      } as unknown as Parameters<AgentMailMessage['reply']>[0]),
+    ).rejects.toThrow('idempotencyKey');
+    expect(requests).toEqual([]);
+  });
+
+  test('a send passes its caller-chosen key, so a retry with it sends once', async () => {
+    const requests: unknown[] = [];
+    const client = {
+      email: {
+        sendAgentMailboxMessage: async (request: unknown) => {
+          requests.push(request);
+          return { data: { id: 'sent-1', threadId: 't-1' } };
+        },
+      },
+    } as unknown as MacroClient;
+    const mailbox = new AgentMailboxNamespace(client);
+    const options = {
+      to: ['a@example.com'],
+      subject: 'Hi',
+      textBody: 'x',
+      userConfirmation: 'yes',
+      idempotencyKey: 'k-1',
+    };
+
+    await mailbox.send(options);
+    await mailbox.send(options);
+
+    expect(
+      requests.map(
+        (request) =>
+          (request as { body: { idempotencyKey: string } }).body.idempotencyKey,
+      ),
+    ).toEqual(['k-1', 'k-1']);
   });
 });

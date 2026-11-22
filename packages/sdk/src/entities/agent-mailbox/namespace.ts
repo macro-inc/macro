@@ -1,7 +1,7 @@
 import type { AgentMailboxResponse } from '../../../generated/email/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import { AgentMailMessage } from './message';
+import { AgentMailMessage, requireIdempotencyKey } from './message';
 
 /** A new message from the agent's own mailbox. */
 export type AgentMailSendOptions = {
@@ -15,8 +15,12 @@ export type AgentMailSendOptions = {
   textBody: string;
   /** The owner's approving reply, quoted. Required on every send and reply. */
   userConfirmation: string;
-  /** Repeat a send with the same key to send it once; one is made when absent. */
-  idempotencyKey?: string;
+  /**
+   * One key per message, chosen before the first attempt (`crypto.randomUUID()`).
+   * Retry a failed or unanswered send with the same key: the server sends it
+   * at most once. A new key is a new message.
+   */
+  idempotencyKey: string;
 };
 
 /** One page of the agent's messages, newest first. */
@@ -77,16 +81,18 @@ export class AgentMailboxNamespace {
 
   /**
    * Send a new message from the mailbox, after the owner approved it; quote
-   * their approval in `userConfirmation`.
+   * their approval in `userConfirmation`, and retry with the same
+   * `idempotencyKey`.
    *
    * @send
    * @openworld
    */
   async send(options: AgentMailSendOptions): Promise<AgentMailMessage> {
+    requireIdempotencyKey(options.idempotencyKey);
     const sent = unwrap(
       await this.client.email.sendAgentMailboxMessage({
         body: {
-          idempotencyKey: options.idempotencyKey ?? crypto.randomUUID(),
+          idempotencyKey: options.idempotencyKey,
           to: options.to,
           cc: options.cc ?? [],
           subject: options.subject,
