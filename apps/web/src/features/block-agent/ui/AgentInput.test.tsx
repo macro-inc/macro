@@ -190,7 +190,7 @@ describe('on a touch device', () => {
 });
 
 describe('while the agent is working', () => {
-  it('keeps view-only drafts and stop inert', () => {
+  it('keeps view-only drafts and stop inert', async () => {
     const onSend = vi.fn();
     const onStop = vi.fn();
     render(() => <AgentInput readOnly busy onSend={onSend} onStop={onStop} />);
@@ -206,12 +206,13 @@ describe('while the agent is working', () => {
     editor.enter?.();
     editor.change?.('Cannot send this');
     editor.enter?.();
+    await Promise.resolve();
 
     expect(onSend).not.toHaveBeenCalled();
     expect(onStop).not.toHaveBeenCalled();
   });
 
-  it('never stops the turn from Enter on an empty draft', () => {
+  it('never stops the turn from Enter on an empty draft', async () => {
     const onSend = vi.fn();
     const onStop = vi.fn();
 
@@ -222,13 +223,15 @@ describe('while the agent is working', () => {
 
     editor.change?.('  another request  ');
     editor.enter?.();
+    // Enter sends once Lexical has finished handling the key.
+    await Promise.resolve();
 
     expect(onSend).toHaveBeenCalledWith('another request', []);
     expect(onStop).not.toHaveBeenCalled();
     expect(editor.clear).toHaveBeenCalledOnce();
   });
 
-  it('sends attached files instead of advancing past them', () => {
+  it('sends attached files instead of advancing past them', async () => {
     const onSend = vi.fn();
     const onStop = vi.fn();
     const uploaded = {
@@ -254,6 +257,7 @@ describe('while the agent is working', () => {
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
 
     editor.enter?.();
+    await Promise.resolve();
     expect(onSend).toHaveBeenCalledWith('', [uploaded]);
     expect(onStop).not.toHaveBeenCalled();
   });
@@ -278,7 +282,7 @@ describe('attachments', () => {
     size: 2048,
   };
 
-  it('sends attached files with no text at all', () => {
+  it('sends attached files with no text at all', async () => {
     const onSend = vi.fn();
 
     render(() => (
@@ -290,10 +294,11 @@ describe('attachments', () => {
     ));
 
     editor.enter?.();
+    await Promise.resolve();
     expect(onSend).toHaveBeenCalledWith('', [uploaded]);
   });
 
-  it('holds the send while a file is still uploading', () => {
+  it('holds the send while a file is still uploading', async () => {
     const onSend = vi.fn();
 
     render(() => (
@@ -306,6 +311,7 @@ describe('attachments', () => {
 
     editor.change?.('look at this');
     editor.enter?.();
+    await Promise.resolve();
     expect(onSend).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty(
       'disabled',
@@ -388,7 +394,7 @@ it('expands for a short quote and collapses when replaced with a paragraph', () 
   expect(layout?.getAttribute('data-composer-compact')).toBe('true');
 });
 
-it('keeps an attached image and text unsent while the selected model is text-only', () => {
+it('keeps an attached image and text unsent while the selected model is text-only', async () => {
   const send = vi.fn();
   render(() => (
     <AgentInput
@@ -399,6 +405,7 @@ it('keeps an attached image and text unsent while the selected model is text-onl
   ));
   expect(screen.queryByText(/This model does not support images/)).toBeNull();
   editor.enter?.();
+  await Promise.resolve();
   expect(send).not.toHaveBeenCalled();
   expect(editor.clear).not.toHaveBeenCalled();
 });

@@ -230,7 +230,9 @@ export function AgentInput(props: AgentInputProps) {
       // On a virtual keyboard Enter is a newline, as in channels; the send
       // button is the only way to submit.
       if (isTouchDevice()) return false;
-      if (canSend()) send();
+      // Send after Lexical's Enter update, not inside it: a clear nested in
+      // that update was merged into it, and the sent text stayed.
+      if (canSend()) queueMicrotask(send);
       return true;
     })
     .onFocusLeave({
