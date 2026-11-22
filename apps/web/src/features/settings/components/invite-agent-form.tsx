@@ -40,7 +40,7 @@ import { TeammateCommand } from './teammate-command';
 export const AGENT_COMPUTER_CHOICE = 'agent-computer';
 
 /** The longest name the Add button spells out before the machine's name. */
-const ADD_LABEL_NAME_CHARS = 24;
+const ADD_LABEL_NAME_CHARS = 12;
 
 function shortenedName(name: string): string {
   const characters = Array.from(name);
