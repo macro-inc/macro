@@ -9,15 +9,29 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
 
 ## How it works
 
-- Settings are sparse rows: a group's action (`documents:destroy`) or one
-  operation (`storage.delete_document`). An operation's state is its own
-  setting, else its group's action, else always. A person's operation
-  setting replaces its group's; one any other credential made (the agent,
-  an API key: `restriction_only`) only adds to it, taking the stricter of the
-  two, so a person's later, stricter group setting still applies.
+- Settings are sparse rows: an action's default (`Target::Action`, stored
+  `action` / `send`), a group's exception to it (`group_action` /
+  `documents:destroy`) or one operation (`tool` / `storage.delete_document`).
+  A group's action is its exception, else the action's default, else
+  always; an operation's state is its own setting, else its group's action.
+  A new group has no exceptions, so it follows every default; so does a pair
+  no operation maps to yet. A person's exception or operation setting
+  replaces what it sits under; one any other credential made (the agent, an
+  API key: `restriction_only`) only adds to it, taking the stricter of the
+  two, so a person's later, stricter default or group setting still applies.
   `via_agent` is only the "set by the agent" label (`SetBy`). A session
-  overlay (an agent's restrictions on itself for one session) can only make
-  it stricter.
+  overlay (an agent's restrictions on itself for one session, any of the
+  three kinds) can only make it stricter. Wire names stay `always/ask/never`
+  and `update`/`destroy`; the catalog names them Edit and Delete and lists
+  actions in `Action::DISPLAY` order (Read, Create, Edit, Send, Delete).
+- Writes (`resolve::normalize`): a default of `always` is never stored (a
+  removal); a person's exception is kept in any state, an explicit Allow and
+  one equal to the default included, until `null` removes it; a restriction
+  (a tightening, an overlay) never stores `always` at all. Before action
+  defaults, no `action` rows existed and `group_action` never held `always`,
+  so every earlier rule set resolves exactly as before
+  (`existing_rule_sets_resolve_exactly_as_before`, against a copy of the old
+  resolver).
 - Operations marked `always_allowed` in the registry (the agent's own
   tightening) are outside the catalog: always allowed, and no setting can
   name them.
@@ -30,16 +44,22 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   its access checks. `agent_tool_permission` and `persona_tool_permission`
   are the tables from before ids, copied by migration `20261122220100` and no
   longer read; a cleanup after release drops them.
-- Tighten-only compares every operation's effective state before and after
-  the change (`domain/resolve.rs` `tighten_only`). A tool's `always` is
-  saved as clearing its own setting. A state asked for that is looser than
-  its target's now is refused (`would_loosen`, `asks_looser`): a tool's
-  `always` under a stricter group (not a silent no-op), and removing or
-  loosening a group's action even when no operation's state moves today,
-  since operations resolving through it later would be looser.
-- The view lists a group's action only when an operation maps to it, and a
+- Tighten-only compares, before and after the change, every operation's
+  effective state, every catalog group's every action (hidden pairs too) and
+  every action's default (`domain/resolve.rs` `tighten_only`); a change that
+  loosens only a pair or a default is refused naming no operation. A tool's
+  `always` is saved as clearing its own setting. A state asked for that is
+  looser than its target's now is refused (`would_loosen`, `asks_looser`): a
+  tool's `always` under a stricter group (not a silent no-op), loosening a
+  group's action or removing it (which asks for the default) even when no
+  operation's state moves today, and lowering or removing a default (which
+  asks for always), since operations resolving through them later would be
+  looser.
+- The view carries the five `defaults` (display order) and, per listed
+  pair, `exception` (this policy saved one, whatever its state). It lists a
+  group's action only when an operation maps to it, and a
   group only when it has one (`resolve::view`); `ShowPermissions` shows
-  only those. A saved rule on a hidden pair stays in `rules` and applies as
+  only those, plus every default. A saved rule on a hidden pair stays in `rules` and applies as
   soon as the registry maps an operation there: resolution never reads the
   view. `restricted` counts operations, so hidden rules don't change it.
 - Expected refusals (off, not found, forbidden, needs a person, would loosen,
@@ -123,6 +143,9 @@ the tags when the flag goes.
   rows (both policy tables and the session overlay), as
   `20261122220000_agent_tool_permission_channel_admin.sql` did for
   `channel_admin`.
+- The session overlay's kind and target checks were widened for `action`
+  NOT VALID (`20261122224406`) and validated in their own migration
+  (`20261122224441`).
 - The handler decides nothing: it maps the credential to `Credential` and the
   service applies every rule. Loosening and reset need `PersonSession`.
 - With the rollout off for the caller, every route answers 404.

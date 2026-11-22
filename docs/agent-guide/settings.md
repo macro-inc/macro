@@ -1267,9 +1267,10 @@ the group has tools for agrees (`✋ Asks for everything`, `⊘ Never allowed`).
 `Channels & messages` covers messaging; creating and deleting channels, their
 settings, members, join links, access requests and channel bots are under
 `Channel settings & members`.
-Expanded, each action the group has tools for (of Create, Read, Update,
+Expanded, each action the group has tools for (of Create, Read, Edit,
 Delete, Send) has an `Allow · Ask · Never` segmented control (radio group named `<Group>:
-<Action>`; full state names are the tooltips), and `Individual tools` lists
+<Action>`; full state names are the tooltips; `Allow` clears the group's
+setting, since this page sets no action defaults and each default is Allow), and `Individual tools` lists
 the group's tools with an `All` / `Differs` filter, each with its own control
 and a ↺ (`Use the <Action> setting`) that clears its own rule. A tool without
 a setting of its own reads `follows <Action>`. Every click saves at once (one
