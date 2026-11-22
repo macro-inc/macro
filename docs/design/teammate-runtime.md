@@ -423,10 +423,12 @@ addresses, as it gives a local Macro computer. Production never sets it.
   the machine's). It keeps the volumes and the kept install, records why,
   and reports `stopped`. From the unpair that takes up to about 40 seconds:
   up to 10 to notice, a second refusal 10 to 20 later (the stream's reopen
-  backoff), then the grace. The next accepted runtime dial, in this macrod
-  or a restarted one, runs them again (the service stops any it no longer
-  wants there); an unpaired machine is never accepted, so its agents stay
-  down. A stop the service asked for is never undone.
+  backoff), then the grace. macrod keeps redialing a refused gateway, 1
+  second doubling to a minute apart, for good, and the first accepted dial
+  runs them again (the service stops any it no longer wants there), so an
+  auth outage ends by itself within about a minute of its end, without a
+  restart; an unpaired machine is never accepted, so its agents stay down.
+  A stop the service asked for is never undone.
 - **Crash loop.** Failed exits (not 0, not 75) restart with a backoff from
   2 to 60 seconds, for as long as they keep failing; macrod never gives up
   on a generation by itself. `crashLoop` is only the reason an image update

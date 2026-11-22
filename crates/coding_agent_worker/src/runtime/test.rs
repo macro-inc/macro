@@ -5,6 +5,13 @@ use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
 
 fn start_runtime(listener: &TcpListener) -> Runtime {
+    start_runtime_hosting(listener, None)
+}
+
+fn start_runtime_hosting(
+    listener: &TcpListener,
+    teammates: Option<Arc<crate::harness::HostTeammates>>,
+) -> Runtime {
     Runtime::start(
         &MacroApi {
             egress_url: None,
@@ -29,7 +36,7 @@ fn start_runtime(listener: &TcpListener) -> Runtime {
         None,
         crate::harness::Handoffs::channel().0,
         None,
-        None,
+        teammates,
     )
 }
 
@@ -84,7 +91,7 @@ async fn retries_transient_failure_and_closed_connection_without_triggers() {
     clippy::result_large_err,
     reason = "the handshake callback's error type is fixed by tungstenite's Callback trait"
 )]
-async fn refused_credentials_stop_reconnecting() {
+async fn a_refusal_that_isnt_the_credentials_stops_reconnecting() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let runtime = start_runtime(&listener);
     let (socket, _) = listener.accept().await.unwrap();
@@ -92,7 +99,7 @@ async fn refused_credentials_stop_reconnecting() {
         socket,
         |_: &tungstenite::handshake::server::Request, _| {
             Err(tungstenite::http::Response::builder()
-                .status(401)
+                .status(404)
                 .body(None)
                 .unwrap())
         },
@@ -105,6 +112,50 @@ async fn refused_credentials_stop_reconnecting() {
         .unwrap_err();
     assert!(matches!(error, tungstenite::Error::ConnectionClosed));
     assert!(runtime._task.is_finished());
+}
+
+#[tokio::test]
+#[expect(
+    clippy::result_large_err,
+    reason = "the handshake callback's error type is fixed by tungstenite's Callback trait"
+)]
+async fn refused_credentials_are_redialed_and_an_accepted_dial_runs_the_stopped_agents_again() {
+    // An auth outage outlasted the persistence check and stopped the
+    // agents; the gateway accepts again on a later redial: they run, with
+    // no restart.
+    let (teammates, engine, _directory) =
+        crate::teammate::test::fake_hosting_stopped_for_refused_credentials().await;
+    let mut statuses = teammates.subscribe();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let runtime = start_runtime_hosting(&listener, Some(teammates));
+    let (socket, _) = listener.accept().await.unwrap();
+    let _ = tokio_tungstenite::accept_hdr_async(
+        socket,
+        |_: &tungstenite::handshake::server::Request, _| {
+            Err(tungstenite::http::Response::builder()
+                .status(401)
+                .body(None)
+                .unwrap())
+        },
+    )
+    .await;
+    assert_eq!(engine.runs(), 0);
+
+    let (socket, _) = tokio::time::timeout(Duration::from_secs(5), listener.accept())
+        .await
+        .expect("a refused machine dials again")
+        .unwrap();
+    let _socket = accept_async(socket).await.unwrap();
+    runtime.ensure_connected().await.unwrap();
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while statuses.recv().await.unwrap().state
+            != agent_runtime_protocol::domain::schema::v0::TeammateRunState::Running
+        {}
+    })
+    .await
+    .expect("the agent stopped for refused credentials runs again");
+    assert_eq!(engine.runs(), 1);
 }
 
 #[tokio::test(start_paused = true)]

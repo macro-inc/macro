@@ -119,8 +119,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   the policy back (and isn't checked for routes). Harness credentials refused twice at least
   `REFUSAL_PERSISTS` (10 s) apart (runtime dial or stream 401) stop every teammate and its holder, keeping
   volumes and the kept install, stopped for `credentialsRefused`
-  (`Teammates::credentials_refused`); the next accepted dial runs those
-  again (`credentials_accepted`). `[teammates] engine` (`auto` probes, falling through to the next
+  (`Teammates::credentials_refused`); a refused runtime dial is redialed 1 s
+  to 60 s apart forever, and the next accepted one runs those again
+  (`credentials_accepted`). `[teammates] engine` (`auto` probes, falling through to the next
   engine) and `[[teammates.allow]]` are in `config.rs`. `[macro]
   teammate_network` (local stack only) makes the holder join the stack's
   network and allows just the service host:port pairs in the agent's

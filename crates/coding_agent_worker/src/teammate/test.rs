@@ -2336,6 +2336,37 @@ pub(crate) async fn fake_hosting() -> (
     ((teammates, report), engine, exit, directory)
 }
 
+/// Teammates on a fake Docker whose one kept install was stopped because
+/// the machine's credentials were refused (as a refusal leaves it), after
+/// the engine check: nothing runs until a dial is accepted.
+pub(crate) async fn fake_hosting_stopped_for_refused_credentials()
+-> (Arc<super::HostTeammates>, FakeEngine, tempfile::TempDir) {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Store::new(directory.path().join("teammates/harness-1"));
+    let mut kept = stored(install(1));
+    let stop = teammate_lifecycle::supervisor::ExitEvent {
+        code: None,
+        requested: true,
+    };
+    kept.lifecycle.policy.exited(stop, chrono::Utc::now());
+    kept.lifecycle.stopped_for = Some(super::store::StopCause::CredentialsRefused);
+    store.save(&kept, &environment().0).unwrap();
+    let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
+    engine
+        .state()
+        .registry
+        .insert(TAGGED.to_owned(), IMAGE_ID.to_owned());
+    let teammates = Arc::new(Teammates::new(
+        engine.clone(),
+        store,
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    ));
+    teammates.detect().await;
+    (teammates, engine, directory)
+}
+
 /// The image [`fake_hosting`]'s registry has.
 pub(crate) fn fake_image() -> TeammateImage {
     image(IMAGE_ID)

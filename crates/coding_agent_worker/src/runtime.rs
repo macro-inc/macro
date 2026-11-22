@@ -34,6 +34,12 @@ const HEALTHY_CONNECTION: Duration = Duration::from_secs(10);
 const FIRST_RECONNECT_DELAY: Duration = Duration::from_millis(250);
 const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(30);
 
+/// The first redial after the gateway refused the credentials.
+const FIRST_REFUSED_REDIAL: Duration = Duration::from_secs(1);
+
+/// The longest wait between redials while the credentials are refused.
+const MAX_REFUSED_REDIAL: Duration = Duration::from_secs(60);
+
 /// The daemon's connection to its harness's sessions.
 ///
 /// Owns one connection supervisor, independent of trigger delivery. Dropping
@@ -114,8 +120,9 @@ impl Runtime {
 }
 
 /// Reconnect even after a clean close or a long outage: model discovery must
-/// recover without requiring an agent mention. Authentication failures stop
-/// the supervisor until the user re-pairs or restarts the daemon.
+/// recover without requiring an agent mention. Refused credentials (401) are
+/// redialed slowly, for good; any other client error stops the supervisor
+/// until the user re-pairs or restarts the daemon.
 ///
 /// An `adopted` agent (handed over by the previous process image) serves the
 /// first connection instead of a fresh spawn. Otherwise the agent is started
@@ -138,8 +145,10 @@ async fn serve(
     teammates: Option<Arc<HostTeammates>>,
 ) {
     let mut backoff = reconnect_strategy();
+    let mut refused_backoff = refused_strategy();
     loop {
         let mut lasted = None;
+        let mut refused = false;
         if adopted.is_none() {
             adopted = start_ahead(&harness, &cwd);
         }
@@ -188,11 +197,16 @@ async fn serve(
                 connected.send_replace(false);
                 lasted = Some(started.elapsed());
             }
+            Ok(Err(error)) if credentials_refused(&error) => {
+                // Unpaired, or the auth service failing for a while: dialed
+                // again slowly, for good, so an outage ends by itself and
+                // the agents it stopped run again on the next accept.
+                harness::credentials_refused(teammates.as_ref());
+                refused = true;
+                tracing::warn!(error = ?error, "the runtime gateway refused this machine's credentials; redialing slowly (re-pair if it was removed)");
+            }
             Ok(Err(error)) => {
                 if !worth_redialing(&error) {
-                    if credentials_refused(&error) {
-                        harness::credentials_refused(teammates.as_ref());
-                    }
                     tracing::error!(error = ?error, "runtime connection refused; check configuration or re-pair");
                     return;
                 }
@@ -201,7 +215,12 @@ async fn serve(
             Err(_) => tracing::warn!("runtime connection timed out; reconnecting"),
         }
         tokio::select! {
-            () = tokio::time::sleep(redial_delay(lasted, &mut backoff)) => {}
+            () = tokio::time::sleep(if refused {
+                refused_backoff.next_delay()
+            } else {
+                refused_backoff.reset();
+                redial_delay(lasted, &mut backoff)
+            }) => {}
             request = handoffs.next() => {
                 answer_between_bridges(request, adopted.take(), &turns);
                 return;
@@ -301,6 +320,12 @@ fn redial_delay(lasted: Option<Duration>, backoff: &mut RetryDelays) -> Duration
         return Duration::ZERO;
     }
     backoff.next_delay()
+}
+
+/// The redials of a machine whose credentials are refused: 1 s doubling to
+/// a minute, forever.
+fn refused_strategy() -> RetryDelays {
+    RetryDelays::new(FIRST_REFUSED_REDIAL, MAX_REFUSED_REDIAL)
 }
 
 fn reconnect_strategy() -> RetryDelays {
