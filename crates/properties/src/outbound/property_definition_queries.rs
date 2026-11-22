@@ -216,6 +216,28 @@ pub async fn get_visible_property_options_batch(
     .collect())
 }
 
+/// One definition joined with one of its options, or with none.
+struct DefinitionOptionRow {
+    id: Uuid,
+    team_id: Option<Uuid>,
+    user_id: Option<String>,
+    database_id: Option<Uuid>,
+    display_name: String,
+    data_type: DataType,
+    is_multi_select: bool,
+    specific_entity_type: Option<Option<EntityType>>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+    is_system: bool,
+    option_id: Option<Uuid>,
+    option_display_order: Option<i32>,
+    option_number_value: Option<f64>,
+    option_string_value: Option<String>,
+    option_color: Option<String>,
+    option_created_at: Option<chrono::DateTime<chrono::Utc>>,
+    option_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 async fn read_property_definitions_with_options(
     pool: &Pool<Postgres>,
     team_id: Option<Uuid>,
@@ -224,8 +246,14 @@ async fn read_property_definitions_with_options(
     property_definition_ids: Option<&[Uuid]>,
 ) -> anyhow::Result<Vec<PropertyDefinitionWithOptions>> {
     let user_id: Option<&str> = user_id.map(|u| u.as_ref());
-    let rows = sqlx::query!(
-        r#"
+    // Two statements, not one with an optional id filter: a prepared statement
+    // shared by both shapes settles on a generic plan that scans every
+    // definition even when it is asked for one id.
+    let rows = match property_definition_ids {
+        None => {
+            sqlx::query_as!(
+                DefinitionOptionRow,
+                r#"
         SELECT
             pd.id,
             pd.team_id,
@@ -248,7 +276,47 @@ async fn read_property_definitions_with_options(
         FROM property_definitions pd
         LEFT JOIN property_options po ON pd.id = po.property_definition_id
         WHERE
-            ($4::uuid[] IS NULL OR pd.id = ANY($4))
+            (
+                ($3 AND pd.is_system)
+                OR ($1::uuid IS NOT NULL AND pd.team_id = $1)
+                OR ($2::text IS NOT NULL AND pd.user_id = $2)
+            )
+        ORDER BY LOWER(pd.display_name), po.display_order, po.number_value, LOWER(po.string_value)
+        "#,
+                team_id,
+                user_id,
+                include_system,
+            )
+            .fetch_all(pool)
+            .await?
+        }
+        Some(ids) => {
+            sqlx::query_as!(
+                DefinitionOptionRow,
+                r#"
+        SELECT
+            pd.id,
+            pd.team_id,
+            pd.user_id,
+            pd.database_id,
+            pd.display_name,
+            pd.data_type as "data_type: DataType",
+            pd.is_multi_select,
+            pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
+            pd.created_at,
+            pd.updated_at,
+            pd.is_system,
+            po.id as "option_id?",
+            po.display_order as "option_display_order?",
+            po.number_value as option_number_value,
+            po.string_value as option_string_value,
+            po.color as option_color,
+            po.created_at as "option_created_at?",
+            po.updated_at as "option_updated_at?"
+        FROM property_definitions pd
+        LEFT JOIN property_options po ON pd.id = po.property_definition_id
+        WHERE
+            pd.id = ANY($4)
             AND (
                 ($3 AND pd.is_system)
                 OR ($1::uuid IS NOT NULL AND pd.team_id = $1)
@@ -256,13 +324,15 @@ async fn read_property_definitions_with_options(
             )
         ORDER BY LOWER(pd.display_name), po.display_order, po.number_value, LOWER(po.string_value)
         "#,
-        team_id,
-        user_id,
-        include_system,
-        property_definition_ids
-    )
-    .fetch_all(pool)
-    .await?;
+                team_id,
+                user_id,
+                include_system,
+                ids,
+            )
+            .fetch_all(pool)
+            .await?
+        }
+    };
 
     let mut property_map: HashMap<Uuid, PropertyDefinitionWithOptions> = HashMap::new();
 
