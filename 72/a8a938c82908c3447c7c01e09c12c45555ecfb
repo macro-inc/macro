@@ -1,0 +1,19 @@
+crates/agent_code_mode/src/inbound/toolset/dialect/search.md
+  s_e9055155a1d975::t_d8ce92cc0cbea0 11,14-16,18,38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "72a8a938c82908c3447c7c01e09c12c45555ecfb",
+  "prompts": {},
+  "sessions": {
+    "s_e9055155a1d975": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c054ab23-5160-49dd-8a77-3e4febf4988f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
