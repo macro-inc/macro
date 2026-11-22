@@ -359,10 +359,16 @@ pub enum Release {
         /// The socket that took over.
         session_id: SessionId,
     },
+    /// The agent couldn't be kept paused mid-drive: the drive that started
+    /// at `started_at` ends, with its hand-back notice.
+    Unpaused {
+        /// When the drive started.
+        started_at: DateTime<Utc>,
+    },
 }
 
 /// How a drive ended, as its audit row says.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum DriveEnd {
     /// The driver handed back.
@@ -371,6 +377,23 @@ pub enum DriveEnd {
     Lapsed,
     /// The agent couldn't be paused, so the take-over was refused.
     Refused,
+    /// The agent couldn't be kept paused mid-drive, so the drive ended.
+    Unpaused,
+}
+
+/// How an owed thaw was settled, as its drive's audit row says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "camelCase")]
+pub enum ThawSettled {
+    /// The guest thawed the agent (or it wasn't running).
+    Thawed,
+    /// A newer drive had frozen it since.
+    Superseded,
+    /// The guest kept failing while it ran, for longer than its own timer
+    /// takes to thaw the agent.
+    DeadMan,
+    /// Too long ago to matter: the computer thaws itself on resume.
+    Expired,
 }
 
 impl From<&Release> for DriveEnd {
@@ -379,6 +402,7 @@ impl From<&Release> for DriveEnd {
             Release::HandBack { .. } => Self::HandBack,
             Release::Lapsed => Self::Lapsed,
             Release::Refused { .. } => Self::Refused,
+            Release::Unpaused { .. } => Self::Unpaused,
         }
     }
 }
@@ -421,6 +445,10 @@ pub struct OwedThaw {
     pub computer_id: ComputerId,
     /// Which drive it was.
     pub drive: DriveId,
+    /// When the drive ended.
+    pub ended_at: DateTime<Utc>,
+    /// Thaws that failed while the computer ran.
+    pub failures: u32,
 }
 
 /// How a thaw the guest answered came out.

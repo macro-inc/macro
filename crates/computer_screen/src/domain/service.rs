@@ -15,8 +15,9 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use super::models::{
-    Access, Caller, EndReason, IssuedTicket, Lease, Mode, PendingNotice, RedeemedTicket, Release,
-    ScreenGrant, SessionId, TakeOver, ThawFailed, TicketRequest, TicketSecret,
+    Access, Caller, DriveEnd, DriveId, EndReason, IssuedTicket, Lease, Mode, PendingNotice,
+    RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver, ThawFailed, ThawSettled, Thawed,
+    TicketRequest, TicketSecret,
 };
 use super::ports::{DriverSignal, LeaseChanges, People, ScreenAccess, ScreenRepo, TicketHash};
 
@@ -42,6 +43,13 @@ pub const SESSION_FRESH_FOR: Duration = Duration::from_secs(120);
 pub const NOTICE_KEPT_FOR: Duration = Duration::from_secs(24 * 60 * 60);
 /// How often each replica runs [`ScreenService::reap`].
 pub const REAP_EVERY: Duration = Duration::from_secs(60);
+/// Thaws that fail while a computer runs before the harness stops: one a
+/// round, so longer than the guest's own timer (3 minutes of its running
+/// time) takes to thaw the agent.
+pub const THAW_FAILURES_BEFORE_DEAD_MAN: u32 = 5;
+/// How old an owed thaw gets before it stops mattering: a computer asleep
+/// that long thaws its agent on resume, by its own timer.
+pub const OWED_THAW_EXPIRES: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 /// How long a brain request holds the notices it carries: past a long
 /// streamed turn, so only a crash leaves them for the next one.
 pub const NOTICE_CLAIMED_FOR: Duration = Duration::from_secs(15 * 60);
@@ -487,11 +495,13 @@ where
 
     /// One round of keeping agents right after a crash, a lost
     /// notification or a computer that was asleep: lapsed leases are
-    /// released, and every ended drive whose thaw the guest hasn't confirmed
-    /// is thawed again, however long ago it ended. A computer that isn't
-    /// running is left for a later round (its own timer thaws it on resume).
-    /// Due every [`REAP_EVERY`] on each replica.
-    #[tracing::instrument(skip_all, fields(screen.lapsed = tracing::field::Empty, screen.owed = tracing::field::Empty, screen.thawed = tracing::field::Empty, screen.asleep = tracing::field::Empty, screen.failed = tracing::field::Empty), err)]
+    /// released, and the owed thaws (least recently tried first) are tried
+    /// on the computers that run. A thaw settles when the guest answers;
+    /// after [`THAW_FAILURES_BEFORE_DEAD_MAN`] failures on a running computer
+    /// (longer than the guest's own timer takes to thaw it), or once
+    /// [`OWED_THAW_EXPIRES`] old, it settles anyway. Due every [`REAP_EVERY`]
+    /// on each replica.
+    #[tracing::instrument(skip_all, fields(screen.lapsed = tracing::field::Empty, screen.owed = tracing::field::Empty, screen.thawed = tracing::field::Empty, screen.asleep = tracing::field::Empty, screen.failed = tracing::field::Empty, screen.given_up = tracing::field::Empty), err)]
     pub async fn reap(&self) -> Result<(), ScreenError> {
         let span = tracing::Span::current();
         let lapsed = self
@@ -509,24 +519,110 @@ where
             .await
             .map_err(ScreenError::internal)?;
         span.record("screen.owed", owed.len());
-        let (mut thawed, mut asleep, mut failed) = (0usize, 0usize, 0usize);
+        if owed.is_empty() {
+            return Ok(());
+        }
+        let computers: Vec<ComputerId> = owed.iter().map(|owed| owed.computer_id).collect();
+        let Ok(running) = self.signal.running(&computers).await else {
+            tracing::warn!("could not tell which computers run; thaws wait for the next round");
+            return Ok(());
+        };
+        let expired_before = Utc::now()
+            - chrono::Duration::from_std(OWED_THAW_EXPIRES).unwrap_or(chrono::Duration::days(7));
+        let (mut thawed, mut asleep, mut failed, mut given_up) = (0usize, 0usize, 0usize, 0usize);
         for owed in owed {
-            match self.signal.thaw(owed.computer_id, &owed.drive).await {
-                Ok(_) => {
-                    self.repo
-                        .mark_thawed(owed.row)
-                        .await
-                        .map_err(ScreenError::internal)?;
-                    thawed += 1;
+            let settled = if owed.ended_at < expired_before {
+                given_up += 1;
+                Some(ThawSettled::Expired)
+            } else if !running.contains(&owed.computer_id) {
+                asleep += 1;
+                None
+            } else {
+                match self.signal.thaw(owed.computer_id, &owed.drive).await {
+                    Ok(Thawed::Running) => {
+                        thawed += 1;
+                        Some(ThawSettled::Thawed)
+                    }
+                    Ok(Thawed::Superseded) => {
+                        thawed += 1;
+                        Some(ThawSettled::Superseded)
+                    }
+                    Err(ThawFailed::NotRunning) => {
+                        asleep += 1;
+                        None
+                    }
+                    Err(ThawFailed::Failed)
+                        if owed.failures + 1 >= THAW_FAILURES_BEFORE_DEAD_MAN =>
+                    {
+                        given_up += 1;
+                        tracing::warn!(computer.id = %owed.computer_id, "a thaw kept failing on a running computer; its own timer has thawed the agent");
+                        Some(ThawSettled::DeadMan)
+                    }
+                    Err(ThawFailed::Failed) => {
+                        failed += 1;
+                        self.repo
+                            .thaw_tried(owed.row, true)
+                            .await
+                            .map_err(ScreenError::internal)?;
+                        continue;
+                    }
                 }
-                Err(ThawFailed::NotRunning) => asleep += 1,
-                Err(ThawFailed::Failed) => failed += 1,
+            };
+            match settled {
+                Some(settled) => self.repo.settle_thaw(owed.row, settled).await,
+                None => self.repo.thaw_tried(owed.row, false).await,
             }
+            .map_err(ScreenError::internal)?;
         }
         span.record("screen.thawed", thawed);
         span.record("screen.asleep", asleep);
         span.record("screen.failed", failed);
+        span.record("screen.given_up", given_up);
         Ok(())
+    }
+
+    /// The guest let the agent run in the middle of `drive` and couldn't
+    /// freeze it again: the drive ends (its driver is told, and the agent
+    /// gets the hand-back notice), rather than claim the agent is paused.
+    #[tracing::instrument(skip_all, fields(computer.id = %computer, screen.ended = tracing::field::Empty), err)]
+    pub async fn freeze_lost(
+        &self,
+        computer: ComputerId,
+        drive: &DriveId,
+    ) -> Result<(), ScreenError> {
+        let lease = self
+            .repo
+            .lease(computer)
+            .await
+            .map_err(ScreenError::internal)?;
+        let Some(lease) = lease.filter(|lease| &lease.drive_id() == drive) else {
+            tracing::Span::current().record("screen.ended", false);
+            return Ok(());
+        };
+        let released = self
+            .repo
+            .release(
+                computer,
+                Release::Unpaused {
+                    started_at: lease.started_at,
+                },
+            )
+            .await
+            .map_err(ScreenError::internal)?;
+        tracing::Span::current().record("screen.ended", released.is_some());
+        if let Some(released) = &released {
+            tracing::warn!("the agent couldn't be kept paused, so the drive ended");
+            self.signal.released(computer, released.drive_id()).await;
+        }
+        Ok(())
+    }
+
+    /// How `lease`'s drive ended, if it has.
+    pub async fn drive_end(&self, lease: &Lease) -> Result<Option<DriveEnd>, ScreenError> {
+        self.repo
+            .drive_end(lease.computer_id, lease.started_at)
+            .await
+            .map_err(ScreenError::internal)
     }
 
     /// Mark an open socket as still there; due every [`SESSION_TOUCH_EVERY`].

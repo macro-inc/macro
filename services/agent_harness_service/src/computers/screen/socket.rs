@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
 use computer_screen::domain::models::{
-    EndReason, Lease, Mode, ScreenGrant, SessionId, Surface, TakeOver, Transport,
+    DriveEnd, EndReason, Lease, Mode, ScreenGrant, SessionId, Surface, TakeOver, Transport,
 };
 use computer_screen::domain::service::ScreenError;
 use futures::{SinkExt as _, StreamExt as _};
@@ -843,11 +843,20 @@ impl Connection {
                         Err(broadcast::error::RecvError::Closed) => false,
                     };
                     if relevant {
+                        let was_driving = lease.clone().filter(|lease| lease.session_id == self.session);
                         lease = match self.deps.screens.lease(computer).await {
                             Ok(lease) => lease,
                             Err(error) => return internal(&error),
                         };
                         if self.state(sender, lease.as_ref(), surface).await.is_err() {
+                            return Ending::plain(EndReason::Stopped);
+                        }
+                        // The agent couldn't be kept paused: say why the
+                        // drive ended, so the viewer doesn't claim it is.
+                        if let Some(ended) = was_driving.filter(|_| !drives_here(lease.as_ref(), self.session))
+                            && matches!(self.deps.screens.drive_end(&ended).await, Ok(Some(DriveEnd::Unpaused)))
+                            && Self::error(sender, ErrorCode::AgentNotPausable, "The agent couldn't be kept paused, so it has the computer back.").await.is_err()
+                        {
                             return Ending::plain(EndReason::Stopped);
                         }
                     }

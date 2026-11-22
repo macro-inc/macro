@@ -341,6 +341,18 @@ mod over_the_wire {
         ) -> Pin<Box<dyn Future<Output = Result<ComputerPower, TunnelError>> + Send + '_>> {
             Box::pin(async { Ok(ComputerPower::Running) })
         }
+
+        fn awake(
+            &self,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<std::collections::HashSet<ComputerId>, TunnelError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async { Ok(std::collections::HashSet::from([COMPUTER])) })
+        }
     }
 
     struct Rig {
@@ -922,6 +934,29 @@ mod over_the_wire {
         rig.lookups_fail.store(false, Ordering::SeqCst);
         send(&mut client, serde_json::json!({ "type": "takeOver" })).await;
         assert_eq!(control_of(&mut client, "state").await["drivingHere"], true);
+    }
+
+    /// A driver whose agent couldn't be kept paused learns why the drive
+    /// ended, so the viewer never claims the agent is paused.
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_driver_whose_freeze_was_lost_is_told(pool: PgPool) {
+        let rig = rig(pool, grant("alice", Mode::Drive)).await;
+        let mut client = connect(&rig).await;
+        control_of(&mut client, "state").await;
+        send(&mut client, serde_json::json!({ "type": "takeOver" })).await;
+        assert_eq!(control_of(&mut client, "state").await["drivingHere"], true);
+        let lease = rig.screens.lease(COMPUTER).await.unwrap().unwrap();
+
+        rig.screens
+            .freeze_lost(COMPUTER, &lease.drive_id())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            control_of(&mut client, "error").await["code"],
+            "agentNotPausable"
+        );
+        assert_eq!(rig.screens.lease(COMPUTER).await.unwrap(), None);
     }
 
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

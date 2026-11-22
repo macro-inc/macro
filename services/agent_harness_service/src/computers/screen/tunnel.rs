@@ -126,6 +126,17 @@ pub trait ScreenWaker: Send + Sync + 'static {
         &self,
         computer: ComputerId,
     ) -> Pin<Box<dyn Future<Output = Result<ComputerPower, TunnelError>> + Send + '_>>;
+
+    /// Every computer that runs now, in one read.
+    fn awake(
+        &self,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<std::collections::HashSet<ComputerId>, TunnelError>>
+                + Send
+                + '_,
+        >,
+    >;
 }
 
 /// [`GuestTunnel`] over a [`GuestExec`]; the tasks that end tunnels which

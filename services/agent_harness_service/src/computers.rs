@@ -134,18 +134,45 @@ impl screen::tunnel::ScreenWaker for Operator {
                 + '_,
         >,
     > {
-        use screen::tunnel::{ComputerPower, TunnelError};
-        // Only asked when a screen stopped short, so the whole list is fine.
+        use screen::tunnel::ComputerPower;
+        // Asked when a screen stopped short, and before a hand-back's thaw.
         Box::pin(async move {
-            let awake = self
+            Ok(
+                if screen::tunnel::ScreenWaker::awake(self)
+                    .await?
+                    .contains(&computer)
+                {
+                    ComputerPower::Running
+                } else {
+                    ComputerPower::NotRunning
+                },
+            )
+        })
+    }
+
+    fn awake(
+        &self,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        std::collections::HashSet<ComputerId>,
+                        screen::tunnel::TunnelError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        use screen::tunnel::TunnelError;
+        // The fleet's whole list: once per reaping round, not per computer.
+        Box::pin(async move {
+            Ok(self
                 .awake_computers()
                 .await
-                .map_err(|error| TunnelError::Unreachable(error.to_string()))?;
-            Ok(if awake.iter().any(|(_, awake)| *awake == computer) {
-                ComputerPower::Running
-            } else {
-                ComputerPower::NotRunning
-            })
+                .map_err(|error| TunnelError::Unreachable(error.to_string()))?
+                .into_iter()
+                .map(|(_, computer)| computer)
+                .collect())
         })
     }
 }

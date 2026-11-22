@@ -8,7 +8,7 @@ use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
-use crate::computers::screen::tunnel::{GuestProgram, TunnelError, Woken};
+use crate::computers::screen::tunnel::{ComputerPower, GuestProgram, TunnelError, Woken};
 
 const COMPUTER: ComputerId = ComputerId::new_from_uuid(uuid::Uuid::from_u128(0xC0));
 
@@ -88,6 +88,24 @@ impl ScreenWaker for Power {
     ) -> Pin<Box<dyn Future<Output = Result<ComputerPower, TunnelError>> + Send + '_>> {
         let power = *self.0.lock().unwrap();
         Box::pin(async move { Ok(power) })
+    }
+
+    fn awake(
+        &self,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<std::collections::HashSet<ComputerId>, TunnelError>>
+                + Send
+                + '_,
+        >,
+    > {
+        let power = *self.0.lock().unwrap();
+        Box::pin(async move {
+            Ok(match power {
+                ComputerPower::Running => std::collections::HashSet::from([COMPUTER]),
+                ComputerPower::NotRunning => std::collections::HashSet::new(),
+            })
+        })
     }
 }
 
@@ -229,21 +247,100 @@ async fn a_thaw_a_newer_drive_superseded_is_done() {
 }
 
 #[tokio::test]
-async fn a_sleeping_computer_is_never_execd_into_and_its_thaw_stays_owed() {
+async fn a_hand_back_on_a_sleeping_computer_is_never_execd_into() {
     let helper = Arc::new(FakeHelper::answering("frozen"));
     let tasks = TaskTracker::new();
     let power = Arc::new(Power(Mutex::new(ComputerPower::NotRunning)));
-    let (files, _) = files(&helper, &power, &tasks);
-    let drive = lease().drive_id();
+    let (files, shutdown) = files(&helper, &power, &tasks);
+
+    files.released(COMPUTER, lease().drive_id()).await;
+    settle(&tasks, &shutdown).await;
+
+    assert!(helper.asked().is_empty());
+    assert!(files.running(&[COMPUTER]).await.unwrap().is_empty());
+}
+
+/// The guest's timer fired during an exec outage (keep: thawed), or a late
+/// freeze of an earlier drive took the fence (keep: superseded): the live
+/// drive is frozen again.
+#[tokio::test]
+async fn a_keep_that_finds_the_agent_unfrozen_freezes_it_again() {
+    for kept in ["thawed", "superseded", "failed"] {
+        let helper = Arc::new(FakeHelper::answering("frozen"));
+        helper.answer("keep", kept);
+        let tasks = TaskTracker::new();
+        let (files, shutdown) = files(&helper, &running(), &tasks);
+        let mut lost = files.lost_freezes().unwrap();
+        let lease = lease();
+        files.driving(&lease).await.unwrap();
+
+        files.renewed(&lease).await;
+        settle(&tasks, &shutdown).await;
+
+        let drive = lease.drive_id();
+        assert_eq!(
+            helper.asked(),
+            [
+                format!("freeze {}", drive.as_str()),
+                format!("keep {}", drive.as_str()),
+                format!("freeze {}", drive.as_str())
+            ],
+            "{kept}"
+        );
+        assert!(lost.try_recv().is_err(), "{kept}");
+    }
+}
+
+/// When the agent can't be frozen again either, the drive is reported lost.
+#[tokio::test]
+async fn a_drive_whose_agent_cannot_be_refrozen_is_lost() {
+    let helper = Arc::new(FakeHelper::answering("frozen"));
+    helper.answer("keep", "thawed");
+    let tasks = TaskTracker::new();
+    let (files, shutdown) = files(&helper, &running(), &tasks);
+    let mut lost = files.lost_freezes().unwrap();
+    let lease = lease();
+    files.driving(&lease).await.unwrap();
+    helper.answer("freeze", "failed");
+
+    files.renewed(&lease).await;
+    settle(&tasks, &shutdown).await;
 
     assert_eq!(
-        files.thaw(COMPUTER, &drive).await,
-        Err(ThawFailed::NotRunning)
+        lost.try_recv().unwrap(),
+        LostFreeze {
+            computer_id: COMPUTER,
+            drive: lease.drive_id()
+        }
     );
-    assert!(helper.asked().is_empty());
+}
 
-    *power.0.lock().unwrap() = ComputerPower::Running;
-    assert_eq!(files.thaw(COMPUTER, &drive).await, Ok(Thawed::Running));
+/// A computer whose image has no helper can't freeze an agent, and has
+/// nothing to keep or thaw.
+#[tokio::test]
+async fn without_the_helper_only_a_freeze_fails() {
+    let state = std::env::temp_dir().join(format!("pause-test-{}", uuid::Uuid::now_v7()));
+    std::fs::create_dir_all(&state).unwrap();
+    for (verb, want) in [("freeze", "failed"), ("keep", "idle"), ("thaw", "idle")] {
+        let output = tokio::process::Command::new("sh")
+            .args(["-c", PAUSE_SCRIPT, "sh", verb, "aa"])
+            .arg(&state)
+            .output()
+            .await
+            .unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            want,
+            "{verb}"
+        );
+    }
+    let output = tokio::process::Command::new("sh")
+        .args(["-c", PAUSE_SCRIPT, "sh", "freeze", "aa", "/no/such/agent"])
+        .output()
+        .await
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "idle");
+    std::fs::remove_dir_all(&state).unwrap();
 }
 
 #[tokio::test]
