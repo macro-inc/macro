@@ -94,3 +94,26 @@ async fn an_unknown_encryption_version_is_refused_before_kms() {
         Err(MailboxKeyCipherError::UnsupportedVersion(2))
     ));
 }
+
+#[test]
+fn every_kms_call_gives_up_inside_the_mailbox_lease() {
+    let client = aws_sdk_kms::Client::from_conf(
+        aws_sdk_kms::Config::builder()
+            .behavior_version(aws_sdk_kms::config::BehaviorVersion::latest())
+            .region(aws_sdk_kms::config::Region::new("us-east-1"))
+            .build(),
+    );
+
+    let kms = AwsMailboxKms::new(client, "alias/agent-mailbox".to_owned());
+
+    let timeout = kms
+        .client
+        .config()
+        .timeout_config()
+        .and_then(|timeouts| timeouts.operation_timeout());
+    assert_eq!(timeout, Some(KMS_CALL_TIMEOUT));
+    assert!(
+        KMS_CALL_TIMEOUT.as_secs() * 6 < 180,
+        "a step's calls fit in LEASE_TTL"
+    );
+}

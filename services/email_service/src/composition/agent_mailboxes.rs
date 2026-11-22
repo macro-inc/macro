@@ -78,12 +78,21 @@ pub(crate) fn spawn_sweep(
                 _ = interval.tick() => {}
             }
             let now = chrono::Utc::now();
-            if let Err(error) = service.sweep(now).await {
-                tracing::warn!(error = %error, "agent mailbox sweep round failed");
-            }
-            // One replica a round takes the hourly orphan check; the rest skip it.
-            if let Err(error) = service.sweep_orphans(now).await {
-                tracing::warn!(error = %error, "agent mailbox orphan sweep failed");
+            let round = async {
+                if let Err(error) = service.sweep(now).await {
+                    tracing::warn!(error = %error, "agent mailbox sweep round failed");
+                }
+                // One replica a round takes the hourly orphan check; the rest skip it.
+                if let Err(error) = service.sweep_orphans(now).await {
+                    tracing::warn!(error = %error, "agent mailbox orphan sweep failed");
+                }
+            };
+            // Shutdown doesn't wait out a round: a step stopped mid-way is
+            // safe to drop (its lease expires, every write is fenced, and the
+            // next round resumes from the last recorded step).
+            tokio::select! {
+                () = cancel.cancelled() => break,
+                () = round => {}
             }
         }
     });

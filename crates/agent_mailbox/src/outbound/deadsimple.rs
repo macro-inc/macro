@@ -301,7 +301,14 @@ async fn failure(response: Response, operation: Operation) -> ProviderError {
         }
         StatusCode::FORBIDDEN => ProviderError::NotConfigured,
         StatusCode::NOT_FOUND => ProviderError::NotFound,
-        StatusCode::CONFLICT if operation == Operation::CreateInbox => ProviderError::AddressTaken,
+        // Only a conflict the provider names as the address is a taken
+        // address. Any other (an idempotent create still in flight) is
+        // retried under the same key: reading it as taken would make a
+        // second, suffixed mailbox and orphan the first.
+        StatusCode::CONFLICT if operation == Operation::CreateInbox && names_the_address(&code) => {
+            ProviderError::AddressTaken
+        }
+        StatusCode::CONFLICT if operation == Operation::CreateInbox => ProviderError::Unavailable,
         // An idempotent request still in flight: retry under the same key.
         StatusCode::CONFLICT if operation == Operation::Send => ProviderError::Unavailable,
         StatusCode::TOO_MANY_REQUESTS if operation == Operation::Send => ProviderError::SendLimit,
@@ -315,6 +322,22 @@ async fn failure(response: Response, operation: Operation) -> ProviderError {
         "deadsimple.email refused a request"
     );
     error
+}
+
+/// Whether a create conflict's error code is about the address itself.
+fn names_the_address(code: &str) -> bool {
+    let code = code.to_ascii_lowercase();
+    !code.contains("idempoten")
+        && [
+            "address",
+            "email",
+            "local_part",
+            "taken",
+            "exists",
+            "unavailable",
+        ]
+        .iter()
+        .any(|word| code.contains(word))
 }
 
 async fn send_request(request: RequestBuilder) -> Result<Response, ProviderError> {
@@ -462,14 +485,19 @@ impl MailboxProvisioner for DeadSimple {
     }
 
     #[tracing::instrument(name = "agent_mailbox.deadsimple.revoke_scoped_keys", skip_all, err)]
-    async fn revoke_all_access(&self, mailbox: &ProviderMailboxId) -> Result<(), ProviderError> {
+    async fn revoke_all_access(
+        &self,
+        mailbox: &ProviderMailboxId,
+        already_revoked: Option<&ProviderGrantId>,
+    ) -> Result<(), ProviderError> {
         let keys: ApiKeyList =
             data(self.admin(Method::GET, "/v1/api-keys")?, Operation::Other).await?;
         // Only keys scoped to exactly this mailbox: never an account-wide key.
         let scoped = keys
             .api_keys
             .into_iter()
-            .filter(|key| key.inbox_ids.as_slice() == std::slice::from_ref(&mailbox.0));
+            .filter(|key| key.inbox_ids.as_slice() == std::slice::from_ref(&mailbox.0))
+            .filter(|key| already_revoked.is_none_or(|revoked| revoked.0 != key.key_id));
         for key in scoped {
             self.revoke_access(&ProviderGrantId(key.key_id)).await?;
         }

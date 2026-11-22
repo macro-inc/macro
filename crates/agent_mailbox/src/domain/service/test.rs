@@ -51,6 +51,11 @@ struct VendorState {
     lose_next_create_response: bool,
     /// The provider wrongly returns any message for a read, from any mailbox.
     leaks_across_mailboxes: bool,
+    /// Create makes the mailbox but answers 409, as an idempotent create
+    /// still in flight might, read as a taken address.
+    conflict_after_next_create: bool,
+    /// Every request that revokes a credential: (operation, grant).
+    revocations: Vec<(&'static str, String)>,
 }
 
 #[derive(Clone, Default)]
@@ -160,6 +165,10 @@ impl MailboxProvisioner for FakeVendor {
             state.lose_next_create_response = false;
             return Err(ProviderError::Unavailable);
         }
+        if state.conflict_after_next_create {
+            state.conflict_after_next_create = false;
+            return Err(ProviderError::AddressTaken);
+        }
         Ok(ProvisionedMailbox {
             id: ProviderMailboxId(id),
             address,
@@ -218,6 +227,7 @@ impl MailboxProvisioner for FakeVendor {
 
     async fn revoke_access(&self, grant: &ProviderGrantId) -> Result<(), ProviderError> {
         let mut state = self.0.lock().unwrap();
+        state.revocations.push(("revoke", grant.0.clone()));
         if let Some(key) = state.grants.remove(&grant.0) {
             state.keys.remove(&key);
             state.revoked_grants.push(grant.0.clone());
@@ -225,7 +235,11 @@ impl MailboxProvisioner for FakeVendor {
         Ok(())
     }
 
-    async fn revoke_all_access(&self, mailbox: &ProviderMailboxId) -> Result<(), ProviderError> {
+    async fn revoke_all_access(
+        &self,
+        mailbox: &ProviderMailboxId,
+        _already_revoked: Option<&ProviderGrantId>,
+    ) -> Result<(), ProviderError> {
         let mut state = self.0.lock().unwrap();
         let scoped: Vec<String> = state
             .keys
@@ -242,6 +256,7 @@ impl MailboxProvisioner for FakeVendor {
                 .map(|(grant, _)| grant.clone())
                 .collect();
             for grant in grants {
+                state.revocations.push(("revoke_listed", grant.clone()));
                 state.grants.remove(&grant);
                 state.revoked_grants.push(grant);
             }
@@ -456,6 +471,8 @@ struct RepositoryState {
     resume_after_sweep_read: Option<AgentMailboxId>,
     /// Prune rounds run, across every replica sharing this store.
     prune_rounds: usize,
+    /// defer_sweep fails this many more times.
+    fail_defer_sweep: usize,
 }
 
 #[derive(Clone, Default)]
@@ -510,10 +527,17 @@ impl AgentMailboxRepository for FakeRepository {
         {
             return Ok(Reservation::Existing(row.mailbox.clone()));
         }
-        if let Some(row) = state.rows.iter().find(|row| {
+        let now = Utc::now();
+        if let Some(row) = state.rows.iter_mut().find(|row| {
             row.mailbox.agent == request.agent && row.mailbox.state != MailboxState::Released
         }) {
-            return Ok(Reservation::AgentHasMailbox(row.mailbox.clone()));
+            let replaceable = row.mailbox.state == MailboxState::Failed
+                && row.mailbox.provider_mailbox_id.is_none()
+                && row.lease.is_none_or(|(_, until)| until < now);
+            if !replaceable {
+                return Ok(Reservation::AgentHasMailbox(row.mailbox.clone()));
+            }
+            row.mailbox.state = MailboxState::Released;
         }
         let team_live = state
             .rows
@@ -768,6 +792,13 @@ impl AgentMailboxRepository for FakeRepository {
     }
 
     async fn defer_sweep(&self, id: AgentMailboxId, until: DateTime<Utc>) -> Result<(), FakeError> {
+        {
+            let mut state = self.0.lock().unwrap();
+            if state.fail_defer_sweep > 0 {
+                state.fail_defer_sweep -= 1;
+                return Err(FakeError);
+            }
+        }
         self.with_row(id, |row| row.next_sweep_at = Some(until));
         Ok(())
     }
@@ -2406,6 +2437,17 @@ async fn a_malformed_display_name_is_refused() {
         "Ada > Ben",
         "Ada \"the agent\"",
         "Ada\nBen",
+        // RFC 2047 encoded words decode to anything in a mail client.
+        "=?utf-8?B?Y2VvQGJhbmsuZXhhbXBsZQ==?=",
+        // Lookalikes of @ < >: fullwidth, small, angle quotation marks.
+        "ceo\u{FF20}bank.example",
+        "ceo\u{FE6B}bank.example",
+        "Bank \u{FF1C}ceo\u{FF1E}",
+        "Bank \u{2039}ceo\u{203A}",
+        // Format characters (bidi overrides, zero-width) and private use.
+        "Ada\u{202E}elpmaxe.knab",
+        "Ada\u{200B}",
+        "Ada\u{E000}",
     ] {
         let request = ProvisionRequest {
             display_name: Some(name.to_owned()),
@@ -2714,4 +2756,135 @@ async fn replicas_sweeping_in_the_same_minute_prune_once() {
     replica.sweep(now).await.unwrap();
 
     assert_eq!(world.repository.0.lock().unwrap().prune_rounds, 1);
+}
+
+#[tokio::test]
+async fn letters_digits_and_ordinary_name_punctuation_are_a_valid_display_name() {
+    let world = world();
+    for (number, name) in [
+        "José Núñez",
+        "Ada 2",
+        "O'Brien & Co.",
+        "Zoë-Ann (Ops)",
+        "李小龙",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let agent = format!("macro|agent-{number}@agents.macro.invalid");
+        world
+            .members
+            .lock()
+            .unwrap()
+            .insert(agent.clone(), ADA_TEAM);
+        let request = ProvisionRequest {
+            display_name: Some(name.to_owned()),
+            ..request(&agent, 100 + number as u128, &format!("agent{number}"))
+        };
+        let provisioned = world.service.provision(request).await;
+        assert!(provisioned.is_ok(), "{name:?}: {provisioned:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_conflict_from_a_create_still_in_flight_never_makes_a_second_mailbox() {
+    let world = world();
+    world.vendor.0.lock().unwrap().conflict_after_next_create = true;
+
+    let view = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+
+    assert_eq!(view.address.as_deref(), Some("ada@fake-vendor.invalid"));
+    assert_eq!(
+        world.vendor.live_mailbox_count(),
+        1,
+        "no second, suffixed inbox"
+    );
+    world.service.release(&user(ADA), Utc::now()).await.unwrap();
+    assert_eq!(world.vendor.live_mailbox_count(), 0, "nothing leaked");
+}
+
+#[tokio::test]
+async fn a_new_request_recovers_a_mailbox_whose_addresses_were_all_taken() {
+    let world = world();
+    // The requested address and the mailbox's own suffixed one are both taken.
+    world
+        .vendor
+        .fail_next("create", ProviderError::AddressTaken);
+    world
+        .vendor
+        .fail_next("create", ProviderError::AddressTaken);
+
+    let failed = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    // A new request gets a new mailbox, so a new suffix; its plain address is still taken.
+    world
+        .vendor
+        .fail_next("create", ProviderError::AddressTaken);
+    let recovered = world
+        .service
+        .provision(request(ADA, 2, "ada"))
+        .await
+        .unwrap();
+
+    assert_eq!(failed.state, MailboxState::Failed);
+    assert_eq!(failed.last_error, Some(ProvisioningFailure::AddressTaken));
+    assert_eq!(recovered.state, MailboxState::Active, "{recovered:?}");
+    assert_ne!(recovered.id, failed.id);
+    assert!(recovered.address.unwrap().starts_with("ada-"));
+}
+
+#[tokio::test]
+async fn a_release_revokes_each_credential_once() {
+    let world = world();
+    world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+
+    world.service.release(&user(ADA), Utc::now()).await.unwrap();
+
+    assert_eq!(
+        world.vendor.0.lock().unwrap().revocations,
+        vec![("revoke", "grant-1".to_owned())]
+    );
+}
+
+#[tokio::test]
+async fn a_failed_deferral_does_not_end_the_sweep_round() {
+    let world = world();
+    let ada = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    let ben = world
+        .service
+        .provision(request(BEN, 2, "ben"))
+        .await
+        .unwrap();
+    world.service.pause(&user(ADA), Utc::now()).await.unwrap();
+    world.service.pause(&user(BEN), Utc::now()).await.unwrap();
+    world.repository.age(ada.id, Duration::days(32));
+    world.repository.age(ben.id, Duration::days(31));
+    world.vendor.fail_next("delete", ProviderError::Unavailable);
+    world.vendor.fail_next("delete", ProviderError::Unavailable);
+    world.repository.0.lock().unwrap().fail_defer_sweep = 1;
+
+    let round = world.service.sweep(Utc::now()).await;
+
+    let report = round.unwrap();
+    assert_eq!(report.failed, 2, "both steps ran: {report:?}");
+    assert_eq!(
+        world.repository.0.lock().unwrap().prune_rounds,
+        1,
+        "the round still pruned"
+    );
 }

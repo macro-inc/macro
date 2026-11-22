@@ -151,7 +151,7 @@ async fn revoking_all_access_finds_keys_by_their_scope() {
         .await
         .unwrap();
 
-    adapter.revoke_all_access(&mailbox.id).await.unwrap();
+    adapter.revoke_all_access(&mailbox.id, None).await.unwrap();
 
     for key in [first, second] {
         let read = adapter

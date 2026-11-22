@@ -76,10 +76,12 @@ pub trait MailboxProvisioner: Send + Sync + 'static {
         grant: &ProviderGrantId,
     ) -> impl Future<Output = Result<(), ProviderError>> + Send;
 
-    /// Revoke every credential scoped to this mailbox, stored or not.
+    /// Revoke every credential scoped to this mailbox, stored or not, except
+    /// `already_revoked` (the stored one, revoked on its own just before).
     fn revoke_all_access(
         &self,
         mailbox: &ProviderMailboxId,
+        already_revoked: Option<&ProviderGrantId>,
     ) -> impl Future<Output = Result<(), ProviderError>> + Send;
 
     /// Delete a mailbox and its mail. Deleting one already gone succeeds.

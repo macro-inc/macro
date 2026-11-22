@@ -43,8 +43,11 @@ pub const MAX_SUBJECT_CHARS: usize = 998;
 /// Most messages on one page.
 pub const MAX_PAGE_SIZE: u8 = 50;
 
-/// How long one attempt holds a mailbox's lease. Every provider call in an
-/// attempt times out well inside it (a handful of calls at 20 seconds each).
+/// How long one attempt holds a mailbox's lease, never renewed. One step is
+/// bounded inside it: provisioning makes at most six provider calls (find,
+/// create, find, suffixed create, guardrails, grant) at 20 seconds each plus
+/// one KMS encrypt at 10, 130 seconds in all; a release makes four plus one
+/// revoke per extra credential scoped to the mailbox (normally none).
 pub const LEASE_TTL: Duration = Duration::minutes(3);
 
 /// How long the sweep leaves a mailbox alone after one of its steps failed.
@@ -100,6 +103,17 @@ pub struct SweepReport {
     pub failed: usize,
     /// Mailboxes another attempt held; it finishes them.
     pub skipped: usize,
+}
+
+/// What one orphan check did.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OrphanReport {
+    /// Mailboxes paused because their agent account or team is gone.
+    pub paused: usize,
+    /// Mailboxes found orphaned but no longer so when rechecked.
+    pub kept: usize,
+    /// Mailboxes whose pause failed; the next check retries them.
+    pub failed: usize,
 }
 
 /// A digest of a send's parts, each length-prefixed so no two different
@@ -393,6 +407,12 @@ where
         };
         match self.vendor.create_mailbox(&request).await {
             Err(ProviderError::AddressTaken) => {
+                // The address may be taken by this very request's create,
+                // made but unanswered: never make a second mailbox for one
+                // owner tag.
+                if let Some(found) = self.vendor.find_mailbox(mailbox.id).await? {
+                    return Ok(found);
+                }
                 let Some(local_part) = &mailbox.requested_local_part else {
                     return Err(ProviderError::AddressTaken);
                 };
@@ -605,10 +625,11 @@ where
                         .map(|found| found.id),
                 };
 
-                // Every credential scoped to the mailbox, not only the stored
-                // one: a credential minted but never stored (a failed
-                // encryption, a lost response, a mint after the replay
-                // window) is found by its scope and revoked too.
+                // The stored credential by its id, whatever the provider's
+                // listing shows (its paging is unverified); then every other
+                // credential scoped to the mailbox: one minted but never
+                // stored (a failed encryption, a lost response, a mint after
+                // the replay window) is found by its scope. Each once.
                 if let Some(grant) = &mailbox.grant {
                     self.vendor
                         .revoke_access(&grant.id)
@@ -617,7 +638,10 @@ where
                 }
                 if let Some(provider_mailbox) = &provider_mailbox {
                     self.vendor
-                        .revoke_all_access(provider_mailbox)
+                        .revoke_all_access(
+                            provider_mailbox,
+                            mailbox.grant.as_ref().map(|grant| &grant.id),
+                        )
                         .await
                         .map_err(mail_error)?;
                 }
@@ -676,10 +700,15 @@ where
                 Err(AgentMailboxError::Busy) => report.skipped += 1,
                 Err(error) => {
                     tracing::warn!(agent_mailbox.id = %id, error = %error, "agent mailbox sweep step failed");
-                    self.repository
+                    // A failed deferral only means the next round retries
+                    // this mailbox sooner; the rest of this round goes on.
+                    if let Err(error) = self
+                        .repository
                         .defer_sweep(id, now + SWEEP_RETRY_DELAY)
                         .await
-                        .map_err(internal)?;
+                    {
+                        tracing::warn!(agent_mailbox.id = %id, error = %error, "agent mailbox sweep deferral failed");
+                    }
                     report.failed += 1;
                 }
             }
@@ -713,7 +742,7 @@ where
     pub async fn sweep_orphans(
         &self,
         now: DateTime<Utc>,
-    ) -> Result<Option<SweepReport>, AgentMailboxError> {
+    ) -> Result<Option<OrphanReport>, AgentMailboxError> {
         // Taken before any span opens, so the replicas that skip a round
         // leave no trace of it.
         let claimed = self
@@ -729,9 +758,9 @@ where
 
     /// The orphan check for a round this replica claimed.
     #[tracing::instrument(skip_all, fields(agent_mailbox.orphans.claimed, agent_mailbox.orphans.paused, agent_mailbox.orphans.failed), err)]
-    async fn check_orphans(&self, now: DateTime<Utc>) -> Result<SweepReport, AgentMailboxError> {
+    async fn check_orphans(&self, now: DateTime<Utc>) -> Result<OrphanReport, AgentMailboxError> {
         tracing::Span::current().record("agent_mailbox.orphans.claimed", true);
-        let mut report = SweepReport::default();
+        let mut report = OrphanReport::default();
         let mut after = None;
         loop {
             let (orphans, last) = self
@@ -743,9 +772,9 @@ where
                 match self.repository.pause_if_orphaned(mailbox.id, now).await {
                     Ok(true) => {
                         tracing::warn!(agent_mailbox.id = %mailbox.id, agent_mailbox.team_id = %mailbox.team, "paused an agent mailbox whose agent account or team is gone");
-                        report.advanced += 1;
+                        report.paused += 1;
                     }
-                    Ok(false) => report.skipped += 1,
+                    Ok(false) => report.kept += 1,
                     Err(error) => {
                         tracing::warn!(agent_mailbox.id = %mailbox.id, error = %error, "agent mailbox orphan pause failed");
                         report.failed += 1;
@@ -759,7 +788,7 @@ where
         }
 
         let span = tracing::Span::current();
-        span.record("agent_mailbox.orphans.paused", report.advanced);
+        span.record("agent_mailbox.orphans.paused", report.paused);
         span.record("agent_mailbox.orphans.failed", report.failed);
         Ok(report)
     }
@@ -1086,23 +1115,25 @@ const RESERVED_DISPLAY_WORDS: &[&str] = &[
     "webmaster",
 ];
 
-/// Characters that could make a display name read as an address.
-const DISPLAY_NAME_FORBIDDEN: [char; 4] = ['@', '<', '>', '"'];
+/// Punctuation a display name may use besides letters, digits and spaces.
+/// Everything else is refused, so the From phrase can never show an address
+/// (`@`, `<`, `>` and their lookalikes), quote itself out, carry an RFC 2047
+/// encoded word (`=?`) or a format or private-use character.
+const DISPLAY_NAME_PUNCTUATION: [char; 7] = ['.', ',', '-', '\'', '(', ')', '&'];
 
 fn validate_display_name(name: &str) -> Result<(), AgentMailboxError> {
     let invalid = |reason: &str| Err(AgentMailboxError::Invalid(format!("display name {reason}")));
     if name.trim().is_empty() || name.chars().count() > MAX_DISPLAY_NAME_CHARS {
         return invalid(&format!("must be 1 to {MAX_DISPLAY_NAME_CHARS} characters"));
     }
-    if name.chars().any(char::is_control) {
-        return invalid("may not contain control characters");
-    }
-    // The name is the From phrase of outbound mail: it may not show an address.
-    if name
-        .chars()
-        .any(|character| DISPLAY_NAME_FORBIDDEN.contains(&character))
-    {
-        return invalid("may not contain @, <, > or \"");
+    let allowed = |character: char| {
+        character.is_alphabetic()
+            || character.is_numeric()
+            || character == ' '
+            || DISPLAY_NAME_PUNCTUATION.contains(&character)
+    };
+    if !name.chars().all(allowed) {
+        return invalid("may use only letters, digits, spaces and . , - ' ( ) &");
     }
     Ok(())
 }

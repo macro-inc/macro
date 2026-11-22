@@ -65,7 +65,8 @@ async fn creates_an_inbox_with_the_provisioning_key_tag_and_idempotency_key() {
 #[tokio::test]
 async fn create_failures_map_to_what_provisioning_decides_on() {
     for (status, expected) in [
-        (409, "address taken"),
+        // A conflict the provider does not name as the address is retried.
+        (409, "provider unavailable"),
         (402, "provider credentials are missing or refused"),
         (401, "provider credentials are missing or refused"),
         (429, "provider throttled the request"),
@@ -352,7 +353,7 @@ async fn revoking_all_access_revokes_only_keys_scoped_to_exactly_that_mailbox() 
         .mount(&server)
         .await;
 
-    adapter.revoke_all_access(&inbox_id()).await.unwrap();
+    adapter.revoke_all_access(&inbox_id(), None).await.unwrap();
 
     let deletes = server
         .received_requests()
@@ -447,4 +448,72 @@ async fn a_conflict_on_send_or_reply_is_retryable_not_a_rejection() {
         matches!(reply, Err(ProviderError::Unavailable)),
         "{reply:?}"
     );
+}
+
+#[tokio::test]
+async fn a_create_conflict_is_a_taken_address_only_when_the_provider_says_so() {
+    for (code, taken) in [
+        ("address_taken", true),
+        ("email_taken", true),
+        ("local_part_unavailable", true),
+        ("idempotency_key_in_use", false),
+        ("request_in_progress", false),
+        ("conflict", false),
+        ("", false),
+    ] {
+        let (server, adapter) = adapter().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/inboxes"))
+            .respond_with(
+                ResponseTemplate::new(409).set_body_json(json!({"error": {"code": code}})),
+            )
+            .mount(&server)
+            .await;
+
+        let created = adapter.create_mailbox(&create_request()).await;
+
+        if taken {
+            assert!(
+                matches!(created, Err(ProviderError::AddressTaken)),
+                "{code}: {created:?}"
+            );
+        } else {
+            assert!(
+                matches!(created, Err(ProviderError::Unavailable)),
+                "{code}: {created:?}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn revoking_all_access_skips_the_credential_already_revoked() {
+    let (server, adapter) = adapter().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/api-keys"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {"api_keys": [
+                {"key_id": "stored", "inbox_ids": [inbox_id().0]},
+                {"key_id": "minted-never-stored", "inbox_ids": [inbox_id().0]},
+            ], "count": 2}
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/v1/api-keys/minted-never-stored"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/v1/api-keys/stored"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    adapter
+        .revoke_all_access(&inbox_id(), Some(&ProviderGrantId("stored".to_owned())))
+        .await
+        .unwrap();
 }

@@ -56,8 +56,10 @@ flowchart LR
   `team_user`; an agent on no team gets no mailbox.
 - **Send keys.** A send's idempotency key is bound to what it says (a SHA-256
   of kind, target, recipients, subject and body); the same key with a different
-  message is refused. The caller picks one key per message and reuses it on
-  every retry (the SDK requires it). Provider idempotency keys are derived per
+  message is refused. The caller passes one key per message on every attempt
+  (the SDK requires it); a code-mode program derives it with
+  `macro.agentMailbox.sendKey(purpose)` from stable ids (the task, turn or
+  message it answers), since each run is a new program. Provider idempotency keys are derived per
   mailbox and per operation, never passed through. A provider `409` on a send
   is an idempotent request still in flight: retried under the same key, never
   reported as a rejection.
@@ -70,8 +72,9 @@ flowchart LR
 - **Names.** A role name (`admin`, `postmaster`, `abuse`, `support`, the CA
   domain-validation addresses and the like) is never taken as is: the mailbox
   gets the suffixed form. A display name that names Macro or an administrator
-  is left off; one with `@`, `<`, `>`, `"` or a control character is refused,
-  so the From phrase can never show an address.
+  is left off. A display name may use only letters, digits, spaces and
+  `. , - ' ( ) &`, so the From phrase can never show an address or a
+  lookalike of one, an RFC 2047 encoded word, or a format character.
 - **Provider content is data.** Headers, the provider's prompt-injection score and
   any provider event never grant access or trigger an action.
 - **No payment.** The provider offers per-call payment when a key is missing; the
@@ -90,14 +93,22 @@ flowchart LR
 
 - Provisioning is idempotent per `requestId`: the row is reserved first, the
   provider create carries an idempotency key and an owner tag, and a lost create
-  is found again by its tag. A taken address retries once with a short suffix.
+  is found again by its tag. A create conflict is a taken address only when
+  the provider names it so; any other conflict (an idempotent create still in
+  flight) is retried under the same key, and a taken address is first checked
+  against the tag, so one request never makes two provider mailboxes. A taken
+  address retries once with a short suffix. A new request replaces a failed
+  mailbox that never reached the provider, so a mailbox whose addresses were
+  all taken gets a new suffix.
 - Provider-side steps run under a per-mailbox lease whose token fences every
   write they record, so overlapping provisioning attempts, a release and the
   sweep never interleave at the provider. A release that starts while a create
   is in flight waits for it, then deletes what it made.
-- Release revokes every key the provider lists as scoped to exactly that
-  mailbox (the stored one and any minted but never stored), then deletes the
-  provider mailbox and its mail.
+- Release revokes the stored key, then every other key the provider lists as
+  scoped to exactly that mailbox (any minted but never stored), each once,
+  then deletes the provider mailbox and its mail. A released row stays as the
+  record of the address it had and answers a retry of its request; it holds
+  no credential and no mail.
 - The sweep runs every minute: stalled provisioning, unfinished releases, and
   mailboxes paused for more than 30 days (rechecked in the write that starts
   the release, so a resume in between wins). A step that fails is set aside
@@ -106,7 +117,9 @@ flowchart LR
   `agent_mailbox.expire_paused`) with the mailbox id and outcome, and each
   provider call a child span. Pruning send records runs in one replica per
   minute (a claim on the database clock), so replicas never delete the same
-  rows at once.
+  rows at once. Shutdown stops a round mid-way: every step is fenced and
+  resumable. A step stays inside its 3-minute lease (provider calls time out
+  at 20 seconds, KMS calls at 10).
 - Hourly, one replica pauses any live mailbox whose agent account was deleted,
   is no longer an agent, or left the mailbox's team, or whose team was
   deleted; the write rechecks it. Pausing keeps the mail: the usual 30-day

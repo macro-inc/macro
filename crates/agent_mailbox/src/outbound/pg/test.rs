@@ -1164,3 +1164,81 @@ async fn a_retry_that_succeeds_after_the_first_attempt_was_refused_still_counts(
         "the sent message holds the hour's only slot: {next:?}"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_new_request_replaces_a_failed_mailbox_that_never_reached_the_provider(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let failed = new_mailbox(&repository).await;
+    let lease = token(1);
+    repository
+        .claim(failed, lease, Utc::now(), TTL)
+        .await
+        .unwrap()
+        .unwrap();
+    repository
+        .record_failure(
+            failed,
+            lease,
+            MailboxState::Failed,
+            ProvisioningFailure::AddressTaken,
+        )
+        .await
+        .unwrap();
+    repository.unclaim(failed, lease).await.unwrap();
+
+    let replaced = repository
+        .reserve(&request(2), AgentMailboxId::generate(), TEAM, 25)
+        .await
+        .unwrap();
+
+    let Reservation::New(mailbox) = replaced else {
+        panic!("expected a new mailbox, got {replaced:?}");
+    };
+    assert_ne!(mailbox.id, failed);
+    assert_eq!(
+        repository.mailbox(failed).await.unwrap().unwrap().state,
+        MailboxState::Released
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_mailbox_holding_a_provider_inbox_or_a_lease_is_not_replaced(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let failed = new_mailbox(&repository).await;
+    let lease = token(1);
+    repository
+        .claim(failed, lease, Utc::now(), TTL)
+        .await
+        .unwrap()
+        .unwrap();
+    let created = ProvisionedMailbox {
+        id: ProviderMailboxId("inbox-1".to_owned()),
+        address: "ada@example.net".to_owned(),
+    };
+    assert!(
+        repository
+            .record_created(failed, lease, &created)
+            .await
+            .unwrap()
+    );
+    repository
+        .record_failure(
+            failed,
+            lease,
+            MailboxState::Failed,
+            ProvisioningFailure::Rejected,
+        )
+        .await
+        .unwrap();
+    repository.unclaim(failed, lease).await.unwrap();
+
+    let refused = repository
+        .reserve(&request(2), AgentMailboxId::generate(), TEAM, 25)
+        .await
+        .unwrap();
+
+    assert!(
+        matches!(refused, Reservation::AgentHasMailbox(_)),
+        "{refused:?}"
+    );
+}
