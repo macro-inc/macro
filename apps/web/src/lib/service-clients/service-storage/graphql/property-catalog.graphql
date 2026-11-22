@@ -1,0 +1,170 @@
+# The viewer's property catalog: definitions, their select options, and tag
+# sets. Reads are live queries over the normalized cache; writes are the
+# mutations below, predicted by the resolvers in lib/queries/properties.
+
+fragment PropertyCatalogDefinitionFields on GraphqlPropertyDefinition {
+	__typename
+	id
+	owner {
+		scope
+		principalId
+	}
+	displayName
+	dataType
+	isMultiSelect
+	specificEntityType
+	isSystem
+	isMetadata
+	createdAt
+	updatedAt
+}
+
+fragment PropertyCatalogOptionFields on GraphqlPropertyOption {
+	__typename
+	id
+	propertyDefinitionId
+	displayOrder
+	value {
+		__typename
+		... on GraphqlStringPropertyOptionValue {
+			stringValue: value
+		}
+		... on GraphqlNumberPropertyOptionValue {
+			numberValue: value
+		}
+	}
+	color
+	createdAt
+	updatedAt
+}
+
+fragment PropertyCatalogTagSetFields on GraphqlTagSet {
+	scope
+	definition {
+		...PropertyCatalogDefinitionFields
+	}
+	options {
+		...PropertyCatalogOptionFields
+	}
+}
+
+query PropertyCatalogDefinitions(
+	$scope: GraphqlPropertyDefinitionScope!
+	$forEntityType: GraphqlPropertyEntityType
+) {
+	user {
+		id
+		propertyDefinitions(scope: $scope, forEntityType: $forEntityType) {
+			...PropertyCatalogDefinitionFields
+		}
+	}
+}
+
+query PropertyCatalogDefinitionsWithOptions(
+	$scope: GraphqlPropertyDefinitionScope!
+	$forEntityType: GraphqlPropertyEntityType
+) {
+	user {
+		id
+		propertyDefinitions(scope: $scope, forEntityType: $forEntityType) {
+			...PropertyCatalogDefinitionFields
+			options {
+				...PropertyCatalogOptionFields
+			}
+		}
+	}
+}
+
+query PropertyCatalogOptions($propertyDefinitionId: ID!) {
+	user {
+		id
+		propertyOptions(propertyDefinitionId: $propertyDefinitionId) {
+			...PropertyCatalogOptionFields
+		}
+	}
+}
+
+query PropertyCatalogTagSets {
+	user {
+		id
+		tagSets {
+			...PropertyCatalogTagSetFields
+		}
+	}
+}
+
+mutation CreatePropertyDefinition($input: CreatePropertyDefinitionInput!) {
+	createPropertyDefinition(input: $input) {
+		...PropertyCatalogDefinitionFields
+		options {
+			...PropertyCatalogOptionFields
+		}
+	}
+}
+
+mutation DeletePropertyDefinition($propertyDefinitionId: ID!) {
+	deletePropertyDefinition(propertyDefinitionId: $propertyDefinitionId) {
+		__typename
+		graphqlTypeName
+		entityId
+	}
+}
+
+mutation AddPropertyOption($input: AddPropertyOptionInput!) {
+	addPropertyOption(input: $input) {
+		...PropertyCatalogOptionFields
+	}
+}
+
+mutation UpdatePropertyOption($input: UpdatePropertyOptionInput!) {
+	updatePropertyOption(input: $input) {
+		...PropertyCatalogOptionFields
+	}
+}
+
+mutation DeletePropertyOption($propertyDefinitionId: ID!, $optionId: ID!) {
+	deletePropertyOption(
+		propertyDefinitionId: $propertyDefinitionId
+		optionId: $optionId
+	) {
+		__typename
+		graphqlTypeName
+		entityId
+	}
+}
+
+mutation EnsureTagSet($scope: GraphqlTagScope!) {
+	ensureTagSet(scope: $scope) {
+		...PropertyCatalogTagSetFields
+	}
+}
+
+mutation PromoteTag($optionId: ID!) {
+	promoteTag(optionId: $optionId) {
+		__typename
+		... on GraphqlPromotedTag {
+			option {
+				...PropertyCatalogOptionFields
+			}
+		}
+		... on GraphqlTagPromotionConflict {
+			message
+			conflictingOption {
+				...PropertyCatalogOptionFields
+			}
+		}
+	}
+}
+
+mutation MergeTag($optionId: ID!, $targetOptionId: ID!) {
+	mergeTag(optionId: $optionId, targetOptionId: $targetOptionId) {
+		option {
+			...PropertyCatalogOptionFields
+		}
+		removedOption {
+			__typename
+			graphqlTypeName
+			entityId
+		}
+	}
+}
