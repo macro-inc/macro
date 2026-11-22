@@ -1434,7 +1434,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   The resolved interface language is reported to PostHog as the person
   property `interface_language` when the account language loads.
 - When adding or changing a feature flag, follow the `feature-flags` skill.
-- Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off.
+- Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off. The server reads a routine (`GET /scheduled-actions/{id}`) only to its owner and refuses everyone else (401/404): a routine page shows the template on that refusal (`readRefused`), and routine mention previews fall back to the template's read.
 - Gate the Agent pings notification setting and its settings-search entry on `enable-agent-notifications`; the notification service refuses `notifications.send` for a sender under the same key.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 - Keep Tasks date ranges on view-owned date-bucket boundaries in `features/tasks-view/core/task-due-date.ts`; send `sort_method=property` with the selected definition and direction, use keyed `date_ranges` grouping, and restart pages when midnight/timezone/resume changes the query key; preserve text-search ordering.
