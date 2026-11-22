@@ -3549,13 +3549,18 @@ async fn an_unreadable_adoption_keeps_the_moved_files_and_fails_the_open() {
     rename_opfs_file(&marker, &held).await;
     create_opfs_directory(&marker).await;
     // Opening the main file alone could only reset it, and a recovery open
-    // cannot tell where the files go either: both fail and keep them.
-    assert!(
-        open_cache_inner(SCOPE.into(), None, false, None, false)
-            .await
-            .is_err()
-    );
-    assert!(recovery_open(SCOPE).await.is_err());
+    // cannot tell where the files go either: both fail and keep them, and
+    // both say so, so the coordinator never gives this scope up.
+    let opened = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .err()
+        .expect("the ordinary open fails");
+    assert!(kept_for_recovery(&opened), "the ordinary open kept them");
+    let recovered = recovery_open(SCOPE)
+        .await
+        .err()
+        .expect("the recovery open fails");
+    assert!(kept_for_recovery(&recovered), "the recovery open kept them");
     assert!(opfs_file_exists(&own).await);
     assert!(!opfs_file_exists(&format!("{own}-wal")).await);
     assert!(opfs_file_exists(&format!("{older}-wal")).await);
@@ -3739,11 +3744,8 @@ async fn an_uncounted_recovery_reads_the_adoption_time_when_the_files_do_not() {
     let error = kept
         .err()
         .expect("a recovery inside the age bound keeps them");
-    assert_eq!(
-        js_sys::Reflect::get(&error, &JsValue::from_str(RECOVERY_DEFERRED_MARKER))
-            .ok()
-            .and_then(|value| value.as_bool()),
-        Some(true),
+    assert!(
+        kept_for_recovery(&error),
         "the coordinator learns the files were kept for a later recovery"
     );
     // Past it the marker's time bounds the attempt, as it would a readable
@@ -3765,6 +3767,58 @@ async fn an_uncounted_recovery_reads_the_adoption_time_when_the_files_do_not() {
     remove_opfs_file(&held).await;
     remove_opfs_file(&wal_held).await;
     destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
+#[wasm_bindgen_test(async)]
+async fn an_uncounted_recovery_reads_the_adoption_again_before_the_age_bound() {
+    const SCOPE: &str = "cache-wasm-recovery-reread";
+    let own = database_identity(SCOPE);
+    let older = cache_database_name(SCOPE, 11);
+    let attempts = format!("{own}-adopting-attempts");
+    let held = format!("{own}-held");
+    // An adoption past the age bound whose first read fails in passing, with
+    // no attempt counted. Only the marker's time would bound it, so it reads
+    // the adoption again first: the files can go back, and they do.
+    let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
+    move_without_opening(SCOPE).await;
+    rename_opfs_file(&attempts, &held).await;
+    ADOPTION_READ_FAILURES.with(|left| left.set(1));
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(UNCOUNTED_RECOVERY_MS));
+    let result = recovery_open(SCOPE).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(0));
+    assert_eq!(ADOPTION_READ_FAILURES.with(std::cell::Cell::get), 0);
+    let (engine, report) = result.expect("recovery open after a failed read");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::ResetStorageUncertain,
+            carry_forward: Some(CarryForward::new(CarryForwardKind::Returned, 11)),
+        }
+    );
+    resolved(engine.close()).await;
+    remove_opfs_file(&held).await;
+    assert!(opfs_file_exists(&older).await);
+    remove_opfs_pair(&own).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("carry the returned database forward");
+    assert_eq!(
+        report.carry_forward,
+        Some(CarryForward::new(CarryForwardKind::Moved, 11))
+    );
+    assert_eq!(queue_depth(&engine).await, "1");
+    assert_eq!(test_generation(&engine).await, generation);
+    resolved(engine.close()).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
+/// Whether `error` says its open kept files an upgrade moved here for a
+/// later recovery to decide.
+fn kept_for_recovery(error: &JsValue) -> bool {
+    js_sys::Reflect::get(error, &JsValue::from_str(RECOVERY_DEFERRED_MARKER))
+        .ok()
+        .and_then(|value| value.as_bool())
+        == Some(true)
 }
 
 /// A recovery open of `scope`, as the coordinator asks for after a failed one.
@@ -3928,12 +3982,12 @@ async fn moved_files_whose_version_is_unreadable_are_kept_until_the_limit() {
 
     // The ordinary open moves the files and cannot open them. Nothing says
     // they are still what the older build wrote, so it keeps them, marker
-    // and all, and lets the older build's name go.
-    assert!(
-        open_cache_inner(SCOPE.into(), None, false, None, false)
-            .await
-            .is_err()
-    );
+    // and all, says so, and lets the older build's name go.
+    let opened = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .err()
+        .expect("the ordinary open fails");
+    assert!(kept_for_recovery(&opened), "the ordinary open kept them");
     assert!(opfs_file_exists(&own).await);
     assert!(opfs_file_exists(&marker).await);
     assert!(!opfs_file_exists(&older).await);

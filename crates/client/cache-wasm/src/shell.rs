@@ -788,6 +788,9 @@ const UNCOUNTED_RECOVERY_MS: u64 = 10 * 60 * 1000;
 thread_local! {
     /// Moves this worker's clock forward, as time passing would.
     static CLOCK_AHEAD_MS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// When not zero, this many of the next recovery reads of an adoption
+    /// fail, as a read that fails in passing would.
+    static ADOPTION_READ_FAILURES: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
 }
 
 /// Milliseconds since the Unix epoch by this browser's clock.
@@ -830,15 +833,24 @@ async fn open_storage(
             // the older build's queue, and opening half of a pair can only
             // reset it: keep them for the recovery open to resolve.
             owner.release().await.map_err(err_js)?;
-            return Err(err_js(reason));
+            return Err(recovery_deferred(err_js(reason)));
+        }
+    };
+    // Until the moved files open, or go back, or are discarded, a failure
+    // leaves them and their marker for the recovery open to decide.
+    let keeps_moved = |error: JsValue| {
+        if moved.is_some() {
+            recovery_deferred(error)
+        } else {
+            error
         }
     };
     let mut returned = None;
-    let (owner, reset_outcome) = match open_owner(owner).await? {
+    let (owner, reset_outcome) = match open_owner(owner).await.map_err(keeps_moved)? {
         OpenResult::Ready(session) => {
-            // A failed connect leaves the marker, so the recovery open decides
-            // what happens to moved files Turso cannot open.
-            let connected = session.connect().map_err(err_js)?;
+            let connected = session
+                .connect()
+                .map_err(|failure| keeps_moved(err_js(failure)))?;
             match TursoStorage::from_opfs_session_with_outcome(connected, scope) {
                 Ok((storage, outcome)) => {
                     if let Some(moved) = moved {
@@ -858,9 +870,14 @@ async fn open_storage(
                 Err(failure) => {
                     let error = failure.error();
                     if !error.requires_physical_reset() {
-                        let owner = failure.preserve().map_err(err_js)?;
-                        owner.release().await.map_err(err_js)?;
-                        return Err(err_js(error));
+                        let owner = failure
+                            .preserve()
+                            .map_err(|failure| keeps_moved(err_js(failure)))?;
+                        owner
+                            .release()
+                            .await
+                            .map_err(|failure| keeps_moved(err_js(failure)))?;
+                        return Err(keeps_moved(err_js(error)));
                     }
                     let outcome = recovery_outcome(
                         error
@@ -880,7 +897,9 @@ async fn open_storage(
                             let stored = failure.stored_storage_version();
                             // The close checkpoints, so a returned file is
                             // self-contained.
-                            let mut owner = failure.preserve().map_err(err_js)?;
+                            let mut owner = failure
+                                .preserve()
+                                .map_err(|failure| recovery_deferred(err_js(failure)))?;
                             let kind = match hand_back(
                                 &mut owner,
                                 &identity,
@@ -894,8 +913,10 @@ async fn open_storage(
                                 HandBack::Kept => {
                                     // The marker stays, so the recovery open
                                     // decides before it wipes anything.
-                                    owner.release().await.map_err(err_js)?;
-                                    return Err(err_js(MOVED_FILES_KEPT));
+                                    owner.release().await.map_err(|failure| {
+                                        recovery_deferred(err_js(failure))
+                                    })?;
+                                    return Err(recovery_deferred(err_js(MOVED_FILES_KEPT)));
                                 }
                             };
                             returned = Some(CarryForward::new(kind, from_version));
@@ -1222,10 +1243,11 @@ async fn keep_for_recovery(owner: OpfsOwner, reason: impl std::fmt::Display) -> 
     )))
 }
 
-/// Marks `error` as a recovery open that kept files it could not decide on
-/// yet ([`RECOVERY_DEFERRED_MARKER`]). The coordinator then keeps this scope
-/// and its pending recovery for a later page instead of giving the database
-/// up, which would leave those files where no open looks for them.
+/// Marks `error` as an open that kept files a storage upgrade moved here and
+/// that it could not decide on yet ([`RECOVERY_DEFERRED_MARKER`]). The
+/// coordinator then keeps this scope and its pending recovery for a later
+/// page instead of giving the database up, which would leave those files
+/// where no open looks for them.
 fn recovery_deferred(error: JsValue) -> JsValue {
     // Setting a property on a new Error does not fail; if it did, the open
     // would read as an ordinary failed recovery.
@@ -1253,23 +1275,40 @@ async fn recover_adoption(
     scope: &str,
     mut owner: OpfsOwner,
 ) -> Result<(OpfsOwner, Option<CarryForward>), JsValue> {
-    let adoption = match owner.read_adoption().await {
+    let adoption = match read_adoption_for_recovery(&mut owner).await {
         Ok(Some(adoption)) => adoption,
         Ok(None) => return Ok((owner, None)),
-        Err(error) => return unreadable_adoption(owner, error).await,
+        Err(error) => return unreadable_adoption(scope, owner, error).await,
     };
     let Some(from_version) = upgradable_storage_version(scope, &adoption.previous_identity) else {
         return Ok((owner, None));
     };
+    let counted = owner.record_attempt().await.ok();
+    recover_read_adoption(owner, adoption, from_version, counted).await
+}
+
+/// Reads the adoption beside this owner's files for a recovery open.
+async fn read_adoption_for_recovery(owner: &mut OpfsOwner) -> Result<Option<Adoption>, String> {
+    #[cfg(test)]
+    if ADOPTION_READ_FAILURES.with(|left| left.replace(left.get().saturating_sub(1)) > 0) {
+        return Err("injected adoption read failure".to_owned());
+    }
+    owner.read_adoption().await.map_err(|error| error.to_string())
+}
+
+/// Decides a readable adoption for a recovery open whose attempt is
+/// `counted`, or could not be counted (`None`).
+async fn recover_read_adoption(
+    owner: OpfsOwner,
+    adoption: Adoption,
+    from_version: u32,
+    counted: Option<u8>,
+) -> Result<(OpfsOwner, Option<CarryForward>), JsValue> {
     let discarded = Some(CarryForward::new(CarryForwardKind::Discarded, from_version));
-    let counted = owner.record_attempt().await;
-    if counted
-        .as_ref()
-        .is_ok_and(|count| *count > RECOVERY_ATTEMPTS)
-    {
+    if counted.is_some_and(|count| count > RECOVERY_ATTEMPTS) {
         return Ok((owner, discarded));
     }
-    let old = counted.is_err() && adoption_is_old(adoption.adopted_at_ms);
+    let old = counted.is_none() && adoption_is_old(adoption.adopted_at_ms);
     match decide_adoption(owner, adoption, from_version).await {
         Decided::Done(owner, carry_forward) => Ok((owner, carry_forward)),
         Decided::Kept(owner, _) if old => Ok((owner, discarded)),
@@ -1366,29 +1405,43 @@ async fn decide_adoption(mut owner: OpfsOwner, adoption: Adoption, from_version:
 /// the open, keeping everything, until [`RECOVERY_ATTEMPTS`] were counted.
 /// Then the files are discarded with their storage version unknown; the wipe
 /// that follows removes the marker and its count. An attempt that cannot be
-/// counted keeps them too, unless the marker itself still reads (the files
-/// beside it did not) and says the adoption is older than
+/// counted reads the adoption again first, because only the age bounds it:
+/// one that reads now is decided as any uncounted recovery is, so a read
+/// that failed in passing never discards files that could go back. When it
+/// still does not read, the files are kept, unless the marker itself reads
+/// (the files beside it did not) and says the adoption is older than
 /// [`UNCOUNTED_RECOVERY_MS`]. When neither the marker nor the count reads,
 /// nothing bounds the attempt or says how old the adoption is.
 async fn unreadable_adoption(
+    scope: &str,
     mut owner: OpfsOwner,
-    error: OpfsError,
+    error: String,
 ) -> Result<(OpfsOwner, Option<CarryForward>), JsValue> {
-    let past_bound = match owner.record_attempt().await {
-        Ok(count) => count > RECOVERY_ATTEMPTS,
-        Err(_) => matches!(
-            owner.read_adoption_time().await,
-            Ok(Some(adopted_at_ms)) if adoption_is_old(adopted_at_ms)
-        ),
-    };
-    if past_bound {
-        return Ok((
-            owner,
-            Some(CarryForward {
-                kind: CarryForwardKind::Discarded,
-                from_storage_version: None,
-            }),
-        ));
+    let unknown = Some(CarryForward {
+        kind: CarryForwardKind::Discarded,
+        from_storage_version: None,
+    });
+    match owner.record_attempt().await {
+        Ok(count) if count > RECOVERY_ATTEMPTS => return Ok((owner, unknown)),
+        Ok(_) => return Err(keep_for_recovery(owner, error).await),
+        Err(_) => {}
+    }
+    match read_adoption_for_recovery(&mut owner).await {
+        Ok(Some(adoption)) => {
+            let Some(from_version) = upgradable_storage_version(scope, &adoption.previous_identity)
+            else {
+                return Ok((owner, None));
+            };
+            return recover_read_adoption(owner, adoption, from_version, None).await;
+        }
+        Ok(None) => return Ok((owner, None)),
+        Err(_) => {}
+    }
+    if matches!(
+        owner.read_adoption_time().await,
+        Ok(Some(adopted_at_ms)) if adoption_is_old(adopted_at_ms)
+    ) {
+        return Ok((owner, unknown));
     }
     Err(keep_for_recovery(owner, error).await)
 }
