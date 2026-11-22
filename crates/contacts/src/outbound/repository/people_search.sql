@@ -88,12 +88,15 @@ ranked AS (
         ) AS is_prefix,
         COALESCE(NULLIF(p.full_name, ''), p.email) COLLATE "C" AS sort_key
     FROM profiles AS p
+    -- A join, not NOT IN: it can spill to disk, while a NOT IN subplan too
+    -- big for hash_mem is rescanned once per candidate.
+    LEFT JOIN hidden ON hidden.id = p.id COLLATE "C"
     WHERE (
         strpos(p.email, (SELECT needle FROM viewer)) > 0
         OR strpos(p.full_name, (SELECT needle FROM viewer)) > 0
     )
       -- Hide a peer only the peer has (see hidden); teammates always stay.
-      AND (p.is_teammate OR p.id COLLATE "C" NOT IN (SELECT id FROM hidden))
+      AND (p.is_teammate OR hidden.id IS NULL)
     -- Byte order keeps ties stable whatever the database's locale.
     ORDER BY p.is_teammate DESC, is_prefix DESC, sort_key, p.id COLLATE "C"
     LIMIT $3

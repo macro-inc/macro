@@ -34,7 +34,11 @@ FROM (
     UNION ALL
     SELECT user2 AS contact FROM contacts_connections WHERE user1 = $1
 ) AS neighbors
-WHERE lower(neighbors.contact COLLATE "C") NOT IN (SELECT id FROM hidden)
+-- NOT EXISTS, not NOT IN: an anti-join can spill to disk, while a NOT IN
+-- subplan too big for hash_mem is rescanned once per contact.
+WHERE NOT EXISTS (
+    SELECT 1 FROM hidden WHERE hidden.id = lower(neighbors.contact COLLATE "C")
+)
 UNION ALL
 -- A user has at most one team, and its roster includes the viewer.
 SELECT lower(teammate.user_id COLLATE "C") COLLATE "default"
