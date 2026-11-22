@@ -14,7 +14,7 @@ import { CombinedError } from '@urql/core';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { CatalogMutationError, isCatalogErrorCode } from './errors';
-import { catalogListResult } from './list-result';
+import { catalogListResult, offlineAsSuccess } from './list-result';
 import {
   optionValueRecord,
   toAddOptionInput,
@@ -303,7 +303,7 @@ describe('catalog list results', () => {
     ]).toEqual([EMPTY, true, false, true]);
   });
 
-  it('reads an offline failure over a list it has as a paused success', () => {
+  it('reads an offline failure as a paused read', () => {
     onlineManager.setOnline(false);
     try {
       const offline = new CombinedError({ networkError: new Error('offline') });
@@ -322,10 +322,18 @@ describe('catalog list results', () => {
       onlineManager.setOnline(true);
       expect(list.isSuccess).toBe(true);
       onlineManager.setOnline(false);
-      // With nothing to show, a refusal from the server, or an HTTP status
-      // from one, it still fails.
+      // A first read made offline stays the placeholder, as a paused
+      // TanStack read with placeholder data did, until the app is back.
       state.data = undefined;
-      expect(list.isError).toBe(true);
+      state.error = new CombinedError({ networkError: new Error('offline') });
+      expect([
+        list.data,
+        list.error,
+        list.isSuccess,
+        list.isPlaceholderData,
+        list.isFetched,
+      ]).toEqual([EMPTY, null, true, true, false]);
+      // A refusal from the server, or an HTTP status from one, still fails.
       state.data = ['a'];
       state.error = new CombinedError({
         graphQLErrors: [{ message: 'forbidden' }],
@@ -336,6 +344,28 @@ describe('catalog list results', () => {
         response: { status: 403 },
       });
       expect(list.isError).toBe(true);
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('keeps a definitions read made offline pending, as TanStack paused it', () => {
+    onlineManager.setOnline(false);
+    try {
+      const state: { data?: string[]; error?: Error } = {
+        error: new CombinedError({ networkError: new Error('offline') }),
+      };
+      const read = offlineAsSuccess(fakeQuery(state));
+      expect([
+        read.error,
+        read.isError,
+        read.isSuccess,
+        read.isPending,
+        read.isLoading,
+        read.status,
+      ]).toEqual([null, false, false, true, false, 'pending']);
+      state.data = ['a'];
+      expect([read.isSuccess, read.status]).toEqual([true, 'success']);
     } finally {
       onlineManager.setOnline(true);
     }
