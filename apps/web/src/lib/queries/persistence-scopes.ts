@@ -9,7 +9,10 @@ import { hasCachedUserIdentity } from './auth/user-info-cache';
 import { calendarKeys } from './calendar/keys';
 import { channelKeys } from './channel/keys';
 import { createPersistenceKey, type PersistScope } from './persistence';
-import { createPerQueryIDBStore } from './persistence/per-query-idb';
+import {
+  createPerQueryIDBStore,
+  type StringKeyPrefix,
+} from './persistence/per-query-idb';
 import { soupKeys } from './soup/keys';
 
 /**
@@ -17,7 +20,7 @@ import { soupKeys } from './soup/keys';
  * the channel store, under the account and before keys named one. No query
  * asks for them now, so nothing would ever expire them.
  */
-const RETIRED_CHANNEL_QUERY_PREFIXES: readonly QueryKey[] = [
+const RETIRED_CHANNEL_QUERY_PREFIXES: readonly StringKeyPrefix[] = [
   ['channel', 'activity'],
   ['channel', 'listChannels'],
 ];
