@@ -676,15 +676,15 @@ export function useTasksDataSource(
     const sort = (entities: TaskEntityWithProperties[]) =>
       sortTasks(entities, state.sort, propertyDefinitions());
     // Before the first page, a grouped view shows a created task in its group.
-    const groups =
-      server.kind === 'grouped'
-        ? server.groups
-        : server.tasks.length === 0 &&
-            optimistic.length > 0 &&
-            state.groupBy !== 'none' &&
-            !search.isSearching()
-          ? []
-          : undefined;
+    const startsGroups =
+      server.kind === 'flat' &&
+      server.tasks.length === 0 &&
+      optimistic.length > 0 &&
+      state.groupBy !== 'none' &&
+      !search.isSearching();
+    let groups: SoupGroup<TaskEntityWithProperties>[] | undefined;
+    if (server.kind === 'grouped') groups = server.groups;
+    else if (startsGroups) groups = [];
     if (!groups) {
       const listed = server.kind === 'flat' ? server.tasks : [];
       if (optimistic.length === 0) return buildFlatSoupRows(listed);
