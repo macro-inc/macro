@@ -271,19 +271,30 @@ export function computeGroupKeysForItem(
   groupBy: GroupByField | undefined
 ): string[] | undefined {
   if (!groupBy) return;
+  if (groupBy.type === 'entity_type') return [item.tag];
+  if (!hasProperties(item)) return;
+  return computeGroupKeysForProperties(item.data.properties, groupBy);
+}
+
+/**
+ * The group keys a row with these properties belongs to under a project or
+ * property grouping, as `computeGroupKeysForItem` reads them; `undefined` for
+ * groupings properties cannot answer.
+ */
+export function computeGroupKeysForProperties(
+  properties: readonly SoupProperty[] | null | undefined,
+  groupBy: GroupByField | undefined
+): string[] | undefined {
+  if (!groupBy) return;
 
   return match(groupBy)
-    .with({ type: 'entity_type' }, () => [item.tag])
     .with({ type: 'project' }, () =>
-      computeGroupKeysForItem(item, {
+      computeGroupKeysForProperties(properties, {
         type: 'property',
         propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
       })
     )
     .with({ type: 'property' }, (propertyGroupBy) => {
-      if (!hasProperties(item)) return;
-
-      const properties = item.data.properties;
       if (propertyGroupBy.bucketing) {
         if (!properties) return;
         const property = properties.find(
@@ -323,6 +334,6 @@ export function computeGroupKeysForItem(
 
       return;
     })
-    .with({ type: 'date' }, () => undefined)
+    .with({ type: 'date' }, { type: 'entity_type' }, () => undefined)
     .exhaustive(() => undefined);
 }
