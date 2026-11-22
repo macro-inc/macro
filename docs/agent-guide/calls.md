@@ -230,8 +230,10 @@ contain only the call ID and tab kind, never transcript or message contents.
 
 ### Imported Granola meetings
 
-Adding Granola in **Settings → Agent connections** (Pipedream Connect, Granola
-Business or Enterprise API key) is the only setup; there are no sync controls.
+Adding Granola in **Settings → Integrations** (Granola Business or Enterprise
+API key) is the only setup; there are no sync controls. Sync needs a
+connection that provides Granola's API; one that does not (Macro Connect holds
+Granola as tools only) reads **Connected · Meetings don't sync**.
 Within about 30 seconds the backend registers a Granola webhook at the widest
 scope the key allows, and removing or disabling the connection stops sync. Notes
 whose first summary is generated, edited, or shared after that are imported as

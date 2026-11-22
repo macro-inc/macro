@@ -385,9 +385,29 @@ async fn run_server() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
     );
     let bots_repo = PgBotsRepo::new(db.clone());
-    // The agent API checks a newly selected MCP app against the connector
-    // catalog (native overlays, then Pipedream's directory), the same check
-    // the ConfigureAgent tool makes.
+    // This process's one connectors composition: the agent API and the
+    // Macro agent's tools read connections only through it. `None` where the
+    // MCP credentials key is not configured.
+    let connectors = match ai_tools::connectors_config::connectors_config_from_env(env).await? {
+        Some(connectors_config) => Some(
+            connectors::composition::compose(
+                connectors_config,
+                db.clone(),
+                Arc::new(redis_client.clone()),
+                authentication_service_client::AuthServiceClient::new(
+                    config
+                        .authentication_service_secret_key
+                        .as_ref()
+                        .to_string(),
+                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                ),
+            )
+            .map_err(|report| anyhow::anyhow!("failed to compose connectors: {report:?}"))?,
+        ),
+        None => None,
+    };
+    // The agent API checks a newly selected MCP app against the connectors
+    // catalog, the same check the ConfigureAgent tool makes.
     let bots_service = BotServiceImpl::new(
         bots_repo,
         macro_event_broker.clone(),
@@ -396,7 +416,11 @@ async fn run_server() -> anyhow::Result<()> {
             hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
         ),
     )
-    .with_mcp_apps(ai_tools::PipedreamMcpAppCatalog::from_env(db.clone())?);
+    .with_mcp_apps(ai_tools::ConnectorsAppCatalog::new(
+        connectors
+            .as_ref()
+            .map(|composed| composed.connectors.clone()),
+    ));
 
     let authorization_service: AuthorizationService = MacroAuthorizationServiceImpl::new(
         MacroAuthJwtValidator::new(jwt_validation_args.clone()),
@@ -1689,17 +1713,7 @@ async fn run_server() -> anyhow::Result<()> {
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
-        Some(Arc::new(
-            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
-                authentication_service_client::AuthServiceClient::new(
-                    config
-                        .authentication_service_secret_key
-                        .as_ref()
-                        .to_string(),
-                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
-                ),
-            ),
-        )),
+        connectors.as_ref(),
         email::outbound::GmailSenderProvider::new(
             gmail_client::GmailClient::without_watch(),
             email::outbound::GmailTokenProviderImpl::lazy(
@@ -2553,12 +2567,15 @@ async fn run_server() -> anyhow::Result<()> {
     ));
 
     // Attention feeds (Home's work feed and the notifications inbox) share
-    // one feed layer and these adapters: Soup
-    // candidates over the replica, notification acknowledgement on the
-    // primary, and live updates recomputed from the viewer's notification,
-    // activity and Soup streams. Done publishes a viewer-addressed Soup patch
-    // so the viewer's other sessions recompute too: GraphQL notification
-    // writes publish no realtime update.
+    // one feed layer and these adapters: Soup candidates over the replica
+    // for pages, unread counts and bulk clears, and over the primary for
+    // recomputes (a change the viewer was just sent, as that change's Soup
+    // patch read it) and for the rows done and seen act on, so they
+    // acknowledge what a recompute showed; notification acknowledgement on
+    // the primary; and live updates recomputed from the viewer's
+    // notification, activity and Soup streams. Done publishes a
+    // viewer-addressed Soup patch so the viewer's other sessions recompute
+    // too: GraphQL notification writes publish no realtime update.
     let feed_triggers: Arc<dyn attention_feed::domain::ports::FeedTriggers> = Arc::new(
         attention_feed::outbound::triggers::RealtimeFeedTriggers::new(
             websocket_notification_consumer_service.clone(),
@@ -2590,7 +2607,8 @@ async fn run_server() -> anyhow::Result<()> {
             attention_feed::outbound::soup::SoupCandidateSource::new(
                 soup_service.clone(),
                 Arc::new(email_service.clone()),
-            ),
+            )
+            .with_committed_reads(primary_entity_soup.clone()),
             attention_feed::outbound::notifications::ReaderFeedNotifications::new(
                 graphql_notification_reader.clone(),
             ),
@@ -2607,7 +2625,8 @@ async fn run_server() -> anyhow::Result<()> {
             attention_feed::outbound::soup::SoupCandidateSource::new(
                 soup_service.clone(),
                 Arc::new(email_service.clone()),
-            ),
+            )
+            .with_committed_reads(primary_entity_soup.clone()),
             attention_feed::outbound::notifications::ReaderFeedNotifications::new(
                 graphql_notification_reader.clone(),
             ),

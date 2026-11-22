@@ -3,11 +3,10 @@ import {
   IntegrationRow,
   SettingsSurface,
 } from '@app/features/settings/primitives';
+import { requestConnectApp } from '@core/connectors/pendingConnect';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { requestConnectApp } from '@core/pipedream/pendingConnect';
-import { SLACK_CONNECT_SLUG } from '@core/pipedream/slugs';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import SlackIcon from '@icon/slack-color.svg';
 import { refreshChannelDirectory } from '@queries/channel/directory';
@@ -80,7 +79,7 @@ function SlackImportSettings(props: {
   const client = getGraphqlSoupClient();
   const { openSettings } = useSettingsState();
   const connectSlack = () => {
-    requestConnectApp(SLACK_CONNECT_SLUG, 'import-slack-channels');
+    requestConnectApp('slack', 'import-slack-channels');
     openSettings('Connected');
   };
   function channelHref(id: string): string | undefined {

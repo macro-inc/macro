@@ -1,4 +1,3 @@
-import { clearMcpAuthAttempts } from '@app/features/settings/mcp-auth-attempt';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { clearNativeDiagnostics } from '@app/observability/native-diagnostics';
 import { reloadApp } from '@app/observability/reload';
@@ -65,7 +64,6 @@ export function clearLocalAuthSession(
       'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
     setEmailOutboxSession(undefined);
     syncLoginStorage(false);
-    clearMcpAuthAttempts();
     const documentContextsCleared = clearOfflineDocumentContexts();
     clearDocumentQueryCache(queryClient);
     clearTeamCalendarQueries();
