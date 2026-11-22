@@ -5,6 +5,17 @@ use super::*;
 
 /// Installs offboarded per sweep round.
 const OFFBOARD_PAGE: u32 = 100;
+
+/// How long a pending revoke may take (the agent's keys, then a repository
+/// token from agent_git) while it holds the install's row lock. Past it the
+/// revoke gives up: its transaction rolls back, `revoke_pending` stays set,
+/// nothing is delivered meanwhile, and the next sweep retries.
+const REVOKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// A pending revoke took longer than [`REVOKE_TIMEOUT`].
+#[derive(Debug, thiserror::Error)]
+#[error("revoking an agent's credentials took longer than {REVOKE_TIMEOUT:?}; left pending")]
+struct RevokeTimedOut;
 use crate::domain::models::InstallProblem;
 use crate::domain::self_hosting::InstallRunState;
 
@@ -567,7 +578,13 @@ where
             return Ok(());
         };
         let current = held.install().clone();
-        revoke_credentials(self.repository, self.api_keys, self.repos, &current.agent).await?;
+        // Bounded: other writers to this install wait on the lock meanwhile.
+        tokio::time::timeout(
+            REVOKE_TIMEOUT,
+            revoke_credentials(self.repository, self.api_keys, self.repos, &current.agent),
+        )
+        .await
+        .map_err(|_elapsed| TeamAgentError::internal(RevokeTimedOut))??;
         held.done().await?;
         if !current.parked() {
             self.runtimes.installs_changed(current.harness_id).await;

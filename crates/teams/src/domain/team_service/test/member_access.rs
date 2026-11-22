@@ -135,3 +135,61 @@ async fn a_removed_member_is_reported_at_once() {
 
     assert_eq!(listener.teams(), vec![team_id]);
 }
+
+/// Records whether the team's billing lock was free when it was told.
+#[derive(Debug)]
+struct BillingLockProbe {
+    billing_lock: Arc<tokio::sync::Mutex<()>>,
+    free: Mutex<Vec<bool>>,
+}
+
+impl MemberAccessLost for BillingLockProbe {
+    fn member_access_lost(&self, _team_id: uuid::Uuid) -> MemberAccessFuture<'_> {
+        Box::pin(async move {
+            let free =
+                tokio::time::timeout(std::time::Duration::from_secs(1), self.billing_lock.lock())
+                    .await
+                    .is_ok();
+            self.free.lock().unwrap().push(free);
+            Ok(())
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_removed_members_listener_runs_after_the_billing_lock_is_released() {
+    let team_id = uuid::Uuid::from_u128(904);
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let admin = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let mut repo = team_with(team_id, &owner, &admin, TeamRole::Admin);
+    repo.removed_member = Some(TeamMember {
+        team_id,
+        user_id: admin.clone().into_owned(),
+        role: TeamRole::Admin,
+        plan: SeatPlan::Premium,
+    });
+    let customers = MockCustomerRepository::default();
+    let probe = Arc::new(BillingLockProbe {
+        billing_lock: customers.billing_lock.clone(),
+        free: Mutex::new(Vec::new()),
+    });
+    let service = TeamServiceImpl::new(
+        repo,
+        customers,
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_member_access_lost(probe.clone());
+
+    service
+        .remove_user_from_team(test_team_receipt::<AdminTeamRole>(team_id, &owner), &admin)
+        .await
+        .unwrap();
+
+    // Parking the member's agents is slow; billing for the team mustn't
+    // wait on it.
+    assert_eq!(*probe.free.lock().unwrap(), [true]);
+}

@@ -52,6 +52,7 @@ strum = { workspace = true }
 sqlx = { workspace = true, optional = true }
 teams = { path = "../teams", optional = true, default-features = false, features = ["ports"] }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
 tracing = { workspace = true }
 macro_env = { path = "../macro_env" }
 user_api_key = { path = "../user_api_key", optional = true, features = ["ports"] }
@@ -68,7 +69,7 @@ harness_id = { path = "../harness_id", features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
 user_api_key = { path = "../user_api_key", features = ["postgres"] }
 
 # The crate depends on itself in tests to turn on `inbound`, which shear reads as unused.

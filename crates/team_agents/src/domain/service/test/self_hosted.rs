@@ -1396,3 +1396,43 @@ async fn an_unpair_parks_only_that_machines_agents() {
     );
     assert_eq!(service.offboard_host(LAPTOP).await.unwrap(), 0);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_revoke_whose_calls_hang_gives_up_and_stays_pending_for_the_sweep() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    service
+        .installs
+        .park(&agent.user_id)
+        .await
+        .unwrap()
+        .unwrap();
+    // agent_git never answers.
+    let hanging = crate::domain::service::InstallOffboarding::new(
+        service.repository.clone(),
+        FakeApiKeys(journal.clone(), Arc::default()),
+        GatedRepos {
+            journal: journal.clone(),
+            gated: std::sync::atomic::AtomicBool::new(true),
+            entered: Arc::new(tokio::sync::Notify::new()),
+            release: Arc::new(tokio::sync::Notify::new()),
+        },
+        service.installs.clone(),
+        FakeRuntimes(journal.clone()),
+    );
+
+    // The row lock is held only as long as the revoke's bounded calls.
+    let round = tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        hanging.offboard_unentitled(),
+    )
+    .await
+    .expect("the revoke gives up instead of holding the row");
+
+    assert_eq!(round.unwrap(), 0);
+    assert!(
+        install_of(&service, &agent).revoke_pending,
+        "left for the sweep"
+    );
+    assert!(!journal.entries().contains(&"install.revoked".to_owned()));
+}
