@@ -59,13 +59,28 @@ fn validated_name(name: &str) -> Result<String, HarnessError> {
 pub struct HarnessServiceImpl<R, TeamAgents> {
     repo: R,
     team_agents: TeamAgents,
+    /// Told when a machine is unpaired.
+    retired: std::sync::Arc<dyn crate::domain::retired::HarnessRetired>,
 }
 
 impl<R, TeamAgents> HarnessServiceImpl<R, TeamAgents> {
     /// Create a harness service over the repository and the computers'
     /// agent teammates.
     pub fn new(repo: R, team_agents: TeamAgents) -> Self {
-        Self { repo, team_agents }
+        Self {
+            repo,
+            team_agents,
+            retired: crate::domain::retired::no_op(),
+        }
+    }
+
+    /// Replaces the listener told when a machine is unpaired.
+    pub fn with_retired(
+        mut self,
+        retired: std::sync::Arc<dyn crate::domain::retired::HarnessRetired>,
+    ) -> Self {
+        self.retired = retired;
+        self
     }
 }
 
@@ -74,6 +89,14 @@ where
     R: HarnessRepo,
     TeamAgents: ComputerTeamAgents,
 {
+    /// Tell the listener `harness_id` was unpaired, best-effort: the unpair
+    /// already happened.
+    async fn tell_retired(&self, harness_id: HarnessId) {
+        if let Err(error) = self.retired.harness_retired(harness_id).await {
+            tracing::error!(error = ?error, %harness_id, "failed to tell listeners a machine was unpaired");
+        }
+    }
+
     /// Mark each agent teammate's computer with its agent, with one lookup
     /// for the whole list, so clients keep it out of everything that starts
     /// agents on a runtime.
@@ -509,6 +532,7 @@ where
         {
             return Err(HarnessError::NotFound("unknown harness".to_owned()));
         }
+        self.tell_retired(harness_id).await;
         Ok(())
     }
 
@@ -556,6 +580,7 @@ where
         {
             return Err(HarnessError::NotFound("unknown harness".to_owned()));
         }
+        self.tell_retired(harness_id).await;
         Ok(())
     }
 

@@ -9,3 +9,4 @@ pub mod filed_items;
 pub mod passwords_access;
 pub mod saved_view_changes;
 pub mod stream_contacts;
+pub mod teammate_host_offboarding;

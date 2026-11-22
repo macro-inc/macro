@@ -1481,3 +1481,58 @@ fn hosted_pairing_redacts_its_credential() {
 }
 
 mod hosted_claim;
+
+/// Every harness the service said was retired.
+#[derive(Debug, Default)]
+struct RecordingRetired(Mutex<Vec<HarnessId>>);
+
+impl crate::domain::retired::HarnessRetired for RecordingRetired {
+    fn harness_retired(&self, harness_id: HarnessId) -> crate::domain::retired::RetiredFuture<'_> {
+        self.0.lock().unwrap().push(harness_id);
+        Box::pin(async { Ok(()) })
+    }
+}
+
+#[tokio::test]
+async fn unpairing_a_machine_tells_the_listener_at_once() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        delete_result: true,
+        ..FakeRepo::default()
+    };
+    let retired = Arc::new(RecordingRetired::default());
+    let service = service(repo.clone()).with_retired(retired.clone());
+
+    service
+        .delete_harness(caller(OWNER_ID), HarnessId::TEST_A)
+        .await
+        .unwrap();
+    service.delete_self(HarnessId::TEST_A).await.unwrap();
+
+    assert_eq!(
+        *retired.0.lock().unwrap(),
+        [HarnessId::TEST_A, HarnessId::TEST_A]
+    );
+}
+
+#[tokio::test]
+async fn a_refused_unpair_tells_nobody() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        ..FakeRepo::default()
+    };
+    let retired = Arc::new(RecordingRetired::default());
+    let service = service(repo).with_retired(retired.clone());
+
+    assert!(
+        service
+            .delete_harness(caller(OWNER_ID), HarnessId::TEST_A)
+            .await
+            .is_err()
+    );
+    assert!(retired.0.lock().unwrap().is_empty());
+}
