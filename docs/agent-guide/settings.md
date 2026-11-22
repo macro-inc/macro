@@ -837,7 +837,8 @@ Linear and Notion connections therefore appear among the custom servers, and
 the Linear and Notion rows read Not connected. A server added by URL can count as
 connected without a sign-in, so every server row offers **Sign in**, which
 runs `POST /connectors/server/{id}/connect`: on the row while it is not
-connected (**Reconnect** when its sign-in stopped working), in its menu
+connected (it reads **Sign in required** when its grant is dead: a sign-in
+that never finished, or an expired token with no refresh), in its menu
 otherwise. An app with a row of its own
 (Granola) is listed once, in that row. A held connection that no longer
 counts (for example one through a provider the user is not on) reads

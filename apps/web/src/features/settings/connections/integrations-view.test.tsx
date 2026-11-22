@@ -445,7 +445,7 @@ describe('unified Integrations page', () => {
     };
     expect(row('My issues').textContent).toContain('mcp.linear.app/mcp');
     expect(row('My issues').textContent).toContain('Custom MCP');
-    expect(row('My issues').textContent).toContain('Reconnect required');
+    expect(row('My issues').textContent).toContain('Sign in required');
     expect(row('Notion').textContent).toContain('Custom MCP');
     // A held connection that no longer counts says so.
     expect(row('Stripe').textContent).toContain('Not connected');
@@ -507,7 +507,7 @@ describe('unified Integrations page', () => {
     );
   });
 
-  it('offers Reconnect on a server whose sign-in stopped working', () => {
+  it('offers Sign in on a server whose grant is dead', () => {
     mocks.connectors = [
       connector(
         { type: 'server', url: 'https://tools.example.com/mcp' },
@@ -522,7 +522,7 @@ describe('unified Integrations page', () => {
       />
     ));
     expect(
-      screen.getByRole('button', { name: 'Reconnect to Team tools' })
+      screen.getByRole('button', { name: 'Sign in to Team tools' })
     ).toBeTruthy();
   });
 

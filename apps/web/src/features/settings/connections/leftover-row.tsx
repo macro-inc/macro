@@ -124,13 +124,12 @@ export function LeftoverRow(props: { leftover: Leftover }) {
   // A server added by URL can count as connected without a sign-in, so its
   // sign-in stays in reach in every state: on the row while it is not
   // connected, in the menu otherwise.
-  const signInLabel = () =>
-    props.leftover.status === 'action-required' ? 'Reconnect' : 'Sign in';
-
+  // A server needs reauth when its grant is dead: a sign-in that never
+  // finished, or an expired token with no refresh. Either way, sign in.
   const signInAction = () => (
     <ConnectAction
-      label={signInLabel()}
-      ariaLabel={`${signInLabel()} to ${props.leftover.title}`}
+      label="Sign in"
+      ariaLabel={`Sign in to ${props.leftover.title}`}
       onClick={startConnect}
       loading={connectBusy()}
       disabled={busy()}
@@ -242,7 +241,11 @@ export function LeftoverRow(props: { leftover: Leftover }) {
   const statusLabel = () =>
     match(props.leftover.status)
       .with('not-connected', () => 'Not connected')
-      .with('action-required', () => 'Reconnect required')
+      .with('action-required', () =>
+        props.leftover.kind === 'server'
+          ? 'Sign in required'
+          : 'Reconnect required'
+      )
       .otherwise(() => undefined);
 
   const row = (): JSX.Element =>
