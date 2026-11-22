@@ -1,13 +1,14 @@
 import { cn } from '@ui/utils/classname';
-import { For, type ParentProps, Show } from 'solid-js';
+import { createMemo, For, type ParentProps, Show } from 'solid-js';
 import { createWheelColumn } from './create-wheel-column';
 import {
-  WHEEL_LOOP_COPIES,
   WHEEL_PADDING,
   WHEEL_ROW_HEIGHT,
   WHEEL_VISIBLE_ROWS,
   type WheelOption,
+  wheelRowCount,
   wheelRowStyle,
+  wheelVisibleRows,
 } from './wheel-values';
 import './wheel-picker.css';
 
@@ -61,11 +62,27 @@ export function WheelColumn(props: {
     element: () => element,
     onChange: (value) => props.onChange(value),
   });
-  const rows = () =>
-    Array.from(
-      { length: props.options.length * (props.loop ? WHEEL_LOOP_COPIES : 1) },
-      (_, index) => index
-    );
+  const rowCount = createMemo(() =>
+    wheelRowCount(props.options.length, props.loop ?? false)
+  );
+  // Native snapping needs targets beyond the visible labels during a fling.
+  // Keep anchors static and recycle only the small visible text window.
+  const anchors = createMemo(() =>
+    Array.from({ length: rowCount() }, () => <div class="wheel-picker-snap" />)
+  );
+  const rows = () => wheelVisibleRows(model.state.position, rowCount());
+  const chooseAt = (event: MouseEvent) => {
+    if (props.disabled || !element) return;
+    const contentY =
+      element.scrollTop +
+      event.clientY -
+      element.getBoundingClientRect().top -
+      WHEEL_PADDING * WHEEL_ROW_HEIGHT;
+    const index = Math.floor(contentY / WHEEL_ROW_HEIGHT);
+    if (index < 0 || index >= rowCount()) return;
+    model.choose(index);
+    element.focus({ preventScroll: true });
+  };
   return (
     <div
       ref={element}
@@ -87,26 +104,25 @@ export function WheelColumn(props: {
       onPointerDown={model.pointerDown}
       onTouchStart={model.touchStart}
       onKeyDown={model.keyDown}
+      onClick={chooseAt}
     >
-      <For each={rows()}>
-        {(index) => (
-          <div
-            aria-hidden="true"
-            class="wheel-picker-row"
-            style={{
-              ...wheelRowStyle(index - model.state.position),
-              'justify-content': props.align === 'start' ? 'start' : 'center',
-            }}
-            onClick={() => {
-              if (props.disabled) return;
-              model.choose(index);
-              element?.focus({ preventScroll: true });
-            }}
-          >
-            {props.options[index % props.options.length]?.label}
-          </div>
-        )}
-      </For>
+      <div class="wheel-picker-track" aria-hidden="true">
+        {anchors()}
+        <For each={rows()}>
+          {(index) => (
+            <div
+              class="wheel-picker-row"
+              style={{
+                ...wheelRowStyle(index - model.state.position),
+                top: `${index * WHEEL_ROW_HEIGHT}px`,
+                'justify-content': props.align === 'start' ? 'start' : 'center',
+              }}
+            >
+              {props.options[index % props.options.length]?.label}
+            </div>
+          )}
+        </For>
+      </div>
     </div>
   );
 }

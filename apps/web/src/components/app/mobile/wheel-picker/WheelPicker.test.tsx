@@ -61,6 +61,49 @@ describe('wheel snapping', () => {
     expect(wheel.getAttribute('aria-valuetext')).toBe('A');
   });
 
+  it('ignores empty rows beyond a bounded column', () => {
+    const changed = vi.fn();
+    const view = render(() => (
+      <WheelPicker>
+        <WheelColumn
+          label="Letter"
+          options={OPTIONS}
+          value="b"
+          width={64}
+          onChange={changed}
+        />
+      </WheelPicker>
+    ));
+    const wheel = view.getByRole('spinbutton');
+    vi.spyOn(wheel, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, 64, 220)
+    );
+    fireEvent.click(wheel, { clientY: 0 });
+    fireEvent.click(wheel, { clientY: 219 });
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it('selects a visible row by its viewport position', () => {
+    const changed = vi.fn();
+    const view = render(() => (
+      <WheelPicker>
+        <WheelColumn
+          label="Letter"
+          options={OPTIONS}
+          value="a"
+          width={64}
+          onChange={changed}
+        />
+      </WheelPicker>
+    ));
+    const wheel = view.getByRole('spinbutton');
+    vi.spyOn(wheel, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, 64, 220)
+    );
+    fireEvent.click(wheel, { clientY: 154 });
+    expect(changed).toHaveBeenCalledExactlyOnceWith('b');
+  });
+
   it('supports bounded keyboard navigation and announces the selected value', () => {
     const view = render(() => {
       const [value, setValue] = createSignal('a');
@@ -178,4 +221,46 @@ describe('wheel snapping', () => {
     vi.advanceTimersByTime(200);
     expect(changed).toHaveBeenCalledExactlyOnceWith('First', 'c');
   });
+  it.each([
+    [61, 'b'],
+    [-61, 'c'],
+    [301, 'b'],
+    [-301, 'c'],
+  ] as const)(
+    'keeps native scrolling untouched for displacement %s before settling',
+    (displacement, expected) => {
+      vi.useFakeTimers();
+      const changed = vi.fn();
+      const view = render(() => (
+        <WheelPicker>
+          <WheelColumn
+            label="Letter"
+            options={OPTIONS}
+            value="a"
+            width={64}
+            loop
+            onChange={changed}
+          />
+        </WheelPicker>
+      ));
+      const wheel = view.getByRole('spinbutton');
+      const anchor = wheel.querySelector('.wheel-picker-snap');
+      expect(anchor).not.toBeNull();
+      const position = wheel.scrollTop + displacement * WHEEL_ROW_HEIGHT;
+      fireEvent.touchStart(wheel);
+      wheel.scrollTop = position;
+      fireEvent.scroll(wheel);
+      vi.advanceTimersByTime(200);
+      expect(wheel.scrollTop).toBe(position);
+      expect(wheel.querySelector('.wheel-picker-snap')).toBe(anchor);
+      expect(
+        wheel.querySelectorAll('.wheel-picker-row').length
+      ).toBeLessThanOrEqual(8);
+      expect(changed).not.toHaveBeenCalled();
+      fireEvent.touchEnd(window);
+      vi.advanceTimersByTime(200);
+      expect(changed).toHaveBeenCalledExactlyOnceWith(expected);
+      expect(wheel.scrollTop).not.toBe(position);
+    }
+  );
 });

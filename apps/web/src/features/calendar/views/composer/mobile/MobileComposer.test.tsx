@@ -260,8 +260,8 @@ it('keeps one inline time wheel open and preserves duration across start edits',
   fireEvent.keyDown(screen.getByRole('spinbutton', { name: 'Hour' }), {
     key: 'ArrowUp',
   });
-  expect(controller.state().start).toBe('2030-11-11T00:00');
-  expect(controller.state().end).toBe('2030-11-11T00:30');
+  expect(controller.state().start).toBe('2030-11-11T12:00');
+  expect(controller.state().end).toBe('2030-11-11T12:30');
   fireEvent.click(screen.getByRole('button', { name: 'event end time' }));
   expect(screen.getAllByRole('spinbutton')).toHaveLength(3);
   expect(starts.getAttribute('aria-expanded')).toBe('false');

@@ -73,7 +73,8 @@ host lives in `../block-calendar/`.
   a same-day end. Phone date/time pickers expand inline. Phone time uses shared
   `components/date-time-range/time-wheel/TimeWheel.tsx` over the same native wheel
   columns as the month/year sheet; keep desktop clock inputs unchanged. Preserve
-  off-step minutes until changed, apply five-minute wheel steps, always move the
+  off-step minutes until changed, keep 24 internal hour values so noon/midnight
+  carry AM/PM while the twelve-hour labels repeat, apply five-minute steps, always move the
   end with a start-wheel change, and clamp end-wheel changes at start plus five
   minutes. Escape returns focus to the matching date or time trigger. Other phone controls use
   `PhoneComposerMenuRoot`: fixed lists up to five non-wrapping choices expand inline;

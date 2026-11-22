@@ -106,7 +106,9 @@ or Escape reverts. Escape closes a time list before the desktop When popup.
 
 On phones, tap a time pill to open inline hour/minute wheels (plus AM/PM for a
 12-hour clock). Five 44px rows show around a fixed accent selection band. Values
-apply when scrolling stops; arrow keys change one row. Minutes step by five, with
+apply when scrolling stops; arrow keys change one row. The hour wheel carries
+AM/PM across noon and midnight; the explicit period wheel still changes only
+the half-day. Minutes step by five, with
 an existing off-step minute retained until changed. A start-wheel change always
 keeps the current duration and carries the end date across midnight. The end
 wheel shows the live duration and stops at start plus five minutes. The calendar's

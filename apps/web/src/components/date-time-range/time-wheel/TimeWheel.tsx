@@ -27,7 +27,7 @@ export function TimeWheel(props: {
   const hours = createMemo(() => timeWheelHours(twelveHour()));
   const minute = () => Number(props.value.slice(3, 5));
   const minutes = createMemo(() => timeWheelMinutes(minute()));
-  const parts = () => timeWheelParts(props.value, twelveHour());
+  const parts = () => timeWheelParts(props.value);
   const periods = createMemo(() =>
     ['am', 'pm'].map((value) => ({
       value,
@@ -39,10 +39,10 @@ export function TimeWheel(props: {
     }))
   );
   const change = (field: 'hour' | 'minute' | 'period', value: string) => {
-    if (!props.disabled)
-      props.onChange(
-        timeFromWheelParts({ ...parts(), [field]: value }, twelveHour())
-      );
+    if (props.disabled) return;
+    const next = { ...parts(), [field]: value };
+    if (field === 'hour') next.period = Number(value) < 12 ? 'am' : 'pm';
+    props.onChange(timeFromWheelParts(next, twelveHour()));
   };
   return (
     <WheelPicker label={props.label} trailingLabel={props.duration}>

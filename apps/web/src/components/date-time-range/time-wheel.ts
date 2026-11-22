@@ -11,11 +11,12 @@ export function usesTwelveHourClock(format?: ClockFormat, locale?: string) {
   );
 }
 
+/** Keep both half-days in the hour cycle so crossing eleven carries the period. */
 export function timeWheelHours(twelveHour: boolean): WheelOption[] {
-  return Array.from({ length: twelveHour ? 12 : 24 }, (_, index) => {
-    const hour = twelveHour ? index + 1 : index;
+  return Array.from({ length: 24 }, (_, hour) => {
     const value = String(hour);
-    return { value, label: twelveHour ? value : value.padStart(2, '0') };
+    const label = twelveHour ? String(hour % 12 || 12) : value.padStart(2, '0');
+    return { value, label };
   });
 }
 
@@ -34,10 +35,10 @@ export function timeWheelMinutes(currentMinute: number): WheelOption[] {
     }));
 }
 
-export function timeWheelParts(value: string, twelveHour: boolean) {
+export function timeWheelParts(value: string) {
   const hours = Number(value.slice(0, 2));
   return {
-    hour: String(twelveHour ? hours % 12 || 12 : hours),
+    hour: String(hours),
     minute: String(Number(value.slice(3, 5))),
     period: hours < 12 ? 'am' : 'pm',
   };

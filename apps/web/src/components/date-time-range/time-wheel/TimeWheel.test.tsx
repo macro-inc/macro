@@ -16,8 +16,8 @@ afterEach(() => {
 });
 
 it('maps noon and midnight and follows explicit formats before locale defaults', () => {
-  expect(timeWheelParts('00:07', true)).toEqual({
-    hour: '12',
+  expect(timeWheelParts('00:07')).toEqual({
+    hour: '0',
     minute: '7',
     period: 'am',
   });
@@ -112,3 +112,56 @@ it('applies the snapped minute after native scroll stops', () => {
   vi.advanceTimersByTime(WHEEL_SETTLE_DELAY_MS);
   expect(changed).toHaveBeenCalledExactlyOnceWith('11:10');
 });
+
+it('carries the period across noon and midnight in both directions', () => {
+  const changed = vi.fn();
+  const view = render(() => {
+    const [value, setValue] = createSignal('11:30');
+    return (
+      <TimeWheel
+        label="Start"
+        value={value()}
+        format="12-hour"
+        onChange={(next) => {
+          changed(next);
+          setValue(next);
+        }}
+      />
+    );
+  });
+  const hour = view.getByRole('spinbutton', { name: 'Hour' });
+  const period = view.getByRole('spinbutton', { name: 'AM or PM' });
+  fireEvent.keyDown(hour, { key: 'ArrowUp' });
+  expect(changed).toHaveBeenLastCalledWith('12:30');
+  expect(period.getAttribute('aria-valuetext')).toBe('pm');
+  fireEvent.keyDown(hour, { key: 'ArrowDown' });
+  expect(changed).toHaveBeenLastCalledWith('11:30');
+  fireEvent.keyDown(period, { key: 'ArrowUp' });
+  expect(changed).toHaveBeenLastCalledWith('23:30');
+  fireEvent.keyDown(hour, { key: 'ArrowUp' });
+  expect(changed).toHaveBeenLastCalledWith('00:30');
+  expect(period.getAttribute('aria-valuetext')).toBe('am');
+  fireEvent.keyDown(hour, { key: 'ArrowDown' });
+  expect(changed).toHaveBeenLastCalledWith('23:30');
+});
+
+it.each([12, -12, 36, -36])(
+  'keeps period displacement for a %s-hour fling',
+  (hours) => {
+    vi.useFakeTimers();
+    const changed = vi.fn();
+    const view = render(() => (
+      <TimeWheel
+        label="Start"
+        value="11:00"
+        format="12-hour"
+        onChange={changed}
+      />
+    ));
+    const hour = view.getByRole('spinbutton', { name: 'Hour' });
+    hour.scrollTop += hours * 44;
+    fireEvent.scroll(hour);
+    vi.advanceTimersByTime(WHEEL_SETTLE_DELAY_MS);
+    expect(changed).toHaveBeenCalledExactlyOnceWith('23:00');
+  }
+);

@@ -50,13 +50,24 @@
   opacity: 0.5;
 }
 
+.wheel-picker-track {
+  position: relative;
+}
+
+.wheel-picker-snap {
+  height: var(--wheel-row-height);
+  scroll-snap-align: center;
+}
+
 .wheel-picker-row {
+  position: absolute;
+  inset-inline: 0;
   display: flex;
   align-items: center;
   height: var(--wheel-row-height);
-  scroll-snap-align: center;
   user-select: none;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .wheel-picker-with-label {
