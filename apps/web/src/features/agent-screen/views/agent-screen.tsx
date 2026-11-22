@@ -74,7 +74,10 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
       </SplitHeaderRight>
 
       <div class="flex min-h-0 flex-1 flex-col gap-2 p-3">
-        <ScreenPicture model={props.model} class="min-h-48 flex-1 rounded-lg">
+        <ScreenPicture
+          model={props.model}
+          class="@container/screen min-h-48 flex-1 rounded-lg"
+        >
           {/* A way back to fit after a trackpad pinch (Ctrl+wheel). */}
           <Show when={props.model.input.viewport().zoom > 1}>
             <ZoomControl
@@ -85,39 +88,48 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
               onFit={() => props.model.input.fit()}
             />
           </Show>
+          {/*
+            The header pill says who drives; this one says what the agent
+            does meanwhile and, for the driver, how to let go. One line:
+            the hints shorten, then drop, as the split narrows.
+          */}
           <Show when={live() && driver()}>
-            <div class="absolute top-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-amber bg-panel px-3 py-1 text-xs font-medium text-amber-ink shadow">
-              <CursorIcon class="size-3.5" />
-              <Switch
-                fallback={t('agentScreen.someoneIsDriving', {
-                  name: props.model.driverName() ?? '',
-                })}
-              >
-                <Match when={session.drivingMe() || session.resumingDrive()}>
-                  {t('agentScreen.youAreDriving')}
-                </Match>
-                <Match when={session.drivingElsewhere()}>
-                  {t('agentScreen.youAreDrivingElsewhere')}
-                </Match>
-              </Switch>
-              <span>·</span>
-              {agentWhileDriven(
-                session.store.server?.agentHeld ?? false,
-                props.model.agentName()
-              )}
+            <div
+              data-screen-driving-pill=""
+              class="absolute top-2 left-1/2 z-10 flex w-max max-w-[calc(100%-1rem)] -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-amber bg-panel px-3 py-1 text-xs font-medium text-amber-ink shadow"
+            >
+              <CursorIcon class="size-3.5 shrink-0" />
+              <span class="min-w-0 truncate">
+                {agentWhileDriven(
+                  session.store.server?.agentHeld ?? false,
+                  props.model.agentName()
+                )}
+              </span>
               <Show when={session.drivingMe()}>
                 <span
-                  class="ml-1 border-l border-current pl-2"
+                  class="shrink-0 border-l border-current pl-2"
                   classList={{
                     'animate-pulse': props.model.input.escapeHeld(),
                   }}
                 >
-                  {t('agentScreen.holdEscToHandBack')}
+                  <span class="hidden @min-[30rem]/screen:inline">
+                    {t('agentScreen.holdEscToHandBack')}
+                  </span>
+                  <span class="@min-[30rem]/screen:hidden">
+                    {t('agentScreen.holdEscToHandBackShort')}
+                  </span>
                 </span>
-                <span class="border-l border-current pl-2">
-                  {IS_MAC
-                    ? t('agentScreen.leaveKeyboardHintMac')
-                    : t('agentScreen.leaveKeyboardHint')}
+                <span class="hidden shrink-0 border-l border-current pl-2 @min-[34rem]/screen:inline">
+                  <span class="hidden @min-[44rem]/screen:inline">
+                    {IS_MAC
+                      ? t('agentScreen.leaveKeyboardHintMac')
+                      : t('agentScreen.leaveKeyboardHint')}
+                  </span>
+                  <span class="@min-[44rem]/screen:hidden">
+                    {IS_MAC
+                      ? t('agentScreen.leaveKeyboardHintShortMac')
+                      : t('agentScreen.leaveKeyboardHintShort')}
+                  </span>
                 </span>
               </Show>
             </div>
@@ -196,11 +208,7 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
           </Switch>
           <span class="grow" />
           <Show when={live()}>
-            <Button
-              size="sm"
-              variant="danger-ghost"
-              onClick={() => session.stop()}
-            >
+            <Button size="sm" variant="ghost" onClick={() => session.stop()}>
               <StopIcon class="size-4" />
               {t('agentScreen.stopWatching')}
             </Button>
