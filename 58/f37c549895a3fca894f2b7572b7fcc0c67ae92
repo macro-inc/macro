@@ -1,0 +1,227 @@
+apps/web/src/features/connector-import/browser-test/import.tsx
+  s_03b21ec112ad69::t_b764a04b917dd9 16-18,25-29,33,38
+apps/web/src/lib/service-clients/service-cognition/client.ts
+  s_03b21ec112ad69::t_90665729e336c8 17-23,144-145,147,151-152,154,161-171,173-174,180-181,183,185,192-193,195,197,203-209,212-214
+apps/web/src/lib/queries/slash-menu-mcps.test.ts
+  s_03b21ec112ad69::t_97fd0b94f6cc1a 1,7-9,12-16,20-33,35-40,42,47-49,53-64,66-68,72,81-90,93-97
+apps/web/src/features/block-agent/primitives/create-connector-continuation.ts
+  s_03b21ec112ad69::t_46072899c75bda 1,8,24
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/ConnectApp.tsx
+  s_03b21ec112ad69::t_eb71021d5b4cbc 4-6,11,20,27,32,35,40,42,52
+apps/web/src/lib/queries/connectors/mutations.ts
+  s_03b21ec112ad69::t_d7d1abea167623 1-112
+apps/web/src/features/connector-import/components/provider-row.tsx
+  s_03b21ec112ad69::t_b764a04b917dd9 58-72
+  s_03b21ec112ad69::t_dc40c866d58d8b 10-15,38-43
+apps/web/src/features/slack-import/slack-import.test.tsx
+  s_03b21ec112ad69::t_83d38d4c02ef62 38,107
+apps/web/src/features/connector-import/connector-import-dialog.tsx
+  s_03b21ec112ad69::t_89387259fe738a 3-7,9,16-22,32,34-44,47-49,59
+apps/web/src/features/onboarding/components/tool-tile.tsx
+  s_03b21ec112ad69::t_6d8c5f8be7504f 1,45
+apps/web/src/features/onboarding/views/tools-step.test.tsx
+  s_03b21ec112ad69::t_115f555db7f4bb 16,28,72,76,83-90,99,117,142
+apps/web/src/features/connector-import/views/import-dialog.test.tsx
+  s_03b21ec112ad69::t_89387259fe738a 102-111
+  s_03b21ec112ad69::t_b764a04b917dd9 87,138,140,143
+apps/web/src/features/onboarding/primitives/tools.test.ts
+  s_03b21ec112ad69::t_1b2bc61a1fb926 16,27,39,50
+apps/web/src/features/settings/connections/add-custom-mcp-dialog.tsx
+  s_03b21ec112ad69::t_2057ef0b1a06a6 2,13,32
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/SkillsMenu/SkillsMenu.test.tsx
+  s_03b21ec112ad69::t_32c6d669234cbd 84-85,89-90
+apps/web/src/features/settings/connections/leftover-row.tsx
+  s_03b21ec112ad69::t_793f3d813755f9 2-3,7-9,11,28-30,33-34,36,42-47,49-51,53-56,59-70,72,92-93,109-120,125,130-131,136,141-146,150,155,159,165,171,175,180-191,195,197,200-201,203,209,214-215,217,268,271
+apps/web/src/features/drive-view/tour.ts
+  s_03b21ec112ad69::t_57531071c501fc 7
+apps/web/src/features/block-agent/ui/AgentComposerAddMenu.test.tsx
+  s_03b21ec112ad69::t_bb6983a8ad1ee0 14-24,42,67,73-74,84,171,207-208,210
+apps/web/AGENTS.md
+  s_03b21ec112ad69::t_c429f7e8ad15a6 503-513,908-909
+apps/web/src/features/settings/Agents.tsx
+  s_03b21ec112ad69::t_fb020f2bd24af8 57,852,1663,1666
+apps/web/src/lib/queries/connectors/connectors.test.tsx
+  s_03b21ec112ad69::t_5753993d545691 1-21,25-192
+  s_03b21ec112ad69::t_827e04e63ef05b 22-24
+apps/web/src/features/settings/ConnectorAppPicker.tsx
+  s_03b21ec112ad69::t_408e2ecdccc7cf 1-184,186-253
+apps/web/src/features/onboarding/tests/connector-icons.ts
+  s_03b21ec112ad69::t_6d8c5f8be7504f 5,8
+apps/web/src/features/settings/connections/integrations-view.tsx
+  s_03b21ec112ad69::t_6fb78fbe77933d 76-79,89,127
+  s_03b21ec112ad69::t_9cbb4d1bfd0c7a 6,10-15,50,54,81-82,84-88,90-91,95,122,128,135,141,156,161,205,209-210,230,259,261-262,264,266-277,282,285-286,339
+apps/web/src/features/block-agent/ui/AgentComposerAddMenu.tsx
+  s_03b21ec112ad69::t_bd3230422dd54b 17-21,36,40-46,52-54,119-124,136,138,161,166,177,184
+apps/web/src/lib/service-clients/service-cognition/connector-types.ts
+  s_03b21ec112ad69::t_9b95848055f3a2 1-55
+apps/web/src/lib/core/connectors/app-icons.ts
+  s_03b21ec112ad69::t_97970dc3625d0f 1-34
+apps/web/src/lib/core/connectors/ConnectedAppIcon.tsx
+  s_03b21ec112ad69::t_97970dc3625d0f 1,3-19
+apps/web/src/features/settings/connections/ai-provider.tsx
+  s_03b21ec112ad69::t_f3c04cfe65497f 2-149
+apps/web/src/features/settings/connections/ai-grant-actions.tsx
+  s_03b21ec112ad69::t_f9bc54ac230a29 12-13,50
+apps/web/src/features/settings/connections/integration-items.tsx
+  s_03b21ec112ad69::t_3f0007149ba562 38,50,63-65,246-250,257,259-267,272,277,313-317,324-328,330,379-384,401,414,418-424
+apps/web/src/features/onboarding/queries/tool-connect.test.ts
+  s_03b21ec112ad69::t_4d45e8bf149b7b 1-2,6-8,14-18,20-34,37,40-44,47-64,67,69-78,80-84
+apps/web/src/features/slack-import/slack-import.tsx
+  s_03b21ec112ad69::t_da698a36c18064 83
+apps/web/src/features/onboarding/views/tools-step.tsx
+  s_03b21ec112ad69::t_6d8c5f8be7504f 42
+apps/web/src/features/settings/connections/ai-provider.test.tsx
+  s_03b21ec112ad69::t_18b901f72420a7 1-122
+apps/web/src/features/tasks-view/tour.ts
+  s_03b21ec112ad69::t_073cd316a9cb7e 10
+apps/web/src/features/settings/connections/catalog-rows.tsx
+  s_03b21ec112ad69::t_2057ef0b1a06a6 3-4,7,15,24-25,89-94,100-102,108,112
+apps/web/src/features/crm/tour.ts
+  s_03b21ec112ad69::t_57531071c501fc 16
+apps/web/src/features/connector-import/context/contracts.ts
+  s_03b21ec112ad69::t_dca4506be54310 4-5,10-11,19-20,23
+apps/web/src/features/routines/core/draft.ts
+  s_03b21ec112ad69::t_408e2ecdccc7cf 6
+apps/web/src/features/onboarding/primitives/tools.ts
+  s_03b21ec112ad69::t_6d8c5f8be7504f 17-19,24-25
+apps/web/src/lib/queries/connectors/connect.test.ts
+  s_03b21ec112ad69::t_c1c7239c59ef8e 1-182,187-225
+  s_03b21ec112ad69::t_4915f1612a186e 183-186
+apps/web/src/features/block-agent/primitives/create-connector-continuation.test.ts
+  s_03b21ec112ad69::t_46072899c75bda 1,7-8,41-48
+apps/web/src/lib/queries/connectors/catalog.ts
+  s_03b21ec112ad69::t_014b5a94799d64 1,16,101
+  s_03b21ec112ad69::t_f276b4ca996028 2-15,17-98,102-117
+  s_03b21ec112ad69::t_91641af0b3e7ba 99-100
+apps/web/src/features/granola-connect/primitives/create-granola-connection.ts
+  s_03b21ec112ad69::t_62bace41c5df2c 3-8,16-17,19-21,25-27,31-32,34-35,42,45,55,63
+apps/web/src/lib/core/connectors/pendingConnect.ts
+  s_03b21ec112ad69::t_2076dad5d45652 1-31
+apps/web/src/lib/queries/slash-menu-mcps.ts
+  s_03b21ec112ad69::t_97fd0b94f6cc1a 1,6,9,13-16,18,21-26,28,30-31,35,37
+apps/web/src/lib/core/connectors/connect-action.ts
+  s_03b21ec112ad69::t_1fa41b9339620d 2-32
+apps/web/src/lib/queries/connectors/connect.ts
+  s_03b21ec112ad69::t_170d53aaf538d1 19,184-188,193-194
+  s_03b21ec112ad69::t_f95ab27eb3596d 1-18,20-183,189-192,195-273
+apps/web/src/features/routines/routine-apps.tsx
+  s_03b21ec112ad69::t_408e2ecdccc7cf 1,6,9,17-18,21,28,34-35,104,107-108,118-119,126-128
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/SkillsMenu/McpRow.tsx
+  s_03b21ec112ad69::t_97fd0b94f6cc1a 1,34
+apps/web/src/features/onboarding/queries/tool-catalog.ts
+  s_03b21ec112ad69::t_6d8c5f8be7504f 2,7-8,24,26-28
+apps/web/src/lib/queries/connectors/connectors.ts
+  s_03b21ec112ad69::t_85453455462c18 91-92
+  s_03b21ec112ad69::t_6bc5a8a900c879 1-11,13-90,93-134,146-150,152-161,163-181
+  s_03b21ec112ad69::t_49617de3349f01 12,135-145,151,162
+  s_03b21ec112ad69::t_6fb78fbe77933d 182-189
+apps/web/src/features/settings/connections/model.test.ts
+  s_03b21ec112ad69::t_f1a66e37f5bc51 1,3,5-20,23-38,40-53,56-68,71-83,86-92,94-113
+apps/web/src/features/connector-import/views/import-dialog.tsx
+  s_03b21ec112ad69::t_dca4506be54310 75-76,78,85
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/ConnectApp.test.tsx
+  s_03b21ec112ad69::t_8eaba1c90f35bb 9,38,41-42,44-45,47,57,62,113,129,249
+apps/web/src/lib/queries/connectors/keys.ts
+  s_03b21ec112ad69::t_154b1f0484b54b 1-7
+apps/web/src/lib/core/connectors/ConnectedAppIcon.test.tsx
+  s_03b21ec112ad69::t_97970dc3625d0f 1-49
+apps/web/src/features/settings/connections/use-connections-model.ts
+  s_03b21ec112ad69::t_cc7523d2327725 1,5,7-12
+apps/web/src/features/block-agent/component/AgentConnections.tsx
+  s_03b21ec112ad69::t_eb71021d5b4cbc 2
+  s_03b21ec112ad69::t_46072899c75bda 4,28-29
+apps/web/src/features/tours/ViewTour.tsx
+  s_03b21ec112ad69::t_57531071c501fc 7,207,230,233-237
+apps/web/src/features/settings/agentMcpServers.ts
+  s_03b21ec112ad69::t_408e2ecdccc7cf 6-7,9
+apps/web/src/features/tours/core/view-tour.ts
+  s_03b21ec112ad69::t_57531071c501fc 12-17
+apps/web/src/features/connector-import/core/providers.ts
+  s_03b21ec112ad69::t_dca4506be54310 10
+apps/web/src/lib/core/connectors/ConnectorIcon.test.tsx
+  s_03b21ec112ad69::t_97970dc3625d0f 1-26
+apps/web/src/features/connector-import/core/catalog.ts
+  s_03b21ec112ad69::t_4547ae6e6d487b 115
+apps/web/src/features/onboarding/queries/connected-tools.ts
+  s_03b21ec112ad69::t_a8ad734d010011 1-2,8-9,11,13,15-17,20-24,27,29-39
+  s_03b21ec112ad69::t_111a9510e9de33 40
+apps/web/src/features/settings/connections/integrations-view.test.tsx
+  s_03b21ec112ad69::t_e619ddc1c9daa5 4-5,20,22-24,39,47-54,59-66,112-113,182-207,212-213,250,278,311,341-344,348,353-354,358,401-404,415,420-461,468-474
+apps/web/src/features/settings/GitHub.tsx
+  s_03b21ec112ad69::t_fa23b3c6bcf3f2 12
+apps/web/src/features/settings/agentMcpServers.test.ts
+  s_03b21ec112ad69::t_fb020f2bd24af8 16-17
+apps/web/src/features/granola-connect/components/GranolaPromoChip.tsx
+  s_03b21ec112ad69::t_62bace41c5df2c 1,20
+apps/web/src/features/settings/connections/provider-meta.tsx
+  s_03b21ec112ad69::t_4a99a0516388ee 9-10
+apps/web/src/features/granola-connect/core/granola.test.ts
+  s_03b21ec112ad69::t_62bace41c5df2c 5-11
+apps/web/src/features/settings/connections/slack-channel-import/SlackChannelImportFlow.tsx
+  s_03b21ec112ad69::t_da698a36c18064 2,26-27
+apps/web/src/features/onboarding/queries/connected-tools.test.ts
+  s_03b21ec112ad69::t_b3119cc2586140 3,8,10-11,13-17,19,22-33,35-37,46,49-52
+apps/web/src/lib/queries/auth/github-link.ts
+  s_03b21ec112ad69::t_1322cabcc4db00 7,93-96
+apps/web/src/features/onboarding/queries/tool-catalog.test.ts
+  s_03b21ec112ad69::t_417efc7d3ce9e1 8-10,14-18,74
+apps/web/src/features/onboarding/create-app-onboarding-context.ts
+  s_03b21ec112ad69::t_4d45e8bf149b7b 54,71-79,254,257,259,263-267,269
+apps/web/src/features/settings/connections/model.ts
+  s_03b21ec112ad69::t_cc7523d2327725 2,96-99,102-105
+  s_03b21ec112ad69::t_111a9510e9de33 93
+  s_03b21ec112ad69::t_774ee036042478 1,3,13,15,21,24-27,30,33-34,36,38,40,43-44,46,49-50,82-83,86-92,101,108-115,118-155,160-161,164-165
+apps/web/src/features/granola-connect/core/granola.ts
+  s_03b21ec112ad69::t_62bace41c5df2c 1-4,7,11-15,19,21-25
+  s_03b21ec112ad69::t_111a9510e9de33 26
+apps/web/src/features/block-agent/component/AgentConnections.test.tsx
+  s_03b21ec112ad69::t_8eaba1c90f35bb 1,23-25
+apps/web/src/lib/queries/connectors/index.ts
+  s_03b21ec112ad69::t_170d53aaf538d1 7-19,21-22,23-27
+  s_03b21ec112ad69::t_6fb78fbe77933d 20
+apps/web/src/lib/core/component/AI/component/tool/McpToolCall.tsx
+  s_03b21ec112ad69::t_32c6d669234cbd 1,14
+apps/web/src/features/calls-view/components/calls-sidebar.tsx
+  s_03b21ec112ad69::t_a5170b517e5100 250-252
+apps/web/src/features/connector-import/tests/fake-context.ts
+  s_03b21ec112ad69::t_b764a04b917dd9 8-15,19-20,22,25
+apps/web/src/features/onboarding/tests/fake-onboarding-context.ts
+  s_03b21ec112ad69::t_f45ed0383d7e6d 25,49-52,121-122,285,289,291,296-297,299-302,304-305,309-318,320
+apps/web/src/features/onboarding/queries/tool-connect.ts
+  s_03b21ec112ad69::t_a8ad734d010011 3-7,10-13,15,19-28,31
+apps/web/src/features/onboarding/browser-test/onboarding.browser.e2e.ts
+  s_03b21ec112ad69::t_e5da04cc18e2b5 77,547,664-665,669,689-691,702,705,713-716,722,724,739-741
+apps/web/src/features/tours/ViewTour.test.tsx
+  s_03b21ec112ad69::t_57531071c501fc 12,32-38,56,70,157-158,164
+apps/web/src/features/settings/Agents.test.tsx
+  s_03b21ec112ad69::t_863f6d275f8a38 298-300,336-337
+  s_03b21ec112ad69::t_9b3c8919ba4cb0 275,280-282,284-285,288-290,292-293,366-367,2090-2091
+apps/web/src/lib/core/connectors/ConnectorIcon.tsx
+  s_03b21ec112ad69::t_97970dc3625d0f 1-49
+docs/agent-guide/setup-cards.md
+  s_03b21ec112ad69::t_c429f7e8ad15a6 16-21
+docs/agent-guide/login.md
+  s_03b21ec112ad69::t_c429f7e8ad15a6 335-341,349,353-358
+docs/agent-guide/ai-chat.md
+  s_03b21ec112ad69::t_2f0bf6ea301930 72-75,78
+docs/agent-guide/settings.md
+  s_03b21ec112ad69::t_c429f7e8ad15a6 818-821,829-843,845-846
+docs/agent-guide/calls.md
+  s_03b21ec112ad69::t_c429f7e8ad15a6 233-236
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "58f37c549895a3fca894f2b7572b7fcc0c67ae92",
+  "prompts": {},
+  "sessions": {
+    "s_03b21ec112ad69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4313240-0b8c-4454-9ac4-f2c59a5300e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
