@@ -134,7 +134,11 @@ validate the original owner, active state, reauth and both generations again.
 A read Account has no lease_id; save, save_health, renew and release must reject
 it. Draft reads remain leased because they may reconcile an uncertain send.
 
-Limit command sessions to three per binding per replica, keeping the permit
-through pool publication or drop. Sync and IDLE retain independent owner sockets;
-this command limit does not bound the cross-replica total. Give read transactions
-local statement/idle deadlines and gate post-IO validation with other loads.
+Limit pooled command sessions to three per endpoint/login per replica; keep
+socket reuse generation-fenced and retain the permit through publication/drop.
+Return throttling promptly at saturation. Retry a read once after one second
+outside global admission and without a DB snapshot; never queue account waiters
+while retaining user slots. Scan, IDLE setup and leased Sent reconciliation use
+independent sessions. The quota is not distributed and excludes those owner/Sent
+sockets. Give read transactions local statement/idle deadlines and gate post-IO
+validation with other loads.

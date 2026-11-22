@@ -591,7 +591,7 @@ impl MailTransport for ProtocolTransport {
     }
     #[tracing::instrument(skip_all, err)]
     async fn wait_change(&self, c: &Credentials, idle_seconds: u64) -> Result<(), Error> {
-        let mut session = self.command_session(c).await?;
+        let mut session = self.imap(&c.imap).await?;
         let capabilities = session
             .capabilities()
             .await
@@ -603,7 +603,7 @@ impl MailTransport for ProtocolTransport {
         } else {
             "INBOX".into()
         };
-        self.return_command(c, session).await;
+        drop(session);
         self.wait_folder(c, &folder, idle_seconds).await
     }
     async fn wait_folder(

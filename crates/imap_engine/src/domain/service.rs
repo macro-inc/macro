@@ -264,14 +264,34 @@ impl Engine {
     }
 
     /// Execute an operation using the trusted caller's workload class.
+    #[tracing::instrument(skip_all, fields(read.retry_count = tracing::field::Empty), err)]
     pub async fn execute_in_class(
         &self,
         binding: Binding,
         operation: Operation,
         class: OperationClass,
     ) -> Result<Value, Error> {
-        self.execute_with_owner(binding, operation, class, None)
-            .await
+        if operation.access() == OperationAccess::Command {
+            return self
+                .execute_with_owner(binding, operation, class, None)
+                .await;
+        }
+        let result = self
+            .execute_with_owner(binding, operation.clone(), class, None)
+            .await;
+        if matches!(&result, Err(Error::Throttled)) {
+            // The first attempt has dropped its global slot and DB snapshot.
+            // Give a short burst one retry without holding either resource.
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            let result = self
+                .execute_with_owner(binding, operation, class, None)
+                .await;
+            tracing::Span::current().record("read.retry_count", 1i64);
+            result
+        } else {
+            tracing::Span::current().record("read.retry_count", 0i64);
+            result
+        }
     }
 
     async fn execute_owned_sync(

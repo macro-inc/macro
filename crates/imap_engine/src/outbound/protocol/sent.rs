@@ -13,7 +13,9 @@ impl ProtocolTransport {
         if message_id.len() > 998 || message_id.chars().any(char::is_control) {
             return Err(Error::Invalid);
         }
-        let mut session = self.command_session(c).await?;
+        // Sent reconciliation runs under the command lease. Keep its socket
+        // independent from user body reads, including the sync recovery path.
+        let mut session = self.imap(&c.imap).await?;
         let mut catalog = self.folders(&mut session).await?;
         let mut preferences = match (&self.settings, c.binding) {
             (Some(settings), Some(binding)) => settings.preferences(binding).await?,
@@ -114,7 +116,7 @@ impl ProtocolTransport {
                 copied = false;
             }
         }
-        self.return_command(c, session).await;
+        drop(session);
         Ok(copied)
     }
 }

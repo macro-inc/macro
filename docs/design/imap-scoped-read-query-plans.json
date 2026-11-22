@@ -453,6 +453,6 @@
       ]
     }
   ],
-  "query": "PgRepository::read_account; link+both generations with current active IMAP owner join. Called once for the snapshot and once after provider IO.",
+  "query": "PgRepository::read_account; link+both generations with current active IMAP owner join. Called once for the snapshot and once after provider IO per attempt. A throttled read has at most one retry, with global admission released between attempts.",
   "limitations": "Synthetic local PostgreSQL18; small health documents, not full MIME bodies. Does not establish production latency or throughput. Existing/missing keys, generic/custom plans, fresh/stale statistics, twice each. Snapshot isolation and authorization changes are covered separately by real-Postgres tests."
 }

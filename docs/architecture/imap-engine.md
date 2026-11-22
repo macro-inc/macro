@@ -213,11 +213,18 @@ MIME fetch with the sole database connection available to other work.
 The [scoped-read plan record](../design/imap-scoped-read-query-plans.json)
 measures the indexed binding/owner lookup for both snapshot and post-IO validation.
 
-Per binding and replica, at most three command IMAP sessions may be in flight;
-return publishes the reusable socket before releasing its permit, and errors or
-cancellation drop the permit. Sync/IDLE use independent owner sockets, preserving
-their slot during a read burst. This is not a distributed connection quota:
-command totals grow across replicas; owner leases bound actor sockets only.
-Read snapshots use local 30-second statement and 10-second idle deadlines,
-and post-IO validation shares the loading gate so it cannot consume all spare
-pool capacity in a burst. Operation access classification is exhaustive.
+Per endpoint/login and replica, at most three pooled command sessions may be
+in flight, shared across links and reconnect generations. Reusable sockets stay
+link/generation-fenced; another scope's idle sockets are closed before a new
+dial. Global idle retention remains 64 sockets. Saturation returns typed
+throttling promptly. A read retries once after one second with its global slot
+and snapshot already released; it then surfaces throttling if still busy.
+This keeps a slow account's waiters from occupying user slots for other accounts.
+
+Sync scan, IDLE setup and Sent reconciliation use independent fresh sessions;
+Sent work is serialized by its existing command lease. These paths do not wait
+for body-read permits. This is not a distributed connection quota: command
+totals grow across replicas, and independent owner/Sent work adds sockets;
+owner leases bound actor sockets only. Read snapshots use local 30-second
+statement and 10-second idle deadlines; post-IO validation shares the loading
+gate. Operation access classification is exhaustive.

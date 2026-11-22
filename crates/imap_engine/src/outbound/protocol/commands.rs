@@ -11,6 +11,7 @@ pub(super) struct Command {
     opened: Instant,
     idle_since: Instant,
     permit: Option<tokio::sync::OwnedSemaphorePermit>,
+    endpoint_key: String,
 }
 impl Deref for Command {
     type Target = Session<Stream>;
@@ -49,19 +50,11 @@ impl ProtocolTransport {
     async fn command_permit(
         &self,
         c: &Credentials,
-    ) -> Result<tokio::sync::OwnedSemaphorePermit, Error> {
-        // Reconnect generations share admission even though their reusable
-        // sockets remain generation-fenced in the separate command pool.
-        let key = match c.binding {
-            Some(binding) => format!("link:{}", binding.link_id),
-            None => format!(
-                "unbound:{:x}",
-                Sha256::digest(format!(
-                    "{}:{}:{}",
-                    c.imap.endpoint.host, c.imap.endpoint.port, c.imap.endpoint.username
-                ))
-            ),
-        };
+    ) -> Result<(tokio::sync::OwnedSemaphorePermit, String), Error> {
+        // Admission is shared across links and generations using the same
+        // protocol endpoint/login. Socket reuse remains separately fenced.
+        let endpoint = serde_json::to_vec(&c.imap.endpoint).map_err(|_| Error::Invalid)?;
+        let key = format!("{:x}", Sha256::digest(endpoint));
         let capacity = {
             let mut accounts = self
                 .command_capacity
@@ -75,26 +68,30 @@ impl ProtocolTransport {
                     return Err(Error::Throttled);
                 }
                 let capacity = std::sync::Arc::new(tokio::sync::Semaphore::new(3));
-                accounts.insert(key, std::sync::Arc::downgrade(&capacity));
+                accounts.insert(key.clone(), std::sync::Arc::downgrade(&capacity));
                 capacity
             }
         };
-        capacity
-            .acquire_owned()
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)
+        let permit = capacity.try_acquire_owned().map_err(|_| Error::Throttled)?;
+        Ok((permit, key))
     }
     pub(super) async fn command_session(&self, c: &Credentials) -> Result<Command, Error> {
+        // Saturation returns typed throttling immediately (HTTP Retry-After),
+        // so account waiters cannot occupy the replica's global user slots.
         // Only command reads/writes share this quota. The owner's fresh sync
         // and IDLE sockets remain independent so reads cannot consume their slot.
-        let permit = self.command_permit(c).await?;
+        let (permit, endpoint_key) = self.command_permit(c).await?;
         let key = Self::command_key(c);
         let previous = {
             let mut pool = self.command_pool.lock().await;
-            pool.retain(|_, sessions| {
+            pool.retain(|stored_key, sessions| {
+                // A different link/generation cannot reuse these credentials.
+                // Close its idle sockets before dialing under the shared quota.
+                let same_scope = key.as_ref().is_some_and(|current| current == stored_key);
                 sessions.retain(|session| {
                     session.opened.elapsed() < Duration::from_secs(1800)
                         && session.idle_since.elapsed() < Duration::from_secs(60)
+                        && (session.endpoint_key != endpoint_key || same_scope)
                 });
                 !sessions.is_empty()
             });
@@ -119,6 +116,7 @@ impl ProtocolTransport {
             opened: now,
             idle_since: now,
             permit: Some(permit),
+            endpoint_key,
         })
     }
     pub(super) async fn return_command(&self, c: &Credentials, mut connection: Command) {
