@@ -344,6 +344,25 @@ pub struct Agent {
     pub stopped_reason: Option<AgentStoppedReason>,
 }
 
+/// An agent whose configuration was replaced.
+#[derive(Debug, Clone)]
+pub struct ReplacedAgent {
+    /// The agent as it is stored now.
+    pub agent: Agent,
+    /// The channels it was in before, without the direct agent conversations
+    /// it takes part in.
+    pub previous_channel_ids: Vec<Uuid>,
+}
+
+/// The agents of a harness that were deleted, and the channels they left.
+#[derive(Debug, Clone, Default)]
+pub struct DeletedHarnessAgents {
+    /// Each deleted bot and its owner.
+    pub bots: Vec<(BotId, BotOwner)>,
+    /// The channels the deleted bots left, each once.
+    pub left_channel_ids: Vec<Uuid>,
+}
+
 /// Why an agent cannot run right now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

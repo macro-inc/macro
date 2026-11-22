@@ -490,6 +490,8 @@ export * from './channelAccessRequestState';
 export * from './channelAccessRequestStateRequest';
 export * from './channelAccessRequestStateRetryAfter';
 export * from './channelAccessRequestStatus';
+export * from './channelBotParticipant';
+export * from './channelBotParticipantLeftAt';
 export * from './channelFilters';
 export * from './channelFiltersImportance';
 export * from './channelFiltersIsParticipant';
