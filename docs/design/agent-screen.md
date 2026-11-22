@@ -60,9 +60,14 @@ guest: Xvnc on 127.0.0.1:5901 (the agent's display :1)
   whether it is the one driving from the lease changes' Postgres
   notification, and drops input past its lease's expiry on its own clock. A
   lease that ends early (a hand-back from the driver's other tab, a lost
-  freeze) is seen only once that notification arrives, so until then, a
-  matter of milliseconds normally, the former driver's input can still reach
-  the guest, even after someone else took over. The lease lapses two minutes
+  freeze) is seen only once that notification arrives and the socket's loop
+  gets to it, so until then the former driver's input can still reach the
+  guest, even after someone else took over. For raw input that is the
+  notification's delay, milliseconds normally. A typed input already being
+  written to the guest is not stopped: its write may take up to 10 seconds,
+  never past the lease's own expiry. The first typed input of a socket,
+  whose injector connects meanwhile, reads the lease again once connected
+  and goes in only while that drive is still the socket's. The lease lapses two minutes
   after the driver's last input or when their access is revoked. Every take-over is an audit row, ended by hand
   back or lapse.
 - **Pausing the agent:** a take-over first freezes the agent's unit
@@ -83,7 +88,7 @@ guest: Xvnc on 127.0.0.1:5901 (the agent's display :1)
   gets an advisory file (`~/agent/state/screen-driver`), and the agent's main
   loop (requests its runtime marks `x-macro-agent-loop: main` that offer tools)
   gets a notice on take-over and on hand-back, with the note, each claimed by
-  one request at a time and kept until the model's answer finished. An
+  one request at a time and kept until the agent read a finished answer. An
   agent on its owner's own Claude plan calls
   Anthropic directly, so it never gets the notices; it is still frozen.
 - **Robustness:** sockets are capped per person and per computer, tickets are

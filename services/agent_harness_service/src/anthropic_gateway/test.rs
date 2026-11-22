@@ -897,6 +897,56 @@ data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\
         assert_eq!(waiting(&screens, &agent).await, 0);
     }
 
+    /// A caller that hangs up never had the answer, even when upstream
+    /// finished it: the notices wait for its next request, whether it hung
+    /// up mid-stream or with the rest of the answer still buffered.
+    #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+    async fn a_screen_notice_waits_when_the_caller_hangs_up(pool: sqlx::PgPool) {
+        let screens = crate::computers::screen::test_screens(pool).await;
+        handed_back(&screens).await;
+        let agent = MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned();
+        let finished_answer = || -> UpstreamChunks {
+            Box::pin(futures::stream::iter([Ok(axum::body::Bytes::from_static(
+                UPSTREAM_SSE.as_bytes(),
+            ))]))
+        };
+
+        // Gone before the first chunk.
+        let claims = screens
+            .claim_notices(&agent)
+            .await
+            .unwrap()
+            .iter()
+            .map(|pending| pending.claim)
+            .collect();
+        let (watch, _tail) = NoticeWatch::new(CarriedNotices {
+            screens: Arc::clone(&screens),
+            claims,
+        });
+        let (caller, chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
+        drop(chunks);
+        pump(finished_answer(), None, Some(watch), caller).await;
+        assert_eq!(waiting(&screens, &agent).await, 2);
+
+        // Gone with the whole answer still buffered, unread.
+        let claims = screens
+            .claim_notices(&agent)
+            .await
+            .unwrap()
+            .iter()
+            .map(|pending| pending.claim)
+            .collect();
+        let (watch, tail) = NoticeWatch::new(CarriedNotices {
+            screens: Arc::clone(&screens),
+            claims,
+        });
+        let (caller, chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
+        let pumped = tokio::spawn(pump(finished_answer(), None, Some(watch), caller));
+        drop((chunks, tail));
+        pumped.await.unwrap();
+        assert_eq!(waiting(&screens, &agent).await, 2);
+    }
+
     #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
     async fn side_queries_never_take_the_main_loops_notices(pool: sqlx::PgPool) {
         let screens = crate::computers::screen::test_screens(pool).await;

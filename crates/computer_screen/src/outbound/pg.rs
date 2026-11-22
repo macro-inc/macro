@@ -317,7 +317,7 @@ impl ScreenRepo for PgScreenRepo {
                 r#"
                 INSERT INTO computer_screen_driver_leases AS lease
                     (computer_id, harness_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at)
-                VALUES ($1, $2, $3, $4, $5, $6, now(), now() + make_interval(secs => $7))
+                VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp(), clock_timestamp() + make_interval(secs => $7))
                 ON CONFLICT (computer_id) DO UPDATE SET
                     harness_id = EXCLUDED.harness_id,
                     session_id = EXCLUDED.session_id,
