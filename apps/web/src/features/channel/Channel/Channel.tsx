@@ -72,6 +72,7 @@ import { MessageNotificationIndexContext } from '@notifications/components/MarkM
 import { recordChannelViewWhenIdle } from '@queries/channel/activity';
 import { queryClient } from '@queries/client';
 import { queryReadyGate } from '@queries/gate';
+import { readStalledOffline } from '@queries/messages/local/flag';
 import {
   newMessageId,
   useDeleteMessageMutation,
@@ -283,10 +284,15 @@ export function Channel(props: ChannelProps) {
     data: () => messagesQuery.data,
     // Pagination and background-refresh errors should not replace content that
     // has already loaded. Only initial-loading errors belong to the gate.
-    error: () =>
-      messagesQuery.isLoadingError && !isTargetMessageMissing()
+    error: () => {
+      if (isTargetMessageMissing()) return undefined;
+      // With no connection, a channel the device does not hold waits for it:
+      // say so, and let the read resume by itself.
+      if (readStalledOffline(messagesQuery)) return 'LOAD_FAILED' as const;
+      return messagesQuery.isLoadingError
         ? toEntityLoadError(messagesQuery.error)
-        : undefined,
+        : undefined;
+    },
     // Keep the loading view mounted while the missing-target handler switches
     // the query back to the latest page.
     isPending: () => messagesQuery.isPending || isTargetMessageMissing(),

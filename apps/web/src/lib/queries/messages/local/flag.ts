@@ -80,3 +80,20 @@ export function retryOnceOnline(policy: RetryPolicy): RetryPolicy {
     return policy(failureCount - offlineFailures, error);
   };
 }
+
+/**
+ * Whether a first read is waiting for the connection after failing: the
+ * device could not serve it and the server could not be reached. The read
+ * stays pending so it resumes by itself, with its retry unspent, once the
+ * connection returns; until then its view has nothing to show and says so
+ * instead of loading without end.
+ */
+export function readStalledOffline(read: {
+  isPending: boolean;
+  fetchStatus: 'fetching' | 'paused' | 'idle';
+  failureCount: number;
+}): boolean {
+  return (
+    read.isPending && read.fetchStatus === 'paused' && read.failureCount > 0
+  );
+}

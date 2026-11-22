@@ -9,6 +9,7 @@ import {
   channelCacheHost,
   channelReadNetworkMode,
   markChannelCacheUnsupported,
+  readStalledOffline,
   retryOnceOnline,
 } from '../flag';
 import { fakeHost } from './fixtures';
@@ -159,8 +160,45 @@ describe('retryOnceOnline', () => {
       expect(client.getQueryState(['unheld'])?.fetchStatus).toBe('paused')
     );
     expect(read).toHaveBeenCalledTimes(1);
+    // The view says it cannot load meanwhile.
+    const stalled = () => {
+      const state = client.getQueryState(['unheld']);
+      return readStalledOffline({
+        isPending: state?.status === 'pending',
+        fetchStatus: state?.fetchStatus ?? 'idle',
+        failureCount: state?.fetchFailureCount ?? 0,
+      });
+    };
+    expect(stalled()).toBe(true);
     onlineManager.setOnline(true);
     await expect(result).resolves.toBe('server page');
     expect(read).toHaveBeenCalledTimes(3);
+    expect(stalled()).toBe(false);
+  });
+});
+
+describe('readStalledOffline', () => {
+  it('is not a read paused before its first attempt, or one still trying', () => {
+    expect(
+      readStalledOffline({
+        isPending: true,
+        fetchStatus: 'paused',
+        failureCount: 0,
+      })
+    ).toBe(false);
+    expect(
+      readStalledOffline({
+        isPending: true,
+        fetchStatus: 'fetching',
+        failureCount: 1,
+      })
+    ).toBe(false);
+    expect(
+      readStalledOffline({
+        isPending: false,
+        fetchStatus: 'paused',
+        failureCount: 1,
+      })
+    ).toBe(false);
   });
 });
