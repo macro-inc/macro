@@ -1,0 +1,101 @@
+crates/import/Cargo.toml
+  s_5d42f0dc11f02e::t_a44eeeed108994 26
+.github/workspace-dep-closures.json
+  s_5d42f0dc11f02e::t_0b554cfd138643 439,850,1014,1234,2120,3511,4835-4875,5869,10857,15118,15237
+crates/agent_harness/src/outbound/egress.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 67,93,109
+services/agent_harness_service/src/cognition/api/tool_selection.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 4,93
+crates/connectors/Cargo.toml
+  s_5d42f0dc11f02e::t_a44eeeed108994 1-21
+crates/ai_tools/Cargo.toml
+  s_5d42f0dc11f02e::t_a44eeeed108994 85
+crates/import/src/domain/service/notion_workspace/personal.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 12
+crates/ai_tools/src/build_context.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 664
+services/agent_harness_service/src/lib.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 2211
+crates/import/src/domain/service/workspace.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 7
+crates/ai_tools/src/import_channels/test.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 27
+crates/import/src/domain/service.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 26
+apps/web/src/lib/queries/slash-menu-mcps.ts
+  s_5d42f0dc11f02e::t_a44eeeed108994 16
+crates/import/src/domain/service/workspace/run.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 17
+crates/import/AGENTS.md
+  s_5d42f0dc11f02e::t_a44eeeed108994 124
+apps/web/AGENTS.md
+  s_5d42f0dc11f02e::t_a44eeeed108994 504
+Cargo.toml
+  s_5d42f0dc11f02e::t_a44eeeed108994 147
+crates/agent_harness/Cargo.toml
+  s_5d42f0dc11f02e::t_a44eeeed108994 59
+crates/ai_tools/src/tool_context/test/import_link_access.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 215-216,222-223,229
+crates/import/src/domain/service/notion_workspace.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 37
+crates/ai_tools/src/tool_context.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 2175-2176,2338,2355
+crates/import/src/outbound/mcp_slack_source/test.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 4
+crates/import/src/domain/models.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 88-89
+crates/agent_inmem/src/rig_engine.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 163,194,309,906,910
+crates/import/src/domain/service/slack_discovery.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 14
+crates/import/src/domain/service/test/admission.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 379,386
+crates/import/src/domain/service/workspace/events.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 17
+crates/pipedream_mcp/src/domain/service/toolset.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 68
+services/agent_harness_service/Cargo.toml
+  s_5d42f0dc11f02e::t_a44eeeed108994 151,233
+services/agent_harness_service/src/cognition/server.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 733,735
+crates/mcp_client/AGENTS.md
+  s_5d42f0dc11f02e::t_a44eeeed108994 56
+crates/agent_inmem/src/outbound/rig_engine/test/code_tools.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 124
+crates/mcp_client/src/domain/service/toolset.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 288
+crates/import/src/outbound/mcp_slack_source.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 9
+crates/import/src/domain/service/tracker_workspace.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 8
+crates/agent_inmem/Cargo.toml
+  s_5d42f0dc11f02e::t_a44eeeed108994 39
+crates/import/src/domain/service/notion_workspace/object.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 11
+crates/pipedream_mcp/src/lib.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 9
+services/agent_harness_service/src/cognition/api/context/test.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 637
+services/agent_harness_service/src/internal_mcp/test/code_mode.rs
+  s_5d42f0dc11f02e::t_a44eeeed108994 258
+crates/pipedream_mcp/AGENTS.md
+  s_5d42f0dc11f02e::t_a44eeeed108994 50,58,63,82
+Cargo.lock
+  s_5d42f0dc11f02e::t_fb876039df3446 584,704,874,1276,5298-5315,11360
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d4d6bc62a520788e15cb7b65272ea15885c57ab2",
+  "prompts": {},
+  "sessions": {
+    "s_5d42f0dc11f02e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "28ceb712-beab-4ed6-9edf-e5c817833544",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

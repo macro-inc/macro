@@ -1,0 +1,37 @@
+rules/ast-grep-tests/ts-connection-state-through-connectors-queries-test.yml
+  s_75ea158df87d0e::t_9be37d95c91d6a 1-38
+rules/ast-grep-tests/tsx-connection-state-through-connectors-queries-test.yml
+  s_75ea158df87d0e::t_9be37d95c91d6a 1-38
+rules/ast-grep/ts-connection-state-through-connectors-queries.yml
+  s_75ea158df87d0e::t_9107f43f5c63b2 1-80
+rules/ast-grep/tsx-connection-state-through-connectors-queries.yml
+  s_75ea158df87d0e::t_07a839355d48f4 1-80
+rules/ast-grep/rust-macro-connect-flag-in-policy.yml
+  s_75ea158df87d0e::t_1d6da4a21dfabb 1-22
+rules/ast-grep-tests/rust-macro-connect-flag-in-policy-test.yml
+  s_75ea158df87d0e::t_9be37d95c91d6a 1-16
+.agents/rules/checks.md
+  s_75ea158df87d0e::t_88873d1288e0a3 31-34
+rules/ast-grep-tests/__snapshots__/rust-macro-connect-flag-in-policy-snapshot.yml
+  s_75ea158df87d0e::t_a6c2b457fc5cac 1-23
+rules/ast-grep-tests/__snapshots__/ts-connection-state-through-connectors-queries-snapshot.yml
+  s_75ea158df87d0e::t_45707ecdf834dd 1-178
+rules/ast-grep-tests/__snapshots__/tsx-connection-state-through-connectors-queries-snapshot.yml
+  s_75ea158df87d0e::t_b45a0d2459f62a 1-178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c94f77096519b42df8a8892c1c6eff4cbe9f1191",
+  "prompts": {},
+  "sessions": {
+    "s_75ea158df87d0e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "453bb9ea-5118-43ec-ab86-e4d3f4c8063f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
