@@ -1,12 +1,14 @@
 /**
- * Repro (bun run repro/qa-rename-row.ts [rounds] [kind] [viewed] [no-menu]): the one row an
+ * Repro (bun run repro/qa-rename-row.ts [rounds] [kind] [viewed] [no-menu] [open=ms,...]): the one row an
  * in-app rename changes, in each side's Quick Access skills (or snippets)
  * feed (`qa.skills`) and in Quick Access itself (`quickAccess`, that bucket).
  * A fresh user makes four, opens the last two, then per round renames an
  * unopened one in the app on both pages and samples for 90 s: the row's name
  * (or search text), `updatedAt`, `sortTimestamp` and position, against a fresh
  * load of the same side. The `/` menu (`menu`) mounts two seconds after the
- * rename, as a user would open it. Needs run.sh's two Vites.
+ * rename, as a user would open it; [open=ms,...] sets that delay per round
+ * (cycling), and each round records what the menu shows once it settles
+ * after opening (`opened`). Needs run.sh's two Vites.
  */
 import { ApiUser } from '../lib/api';
 import { closeBrowser, launch, openUser, reloadApp, type Side } from '../lib/browser';
@@ -17,6 +19,7 @@ const kind = process.argv[3] === 'snippet' ? 'snippet' : 'skill';
 // [no-menu]: never mount the `/` menu, so no list reads the cache.
 const renameViewed = process.argv.includes('viewed');
 const withMenu = !process.argv.includes('no-menu');
+const openAts = process.argv.find((a) => a.startsWith('open='))?.slice(5).split(',').map(Number) ?? [2_000];
 const feedReader = kind === 'snippet' ? 'qa.snippets' : 'qa.skills';
 const tag = Date.now().toString(36);
 const email = `owner@wrow-${tag}.difftest.dev`;
@@ -84,9 +87,28 @@ try {
     const writes = await Promise.all(sides.map((side) =>
       write(s.pages[side], 'rename', { id: target.id, type: 'document', name: newName, oldName: target.name }).then((w) => (w.ok ? 'ok' : String(w.error).slice(0, 120)))));
     target.name = newName;
-    // The user opens the `/` menu two seconds after the rename.
-    await Bun.sleep(2_000);
-    if (withMenu) for (const side of sides) await mount(s.pages[side], 'menu', 'quickAccess', { buckets: [kind], menu: true });
+    // The user opens the `/` menu (two seconds) after the rename.
+    const openAt = openAts[r % openAts.length];
+    await Bun.sleep(Math.max(0, t0 + openAt - Date.now()));
+    const opened: Record<string, unknown> = {};
+    if (withMenu) {
+      // What the lists already mounted show just before the menu opens.
+      for (const side of sides)
+        opened[`${label(side)} before`] = { feed: await rowOf(s.pages[side], 'feed', target.id), qa: await rowOf(s.pages[side], 'qa', target.id) };
+      await Promise.all(sides.map((side) => mount(s.pages[side], 'menu', 'quickAccess', { buckets: [kind], menu: true })));
+      // Every distinct state the opened menu shows until it settles: a stale
+      // name the user would glimpse shows up here before the settled one.
+      await Promise.all(sides.map(async (side) => {
+        const seen: [number, string][] = [];
+        const until = Date.now() + 3_000;
+        while (Date.now() < until) {
+          const v = JSON.stringify(await rowOf(s.pages[side], 'menu', target.id));
+          if (seen.at(-1)?.[1] !== v) seen.push([Date.now() - t0, v]);
+          await Bun.sleep(50);
+        }
+        opened[label(side)] = { seen, settled: await rowOf(s.pages[side], 'menu', target.id, true), settledAtMs: Date.now() - t0 };
+      }));
+    }
     const samples: Record<string, [number, string][]> = {};
     while (Date.now() - t0 < 90_000) {
       for (const side of sides) for (const key of withMenu ? ['feed', 'qa', 'menu'] : ['feed', 'qa']) {
@@ -114,7 +136,7 @@ try {
       await page.close();
     }
     const result = Object.fromEntries(Object.entries(samples).map(([k, xs]) => [k, { changes: xs, fresh: fresh[k], matchesFresh: xs.at(-1)?.[1] === fresh[k] }]));
-    out.push({ round: r, writes: writes.join('/'), renamedAtMs: Date.now() - t0, rows: result, timeline });
+    out.push({ round: r, openAtMs: withMenu ? openAt : null, newName, opened, writes: writes.join('/'), renamedAtMs: Date.now() - t0, rows: result, timeline });
     console.error(JSON.stringify(out.at(-1)));
   }
   console.log(JSON.stringify({ kind, rounds: out }, null, 1));
