@@ -68,6 +68,11 @@ impl FeedbackRepo for PgFeedbackRepo {
         let subject_id = write.subject.subject_id();
         let turn = turn_column(write.subject.turn())?;
         let mut transaction = self.pool.begin().await?;
+        // Bounds the lock wait too: a write stuck behind another for this
+        // response fails instead of holding a connection.
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await?;
 
         // One writer per person and response: the replay check, the
         // comparison with the newest row and the insert see each other's
@@ -83,25 +88,53 @@ impl FeedbackRepo for PgFeedbackRepo {
         .execute(&mut *transaction)
         .await?;
 
-        let latest = sqlx::query_as!(
-            Latest,
-            r#"SELECT rating::text AS rating, note, created_at
-               FROM agent_response_feedback
-               WHERE user_id = $1
-                 AND subject_kind = $2::text::agent_response_feedback_subject
-                 AND container_id = $3
-                 AND subject_id = $4
-                 AND turn IS NOT DISTINCT FROM $5
-               ORDER BY created_at DESC, id DESC
-               LIMIT 1"#,
-            write.user.as_ref(),
-            kind.as_ref(),
-            container_id,
-            subject_id,
-            turn,
-        )
-        .fetch_optional(&mut *transaction)
-        .await?;
+        // The newest row for the response. A turn and a turnless subject are
+        // separate statements so `turn` stays an index condition: with
+        // `IS NOT DISTINCT FROM` it is a filter over every rated turn of the
+        // session.
+        let latest = match turn {
+            Some(turn) => {
+                sqlx::query_as!(
+                    Latest,
+                    r#"SELECT rating::text AS rating, note, created_at
+                       FROM agent_response_feedback
+                       WHERE user_id = $1
+                         AND subject_kind = $2::text::agent_response_feedback_subject
+                         AND container_id = $3
+                         AND subject_id = $4
+                         AND turn = $5
+                       ORDER BY created_at DESC, id DESC
+                       LIMIT 1"#,
+                    write.user.as_ref(),
+                    kind.as_ref(),
+                    container_id,
+                    subject_id,
+                    turn,
+                )
+                .fetch_optional(&mut *transaction)
+                .await?
+            }
+            None => {
+                sqlx::query_as!(
+                    Latest,
+                    r#"SELECT rating::text AS rating, note, created_at
+                       FROM agent_response_feedback
+                       WHERE user_id = $1
+                         AND subject_kind = $2::text::agent_response_feedback_subject
+                         AND container_id = $3
+                         AND subject_id = $4
+                         AND turn IS NULL
+                       ORDER BY created_at DESC, id DESC
+                       LIMIT 1"#,
+                    write.user.as_ref(),
+                    kind.as_ref(),
+                    container_id,
+                    subject_id,
+                )
+                .fetch_optional(&mut *transaction)
+                .await?
+            }
+        };
 
         let stored = sqlx::query!(
             r#"SELECT user_id, subject_kind::text AS "subject_kind!", subject_id, turn
@@ -191,6 +224,12 @@ impl FeedbackRepo for PgFeedbackRepo {
         kind: SubjectKind,
         container_id: &str,
     ) -> Result<Vec<MyFeedback>, Report> {
+        // One person's ratings in one container: small, but read on every
+        // render of a transcript or channel.
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await?;
         let rows = sqlx::query!(
             r#"SELECT subject_id AS "subject_id!", turn, rating::text AS "rating!", note,
                       created_at AS "created_at!"
@@ -208,8 +247,9 @@ impl FeedbackRepo for PgFeedbackRepo {
             kind.as_ref(),
             container_id,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *transaction)
         .await?;
+        transaction.commit().await?;
 
         rows.into_iter()
             .map(|row| {
@@ -230,6 +270,10 @@ impl FeedbackRepo for PgFeedbackRepo {
         limit: ExportLimit,
     ) -> Result<Vec<FeedbackEvent>, Report> {
         let limit = i64::from(limit.get());
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '30s'")
+            .execute(&mut *transaction)
+            .await?;
         // The first page and the rest are separate statements, so each is a
         // plain range scan of the (created_at, id) index.
         let rows = match after {
@@ -246,7 +290,7 @@ impl FeedbackRepo for PgFeedbackRepo {
                        LIMIT $1"#,
                     limit,
                 )
-                .fetch_all(&self.pool)
+                .fetch_all(&mut *transaction)
                 .await?
             }
             Some(after) => {
@@ -265,10 +309,11 @@ impl FeedbackRepo for PgFeedbackRepo {
                     after.after_id,
                     limit,
                 )
-                .fetch_all(&self.pool)
+                .fetch_all(&mut *transaction)
                 .await?
             }
         };
+        transaction.commit().await?;
         rows.into_iter().map(EventRow::event).collect()
     }
 }

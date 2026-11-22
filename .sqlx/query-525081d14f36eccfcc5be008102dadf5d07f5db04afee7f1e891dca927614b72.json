@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT rating::text AS rating, note, created_at\n                       FROM agent_response_feedback\n                       WHERE user_id = $1\n                         AND subject_kind = $2::text::agent_response_feedback_subject\n                         AND container_id = $3\n                         AND subject_id = $4\n                         AND turn IS NULL\n                       ORDER BY created_at DESC, id DESC\n                       LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rating",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      false
+    ]
+  },
+  "hash": "525081d14f36eccfcc5be008102dadf5d07f5db04afee7f1e891dca927614b72"
+}
