@@ -256,6 +256,14 @@ export type BotOwnerSummary =
       type: 'team';
     };
 /**
+ * Where a user stands with an app or server.
+ */
+export type ConnectorStatus =
+  | 'connected'
+  | 'disabled'
+  | 'needsReauth'
+  | 'notConnected';
+/**
  * How search tools match query terms. Restricted to partial/exact — the
  * backend also supports regexp and an internal query mode, but those are not
  * offered to the model.
@@ -1247,9 +1255,7 @@ export type DiscoveryResult =
   | {
       app: DiscoveredApp;
       /**
-       * Whether this caller has an enabled connection. For an app that
-       * connects through its own MCP server, that connection is checked
-       * there, not in Pipedream.
+       * Whether this caller's connection to the app is usable now.
        */
       connected: boolean;
       /**
@@ -6387,23 +6393,16 @@ export interface ConnectMcpServer {
  */
 export interface ConnectMcpServerResponse {
   /**
-   * The server's URL.
+   * The server's URL, normalized.
    */
   url: string;
   /**
-   * The server's display name.
+   * The connector's display name.
    */
   serverName: string;
+  status: ConnectorStatus;
   /**
-   * Whether the user already had this server before the call.
-   */
-  alreadyConnected: boolean;
-  /**
-   * Whether the server holds the user's sign-in.
-   */
-  authenticated: boolean;
-  /**
-   * Whether the server's tools are turned on.
+   * Whether its tools are turned on.
    */
   enabled: boolean;
   /**

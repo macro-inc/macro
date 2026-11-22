@@ -1,17 +1,17 @@
-//! Jira Cloud v3 reads through Pipedream's OAuth proxy.
+//! Jira Cloud v3 reads through the user's connected Jira API.
 
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use connectors::ApiConnectionsService;
 use http::Method;
 use import_tracker::domain::model::{
     Comment, Group, GroupKind, Inventory, Issue, ObjectId, TrackerConnections, TrackerError, User,
 };
-use import_tracker::outbound::pipedream::{Connections, Session};
+use import_tracker::outbound::connection::{Connections, Session};
 use macro_user_id::user_id::MacroUserIdStr;
-use pipedream_mcp::domain::ports::{ConnectedAppProxy, ConnectionStore};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
@@ -124,25 +124,25 @@ impl JiraRead {
     }
 }
 
-/// Jira connections backed by enabled Pipedream `jira` accounts.
-pub struct PipedreamJiraConnections<Store, Proxy>(Connections<Store, Proxy>);
+/// Jira's catalog app.
+const JIRA_APP: &str = "jira";
 
-impl<Store: ConnectionStore, Proxy: ConnectedAppProxy> PipedreamJiraConnections<Store, Proxy> {
+/// Jira inventories through users' Jira connections that provide Jira's API.
+pub struct JiraConnections<S>(Connections<S>);
+
+impl<S: ApiConnectionsService> JiraConnections<S> {
     /// Space calls on each account and honor Jira's retry budget.
-    pub fn new(store: Arc<Store>, proxy: Option<Arc<Proxy>>) -> Self {
+    pub fn new(service: Arc<S>) -> Self {
         Self(Connections::new(
-            store,
-            proxy,
-            "jira",
+            service,
+            JIRA_APP,
             Duration::from_millis(350),
         ))
     }
 }
 
 #[async_trait]
-impl<Store: ConnectionStore, Proxy: ConnectedAppProxy> TrackerConnections
-    for PipedreamJiraConnections<Store, Proxy>
-{
+impl<S: ApiConnectionsService> TrackerConnections for JiraConnections<S> {
     #[tracing::instrument(skip_all, err)]
     async fn inventory(
         &self,
@@ -162,9 +162,9 @@ impl<Store: ConnectionStore, Proxy: ConnectedAppProxy> TrackerConnections
     }
 }
 
-struct Client<Proxy>(Session<Proxy>);
+struct Client<S>(Session<S>);
 
-impl<Proxy: ConnectedAppProxy> Client<Proxy> {
+impl<S: ApiConnectionsService> Client<S> {
     async fn request<T: DeserializeOwned>(&self, read: JiraRead) -> Result<T, TrackerError> {
         serde_json::from_value(
             self.0

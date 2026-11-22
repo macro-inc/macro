@@ -1349,8 +1349,29 @@ export const ConnectMcpServer = z.object({
 export const ConnectMcpServerResponse = z.object({
   url: z.string(),
   serverName: z.string(),
-  alreadyConnected: z.boolean(),
-  authenticated: z.boolean(),
+  status: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('connected'),
+      z.literal('disabled'),
+      z.literal('needsReauth'),
+      z.literal('notConnected'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
   enabled: z.boolean(),
   summary: z.string(),
 });

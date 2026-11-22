@@ -65,12 +65,14 @@ pub trait RoutineSessions: Send + Sync + 'static {
     }
 }
 
-/// The Pipedream apps a user has connected and enabled for tool use, which
-/// is what the egress proxy treats as connected.
+/// The apps a user has connected, counted as the egress proxy counts them.
 pub trait ConnectedApps: Send + Sync + 'static {
-    /// App slugs of the user's enabled connections.
-    fn connected_app_slugs(
+    /// Whether the user has a usable connection to every one of `apps`.
+    /// Slugs name apps, not stored spellings: an alias (`slack_v2`) is the
+    /// app it stands for (`slack`).
+    fn all_connected(
         &self,
         user: &macro_user_id::user_id::MacroUserIdStr<'static>,
-    ) -> impl Future<Output = anyhow::Result<Vec<String>>> + Send;
+        apps: &[&str],
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
 }

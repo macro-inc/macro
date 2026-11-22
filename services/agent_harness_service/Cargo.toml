@@ -148,8 +148,8 @@ macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 mcp_auth_proxy = { path = "../mcp_auth_proxy" }
-mcp_client = { path = "../../crates/mcp_client" }
-mcp_select = { path = "../../crates/mcp_select" }
+mcp_toolset = { path = "../../crates/mcp_toolset" }
+connectors = { path = "../../crates/connectors" }
 memory = { path = "../../crates/memory" }
 messages = { path = "../../crates/messages", features = ["broker", "delivery", "outbound"] }
 model = { path = "../../crates/model" }
@@ -163,7 +163,6 @@ non_empty = { path = "../../crates/non_empty" }
 notification = { path = "../../crates/notification", features = ["ai_tool"] }
 onboarding = { path = "../../crates/onboarding" }
 opentelemetry = { workspace = true, features = ["metrics"] }
-pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 png = { workspace = true }
 prompt = { path = "../../crates/prompt" }
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
@@ -231,7 +230,7 @@ harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["test-utils"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
-mcp_select = { path = "../../crates/mcp_select" }
+connectors = { path = "../../crates/connectors", features = ["test-fakes"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 schemars = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "net", "test-util"] }

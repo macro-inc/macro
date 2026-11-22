@@ -503,13 +503,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         },
     );
 
+    let composed = test_connectors(pool.clone());
     let tool_service_context = ai_tools::ToolServiceContext {
         memory_tool_context: ai_tools::memory::build_memory_tool_context(
             pool.clone(),
             recorder.clone(),
         ),
         cognition_tool_context: Default::default(),
-        connector_tool_context: ai_tools::build_connector_tool_context(pool.clone(), None, None),
+        connector_tool_context: ai_tools::build_connector_tool_context(Some(&composed)),
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
@@ -552,7 +553,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         forms_tool_context,
         databases_sql_tool_context,
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),
-        mcp_server_tool_context: ai_tools::ToolMcpServerToolContext::unwired(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context_without_side_effects(
             pool.clone(),
@@ -564,7 +564,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             "http://localhost:8086".to_string(),
-            None,
+            Some(composed.connectors.clone()),
         ),
         read_agent_session_context: ai_tools::build_read_agent_session_context(
             pool.clone(),
@@ -604,13 +604,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
         Arc::new(all_tools.prompt.to_string());
 
-    let (import_service, onboarding_service, mcp_selector) = {
-        let mcp_key =
-            mcp_client::domain::models::AesKey::try_from(vec![0u8; 32]).expect("valid test key");
-        let mcp_repo = mcp_client::outbound::NativeServerStore::new(
-            mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key),
-            None,
-        );
+    let (import_service, onboarding_service) = {
+        let connections = Arc::new(composed.connectors.clone());
         let creator = ai_tools::ToolEntityCreator {
             document_creator: document_tool_context.creator.clone(),
             entity_access_service: entity_access_service.clone(),
@@ -630,39 +625,26 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             databases_service: tool_service_context.databases_tool_context.service.clone(),
             document_service: document_tool_context.service.clone(),
         };
-        let pipedream_connections = Arc::new(
-            pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
-        );
-        let mcp_selector: Arc<ai_tools::ToolMcpSelector> =
-            Arc::new(mcp_select::McpToolSelector::new(
-                Arc::new(mcp_repo.clone()),
-                local_mcp_http(),
-                pipedream_connections.clone(),
-                Arc::new(None),
-            ));
         let import_service = Arc::new(
             import::domain::service::ImportServiceImpl::new(
                 import::outbound::pg_import_repo::PgImportRepo::new(pool.clone()),
-                mcp_selector.clone(),
+                Arc::clone(&connections),
                 Arc::new(creator),
                 recorder.clone(),
             )
             .with_slack_source(Arc::new(
-                import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
+                import::outbound::mcp_slack_source::McpSlackSource::new(Arc::clone(&connections)),
             ))
             .with_notion_connections(Arc::new(
-                import_notion::outbound::pipedream::PipedreamNotionConnections::new(
-                    pipedream_connections,
-                    None,
-                ),
+                import_notion::outbound::connected::ConnectedNotion::new(Arc::clone(&connections)),
             ))
             .with_admission(admission.clone()),
         );
         let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
             onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(pool.clone()),
-            Arc::new(mcp_repo),
+            connections,
         ));
-        (import_service, onboarding_service, mcp_selector)
+        (import_service, onboarding_service)
     };
 
     let memory_service = Arc::new(ai_tools::memory::build_memory_service(
@@ -801,41 +783,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             },
         },
         granola_sync: None,
-        pipedream_state: pipedream_mcp::inbound::PipedreamRouterState::new(
-            pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
-            None,
-            authorization_state.clone(),
+        connectors_state: connectors::inbound::axum_router::ConnectorsRouterState::new(
+            composed.connectors.clone(),
+            composed.catalog.clone(),
+            authorization_state,
         ),
-        mcp_selector,
-        mcp_state: {
-            let redis_client =
-                Arc::new(redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"));
-            let mcp_key = mcp_client::domain::models::AesKey::try_from(vec![0u8; 32])
-                .expect("valid test key");
-            let mcp_repo = mcp_client::outbound::NativeServerStore::new(
-                mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key),
-                None,
-            );
-            let mcp_state_store =
-                mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client);
-            let client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(
-                "http://localhost/mcp/servers/auth/client-metadata".to_string(),
-                "http://localhost/mcp/servers/auth/callback".to_string(),
-            );
-            let mcp_oauth = mcp_client::outbound::oauth::OAuthService::new(
-                mcp_repo.clone(),
-                mcp_state_store,
-                client_metadata.clone(),
-                local_mcp_http(),
-                mcp_client::domain::provider_registry::PreRegisteredProviders::empty(),
-            );
-            mcp_client::inbound::McpRouterState::new(
-                mcp_repo,
-                mcp_oauth,
-                authorization_state,
-                client_metadata,
-            )
-        },
+        callbacks_state: connectors::inbound::callbacks::CallbacksState::new(
+            composed.sign_ins.clone(),
+        ),
+        connectors: composed.connectors.clone(),
         import_service: import_service.clone(),
         onboarding_service,
         macro_event_broker,
@@ -843,9 +799,30 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     Arc::new(api_context)
 }
 
-fn local_mcp_http() -> mcp_client::outbound::guarded_http::McpHttp {
-    mcp_client::outbound::guarded_http::McpHttp::new(
-        mcp_client::outbound::guarded_http::AddressPolicy::AnyAddress,
+/// The real connectors composition over the test database, with no hosted
+/// source and no flag provider: every user holds only native servers.
+fn test_connectors(pool: sqlx::PgPool) -> connectors::composition::Composed {
+    connectors::composition::compose(
+        connectors::composition::ConnectorsConfig {
+            environment: macro_env::Environment::Local,
+            app_origin: url::Url::parse("http://localhost:3000").expect("valid test origin"),
+            mcp_credentials_key: connectors::composition::AesKey::try_from(vec![0u8; 32])
+                .expect("valid test key"),
+            mcp_oauth_client: connectors::composition::OAuthClientMetadata::new(
+                "http://localhost/mcp/servers/auth/client-metadata".to_string(),
+                "http://localhost/mcp/servers/auth/callback".to_string(),
+            ),
+            mcp_pre_registered: connectors::composition::PreRegisteredProviders::empty(),
+            pipedream: None,
+            connect: None,
+            feature_flags: None,
+        },
+        pool,
+        Arc::new(redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url")),
+        authentication_service_client::AuthServiceClient::new(
+            "test-key".to_string(),
+            "http://localhost:0".to_string(),
+        ),
     )
-    .unwrap()
+    .expect("the test connectors compose")
 }

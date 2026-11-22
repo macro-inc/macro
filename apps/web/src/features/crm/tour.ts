@@ -13,7 +13,7 @@ export const companiesTour = defineViewTour({
   connector: {
     kind: 'mcp',
     label: 'HubSpot or Attio',
-    tools: ['HubSpot', 'Attio'],
+    apps: ['hubspot', 'attio'],
   },
   video: {
     youtubeId: '5d2K_NYs50k',

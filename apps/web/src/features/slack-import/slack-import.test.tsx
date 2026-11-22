@@ -35,7 +35,7 @@ vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
 vi.mock('@app/features/connector-import/primitives/promotion', () => ({
   hideImportPromotion: host.hidePromotion,
 }));
-vi.mock('@core/pipedream/pendingConnect', () => ({
+vi.mock('@core/connectors/pendingConnect', () => ({
   requestConnectApp: host.requestConnect,
 }));
 vi.mock('@core/util/reloadForNewerBuild', () => ({
@@ -104,7 +104,7 @@ describe('Slack import production boundary', () => {
     await screen.findByText('Mounted import');
     host.props!.onConnect!();
     expect(host.requestConnect).toHaveBeenCalledWith(
-      'slack_v2',
+      'slack',
       'import-slack-channels'
     );
     expect(host.openSettings).toHaveBeenCalledWith('Connected');
