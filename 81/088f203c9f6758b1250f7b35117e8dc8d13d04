@@ -1,0 +1,28 @@
+apps/web/src/features/agent-permissions/components/action-accordion.tsx
+  s_9aaadd038e8bff::t_c3ba98327752ef 151-174
+apps/web/src/features/settings/Agents.test.tsx
+  s_9aaadd038e8bff::t_e11b5874a6c0f2 1103,1108-1127
+apps/web/src/features/settings/Agents.tsx
+  s_9aaadd038e8bff::t_bbaaac73fb3967 215-221,500-505,658-659,662-663,672-673,676-677,680-684,687,701-705
+  s_9aaadd038e8bff::t_4bb761fc536cd3 709,711-732
+apps/web/src/features/agent-permissions/components/tool-settings-list.tsx
+  s_9aaadd038e8bff::t_e11b5874a6c0f2 27-46,48-68,70-72
+apps/web/src/features/agent-permissions/views/agent-permissions-panel.test.tsx
+  s_9aaadd038e8bff::t_5e25f1119400aa 197-211
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "81088f203c9f6758b1250f7b35117e8dc8d13d04",
+  "prompts": {},
+  "sessions": {
+    "s_9aaadd038e8bff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e05430e7-cb2a-430c-b897-bbb624a22b13",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

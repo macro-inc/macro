@@ -1,0 +1,152 @@
+apps/web/src/features/agent-permissions/components/tool-settings-list.tsx
+  s_9aaadd038e8bff::t_23c46d3e134511 6,18-19,31,63
+  s_9aaadd038e8bff::t_12c6f86aa8bde8 1-5,7-17,20-30,32-62,64-74
+apps/web/src/features/agent-permissions/views/agent-permissions-panel.tsx
+  s_9aaadd038e8bff::t_f946a56a2e6aa9 1-240
+apps/web/src/features/agent-permissions/components/entity-picker.tsx
+  s_9aaadd038e8bff::t_ae488cd4d3e2fd 1-103
+apps/web/src/features/agent-permissions/core/model.ts
+  s_9aaadd038e8bff::t_5241a6ce9547a0 196-206,210-211,214-215,225-226,228,234-235,237-239
+  s_9aaadd038e8bff::t_3fd17af1dcfd34 8-15,18-20,23,26,29,35-41,43,46,50,57,61-64,69-70,73-75,80-82,89-91,97,115,124,126,131,133,137,139-142,160-168,171,173-177,181-188,191-193,207,209,212-213,216-218,222-224,227,229,231-233,236,243-252,254-260,263-271,274-284,287-289,291-297,299,301-308,311-314,316-327,330-340
+  s_9aaadd038e8bff::t_1293d6b12db106 138,300
+  s_9aaadd038e8bff::t_2dd9f1b7a641bf 230
+  s_9aaadd038e8bff::t_b06e61ea11bb04 125,127-130,132,134-136,143-144,219
+  s_9aaadd038e8bff::t_9f883330c68a11 105-108,113-114,118
+  s_9aaadd038e8bff::t_dcaefbcd173caf 169,178
+apps/web/src/features/agent-permissions/components/exception-row.tsx
+  s_9aaadd038e8bff::t_ef511b591fd027 1-56
+apps/web/src/features/agent-permissions/components/reset-permissions-dialog.tsx
+  s_9aaadd038e8bff::t_871485855efc6e 5-8,12-13,30-31,34
+apps/web/src/features/agent-permissions/index.ts
+  s_9aaadd038e8bff::t_823fc48bd0e55c 7,11
+apps/web/src/features/agent-permissions/tests/fixtures.ts
+  s_9aaadd038e8bff::t_af1e143bee5313 281-304
+  s_9aaadd038e8bff::t_06acfb2bb433b8 3,6,114,151-279,305-331,333,335-381
+  s_9aaadd038e8bff::t_b06e61ea11bb04 5,334
+apps/web/src/features/agent-permissions/views/agent-permissions-panel.test.tsx
+  s_9aaadd038e8bff::t_1be2f567583efa 1-64,68-97,101-110,112-143,146-147,149-198,202-203,207-214,218-283
+  s_9aaadd038e8bff::t_af1e143bee5313 65-67,98-100,199-201,204-206,215-217
+  s_9aaadd038e8bff::t_eaa45f902cee41 111,144-145,148
+apps/web/src/features/agent-permissions/views/show-permissions-card.tsx
+  s_9aaadd038e8bff::t_af1e143bee5313 26,44
+  s_9aaadd038e8bff::t_63d019cc62d739 55,297
+  s_9aaadd038e8bff::t_9f883330c68a11 30,229-234
+apps/web/src/features/agent-permissions/components/labels.ts
+  s_9aaadd038e8bff::t_4e6f15638c7176 8,34-35,37-41
+apps/web/src/features/agent-permissions/components/permission-state-menu.tsx
+  s_9aaadd038e8bff::t_af1e143bee5313 59
+  s_9aaadd038e8bff::t_90c40967ccb091 1-58,60-74
+apps/web/src/lib/service-clients/service-agent-harness/tool-permissions.ts
+  s_9aaadd038e8bff::t_63d019cc62d739 3,63,77,88-90,105
+  s_9aaadd038e8bff::t_af1e143bee5313 91
+  s_9aaadd038e8bff::t_478ea9a0fe539e 46-52,64,78,92,104,106-109
+apps/web/src/features/agent-permissions/components/tool-permissions.tsx
+  s_9aaadd038e8bff::t_44c4b0d75af0aa 1-10,12-14,18-42,44-59,62-109,120-143
+  s_9aaadd038e8bff::t_5241a6ce9547a0 11,15-17,43,60-61,110-119
+apps/web/src/features/agent-permissions/queries/permissions-view.ts
+  s_9aaadd038e8bff::t_6e1b7db019cf29 1-25,27-28,30-70,75-122
+  s_9aaadd038e8bff::t_1293d6b12db106 26,29
+  s_9aaadd038e8bff::t_af1e143bee5313 71-74
+apps/web/src/features/agent-permissions/core/model.test.ts
+  s_9aaadd038e8bff::t_4b2bf600590bce 3-8,10-12,14-18,21-23,26-28,51-52,60-78,80-82,84,86-87,89-96,99-107,109-132,136-144,148-156,160-166,168,170-176,178-179,181-185,187-189,191,193-216,219-220
+  s_9aaadd038e8bff::t_af1e143bee5313 53-59
+  s_9aaadd038e8bff::t_b06e61ea11bb04 79,88,108,134,186
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_9aaadd038e8bff::t_ac9f4045e5c173 106,117,122-126,128-148,150-174,178
+  s_e4dab6ab069ba5::t_f8da07a232f8cf 127,223
+  s_9aaadd038e8bff::t_b06e61ea11bb04 191
+apps/web/src/features/block-agent/browser-test/permissions.tsx
+  s_9aaadd038e8bff::t_048273298aaa7f 132-202
+  s_9aaadd038e8bff::t_af1e143bee5313 225-229
+  s_9aaadd038e8bff::t_a7c9859da9cdab 7-8,10-15,206-208,216-224,230-251,260-265,296,299-308,312,520,525
+  s_9aaadd038e8bff::t_dcaefbcd173caf 280
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_9aaadd038e8bff::t_3a2c8f7a734578 1,4-5,8-10,20,26,29,32,34,36-58,60-65,67,88
+  s_9aaadd038e8bff::t_60cd8d1d4d551b 6-7
+  s_9aaadd038e8bff::t_b06e61ea11bb04 59
+apps/web/src/features/agent-permissions/views/open-agent-permissions.ts
+  s_9aaadd038e8bff::t_f2de45fed91f62 3
+  s_9aaadd038e8bff::t_318a111be757a3 7-8
+  s_9aaadd038e8bff::t_6c03c37e8709bd 6
+apps/web/src/features/settings/agentSettingsState.ts
+  s_9aaadd038e8bff::t_318a111be757a3 5-7
+  s_9aaadd038e8bff::t_e9c9e4714569a4 30-31
+apps/web/src/features/agent-permissions/queries/permissions.ts
+  s_9aaadd038e8bff::t_bd93faccf7fcd7 4,9-14,34-53,72,84,119-120,135,156-158,175-178
+  s_9aaadd038e8bff::t_af1e143bee5313 159
+apps/web/src/features/agent-permissions/components/permissions-skeleton.tsx
+  s_9aaadd038e8bff::t_871485855efc6e 5,9-12,14-15,19,21-23
+  s_9aaadd038e8bff::t_1e5478814c094c 13,16-17
+apps/web/src/features/settings/Agents.tsx
+  s_9aaadd038e8bff::t_19527cd14de201 390-392,635-703,710-711,714-732,735,751-752,755-758,762,764-768,1960-1961
+  s_9aaadd038e8bff::t_b7dea21d13fcc3 3,211-218,371-373,384,386,393-396,458,491,493-499
+  s_9aaadd038e8bff::t_60cd8d1d4d551b 1402,1712,1942-1959
+  s_9aaadd038e8bff::t_af1e143bee5313 35
+  s_9aaadd038e8bff::t_cf2affb9e0ebb2 397-398,1962
+apps/web/src/features/agent-permissions/components/action-accordion.tsx
+  s_9aaadd038e8bff::t_7b80858a74d1a9 1-37,39-191,193-218
+  s_9aaadd038e8bff::t_23c46d3e134511 38
+  s_9aaadd038e8bff::t_80e4faab0b3722 192
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_e3d42bca6fdb8e::t_fe01880215f745 6-12,16-22,26-28,31-33,37-39,46-54,56,60-64,69-71,77
+apps/web/src/features/agent-permissions/components/gated-phrases.test.ts
+  s_6cb9970725150c::t_3f13f5c4d09505 61
+apps/web/src/features/agent-permissions/core/gated-operations.test.ts
+  s_6cb9970725150c::t_23e3324889bb1e 25
+apps/web/src/features/agent-permissions/primitives/pending-changes.ts
+  s_69795600d3e845::t_a0d63b84dcb196 1,10-13,24-25,35,44,63,65,99
+apps/web/src/features/agent-permissions/views/permission-changes.ts
+  s_6cb9970725150c::t_1b6774748c548a 5,8-15,18-21,30,33,36-40,53,59,61,65,89-97,99-101,107,111-112
+apps/web/src/features/agent-permissions/views/show-permissions-card.test.tsx
+  s_9aaadd038e8bff::t_75c0c031024502 18,40,60,138
+apps/web/src/features/settings/Agents.test.tsx
+  s_e4dab6ab069ba5::t_b6746427d969c6 85-86,93,96,98-101,1061-1062,1064-1066,1069,1072-1073,1075-1080,1082-1085,1088,1090,1092-1095,1099-1100,1103,1106,1108-1110,1113,1118,1120,1122-1126,1128,1130-1131,1133-1140,1147,1151,1155,1160,1162-1165,1168-1174
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "28ead8ca40adb94b85c5ff104b2d9af66614afee",
+  "prompts": {},
+  "sessions": {
+    "s_69795600d3e845": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aa19df4e-f0f8-4e4f-bb24-eb5cbee16e2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_6cb9970725150c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9671670f-5bc5-454f-b814-8dec34b583a5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9aaadd038e8bff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e05430e7-cb2a-430c-b897-bbb624a22b13",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e3d42bca6fdb8e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9af237d7-a678-4134-bdfa-b6234b0b3b46",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e4dab6ab069ba5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cd9cc4b6-e475-4672-bb0c-d61b5198aec2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
