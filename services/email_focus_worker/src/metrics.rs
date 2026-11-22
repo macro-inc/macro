@@ -61,6 +61,9 @@ pub enum Metric {
     DueDateCalls,
     /// Due date asks that failed or ran out of time.
     DueDateFailures,
+    /// Due date asks the harness answered, but whose model answer cited text
+    /// the thread doesn't have, so no date was trusted; not failures.
+    DueDateRejected,
     /// Due date input tokens, cached ones included.
     DueDateInputTokens,
     /// Due date output tokens.

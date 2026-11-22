@@ -71,6 +71,12 @@ pub struct ThreadDueDateResponse {
     /// metered here either way. Absent when the model reported no token usage.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<DueDateUsage>,
+    /// Whether the model's deadlines or closures cited a message or text the
+    /// thread doesn't have, so nothing it read is trusted and both days are
+    /// absent. Absent from a harness that predates it, which failed the request
+    /// instead.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub rejected: bool,
 }
 
 /// The tokens one due date read took, as the usage journal records them.
@@ -323,6 +329,7 @@ impl<E: ThreadFactExtractor> ThreadDueDateService<E> {
             deadlines = Empty,
             closures = Empty,
             events = Empty,
+            rejected = Empty,
             due_date_found = Empty,
             event_found = Empty,
             event_rejected = Empty,
@@ -345,7 +352,18 @@ impl<E: ThreadFactExtractor> ThreadDueDateService<E> {
         span.record("deadlines", facts.deadlines.len());
         span.record("closures", facts.closures.len());
         span.record("events", facts.events.len());
-        let due_on = resolve_due_date(&facts, &request.messages)?;
+        // The model answered, so this is an answer, not a failure: the caller
+        // learns it holds no days it can trust, and what reading it cost.
+        let due_on = resolve_due_date(&facts, &request.messages);
+        span.record("rejected", due_on.is_err());
+        let Ok(due_on) = due_on else {
+            return Ok(ThreadDueDateResponse {
+                due_on: None,
+                event_on: None,
+                usage,
+                rejected: true,
+            });
+        };
         // Unreadable events cost only the event: the due date stands on its own.
         let event = resolve_event_date(&facts, &request.messages);
         span.record("event_rejected", event.is_err());
@@ -356,6 +374,7 @@ impl<E: ThreadFactExtractor> ThreadDueDateService<E> {
             due_on,
             event_on,
             usage,
+            rejected: false,
         })
     }
 }
