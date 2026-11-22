@@ -176,6 +176,23 @@ describe('channel rereads owed after a delete', () => {
     expect(pendingChannelRereads('viewer', 'g2')).toEqual(['g2']);
   });
 
+  it('keeps the generation it owes in, whatever other tabs stamped the rest', () => {
+    vi.useFakeTimers({ now: 1_000_000 });
+    // Another tab, its clock ahead of this one's, wrote three generations.
+    const ahead = (mark: string) => ({
+      touched: Date.now() + 60_000,
+      owed: { [mark]: [{ mark }] },
+    });
+    localStorage.setItem(
+      'channel-directory-rereads:v4:viewer',
+      JSON.stringify({ g1: ahead('a'), g2: ahead('b'), g3: ahead('c') })
+    );
+
+    const owed = addChannelRereads('viewer', 'g4', ['d']);
+    expect(owed).toBeDefined();
+    expect(pendingChannelRereads('viewer', 'g4')).toEqual(['d']);
+  });
+
   it('ignores what it cannot read back', () => {
     localStorage.setItem('channel-directory-rereads:v4:viewer', '{"ids":3}');
 

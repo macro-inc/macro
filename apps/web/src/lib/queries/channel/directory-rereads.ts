@@ -84,19 +84,21 @@ function load(userId: string): Stored {
 }
 
 /** Writes `owed` as `generation`'s entries, keeping the other generations
- * written to most recently. Whether storage took the write. */
+ * written to most recently. Whether storage took the write. The generation
+ * written is always kept, whatever another tab's clock stamped the others:
+ * a caller deletes only once its entry is saved. */
 function save(
   userId: string,
   generation: string,
   owed: Generation['owed']
 ): boolean {
   const key = storeKey(userId);
-  const stored = load(userId);
-  if (Object.keys(owed).length === 0) delete stored[generation];
-  else stored[generation] = { touched: Date.now(), owed };
-  const kept = Object.entries(stored)
+  const { [generation]: _replaced, ...others } = load(userId);
+  const owes = Object.keys(owed).length > 0;
+  const kept = Object.entries(others)
     .sort(([, a], [, b]) => b.touched - a.touched)
-    .slice(0, KEPT_GENERATIONS);
+    .slice(0, owes ? KEPT_GENERATIONS - 1 : KEPT_GENERATIONS);
+  if (owes) kept.unshift([generation, { touched: Date.now(), owed }]);
   try {
     if (kept.length === 0) localStorage.removeItem(key);
     else localStorage.setItem(key, JSON.stringify(Object.fromEntries(kept)));
