@@ -4,7 +4,10 @@
 //! cannot prove a full page reads on from its last candidate, never returning
 //! the ones before again, by an amount sized from the hit rate it saw, up to
 //! `MAX_CANDIDATES` per fact source. Filters sparser than that fall back to the
-//! set-based SQL plan. Optimistic facts hold only pending local writes, so
+//! set-based SQL plan. An authority candidate's predicate is tested in Rust on
+//! the facts blob of its document, so that window serves a predicate of any
+//! depth; the optimistic window tests predicates in SQL and is refused for
+//! one deeper than the expression limit. Optimistic facts hold only pending local writes, so
 //! their window runs out long before the cap; when the snapshot holds none,
 //! neither that window nor the per-candidate shadow probe runs. Both plans run
 //! inside the caller's read transaction over the same snapshot. Inside a tie a
@@ -209,26 +212,108 @@ fn candidate_sql(
         }
         conjunction::FactSource::Optimistic => String::new(),
     };
-    let mut joins = conjunction::ExactJoins::new(source);
-    let partitions = searched_partitions(query)
-        .map(|partition| {
-            parameters.push(text(partition.partition.as_str()));
-            let predicate =
-                conjunction::joined_condition(&partition.predicate, &mut parameters, &mut joins);
-            format!("(d.partition = ? AND ({predicate}))")
-        })
-        .collect::<Vec<_>>();
-    let partitions = balanced_or(&partitions);
-    let (joins, join_parameters) = joins.finish();
-    parameters.extend(join_parameters);
     // Bound BEFORE scope/predicate probes. A sparse query cannot turn this
     // speculation into a full-index walk. Ordering document_id with value lets
     // Turso walk the existing index without sorting the corpus. Record-key
     // ordering is resolved only after proving the entire cutoff tie is present.
-    let sql = format!(
-        "WITH candidates AS MATERIALIZED (SELECT document_id, value FROM {facts} INDEXED BY {index} WHERE attribute = ?{boundary} ORDER BY value {direction}, document_id {direction} LIMIT ?) SELECT d.record_key, s.value, s.document_id, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND ({partitions}) THEN 1 ELSE 0 END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id{joins}"
+    let candidates = format!(
+        "WITH candidates AS MATERIALIZED (SELECT document_id, value FROM {facts} INDEXED BY {index} WHERE attribute = ?{boundary} ORDER BY value {direction}, document_id {direction} LIMIT ?)"
     );
+    let sql = match source {
+        // An authority candidate in scope brings its facts blob, and its own
+        // partition's predicate is tested on it in Rust: one row read instead
+        // of a fact-table seek per fact the predicate names. A join, unlike a
+        // correlated subquery, opens the facts cursor once per statement. Every
+        // candidate seeks its facts row, but the blob column is read only
+        // behind the CASE, for a candidate in scope.
+        conjunction::FactSource::Authority => {
+            let partitions = searched_partitions(query)
+                .map(|partition| {
+                    parameters.push(text(partition.partition.as_str()));
+                    "?"
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "{candidates} SELECT d.record_key, s.value, s.document_id, d.partition, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND d.partition IN ({partitions}) THEN f.facts END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id LEFT JOIN index_document_facts AS f ON f.document_id = d.id"
+            )
+        }
+        conjunction::FactSource::Optimistic => {
+            let mut joins = conjunction::ExactJoins::new(source);
+            let partitions = searched_partitions(query)
+                .map(|partition| {
+                    parameters.push(text(partition.partition.as_str()));
+                    let predicate = conjunction::joined_condition(
+                        &partition.predicate,
+                        &mut parameters,
+                        &mut joins,
+                    );
+                    format!("(d.partition = ? AND ({predicate}))")
+                })
+                .collect::<Vec<_>>();
+            let partitions = balanced_or(&partitions);
+            let (joins, join_parameters) = joins.finish();
+            parameters.extend(join_parameters);
+            format!(
+                "{candidates} SELECT d.record_key, s.value, s.document_id, NULL, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND ({partitions}) THEN 1 ELSE 0 END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id{joins}"
+            )
+        }
+    };
     (sql, parameters)
+}
+
+/// Whether a window row is a hit: the optimistic window's SQL decided it, and
+/// an authority row in scope carries the facts its partition's predicate is
+/// tested on.
+fn row_matches(
+    query: &IndexQuery,
+    source: conjunction::FactSource,
+    record_key: &str,
+    row: &WindowRow<'_>,
+    facts: &mut facts_blob::Facts<'static>,
+) -> Result<bool, TursoStorageError> {
+    match source {
+        conjunction::FactSource::Optimistic => Ok(row_i64(row[4])? == 1),
+        conjunction::FactSource::Authority => {
+            let blob = match row[4] {
+                Value::Null => return Ok(false),
+                Value::Blob(blob) => &blob[..],
+                _ => return Err(invariant()),
+            };
+            let partition = match row[3] {
+                Value::Text(partition) => partition.as_str(),
+                _ => return Err(invariant()),
+            };
+            let predicate = &searched_partitions(query)
+                .find(|candidate| candidate.partition.as_str() == partition)
+                .ok_or_else(invariant)?
+                .predicate;
+            // Decodes into the window's buffers, so a row allocates nothing.
+            let mut decoded: facts_blob::Facts<'_> = std::mem::take(facts);
+            let matched = facts_blob::decode_into(blob, &mut decoded)
+                .map(|()| predicate_index::matches_facts(&decoded, record_key, predicate));
+            *facts = decoded.recycle();
+            matched.ok_or_else(invariant)
+        }
+    }
+}
+
+/// A window row's columns, borrowed from the statement: record key, sort
+/// value, document id, partition, and the facts blob or optimistic verdict.
+type WindowRow<'a> = [&'a Value; 5];
+
+fn row_i64(value: &Value) -> Result<i64, TursoStorageError> {
+    match value {
+        Value::Numeric(Numeric::Integer(value)) => Ok(*value),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Corruption)),
+    }
+}
+
+fn row_text(value: &Value) -> Result<&str, TursoStorageError> {
+    match value {
+        Value::Text(value) => Ok(value.as_str()),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Corruption)),
+    }
 }
 
 /// One fact source's candidates read so far, in index order.
@@ -240,6 +325,8 @@ struct Window {
     exhausted: bool,
     last: Option<Position>,
     hits: Vec<ReferenceHit>,
+    /// Decode buffers reused across rows.
+    facts: facts_blob::Facts<'static>,
 }
 
 impl Window {
@@ -250,6 +337,7 @@ impl Window {
             exhausted: false,
             last: None,
             hits: Vec::new(),
+            facts: facts_blob::Facts::default(),
         }
     }
 
@@ -276,36 +364,54 @@ impl Window {
         let Some(mut statement) = driver::prepare_unless_refused(connection, &sql)? else {
             return Ok(false);
         };
-        let rows = driver::query_prepared(&mut statement, parameters)?;
-        self.read += rows.len();
-        self.exhausted = rows.len() < count;
-        for row in rows {
-            if row.len() != 4 {
+        // Each row is tested as it is read, so at most one candidate's facts
+        // blob is held at a time however large the window.
+        let mut read = 0;
+        driver::query_each_prepared(&mut statement, parameters, |row| {
+            read += 1;
+            if row.len() != 5 {
                 return Err(invariant());
             }
-            let position = Position {
-                value: required_i64(&row, 1)?,
-                document: required_i64(&row, 2)?,
-            };
-            let later = self.last.is_none_or(|last| {
-                let order = (position.value, position.document).cmp(&(last.value, last.document));
-                match query.sort_direction {
-                    SortDirection::Asc => order.is_gt(),
-                    SortDirection::Desc => order.is_lt(),
-                }
-            });
-            if later {
-                self.last = Some(position);
-            }
-            if required_i64(&row, 3)? == 1 {
-                self.hits.push(ReferenceHit {
-                    record_key: PredicateRecordKey::new(required_text(&row, 0)?)
-                        .map_err(|_| invariant())?,
-                    sort_value: position.value,
-                });
-            }
-        }
+            self.take(
+                query,
+                &[
+                    row.get_value(0),
+                    row.get_value(1),
+                    row.get_value(2),
+                    row.get_value(3),
+                    row.get_value(4),
+                ],
+            )
+        })?;
+        self.read += read;
+        self.exhausted = read < count;
         Ok(true)
+    }
+
+    fn take(&mut self, query: &IndexQuery, row: &WindowRow<'_>) -> Result<(), TursoStorageError> {
+        let position = Position {
+            value: row_i64(row[1])?,
+            document: row_i64(row[2])?,
+        };
+        let later = self.last.is_none_or(|last| {
+            let order = (position.value, position.document).cmp(&(last.value, last.document));
+            match query.sort_direction {
+                SortDirection::Asc => order.is_gt(),
+                SortDirection::Desc => order.is_lt(),
+            }
+        });
+        if later {
+            self.last = Some(position);
+        }
+        let record_key = row_text(row[0])?;
+        if row_matches(query, self.source, record_key, row, &mut self.facts)? {
+            self.hits.push(ReferenceHit {
+                record_key: PredicateRecordKey::new(record_key.to_owned())
+                    .map_err(|_| invariant())?,
+                sort_value: position.value,
+            });
+        }
+        Ok(())
     }
 
     /// Every candidate up to `cutoff` is read: the window ran out, or its last

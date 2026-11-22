@@ -2446,3 +2446,52 @@ fn raw_record_keys_include_unprojected_records_and_preserve_queued_writes() {
         );
     });
 }
+
+/// Every complete authoritative document has exactly the facts blob its fact
+/// tables encode, and no other document has one.
+fn assert_facts_blobs_match(storage: &TursoStorage) {
+    let connection = storage.connection();
+    let rows = driver::query(
+        &connection,
+        "SELECT d.id, d.record_key, d.profile, d.partition, d.state, f.facts FROM index_documents AS d LEFT JOIN index_document_facts AS f ON f.document_id = d.id ORDER BY d.id",
+        vec![],
+    )
+    .unwrap();
+    for row in rows {
+        let id = required_i64(&row, 0).unwrap();
+        let stored = match &row[5] {
+            Value::Null => None,
+            _ => Some(required_blob(&row, 5).unwrap()),
+        };
+        if required_i64(&row, 4).unwrap() != 0 {
+            assert_eq!(stored, None, "incomplete document {id} has a facts row");
+            continue;
+        }
+        let record_key = PredicateRecordKey::new(required_text(&row, 1).unwrap()).unwrap();
+        let mut documents = HashMap::from([(
+            record_key.clone(),
+            predicate_index::IndexDocument {
+                record_key: record_key.clone(),
+                profile: Profile::new(Token::new(required_text(&row, 2).unwrap()).unwrap()),
+                partition: Token::new(required_text(&row, 3).unwrap()).unwrap(),
+                exact_facts: Vec::new(),
+                integer_facts: Vec::new(),
+                sort_facts: Vec::new(),
+            },
+        )]);
+        load_index_facts(&connection, &HashMap::from([(id, record_key.clone())]), &mut documents)
+            .unwrap();
+        assert_eq!(
+            stored,
+            Some(facts_blob::encode(&documents[&record_key])),
+            "document {id}"
+        );
+    }
+    assert_eq!(
+        raw_scalar(
+            storage,
+            "SELECT COUNT(*) FROM index_document_facts AS f WHERE NOT EXISTS (SELECT 1 FROM index_documents AS d WHERE d.id = f.document_id)"
+        ),
+        0
+    );
+}

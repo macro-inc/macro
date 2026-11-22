@@ -19,9 +19,14 @@
 //! current schema constants, because a later version may change them while the
 //! step must still produce exactly the version after its own.
 
-use super::{STORAGE_SCHEMA_VERSION, compatibility, required_text, text, validate_frozen_schema};
-use crate::{TursoStorageError, driver};
+use super::{
+    HashMap, PredicateRecordKey, Profile, STORAGE_SCHEMA_VERSION, Token, Value,
+    compatibility, facts_blob, invariant, load_index_facts, require_changed, required_i64,
+    required_text, text, validate_frozen_schema,
+};
 use crate::driver::Db;
+use predicate_index::IndexDocument;
+use crate::{TursoStorageError, driver};
 
 /// The body of one step. Tests build generated steps as closures.
 pub(super) type StepFn = dyn Fn(&Db) -> Result<(), TursoStorageError> + Sync;
@@ -37,10 +42,16 @@ pub(super) struct StorageUpgradeStep {
 /// Registered steps, oldest first, contiguous, and ending at the current
 /// version. Bumping [`STORAGE_SCHEMA_VERSION`] needs a step here; clearing the
 /// list instead declares that every older file is reset.
-const STEPS: &[StorageUpgradeStep] = &[StorageUpgradeStep {
-    from: 11,
-    apply: &upgrade_11_to_12,
-}];
+const STEPS: &[StorageUpgradeStep] = &[
+    StorageUpgradeStep {
+        from: 11,
+        apply: &upgrade_11_to_12,
+    },
+    StorageUpgradeStep {
+        from: 12,
+        apply: &upgrade_12_to_13,
+    },
+];
 
 const _: () = assert!(
     steps_reach_current_version(),
@@ -171,6 +182,76 @@ fn upgrade_11_to_12(connection: &Db) -> Result<(), TursoStorageError> {
     Ok(())
 }
 
+/// Storage 13 keeps each complete authoritative document's facts as one blob
+/// in `index_document_facts`, so the authority window tests a candidate's
+/// predicate by reading one row. Storage 12 kept facts only in the fact
+/// tables, which stay, so the step creates the table and fills it from them.
+/// Records, queued writes, optimistic layers and their projections are kept.
+pub(super) const UPGRADE_12_TO_13_TABLE: &str = "CREATE TABLE index_document_facts (document_id INTEGER PRIMARY KEY, facts BLOB NOT NULL, FOREIGN KEY (document_id) REFERENCES index_documents(id) ON DELETE CASCADE)";
+
+/// Documents whose facts the 12 to 13 step reads and writes back together.
+const FACTS_UPGRADE_BATCH: i64 = 512;
+
+/// Encodes with the blob format of storage 13 (`facts_blob` version 1). A
+/// later blob format needs its own storage version and a step that rewrites
+/// every blob, which runs after this one.
+fn upgrade_12_to_13(connection: &Db) -> Result<(), TursoStorageError> {
+    driver::execute(connection, UPGRADE_12_TO_13_TABLE, Vec::new())?;
+    let mut documents_after = driver::prepare(
+        connection,
+        "SELECT id, record_key, profile, partition FROM index_documents WHERE id >= ?1 AND state = 0 ORDER BY id LIMIT ?2",
+    )?;
+    let mut insert = driver::prepare(
+        connection,
+        "INSERT INTO index_document_facts (document_id, facts) VALUES (?1, ?2)",
+    )?;
+    // Every id is a valid row id, i64::MIN and i64::MAX included.
+    let mut from = Some(i64::MIN);
+    while let Some(start) = from {
+        let rows = driver::query_prepared(
+            &mut documents_after,
+            vec![Value::from_i64(start), Value::from_i64(FACTS_UPGRADE_BATCH)],
+        )?;
+        let Some(last) = rows.last() else {
+            break;
+        };
+        from = required_i64(last, 0)?.checked_add(1);
+        let mut by_id = HashMap::with_capacity(rows.len());
+        let mut documents = HashMap::with_capacity(rows.len());
+        for row in &rows {
+            let record_key =
+                PredicateRecordKey::new(required_text(row, 1)?).map_err(|_| invariant())?;
+            by_id.insert(required_i64(row, 0)?, record_key.clone());
+            documents.insert(
+                record_key.clone(),
+                IndexDocument {
+                    record_key,
+                    profile: Profile::new(Token::new(required_text(row, 2)?).map_err(|_| invariant())?),
+                    partition: Token::new(required_text(row, 3)?).map_err(|_| invariant())?,
+                    exact_facts: Vec::new(),
+                    integer_facts: Vec::new(),
+                    sort_facts: Vec::new(),
+                },
+            );
+        }
+        load_index_facts(connection, &by_id, &mut documents)?;
+        for (id, record_key) in &by_id {
+            let document = documents.get(record_key).ok_or_else(invariant)?;
+            require_changed(
+                driver::execute_prepared(
+                    &mut insert,
+                    vec![
+                        Value::from_i64(*id),
+                        Value::from_blob(facts_blob::encode(document)),
+                    ],
+                )?,
+                1,
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// Hooks that stop an upgrade between steps, for tests and the differential
 /// fuzzer. Not part of the production build.
 #[cfg(any(test, feature = "migration-test-hooks"))]
@@ -204,9 +285,25 @@ pub mod test_hooks {
         ];
     }
 
+    /// Rewrites a database of this build as a storage 12 build left it: the
+    /// inverse of the 12 to 13 step, so the next open runs that step alone.
+    pub fn rewrite_as_storage_12(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
+        storage.require_healthy()?;
+        let connection = storage.connection();
+        storage.latch_result(driver::write_transaction(&connection, || {
+            for sql in [
+                "DROP TABLE index_document_facts",
+                "UPDATE meta SET value = '12' WHERE key = 'storage_schema_version'",
+            ] {
+                driver::execute(&connection, sql, Vec::new())?;
+            }
+            Ok(())
+        }))
+    }
+
     /// Rewrites a database of this build as the last storage 11 build left
     /// it, so a test can open it as a file an older build left behind: the
-    /// inverse of the 11 to 12 step, plus every part of
+    /// inverse of the 11 to 12 and 12 to 13 steps, plus every part of
     /// [`Storage11DerivedState`], so opening the rewrite rebuilds all three, as
     /// opening a real storage 11 file does. Page compaction then finds pages
     /// already in the newer shape, so the rewrite costs a lower bound of a real
@@ -216,6 +313,7 @@ pub mod test_hooks {
         let connection = storage.connection();
         storage.latch_result(driver::write_transaction(&connection, || {
             for sql in [
+                "DROP TABLE index_document_facts",
                 "DROP INDEX records_contacts_cover_idx",
                 "DROP INDEX search_documents_browse_idx",
                 "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id)",

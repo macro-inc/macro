@@ -216,11 +216,12 @@ fn upgrade_reports_the_previous_version_once() {
 #[test]
 fn versions_without_a_chain_and_failing_steps_still_reset() {
     block_on(async {
+        let newer = format!(
+            "UPDATE meta SET value = '{}' WHERE key = 'storage_schema_version'",
+            STORAGE_SCHEMA_VERSION + 1
+        );
         for (name, sql) in [
-            (
-                "newer",
-                "UPDATE meta SET value = '13' WHERE key = 'storage_schema_version'",
-            ),
+            ("newer", newer.as_str()),
             (
                 "older-than-every-step",
                 "UPDATE meta SET value = '10' WHERE key = 'storage_schema_version'",
@@ -310,15 +311,40 @@ fn a_file_this_scope_does_not_own_is_never_upgraded() {
 
 /// The frozen-schema checks run inside the last step's transaction: a chain
 /// whose result they reject leaves the file exactly as the older build wrote
-/// it, still at the older version, so the browser can hand it back.
+/// it, still at the older version, so the browser can hand it back. Earlier
+/// steps commit on their own, so a file two steps behind is left one step
+/// behind instead, which the browser discards rather than hands back.
 #[test]
 fn a_rejected_upgrade_leaves_the_older_file_untouched() {
     block_on(async {
-        let database = TursoMemoryDatabase::new("rejected-upgrade.db");
+        let database = TursoMemoryDatabase::new("rejected-two-steps.db");
         let mut storage = database.open("scope").unwrap();
         populate(&mut storage).await;
         test_hooks::add_unknown_table(&mut storage).unwrap();
         downgrade_to_storage_11(&mut storage);
+        storage.try_close().unwrap();
+        expect_reset_reason(database.open("scope"), PhysicalResetReason::Compatibility);
+        {
+            let state = database.state.lock().unwrap();
+            let raw = Database::open(
+                state.io.clone(),
+                &database.path,
+                OpenOptions::new(Arc::new(SqliteDialect)),
+            )
+            .unwrap();
+            let connection = Db::uncached(raw.connect().unwrap());
+            assert_eq!(
+                crate::storage::migration::stored_storage_version(&connection),
+                Some(STORAGE_SCHEMA_VERSION - 1)
+            );
+            connection.close().unwrap();
+        }
+
+        let database = TursoMemoryDatabase::new("rejected-upgrade.db");
+        let mut storage = database.open("scope").unwrap();
+        populate(&mut storage).await;
+        test_hooks::add_unknown_table(&mut storage).unwrap();
+        test_hooks::rewrite_as_storage_12(&mut storage).unwrap();
         let schema = schema_rows(&storage.connection());
         let rows = table_rows(&storage.connection());
         storage.try_close().unwrap();
@@ -334,7 +360,7 @@ fn a_rejected_upgrade_leaves_the_older_file_untouched() {
         let connection = Db::uncached(raw.connect().unwrap());
         assert_eq!(
             crate::storage::migration::stored_storage_version(&connection),
-            Some(11)
+            Some(12)
         );
         assert_eq!(schema_rows(&connection), schema);
         assert_eq!(table_rows(&connection), rows);

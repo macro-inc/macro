@@ -78,8 +78,8 @@ fn normalized_authority_owns_membership_names_deletes_and_rebuilds() {
         .unwrap();
         assert_eq!(
             after - before,
-            3,
-            "malformed context changes the record/search hash and invalid-context marker, not name/SQL facts"
+            4,
+            "malformed context changes the record/search hash and invalid-context marker (a fact row and the facts blob), not name/SQL facts"
         );
         let mut changed = record.clone();
         changed

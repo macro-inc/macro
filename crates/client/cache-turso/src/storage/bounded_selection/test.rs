@@ -630,11 +630,12 @@ fn nested_predicates(levels: usize) -> [(&'static str, PredicateExpr); 4] {
     ]
 }
 
-/// Turso refuses SQL nested past its parser's limits, and the window joins
-/// every partition's predicate into one expression. Across predicate depths
-/// up to the deepest a query may hold and partition counts past 64, the window
-/// runs exactly when Turso prepares its SQL, never fails, and pages like the
-/// set-based plan, which serves the queries just past the limit.
+/// Turso refuses SQL nested past its parser's limits, and the optimistic
+/// window joins every partition's predicate into one expression. While a
+/// local write is pending, across predicate depths up to the deepest a query
+/// may hold and partition counts past 64, the window runs exactly when Turso
+/// prepares that SQL, never fails, and pages like the set-based plan, which
+/// serves the queries just past the limit.
 #[test]
 fn many_partitions_with_deep_predicates_stay_within_the_expression_limit() {
     block_on(async {
@@ -649,6 +650,18 @@ fn many_partitions_with_deep_predicates_stay_within_the_expression_limit() {
                         ProjectionMutation::Replace(doc)
                     })
                     .collect(),
+            )
+            .await
+            .unwrap();
+        let mut pending = document(1_000, 1_000);
+        pending.partition = Token::new("other").unwrap();
+        storage
+            .enqueue_mutation_with_shadow(
+                queued("Pending"),
+                vec![PendingOptimisticProjection {
+                    state: OptimisticProjectionState::Complete(pending),
+                    uncertainty: OptimisticUncertainty::Attributes(BTreeSet::new()),
+                }],
             )
             .await
             .unwrap();
@@ -668,12 +681,11 @@ fn many_partitions_with_deep_predicates_stay_within_the_expression_limit() {
         let refused = |query: &ValidatedIndexQuery| {
             let (sql, _) = candidate_sql(
                 query.as_query(),
-                conjunction::FactSource::Authority,
+                conjunction::FactSource::Optimistic,
                 &[],
                 None,
                 64,
-                // No local writes are pending, so the window has no shadow probe.
-                false,
+                true,
             );
             driver::prepare_unless_refused(&connection, &sql)
                 .unwrap()
@@ -801,6 +813,79 @@ fn more_exact_facts_than_turso_can_join_still_run_in_the_window() {
                 "{facts} facts"
             );
         }
+    });
+}
+
+/// The authority window tests predicates on each candidate's facts blob, so
+/// with no local write pending no SQL holds a predicate and the window serves
+/// every depth a query may hold, paging like the set-based plan wherever Turso
+/// prepares that plan.
+#[test]
+fn without_pending_writes_the_window_serves_every_predicate_depth() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("bounded-depth-idle").unwrap();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                (0..240)
+                    .map(|n| {
+                        let mut doc = document(n, i64::from(n));
+                        doc.partition = Token::new(format!("p{}", n % 8)).unwrap();
+                        ProjectionMutation::Replace(doc)
+                    })
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let connection = storage.connection();
+        let mut compared = 0;
+        for count in [1, 9, 129] {
+            for (shape, levels) in [0, 1, 2, 3].into_iter().flat_map(|shape| {
+                [0, 1, 31, predicate_index::MAX_EXPRESSION_DEPTH - 2].map(|levels| (shape, levels))
+            }) {
+                let (name, predicate) = nested_predicates(levels)[shape].clone();
+                let mut descriptor =
+                    query(PredicateExpr::All, SortDirection::Desc, SortDirection::Asc)
+                        .as_query()
+                        .clone();
+                descriptor.partitions = (0..count)
+                    .map(|n| PartitionPredicate {
+                        partition: Token::new(format!("p{n}")).unwrap(),
+                        predicate: predicate.clone(),
+                    })
+                    .collect();
+                let Ok(query) = ValidatedIndexQuery::new(descriptor) else {
+                    continue;
+                };
+                let label = format!("{name} × {levels} levels × {count} partitions");
+                let page = try_select(&connection, &query, &[])
+                    .unwrap_or_else(|error| panic!("{label}: {error:?}"))
+                    .unwrap_or_else(|| panic!("{label}: not windowed"))
+                    .into_iter()
+                    .map(|hit| (hit.record_key.as_str().to_owned(), hit.sort_value))
+                    .collect::<Vec<_>>();
+                assert_eq!(page.len(), 20, "{label}");
+                let (sql, parameters) = compile_predicate_selection(&query, &[], true);
+                if let Some(mut statement) =
+                    driver::prepare_unless_refused(&connection, &sql).unwrap()
+                    && (count == 1 || levels < 2)
+                {
+                    let reference = driver::query_prepared(&mut statement, parameters)
+                        .unwrap()
+                        .iter()
+                        .map(|row| {
+                            (
+                                required_text(row, 0).unwrap(),
+                                required_i64(row, 1).unwrap(),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    assert_eq!(page, reference, "{label}");
+                    compared += 1;
+                }
+            }
+        }
+        assert!(compared >= 12, "{compared}");
     });
 }
 
