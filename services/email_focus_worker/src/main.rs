@@ -3,14 +3,15 @@
 //!
 //! Reads `macro.email` for new and sent messages, asks Jev about each signal
 //! thread and key mail in an inbox in the Focus rollout (the
-//! `enable-email-focus` flag of its owner or of a user it is linked to) with
-//! the owner's stored memory as context, asks
-//! the agent harness for the day a thread that can be in Focus is due, stores
-//! both in `email_thread_focus`, and tells the inbox's readers through the
-//! connection gateway. Every minute it looks for inboxes that joined the
-//! rollout and fills them from the last window of mail; an hourly sweep catches
-//! what the event stream missed. Its rollout numbers (cost, failures, delays)
-//! go to CloudWatch as `Macro/EmailFocus` once a minute.
+//! `enable-email-focus` flag of its owner or of a user it is linked to, for
+//! someone who used Macro in the last week) with the owner's stored memory
+//! as context, asks the agent harness for the day a thread that can be in
+//! Focus is due, stores both in `email_thread_focus`, and tells the inbox's
+//! readers through the connection gateway. Every minute it looks for inboxes
+//! that joined the rollout and fills them from the last window of mail; an
+//! hourly sweep catches what the event stream missed. Its rollout numbers
+//! (cost, failures, delays) go to CloudWatch as `Macro/EmailFocus` once a
+//! minute.
 
 mod config;
 mod metrics;
@@ -22,6 +23,7 @@ mod inbound {
     pub mod sweep;
 }
 mod outbound {
+    pub mod active_enrollment;
     pub mod cloudwatch_metrics;
     pub mod flag_enrollment;
     pub mod gateway_notifier;
@@ -33,6 +35,7 @@ mod outbound {
 
 use std::{sync::Arc, time::Duration};
 
+use activity::outbound::pg_activity_repo::PgActivityRepo;
 use calendar_events::outbound::pg::PgCalendarRepository;
 use connection_gateway_client::ConnectionGatewayClient;
 use email::{domain::focus::FocusService, outbound::FocusPgRepository};
@@ -50,6 +53,7 @@ use crate::{
     inbound::{backfill::run_backfills, kafka_consumer::run_focus_consumer, sweep::run_sweeps},
     metrics::{FocusMetrics, Metric, run_publisher},
     outbound::{
+        active_enrollment::ActiveEnrollment,
         cloudwatch_metrics::CloudWatchMetrics,
         flag_enrollment::{EMAIL_FOCUS_FLAG, FlagEnrollment},
         gateway_notifier::{CoalescingNotifier, GatewayDelivery},
@@ -121,6 +125,7 @@ async fn main() -> Result<(), Report> {
         config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
+    let activity = PgActivityRepo::new(db.clone());
     let service = Arc::new(FocusService::new(
         TimedStore::new(FocusPgRepository(db.clone()), metrics.clone()),
         MemoryProfiles::new(
@@ -149,7 +154,12 @@ async fn main() -> Result<(), Report> {
             metrics.clone(),
             prices,
         )?,
-        FlagEnrollment::new(flags),
+        ActiveEnrollment::new(
+            FlagEnrollment::new(flags),
+            activity,
+            chrono::Duration::days(i64::from(config.focus_active_days.max(1))),
+            Duration::from_secs(config.focus_activity_cache_secs),
+        ),
     ));
     // The Focus list reads at most 90 days; a longer window would only make
     // every stale-thread page scan the whole thread table.

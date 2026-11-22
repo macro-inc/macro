@@ -155,8 +155,8 @@ impl NotionPlanRepo for PgImportRepo {
                 r#"
                 INSERT INTO import_entity
                     (user_id, source, kind, foreign_id, status, initiator, metadata, parent_id,
-                     review_id)
-                VALUES ($1, $2, $3, $4, 'staged', 'chat', $5, $6, $7)
+                     review_id, id)
+                VALUES ($1, $2, $3, $4, 'staged', 'chat', $5, $6, $7, $8)
                 ON CONFLICT (user_id, source, foreign_id) DO UPDATE
                 SET kind = EXCLUDED.kind, metadata = EXCLUDED.metadata || jsonb_strip_nulls(jsonb_build_object(
                         'personalFolderId', import_entity.metadata -> 'personalFolderId',
@@ -175,6 +175,8 @@ impl NotionPlanRepo for PgImportRepo {
                 row.metadata,
                 parent_id,
                 review_id,
+                // Transaction timestamps tie; new IDs retain the input order.
+                Uuid::now_v7(),
             )
             .fetch_optional(&mut *transaction)
             .await?;
