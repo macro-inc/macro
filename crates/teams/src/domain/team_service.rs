@@ -1241,6 +1241,9 @@ where
             removed_by: removed_by_id,
             role: removed_member.member.role,
         }));
+        // Parking the member's agents is slow (keys and repositories over
+        // the network) and needs nothing billing guards.
+        drop(_billing);
         self.member_access_lost(team_id).await;
 
         Ok(())
