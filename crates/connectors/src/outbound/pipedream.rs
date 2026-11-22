@@ -15,3 +15,6 @@ pub mod inbound;
 
 /// Outbound adapters for the Pipedream API and Postgres.
 pub mod outbound;
+
+/// Pipedream as a source of connections.
+pub(crate) mod source;

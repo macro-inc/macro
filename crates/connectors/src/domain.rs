@@ -15,7 +15,7 @@
         reason = "the services in service.rs are implemented over these in the next step; remove this then"
     )
 )]
-mod catalog;
+pub(crate) mod catalog;
 #[expect(
     dead_code,
     reason = "the services in service.rs are implemented over these in the next step; remove this then"

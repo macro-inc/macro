@@ -13,9 +13,14 @@ Each source of connections lives under `src/outbound/`:
 - `native/` (was `mcp_client`): user-configured MCP servers, including
   OAuth-protected ones, dialed in process through `rmcp`.
 - `pipedream/` (was `pipedream_mcp`): apps connected through Pipedream
-  Connect, called through Pipedream's remote MCP server, and, for a user the
-  `macro-connect` flag is on for, through Macro Connect (`connect_client`)
-  alone, with no Pipedream fallback.
+  Connect, called through Pipedream's remote MCP server. `source.rs` is
+  Pipedream as a domain `Source`; the rest is the old ports and routes its
+  hosts still use, including the Pipedream-or-Connect chooser
+  (`outbound/dispatch.rs`), a shim deleted with its last host.
+- `macro_connect/`: Macro Connect (`connect_client`) as a `Source`.
+- `hosted_connections.rs`: the `pipedream_mcp_connections` table both hosted
+  sources share, each through a `HostedRepo` bound to its own `provider`.
+- `overlays.rs`: the `mcp_overlays` table as the domain's `OverlayCatalog`.
 
 The crate root (was `mcp_select`) decides per user which stack serves an app
 and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
@@ -45,9 +50,10 @@ and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
   `pipedream_mcp_connections` and `mcp_overlays` tables. Connection reads skip
   overlaid slugs, and completing a Pipedream connection to one refuses it (409)
   and deletes the new Pipedream account.
-- `src/outbound/pipedream/outbound/connect.rs`: the Macro Connect adapter;
-  `dispatch.rs`: `ConnectorBackends`, which holds the host's `ConnectRollout`
-  (the `macro-connect` flag, read by `ai_tools::macro_connect_rollout`).
+- `src/outbound/pipedream/outbound/connect.rs`: the old ports over
+  `macro_connect`'s client; `dispatch.rs`: `ConnectorBackends`, which holds
+  the host's `ConnectRollout` (the `macro-connect` flag, read by
+  `ai_tools::macro_connect_rollout`).
 
 ## Boundaries
 
@@ -77,8 +83,12 @@ and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
   the Pipedream slug in `app_slug`. Granola sync reads Granola's REST API, so
   it only syncs Pipedream-held Granola accounts.
 - Completing a connection turns the app on, even over a row the user disabled.
-- Overlaying an app hides its Pipedream grant from every reader, imports and
-  Granola sync included; a Macro Connect grant outranks an overlay.
+- The old `PgConnectionRepo` hides Pipedream rows of overlaid apps; the
+  hosted sources do not, since the resolver decides which source counts.
+- `pipedream_mcp_connections` is keyed `(user_id, app_slug)` for both
+  providers: completing an app through one provider replaces the other's row
+  under any of the app's slugs and revokes the replaced grant
+  (`HostedRepo::replace`, `revoke_replaced`).
 - `github` is overlaid, but its native server is authorized by the GitHub
   account link, not MCP OAuth.
 - The Connect consent redirect (`/pipedream/mcp/connect/callback`) is public

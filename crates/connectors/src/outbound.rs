@@ -13,3 +13,9 @@ pub mod pipedream;
     )
 )]
 pub(crate) mod github_link;
+/// The table both hosted sources keep their connections in.
+pub(crate) mod hosted_connections;
+/// Macro Connect as a source of connections.
+pub(crate) mod macro_connect;
+/// The overlay table, for the domain's catalog.
+pub(crate) mod overlays;

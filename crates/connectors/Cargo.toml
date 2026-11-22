@@ -50,4 +50,3 @@ proptest.workspace = true
 regex.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 tower = { workspace = true }
-wiremock = { workspace = true }

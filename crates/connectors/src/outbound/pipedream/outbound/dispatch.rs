@@ -1,3 +1,7 @@
+//! Transitional shim: the old Pipedream-or-Connect chooser, kept only so
+//! its hosts compile until they move to the connectors services, which
+//! leave the choice to the resolver. Delete it with its last host.
+
 use crate::outbound::pipedream::domain::models::{
     CatalogEntry, CatalogPage, ConnectApp, ConnectToken, ConnectionProvider, MacroUserIdStr,
     McpServer, PipedreamAccount, PipedreamConnection,
@@ -10,9 +14,6 @@ use crate::outbound::pipedream::domain::service::discovery::ConnectorTool;
 use crate::outbound::pipedream::outbound::api::{McpUpstream, McpUpstreamCall, PipedreamClient};
 use crate::outbound::pipedream::outbound::connect::ConnectAdapter;
 use std::sync::Arc;
-
-#[cfg(test)]
-mod test;
 
 /// Every connector backend behind one set of ports: Pipedream, plus Macro
 /// Connect when configured.

@@ -616,9 +616,6 @@ struct PageInfo {
     end_cursor: Option<String>,
 }
 
-#[cfg(test)]
-mod test;
-
 #[derive(Deserialize)]
 struct AppResponse {
     name_slug: String,

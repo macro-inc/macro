@@ -1,9 +1,8 @@
 /// HTTP adapter for the Pipedream API, the app directory, and the remote MCP server.
 pub mod api;
-/// Macro Connect adapter over `connect_client`: the gateway, token export,
-/// catalog, and connect flow.
+/// Macro Connect behind the old ports, over [`crate::outbound::macro_connect`].
 pub mod connect;
-/// One adapter over both backends, dispatching per connection record.
+/// Transitional: one adapter over both backends for the old hosts.
 pub mod dispatch;
 /// Postgres repository implementing [`ConnectionStore`](crate::outbound::pipedream::domain::ports::ConnectionStore).
 pub mod pg_connection_repo;

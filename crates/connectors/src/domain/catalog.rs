@@ -23,6 +23,16 @@ pub(crate) fn canonical_slug(slug: &str) -> &str {
         .map_or(slug, |(_, canonical)| canonical)
 }
 
+/// Every slug that names `app`: its own, then each alias that folds to it.
+pub(crate) fn slugs_of(app: &ConnectorId) -> Vec<&str> {
+    let aliases = ALIASES
+        .iter()
+        .filter(|(_, canonical)| *canonical == app.as_str())
+        .map(|(alias, _)| *alias);
+
+    std::iter::once(app.as_str()).chain(aliases).collect()
+}
+
 /// Catalog apps served by the vendor's own MCP server (`mcp_overlays`).
 ///
 /// Addresses are not unique: several slugs can name one server, and a user's

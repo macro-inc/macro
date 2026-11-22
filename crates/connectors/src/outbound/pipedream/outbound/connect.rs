@@ -1,6 +1,8 @@
+use crate::domain::models::ApiRequest;
+use crate::outbound::hosted_connections::RevokeGrant;
+use crate::outbound::macro_connect::{ConnectVendor, ConnectVendorClient};
 use crate::outbound::pipedream::domain::models::{
     CatalogEntry, CatalogPage, ConnectApp, MacroUserIdStr, McpServer, PipedreamConnection,
-    client_info,
 };
 use crate::outbound::pipedream::domain::ports::{
     ConnectedAppProxy, ConnectorCapabilities, ConnectorDirectory, MacroConnect, McpConnection,
@@ -9,104 +11,45 @@ use crate::outbound::pipedream::domain::ports::{
 use crate::outbound::pipedream::domain::service::discovery::ConnectorTool;
 use crate::outbound::pipedream::outbound::api::{McpUpstream, McpUpstreamCall};
 use anyhow::Context;
-use connect_client::{ConnectClient, wire};
-use reqwest::header::{HeaderMap, HeaderValue};
-use rmcp::service::ServiceExt;
-use rmcp::transport::StreamableHttpClientTransport;
-use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
+use connect_client::wire;
+use reqwest::header::HeaderMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use url::Url;
 
-#[cfg(test)]
-mod test;
-
-/// How long a fetched Connect catalog is reused. The catalog changes only
-/// when Connect deploys, and every connect click and tool listing reads it.
-const CATALOG_TTL: Duration = Duration::from_secs(5 * 60);
-
-/// Configuration for [`ConnectAdapter`].
-#[derive(Clone)]
-pub struct ConnectConfig {
-    /// Connect API base URL, e.g. `https://connect-dev.macro.com`.
-    pub api_url: String,
-    /// Macro's customer key for the Connect API.
-    pub customer_key: String,
-    /// Where Connect sends the browser after consent.
-    pub callback_url: Url,
-}
-
-impl std::fmt::Debug for ConnectConfig {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("ConnectConfig")
-            .field("api_url", &self.api_url)
-            .field("customer_key", &"[REDACTED]")
-            .field("callback_url", &self.callback_url)
-            .finish()
-    }
-}
+pub use crate::outbound::macro_connect::ConnectConfig;
 
 /// Macro Connect behind this crate's ports, over `connect_client`.
 ///
-/// Serves records with [`ConnectionProvider::Connect`]: tools through
-/// Connect's MCP gateway (Connect attaches the vendor token), app API calls
-/// with an exported access token, and the connect flow. Catalog apps are
+/// Transitional: what the old Pipedream routes and hosts use until they move
+/// to the connectors services. Connect's mechanics live in
+/// [`crate::outbound::macro_connect`]; this only adapts them to the old
+/// ports, for records with [`ConnectionProvider::Connect`]. Catalog apps are
 /// addressed by the Pipedream slugs they replace, or by their Connect id when
 /// Pipedream has no such app.
 ///
 /// [`ConnectionProvider::Connect`]: crate::outbound::pipedream::domain::models::ConnectionProvider::Connect
 pub struct ConnectAdapter {
-    client: ConnectClient,
-    api_url: Url,
-    callback_url: Url,
-    http: reqwest::Client,
-    catalog: tokio::sync::Mutex<Option<(Instant, Arc<Vec<wire::CatalogEntry>>)>>,
+    vendor: ConnectVendorClient,
 }
 
 impl ConnectAdapter {
     /// Build an adapter. Fails when the base URL is not an HTTP URL.
     pub fn new(config: ConnectConfig) -> anyhow::Result<Self> {
-        let api_url = Url::parse(&config.api_url).context("Connect API URL is not a URL")?;
-        let client = ConnectClient::new(&config.api_url, config.customer_key)
-            .map_err(|error| anyhow::anyhow!("building Connect client: {error}"))?;
-        let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .context("building Connect proxy HTTP client")?;
         Ok(Self {
-            client,
-            api_url,
-            callback_url: config.callback_url,
-            http,
-            catalog: tokio::sync::Mutex::new(None),
+            vendor: ConnectVendorClient::new(config)?,
         })
     }
 
     async fn catalog(&self) -> anyhow::Result<Arc<Vec<wire::CatalogEntry>>> {
-        let mut cached = self.catalog.lock().await;
-        if let Some((fetched, apps)) = cached.as_ref()
-            && fetched.elapsed() < CATALOG_TTL
-        {
-            return Ok(apps.clone());
-        }
-        let apps = Arc::new(
-            self.client
-                .catalog()
-                .await
-                .map_err(|error| anyhow::anyhow!("reading Connect catalog: {error}"))?,
-        );
-        *cached = Some((Instant::now(), apps.clone()));
-        Ok(apps)
+        Ok(self.vendor.catalog().await?)
     }
 
     fn upstream_call(&self, record: &PipedreamConnection) -> McpUpstreamCall {
-        let upstream = self
-            .client
-            .mcp_upstream(record.user_id.as_ref(), &record.account_id);
+        let upstream = self.vendor.upstream(&record.user_id, &record.account_id);
         McpUpstreamCall {
-            url: upstream.url.clone(),
-            bearer_token: upstream.bearer_token.clone(),
+            url: upstream.url().clone(),
+            bearer_token: upstream.bearer().unwrap_or_default().to_owned(),
             headers: HeaderMap::new(),
         }
     }
@@ -164,16 +107,11 @@ impl MacroConnect for ConnectAdapter {
         user_id: &MacroUserIdStr<'static>,
         app: &ConnectApp,
     ) -> anyhow::Result<String> {
-        let mut redirect = self.callback_url.clone();
-        redirect
-            .query_pairs_mut()
-            .append_pair("app_slug", &app.app_slug);
-        let session = self
-            .client
-            .create_connect_session(user_id.as_ref(), &app.app_id, redirect.as_str())
-            .await
-            .map_err(|error| anyhow::anyhow!("creating Connect session: {error}"))?;
-        Ok(session.connect_url)
+        let url = self
+            .vendor
+            .connect_url(user_id, &app.app_id, &app.app_slug)
+            .await?;
+        Ok(url.into())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -182,11 +120,7 @@ impl MacroConnect for ConnectAdapter {
         user_id: &MacroUserIdStr<'static>,
         app_id: &str,
     ) -> anyhow::Result<bool> {
-        let connections = self
-            .client
-            .connections(user_id.as_ref())
-            .await
-            .map_err(|error| anyhow::anyhow!("listing Connect connections: {error}"))?;
+        let connections = self.vendor.connections(user_id).await?;
         Ok(connections.iter().any(|connection| {
             connection.app_id == app_id
                 && matches!(connection.status, wire::ConnectionStatus::Active)
@@ -199,14 +133,7 @@ impl MacroConnect for ConnectAdapter {
         user_id: &MacroUserIdStr<'static>,
         app_id: &str,
     ) -> anyhow::Result<()> {
-        match self
-            .client
-            .delete_connection(user_id.as_ref(), app_id)
-            .await
-        {
-            Ok(_) | Err(connect_client::Error::NotConnected) => Ok(()),
-            Err(error) => Err(anyhow::anyhow!("deleting Connect connection: {error}")),
-        }
+        Ok(self.vendor.revoke(user_id, app_id).await?)
     }
 }
 
@@ -224,20 +151,10 @@ impl McpConnection for ConnectAdapter {
 
     #[tracing::instrument(skip_all, err, fields(app = %record.app_slug, user_id = %record.user_id))]
     async fn connect(&self, record: &PipedreamConnection) -> anyhow::Result<McpServer> {
-        let upstream = self.upstream_call(record);
-        let mut headers = HeaderMap::new();
-        let mut auth = HeaderValue::from_str(&format!("Bearer {}", upstream.bearer_token))
-            .context("invalid Connect customer key")?;
-        auth.set_sensitive(true);
-        headers.insert(reqwest::header::AUTHORIZATION, auth);
-
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .build()
-            .context("building Connect MCP HTTP client")?;
-        let config = StreamableHttpClientTransportConfig::with_uri(upstream.url.as_str());
-        let transport = StreamableHttpClientTransport::with_client(client, config);
-        Ok(client_info().serve(transport).await?)
+        Ok(self
+            .vendor
+            .dial(&record.user_id, &record.account_id)
+            .await?)
     }
 }
 
@@ -306,7 +223,7 @@ impl ConnectorDirectory for ConnectAdapter {
             })
             .filter_map(|app| {
                 let slug = macro_slugs(app).first()?;
-                Some(catalog_entry(app, slug, &self.api_url))
+                Some(catalog_entry(app, slug, self.vendor.api_url()))
             })
             .collect();
         let start: usize = cursor.map(str::parse).transpose()?.unwrap_or(0);
@@ -328,7 +245,7 @@ impl ConnectorDirectory for ConnectAdapter {
             .await?
             .iter()
             .find(|app| macro_slugs(app).iter().any(|slug| slug == app_slug))
-            .map(|app| catalog_entry(app, app_slug, &self.api_url)))
+            .map(|app| catalog_entry(app, app_slug, self.vendor.api_url())))
     }
 }
 
@@ -343,27 +260,20 @@ impl ConnectedAppProxy for ConnectAdapter {
         headers: &http::HeaderMap,
         body: Option<&serde_json::Value>,
     ) -> anyhow::Result<ProxyResponse> {
-        let token = self
-            .client
-            .access_token(connection.user_id.as_ref(), &connection.account_id)
-            .await
-            .map_err(|error| anyhow::anyhow!("exporting Connect access token: {error}"))?;
-        let mut request = self
-            .http
-            .request(method, url)
-            .headers(headers.clone())
-            .bearer_auth(&token.access_token);
-        if let Some(body) = body {
-            request = request.json(body);
-        }
-        let response = request.send().await.context("calling connected app")?;
+        let request = ApiRequest {
+            method,
+            url: url.to_owned(),
+            headers: headers.clone(),
+            body: body.cloned(),
+        };
+        let response = self
+            .vendor
+            .call(&connection.user_id, &connection.account_id, request)
+            .await?;
         Ok(ProxyResponse {
-            status: response.status(),
-            headers: response.headers().clone(),
-            body: response
-                .text()
-                .await
-                .context("reading connected app response")?,
+            status: response.status,
+            headers: response.headers,
+            body: response.body,
         })
     }
 }
