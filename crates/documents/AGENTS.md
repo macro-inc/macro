@@ -50,7 +50,10 @@ word docs, Illustrator/Photoshop files).
   (admission, models, metering) with a token minted like EditDocument's: 422
   `edit_refused` is the worker's clarification, 502 `edit_failed` may have
   partly applied, and a client disconnect drops the worker call (never spawn
-  it).
+  it). The shared domain edit check refuses existing Skill bodies for NoSend
+  and channel-mention credentials before minting an edit token or calling a
+  worker; ordinary-session skill edits and authorized normal Markdown edits
+  remain available.
 - `src/inbound/axum_router/canvas.rs`: the SDK's canvas routes,
   `POST /{id}/canvas/{scene,render,edits,ai-edit}`, over `CanvasService` with
   `CanvasRouteDeps`. Calls run as `CanvasCaller` (the acting user, plus the bot

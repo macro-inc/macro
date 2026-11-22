@@ -2,7 +2,7 @@
 //! only while the document is still at the revision the caller read, so a
 //! writer never overwrites an edit it did not see.
 
-use super::ai_edit::{ensure_markdown, worker_token};
+use super::ai_edit::{ensure_markdown, ensure_markdown_edit, worker_token};
 use super::models::DocumentError;
 use super::ports::editing::{EditingWorkerService, MarkdownWrite};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
@@ -83,7 +83,7 @@ pub async fn write_markdown<Worker: EditingWorkerService>(
     expected_revision: &str,
     markdown: &str,
 ) -> Result<DocumentMarkdownWritten, DocumentMarkdownError> {
-    ensure_markdown(&access, document)?;
+    ensure_markdown_edit(&access, document)?;
     if expected_revision.is_empty() {
         return Err(DocumentError::BadRequest("expectedRevision is empty".to_string()).into());
     }
