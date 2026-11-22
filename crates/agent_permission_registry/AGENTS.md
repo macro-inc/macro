@@ -14,7 +14,9 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
 
 - `registry.json`: the groups (display order, name, description) and every
   operation, one per line, grouped by service.
-- `src/lib.rs`: `groups`, `group`, `operation`, `operations`; the web's
+- `src/lib.rs`: `groups`, `group`, `operation`, `operations`, and
+  `Action::DISPLAY` (the order a person sees actions: Read, Create, Edit,
+  Send, Delete; `Action::ALL` is for iterating); the web's
   `permissionGroups`, `groupOperations`, `permissionOperation`.
 
 ## Recipes
