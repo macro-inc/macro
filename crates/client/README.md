@@ -98,7 +98,11 @@ advances `meta.storage_schema_version`, so a stopped upgrade resumes from the
 last committed step. The last step's transaction also runs the frozen-schema
 checks every reopen runs, so the current version is committed only for a file
 with exactly the tables and indexes a fresh file has; a chain that would produce
-anything else rolls back to the version before its last step. The open then
+anything else rolls back to the version before its last step. The browser hands
+a rejected file back only when that is the version it moved at, so a rejected
+chain of two or more steps is discarded. Steps are not merged into one
+transaction because Turso holds a transaction's dirty pages in memory until it
+commits, which would raise the peak to the sum of the steps. The open then
 runs the queue checks as every reopen does. Records, queued mutations,
 optimistic layers and the storage generation stay, so the upgrade refetches
 nothing and loses no queued write; a format migration that runs after it (above)

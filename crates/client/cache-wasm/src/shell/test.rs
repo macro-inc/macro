@@ -2897,9 +2897,9 @@ async fn calendar_ranges_report_gaps_watermarks_and_uncertain_events_across_the_
     close_and_destroy(&engine, SCOPE).await;
 }
 
-/// Rewrites this build's closed database for `scope` as storage 11 wrote it,
-/// with `flaw`.
-async fn rewrite_closed_as_storage_11(scope: &str, flaw: Flaw) {
+/// Rewrites this build's closed database for `scope` as storage `version`
+/// (11 or 12) wrote it, with `flaw`.
+async fn rewrite_closed_as(scope: &str, version: u32, flaw: Flaw) {
     let owner = OpfsOwner::acquire(&database_identity(scope))
         .await
         .expect("acquire closed database");
@@ -2909,8 +2909,12 @@ async fn rewrite_closed_as_storage_11(scope: &str, flaw: Flaw) {
     let mut storage =
         TursoStorage::from_opfs_session(session.connect().expect("connect closed database"), scope)
             .expect("closed database initializes");
-    cache_turso::migration_test_hooks::rewrite_as_storage_11(&mut storage)
-        .expect("rewrite as storage 11");
+    match version {
+        11 => cache_turso::migration_test_hooks::rewrite_as_storage_11(&mut storage),
+        12 => cache_turso::migration_test_hooks::rewrite_as_storage_12(&mut storage),
+        _ => panic!("no rewrite to storage {version}"),
+    }
+    .expect("rewrite as an older storage version");
     match flaw {
         Flaw::None => {}
         Flaw::UnknownTable => cache_turso::migration_test_hooks::add_unknown_table(&mut storage)
@@ -3037,8 +3041,9 @@ async fn an_older_storage_version_moves_forward_and_upgrades_in_place() {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Flaw {
     None,
-    /// A table no version has: the upgrade's last step is rejected, so the
-    /// file stays at storage 11 and this build cannot open it.
+    /// A table no version has: the upgrade's last step is rejected. Each step
+    /// commits on its own, so only a one-step upgrade leaves the file at the
+    /// version it moved at, and this build cannot open it.
     UnknownTable,
     /// The queued write lost its optimistic layer: the open finds the queue
     /// inconsistent only after the upgrade committed.
@@ -3049,8 +3054,13 @@ enum Flaw {
 /// holding a cached query and a queued write, and `flaw`, with nothing at
 /// this build's identity. Returns its generation.
 async fn older_database_with_a_queued_write(scope: &str, flaw: Flaw) -> Option<String> {
+    older_database_at(scope, 11, flaw).await
+}
+
+/// The same at the storage `version` (11 or 12) identity.
+async fn older_database_at(scope: &str, version: u32, flaw: Flaw) -> Option<String> {
     let own = database_identity(scope);
-    let older = cache_database_name(scope, 11);
+    let older = cache_database_name(scope, version);
     remove_opfs_pair(&older).await;
     let engine = fresh_engine(scope).await;
     resolved(engine.write_query(
@@ -3065,7 +3075,7 @@ async fn older_database_with_a_queued_write(scope: &str, flaw: Flaw) -> Option<S
     queue_one_mutation(&engine).await;
     let generation = test_generation(&engine).await;
     resolved(engine.close()).await;
-    rewrite_closed_as_storage_11(scope, flaw).await;
+    rewrite_closed_as(scope, version, flaw).await;
     move_opfs_pair(&own, &older).await;
     generation
 }
@@ -3273,8 +3283,11 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     resolved(engine.close()).await;
     assert!(!opfs_file_exists(&older).await);
 
-    // A moved database this build cannot open goes back as well.
-    older_database_with_a_queued_write(SCOPE, Flaw::UnknownTable).await;
+    // A moved database this build cannot open goes back as well, when its
+    // upgrade is one step: the rejected step leaves it at the version it
+    // moved at.
+    let previous = cache_database_name(SCOPE, 12);
+    older_database_at(SCOPE, 12, Flaw::UnknownTable).await;
     let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
         .await
         .expect("open beside an unusable older database");
@@ -3282,13 +3295,13 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
         report,
         OpenReport {
             outcome: CacheOpenOutcome::ResetIncompatible,
-            carry_forward: carried(CarryForwardKind::Returned),
+            carry_forward: Some(CarryForward::new(CarryForwardKind::Returned, 12)),
         }
     );
     assert_eq!(queue_depth(&engine).await, "0");
     resolved(engine.close()).await;
-    assert!(opfs_file_exists(&older).await);
-    assert!(opfs_file_exists(&format!("{older}-wal")).await);
+    assert!(opfs_file_exists(&previous).await);
+    assert!(opfs_file_exists(&format!("{previous}-wal")).await);
     assert!(!opfs_file_exists(&marker).await);
 
     // Its own files now exist, so this build never tries it again.
@@ -3298,7 +3311,27 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     assert_eq!(report.carry_forward, None);
     assert_eq!(report.outcome, CacheOpenOutcome::OpenedExisting);
     resolved(engine.close()).await;
-    remove_opfs_pair(&older).await;
+    remove_opfs_pair(&previous).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+
+    // From storage 11 the first step has committed by the time the last is
+    // rejected: the file is no longer what the older build wrote, so it is
+    // discarded, not handed back.
+    older_database_with_a_queued_write(SCOPE, Flaw::UnknownTable).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("open beside an unusable storage 11 database");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::ResetIncompatible,
+            carry_forward: carried(CarryForwardKind::Discarded),
+        }
+    );
+    assert_eq!(queue_depth(&engine).await, "0");
+    resolved(engine.close()).await;
+    assert!(!opfs_file_exists(&older).await);
+    assert!(!opfs_file_exists(&marker).await);
     destroy_cache(SCOPE.into()).await.expect("destroy cache");
 }
 

@@ -8,8 +8,16 @@
 //! the frozen-schema checks every reopen runs, so an upgraded file must have
 //! exactly the tables and indexes a fresh file has before the current version
 //! is committed: a chain that would produce anything else rolls back and leaves
-//! the file at the version before its last step, which the browser can still
-//! hand back to the build that wrote it.
+//! the file at the version before its last step. The browser hands that back to
+//! the older build only when it is the version the file moved at, that is, when
+//! no earlier step committed; a longer chain rejected at its last step is
+//! discarded instead.
+//!
+//! Steps commit one at a time rather than the chain in one transaction because
+//! Turso keeps a write transaction's dirty pages in memory until it commits,
+//! and the browser's Wasm memory never shrinks: one transaction for 11 to 13
+//! grew it to 301 MiB on a 320 MB cache, against 236 MiB for the larger step
+//! alone.
 //!
 //! A version with no complete chain of steps, a newer version, and a failing
 //! step are all classified for physical reset, as every version change was
@@ -20,13 +28,13 @@
 //! step must still produce exactly the version after its own.
 
 use super::{
-    HashMap, PredicateRecordKey, Profile, STORAGE_SCHEMA_VERSION, Token, Value,
-    compatibility, facts_blob, invariant, load_index_facts, require_changed, required_i64,
-    required_text, text, validate_frozen_schema,
+    HashMap, PredicateRecordKey, Profile, STORAGE_SCHEMA_VERSION, Token, Value, compatibility,
+    facts_blob, invariant, load_index_facts, require_changed, required_i64, required_text, text,
+    validate_frozen_schema,
 };
 use crate::driver::Db;
-use predicate_index::IndexDocument;
 use crate::{TursoStorageError, driver};
+use predicate_index::IndexDocument;
 
 /// The body of one step. Tests build generated steps as closures.
 pub(super) type StepFn = dyn Fn(&Db) -> Result<(), TursoStorageError> + Sync;
@@ -226,7 +234,9 @@ fn upgrade_12_to_13(connection: &Db) -> Result<(), TursoStorageError> {
                 record_key.clone(),
                 IndexDocument {
                     record_key,
-                    profile: Profile::new(Token::new(required_text(row, 2)?).map_err(|_| invariant())?),
+                    profile: Profile::new(
+                        Token::new(required_text(row, 2)?).map_err(|_| invariant())?,
+                    ),
                     partition: Token::new(required_text(row, 3)?).map_err(|_| invariant())?,
                     exact_facts: Vec::new(),
                     integer_facts: Vec::new(),
@@ -342,10 +352,7 @@ pub mod test_hooks {
         }))
     }
 
-    fn rewind(
-        connection: &Db,
-        part: Storage11DerivedState,
-    ) -> Result<(), TursoStorageError> {
+    fn rewind(connection: &Db, part: Storage11DerivedState) -> Result<(), TursoStorageError> {
         let set = |key: &str, value: &str| {
             driver::execute(
                 connection,
