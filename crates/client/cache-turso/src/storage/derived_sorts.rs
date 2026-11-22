@@ -178,8 +178,9 @@ fn derive_uncertainty(
 }
 
 /// A document the derived fact took past `MAX_ATTRIBUTES_PER_DOCUMENT`
-/// distinct attributes becomes incomplete (Dirty), as composition makes it,
-/// so its queries fall back and loads do not refuse it. Row counts bound
+/// distinct attributes becomes incomplete, as composition makes it, so its
+/// queries fall back and loads do not refuse it: an authority `Missing`, which
+/// keeps retained server rows, a shadow `Dirty`. Row counts bound
 /// distinct attributes from above, so SQL selects the few documents holding
 /// the fact with that many rows and Rust counts their distinct attributes.
 fn mark_over_limit_incomplete(
@@ -217,6 +218,7 @@ fn mark_over_limit_incomplete(
         if attributes.len() <= limit {
             continue;
         }
+        let missing = projection_state_code(ProjectionIncompleteKind::Missing);
         let dirty = projection_state_code(ProjectionIncompleteKind::Dirty);
         if *optimistic {
             driver::execute(
@@ -232,7 +234,7 @@ fn mark_over_limit_incomplete(
             driver::execute(
                 connection,
                 &format!("UPDATE {documents} SET state = ?2 WHERE id = ?1"),
-                vec![Value::from_i64(document_id), Value::from_i64(dirty)],
+                vec![Value::from_i64(document_id), Value::from_i64(missing)],
             )?;
         }
         for table in [exact, integers, sorts] {

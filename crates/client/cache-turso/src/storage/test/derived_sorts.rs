@@ -398,7 +398,7 @@ fn a_document_at_the_attribute_limit_becomes_incomplete() {
         assert!(matches!(
             states[0],
             Some(ProjectionState::Incomplete {
-                kind: ProjectionIncompleteKind::Dirty,
+                kind: ProjectionIncompleteKind::Missing,
                 ..
             })
         ));

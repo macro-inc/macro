@@ -377,6 +377,7 @@ mod derived_sort_facts {
         full.canonicalize();
         full.validate().unwrap();
         let unarchive = patch(&full, vec![flag("mail-inbox", true)], vec![]);
+        let archive = patch(&full, vec![flag("mail-inbox", false)], vec![]);
         let shadow = compose(&full, std::slice::from_ref(&unarchive));
         assert!(matches!(
             shadow.state,
@@ -385,6 +386,36 @@ mod derived_sort_facts {
                 ..
             }
         ));
+        // Only the composed document counts: an archive after the unarchive
+        // brings it back under the limit.
+        let rearchived = compose(&full, &[unarchive.clone(), archive]);
+        assert_eq!(
+            rearchived.state,
+            OptimisticProjectionState::Complete(full.clone())
+        );
+        // An authority past the limit is Missing, as a projection past the
+        // limit is: without a shadow, Dirty would revoke the thread's retained
+        // server rows.
+        let OptimisticProjectionMutation::Patch { exact, .. } = &unarchive else {
+            unreachable!()
+        };
+        assert_eq!(
+            apply_authoritative_projection_patch(
+                Some(&ProjectionState::Complete(full.clone())),
+                &full.record_key,
+                &full.profile,
+                &full.partition,
+                exact,
+                &[],
+                &[],
+            ),
+            ProjectionState::Incomplete {
+                record_key: full.record_key.clone(),
+                profile: full.profile.clone(),
+                partition: full.partition.clone(),
+                kind: ProjectionIncompleteKind::Missing,
+            }
+        );
         let deleted = compose(
             &full,
             &[
@@ -422,7 +453,10 @@ mod derived_sort_facts {
         );
         assert!(matches!(
             states.get(&eligible.record_key),
-            Some(ProjectionState::Incomplete { .. })
+            Some(ProjectionState::Incomplete {
+                kind: ProjectionIncompleteKind::Missing,
+                ..
+            })
         ));
         // An authority stored before the rule starts the shadow incomplete.
         let started = compose(&eligible, &[unknown(&eligible, &["mail-read"])]);
