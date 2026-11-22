@@ -4939,7 +4939,7 @@ export type PermissionState = 'always' | 'ask' | 'never';
 /**
  * Where an effective state comes from.
  */
-export type Origin = 'tool' | 'group_action' | 'default' | 'session';
+export type Origin = 'tool' | 'group_action' | 'default' | 'action' | 'session';
 /**
  * How an approval ended without approving.
  */
