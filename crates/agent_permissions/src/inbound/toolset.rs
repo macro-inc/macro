@@ -23,6 +23,7 @@ use utoipa::ToSchema;
 
 use crate::domain::model::{
     Caller, Credential, Origin, PermissionError, PermissionState, PermissionsView, Target,
+    ToolPermissionDefault,
 };
 use crate::domain::service::AgentPermissions;
 
@@ -64,7 +65,8 @@ fn description() -> String {
          (never) or ask about, naming the groups and actions, or the operations, from the \
          refusal. It changes nothing: they toggle the setting themselves, and only someone who \
          can edit this agent can. Groups: {groups}. Actions: create, read, update, destroy, send; \
-         a group's action no operation has is not shown."
+         a group's action no operation has is not shown. Each action has a default that every \
+         group without its own exception follows; the result lists the defaults."
     )
 }
 
@@ -156,6 +158,10 @@ pub struct ShowPermissionsResult {
     pub reason: Option<String>,
     /// Each shown setting as it stands now.
     pub current: Vec<ShownPermission>,
+    /// Each action's default as it stands now, in display order: what every
+    /// group's action without an exception follows.
+    #[serde(default)]
+    pub defaults: Vec<ToolPermissionDefault>,
     /// What the model should do next.
     pub message: String,
 }
@@ -239,6 +245,7 @@ impl AsyncTool<PermissionToolContext> for ShowPermissions {
             agent_id: context.agent,
             session_id: context.session,
             current: current(&view, &selection),
+            defaults: view.defaults.clone(),
             selection,
             reason: self.reason.clone(),
             message,
@@ -303,7 +310,7 @@ impl ShowPermissions {
                 .map(|selected| GroupSelection {
                     group: selected.group.clone(),
                     actions: if selected.actions.is_empty() {
-                        Action::ALL.to_vec()
+                        Action::DISPLAY.to_vec()
                     } else {
                         selected.actions.clone()
                     },

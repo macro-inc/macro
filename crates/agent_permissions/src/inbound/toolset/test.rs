@@ -129,6 +129,12 @@ async fn shows_the_selection_with_its_current_settings() {
                     service: "storage".into(),
                     operation: "delete_document".into(),
                 },
+                PermissionState::Never,
+            ),
+            rule(
+                Target::Action {
+                    action: Action::Destroy,
+                },
                 PermissionState::Ask,
             ),
         ],
@@ -151,8 +157,8 @@ async fn shows_the_selection_with_its_current_settings() {
     assert_eq!(
         result.selection.groups[1].actions,
         vec![
-            Action::Create,
             Action::Read,
+            Action::Create,
             Action::Update,
             Action::Destroy
         ]
@@ -167,8 +173,29 @@ async fn shows_the_selection_with_its_current_settings() {
     assert_eq!(result.current[0].state, PermissionState::Never);
     assert_eq!(result.current[0].origin, Origin::GroupAction);
     assert_eq!(result.current[1].state, PermissionState::Always);
+    // Tasks · Delete has no exception: it follows the Delete default.
+    assert_eq!(
+        (result.current[4].state, result.current[4].origin),
+        (PermissionState::Ask, Origin::Action)
+    );
+    // Every default, in display order.
+    let defaults: Vec<(Action, PermissionState)> = result
+        .defaults
+        .iter()
+        .map(|default| (default.action, default.state))
+        .collect();
+    assert_eq!(
+        defaults,
+        vec![
+            (Action::Read, PermissionState::Always),
+            (Action::Create, PermissionState::Always),
+            (Action::Update, PermissionState::Always),
+            (Action::Send, PermissionState::Always),
+            (Action::Destroy, PermissionState::Ask),
+        ]
+    );
     let tool = result.current.last().unwrap();
-    assert_eq!(tool.state, PermissionState::Ask);
+    assert_eq!(tool.state, PermissionState::Never);
     assert_eq!(tool.origin, Origin::Tool);
     // Read as the agent in its session, for its owner.
     assert_eq!(
@@ -183,6 +210,10 @@ async fn shows_the_selection_with_its_current_settings() {
     );
     let wire = serde_json::to_value(&result).unwrap();
     assert_eq!(wire["current"][0]["target"]["kind"], "group_action");
+    assert_eq!(
+        wire["defaults"][4],
+        serde_json::json!({ "action": "destroy", "state": "ask", "origin": "action" })
+    );
     assert_eq!(
         wire["selection"]["tools"][0]["operation"],
         "delete_document"

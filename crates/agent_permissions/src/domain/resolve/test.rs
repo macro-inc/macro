@@ -335,8 +335,9 @@ fn moving_a_groups_never_onto_each_of_its_tools_loosens_no_operation_but_is_refu
         change(tool("storage", "delete_project"), Some(Never)),
         change(group_action("documents", Action::Destroy), None),
     ];
-    assert_eq!(tighten(&saved, changes.clone()), Ok(()));
-    // An operation added to documents·destroy later would be always.
+    // No operation loosens, but an operation added to documents·destroy
+    // later would be always: both checks refuse, naming none.
+    assert_eq!(tighten(&saved, changes.clone()), Err(Vec::new()));
     assert!(asks_looser(&catalog(), (&saved, &[]), &changes).is_err());
 }
 
@@ -527,10 +528,12 @@ fn a_rule_on_a_pair_with_no_tool_applies_once_a_tool_maps_there() {
 }
 
 #[test]
-fn the_catalog_names_destroy_delete_and_lists_tools_by_group() {
+fn the_catalog_lists_actions_in_display_order_as_edit_and_delete_and_tools_by_group() {
     let catalog = catalog_view(&catalog());
     let names: Vec<&str> = catalog.actions.iter().map(|action| action.name).collect();
-    assert_eq!(names, ["Create", "Read", "Update", "Delete", "Send"]);
+    assert_eq!(names, ["Read", "Create", "Edit", "Send", "Delete"]);
+    let actions: Vec<Action> = catalog.actions.iter().map(|action| action.action).collect();
+    assert_eq!(actions, Action::DISPLAY);
     assert_eq!(catalog.groups[0].tools.len(), 3);
 
     let json = serde_json::to_value(&catalog.groups[0].tools[0]).unwrap();
@@ -640,5 +643,623 @@ fn channel_admin_moves_keep_every_operations_state() {
             now.service,
             now.operation
         );
+    }
+}
+
+fn default_rule(action: Action, state: PermissionState) -> Rule {
+    Rule {
+        target: Target::Action { action },
+        state,
+        via_agent: false,
+        restriction_only: false,
+        updated_at: DateTime::UNIX_EPOCH,
+    }
+}
+
+fn agent_group_rule(group: &str, action: Action, state: PermissionState) -> Rule {
+    Rule {
+        via_agent: true,
+        restriction_only: true,
+        ..group_rule(group, action, state)
+    }
+}
+
+fn default_target(action: Action) -> Target {
+    Target::Action { action }
+}
+
+/// Each default in `view`, in order.
+fn defaults_of(view: &PermissionsView) -> Vec<(Action, PermissionState, Origin)> {
+    view.defaults
+        .iter()
+        .map(|default| (default.action, default.state, default.origin))
+        .collect()
+}
+
+#[test]
+fn an_action_default_applies_to_every_entity_without_an_exception() {
+    let saved = [default_rule(Action::Destroy, Ask)];
+    for operation in ["delete_document", "delete_project"] {
+        assert_eq!(
+            state_of(&saved, &[], "storage", operation),
+            (Ask, Origin::Action)
+        );
+    }
+    // Other actions keep their own default: none, so always.
+    assert_eq!(
+        state_of(&saved, &[], "storage", "create_document"),
+        (Always, Origin::Default)
+    );
+
+    let view = view_of(&catalog(), saved.to_vec(), None);
+    assert_eq!(
+        defaults_of(&view),
+        vec![
+            (Action::Read, Always, Origin::Default),
+            (Action::Create, Always, Origin::Default),
+            (Action::Update, Always, Origin::Default),
+            (Action::Send, Always, Origin::Default),
+            (Action::Destroy, Ask, Origin::Action),
+        ]
+    );
+    let destroy = pair(&view, "documents", Action::Destroy).unwrap();
+    assert_eq!(
+        (destroy.state, destroy.origin, destroy.exception),
+        (Ask, Origin::Action, false)
+    );
+    assert_eq!(view.restricted, 2);
+}
+
+#[test]
+fn an_exception_replaces_the_default_in_either_direction() {
+    // Allow under an Ask default.
+    let saved = [
+        default_rule(Action::Send, Ask),
+        group_rule("email", Action::Send, Always),
+    ];
+    assert_eq!(
+        state_of(&saved, &[], "email", "send_email"),
+        (Always, Origin::GroupAction)
+    );
+    // Deny under an Allow default.
+    let saved = [group_rule("documents", Action::Destroy, Never)];
+    assert_eq!(
+        state_of(&saved, &[], "storage", "delete_document"),
+        (Never, Origin::GroupAction)
+    );
+    let view = view_of(&catalog(), saved.to_vec(), None);
+    let destroy = pair(&view, "documents", Action::Destroy).unwrap();
+    assert_eq!((destroy.state, destroy.exception), (Never, true));
+}
+
+#[test]
+fn an_explicit_exception_equal_to_the_default_is_kept_and_survives_a_default_change() {
+    let catalog = catalog();
+    // A person's Allow on Email · Send is stored, though Allow is the
+    // default.
+    let changes = normalize(
+        vec![change(group_action("email", Action::Send), Some(Always))],
+        false,
+    );
+    assert_eq!(changes[0].state, Some(Always));
+    let saved = apply(&[], &changes, SetBy::Person);
+    let view = view_of(&catalog, saved.clone(), None);
+    let send = pair(&view, "email", Action::Send).unwrap();
+    assert_eq!(
+        (send.state, send.origin, send.exception),
+        (Always, Origin::GroupAction, true)
+    );
+
+    // The Send default becomes Ask: Email keeps its Allow.
+    let default = normalize(vec![change(default_target(Action::Send), Some(Ask))], false);
+    let saved = apply(&saved, &default, SetBy::Person);
+    assert_eq!(
+        state_of(&saved, &[], "email", "send_email"),
+        (Always, Origin::GroupAction)
+    );
+
+    // Removing the exception falls back to the default.
+    let removal = normalize(
+        vec![change(group_action("email", Action::Send), None)],
+        false,
+    );
+    let saved = apply(&saved, &removal, SetBy::Person);
+    assert_eq!(
+        state_of(&saved, &[], "email", "send_email"),
+        (Ask, Origin::Action)
+    );
+    assert!(
+        !pair(&view_of(&catalog, saved, None), "email", Action::Send)
+            .unwrap()
+            .exception
+    );
+}
+
+#[test]
+fn a_default_of_always_is_never_stored() {
+    for restriction in [false, true] {
+        let changes = normalize(
+            vec![change(default_target(Action::Send), Some(Always))],
+            restriction,
+        );
+        assert_eq!(changes[0].state, None);
+    }
+    // A restriction stores no always on an exception either.
+    let changes = normalize(
+        vec![change(group_action("email", Action::Send), Some(Always))],
+        true,
+    );
+    assert_eq!(changes[0].state, None);
+}
+
+#[test]
+fn a_new_entity_type_inherits_each_action_default() {
+    let saved = vec![
+        default_rule(Action::Send, Ask),
+        default_rule(Action::Destroy, Never),
+    ];
+    // A registry that adds `tasks`, with operations no rule names.
+    let mut catalog = catalog();
+    catalog.groups.push(group("tasks"));
+    catalog
+        .entries
+        .push(entry("storage", "send_task", "tasks", Action::Send));
+    catalog
+        .entries
+        .push(entry("storage", "delete_task", "tasks", Action::Destroy));
+    catalog
+        .entries
+        .push(entry("storage", "get_task", "tasks", Action::Read));
+    let layer = Layer::new(&saved);
+    let resolve = |operation: &str| {
+        effective(
+            &layer,
+            &Layer::default(),
+            catalog.entry("storage", operation).unwrap(),
+        )
+    };
+    assert_eq!(resolve("send_task"), (Ask, Origin::Action));
+    assert_eq!(resolve("delete_task"), (Never, Origin::Action));
+    assert_eq!(resolve("get_task"), (Always, Origin::Default));
+}
+
+#[test]
+fn a_default_on_a_pair_with_no_tool_applies_once_a_tool_maps_there() {
+    // Documents has no Send operation yet; the Send default is Ask.
+    let saved = vec![default_rule(Action::Send, Ask)];
+    assert_eq!(
+        pair_state(
+            &Layer::new(&saved),
+            &Layer::default(),
+            "documents",
+            Action::Send
+        ),
+        (Ask, Origin::Action)
+    );
+    let mut catalog = catalog();
+    catalog.entries.push(entry(
+        "storage",
+        "share_document",
+        "documents",
+        Action::Send,
+    ));
+    let send = pair(&view_of(&catalog, saved, None), "documents", Action::Send)
+        .cloned()
+        .unwrap();
+    assert_eq!(
+        (send.state, send.origin, send.exception),
+        (Ask, Origin::Action, false)
+    );
+}
+
+#[test]
+fn tool_rules_sit_under_the_exception_and_the_default() {
+    // A person's tool setting replaces both.
+    let saved = [
+        default_rule(Action::Destroy, Never),
+        group_rule("documents", Action::Destroy, Never),
+        tool_rule("storage", "delete_project", Always),
+    ];
+    assert_eq!(
+        state_of(&saved, &[], "storage", "delete_project"),
+        (Always, Origin::Tool)
+    );
+    // Without an exception, a person's tool setting replaces the default.
+    let saved = [
+        default_rule(Action::Destroy, Never),
+        tool_rule("storage", "delete_project", Ask),
+    ];
+    assert_eq!(
+        state_of(&saved, &[], "storage", "delete_project"),
+        (Ask, Origin::Tool)
+    );
+    // The agent's tool setting takes the stricter of itself and the default.
+    let saved = [
+        default_rule(Action::Destroy, Never),
+        agent_tool_rule("storage", "delete_project", Ask),
+    ];
+    assert_eq!(
+        state_of(&saved, &[], "storage", "delete_project"),
+        (Never, Origin::Action)
+    );
+    let saved = [
+        default_rule(Action::Destroy, Ask),
+        agent_tool_rule("storage", "delete_project", Never),
+    ];
+    assert_eq!(
+        state_of(&saved, &[], "storage", "delete_project"),
+        (Never, Origin::Tool)
+    );
+    // And of its group's exception, when it has one.
+    let saved = [
+        default_rule(Action::Destroy, Never),
+        group_rule("documents", Action::Destroy, Always),
+        agent_tool_rule("storage", "delete_project", Ask),
+    ];
+    assert_eq!(
+        state_of(&saved, &[], "storage", "delete_project"),
+        (Ask, Origin::Tool)
+    );
+    assert_eq!(
+        state_of(&saved, &[], "storage", "delete_document"),
+        (Always, Origin::GroupAction)
+    );
+}
+
+#[test]
+fn an_agents_exception_never_exempts_a_group_from_a_stricter_default() {
+    // The agent restricts Email · Send to Ask; a person later sets the Send
+    // default to Never. The agent's row only adds, so Email follows Never.
+    let saved = [
+        agent_group_rule("email", Action::Send, Ask),
+        default_rule(Action::Send, Never),
+    ];
+    assert_eq!(
+        state_of(&saved, &[], "email", "send_email"),
+        (Never, Origin::Action)
+    );
+    let view = view_of(&catalog(), saved.to_vec(), None);
+    let send = pair(&view, "email", Action::Send).unwrap();
+    assert_eq!(
+        (send.state, send.origin, send.exception),
+        (Never, Origin::Action, true)
+    );
+    // Under a laxer default it is the stricter.
+    let saved = [
+        agent_group_rule("email", Action::Send, Ask),
+        default_rule(Action::Send, Always),
+    ];
+    assert_eq!(
+        state_of(&saved, &[], "email", "send_email"),
+        (Ask, Origin::GroupAction)
+    );
+}
+
+#[test]
+fn a_sessions_default_only_makes_things_stricter() {
+    let saved = [
+        default_rule(Action::Send, Ask),
+        group_rule("email", Action::Send, Always),
+    ];
+    let overlay = [Rule {
+        via_agent: true,
+        restriction_only: true,
+        ..default_rule(Action::Send, Never)
+    }];
+    assert_eq!(
+        state_of(&saved, &overlay, "email", "send_email"),
+        (Never, Origin::Session)
+    );
+    let view = view_of(&catalog(), saved.to_vec(), Some(overlay.to_vec()));
+    assert!(defaults_of(&view).contains(&(Action::Send, Never, Origin::Session)));
+    let send = pair(&view, "email", Action::Send).unwrap();
+    assert_eq!((send.state, send.origin), (Never, Origin::Session));
+}
+
+#[test]
+fn tightening_cannot_loosen_a_hidden_pair_or_a_default() {
+    // Lowering a default no operation follows today (every documents
+    // destroy has an exception) is still refused.
+    let saved = [
+        default_rule(Action::Destroy, Never),
+        group_rule("documents", Action::Destroy, Never),
+    ];
+    let lower = vec![change(default_target(Action::Destroy), Some(Ask))];
+    assert_eq!(tighten(&saved, lower.clone()), Err(Vec::new()));
+    assert!(asks_looser(&catalog(), (&saved, &[]), &lower).is_err());
+    let removal = vec![change(default_target(Action::Destroy), None)];
+    assert_eq!(tighten(&saved, removal), Err(Vec::new()));
+
+    // Loosening an exception on a pair no operation maps to.
+    let saved = [group_rule("documents", Action::Send, Never)];
+    let loosen = vec![change(group_action("documents", Action::Send), Some(Ask))];
+    assert_eq!(tighten(&saved, loosen), Err(Vec::new()));
+
+    // An explicit Allow exception that hides a stricter default from a
+    // pair no operation maps to.
+    let saved = [default_rule(Action::Send, Never)];
+    let allow = vec![change(
+        group_action("documents", Action::Send),
+        Some(Always),
+    )];
+    assert_eq!(tighten(&saved, allow.clone()), Err(Vec::new()));
+
+    // Tightening a default or a hidden pair passes.
+    assert_eq!(
+        tighten(&[], vec![change(default_target(Action::Send), Some(Ask))]),
+        Ok(())
+    );
+    assert_eq!(
+        tighten(
+            &[],
+            vec![change(group_action("documents", Action::Send), Some(Never))]
+        ),
+        Ok(())
+    );
+}
+
+#[test]
+fn removing_an_exception_asks_for_the_default() {
+    let catalog = catalog();
+    // Removing a Never exception under an Ask default asks for Ask.
+    let saved = [
+        default_rule(Action::Send, Ask),
+        group_rule("email", Action::Send, Never),
+    ];
+    let removal = [change(group_action("email", Action::Send), None)];
+    let refused = asks_looser(&catalog, (&saved, &[]), &removal).unwrap_err();
+    assert_eq!((refused[0].from, refused[0].to), (Never, Ask));
+
+    // Removing an Ask exception under a Never default asks for something
+    // stricter: allowed.
+    let saved = [
+        default_rule(Action::Send, Never),
+        group_rule("email", Action::Send, Ask),
+    ];
+    assert_eq!(asks_looser(&catalog, (&saved, &[]), &removal), Ok(()));
+
+    // Removing a default asks for always; the operations that follow it are
+    // named.
+    let saved = [default_rule(Action::Destroy, Ask)];
+    let refused = asks_looser(
+        &catalog,
+        (&saved, &[]),
+        &[change(default_target(Action::Destroy), None)],
+    )
+    .unwrap_err();
+    let named: Vec<&str> = refused.iter().map(|op| op.operation.as_str()).collect();
+    assert_eq!(named, ["delete_document", "delete_project"]);
+    assert!(refused.iter().all(|op| (op.from, op.to) == (Ask, Always)));
+}
+
+#[test]
+fn every_default_is_a_known_target() {
+    let changes: Vec<Change> = Action::ALL
+        .into_iter()
+        .map(|action| change(default_target(action), Some(Never)))
+        .collect();
+    assert!(unknown_targets(&catalog(), &changes).is_empty());
+}
+
+#[test]
+fn the_view_serializes_its_defaults_and_each_pairs_exception() {
+    let saved = vec![
+        default_rule(Action::Send, Ask),
+        group_rule("email", Action::Send, Always),
+    ];
+    let json = serde_json::to_value(view_of(&catalog(), saved, None)).unwrap();
+    assert_eq!(
+        json["defaults"][3],
+        serde_json::json!({ "action": "send", "state": "ask", "origin": "action" })
+    );
+    let email = json["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|group| group["group"] == "email")
+        .unwrap();
+    assert_eq!(
+        email["actions"][1],
+        serde_json::json!({
+            "action": "send",
+            "state": "always",
+            "origin": "group_action",
+            "exception": true,
+            "tools": 1,
+            "overrides": [],
+        })
+    );
+    assert_eq!(
+        json["rules"][0]["target"],
+        serde_json::json!({ "kind": "action", "action": "send" })
+    );
+    let parsed: Change = serde_json::from_value(serde_json::json!({
+        "target": { "kind": "action", "action": "destroy" },
+        "state": "never",
+    }))
+    .unwrap();
+    assert_eq!(parsed, change(default_target(Action::Destroy), Some(Never)));
+}
+
+/// Resolution as it was before action defaults, kept to pin that every rule
+/// set saved then resolves exactly as it did: an operation's person setting,
+/// else the stricter of a restriction and its group's action, else its
+/// group's action, else always; the overlay's operation and group rows only
+/// add.
+fn effective_before_defaults(
+    saved: &[Rule],
+    overlay: &[Rule],
+    entry: &CatalogEntry,
+) -> (PermissionState, Origin) {
+    let group_of = |rules: &[Rule]| {
+        rules.iter().find_map(|rule| match &rule.target {
+            Target::GroupAction { group, action }
+                if *group == entry.group && *action == entry.action =>
+            {
+                Some(rule.state)
+            }
+            _ => None,
+        })
+    };
+    let tool_of = |rules: &[Rule]| {
+        rules
+            .iter()
+            .find(|rule| {
+                rule.target
+                    == Target::Tool {
+                        service: entry.service.clone(),
+                        operation: entry.operation.clone(),
+                    }
+            })
+            .map(|rule| (rule.state, rule.restriction_only))
+    };
+    let group = match group_of(saved) {
+        Some(state) => (state, Origin::GroupAction),
+        None => (Always, Origin::Default),
+    };
+    let (base, origin) = match tool_of(saved) {
+        Some((state, false)) => (state, Origin::Tool),
+        Some((state, true)) if state > group.0 => (state, Origin::Tool),
+        Some(_) | None => group,
+    };
+    let extra = tool_of(overlay)
+        .map(|(state, _)| state)
+        .into_iter()
+        .chain(group_of(overlay))
+        .max()
+        .unwrap_or(Always);
+    if extra > base {
+        (extra, Origin::Session)
+    } else {
+        (base, origin)
+    }
+}
+
+/// A small deterministic generator, so the fixtures are the same each run.
+struct Fixtures(u64);
+
+impl Fixtures {
+    fn next(&mut self, below: usize) -> usize {
+        self.0 = self
+            .0
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        usize::try_from(self.0 >> 33).unwrap() % below
+    }
+
+    /// A rule set the tables before action defaults could hold: no
+    /// `action` rows, never `always` on a group's action (and never at all in
+    /// an overlay).
+    fn rules(&mut self, catalog: &Catalog, overlay: bool) -> Vec<Rule> {
+        let mut rules = Vec::new();
+        let states = if overlay {
+            &[Ask, Never][..]
+        } else {
+            &[Always, Ask, Never][..]
+        };
+        let groups = ["documents", "email", "calendar", "tasks"];
+        for _ in 0..self.next(6) {
+            let group = groups[self.next(groups.len())];
+            let action = Action::ALL[self.next(5)];
+            let state = [Ask, Never][self.next(2)];
+            let restriction = overlay || self.next(2) == 0;
+            rules.retain(|rule: &Rule| rule.target != group_action(group, action));
+            rules.push(Rule {
+                via_agent: restriction,
+                restriction_only: restriction,
+                ..group_rule(group, action, state)
+            });
+        }
+        for _ in 0..self.next(4) {
+            let entry = &catalog.entries[self.next(catalog.entries.len())];
+            let state = states[self.next(states.len())];
+            let restriction = overlay || self.next(2) == 0;
+            let target = tool(&entry.service, &entry.operation);
+            rules.retain(|rule: &Rule| rule.target != target);
+            rules.push(Rule {
+                via_agent: restriction,
+                restriction_only: restriction,
+                ..tool_rule(&entry.service, &entry.operation, state)
+            });
+        }
+        rules
+    }
+}
+
+#[test]
+fn existing_rule_sets_resolve_exactly_as_before() {
+    let catalog = catalog();
+    let mut fixtures = Fixtures(0x5eed);
+    for _ in 0..5_000 {
+        let saved = fixtures.rules(&catalog, false);
+        let overlay = fixtures.rules(&catalog, true);
+        let (saved_layer, overlay_layer) = (Layer::new(&saved), Layer::new(&overlay));
+        for entry in &catalog.entries {
+            assert_eq!(
+                effective(&saved_layer, &overlay_layer, entry),
+                effective_before_defaults(&saved, &overlay, entry),
+                "{}.{} under {saved:?} and {overlay:?}",
+                entry.service,
+                entry.operation
+            );
+        }
+    }
+}
+
+impl Fixtures {
+    /// A rule set with defaults and explicit exceptions of any state, as the
+    /// tables hold them now.
+    fn rules_with_defaults(&mut self, catalog: &Catalog, overlay: bool) -> Vec<Rule> {
+        let mut rules = self.rules(catalog, overlay);
+        for _ in 0..self.next(3) {
+            let action = Action::ALL[self.next(5)];
+            let state = [Ask, Never][self.next(2)];
+            rules.retain(|rule: &Rule| rule.target != default_target(action));
+            rules.push(Rule {
+                via_agent: overlay,
+                restriction_only: overlay,
+                ..default_rule(action, state)
+            });
+        }
+        if !overlay && self.next(2) == 0 {
+            let group = ["documents", "email", "calendar"][self.next(3)];
+            let action = Action::ALL[self.next(5)];
+            rules.retain(|rule: &Rule| rule.target != group_action(group, action));
+            rules.push(group_rule(group, action, Always));
+        }
+        rules
+    }
+}
+
+#[test]
+fn the_view_and_the_gate_agree_for_every_operation() {
+    let catalog = catalog();
+    let mut fixtures = Fixtures(0xdefa);
+    for _ in 0..2_000 {
+        let saved = fixtures.rules_with_defaults(&catalog, false);
+        let overlay = fixtures.rules_with_defaults(&catalog, true);
+        let view = view_of(&catalog, saved.clone(), Some(overlay.clone()));
+        let (saved_layer, overlay_layer) = (Layer::new(&saved), Layer::new(&overlay));
+        let mut restricted = 0;
+        for entry in &catalog.entries {
+            let listed = pair(&view, &entry.group, entry.action).unwrap();
+            let shown = listed
+                .overrides
+                .iter()
+                .find(|item| item.service == entry.service && item.operation == entry.operation)
+                .map_or(listed.state, |item| item.state);
+            // Origins may differ where an operation's own setting equals its
+            // pair's: the view lists it under the pair.
+            let gate = effective(&saved_layer, &overlay_layer, entry);
+            assert_eq!(
+                shown, gate.0,
+                "{}.{} under {saved:?} and {overlay:?}",
+                entry.service, entry.operation
+            );
+            if gate.0 != Always {
+                restricted += 1;
+            }
+        }
+        assert_eq!(view.restricted, restricted);
     }
 }

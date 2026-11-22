@@ -524,13 +524,15 @@ where
             .ok_or(PermissionError::Forbidden)?;
         let policy = self.policy_id(&owner).await?;
 
-        // A tightening never stores `always`, so a tool's `always` is saved
-        // as clearing its own setting, and tool settings not made by a
-        // signed-in person only add to their group's. A tool state the agent asks for that is looser
-        // than the tool's state now (an `always` under a stricter group) is
-        // refused rather than quietly saved as a no-op. The checks run on the
-        // rules as they stand under the store's lock, so a concurrent change
-        // can't slip between the check and the write.
+        // A tightening never stores `always`, so an `always` is saved as
+        // clearing its setting, and settings not made by a signed-in person
+        // only add to what they sit under (a tool to its group's action, an
+        // exception to the default). A state the agent asks for that is
+        // looser than its target's now (an `always` under a stricter group,
+        // removing a default) is refused rather than quietly saved as a
+        // no-op. The checks run on the rules as they stand under the store's
+        // lock, so a concurrent change can't slip between the check and the
+        // write.
         let requested = changes.clone();
         let changes = resolve::normalize(changes, true);
         let set_by = SetBy::of(&caller.credential);
