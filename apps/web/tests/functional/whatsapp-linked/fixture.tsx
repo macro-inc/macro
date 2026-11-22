@@ -31,11 +31,12 @@ import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { SidePanel } from '@components/app/side-panel';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { useExternalChatsQuery } from '@queries/external-chats';
 import { queryReadyGate } from '@queries/gate';
@@ -213,7 +214,7 @@ render(
               <EmailLinksContextProvider>
                 {/* The app root provides Macro's items; the composer's `@` menu
                     reads them. An external chat offers only its people. */}
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider directory={staticChannelDirectory(() => [])}>
                   <QuickAccessContextProvider value={noQuickAccess}>
                     <Router
                       root={(props) => (
@@ -226,7 +227,7 @@ render(
                       <Route path="*" component={Page} />
                     </Router>
                   </QuickAccessContextProvider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </EmailLinksContextProvider>
             </Suspense>
           </UserContextProvider>
