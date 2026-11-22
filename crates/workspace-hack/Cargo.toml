@@ -46,6 +46,8 @@ chacha20 = { version = "0.10", default-features = false, features = ["legacy", "
 chrono = { version = "0.4", features = ["serde"] }
 cipher-9fbad63c4bcf4a8f = { package = "cipher", version = "0.4", default-features = false, features = ["block-padding", "std"] }
 cipher-d8f496e17d97b5cb = { package = "cipher", version = "0.5", default-features = false, features = ["block-padding", "rand_core", "stream-wrapper"] }
+clap = { version = "4", features = ["derive", "env"] }
+clap_builder = { version = "4", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
 crossbeam-utils = { version = "0.8" }
 crypto-bigint = { version = "0.5", features = ["generic-array", "zeroize"] }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
@@ -91,6 +93,7 @@ indexmap = { version = "2", features = ["serde"] }
 inout-6f8ce4dd05d13bba = { package = "inout", version = "0.2", default-features = false, features = ["block-padding"] }
 inout-c65f7effa3be6d31 = { package = "inout", version = "0.1", default-features = false, features = ["std"] }
 insta = { version = "1", features = ["glob", "json"] }
+ipnet = { version = "2", features = ["serde"] }
 itertools-594e8ee84c453af0 = { package = "itertools", version = "0.13" }
 itertools-5ef9efb8ec2df382 = { package = "itertools", version = "0.12" }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
@@ -214,6 +217,8 @@ chacha20 = { version = "0.10", default-features = false, features = ["legacy", "
 chrono = { version = "0.4", features = ["serde"] }
 cipher-9fbad63c4bcf4a8f = { package = "cipher", version = "0.4", default-features = false, features = ["block-padding", "std"] }
 cipher-d8f496e17d97b5cb = { package = "cipher", version = "0.5", default-features = false, features = ["block-padding", "rand_core", "stream-wrapper"] }
+clap = { version = "4", features = ["derive", "env"] }
+clap_builder = { version = "4", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
 crossbeam-utils = { version = "0.8" }
 crypto-bigint = { version = "0.5", features = ["generic-array", "zeroize"] }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
@@ -261,6 +266,7 @@ indexmap = { version = "2", features = ["serde"] }
 inout-6f8ce4dd05d13bba = { package = "inout", version = "0.2", default-features = false, features = ["block-padding"] }
 inout-c65f7effa3be6d31 = { package = "inout", version = "0.1", default-features = false, features = ["std"] }
 insta = { version = "1", features = ["glob", "json"] }
+ipnet = { version = "2", features = ["serde"] }
 itertools-594e8ee84c453af0 = { package = "itertools", version = "0.13" }
 itertools-5ef9efb8ec2df382 = { package = "itertools", version = "0.12" }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
@@ -364,7 +370,6 @@ data-encoding = { version = "2" }
 futures-lite = { version = "2" }
 hyper-rustls = { version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
-ipnet = { version = "2", features = ["serde"] }
 linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
 mio = { version = "1", features = ["net", "os-ext"] }
 nix = { version = "0.31", features = ["feature", "ioctl", "mman", "socket"] }
@@ -387,7 +392,6 @@ data-encoding = { version = "2" }
 futures-lite = { version = "2" }
 hyper-rustls = { version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
-ipnet = { version = "2", features = ["serde"] }
 linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
 mio = { version = "1", features = ["net", "os-ext"] }
 nix = { version = "0.31", features = ["feature", "ioctl", "mman", "socket"] }
@@ -411,7 +415,6 @@ errno = { version = "0.3" }
 futures-lite = { version = "2" }
 hyper-rustls = { version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
-ipnet = { version = "2", features = ["serde"] }
 mio = { version = "1", features = ["net", "os-ext"] }
 nix = { version = "0.31", features = ["feature", "fs", "ioctl", "mman", "socket"] }
 objc2 = { version = "0.6" }
@@ -433,7 +436,6 @@ errno = { version = "0.3" }
 futures-lite = { version = "2" }
 hyper-rustls = { version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
-ipnet = { version = "2", features = ["serde"] }
 mio = { version = "1", features = ["net", "os-ext"] }
 nix = { version = "0.31", features = ["feature", "fs", "ioctl", "mman", "socket"] }
 objc2 = { version = "0.6" }

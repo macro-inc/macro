@@ -73,6 +73,7 @@ mod crm_member_access;
 mod delete_team;
 mod directory_changes;
 mod invite_link;
+mod member_access;
 mod team_agent;
 
 use delete_team::{Journal, RecordingOwnedEntityCleanup, Step};

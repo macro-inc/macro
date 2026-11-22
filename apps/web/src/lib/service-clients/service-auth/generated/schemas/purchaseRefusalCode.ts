@@ -19,4 +19,6 @@ export const PurchaseRefusalCode = {
   payment_declined: 'payment_declined',
   no_room: 'no_room',
   invite_in_progress: 'invite_in_progress',
+  host_not_eligible: 'host_not_eligible',
+  self_hosted_not_enabled: 'self_hosted_not_enabled',
 } as const;

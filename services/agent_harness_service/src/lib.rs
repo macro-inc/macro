@@ -44,6 +44,7 @@ mod runtime_commands;
 mod runtime_gauges;
 mod scheduling;
 mod speech_gateway;
+mod teammates;
 mod trigger;
 mod voice_gateway;
 
@@ -1520,6 +1521,21 @@ pub async fn run() -> anyhow::Result<()> {
         )),
         live_sessions,
     );
+    // Agent teammates on their owners' own machines: this replica delivers to
+    // the machines whose macrod sockets it holds. Set before anything dials.
+    let teammate_delivery = teammates::TeammateDelivery::new(
+        Arc::new(
+            team_agents::outbound::pg_teammate_installs::PgTeammateInstalls::new(pool.clone()),
+        ),
+        Arc::new(teammates::auth_installs::AuthInstalls::new(
+            config.authentication_service_secret_key.as_ref(),
+        )?),
+        Arc::clone(&runtimes) as Arc<dyn teammates::TeammateSockets>,
+        teammates::teammate_runtime_images(),
+    );
+    let (teammate_reports, teammate_report_receiver) = tokio::sync::mpsc::unbounded_channel();
+    runtimes.report_teammates_to(teammate_reports);
+    tokio::spawn(Arc::clone(&teammate_delivery).run(teammate_report_receiver));
     let harnessd: computers::HostedHarnessd = computers::harnessd::Harnessd::new(
         match &computer_operator {
             Some(operator) => Arc::new(computers::FleetTransport::new(Arc::clone(operator))),
@@ -1809,6 +1825,7 @@ pub async fn run() -> anyhow::Result<()> {
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
     let runtime_command_runtimes = Arc::clone(&runtimes);
+    let runtime_command_teammates = Arc::clone(&teammate_delivery);
     // The replica holding an agent computer's socket issues its agent's
     // environment; it never crosses the runtime bus. The authentication
     // service checks its own internal key, not ours. Only a deployment that
@@ -1878,6 +1895,7 @@ pub async fn run() -> anyhow::Result<()> {
                             ))
                         })
                     },
+                    Some(Arc::clone(&runtime_command_teammates)),
                 )
             },
         )
@@ -2250,6 +2268,13 @@ pub async fn run() -> anyhow::Result<()> {
         feature_flags.clone(),
     )
     .await?;
+    // Self-hosted macrod's teammate spans go on to this service's collector.
+    let teammate_telemetry_store: Arc<dyn teammates::InstallStore> = Arc::new(
+        team_agents::outbound::pg_teammate_installs::PgTeammateInstalls::new(pool.clone()),
+    );
+    let teammate_forwarder: Arc<dyn teammates::telemetry::TraceForwarder> = Arc::new(
+        teammates::telemetry::CollectorForwarder::new(macro_entrypoint::otel_endpoint())?,
+    );
     let http_shutdown = service_shutdown.clone();
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -2268,6 +2293,22 @@ pub async fn run() -> anyhow::Result<()> {
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
+            .with_teammates(
+                teammates::router(
+                    redis.clone(),
+                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                )
+                .merge(teammates::telemetry::router(
+                    teammates::telemetry::TelemetryState {
+                        store: teammate_telemetry_store,
+                        forwarder: teammate_forwarder,
+                        limit: Arc::default(),
+                        authorization_state: MacroAuthorizationState::new(Arc::new(
+                            authorization_service.clone(),
+                        )),
+                    },
+                )),
+            )
             .with_claude_access(match &computer_operator {
                 Some(operator) => computer_claude.merge(computers::moves::router(
                     Arc::clone(operator),

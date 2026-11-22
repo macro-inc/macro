@@ -12,7 +12,9 @@ export type PurchaseRefusalErrorCode =
   | 'TEAM_ON_TRIAL'
   | 'PAYMENT_DECLINED'
   | 'NO_ROOM'
-  | 'INVITE_IN_PROGRESS';
+  | 'INVITE_IN_PROGRESS'
+  | 'HOST_NOT_ELIGIBLE'
+  | 'SELF_HOSTED_NOT_ENABLED';
 
 /** The `{ message, code? }` error body both purchase routes answer with. */
 async function errorBody(
@@ -52,6 +54,11 @@ export async function readPurchaseRefusal(
     .with(PurchaseRefusalCode.payment_declined, () => 'PAYMENT_DECLINED')
     .with(PurchaseRefusalCode.no_room, () => 'NO_ROOM')
     .with(PurchaseRefusalCode.invite_in_progress, () => 'INVITE_IN_PROGRESS')
+    .with(PurchaseRefusalCode.host_not_eligible, () => 'HOST_NOT_ELIGIBLE')
+    .with(
+      PurchaseRefusalCode.self_hosted_not_enabled,
+      () => 'SELF_HOSTED_NOT_ENABLED'
+    )
     // A code a newer server adds is left to the caller's own reading.
     .exhaustive(() => undefined);
   if (!code) return undefined;

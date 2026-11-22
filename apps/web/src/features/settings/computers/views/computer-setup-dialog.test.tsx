@@ -2,7 +2,6 @@
  * @vitest-environment jsdom
  */
 
-import { agentSettingsRequest } from '@app/features/settings/agentSettingsState';
 import type { ComputerStatus } from '@service-auth/computers';
 import {
   cleanup,
@@ -204,6 +203,9 @@ it('opens a chat with the agent it just set up, as the one action', () => {
 
   expect(onClose).toHaveBeenCalledOnce();
   expect(mocks.openAgentDm).toHaveBeenCalledWith('computer-agent');
+  expect(
+    screen.queryByRole('button', { name: 'Add another agent' })
+  ).toBeNull();
 });
 
 it('ends on Done when agent chats are off, with nothing else to open', () => {
@@ -216,21 +218,8 @@ it('ends on Done when agent chats are off, with nothing else to open', () => {
   fireEvent.click(done[0]);
   expect(onClose).toHaveBeenCalledOnce();
   expect(
-    screen.getByRole('button', { name: 'Add another agent' })
-  ).toBeTruthy();
-});
-
-it('opens the create form with this computer chosen as where it runs', () => {
-  const onClose = readyStep();
-
-  fireEvent.click(screen.getByRole('button', { name: 'Add another agent' }));
-
-  expect(onClose).toHaveBeenCalledOnce();
-  expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
-  expect(agentSettingsRequest()).toMatchObject({
-    type: 'create',
-    harnessId: 'computer-harness',
-  });
+    screen.queryByRole('button', { name: 'Add another agent' })
+  ).toBeNull();
 });
 
 it('only closes from an agent editor, whose Where it runs takes the computer', () => {

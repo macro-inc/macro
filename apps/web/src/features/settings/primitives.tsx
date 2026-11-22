@@ -319,7 +319,9 @@ export function ChoiceRow(props: {
   value: string;
   checked: boolean;
   title: string;
-  description: string;
+  /** Omitted when the title says it all. Stays readable when disabled: it
+   * often says why. */
+  description?: string;
   suggested?: boolean;
   disabled?: boolean;
   /** Trailing content, e.g. a price or an action for an unavailable choice. */
@@ -328,7 +330,8 @@ export function ChoiceRow(props: {
 }) {
   return (
     <label
-      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted has-checked:border-accent has-checked:bg-accent-bg"
+      // edge-muted vanishes on a dark dialog, so dark mode takes the full edge.
+      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted dark-mode:border-edge has-checked:border-accent has-checked:bg-accent-bg"
       classList={{
         'cursor-not-allowed': props.disabled,
         'p-4': props.suggested,
@@ -343,11 +346,16 @@ export function ChoiceRow(props: {
         disabled={props.disabled}
         onChange={props.onChange}
         aria-label={props.title}
-        class="mt-0.5 accent-accent"
+        // Drawn by hand: a native radio is a grey disc in dark mode whether or
+        // not it can be picked. An open ring, an accent dot once picked.
+        class="mt-0.5 size-4 shrink-0 appearance-none rounded-full border border-ink-muted bg-surface checked:border-[5px] checked:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:border-edge"
         classList={{ 'opacity-50': props.disabled }}
       />
-      <span class="min-w-0 flex-1" classList={{ 'opacity-50': props.disabled }}>
-        <span class="flex flex-wrap items-center gap-2 text-sm font-medium text-ink">
+      <span class="min-w-0 flex-1">
+        <span
+          class="flex flex-wrap items-center gap-2 text-sm font-medium text-ink"
+          classList={{ 'opacity-50': props.disabled }}
+        >
           {props.title}
           <Show when={props.suggested}>
             <span class="rounded-full bg-ink/6 px-2 py-0.5 text-xs font-medium text-ink-muted">
@@ -355,9 +363,11 @@ export function ChoiceRow(props: {
             </span>
           </Show>
         </span>
-        <span class="mt-0.5 block text-sm text-ink-muted">
-          {props.description}
-        </span>
+        <Show when={props.description}>
+          <span class="mt-0.5 block text-sm text-ink-muted">
+            {props.description}
+          </span>
+        </Show>
       </span>
       <Show when={props.aside}>
         <span class="shrink-0 self-center text-right">{props.aside}</span>

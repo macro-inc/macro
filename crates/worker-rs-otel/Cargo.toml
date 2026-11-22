@@ -8,7 +8,7 @@ publish = false
 getrandom = { workspace = true, features = ["wasm_js"] }
 http.workspace = true
 opentelemetry = { workspace = true, features = ["trace"] }
-opentelemetry-proto = { version = "0.31.0", default-features = false, features = [
+opentelemetry-proto = { workspace = true, features = [
   "gen-tonic-messages",
   "logs",
   "with-serde",

@@ -38,14 +38,30 @@ pub fn is_macro_computer() -> bool {
 pub struct Computer {
     workspace: PathBuf,
     egress_url: Option<String>,
+    /// On an agent's computer, the controller of its `macro-agent.service`
+    /// (a no-op on an image whose unit restarts itself).
+    #[cfg(unix)]
+    hosted_agent: Option<crate::teammate::hosted_unit::HostedAgent>,
 }
 
 impl Computer {
-    /// The enrolled computer's settings.
+    /// The enrolled computer's settings; on an agent's computer (it has the
+    /// agent inbox) this starts controlling the agent's unit.
     pub fn new(macro_api: &MacroApi, workspace: &std::path::Path) -> Self {
         Self {
             workspace: workspace.to_owned(),
             egress_url: macro_api.egress_url.clone(),
+            #[cfg(unix)]
+            hosted_agent: hosted_agent(),
+        }
+    }
+
+    /// A new agent environment was staged in the inbox: install it and
+    /// start the agent again on it, when macrod controls the agent's unit.
+    pub fn agent_delivered(&self) {
+        #[cfg(unix)]
+        if let Some(agent) = &self.hosted_agent {
+            agent.delivered();
         }
     }
 
@@ -54,6 +70,28 @@ impl Computer {
     pub fn prepare_session(&self, frame: &mut Value) -> rootcause::Result<()> {
         prepare_session(frame, &self.workspace, self.egress_url.as_deref())
     }
+}
+
+/// The agent unit's controller on an agent's computer; tests never touch
+/// the real unit.
+#[cfg(unix)]
+fn hosted_agent() -> Option<crate::teammate::hosted_unit::HostedAgent> {
+    use crate::teammate::hosted_unit::{
+        HostedAgent, HostedPaths, PREVIOUS_EXIT_FILE, ProcessSystemctl,
+    };
+
+    let inbox = std::path::Path::new(crate::agent_env::AGENT_ENV_INBOX).parent()?;
+    if cfg!(test) || !inbox.exists() {
+        return None;
+    }
+    let macrod = crate::config::macrod_directory()?;
+    Some(HostedAgent::start(
+        ProcessSystemctl,
+        HostedPaths {
+            policy: macrod.join("hosted-agent.json"),
+            previous_exit: PREVIOUS_EXIT_FILE.into(),
+        },
+    ))
 }
 
 /// Merge the session env into a session-starting request's

@@ -190,6 +190,10 @@ async fn run_server<H>(
                     ToServerMessage::ModelProbeResponse { .. } => {
                         tracing::warn!("dropping a model probe response without a probe waiter");
                     }
+                    // Teammate hosting is the harness service's, not this relay's.
+                    ToServerMessage::TeammateHost { .. } | ToServerMessage::TeammateStatus { .. } => {
+                        tracing::debug!("ignoring a teammate report on a relay that hosts none");
+                    }
                 }
             }
             message = acp.rx.next(), if acp_open => {
@@ -244,8 +248,10 @@ async fn run_runtime<H>(
                     }
                     // Only hosted computers run agent teammates; their
                     // daemon handles this message itself.
-                    ToRuntimeMessage::ApplyAgent { .. } => {
-                        tracing::debug!("ignoring an agent environment this runtime cannot apply");
+                    ToRuntimeMessage::ApplyAgent { .. }
+                    | ToRuntimeMessage::RunTeammate { .. }
+                    | ToRuntimeMessage::StopTeammate { .. } => {
+                        tracing::debug!("ignoring an agent teammate message this runtime cannot apply");
                     }
                     ToRuntimeMessage::ModelProbeRequest => {
                         let model_probes = Arc::clone(&model_probes);
@@ -260,8 +266,9 @@ async fn run_runtime<H>(
                             let _ = outbound.send(ToServerMessage::ModelProbeResponse { result });
                         });
                     }
-                    // This side serves one agent and no triggers.
-                    ToRuntimeMessage::AgentsChanged => {}
+                    // This side serves one agent and no triggers, and
+                    // hosts no teammates.
+                    ToRuntimeMessage::AgentsChanged | ToRuntimeMessage::RecheckTeammateHost { .. } => {}
                 }
             }
             result = probes.join_next(), if !probes.is_empty() => {

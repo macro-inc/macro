@@ -125,7 +125,7 @@ export type Startup = {
   readonly mcpServers: Readonly<Record<string, McpServer>>;
   /**
    * What every child (a script's process, Claude Code) is started under: on
-   * a computer, bubblewrap with the systemd credentials directory hidden, so
+   * a computer, bubblewrap with the credentials directory hidden, so
    * only this process can read the enrollment's secrets; nothing elsewhere.
    */
   readonly sandbox: readonly string[];
@@ -133,7 +133,7 @@ export type Startup = {
   readonly browserEndpoint: string;
 };
 
-/** Set by systemd when the unit loads credentials (`LoadCredential=`). */
+/** The directory holding the credentials file, hidden from children: set by systemd when the unit loads credentials (`LoadCredential=`), and by the teammate runtime image (`/run/teammate`, which holds only the agent.env bind). */
 const credentialsDirectory = 'CREDENTIALS_DIRECTORY';
 
 /** Where harnessd keeps the computer's Claude sign-in, which the `claude` wrapper reads; set by the agent's unit. */

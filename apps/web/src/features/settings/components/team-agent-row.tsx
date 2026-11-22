@@ -14,6 +14,14 @@ export function TeamAgentRow(props: {
   agent: TeamAgent;
   /** Its ⋯; left out for viewers who can't change anything. */
   menu?: JSX.Element;
+  /** Which of its owner's machines it runs on, if it runs on one. */
+  runsOn?: JSX.Element;
+  /** Its status in words, in place of the status's own (e.g. "Moving to laptop"). */
+  statusLabel?: string;
+  /** Why its own machine couldn't run it, under its status. */
+  problem?: string;
+  /** A problem the owner caused on purpose (a parked agent) reads muted, not as a failure. */
+  problemTone?: 'failure' | 'muted';
   /** Which Claude its computer runs on, for viewers who manage it. */
   claude?: JSX.Element;
   /** The step its computer's setup is on, while it is being set up. */
@@ -41,10 +49,29 @@ export function TeamAgentRow(props: {
           <div class="text-xs text-ink-muted truncate">
             {props.agent.jobDescription}
           </div>
-          {/* Its summary line, where a person's role and plan are. */}
-          <div class="flex">
-            <TeamAgentStatusLabel status={props.agent.status} />
+          {/* Its summary line, where a person's role and plan are: its
+              status, then the machine it runs on. */}
+          <div class="flex min-w-0 items-center gap-1.5">
+            <TeamAgentStatusLabel
+              status={props.agent.status}
+              label={props.statusLabel}
+            />
+            {props.runsOn}
           </div>
+          <Show when={props.problem}>
+            {(problem) => (
+              <div
+                data-agent-problem
+                class="text-xs"
+                classList={{
+                  'text-failure': props.problemTone !== 'muted',
+                  'text-ink-muted': props.problemTone === 'muted',
+                }}
+              >
+                {problem()}
+              </div>
+            )}
+          </Show>
           <Show when={props.setupStep}>
             {(step) => (
               <div

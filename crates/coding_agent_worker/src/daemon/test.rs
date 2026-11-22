@@ -83,6 +83,7 @@ async fn stop_does_not_wait_for_in_flight_work() {
         handoff: crate::harness::Handoffs::channel().1,
         runtime_connected: watch::channel(false).1,
         trigger_stream: watch::channel(TriggerStreamHealth::Connecting).1,
+        hosting_problem: watch::channel(None).1,
         _presence_watch: AbortOnDropHandle::new(tokio::spawn(async {})),
     };
 
@@ -378,6 +379,7 @@ async fn a_stalled_bound_agent_refresh_keeps_the_event_stream() {
     let agents_changed = Notify::new();
     let mut position = StreamPosition::new(std::time::SystemTime::now());
     let (health, _) = watch::channel(TriggerStreamHealth::Connecting);
+    let hosting = crate::harness::Hosting::default();
     let serving = serve_once(
         &client,
         &NoWork,
@@ -385,6 +387,7 @@ async fn a_stalled_bound_agent_refresh_keeps_the_event_stream() {
         &agents_changed,
         &mut position,
         &health,
+        &hosting,
     );
     tokio::pin!(serving);
 
@@ -446,6 +449,7 @@ async fn a_refused_credential_on_refresh_ends_the_event_stream() {
         &agents_changed,
         &mut position,
         &health,
+        &crate::harness::Hosting::default(),
     )
     .await;
     let ServeOutcome::Ended { error, lasted } = outcome else {
@@ -453,6 +457,173 @@ async fn a_refused_credential_on_refresh_ends_the_event_stream() {
     };
     assert!(format!("{error}").contains("401"), "{error}");
     assert!(lasted.is_some(), "the stream had opened");
+}
+
+#[tokio::test]
+async fn an_accepted_bound_agent_read_runs_agents_stopped_for_refused_credentials() {
+    // Stopped from the stream path while the runtime connection stayed up:
+    // the next accepted harness call, here the bound-agent read, brings
+    // them back without a runtime redial.
+    let (teammates, engine, _directory) =
+        crate::teammate::test::fake_hosting_stopped_for_refused_credentials().await;
+    let mut statuses = teammates.subscribe();
+    let storage = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut api: Config = toml::from_str(include_str!("../../config.example.toml")).unwrap();
+    api.macro_api.storage_url = format!("http://{}", storage.local_addr().unwrap());
+    let (seen, _requests) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(serve_storage_with_second_refresh(storage, seen, None));
+    let client = EventStreamClient::new(
+        &api.macro_api,
+        &HarnessCredentials {
+            harness_id: harness_id::HarnessId::TEST_A,
+            token: "mhns_test".to_owned(),
+            pairing_id: None,
+        },
+    );
+    let cancel = CancellationToken::new();
+    let agents_changed = Notify::new();
+    let mut position = StreamPosition::new(std::time::SystemTime::now());
+    let (health, _) = watch::channel(TriggerStreamHealth::Connecting);
+    let hosting = crate::harness::Hosting::with(teammates.clone());
+    let serving = serve_once(
+        &client,
+        &NoWork,
+        &cancel,
+        &agents_changed,
+        &mut position,
+        &health,
+        &hosting,
+    );
+    tokio::pin!(serving);
+
+    let running = async {
+        while statuses.recv().await.unwrap().state
+            != agent_runtime_protocol::domain::schema::v0::TeammateRunState::Running
+        {}
+    };
+    tokio::select! {
+        _ = &mut serving => panic!("serving ended"),
+        outcome = tokio::time::timeout(Duration::from_secs(5), running) => {
+            outcome.expect("the agent stopped for refused credentials runs again");
+        }
+    }
+    assert_eq!(engine.runs(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_busy_stream_still_refreshes_the_bound_agents_every_ten_seconds() {
+    // A heartbeat every second must not keep pushing the refresh back: it
+    // is how a removed machine learns its credentials are refused.
+    let storage = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut api: Config = toml::from_str(include_str!("../../config.example.toml")).unwrap();
+    api.macro_api.storage_url = format!("http://{}", storage.local_addr().unwrap());
+    let (seen, mut requests) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(serve_storage_with_busy_stream(storage, seen));
+    let client = EventStreamClient::new(
+        &api.macro_api,
+        &HarnessCredentials {
+            harness_id: harness_id::HarnessId::TEST_A,
+            token: "mhns_test".to_owned(),
+            pairing_id: None,
+        },
+    );
+    let cancel = CancellationToken::new();
+    let agents_changed = Notify::new();
+    let mut position = StreamPosition::new(std::time::SystemTime::now());
+    let (health, _) = watch::channel(TriggerStreamHealth::Connecting);
+    let hosting = crate::harness::Hosting::default();
+    let serving = serve_once(
+        &client,
+        &NoWork,
+        &cancel,
+        &agents_changed,
+        &mut position,
+        &health,
+        &hosting,
+    );
+    tokio::pin!(serving);
+
+    let started = tokio::time::Instant::now();
+    let mut refreshes = 0;
+    while refreshes < 4 {
+        tokio::select! {
+            _ = &mut serving => panic!("serving ended"),
+            () = tokio::time::sleep(Duration::from_secs(60)) => panic!("only {refreshes} bound-agent reads in a minute"),
+            path = requests.recv() => {
+                if path.unwrap() == "/harnesses/me/agents" {
+                    refreshes += 1;
+                }
+            }
+        }
+    }
+    // The first read, then three refreshes ten seconds apart.
+    assert!(
+        started.elapsed() <= Duration::from_secs(31),
+        "{:?}",
+        started.elapsed()
+    );
+    cancel.cancel();
+}
+
+/// Storage for one bound agent whose event stream sends a heartbeat every
+/// second; each request's path goes to `seen`.
+async fn serve_storage_with_busy_stream(
+    storage: tokio::net::TcpListener,
+    seen: tokio::sync::mpsc::UnboundedSender<String>,
+) {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+    const AGENTS: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         [{\"bot_id\":\"00000000-0000-0000-0000-000000000001\",\"name\":\"a\",\"handle\":\"a\"}]";
+    const HARNESS: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         {\"allow_permission_bypass\":false,\"id\":\"00000000-0000-0000-0000-00000000000a\",\
+          \"kind\":\"macrod\",\"name\":\"desk\",\
+          \"owner\":{\"type\":\"user\",\"user_id\":\"macro|owner@example.com\"},\
+          \"shared_team_ids\":[],\"created_by\":\"macro|owner@example.com\",\"created_at\":\"2026-11-01T00:00:00Z\",\
+          \"updated_at\":\"2026-11-01T00:00:00Z\",\"connected\":true,\"last_connected_at\":null}";
+    const STREAM: &str =
+        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n";
+
+    loop {
+        let Ok((mut socket, _)) = storage.accept().await else {
+            return;
+        };
+        let mut request = [0; 4096];
+        let read = socket.read(&mut request).await.unwrap_or(0);
+        let path = String::from_utf8_lossy(&request[..read])
+            .split_whitespace()
+            .nth(1)
+            .and_then(|target| target.split('?').next())
+            .unwrap_or_default()
+            .to_owned();
+        let _ = seen.send(path.clone());
+        match path.as_str() {
+            "/harnesses/me/agents" | "/harnesses/me" => {
+                let answer = if path == "/harnesses/me" {
+                    HARNESS
+                } else {
+                    AGENTS
+                };
+                let _ = socket.write_all(answer.as_bytes()).await;
+                let _ = socket.shutdown().await;
+            }
+            _ => {
+                tokio::spawn(async move {
+                    let _ = socket.write_all(STREAM.as_bytes()).await;
+                    loop {
+                        if socket
+                            .write_all(b"event: heartbeat\ndata: \n\n")
+                            .await
+                            .is_err()
+                        {
+                            return;
+                        }
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                });
+            }
+        }
+    }
 }
 
 /// Never runs: no event reaches it.
@@ -528,4 +699,66 @@ async fn serve_storage_with_second_refresh(
             None => held.push(socket),
         }
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_hosting_setup_is_tried_again_until_it_succeeds() {
+    // Setting up hosting failed at start (another macrod writing the same
+    // file, say): it is tried again with backoff, and the machine hosts once
+    // it succeeds, with no restart.
+    let ((teammates, _report), _engine, _exit, _directory) =
+        crate::teammate::test::fake_hosting().await;
+    let mut teammates = Some(
+        std::sync::Arc::try_unwrap(teammates)
+            .unwrap_or_else(|_| panic!("the only reference to the teammates")),
+    );
+    let attempts = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let counted = std::sync::Arc::clone(&attempts);
+    let hosting = crate::harness::Hosting::default();
+
+    let (problem, shown) = watch::channel(None);
+
+    let retry = set_up_hosting(&hosting, &problem, move || {
+        if counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst) < 2 {
+            Err(crate::harness::HostingSetupError::Failed(
+                rootcause::report!("could not write the seccomp profile"),
+            ))
+        } else {
+            Ok(teammates.take())
+        }
+    });
+    assert!(retry.is_some());
+    assert!(hosting.current().is_none());
+    assert!(shown.borrow().is_some());
+
+    tokio::time::timeout(Duration::from_secs(60), hosting.ready())
+        .await
+        .expect("hosting is set up by a retry");
+    assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 3);
+    assert_eq!(*shown.borrow(), None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn invalid_teammate_settings_are_shown_and_retried_rarely() {
+    // A typo in `[[teammates.allow]]` can't pass by retrying: the error is
+    // shown, and the setup is tried again only every ten minutes.
+    let attempts = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let counted = std::sync::Arc::clone(&attempts);
+    let hosting = crate::harness::Hosting::default();
+    let (problem, shown) = watch::channel(None);
+
+    let _retry = set_up_hosting(&hosting, &problem, move || {
+        counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Err(crate::harness::HostingSetupError::Settings(
+            rootcause::report!("[[teammates.allow]]: 10.0.0 is not a network"),
+        ))
+    });
+    let shown_now = shown.borrow().clone().expect("the error is shown");
+    assert!(shown_now.contains("10.0.0 is not a network"), "{shown_now}");
+
+    tokio::time::sleep(Duration::from_secs(9 * 60)).await;
+    assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+    tokio::time::sleep(Duration::from_secs(2 * 60)).await;
+    assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 2);
+    assert!(hosting.current().is_none());
 }

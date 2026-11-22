@@ -40,6 +40,10 @@ mod retry_delay;
 mod runtime;
 mod self_knowledge;
 mod service;
+// Teammates run in containers on Linux and macOS hosts; on Windows macrod
+// doesn't list the capability.
+#[cfg(unix)]
+mod teammate;
 mod telemetry;
 mod trigger;
 mod tui;
@@ -184,6 +188,13 @@ enum Command {
     /// List this computer's machines: the default config and every named
     /// profile, whether each is paired, and whether a macrod is running it.
     Profiles,
+    /// The agent teammates this machine hosts in containers: list them,
+    /// show a container's logs, or sign one in with your own Claude plan.
+    #[cfg(unix)]
+    Teammate {
+        #[command(subcommand)]
+        command: teammate::command::TeammateCommand,
+    },
 }
 
 /// Why the control panel has no config to serve. Shown as one line.
@@ -356,6 +367,16 @@ async fn main() -> ExitCode {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(error) => {
                     eprintln!("macrod enroll: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        #[cfg(unix)]
+        Some(Command::Teammate { command }) => {
+            return match teammate::command::run(command).await {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("macrod teammate: {error:?}");
                     ExitCode::FAILURE
                 }
             };

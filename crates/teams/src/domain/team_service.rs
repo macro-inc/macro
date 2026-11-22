@@ -47,6 +47,7 @@ use crate::domain::{
         TeamMemberRemovedMetadata, TeamMemberRoleChangedMetadata, TeamUpdatedMetadata,
     },
     invite_rewards::{InviteRewardEvent, InviteRewarder, NoOpInviteRewarder},
+    member_access::{MemberAccessLost, NoOpMemberAccessLost},
     model::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError,
         JoinTeamDirectlyError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
@@ -165,6 +166,8 @@ pub struct TeamServiceImpl<
     owned_entity_cleanup: OEC,
     /// Rewards whoever brought a new member onto the team.
     invite_rewarder: Arc<dyn InviteRewarder>,
+    /// Told when a member is removed or loses admin.
+    member_access_lost: Arc<dyn MemberAccessLost>,
     /// Gates preference changes until every membership writer is upgraded.
     crm_access_rollout: Arc<dyn CrmAccessRollout>,
 }
@@ -204,6 +207,7 @@ where
             open_seat_release: self.open_seat_release.clone(),
             owned_entity_cleanup: self.owned_entity_cleanup.clone(),
             invite_rewarder: self.invite_rewarder.clone(),
+            member_access_lost: self.member_access_lost.clone(),
             crm_access_rollout: self.crm_access_rollout.clone(),
         }
     }
@@ -310,6 +314,7 @@ where
             open_seat_release: NoOpOpenSeatRelease,
             owned_entity_cleanup: UnwiredOwnedEntityCleanup,
             invite_rewarder: Arc::new(NoOpInviteRewarder),
+            member_access_lost: Arc::new(NoOpMemberAccessLost),
             crm_access_rollout: Arc::new(DisabledCrmAccessRollout),
         }
     }
@@ -700,6 +705,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            member_access_lost: self.member_access_lost,
             crm_access_rollout: self.crm_access_rollout,
         }
     }
@@ -726,6 +732,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            member_access_lost: self.member_access_lost,
             crm_access_rollout: self.crm_access_rollout,
         }
     }
@@ -752,6 +759,7 @@ where
             open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            member_access_lost: self.member_access_lost,
             crm_access_rollout: self.crm_access_rollout,
         }
     }
@@ -766,6 +774,24 @@ where
     pub fn with_invite_rewarder(mut self, invite_rewarder: Arc<dyn InviteRewarder>) -> Self {
         self.invite_rewarder = invite_rewarder;
         self
+    }
+
+    /// Replaces the listener told when a member is removed or loses admin.
+    pub fn with_member_access_lost(mut self, listener: Arc<dyn MemberAccessLost>) -> Self {
+        self.member_access_lost = listener;
+        self
+    }
+
+    /// Tells the listener a member of `team_id` lost access, best-effort:
+    /// the change already happened.
+    pub(crate) async fn member_access_lost(&self, team_id: uuid::Uuid) {
+        if let Err(error) = self.member_access_lost.member_access_lost(team_id).await {
+            tracing::error!(
+                error = ?error,
+                %team_id,
+                "failed to tell listeners a team member lost access"
+            );
+        }
     }
 
     /// Rewards `inviter` for `joined`, best-effort: the join already happened.
@@ -815,6 +841,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            member_access_lost: self.member_access_lost,
             crm_access_rollout: self.crm_access_rollout,
         }
     }
@@ -917,6 +944,18 @@ where
                 DeleteTeamError::OwnedEntityCleanup(OwnedEntityCleanupError::ReleaseComputers {
                     source: Box::new(source),
                 })
+            })?;
+        // Agent teammates on members' own machines: revoked and stopped, and
+        // their installs gone, which the team row's deletion otherwise refuses.
+        self.owned_entity_cleanup
+            .release_teammate_installs(team_id)
+            .await
+            .map_err(|source| {
+                DeleteTeamError::OwnedEntityCleanup(
+                    OwnedEntityCleanupError::ReleaseTeammateInstalls {
+                        source: Box::new(source),
+                    },
+                )
             })?;
 
         let subscription_id = self
@@ -1202,6 +1241,10 @@ where
             removed_by: removed_by_id,
             role: removed_member.member.role,
         }));
+        // Parking the member's agents is slow (keys and repositories over
+        // the network) and needs nothing billing guards.
+        drop(_billing);
+        self.member_access_lost(team_id).await;
 
         Ok(())
     }
@@ -2752,6 +2795,7 @@ where
                     ));
                 }
 
+                let mut demoted = false;
                 for update in user_role_updates {
                     let previous_role = team
                         .members
@@ -2770,6 +2814,11 @@ where
                             previous_role,
                         },
                     ));
+                    demoted |= update.role == TeamRole::Member
+                        && matches!(previous_role, Some(TeamRole::Admin | TeamRole::Owner));
+                }
+                if demoted {
+                    self.member_access_lost(team_id).await;
                 }
             }
         }

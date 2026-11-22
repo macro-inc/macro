@@ -411,10 +411,20 @@ async fn run_server() -> anyhow::Result<()> {
         db.clone(),
     )));
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
+    // Unpairing a machine parks the agent teammates it hosted at once.
     let harnesses_service = harnesses::domain::service::HarnessServiceImpl::new(
         PgHarnessRepo::new(db.clone()),
         hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
-    );
+    )
+    .with_retired(Arc::new(
+        crate::outbound::teammate_host_offboarding::TeammateHostOffboarding::new(
+            macro_service_urls::AuthServiceUrl::new()?.as_ref(),
+            config
+                .authentication_service_secret_key
+                .as_ref()
+                .to_string(),
+        )?,
+    ));
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(

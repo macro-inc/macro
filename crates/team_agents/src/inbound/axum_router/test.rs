@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::{
-    models::{ComputerId, ComputerSize, TeamAgents},
+    models::{ComputerId, ComputerSize, HarnessId, TeamAgents},
+    self_hosting::{IssuedInstall, MoveTeammate, TeammateHosts},
     voice::AgentVoice,
 };
 use axum::{
@@ -39,6 +40,15 @@ impl Reached {
 }
 
 impl TeamAgentService for Reached {
+    async fn set_avatar(
+        &self,
+        _: EntityAccessReceipt<AdminTeamRole>,
+        _: &MacroUserIdStr<'_>,
+        _: AgentAvatar,
+    ) -> Result<(), TeamAgentError> {
+        self.reached()
+    }
+
     async fn create(
         &self,
         _: EntityAccessReceipt<AdminTeamRole>,
@@ -78,6 +88,44 @@ impl TeamAgentService for Reached {
         &self,
         _: EntityAccessReceipt<MemberTeamRole>,
     ) -> Result<(), TeamAgentError> {
+        self.reached()
+    }
+    async fn hosts(
+        &self,
+        _: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<TeammateHosts, TeamAgentError> {
+        self.reached()
+    }
+    async fn recheck_host(
+        &self,
+        _: EntityAccessReceipt<AdminTeamRole>,
+        _: HarnessId,
+    ) -> Result<(), TeamAgentError> {
+        self.reached()
+    }
+    async fn move_install(
+        &self,
+        _: EntityAccessReceipt<AdminTeamRole>,
+        _: &MacroUserIdStr<'_>,
+        _: MoveTeammate,
+    ) -> Result<TeamAgent, TeamAgentError> {
+        self.reached()
+    }
+    async fn issue_install(
+        &self,
+        _: HarnessId,
+        _: uuid::Uuid,
+        _: Option<(u64, u64)>,
+    ) -> Result<Option<IssuedInstall>, AgentEnrollmentError> {
+        unreachable!("an internal route")
+    }
+    async fn finish_checkpoint(&self, _: uuid::Uuid) -> Result<(), TeamAgentError> {
+        unreachable!("an internal route")
+    }
+    async fn offboard_unentitled_hosts(&self) -> Result<usize, TeamAgentError> {
+        unreachable!("not a route")
+    }
+    async fn offboard_host(&self, _: HarnessId) -> Result<usize, TeamAgentError> {
         self.reached()
     }
     async fn issue_enrollment(
@@ -316,6 +364,50 @@ async fn a_person_creates_a_team_agent() {
     assert_eq!(service.0.load(Ordering::SeqCst), 1);
 }
 
+#[tokio::test]
+async fn an_admin_can_reach_the_agent_avatar_edit_service() {
+    let service = Arc::new(Reached::default());
+    let response = router(service.clone())
+        .oneshot(
+            Request::put("/macro%7Cagent%40example.com/avatar")
+                .header(header::AUTHORIZATION, "Bearer valid")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    r#"{"face":{"v":1,"seed":"avatar","pins":{"hair":2}},"url":null}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(service.0.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn avatar_edits_refuse_members_before_the_service() {
+    let service = Arc::new(Reached::default());
+    let app = team_agents_router(TeamAgentsRouterState {
+        service: service.clone(),
+        entity_access_service: Arc::new(FakeEntityAccessService::with_membership(
+            USER_ID,
+            TeamRole::Member,
+        )),
+        authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuthorization)),
+    });
+    let response = app
+        .oneshot(
+            Request::put("/macro%7Cagent%40example.com/avatar")
+                .header(header::AUTHORIZATION, "Bearer valid")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"face":null,"url":null}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(service.0.load(Ordering::SeqCst), 0);
+}
+
 async fn error_body(error: TeamAgentError) -> (StatusCode, serde_json::Value) {
     let response = error.into_response();
     let status = response.status();
@@ -373,4 +465,103 @@ async fn an_invalid_purchase_key_is_a_bad_request_with_a_message() {
         "the purchase key must be 1 to 128 printable ASCII characters"
     );
     assert!(body.get("code").is_none());
+}
+
+#[tokio::test]
+async fn an_ineligible_own_machine_is_a_coded_conflict_with_its_reason() {
+    let (status, body) = error_body(TeamAgentError::HostNotEligible(
+        crate::domain::self_hosting::HostEligibility::of(false, None, |_| None),
+    ))
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "host_not_eligible");
+    assert_eq!(body["reason"], "offline");
+    assert!(body.get("resource").is_none());
+}
+
+#[tokio::test]
+async fn self_hosting_off_is_a_coded_forbidden() {
+    let (status, body) = error_body(TeamAgentError::SelfHostedNotEnabled).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "self_hosted_not_enabled");
+}
+
+#[tokio::test]
+async fn an_own_machine_invite_and_the_hosts_reach_the_service() {
+    let service = Arc::new(Reached::default());
+    let invite = Request::post("/")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            r#"{"purchaseKey": "k", "name": "Ada", "computer": {"kind": "own", "harnessId": "0193a1b2-0000-7000-8000-000000000d01"}}"#,
+        ))
+        .unwrap();
+    let hosts = Request::get("/hosts")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .body(Body::empty())
+        .unwrap();
+
+    let invited = router(service.clone()).oneshot(invite).await.unwrap();
+    let listed = router(service.clone()).oneshot(hosts).await.unwrap();
+
+    assert_eq!(invited.status(), StatusCode::NOT_FOUND);
+    assert_eq!(listed.status(), StatusCode::NOT_FOUND);
+    assert_eq!(service.0.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn a_program_cannot_move_a_team_agent() {
+    let service = Arc::new(Reached::default());
+    let request = Request::post("/macro%7Cada@agents.macro.invalid/install")
+        .header(header::AUTHORIZATION, "Bearer agent")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            r#"{"harnessId": "0193a1b2-0000-7000-8000-000000000d02"}"#,
+        ))
+        .unwrap();
+
+    let response = router(service.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(service.0.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_machine_recheck_reaches_the_service() {
+    let service = Arc::new(Reached::default());
+    let request = Request::post("/hosts/0193a1b2-0000-7000-8000-000000000d01/recheck")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router(service.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(service.0.load(Ordering::SeqCst), 1);
+}
+
+/// Each recheck runs a full probe on the owner's machine: a person asks for
+/// one, never an agent's program looping on it.
+#[tokio::test]
+async fn a_program_cannot_ask_a_machine_to_check_again() {
+    for (program, bearer, code_execution) in [
+        ("an agent run", "agent", false),
+        ("an owner-identity routine run", "routine", false),
+        ("the code-mode runtime", "valid", true),
+    ] {
+        let service = Arc::new(Reached::default());
+        let mut request = Request::post("/hosts/0193a1b2-0000-7000-8000-000000000d01/recheck")
+            .header(header::AUTHORIZATION, format!("Bearer {bearer}"));
+        if code_execution {
+            request = request.header(macro_authorization::CODE_EXECUTION_HEADER, "1");
+        }
+
+        let response = router(service.clone())
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{program}");
+        assert_eq!(service.0.load(Ordering::SeqCst), 0, "{program}");
+    }
 }

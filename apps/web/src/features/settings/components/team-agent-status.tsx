@@ -9,6 +9,8 @@ function statusLabel(status: TeamAgentStatus): string {
   return (
     match(status)
       .with('provisioning', () => t('teamAgents.statusProvisioning'))
+      .with('downloading', () => t('teammateHosts.statusDownloading'))
+      .with('moving', () => t('teammateHosts.statusMoving'))
       .with('starting', () => t('teamAgents.statusStarting'))
       .with('running', () => t('teamAgents.statusRunning'))
       .with('paused', () => t('teamAgents.statusPaused'))
@@ -28,6 +30,8 @@ function dotState(
     .with('failed', 'unhealthy', () => 'attention' as const)
     .with(
       'provisioning',
+      'downloading',
+      'moving',
       'starting',
       'paused',
       'released',
@@ -37,7 +41,11 @@ function dotState(
 }
 
 /** Where an agent teammate is, from its computer and its own online report: a dot and a word. */
-export function TeamAgentStatusLabel(props: { status: TeamAgentStatus }) {
+export function TeamAgentStatusLabel(props: {
+  status: TeamAgentStatus;
+  /** In place of the status's own word. */
+  label?: string;
+}) {
   return (
     <span
       role="status"
@@ -45,13 +53,17 @@ export function TeamAgentStatusLabel(props: { status: TeamAgentStatus }) {
       class="inline-flex items-center gap-1.5 text-xs text-ink-muted whitespace-nowrap"
     >
       <Show
-        when={props.status === 'provisioning' || props.status === 'starting'}
+        when={
+          props.status === 'provisioning' ||
+          props.status === 'moving' ||
+          props.status === 'starting'
+        }
         fallback={<StatusDot state={dotState(props.status)} />}
       >
         <Spinner size="sm" decorative />
       </Show>
       <span classList={{ 'text-failure': props.status === 'failed' }}>
-        {statusLabel(props.status)}
+        {props.label ?? statusLabel(props.status)}
       </span>
     </span>
   );

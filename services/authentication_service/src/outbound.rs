@@ -1,6 +1,7 @@
 //! Adapters for authentication service use cases.
 
 pub mod agent_addresses;
+pub mod agent_picture_changes;
 pub mod computer_billing;
 pub mod crm_member_access;
 pub mod email_code_signup;
@@ -12,6 +13,7 @@ pub mod stripe_consumers;
 pub mod stripe_identity;
 pub mod subscription_checkout;
 pub mod team_owned_entity_cleanup;
+pub mod teammate_runtimes;
 pub mod user_deletion;
 
 pub mod subscription_billing;

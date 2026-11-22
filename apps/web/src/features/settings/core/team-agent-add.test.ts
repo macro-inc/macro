@@ -16,6 +16,12 @@ describe('addedAgentProgress', () => {
     );
   });
 
+  it('waits while an own machine downloads the runtime', () => {
+    expect(
+      addedAgentProgress([{ userId: 'agent', status: 'downloading' }], 'agent')
+    ).toBe('waiting');
+  });
+
   it('stops at a started computer when the wait ends there', () => {
     expect(
       addedAgentProgress([{ ...ada, status: 'starting' }], 'ada', 'computer_up')
@@ -56,6 +62,14 @@ describe('addRefusal', () => {
     expect(refused('INVITE_IN_PROGRESS')).toEqual({
       kind: 'refused',
       reason: 'in_progress',
+    });
+    expect(refused('HOST_NOT_ELIGIBLE')).toEqual({
+      kind: 'refused',
+      reason: 'host_not_eligible',
+    });
+    expect(refused('SELF_HOSTED_NOT_ENABLED')).toEqual({
+      kind: 'refused',
+      reason: 'self_hosted_not_enabled',
     });
     expect(refused('SOMETHING_NEW')).toEqual({
       kind: 'refused',

@@ -62,7 +62,14 @@ let
     '';
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";
-    outputHash = "sha256-mgnD+06wGiXNgFwKrJKv/9GFZoGGxozrMH6IynI/SiU=";
+    # bun installs each platform's native packages, so each has its own.
+    outputHash =
+      {
+        x86_64-linux = "sha256-mgnD+06wGiXNgFwKrJKv/9GFZoGGxozrMH6IynI/SiU=";
+        # Not yet built on an aarch64 builder: take the hash from its `got:`.
+        aarch64-linux = lib.fakeHash;
+      }
+      .${pkgs.stdenv.hostPlatform.system};
   };
   # The template's code must run on the muppet this image ships: a template
   # that needs a higher muppet API than it has fails here, at evaluation,

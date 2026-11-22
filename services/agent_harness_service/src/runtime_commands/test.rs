@@ -80,6 +80,7 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
         origin_ready,
         empty_models(redis.clone()),
         no_delivery(),
+        None,
     ));
     let (peer_ready, mut peer_readiness) = tokio::sync::watch::channel(false);
     let peer_consumer = tokio::spawn(consume_runtime_commands(
@@ -90,6 +91,7 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
         peer_ready,
         empty_models(redis.clone()),
         no_delivery(),
+        None,
     ));
     ready(&mut origin_readiness).await;
     ready(&mut peer_readiness).await;
@@ -124,6 +126,7 @@ async fn a_responsible_replicas_error_does_not_fail_the_publish() {
         ready_tx,
         empty_models(redis.clone()),
         no_delivery(),
+        None,
     ));
     ready(&mut readiness).await;
 
@@ -154,6 +157,7 @@ async fn publishing_without_an_owner_still_succeeds() {
         ready_tx,
         empty_models(redis.clone()),
         no_delivery(),
+        None,
     ));
     ready(&mut readiness).await;
 
@@ -187,6 +191,7 @@ async fn overlapping_harness_connections_execute_once() {
         first_ready,
         empty_models(redis.clone()),
         no_delivery(),
+        None,
     ));
     let (second_ready, mut second_readiness) = tokio::sync::watch::channel(false);
     let second_consumer = tokio::spawn(consume_runtime_commands(
@@ -197,6 +202,7 @@ async fn overlapping_harness_connections_execute_once() {
         second_ready,
         empty_models(redis.clone()),
         no_delivery(),
+        None,
     ));
     ready(&mut first_readiness).await;
     ready(&mut second_readiness).await;
@@ -510,4 +516,23 @@ async fn a_hand_off_on_a_new_dial_issues_again() {
 
     assert_eq!(agents.issued.lock().unwrap().len(), 2);
     assert_eq!(sent.lock().unwrap().len(), 2);
+}
+
+/// A recheck on the bus names only its machine, and is told apart from a
+/// teammate change.
+#[test]
+fn a_recheck_on_the_bus_reads_back_as_one() {
+    let recheck = crate::teammates::TeammateHostRecheck::new(AGENT_HARNESS);
+    let wire = serde_json::to_value(&recheck).unwrap();
+    let mut keys: Vec<&str> = wire
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(keys, ["recheck_teammate_host", "trace_context"]);
+
+    let read: RuntimeBusEvent = serde_json::from_value(wire).unwrap();
+    assert!(matches!(read, RuntimeBusEvent::TeammateHostRecheck(read) if read == recheck));
 }

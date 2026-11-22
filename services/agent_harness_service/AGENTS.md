@@ -93,6 +93,34 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   and `GET /internal/computers/{id}/moves` (internal API key only): start and
   watch moving a computer to another host; the operator's move pass (every
   5 s) does the work.
+- `src/teammates.rs`: delivers agent teammates to their owners' own machines
+  (macrod with a container engine). The registry hands it each runtime's
+  `TeammateHost`/`TeammateStatus` reports; the replica holding the socket
+  keeps what the runtime runs, asks the authentication service for the next
+  counted delivery (`teammates/auth_installs.rs`) when a row is ahead, and
+  sends `RunTeammate`; stops installs that are moving away, being removed
+  or stale, and finishes a checkpoint on `stopped` or after
+  `CHECKPOINT_TIMEOUT`. A `failed: badConfiguration` of the current
+  delivery is redelivered (a new key) at most once per
+  `BAD_CONFIGURATION_REDELIVERY` (5 min). A new `TeammateRuntimeImage` for
+  the machine's architecture gives a delivered install its next generation
+  (`new_image_generation`). Each machine's reports run in order on their own
+  task, under that machine's lock only.
+- `src/teammates/telemetry.rs`: `POST /teammates/telemetry`, a self-hosted
+  macrod's OTLP/HTTP protobuf traces, harness credential only. Replaces the
+  resource with the caller's harness, keeps `teammate.*`/`macrod.*` spans
+  with allowlisted attributes (no events or links), drops spans naming
+  another machine's install, limits body, spans and requests per machine,
+  and forwards over OTLP/gRPC to `macro_entrypoint::otel_endpoint()`.
+  `POST /internal/teammates/{harness}/changed`
+  broadcasts `TeammatesChanged` on the runtime bus, and
+  `POST /internal/teammates/{harness}/recheck` (its owner pressed Check
+  again) broadcasts `TeammateHostRecheck`, which the replica holding the
+  socket turns into `ToRuntimeMessage::RecheckTeammateHost` carrying the
+  asker's `traceparent` (span `teammate.recheck_host`, `sent`), so macrod's
+  check joins the click's trace. Spans `teammate.deliver`
+  and `teammate.status` carry the install id and generation, never the
+  agent's account.
 - `src/computers/agent_enrollment.rs`: the operator's `AgentEnrollmentSource`;
   every computer creation asks the auth service's internal
   `/internal/team_agent_enrollment` route, so an agent computer never enrolls

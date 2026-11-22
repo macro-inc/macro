@@ -1,0 +1,110 @@
+# The teammate runtime container's entrypoint (under tini): the agent's
+# desktop (session bus, Xvnc, Openbox, PulseAudio, Chromium), then
+# `teammate-boot run` (crates/teammate_lifecycle), which boots the workspace
+# and execs the runtime. A desktop process that dies is started again. The
+# container exits with the agent's exit code; macrod reads it and passes it
+# to the next container's boot as TEAMMATE_PREVIOUS_EXIT, which counts
+# failed boots (no ExecStopPost here). After a land the agent restarts
+# itself: it exits 75, and so does the container. SIGTERM (`docker stop`)
+# goes to the agent, which syncs once more and exits 0.
+# `_teammate-image.nix` prepends `desktop_runtime`, `browser_profile`,
+# `display_socket`, `bus_command`, `display_command`, `openbox_command`,
+# `sound_command`, `browser_command`, `boot_command` (an array) and
+# `claude_settings`.
+umask 077
+
+# A stop can come at any point of the start: it is taken from the first line.
+stopping=0
+agent=''
+# shellcheck disable=SC2329 # the trap calls it
+on_term() {
+  stopping=1
+  [[ -n $agent ]] && kill -TERM "$agent" 2>/dev/null || true
+}
+trap on_term TERM INT
+
+# The volume's layout (the runtime contract in docs/design/teammate-runtime.md);
+# a fresh volume is empty.
+mkdir -p "$HOME" "$CLAUDE_CONFIG_DIR" "$(dirname "$MUPPET_LAST_GOOD_FILE")" "$browser_profile"
+mkdir -p "$desktop_runtime/pulse"
+chmod 0700 "$desktop_runtime"
+# Claude Code's first-run screens never show here.
+[[ -e "$CLAUDE_CONFIG_DIR/.claude.json" ]] || cp "$claude_settings" "$CLAUDE_CONFIG_DIR/.claude.json"
+chmod u+w "$CLAUDE_CONFIG_DIR/.claude.json"
+# The last container's Chromium is gone, but its profile lock names that
+# container's hostname, so this one's would refuse the profile.
+rm -f "$browser_profile"/Singleton{Lock,Socket,Cookie}
+
+declare -A commands=() pids=()
+start() {
+  local name=$1 words
+  read -ra words <<<"${commands[$name]}"
+  "${words[@]}" &
+  pids[$name]=$!
+}
+wait_for_display() {
+  local tries=0
+  until [[ -S $display_socket ]]; do
+    if ((++tries > 150)); then
+      echo "teammate-entrypoint: the display did not come up in 30 s" >&2
+      return 1
+    fi
+    sleep 0.2
+  done
+}
+
+commands=(
+  [bus]=$bus_command
+  [display]=$display_command
+  [openbox]=$openbox_command
+  [sound]=$sound_command
+  [browser]=$browser_command
+)
+start bus
+start display
+start sound
+wait_for_display || exit 1
+start openbox
+start browser
+
+status=''
+# A stop that came while the desktop started: the agent never starts.
+if ((stopping)); then
+  status=0
+else
+  "${boot_command[@]}" &
+  agent=$!
+fi
+while [[ -z $status ]]; do
+  exited=''
+  code=0
+  # errexit (writeShellApplication) must not end the loop: a child's
+  # failure or the stop's signal is a status here.
+  wait -n -p exited || code=$?
+  # A signal (the stop) interrupted the wait; nothing exited (and bash
+  # unsets the variable).
+  [[ -z ${exited:-} ]] && continue
+  if [[ $exited == "$agent" ]]; then
+    status=$code
+    break
+  fi
+  for name in "${!pids[@]}"; do
+    if [[ ${pids[$name]} == "$exited" ]] && ((!stopping)); then
+      echo "teammate-entrypoint: $name exited with $code; starting it again" >&2
+      sleep 2
+      start "$name"
+    fi
+  done
+done
+
+# As under systemd, an agent that a stop ended with SIGHUP, SIGINT, SIGTERM
+# or SIGPIPE (one stopped during its boot or before its handler was in
+# place) stopped cleanly.
+if ((stopping)) && [[ $status =~ ^(129|130|141|143)$ ]]; then
+  status=0
+fi
+
+stopping=1
+kill -TERM "${pids[@]}" 2>/dev/null || true
+wait "${pids[@]}" 2>/dev/null || true
+exit "$status"

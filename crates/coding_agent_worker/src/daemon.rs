@@ -53,6 +53,8 @@ pub struct Daemon {
     handoff: HandoffSender,
     runtime_connected: watch::Receiver<bool>,
     trigger_stream: watch::Receiver<TriggerStreamHealth>,
+    /// Why hosting teammates isn't set up, while it isn't.
+    hosting_problem: watch::Receiver<Option<String>>,
     _presence_watch: AbortOnDropHandle<()>,
 }
 
@@ -65,6 +67,148 @@ pub type InheritedAgent = std::convert::Infallible;
 /// How long a handoff may take before macrod gives up on keeping the agent.
 #[cfg(unix)]
 const HANDOFF_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How soon a failed hosting setup is tried again, doubling to
+/// [`MAX_HOSTING_RETRY`].
+const FIRST_HOSTING_RETRY: Duration = Duration::from_secs(1);
+
+/// The longest wait between hosting setup attempts.
+const MAX_HOSTING_RETRY: Duration = Duration::from_secs(300);
+
+/// The wait between attempts while the teammate settings are invalid: they
+/// can't pass by themselves, so the machine isn't kept busy retrying.
+const SETTINGS_RETRY: Duration = Duration::from_secs(600);
+
+/// What a hosting setup attempt gives.
+type HostingSetup =
+    Result<Option<crate::harness::HostTeammates>, crate::harness::HostingSetupError>;
+
+/// Set up hosting teammates into `hosting`. A failed setup is retried in
+/// the background, for good, so a macrod that failed once (a transient
+/// file error at start) hosts once it succeeds instead of never until a
+/// restart: with backoff, or every [`SETTINGS_RETRY`] while the settings
+/// are invalid. The last error is in `problem` until it succeeds; the task
+/// is aborted when the handle is dropped.
+fn set_up_hosting<SetUp>(
+    hosting: &crate::harness::Hosting,
+    problem: &watch::Sender<Option<String>>,
+    mut set_up: SetUp,
+) -> Option<AbortOnDropHandle<()>>
+where
+    SetUp: FnMut() -> HostingSetup + Send + 'static,
+{
+    match set_up() {
+        Ok(Some(teammates)) => {
+            hosting.set(std::sync::Arc::new(teammates));
+            None
+        }
+        Ok(None) => None,
+        Err(error) => {
+            let mut delays = RetryDelays::new(FIRST_HOSTING_RETRY, MAX_HOSTING_RETRY);
+            let delay = hosting_failed(&error, problem, &mut delays);
+            Some(AbortOnDropHandle::new(tokio::spawn(retry_hosting(
+                hosting.clone(),
+                problem.clone(),
+                set_up,
+                delays,
+                delay,
+            ))))
+        }
+    }
+}
+
+/// Try setting up hosting again until it succeeds (or there is nothing to
+/// host here), first after `delay`.
+async fn retry_hosting<SetUp>(
+    hosting: crate::harness::Hosting,
+    problem: watch::Sender<Option<String>>,
+    mut set_up: SetUp,
+    mut delays: RetryDelays,
+    mut delay: Duration,
+) where
+    SetUp: FnMut() -> HostingSetup + Send + 'static,
+{
+    for attempt in 2u32.. {
+        tokio::time::sleep(delay).await;
+        let span = tracing::info_span!("teammate.hosting_setup", attempt);
+        let _entered = span.enter();
+        match set_up() {
+            Ok(Some(teammates)) => {
+                tracing::info!("set up hosting teammates");
+                problem.send_replace(None);
+                hosting.set(std::sync::Arc::new(teammates));
+                return;
+            }
+            Ok(None) => {
+                problem.send_replace(None);
+                return;
+            }
+            Err(error) => delay = hosting_failed(&error, &problem, &mut delays),
+        }
+    }
+}
+
+/// Note a failed setup: logged and published when it differs from the last
+/// one (a retry that fails the same way says nothing new). Returns the wait
+/// before the next attempt.
+fn hosting_failed(
+    error: &crate::harness::HostingSetupError,
+    problem: &watch::Sender<Option<String>>,
+    delays: &mut RetryDelays,
+) -> Duration {
+    let shown = error.to_string();
+    let changed = problem.send_if_modified(|last| {
+        if last.as_deref() == Some(shown.as_str()) {
+            return false;
+        }
+        *last = Some(shown.clone());
+        true
+    });
+    match error {
+        crate::harness::HostingSetupError::Settings(_) => {
+            if changed {
+                tracing::error!(error = ?error, "not hosting teammates until the teammate settings are fixed; checking again every {SETTINGS_RETRY:?}");
+            }
+            SETTINGS_RETRY
+        }
+        crate::harness::HostingSetupError::Failed(_) => {
+            if changed {
+                tracing::warn!(error = ?error, "could not set up hosting teammates; trying again");
+            }
+            delays.next_delay()
+        }
+    }
+}
+
+/// The teammates this macrod hosts in containers (docs/design/
+/// teammate-runtime.md). Without them macrod still serves sessions; it just
+/// doesn't list the capability. Tests never touch the real engine or the
+/// home directory's store.
+fn host_teammates(
+    macro_api: &crate::config::MacroApi,
+    teammates: &crate::config::TeammatesSettings,
+    credentials: &HarnessCredentials,
+) -> HostingSetup {
+    #[cfg(all(unix, not(test)))]
+    return crate::teammate::host(
+        credentials.harness_id,
+        crate::teammate::ingest::IngestTarget {
+            url: format!(
+                "{}/teammates/telemetry",
+                macro_api.api_url.trim_end_matches('/')
+            ),
+            token: credentials.token.clone(),
+        },
+        macro_api.teammate_network.as_deref(),
+        teammates,
+    )
+    .map(Some);
+    #[cfg(any(not(unix), test))]
+    {
+        let _ = (macro_api, teammates, credentials);
+        Ok(None)
+    }
+}
 
 impl Daemon {
     /// Connect the runtime and listen for agent triggers in background tasks.
@@ -123,6 +267,17 @@ impl Daemon {
         // may have handled. Every later open resumes from a service id, and
         // `StreamPosition` drops repeats within this process.
         let mut position = StreamPosition::new(std::time::SystemTime::now());
+        let hosting = crate::harness::Hosting::default();
+        let set_up = {
+            let macro_api = config.macro_api.clone();
+            let settings = config.teammates.clone();
+            let credentials = credentials.clone();
+            move || host_teammates(&macro_api, &settings, &credentials)
+        };
+        // Set up now, so the first dial can list teammates; a failure (say,
+        // another macrod writing the same file) is retried in the background.
+        let (hosting_problem, hosting_problem_seen) = watch::channel(None);
+        let hosting_retry = set_up_hosting(&hosting, &hosting_problem, set_up);
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
@@ -133,6 +288,7 @@ impl Daemon {
             adopted,
             handoffs,
             computer,
+            hosting.clone(),
         );
         let runtime_connected = runtime.connection_state();
         let agents_changed = runtime.agents_changed();
@@ -161,6 +317,8 @@ impl Daemon {
         let shutdown = cancel.clone();
         let (health, trigger_stream) = watch::channel(TriggerStreamHealth::Connecting);
         let task = tokio::spawn(async move {
+            // Retried for as long as the daemon serves.
+            let _hosting_retry = hosting_retry;
             let mut delays = reconnect_delays();
             let mut attempt: u32 = 0;
             loop {
@@ -174,6 +332,7 @@ impl Daemon {
                     &agents_changed,
                     &mut position,
                     &health,
+                    &hosting,
                 )
                 .await
                 {
@@ -184,6 +343,15 @@ impl Daemon {
                         health.send_if_modified(TriggerStreamHealth::reopening);
                     }
                     ServeOutcome::Ended { error, lasted } => {
+                        if error
+                            .downcast_current_context::<crate::outbound::stream::CredentialsRefused>()
+                            .is_some_and(crate::outbound::stream::CredentialsRefused::revoked)
+                        {
+                            crate::harness::credentials_refused(
+                                hosting.current().as_ref(),
+                                crate::harness::CredentialPath::Stream,
+                            );
+                        }
                         tracing::warn!(error = ?error, "event stream ended; reconnecting");
                         let delay = reconnect_delay(lasted, &mut delays, &mut attempt);
                         health.send_replace(TriggerStreamHealth::Reconnecting {
@@ -206,6 +374,7 @@ impl Daemon {
             handoff,
             runtime_connected,
             trigger_stream,
+            hosting_problem: hosting_problem_seen,
             _presence_watch: presence_watch,
         })
     }
@@ -217,6 +386,12 @@ impl Daemon {
     )]
     pub fn trigger_stream_health(&self) -> watch::Receiver<TriggerStreamHealth> {
         self.trigger_stream.clone()
+    }
+
+    /// Why this machine can't host teammates yet, while setting up hosting
+    /// fails (the panel shows it).
+    pub fn hosting_problem(&self) -> Option<String> {
+        self.hosting_problem.borrow().clone()
     }
 
     /// Whether this daemon currently holds a runtime connection.
@@ -419,10 +594,17 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
     agents_changed: &Notify,
     position: &mut StreamPosition,
     health: &watch::Sender<TriggerStreamHealth>,
+    hosting: &crate::harness::Hosting,
 ) -> ServeOutcome {
     let read_at = std::time::SystemTime::now();
     let bots = match client.bound_agents().await {
         Ok(agents) => {
+            // Any accepted harness call ends a refusal and runs again what
+            // it stopped, whether or not the runtime connection redials.
+            crate::harness::credentials_accepted(
+                hosting.current().as_ref(),
+                crate::harness::CredentialPath::Stream,
+            );
             position.agents_read(&agents.bot_ids, agents.read_by.unwrap_or(read_at));
             agents.bot_ids
         }
@@ -475,18 +657,26 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         "connected to the agent-trigger event stream"
     );
 
+    // An interval, not a sleep made afresh each turn: a busy stream would
+    // otherwise push the refresh back forever, and it is how a removed
+    // machine learns its credentials are refused.
+    let mut refresh = tokio::time::interval_at(
+        tokio::time::Instant::now() + BOUND_AGENT_REFRESH,
+        BOUND_AGENT_REFRESH,
+    );
+    refresh.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
             () = cancel.cancelled() => return ServeOutcome::Stopped,
             () = agents_changed.notified() => {
-                match bound_agents_changed(client, &bots, position).await {
+                match bound_agents_changed(client, &bots, position, hosting).await {
                     Ok(false) => {}
                     Ok(true) => return ServeOutcome::Idle,
                     Err(error) => return ended(error),
                 }
             }
-            () = tokio::time::sleep(BOUND_AGENT_REFRESH) => {
-                match bound_agents_changed(client, &bots, position).await {
+            _ = refresh.tick() => {
+                match bound_agents_changed(client, &bots, position, hosting).await {
                     Ok(false) => {}
                     Ok(true) => return ServeOutcome::Idle,
                     Err(error) => return ended(error),
@@ -524,9 +714,17 @@ async fn bound_agents_changed(
     client: &EventStreamClient,
     bots: &[String],
     position: &mut StreamPosition,
+    hosting: &crate::harness::Hosting,
 ) -> Result<bool, rootcause::Report> {
     let read_at = std::time::SystemTime::now();
-    match client.bound_agents().await {
+    let latest = client.bound_agents().await;
+    if latest.is_ok() {
+        crate::harness::credentials_accepted(
+            hosting.current().as_ref(),
+            crate::harness::CredentialPath::Stream,
+        );
+    }
+    match latest {
         Ok(latest) if latest.bot_ids == bots => {
             position.agents_read(&latest.bot_ids, latest.read_by.unwrap_or(read_at));
             Ok(false)

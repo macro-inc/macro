@@ -1,0 +1,14 @@
+{
+  "name": "@macro-inc/agent-faces",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "test": "bun test",
+    "type-check": "bun ../../node_modules/typescript-native/bin/tsc --noEmit --project tsconfig.json"
+  }
+}

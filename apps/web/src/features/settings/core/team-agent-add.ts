@@ -5,9 +5,6 @@ import { match } from 'ts-pattern';
 import { purchaseRefusalOf } from '../computers/core/purchase-refusal';
 import { PURCHASE_WAIT_MS } from '../computers/core/purchase-wait';
 
-/** Names offered while the name field is empty. */
-export const AGENT_NAME_SUGGESTIONS = ['Ada', 'Bo', 'Kim', 'Nova'] as const;
-
 /**
  * How long Add waits in its dialog. Past it, the dialog closes to the DM and
  * the agent's setup carries on there.
@@ -45,7 +42,7 @@ export function addedAgentProgress(
   return (
     match(agent.status)
       .returnType<AddedAgentProgress>()
-      .with('provisioning', () => 'waiting')
+      .with('provisioning', 'downloading', 'moving', () => 'waiting')
       .with('starting', () =>
         waitsFor === 'computer_up' ? 'online' : 'waiting'
       )
@@ -71,6 +68,8 @@ export type AddAgentEnding = Exclude<AddedAgentProgress, 'waiting'> | 'slow';
  *   again on the same computer, without a new charge.
  * - `refunded`: it failed again; the charge was undone and the computer
  *   released, so Retry buys afresh.
+ * - `host_failed`: the agent didn't start on the inviter's own computer;
+ *   nothing was bought, so there is nothing to undo.
  * - `refused`: any other refusal, in the server's words.
  */
 export type AddAgentState =
@@ -80,6 +79,7 @@ export type AddAgentState =
   | { kind: 'no_room'; size: ComputerSize }
   | { kind: 'not_started'; agent: TeamAgent }
   | { kind: 'refunded' }
+  | { kind: 'host_failed'; agent: TeamAgent }
   | { kind: 'refused'; reason: AddRefusal };
 
 /** Refusals that are neither a decline nor a full host. */
@@ -90,6 +90,8 @@ export type AddRefusal =
   | 'unavailable'
   | 'in_progress'
   | 'repository'
+  | 'host_not_eligible'
+  | 'self_hosted_not_enabled'
   | 'unknown';
 
 /** How a refused invite reads in the dialog. */
@@ -113,6 +115,14 @@ export function addRefusal(error: unknown): Refusal {
       .with('INVITE_IN_PROGRESS', () => ({
         kind: 'refused',
         reason: 'in_progress',
+      }))
+      .with('HOST_NOT_ELIGIBLE', () => ({
+        kind: 'refused',
+        reason: 'host_not_eligible',
+      }))
+      .with('SELF_HOSTED_NOT_ENABLED', () => ({
+        kind: 'refused',
+        reason: 'self_hosted_not_enabled',
       }))
       .exhaustive();
   if (!(error instanceof ThrownResultError))

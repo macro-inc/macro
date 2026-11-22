@@ -4,10 +4,13 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { UserProfilePictureAvatarFace } from './userProfilePictureAvatarFace';
 import type { UserProfilePictureChecksum } from './userProfilePictureChecksum';
+import type { UserProfilePictureUrl } from './userProfilePictureUrl';
 
 export interface UserProfilePicture {
+  avatar_face?: UserProfilePictureAvatarFace;
   checksum?: UserProfilePictureChecksum;
   id: string;
-  url: string;
+  url?: UserProfilePictureUrl;
 }

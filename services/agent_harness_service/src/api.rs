@@ -80,6 +80,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     sharing: Router,
     routine_sessions: Router,
     coding_agents: Router,
+    teammates: Router,
     claude_access: Router,
     capabilities: Router,
     voices: Router,
@@ -138,6 +139,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             sharing: Router::new(),
             routine_sessions: Router::new(),
             coding_agents: Router::new(),
+            teammates: Router::new(),
             claude_access: Router::new(),
             capabilities: Router::new(),
             voices: Router::new(),
@@ -251,6 +253,13 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach internal coding agent discovery and dispatch routes.
     pub fn with_coding_agents(mut self, router: Router) -> Self {
         self.coding_agents = router;
+        self
+    }
+
+    /// Attach the internal route that hands a machine's teammate install
+    /// changes to the replica holding its socket.
+    pub fn with_teammates(mut self, router: Router) -> Self {
+        self.teammates = router;
         self
     }
 
@@ -464,6 +473,7 @@ where
         .merge(agent_repositories_router(states.repositories))
         .merge(states.routine_sessions)
         .merge(states.coding_agents)
+        .merge(states.teammates)
         .merge(states.claude_access)
         .merge(states.capabilities)
         .merge(states.voices)

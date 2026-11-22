@@ -183,6 +183,10 @@ impl App {
 
     /// (Re)start the serving core on the current config and credential.
     /// Whether this process currently holds a runtime connection.
+    pub(crate) fn hosting_problem(&self) -> Option<String> {
+        self.daemon.as_ref().and_then(Daemon::hosting_problem)
+    }
+
     pub(crate) fn runtime_connected(&self) -> bool {
         self.daemon.as_ref().is_some_and(Daemon::runtime_connected)
     }

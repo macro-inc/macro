@@ -106,55 +106,92 @@ impl Drop for Telemetry {
     }
 }
 
+/// Where the teammate lifecycle spans wait for the service's ingest: the
+/// daemon starts sending them (`teammate::ingest::Ingest`) once it knows
+/// its harness; until then they are dropped.
+#[cfg(unix)]
+pub(crate) static TEAMMATE_SPANS: std::sync::LazyLock<crate::teammate::ingest::Outbox> =
+    std::sync::LazyLock::new(crate::teammate::ingest::Outbox::default);
+
+/// Batches `teammate.*` spans for the ingest, at its pace.
+#[cfg(unix)]
+fn teammate_spans_processor() -> opentelemetry_sdk::trace::BatchSpanProcessor {
+    use crate::teammate::ingest::{IngestExporter, MAX_BATCH_SPANS, MIN_INTERVAL};
+    use opentelemetry_sdk::trace::{BatchConfigBuilder, BatchSpanProcessor};
+
+    BatchSpanProcessor::builder(IngestExporter::new(TEAMMATE_SPANS.clone()))
+        .with_batch_config(
+            BatchConfigBuilder::default()
+                .with_max_export_batch_size(MAX_BATCH_SPANS)
+                .with_max_queue_size(2048)
+                .with_scheduled_delay(MIN_INTERVAL)
+                .build(),
+        )
+        .build()
+}
+
 pub(crate) fn install(exporter: Option<Exporter>) -> Telemetry {
     let computer_id = std::fs::read_to_string(crate::computer::ENROLLED_MARKER)
         .ok()
         .and_then(|value| uuid::Uuid::parse_str(value.lines().next()?.trim()).ok());
-    let provider = exporter.map(|exporter| {
-        let exporter = match exporter {
-            Exporter::Grpc(endpoint) => opentelemetry_otlp::SpanExporter::builder()
-                .with_tonic()
-                .with_endpoint(endpoint)
-                .build(),
-            Exporter::Http { endpoint, computer } => opentelemetry_otlp::SpanExporter::builder()
-                .with_http()
-                .with_endpoint(format!("{}/v1/traces", endpoint.trim_end_matches('/')))
-                .with_headers(
-                    computer
-                        .map(|computer| (COMPUTER_HEADER.to_owned(), computer.to_string()))
-                        .into_iter()
-                        .collect(),
+    // The teammate lifecycle spans always go to the service's ingest
+    // (`TEAMMATE_SPANS`); the rest only to an opted-in collector.
+    let hosts_teammates = cfg!(unix);
+    let provider = (exporter.is_some() || hosts_teammates).then(|| {
+        let mut builder = SdkTracerProvider::builder().with_resource(
+            opentelemetry_sdk::Resource::builder()
+                .with_service_name("macrod")
+                .with_attributes(
+                    computer_id
+                        .map(|id| opentelemetry::KeyValue::new("computer_id", id.to_string())),
                 )
                 .build(),
-        }
-        .expect("invalid macrod OTLP exporter configuration");
-        SdkTracerProvider::builder()
-            .with_resource(
-                opentelemetry_sdk::Resource::builder()
-                    .with_service_name("macrod")
-                    .with_attributes(
-                        computer_id
-                            .map(|id| opentelemetry::KeyValue::new("computer_id", id.to_string())),
-                    )
+        );
+        if let Some(exporter) = exporter {
+            let exporter = match exporter {
+                Exporter::Grpc(endpoint) => opentelemetry_otlp::SpanExporter::builder()
+                    .with_tonic()
+                    .with_endpoint(endpoint)
                     .build(),
-            )
-            .with_batch_exporter(exporter)
-            .build()
+                Exporter::Http { endpoint, computer } => {
+                    opentelemetry_otlp::SpanExporter::builder()
+                        .with_http()
+                        .with_endpoint(format!("{}/v1/traces", endpoint.trim_end_matches('/')))
+                        .with_headers(
+                            computer
+                                .map(|computer| (COMPUTER_HEADER.to_owned(), computer.to_string()))
+                                .into_iter()
+                                .collect(),
+                        )
+                        .build()
+                }
+            }
+            .expect("invalid macrod OTLP exporter configuration");
+            builder = builder.with_batch_exporter(exporter);
+        }
+        #[cfg(unix)]
+        {
+            builder = builder.with_span_processor(teammate_spans_processor());
+        }
+        builder.build()
     });
     opentelemetry::global::set_text_map_propagator(
         opentelemetry_sdk::propagation::TraceContextPropagator::new(),
     );
     let layer = provider.as_ref().map(|provider| {
         // Only audited metadata spans are exported; ACP and tool payloads stay private.
-        // The trigger and workspace spans carry ids, timings and outcomes only.
+        // The trigger and workspace spans carry ids, timings and outcomes only;
+        // the teammate container spans carry opaque install ids only.
         tracing_opentelemetry::layer()
             .with_tracer(provider.tracer("macrod"))
             .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
-                metadata.name().starts_with("macrod.enroll")
-                    || metadata.name().starts_with("macrod.trigger.")
-                    || metadata.name() == "macrod.workspace.worktree"
-                    || metadata.name() == "run_enroll"
-                    || metadata.name() == "macrod.agent.apply"
+                let name = metadata.name();
+                name.starts_with("macrod.enroll")
+                    || name.starts_with("macrod.trigger.")
+                    || name == "macrod.workspace.worktree"
+                    || name == "run_enroll"
+                    || name == "macrod.agent.apply"
+                    || (metadata.is_span() && name.starts_with("teammate."))
             }))
     });
     // Without a filter the registry logs every dependency at TRACE.

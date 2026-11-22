@@ -11,12 +11,18 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::admission::AgentAccountFacts;
+use super::avatar::AgentAvatar;
 use super::models::{
     AgentApiKey, AgentReady, AgentRepo, ComputerDetails, ComputerId, ComputerPurchase,
     ComputerState, CreateTeamAgent, CreatedAccount, NewAgentAccount, PersonaSeed, TeamAgent,
     TeamAgentError, TeamAgentRecord, TeamAgents, VoiceModel,
 };
+use super::self_hosting::{
+    Checkpoint, CreatedInstall, HostFacts, IssuedInstall, MoveTeammate, NewTeammateInstall,
+    TeammateHosts, TeammateInstallRecord,
+};
 use super::voice::AgentVoice;
+use harness_id::HarnessId;
 
 /// Agent accounts and their `team_agents` rows.
 pub trait TeamAgentRepository: Send + Sync + 'static {
@@ -66,6 +72,22 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Atomically replace both avatar columns for an agent still on this team.
+    /// Returns false when it was removed or moved before the write.
+    fn set_avatar(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+        avatar: &AgentAvatar,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+}
+
+/// Best-effort publication of saved avatar changes to connected clients.
+pub trait AgentPictureChanges: Send + Sync + 'static {
+    /// Publish after persistence succeeds. Failures are logged by the adapter
+    /// and never turn a successful save into a failed request.
+    fn picture_changed(&self, agent: &MacroUserIdStr<'_>, url: Option<&str>);
 }
 
 /// What an agent's own account says about it, for admission.
@@ -221,6 +243,189 @@ pub trait Computers: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 }
 
+/// A counted delivery whose install row stays locked until
+/// [`CountedDelivery::release`]: racing issuers wait on it, so credentials
+/// are minted in delivery order and the highest pair holds the live key.
+pub trait CountedDelivery: Send {
+    /// The `(generation, delivery)` to mint for.
+    fn pair(&self) -> (u64, u64);
+
+    /// Keep the count and let the next issuer go. Dropped unreleased, the
+    /// count is undone.
+    fn release(self) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+}
+
+/// A pending revoke held by [`TeammateInstalls::begin_revoke`]: the install
+/// row stays locked, so no delivery is counted (and no key minted) until it
+/// is done or dropped.
+pub trait HeldRevoke: Send {
+    /// The install, as locked.
+    fn install(&self) -> &TeammateInstallRecord;
+
+    /// The credentials were revoked: clear the flag and let deliveries
+    /// resume. Dropped undone, the flag stays for the sweep to retry.
+    fn done(self) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+}
+
+/// Agents' installs on their owners' own machines, and those machines.
+pub trait TeammateInstalls: Send + Sync + 'static {
+    /// A delivery counted by [`TeammateInstalls::next_delivery`].
+    type Delivery: CountedDelivery;
+    /// A revoke held by [`TeammateInstalls::begin_revoke`].
+    type Revoke: HeldRevoke;
+
+    /// Create the agent's install. When the agent already has one, creates
+    /// nothing and returns it: one install per agent, whoever races.
+    fn create(
+        &self,
+        install: &NewTeammateInstall,
+    ) -> impl Future<Output = Result<CreatedInstall, TeamAgentError>> + Send;
+
+    /// The agent's install, if it has one.
+    fn for_agent(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// The installs of those of `agents` that have one, in one read.
+    fn for_agents(
+        &self,
+        agents: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// An install by its id.
+    fn by_id(
+        &self,
+        install_id: Uuid,
+    ) -> impl Future<Output = Result<Option<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// Mark the agent's install as waiting on its machine to stop it, keeping
+    /// when an earlier checkpoint started; a later move retargets it, and a
+    /// removal overrides a move. `None` when it has no install.
+    fn begin_checkpoint(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        checkpoint: Checkpoint,
+    ) -> impl Future<Output = Result<Option<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// Finish a move of install `install_id`: the target machine, the new
+    /// install id, the next generation, nothing delivered yet. `None` when
+    /// that install isn't moving (finished already, or removed).
+    fn finish_move(
+        &self,
+        install_id: Uuid,
+        new_install_id: Uuid,
+    ) -> impl Future<Output = Result<Option<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// Count the next delivery of `install_id` on `harness`, when the
+    /// machine's last known `(generation, delivery)` is behind the row's and
+    /// no checkpoint is pending, recording the runtime image id it carries.
+    /// The row stays locked until the delivery is released, so a racing
+    /// caller waits, then counts its own delivery. `None` when there is
+    /// nothing to deliver.
+    fn next_delivery(
+        &self,
+        install_id: Uuid,
+        harness: HarnessId,
+        reported: (u64, u64),
+        image_id: &str,
+    ) -> impl Future<Output = Result<Option<Self::Delivery>, TeamAgentError>> + Send;
+
+    /// The machines `owner` paired and owns (never Macro computers), by
+    /// name, with their latest hosting reports.
+    fn hosts_of(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<HostFacts>, TeamAgentError>> + Send;
+
+    /// One machine, whoever owns it.
+    fn host(
+        &self,
+        harness: HarnessId,
+    ) -> impl Future<Output = Result<Option<HostFacts>, TeamAgentError>> + Send;
+
+    /// Whether `user` owns `team_id`.
+    fn owns_team(
+        &self,
+        team_id: Uuid,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, TeamAgentError>> + Send;
+
+    /// Whether `harness` may still host an agent of `team_id`: it is paired
+    /// (not deleted) and its owner is still an owner or admin of the team.
+    fn host_entitled(
+        &self,
+        harness: HarnessId,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, TeamAgentError>> + Send;
+
+    /// Up to `limit` installs, not already being removed, on (or moving to)
+    /// a machine that may no longer host them (see
+    /// [`TeammateInstalls::host_entitled`]).
+    fn unentitled_installs(
+        &self,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// [`TeammateInstalls::unentitled_installs`] on (or moving to) one
+    /// machine.
+    fn unentitled_installs_on(
+        &self,
+        harness: HarnessId,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// Park the agent's install: no machine hosts it, nothing is delivered,
+    /// any move is cancelled, and its credentials are due for revoking
+    /// ([`TeammateInstallRecord::revoke_pending`]). Waits for a delivery in
+    /// flight to be released, so a revoke after it voids that key too.
+    /// `None` when it has no install or is being removed.
+    fn park(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// Lock the agent's install while its credentials are still due for
+    /// revoking, rechecking the flag under the lock; `None` when they no
+    /// longer are (another revoke finished first, and a fresh key may
+    /// already be out). Waits for a delivery in flight, and holds off the
+    /// next one until the revoke is done.
+    fn begin_revoke(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<Self::Revoke>, TeamAgentError>> + Send;
+
+    /// Up to `limit` installs whose credentials are still due for revoking.
+    fn revoke_pending(
+        &self,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// Every install of `team_id`'s agents.
+    fn of_team(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// Delete the agent's install; a missing one is success.
+    fn delete(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+}
+
+/// Telling the machines' service that a machine's installs changed, so the
+/// replica holding its socket delivers or stops them now. Best effort: a
+/// machine that misses it catches up when it next connects.
+pub trait TeammateRuntimes: Send + Sync + 'static {
+    /// `harness`'s installs changed.
+    fn installs_changed(&self, harness: HarnessId) -> impl Future<Output = ()> + Send;
+
+    /// Ask `harness` to check its teammate hosting again now; it answers
+    /// with a fresh report.
+    fn recheck_host(&self, harness: HarnessId) -> impl Future<Output = ()> + Send;
+}
+
 /// Telling an agent's inviter that the agent is up.
 pub trait AgentReadyNotices: Send + Sync + 'static {
     /// Deliver `notice`. Delivering it again must not notify twice.
@@ -236,6 +441,14 @@ pub trait EnrollmentEnvironment: Send + Sync + 'static {
 
 /// Agent teammates.
 pub trait TeamAgentService: Send + Sync + 'static {
+    /// Replace an agent's face and PNG, or save a photo and clear the face.
+    fn set_avatar(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+        avatar: AgentAvatar,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
     /// Invite an agent teammate: its account, team membership, workspace
     /// repository and computer. Undoes everything before the purchase if a
     /// step fails.
@@ -285,6 +498,71 @@ pub trait TeamAgentService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<MemberTeamRole>,
     ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
+    /// The acting admin's own machines, each with whether it can host a
+    /// teammate now.
+    fn hosts(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> impl Future<Output = Result<TeammateHosts, TeamAgentError>> + Send;
+
+    /// Ask one of the acting admin's own machines to check its teammate
+    /// hosting again now (its container engine, above all); its fresh report
+    /// shows in [`Self::hosts`]. Someone else's machine is `NotFound`.
+    fn recheck_host(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        harness: HarnessId,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
+    /// Move an agent on an own machine to another of the admin's own
+    /// machines. The machine it leaves stops it first (its last push), then
+    /// a new install runs on the target with fresh credentials.
+    fn move_install(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+        request: MoveTeammate,
+    ) -> impl Future<Output = Result<TeamAgent, TeamAgentError>> + Send;
+
+    /// Fresh credentials for the next delivery of an install on `harness`,
+    /// for the replica holding that machine's socket, given the
+    /// `(generation, delivery)` the machine last said it runs (`None`:
+    /// nothing). `None` when the install is gone, elsewhere, moving, not
+    /// behind, or its agent's rollout is off. Each issue retires the agent's
+    /// previous key.
+    fn issue_install(
+        &self,
+        harness: HarnessId,
+        install_id: Uuid,
+        reported: Option<(u64, u64)>,
+    ) -> impl Future<Output = Result<Option<IssuedInstall>, AgentEnrollmentError>> + Send;
+
+    /// The machine stopped install `install_id` for its move or removal, or
+    /// the wait gave up: finish the move (new install on the target), or the
+    /// removal (keys, repo token, team, seat, and the install last). An
+    /// install with nothing pending is done.
+    fn finish_checkpoint(
+        &self,
+        install_id: Uuid,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
+    /// Take every agent off machines that may no longer host it: the
+    /// owner left the team or lost admin, or unpaired the machine. Each is
+    /// parked: it loses its credentials at once and its machine stops it,
+    /// and it keeps its account, seat and repository until an admin moves
+    /// it to a machine of theirs. Also retries every revoke that failed
+    /// before. How many were taken off.
+    fn offboard_unentitled_hosts(
+        &self,
+    ) -> impl Future<Output = Result<usize, TeamAgentError>> + Send;
+
+    /// [`TeamAgentService::offboard_unentitled_hosts`] for the agents on (or
+    /// moving to) one machine, just unpaired. How many were taken off.
+    fn offboard_host(
+        &self,
+        harness: HarnessId,
+    ) -> impl Future<Output = Result<usize, TeamAgentError>> + Send;
 
     /// The agent part of a computer's enrollment: fresh credentials and its
     /// environment, or `None` when the computer runs no agent.

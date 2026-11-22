@@ -63,6 +63,8 @@ pub(crate) enum Routed {
     Connection,
     /// A connection-level model probe response, never session traffic.
     Probe,
+    /// A report about hosting agent teammates, for whoever delivers them.
+    Teammate,
     /// The answer to a request the connection itself sent.
     Answer,
     /// Nothing owns it. Kept as its own answer rather than folded into
@@ -110,6 +112,12 @@ impl Routes {
     pub(crate) fn route(&mut self, message: &ToServerMessage) -> Routed {
         if matches!(message, ToServerMessage::ModelProbeResponse { .. }) {
             return Routed::Probe;
+        }
+        if matches!(
+            message,
+            ToServerMessage::TeammateHost { .. } | ToServerMessage::TeammateStatus { .. }
+        ) {
+            return Routed::Teammate;
         }
         let ToServerMessage::Acp(AcpMessage(frame)) = message else {
             return Routed::Connection;
@@ -316,6 +324,9 @@ pub struct RuntimeConnection<Sender> {
     answers: DashMap<RequestId, oneshot::Sender<RawJsonRpcMessage>>,
     routes: Mutex<Routes>,
     router: OnceLock<tokio::task::AbortHandle>,
+    /// Where teammate hosting reports go; without a receiver they are
+    /// dropped, since no session ever wants them.
+    teammate_reports: Option<mpsc::UnboundedSender<ToServerMessage>>,
     /// Cancelled once this connection's transport has ended.
     ///
     /// A token rather than a notification because whoever waits on it mostly
@@ -338,6 +349,18 @@ where
     where
         Carrier: Transport<ToRuntimeMessage, ToServerMessage, Sender = Sender>,
     {
+        Self::connect_reporting_teammates(carrier, None)
+    }
+
+    /// [`Self::connect`], handing the runtime's teammate hosting reports
+    /// (`TeammateHost`, `TeammateStatus`) to `teammate_reports`.
+    pub fn connect_reporting_teammates<Carrier>(
+        carrier: Carrier,
+        teammate_reports: Option<mpsc::UnboundedSender<ToServerMessage>>,
+    ) -> Arc<Self>
+    where
+        Carrier: Transport<ToRuntimeMessage, ToServerMessage, Sender = Sender>,
+    {
         let (outbound, inbound) = carrier.split();
         let (handshake, _) = watch::channel(HandshakeStatus::Pending);
         let connection = Arc::new(Self {
@@ -350,6 +373,7 @@ where
             answers: DashMap::new(),
             routes: Mutex::new(Routes::default()),
             router: OnceLock::new(),
+            teammate_reports,
             closed: CancellationToken::new(),
         });
         let router = tokio::spawn(Arc::clone(&connection).route_inbound(inbound));
@@ -392,6 +416,17 @@ where
         self.outbound.send(ToRuntimeMessage::AgentsChanged).await
     }
 
+    /// Ask the runtime to check its teammate hosting again now and send a
+    /// fresh report, its check joining the trace of `traceparent`.
+    pub async fn recheck_teammate_host(
+        &self,
+        traceparent: Option<String>,
+    ) -> std::result::Result<(), TransportError> {
+        self.outbound
+            .send(ToRuntimeMessage::RecheckTeammateHost { traceparent })
+            .await
+    }
+
     /// Hand the runtime an agent teammate's environment to run. Nothing
     /// answers; the agent's own online report confirms it.
     pub async fn apply_agent(
@@ -402,6 +437,40 @@ where
         self.outbound
             .send(ToRuntimeMessage::ApplyAgent {
                 environment,
+                traceparent,
+            })
+            .await
+    }
+
+    /// Hand the runtime an agent teammate's install to run in its teammate
+    /// runtime container. Its `TeammateStatus` reports answer.
+    pub async fn run_teammate(
+        &self,
+        install: agent_runtime_protocol::domain::schema::v0::TeammateInstall,
+        image: agent_runtime_protocol::domain::schema::v0::TeammateImage,
+        environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+        traceparent: Option<String>,
+    ) -> Result<(), TransportError> {
+        self.outbound
+            .send(ToRuntimeMessage::RunTeammate {
+                install,
+                image,
+                environment,
+                traceparent,
+            })
+            .await
+    }
+
+    /// Tell the runtime to stop an agent teammate's container and delete
+    /// its install.
+    pub async fn stop_teammate(
+        &self,
+        install: agent_runtime_protocol::domain::schema::v0::TeammateInstall,
+        traceparent: Option<String>,
+    ) -> Result<(), TransportError> {
+        self.outbound
+            .send(ToRuntimeMessage::StopTeammate {
+                install,
                 traceparent,
             })
             .await
@@ -723,6 +792,14 @@ where
                 Routed::Session(session) => self.deliver(session, message).await,
                 Routed::Connection => self.on_connection_message(message).await,
                 Routed::Probe => self.answer_probes(message),
+                Routed::Teammate => match &self.teammate_reports {
+                    Some(reports) => {
+                        // A closed receiver means nobody delivers teammates
+                        // on this replica any more.
+                        let _ = reports.send(message);
+                    }
+                    None => tracing::debug!("dropping a teammate report nobody delivers"),
+                },
                 Routed::Answer => self.answer(message),
                 Routed::Orphan => {
                     tracing::warn!(

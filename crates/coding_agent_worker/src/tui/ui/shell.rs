@@ -45,6 +45,12 @@ pub(super) fn render_header(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled(state, Style::new().fg(DIM)),
     ];
     spans.extend(serving);
+    if let Some(problem) = app.hosting_problem() {
+        spans.push(Span::styled(
+            format!("  ⚠ not hosting teammates: {problem}"),
+            Style::new().fg(WARN),
+        ));
+    }
     spans.push(Span::styled(
         format!("  pid {}", app.pid),
         Style::new().fg(DIM),

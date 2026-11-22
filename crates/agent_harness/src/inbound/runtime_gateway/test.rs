@@ -344,6 +344,36 @@ fn only_a_runtime_that_lists_apply_agent_can_run_an_agent_teammate() {
         RuntimeAccepts {
             agents_changed: true,
             apply_agent: true,
+            teammate_container: false,
+            recheck_teammate_host: false,
         }
     );
+}
+
+#[test]
+fn only_a_runtime_that_lists_teammate_container_hosts_teammates() {
+    use axum::http::{HeaderMap, HeaderValue};
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        RUNTIME_ACCEPTS_HEADER,
+        HeaderValue::from_static("agents-changed, teammate-container"),
+    );
+
+    assert!(super::runtime_accepts(&headers).teammate_container);
+}
+
+#[test]
+fn a_runtime_set_up_to_host_teammates_may_be_asked_to_recheck_without_hosting_now() {
+    use axum::http::{HeaderMap, HeaderValue};
+
+    assert!(!super::runtime_accepts(&HeaderMap::new()).recheck_teammate_host);
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        RUNTIME_ACCEPTS_HEADER,
+        HeaderValue::from_static("agents-changed, recheck-teammate-host"),
+    );
+    let accepts = super::runtime_accepts(&headers);
+    assert!(accepts.recheck_teammate_host);
+    assert!(!accepts.teammate_container, "its engine didn't answer");
 }

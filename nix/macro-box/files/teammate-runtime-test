@@ -1,0 +1,249 @@
+# `nix run .#teammate-runtime-test`: runs the teammate runtime image in the
+# local Docker engine the way macrod does (docs/design/teammate-runtime.md,
+# "The container"), against a throwaway git server holding the starter agent
+# and a stand-in Macro, and asserts the container contract. Prints
+# timings for docs/design/teammate-runtime-measurements.md. Removes
+# everything it made. `macro-box.nix` prepends `image` (the image's stream
+# script), `seccomp`, `starter_agent`, `git_server`, `python` and `git_bin`.
+umask 077
+suffix=$(head -c 6 /dev/urandom | od -An -tx1 | tr -d ' \n')
+name=teammate-test-$suffix
+network=macro-teammates-test-$suffix
+server=git-$suffix
+volume=macro-teammate-$name
+work=$(mktemp -d "${TMPDIR:-/tmp}/teammate-test.XXXXXX")
+failures=0
+
+cleanup() {
+  if ((failures)); then
+    echo "# the container's log (without Chromium's and the desktop's noise)"
+    docker logs "$name" 2>&1 |
+      grep -vE '^\[[0-9:/.]+:(ERROR|WARNING):|GLX|EGL|^[EW]: \[|xkbcomp|^> |dbind-WARNING|^$' |
+      tail -n 120
+  fi
+  docker rm -f "$name" "$server" >/dev/null 2>&1 || true
+  docker volume rm "$volume" "$volume-provider" >/dev/null 2>&1 || true
+  docker network rm "$network" >/dev/null 2>&1 || true
+  rm -rf "$work"
+}
+trap cleanup EXIT
+
+now() { date +%s.%N; }
+since() { awk -v start="$1" -v end="$(now)" 'BEGIN { printf "%.2f", end - start }'; }
+pass() { echo "ok   $*"; }
+fail() {
+  echo "FAIL $*"
+  failures=$((failures + 1))
+}
+check() {
+  local what=$1
+  shift
+  if "$@" >/dev/null 2>&1; then pass "$what"; else fail "$what"; fi
+}
+in_container() { docker exec "$name" "$@"; }
+# Waits up to $2 seconds for the container's log to contain $1.
+wait_for_log() {
+  local deadline=$((SECONDS + $2))
+  until docker logs "$name" 2>&1 | grep -qF -- "$1"; do
+    if ((SECONDS > deadline)); then return 1; fi
+    sleep 0.2
+  done
+}
+# Waits up to $1 seconds for the container to exit; prints its exit code.
+# Waits up to $2 seconds for a healthy boot after epoch $1: the runtime
+# writes MUPPET_LAST_GOOD_FILE once its start is done (and its SIGTERM
+# handler is in place).
+wait_for_healthy() {
+  local deadline=$((SECONDS + $2))
+  until [[ "$(docker exec "$name" stat -c %Y /teammate/state/last-good 2>/dev/null || echo 0)" -ge "$1" ]]; do
+    if ((SECONDS > deadline)); then return 1; fi
+    sleep 0.2
+  done
+}
+wait_for_exit() {
+  timeout "$1" docker wait "$name"
+}
+
+echo "# image"
+start=$(now)
+"$image" | gzip --fast >"$work/image.tar.gz"
+echo "stream+gzip: $(since "$start") s, $(du -m "$work/image.tar.gz" | cut -f1) MiB compressed"
+start=$(now)
+loaded=$(docker load -q <"$work/image.tar.gz" | sed -n 's/^Loaded image: //p')
+echo "docker load: $(since "$start") s ($loaded)"
+id=$(docker image inspect -f '{{.Id}}' "$loaded")
+echo "loaded size: $(($(docker image inspect -f '{{.Size}}' "$id") / 1048576)) MiB, id $id"
+
+echo "# git server"
+mkdir -p "$work/srv" "$work/seed"
+git init -q --bare -b main "$work/srv/repo.git"
+cp -r "$starter_agent"/. "$work/seed"
+chmod -R u+w "$work/seed"
+# An agent's own repository has its rendered settings; the template's
+# example will do here.
+cp "$work/seed/agent.example.json" "$work/seed/agent.json"
+git -C "$work/seed" init -q -b main
+git -C "$work/seed" add -A
+git -C "$work/seed" -c user.name=test -c user.email=test@example.com commit -qm "feat: the starter agent"
+git -C "$work/seed" push -q "$work/srv/repo.git" main
+chmod -R a+rwX "$work/srv"
+docker network create "$network" >/dev/null
+# files/test-git-server.py on the test network instead of loopback, and a
+# stand-in Macro on 8081 that answers every request with an empty success
+# (the agent's start asks who it is; nothing else needs an answer here).
+docker run -d --name "$server" --network "$network" --user "$(id -u):$(id -g)" \
+  -v /nix/store:/nix/store:ro -v "$work/srv:/srv/git" -e PATH="$git_bin" \
+  --entrypoint "$python" "$id" -c "
+import http.server, json, threading
+class Macro(http.server.BaseHTTPRequestHandler):
+    def answer(self):
+        length = int(self.headers.get('content-length') or 0)
+        self.rfile.read(length)
+        body = json.dumps({'user_id': 'macro|teammate-test@example.invalid'}).encode()
+        self.send_response(200)
+        self.send_header('content-type', 'application/json')
+        self.send_header('content-length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = answer
+    def log_message(self, *args):
+        pass
+macro = http.server.ThreadingHTTPServer(('0.0.0.0', 8081), Macro)
+threading.Thread(target=macro.serve_forever, daemon=True).start()
+listen = http.server.ThreadingHTTPServer
+http.server.ThreadingHTTPServer = lambda address, handler: listen(('0.0.0.0', 8080), handler)
+exec(open('$git_server').read())
+" >/dev/null
+macro=http://$server:8081
+
+echo "# credentials"
+mkdir -m 0700 "$work/install"
+cat >"$work/install/agent.env" <<EOF
+MACRO_API_KEY="mak_test"
+MACRO_GATEWAY="$macro"
+OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL="$macro"
+OVERRIDE_AUTH_SERVICE_URL="$macro"
+OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL="$macro"
+OVERRIDE_AGENT_HARNESS_SERVICE_URL="$macro"
+OVERRIDE_SCHEDULED_ACTION_SERVICE_URL="$macro"
+OVERRIDE_MCP_SERVICE_URL="$macro"
+OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL="ws://$server:8081"
+ANTHROPIC_BASE_URL="$macro/anthropic"
+ANTHROPIC_AUTH_TOKEN="test-gateway-token"
+MACRO_REPO_URL="http://$server:8080/repo.git"
+MACRO_REPO_TOKEN="test-token"
+MACRO_AGENT_USER_ID="macro|teammate-test@example.invalid"
+MACRO_AGENT_NAME="Ada"
+MACRO_TEAMMATE_INSTALL_ID="$suffix"
+EOF
+chmod 0644 "$work/install/agent.env"
+
+# A container as macrod makes one, for each start (a new container on the
+# same volumes): the previous container's exit, as macrod saw it, goes to
+# teammate-boot as TEAMMATE_PREVIOUS_EXIT (0 for a stop it asked for).
+run_teammate() {
+  docker rm -f "$name" >/dev/null 2>&1 || true
+  docker run --detach --name "$name" \
+    --user 1000:1000 --read-only --cap-drop=ALL --security-opt=no-new-privileges \
+    --security-opt "seccomp=$seccomp" \
+    --pids-limit 512 --memory 4g --cpus 2 --shm-size 1g \
+    --tmpfs /tmp --tmpfs /run/teammate-runtime \
+    --network "$network" \
+    --mount "type=volume,src=$volume,dst=/teammate" \
+    --mount "type=volume,src=$volume-provider,dst=/teammate-provider,readonly" \
+    --mount "type=bind,src=$work/install/agent.env,dst=/run/teammate/agent.env,readonly" \
+    --label "macro.teammate.install=$suffix" --label macro.teammate.generation=1 \
+    --restart no \
+    -e "TEAMMATE_PREVIOUS_EXIT=$1" \
+    "$id" >/dev/null
+}
+
+echo "# run (macrod's flags)"
+start=$(now)
+run_teammate unknown
+if wait_for_log 'starting the runtime at' 180; then
+  echo "cold start to teammate-boot's exec of the runtime: $(since "$start") s"
+  if wait_for_healthy "${start%.*}" 180; then
+    echo "cold start to a healthy boot: $(since "$start") s"
+  else
+    fail "a healthy boot"
+  fi
+  pass "teammate-boot cloned, linked node_modules and exec'd bun cli.ts run"
+else
+  fail "teammate-boot reached bun cli.ts run"
+  docker logs "$name" 2>&1 | tail -40
+  exit 1
+fi
+
+echo "# contract"
+check "runs as uid 1000" test "$(in_container id -u)" = 1000
+check "PID 1 has no capabilities" sh -c "docker exec $name grep -E '^CapEff:' /proc/1/status | grep -q '0000000000000000'"
+check "no capability bounding set" sh -c "docker exec $name grep -E '^CapBnd:' /proc/1/status | grep -q '0000000000000000'"
+check "no new privileges" sh -c "docker exec $name grep -E '^NoNewPrivs:' /proc/1/status | grep -q 1"
+check "the root is read-only" test "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$name")" = true
+check "writing the root fails" sh -c "! docker exec $name touch /nix/x 2>/dev/null && ! docker exec $name touch /etc/x 2>/dev/null"
+mounts=$(docker inspect -f '{{range .Mounts}}{{.Type}}:{{.Destination}}:{{.RW}} {{end}}' "$name")
+check "mounts are the agent volume, the read-only provider volume and the agent.env bind ($mounts)" \
+  test "$(tr ' ' '\n' <<<"$mounts" | sed '/^$/d' | sort | tr '\n' ' ')" = "bind:/run/teammate/agent.env:false volume:/teammate-provider:false volume:/teammate:true "
+check "no engine socket" sh -c "! docker exec $name sh -c 'ls /var/run/docker.sock /run/docker.sock /run/podman' 2>/dev/null"
+check "display :1 is up" in_container test -S /tmp/.X11-unix/X1
+check "Chromium answers DevTools on 127.0.0.1:9223" sh -c "docker exec $name sh -c 'for i in \$(seq 50); do curl -sf http://127.0.0.1:9223/json/version && exit 0; sleep 0.2; done; exit 1'"
+check "the repository is cloned to /teammate/workspace" in_container git -C /teammate/workspace rev-parse HEAD
+check "node_modules is the image's" sh -c "docker exec $name readlink /teammate/workspace/node_modules | grep -q '^/nix/store/.*-macro-agent-runtime.*/node_modules$'"
+check "the repo token is in no process environment" sh -c "! docker exec $name sh -c 'cat /proc/[0-9]*/environ 2>/dev/null | tr \"\\0\" \"\\n\" | grep -q test-token'"
+check "bubblewrap hides the credentials file" in_container bwrap --dev-bind / / --tmpfs /run/teammate --ro-bind /teammate-provider /teammate-provider -- sh -c '! test -e /run/teammate/agent.env'
+renderer=$(in_container sh -c 'pgrep -f -- "--type=renderer" | head -n 1' || true)
+check "Chromium's renderers run in their own user namespace (its sandbox is on)" \
+  sh -c "[ -n '$renderer' ] && [ \"\$(docker exec $name readlink /proc/$renderer/ns/user)\" != \"\$(docker exec $name readlink /proc/1/ns/user)\" ]"
+check "Chromium runs without --no-sandbox" sh -c "! docker exec $name sh -c 'cat /proc/[0-9]*/cmdline 2>/dev/null | tr \"\\0\" \" \" | grep -q -- [-]-no-sandbox'"
+sleep 20
+echo "idle memory (docker stats): $(docker stats --no-stream --format '{{.MemUsage}}' "$name")"
+echo "processes: $(in_container sh -c 'ls -d /proc/[0-9]* | wc -l')"
+
+echo "# restart marker"
+in_container touch /teammate/.restart
+code=$(wait_for_exit 90 || echo timeout)
+check "the restart marker stops the container with 75 (got $code)" test "$code" = 75
+check "a restart is not a failed boot" sh -c "[ \"\$(docker run --rm --entrypoint cat -v $volume:/teammate $id /teammate/state/failed-boots 2>/dev/null || echo 0)\" = 0 ]"
+
+echo "# a warm restart while offline, then the last sync"
+# The agent's own machine goes offline: neither Macro nor its git server.
+docker stop "$server" >/dev/null
+start=$(now)
+run_teammate 75
+wait_for_log 'starting the runtime at' 120 || fail "teammate-boot reached the runtime after the restart"
+echo "warm restart to teammate-boot's exec of the runtime: $(since "$start") s"
+# Past the runtime's 3-minute listening deadline: offline, it must neither
+# exit nor count as healthy.
+sleep 200
+check "offline past the listening deadline, the runtime stays up" test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+check "offline is not a healthy boot (no last-good)" sh -c "! [ \"\$(docker exec $name stat -c %Y /teammate/state/last-good 2>/dev/null || echo 0)\" -ge ${start%.*} ]"
+check "offline is not a failed boot" sh -c "[ \"\$(docker exec $name cat /teammate/state/failed-boots 2>/dev/null || echo 0)\" = 0 ]"
+docker start "$server" >/dev/null
+online=$(now)
+# Back online: the agent's streams start again within their backoff.
+if wait_for_healthy "${online%.*}" 150; then
+  echo "back online to a healthy boot: $(since "$online") s"
+else
+  fail "a healthy boot once back online"
+fi
+in_container sh -c 'mkdir -p /teammate/workspace/state/memory/test && echo moved > /teammate/workspace/state/memory/test/note.md'
+start=$(now)
+docker stop -t 90 "$name" >/dev/null
+echo "docker stop: $(since "$start") s"
+code=$(docker inspect -f '{{.State.ExitCode}}' "$name")
+check "SIGTERM stops it with 0 (got $code)" test "$code" = 0
+check "the last sync pushed the agent's change" sh -c "git -C $work/srv/repo.git show main:state/memory/test/note.md | grep -qx moved"
+
+echo "# a stop during the start"
+run_teammate 0
+docker stop -t 90 "$name" >/dev/null
+code=$(docker inspect -f '{{.State.ExitCode}}' "$name")
+check "a stop before the start is done exits 0, as under systemd (got $code)" test "$code" = 0
+docker logs "$name" 2>&1 | tail -n 15
+
+if ((failures)); then
+  echo "$failures check(s) failed"
+  exit 1
+fi
+echo "all checks passed"

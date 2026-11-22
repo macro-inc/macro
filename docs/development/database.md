@@ -4,6 +4,13 @@ Read this for SQLx queries, migrations, database-backed tests, and cache errors.
 Commands run from the repository root inside `nix develop` unless shown with an
 explicit Nix invocation. See also [Rust development](rust.md).
 
+`nix develop` sets `DATABASE_URL` to localhost:5432, which is usually another
+worktree's shared local stack. Before `sqlx database drop`/`create`/`reset`,
+`migrate run`, `just prepare_db` or a test that writes, set `DATABASE_URL` to
+your own throwaway database inside the same command (for example
+`nix develop -c env DATABASE_URL=postgres://…:<port>/… sqlx migrate run`), and
+check that its port is yours.
+
 ## Locate the schema and owner
 
 - MacroDB migrations live in [`crates/macro_db_client/migrations/`](../../crates/macro_db_client/migrations/).

@@ -215,7 +215,8 @@ pub(crate) type StripeInboxType = stripe_inbox::domain::service::InboxService<
     StripeConsumersType,
 >;
 
-/// Agent teammates on the team's Macro computers.
+/// Agent teammates on the team's Macro computers or their owners' own
+/// machines.
 pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentServiceImpl<
     team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
     team_agents::outbound::team_membership::TeamsMembership<TeamsServiceType>,
@@ -239,6 +240,8 @@ pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentS
         NotificationIngressType,
         team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
     >,
+    team_agents::outbound::pg_teammate_installs::PgTeammateInstalls,
+    crate::outbound::teammate_runtimes::HarnessTeammateRuntimes,
 >;
 
 pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServiceImpl<

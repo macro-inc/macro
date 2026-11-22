@@ -45,21 +45,13 @@ pub fn stage_agent_env(
     installed: &Path,
     environment: &BTreeMap<String, String>,
 ) -> rootcause::Result<Staged> {
-    use hosted_runtimes::domain::agent::{AgentEnv, AgentEnvKey, InvalidAgentEnvKey};
-
     let inbox = path
         .parent()
         .ok_or_else(|| rootcause::report!("{} has no directory", path.display()))?;
     if !inbox.is_dir() {
         rootcause::bail!("{} is absent: this computer runs no agent", inbox.display());
     }
-    let values = environment
-        .iter()
-        .map(|(key, value)| Ok((AgentEnvKey::new(key.clone())?, value.clone())))
-        .collect::<Result<BTreeMap<_, _>, InvalidAgentEnvKey>>()
-        .context("the agent environment names an invalid variable")?;
-    let env = AgentEnv::new(values).context("the agent environment has an invalid value")?;
-    let contents = env_file(&env);
+    let contents = env_file(&validated(environment)?);
     let current = std::fs::read_to_string(installed)
         .ok()
         .map(zeroize::Zeroizing::new);
@@ -70,6 +62,22 @@ pub fn stage_agent_env(
     write_private(&staging, &contents)?;
     std::fs::rename(&staging, path).context(format!("could not stage {}", path.display()))?;
     Ok(Staged::Written)
+}
+
+/// An environment from the wire, checked: valid variable names and
+/// single-line values.
+pub(crate) fn validated(
+    environment: &BTreeMap<String, String>,
+) -> rootcause::Result<hosted_runtimes::domain::agent::AgentEnv> {
+    use hosted_runtimes::domain::agent::{AgentEnv, AgentEnvKey, InvalidAgentEnvKey};
+
+    let values = environment
+        .iter()
+        .map(|(key, value)| Ok((AgentEnvKey::new(key.clone())?, value.clone())))
+        .collect::<Result<BTreeMap<_, _>, InvalidAgentEnvKey>>()
+        .context("the agent environment names an invalid variable")?;
+    let env = AgentEnv::new(values).context("the agent environment has an invalid value")?;
+    Ok(env)
 }
 
 /// Stage the first valid setup `traceparent` at `path` for the agent's start;
@@ -95,7 +103,9 @@ pub fn stage_setup_traceparent(path: &Path, traceparent: Option<&str>) -> rootca
 /// and single-line values are validated by [`AgentEnv`].
 ///
 /// [`AgentEnv`]: hosted_runtimes::domain::agent::AgentEnv
-fn env_file(env: &hosted_runtimes::domain::agent::AgentEnv) -> zeroize::Zeroizing<String> {
+pub(crate) fn env_file(
+    env: &hosted_runtimes::domain::agent::AgentEnv,
+) -> zeroize::Zeroizing<String> {
     let mut contents = zeroize::Zeroizing::new(String::new());
     for (key, value) in env.expose() {
         let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");

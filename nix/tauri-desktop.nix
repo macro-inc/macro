@@ -321,6 +321,21 @@
         pname = "firecracker-guest-agent";
         package = "firecracker_guest_agent";
       };
+      # The agent teammate's launcher (crates/teammate_lifecycle), in the
+      # teammate runtime image (nix/macro-box/_teammate-image.nix). Its panic
+      # locations name the toolchain and the vendored sources, which would put
+      # ~3.8 GiB in the image's closure: those references are dropped.
+      teammateBootBinary =
+        (workspaceBinary {
+          pname = "teammate-boot";
+          package = "teammate_lifecycle";
+        }).overrideAttrs
+          (previous: {
+            nativeBuildInputs = previous.nativeBuildInputs ++ [ pkgs.removeReferencesTo ];
+            postFixup = (previous.postFixup or "") + ''
+              remove-references-to -t ${rustToolchain} -t ${rootCargoVendorDir} "$out/bin/teammate-boot"
+            '';
+          });
 
       # Tauri sidecar sources carry the target triple in the file name; the
       # bundler strips it when placing the binary next to the app executable.
@@ -1519,6 +1534,7 @@
         macrod = macrodBinary;
         firecracker-host = firecrackerHostBinary;
         firecracker-guest-agent = firecrackerGuestAgentBinary;
+        teammate-boot = teammateBootBinary;
       }
       // lib.optionalAttrs isLinux {
         tauri-frontend = frontend;

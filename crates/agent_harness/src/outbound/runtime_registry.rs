@@ -29,7 +29,7 @@ use tracing::Instrument as _;
 
 use crate::domain::ports::{
     ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
-    RuntimeConnections,
+    RuntimeConnections, TeammateEvent, TeammateReport,
 };
 
 #[cfg(test)]
@@ -73,6 +73,9 @@ pub struct RuntimeRegistry<Sender> {
     connections: DashMap<HarnessId, ListedConnection<Sender>>,
     presence: Option<Arc<dyn HarnessPresence>>,
     live_sessions: Option<mpsc::UnboundedSender<LiveRuntimeSessions>>,
+    /// Where runtimes' teammate hosting reports go, once someone delivers
+    /// teammates on this replica.
+    teammate_reports: std::sync::OnceLock<mpsc::UnboundedSender<TeammateReport>>,
 }
 
 impl<Sender> Default for RuntimeRegistry<Sender> {
@@ -81,6 +84,7 @@ impl<Sender> Default for RuntimeRegistry<Sender> {
             connections: DashMap::new(),
             presence: None,
             live_sessions: None,
+            teammate_reports: std::sync::OnceLock::new(),
         }
     }
 }
@@ -103,9 +107,9 @@ where
         live_sessions: mpsc::UnboundedSender<LiveRuntimeSessions>,
     ) -> Arc<Self> {
         Arc::new(Self {
-            connections: DashMap::new(),
             presence: Some(presence),
             live_sessions: Some(live_sessions),
+            ..Self::default()
         })
     }
 
@@ -119,6 +123,12 @@ where
             live_sessions: Some(live_sessions),
             ..Self::default()
         })
+    }
+
+    /// Hand every teammate hosting report of connections attached from now
+    /// on to `reports`. Set once; a second call is ignored.
+    pub fn report_teammates_to(&self, reports: mpsc::UnboundedSender<TeammateReport>) {
+        let _ = self.teammate_reports.set(reports);
     }
 
     /// Whether a harness currently has a runtime connected.
@@ -151,6 +161,91 @@ where
             .get(&harness)
             .map(|entry| Arc::clone(&entry.connection))?;
         Some(connection.probe_models().await)
+    }
+
+    /// The dial `harness`'s runtime is connected on here, and whether it
+    /// hosts agent teammates in containers.
+    pub fn teammate_dial(&self, harness: HarnessId) -> Option<(RuntimeConnectionId, bool)> {
+        self.connections
+            .get(&harness)
+            .map(|listed| (listed.id, listed.accepts.teammate_container))
+    }
+
+    /// The dial `harness`'s runtime is connected on here, when it is that
+    /// one and hosts teammates in containers.
+    fn teammate_connection(
+        &self,
+        harness: HarnessId,
+        connection: RuntimeConnectionId,
+    ) -> Option<Arc<RuntimeConnection<Sender>>> {
+        self.connections
+            .get(&harness)
+            .filter(|listed| listed.id == connection && listed.accepts.teammate_container)
+            .map(|listed| Arc::clone(&listed.connection))
+    }
+
+    /// Send `RunTeammate`, carrying the sender's `traceparent`, down
+    /// `harness`'s runtime on `connection`. Whether
+    /// it was sent: false when that dial is gone or can't host teammates.
+    pub async fn run_teammate(
+        &self,
+        harness: HarnessId,
+        connection: RuntimeConnectionId,
+        install: agent_runtime_protocol::domain::schema::v0::TeammateInstall,
+        image: agent_runtime_protocol::domain::schema::v0::TeammateImage,
+        environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+        traceparent: Option<String>,
+    ) -> bool {
+        let Some(runtime) = self.teammate_connection(harness, connection) else {
+            return false;
+        };
+        runtime
+            .run_teammate(install, image, environment, traceparent)
+            .await
+            .inspect_err(|error| tracing::warn!(%harness, error = ?error, "could not send a teammate install"))
+            .is_ok()
+    }
+
+    /// Ask `harness`'s runtime to check its teammate hosting again now, its
+    /// check joining the trace of `traceparent`. Whether it was sent: false
+    /// when it isn't connected here or didn't list the message.
+    pub async fn recheck_teammate_host(
+        &self,
+        harness: HarnessId,
+        traceparent: Option<String>,
+    ) -> bool {
+        let Some(runtime) = self
+            .connections
+            .get(&harness)
+            .filter(|listed| listed.accepts.recheck_teammate_host)
+            .map(|listed| Arc::clone(&listed.connection))
+        else {
+            return false;
+        };
+        runtime
+            .recheck_teammate_host(traceparent)
+            .await
+            .inspect_err(|error| tracing::warn!(%harness, error = ?error, "could not ask a runtime to recheck its teammate hosting"))
+            .is_ok()
+    }
+
+    /// Send `StopTeammate` down `harness`'s runtime on `connection`. Whether
+    /// it was sent.
+    pub async fn stop_teammate(
+        &self,
+        harness: HarnessId,
+        connection: RuntimeConnectionId,
+        install: agent_runtime_protocol::domain::schema::v0::TeammateInstall,
+        traceparent: Option<String>,
+    ) -> bool {
+        let Some(runtime) = self.teammate_connection(harness, connection) else {
+            return false;
+        };
+        runtime
+            .stop_teammate(install, traceparent)
+            .await
+            .inspect_err(|error| tracing::warn!(%harness, error = ?error, "could not stop a teammate install"))
+            .is_ok()
     }
 
     /// Hand `harness`'s live runtime an agent teammate's environment, with
@@ -209,7 +304,17 @@ where
     ) where
         Carrier: Transport<ToRuntimeMessage, ToServerMessage, Sender = Sender>,
     {
-        let connection = RuntimeConnection::connect(carrier);
+        let (teammate_sender, teammate_receiver) = match self.teammate_reports.get() {
+            Some(reports) => {
+                let (sender, receiver) = mpsc::unbounded_channel();
+                (Some(sender), Some((receiver, reports.clone())))
+            }
+            None => (None, None),
+        };
+        let connection = RuntimeConnection::connect_reporting_teammates(carrier, teammate_sender);
+        if let Some((receiver, reports)) = teammate_receiver {
+            forward_teammate_reports(harness, connection.id(), receiver, reports);
+        }
         let listed = ListedConnection {
             id: connection.id(),
             connection,
@@ -490,4 +595,32 @@ where
             .sessions_on_harness(harness, acp_sessions)
             .await
     }
+}
+
+/// Hand a connection's teammate reports from `receiver` to `reports`, tagged
+/// with the harness and dial they came on. Ends with the connection.
+fn forward_teammate_reports(
+    harness: HarnessId,
+    connection: RuntimeConnectionId,
+    mut receiver: mpsc::UnboundedReceiver<ToServerMessage>,
+    reports: mpsc::UnboundedSender<TeammateReport>,
+) {
+    tokio::spawn(async move {
+        while let Some(message) = receiver.recv().await {
+            let report = TeammateReport {
+                harness,
+                connection,
+                event: TeammateEvent::Message(message),
+            };
+            if reports.send(report).is_err() {
+                return;
+            }
+        }
+        // The dial is gone: delivery forgets what it kept for it.
+        let _ = reports.send(TeammateReport {
+            harness,
+            connection,
+            event: TeammateEvent::Closed,
+        });
+    });
 }

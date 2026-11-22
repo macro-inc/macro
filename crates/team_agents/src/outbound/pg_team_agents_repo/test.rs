@@ -45,6 +45,7 @@ fn sam() -> NewAgentAccount {
             .into_owned(),
         name: AgentName::try_new("Sam Rivera").unwrap(),
         avatar_url: None,
+        avatar_face: None,
         persona_seed: PersonaSeed {
             creator_id: Some(
                 MacroUserIdStr::parse_from_str("macro|admin@example.com")
@@ -108,6 +109,88 @@ async fn an_agent_account_round_trips_and_is_marked_as_an_agent(pool: PgPool) {
     .await
     .unwrap();
     assert!(is_agent);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn avatar_recipe_and_png_are_saved_together_and_photo_edits_clear_the_recipe(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgTeamAgentsRepo::new(pool.clone());
+    let mut account = sam();
+    account.avatar_url = Some("https://static.example/face.png".to_owned());
+    account.avatar_face = Some(
+        serde_json::from_value(serde_json::json!({
+            "v":1,"seed":"portrait","pins":{"hair":2},
+        }))
+        .unwrap(),
+    );
+    repo.create_account(&account).await.unwrap();
+    let stored = sqlx::query!(
+        r#"SELECT info.avatar_face, info.profile_picture FROM macro_user_info info
+        JOIN "User" u ON u.macro_user_id = info.macro_user_id WHERE u.id = $1"#,
+        account.user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        stored.avatar_face,
+        Some(serde_json::to_value(&account.avatar_face).unwrap())
+    );
+    assert_eq!(stored.profile_picture, account.avatar_url);
+
+    let photo = AgentAvatar {
+        face: None,
+        url: Some("https://static.example/photo.png".to_owned()),
+    };
+    assert!(
+        !repo
+            .set_avatar(Uuid::nil(), &account.user_id, &photo)
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.set_avatar(TEAM, &account.user_id, &photo)
+            .await
+            .unwrap()
+    );
+    let stored = sqlx::query!(
+        r#"SELECT info.avatar_face, info.profile_picture, info.profile_picture_hash FROM macro_user_info info
+        JOIN "User" u ON u.macro_user_id = info.macro_user_id WHERE u.id = $1"#,
+        account.user_id.as_ref(),
+    ).fetch_one(&pool).await.unwrap();
+    assert_eq!(stored.avatar_face, None);
+    assert_eq!(stored.profile_picture, photo.url);
+    assert_eq!(stored.profile_picture_hash, None);
+
+    let face_only = AgentAvatar {
+        face: account.avatar_face.clone(),
+        url: None,
+    };
+    assert!(
+        repo.set_avatar(TEAM, &account.user_id, &face_only)
+            .await
+            .unwrap()
+    );
+    let stored = sqlx::query!(
+        r#"SELECT info.avatar_face, info.profile_picture FROM macro_user_info info
+        JOIN "User" u ON u.macro_user_id = info.macro_user_id WHERE u.id = $1"#,
+        account.user_id.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        stored.avatar_face,
+        Some(serde_json::to_value(&account.avatar_face).unwrap())
+    );
+    assert_eq!(stored.profile_picture, None);
+    repo.remove_seat(&account.user_id).await.unwrap();
+    assert!(
+        !repo
+            .set_avatar(TEAM, &account.user_id, &photo)
+            .await
+            .unwrap()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

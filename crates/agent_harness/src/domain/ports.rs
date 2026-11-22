@@ -172,6 +172,34 @@ pub struct RuntimeAccepts {
     /// `ToRuntimeMessage::ApplyAgent`: without it the runtime can't run an
     /// agent teammate.
     pub apply_agent: bool,
+    /// `ToRuntimeMessage::RunTeammate` and `StopTeammate`: the runtime hosts
+    /// agent teammates in containers on its owner's own machine.
+    pub teammate_container: bool,
+    /// `ToRuntimeMessage::RecheckTeammateHost`: the runtime is set up to
+    /// host teammates and checks again when asked, even on a dial whose
+    /// engine didn't answer (without `teammate_container`).
+    pub recheck_teammate_host: bool,
+}
+
+/// A runtime's report about hosting agent teammates (`TeammateHost` or
+/// `TeammateStatus`), or the end of its dial, with the dial it came on.
+#[derive(Debug, Clone)]
+pub struct TeammateReport {
+    /// The harness whose runtime sent it.
+    pub harness: HarnessId,
+    /// The dial it came on.
+    pub connection: RuntimeConnectionId,
+    /// What happened.
+    pub event: TeammateEvent,
+}
+
+/// What a [`TeammateReport`] says.
+#[derive(Debug, Clone)]
+pub enum TeammateEvent {
+    /// The runtime sent this.
+    Message(agent_runtime_protocol::domain::schema::v0::ToServerMessage),
+    /// The dial closed; nothing more comes on it.
+    Closed,
 }
 
 /// A harness and one of its runtime connections.

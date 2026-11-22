@@ -6,6 +6,8 @@ pub mod account_logins;
 pub mod models;
 /// Ports connecting the domain to its adapters.
 pub mod ports;
+/// Telling other domains a machine was unpaired.
+pub mod retired;
 /// Domain service implementation.
 pub mod service;
 /// Pairing code, device secret, and harness token generation.

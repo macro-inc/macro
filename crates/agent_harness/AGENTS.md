@@ -211,7 +211,10 @@ the `x-macro-runtime-accepts` dial header (`RuntimeAccepts`, read by
 gets the `RuntimeAccepts` too: a Macro computer's macrod that doesn't list
 `apply-agent` can't take `ToRuntimeMessage::ApplyAgent`, so an agent
 teammate's computer fails its start at once (hosted_runtimes
-`Failure::AgentUnsupported`).
+`Failure::AgentUnsupported`). `RuntimeRegistry::recheck_teammate_host` sends
+`ToRuntimeMessage::RecheckTeammateHost` only to a runtime that listed
+`recheck-teammate-host`, which a macrod set up to host teammates lists even
+when its engine didn't answer (no `teammate-container`).
 
 Only directly authenticated users with edit access may answer ACP permissions or
 elicitations (`agent_session::ControlEvent::authorized`). Agent runs may deny or

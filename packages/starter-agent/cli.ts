@@ -41,15 +41,21 @@ import {
   reportsOnline,
 } from './behavior/capabilities/chat/online.ts';
 import { stayOnline } from './behavior/capabilities/chat/presence.ts';
+import { commit } from './behavior/capabilities/heartbeat/commit.ts';
+import { limits, logs } from './behavior/capabilities/heartbeat/config.ts';
+import { repositoryOf } from './behavior/capabilities/heartbeat/live.ts';
 import { gitCommand } from './behavior/capabilities/heartbeat/repository.ts';
-import { markHealthy } from './behavior/capabilities/heartbeat/restart.ts';
-import { ensureSchedules } from './behavior/capabilities/heartbeat/schedules.ts';
-import { macroKey } from './behavior/context/index.ts';
 import {
-  configured,
-  exitCodes,
-  startOrExit,
-} from './behavior/context/startup.ts';
+  markHealthy,
+  restartExitCode,
+} from './behavior/capabilities/heartbeat/restart.ts';
+import { ensureSchedules } from './behavior/capabilities/heartbeat/schedules.ts';
+import {
+  stopper,
+  watchMarker,
+} from './behavior/capabilities/heartbeat/stop.ts';
+import { macroKey } from './behavior/context/index.ts';
+import { configured, startOrExit } from './behavior/context/startup.ts';
 import { ensureIntroduction } from './behavior/events/handlers/identity.ts';
 import {
   assistant,
@@ -59,6 +65,7 @@ import {
   resultFlag,
   sandboxProgram,
   scripts,
+  wakesRunning,
   wiring,
 } from './index.ts';
 
@@ -95,11 +102,34 @@ const Hook = z.object({
   cwd: z.string(),
 });
 
+const stop = stopper({
+  running: wakesRunning,
+  commit: (message) =>
+    commit(repositoryOf(assistant.decorations), message, limits.commitLockWait),
+  log: (entry) => base.log.event(logs.heartbeat, entry),
+  flush: () => Telemetry.flush(),
+  exit: (code) => process.exit(code),
+  timeoutMs: limits.stopSync,
+  sleep: (ms) => Bun.sleep(ms),
+});
+
 const run = async (): Promise<void> => {
+  // A stop syncs once more when no wake is running, so a teammate moved to
+  // another machine starts from all it did here; one during the start too.
+  process.on('SIGTERM', () => void stop());
   // Everything the agent needs to run is checked before anything starts,
   // including the files it tells its launcher through (`launcherFiles`): a
   // healthy boot, or a restart onto code it landed.
   const files = launcherFiles();
+  // A land, in any of the agent's processes, touches the restart marker: the
+  // agent then stops the way a stop does and exits 75, which its launcher
+  // (teammate-boot's supervisor, macrod or systemd) starts again.
+  void watchMarker({
+    read: () => base.disk.read(files.restart),
+    sleep: (ms) => Bun.sleep(ms),
+    everyMs: limits.restartPoll,
+    changed: () => void stop(restartExitCode),
+  });
   // Wakes are traces of their own: the event loop starts in this context,
   // outside the start's span.
   const outsideStart = Telemetry.captureContext();
@@ -121,11 +151,6 @@ const run = async (): Promise<void> => {
           const apiKey = await phase('agent.start.credentials', () =>
             configured(() => base.credentials.get(macroKey))
           );
-          process.on('SIGTERM', () => {
-            void Telemetry.flush().finally(() =>
-              process.exit(exitCodes.stopped)
-            );
-          });
           // Once presence is open, the agent tells Macro it is up: its row turns
           // Running and its inviter hears it is ready.
           const online = reportsOnline({
@@ -186,7 +211,8 @@ const run = async (): Promise<void> => {
           );
           // Built, credentials read, presence open, sources started and chat
           // hearing Macro: a healthy boot, so the launcher's rollback starts
-          // from this HEAD. One that can't hear in time exits, as a failed boot.
+          // from this HEAD. One that Macro answers but whose stream doesn't
+          // open in time exits, as a failed boot; one offline waits, up.
           await phase('agent.start.healthy', () =>
             markHealthy({
               git: (args) =>
@@ -195,6 +221,8 @@ const run = async (): Promise<void> => {
               file: files.lastGood,
               listening: assistant.decorations.chat.listening,
               deadline: () => Bun.sleep(listeningDeadlineMs),
+              reached: assistant.decorations.chat.reached,
+              reachable: assistant.decorations.chat.reachable,
             })
           );
           // Wrapped, so the start's span ends here instead of awaiting the loop.

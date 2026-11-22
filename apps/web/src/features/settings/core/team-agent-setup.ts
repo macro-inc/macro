@@ -25,7 +25,13 @@ export function teamAgentRunState(
   return (
     match(agent.status)
       .returnType<TeamAgentRunState>()
-      .with('provisioning', 'starting', () => 'setting_up')
+      .with(
+        'provisioning',
+        'downloading',
+        'moving',
+        'starting',
+        () => 'setting_up'
+      )
       .with('failed', () => 'setup_failed')
       .with('paused', 'unhealthy', () => 'offline')
       .with('released', () => 'not_running')

@@ -1,22 +1,32 @@
-import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
+import {
+  ENABLE_AGENT_FACES,
+  ENABLE_PROFILE_PICTURES,
+} from '@core/constant/featureFlags';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { useProfilePictureUrl } from '@core/signal/profilePicture';
+import {
+  profilePictureItem,
+  useProfilePictureUrl,
+} from '@core/signal/profilePicture';
 import {
   getDisplayName,
   getDisplayNameParts,
   getInitials,
   getInitialsFromName,
+  isAgentAccount,
   macroIdToEmail,
   tryMacroId,
   useIsConnectedSecondaryInbox,
 } from '@core/user';
+import { derivedAgentFace } from '@core/user/agent-face';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import RobotIcon from '@icon/system/regular/robot.svg';
 import Trash from '@icon/system/regular/trash.svg?component-solid';
+import { type AgentFace, renderFace } from '@macro-inc/agent-faces';
+import { Telemetry } from '@macro-inc/observability';
 import { Avatar, type AvatarSize, cn } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import { BotMarkAvatar } from './BotMarkAvatar';
@@ -37,14 +47,34 @@ export type UserIconProps = {
   photoUrl?: string;
 } & ({ id: string; email?: never } | { email: string; id?: never });
 
+/** The edge, in pixels, a face is drawn for; `fill` has no fixed size. */
+const FACE_PIXELS: Record<AvatarSize, number | undefined> = {
+  sm: 16,
+  md: 24,
+  lg: 40,
+  fill: undefined,
+};
+
+/** The face as an image URL, or `undefined` when it fails to draw. */
+function faceImageUrl(face: AgentFace, size: AvatarSize): string | undefined {
+  try {
+    const svg = renderFace(face, { size: FACE_PIXELS[size] });
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  } catch (error) {
+    Telemetry.error(error, { surface: 'agent-face' });
+    return undefined;
+  }
+}
+
 /**
- * Internal render. Image or fallback.
+ * Internal render. Face, image or fallback.
  */
 function ProfileImage(props: {
   name?: string;
   id?: string;
   email?: string;
   photoUrl?: string;
+  size: AvatarSize;
 }) {
   const macroId = createMemo(() =>
     props.id ? tryMacroId(props.id) : undefined
@@ -76,29 +106,60 @@ function ProfileImage(props: {
   // Macro profile picture wins; fall back to a contact photo before initials.
   const imageUrl = () => profilePicUrl() || props.photoUrl;
 
+  // A saved face beats its own PNG in `imageUrl`. An agent with no picture
+  // gets a face derived from its id, but only once its picture has loaded, so
+  // an uploaded photo never flashes a face first.
+  const face = (): AgentFace | undefined => {
+    if (!ENABLE_AGENT_FACES || !props.id) return undefined;
+
+    const picture = profilePictureItem(props.id);
+    if (!picture || picture.loading) return undefined;
+    if (picture.face) return picture.face;
+    if (imageUrl()) return undefined;
+
+    const id = macroId();
+    if (!id || !isAgentAccount(id)) return undefined;
+    return derivedAgentFace(id);
+  };
+
+  const faceUrl = createMemo(() => {
+    const current = face();
+    return current ? faceImageUrl(current, props.size) : undefined;
+  });
+
   return (
-    <Show
-      when={imageUrl()}
+    <Switch
       fallback={
         <Avatar.Fallback class="font-semibold">{initials()}</Avatar.Fallback>
       }
-      keyed
     >
-      {(url) => (
-        <Avatar.Image
-          // Solid surface circle behind the picture so a transparent profile
-          // picture shows surface color rather than what's rendered behind the avatar.
-          class="bg-surface"
-          src={staticFileSizedUrl(url, 'small')}
-          onError={(e) => {
-            if (e.currentTarget.src !== url) {
-              e.currentTarget.src = url;
-            }
-          }}
-          ref={(el) => internalDrag(el)}
-        />
-      )}
-    </Show>
+      <Match when={faceUrl()} keyed>
+        {(url) => (
+          <>
+            <Avatar.Fallback class="font-semibold">
+              {initials()}
+            </Avatar.Fallback>
+            <Avatar.Image src={url} alt="" ref={(el) => internalDrag(el)} />
+          </>
+        )}
+      </Match>
+      <Match when={imageUrl()} keyed>
+        {(url) => (
+          <Avatar.Image
+            // Solid surface circle behind the picture so a transparent profile
+            // picture shows surface color rather than what's rendered behind the avatar.
+            class="bg-surface"
+            src={staticFileSizedUrl(url, 'small')}
+            onError={(e) => {
+              if (e.currentTarget.src !== url) {
+                e.currentTarget.src = url;
+              }
+            }}
+            ref={(el) => internalDrag(el)}
+          />
+        )}
+      </Match>
+    </Switch>
   );
 }
 
@@ -111,6 +172,7 @@ function UserIconContent(props: {
   email?: string;
   isDeleted?: boolean;
   photoUrl?: string;
+  size: AvatarSize;
 }) {
   return (
     <Switch>
@@ -119,7 +181,12 @@ function UserIconContent(props: {
       </Match>
       <Match when={props.id} keyed>
         {(id) => (
-          <ProfileImage id={id} name={props.name} photoUrl={props.photoUrl} />
+          <ProfileImage
+            id={id}
+            name={props.name}
+            photoUrl={props.photoUrl}
+            size={props.size}
+          />
         )}
       </Match>
       <Match when={!props.id && props.email} keyed>
@@ -128,6 +195,7 @@ function UserIconContent(props: {
             email={email}
             name={props.name}
             photoUrl={props.photoUrl}
+            size={props.size}
           />
         )}
       </Match>
@@ -220,6 +288,7 @@ export function UserIcon(props: UserIconProps) {
             email={props.email}
             isDeleted={props.isDeleted}
             photoUrl={props.photoUrl}
+            size={size()}
           />
         </Avatar>
       </Match>
@@ -250,6 +319,7 @@ export function UserIcon(props: UserIconProps) {
                   email={props.email}
                   isDeleted={props.isDeleted}
                   photoUrl={props.photoUrl}
+                  size={size()}
                 />
               </Avatar>
             }
@@ -281,6 +351,7 @@ export function UserIcon(props: UserIconProps) {
                 email={props.email}
                 isDeleted={props.isDeleted}
                 photoUrl={props.photoUrl}
+                size={size()}
               />
             </Avatar>
           }

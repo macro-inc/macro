@@ -53,6 +53,14 @@ flag) read and commit it through agent_git; the agent's next call uses it.
 admins behind the same flag; agent_harness_service implements its
 `VoiceProvider` and mounts it at `/voices`.
 
+The invite accepts `avatarFace` and `avatarUrl`. Owners and admins can replace
+them with `PUT /team_agents/{agent_user_id}/avatar` (`{face, url}`, 204), behind
+the same flag. Saving a face writes its recipe and PNG URL together; a missing
+URL clears the old PNG. A URL must be a Macro static file,
+`<StaticFilePublicUrl>/file/<uuid>` (`PictureBase`), on invite and edit, so
+clients never load a host an admin chose. Saving a photo clears the recipe. Picture changes
+publish through the `AgentPictureChanges` port after persistence.
+
 `domain::admission::AgentAdmission::admit(agent, team)` answers whether an
 account is an agent the vault may admit, from current facts each call: its
 `team_agents` row is for that team, `"User"."isAgent"` is set, it is still a
@@ -84,15 +92,106 @@ on macrod connect for an agent's computer unless the agent already counts as
 online (one invited before reports, backfilled; its workspace never reports). Not tied to the starter agent: any
 agent runtime reports the same way.
 
+### On the owner's own machine
+
+Behind `enable-self-hosted-teammates` (acting admin, fail closed) on top of
+`enable-agent-teammates`. `POST /team_agents` with
+`computer: {kind: "own", harnessId}` (a request with only `size` still buys
+a computer; both is a 400) checks the machine (`self_hosting::HostEligibility`:
+the admin's own paired harness, never a Macro computer; connected; latest
+`TeammateHost` report has an engine, no problem, an image for its
+architecture and the hardware floor), then makes the account, seat and repo
+as above and a `team_agent_installs` row (generation 1) instead of a
+purchase, and tells agent_harness_service (`TeammateRuntimes`, internal
+`POST /internal/teammates/{harness}/changed`). `GET /team_agents/hosts` lists
+the admin's machines with eligibility and each installed engine (`engines`,
+with whether it can confine a teammate's network). `POST
+/team_agents/hosts/{harness_id}/recheck` (the admin's own machine only,
+else 404; never an agent's program, 403; 204) asks it to check again now,
+at most once per machine every 10 s per replica (`HostRechecks`: a press
+while one is in flight or within the 10 s joins it, still 204) (`TeammateRuntimes::recheck_host`,
+internal `POST /internal/teammates/{harness}/recheck`, sent as
+`RecheckTeammateHost` to a macrod that listed `recheck-teammate-host`); its
+fresh report shows in the next `GET /team_agents/hosts`. Status comes from the install's
+`run_state` (`downloading` is new) and `first_online_at`; a `failed` or
+`rolled_back` install also answers `installProblem` (`{kind: failed |
+rolledBack, reason}`, the machine's `InstallFailure`), absent during a move or
+removal.
+
+Delivery is counted: the replica holding the machine's socket asks
+`POST /internal/team_agent_install/{harness}/{install}` with what the runtime
+runs; `issue_install` bumps `delivery` only when the runtime is behind the
+row (`PgTeammateInstalls::next_delivery`, a conditional update whose row lock
+is held until the `CountedDelivery` is released), mints under that lock so
+racing replicas mint in delivery order (`replace_key`, same brain key name),
+releases (kept even when minting failed, so the runtime stays behind and gets
+the next delivery) and returns the image
+(`TeammateRuntimeImage::images`, a per-architecture constant; a local
+stack may override it with `OVERRIDE_TEAMMATE_RUNTIME_IMAGE_{AMD64,ARM64}` =
+`<repository>@sha256:<hex>`, ignored outside `ENVIRONMENT=local`; each
+service reads them once at startup with `maybe_env_vars!` and injects the
+result) and the
+environment with public addresses (`MACRO_TEAMMATE_INSTALL_ID`, no
+`MACRO_COMPUTER_ID`; on a local stack, the in-network `OVERRIDE_*` addresses a
+local Macro computer gets, since the teammate joins the stack's network). A move (`POST /team_agents/{agent}/install`) or removal
+first marks the row's `checkpoint`; the old machine stops the agent (its last
+push), then `finish_checkpoint` (internal `.../{install}/checkpointed`, or at
+once when the machine is offline, or after `CHECKPOINT_TIMEOUT`) makes a new
+install id and generation on the target, or revokes and removes the agent
+with its install last. While a move's checkpoint is open the agent lists as
+`moving` with `movingTo` set to the target (`harnessId` is still the old
+machine, which only saves its memory). A finished move sets `revoke_pending`: nothing is
+delivered until the old machine's keys and repository token are revoked. A
+revoke runs under `begin_revoke`, which locks the row and rechecks
+`revoke_pending` (`SELECT … AND revoke_pending FOR UPDATE`) and clears it in
+the same transaction (`HeldRevoke::done`), so a sweep holding a stale copy of
+the row skips it instead of voiding the key the new machine was minted since.
+Each agent's revoke under the lock is bounded by `REVOKE_TIMEOUT` (5 s); past
+it the transaction rolls back and `revoke_pending` stays for the sweep. Only the agent's inviter or
+the current machine's owner may move it. A machine whose owner is no longer
+an owner or admin of the agent's team, or that was unpaired, gets nothing more
+(`issue_install` checks `host_entitled`), and its agents are parked: at once
+by `InstallOffboarding::offboard_unentitled` when the team service reports a
+removal or demotion (`teams::domain::member_access`), and by the internal
+`POST /internal/teammate_hosts/{harness_id}/offboard` (`offboard_host`, only
+that machine's installs) that document_storage_service calls after an unpair
+(`harnesses::domain::retired`, a 10 s client timeout). `offboard_host` parks
+every agent on (or moving to) the machine first, then revokes while telling
+it and the machine a parked mid-move agent was leaving (which still runs it;
+the nudges are hints and never delay a revoke), so a slow revoke or the caller giving up leaves the rest parked, the
+slow one `revoke_pending`; authentication_service's 60 s
+sweep (`offboard_unentitled_hosts`) backs both. The sweep, the removal and
+demotion hook and an unpair offboard and
+revokes `OFFBOARD_CONCURRENCY` (4) agents at once, each within its 5 s, so
+one hanging revoke costs a round one budget, not one per agent; a revoke that
+failed in a round waits for the next. Parking: `park` waits for a
+delivery in flight and sets `parked_at` and `revoke_pending`, then the
+credentials are revoked; `installs_on` leaves a parked install out, so its
+machine stops it. A parked agent keeps its account, seat, DMs and repository,
+lists as `paused` with `installProblem: hostRemoved`, and may be moved (to a
+machine of the mover's, or back to the same one) only by its inviter, the
+team's owner (`owns_team`), or the owner of the machine it was parked off once
+`host_entitled` again; never by another admin, who could otherwise park it by
+removing its host and take its key, DMs and shares. The same sweep
+retries every revoke still pending. Deleting a team first runs
+`InstallOffboarding::release_team` (team deletion's
+`release_teammate_installs`): park, revoke, delete each install, nudge its
+machine; `team_agent_installs.team_id` and `harness_id` are `ON DELETE
+RESTRICT`, so nothing drops an install with live credentials. No billing (`SELF_HOSTED_TEAMMATE_PRICING` is `None`).
+Spec: `docs/design/teammate-runtime.md`.
+
 ## Start here
 
 - `src/domain/service.rs`: invite, list, remove and enrollment issuance.
 - `src/domain/ports.rs`: what the service needs from other crates.
 - `src/domain/admission.rs`: agent admission for the vault.
+- `src/domain/self_hosting.rs`, `src/domain/service/self_hosted.rs`,
+  `src/outbound/pg_teammate_installs.rs`: agents on owners' own machines.
 
 ## Scope
 
-- Owns: agent accounts, the `team_agents` table, enrollment issuance.
+- Owns: agent accounts, the `team_agents`, `team_agent_installs` and
+  `harness_teammate_hosts` tables, enrollment and install issuance.
 - Not here: the computer lifecycle and billing → `crates/hosted_runtimes`;
   membership and seats → `crates/teams`; the repo server → `crates/agent_git`;
   the agent runtime → `packages/muppet` and its template `packages/starter-agent`.

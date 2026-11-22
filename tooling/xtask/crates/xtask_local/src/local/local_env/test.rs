@@ -734,3 +734,12 @@ fn a_static_stack_presigns_files_for_this_machines_name() {
         )
     );
 }
+
+#[test]
+fn teammate_runtime_images_are_declared_empty_so_the_process_env_can_set_them() {
+    let env = local_env();
+
+    for name in TEAMMATE_RUNTIME_IMAGE_OVERRIDES {
+        assert_eq!(env.get(name).map(String::as_str), Some(""), "{name}");
+    }
+}

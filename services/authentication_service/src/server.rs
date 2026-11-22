@@ -690,6 +690,21 @@ async fn run_server() -> anyhow::Result<()> {
     let internal_key = config.service_internal_auth_key.to_string();
     let harness_url = macro_service_urls::AgentHarnessServiceUrl::new()?.to_string();
     let scheduled_action_url = macro_service_urls::ScheduledActionServiceUrl::new()?.to_string();
+    // Agents on owners' own machines, for team deletion and membership
+    // changes; the agent service is built on the team service, so this holds
+    // only the ports.
+    let install_offboarding: Arc<
+        dyn crate::outbound::team_owned_entity_cleanup::TeamTeammateInstalls,
+    > = Arc::new(team_agents::domain::service::InstallOffboarding::new(
+        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
+        agent_api_keys(&db),
+        agent_git_repos(&internal_key)?,
+        team_agents::outbound::pg_teammate_installs::PgTeammateInstalls::new(db.clone()),
+        crate::outbound::teammate_runtimes::HarnessTeammateRuntimes::new(
+            harness_url.clone(),
+            &internal_key,
+        )?,
+    ));
     let team_owned_entity_cleanup = TeamOwnedEntityCleanupAdapter::new(
         Arc::new(
             passwords::outbound::postgres::PgRepository::new(db.clone())
@@ -709,6 +724,7 @@ async fn run_server() -> anyhow::Result<()> {
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
             hosted_runtimes::domain::service::SystemClock,
         )),
+        install_offboarding.clone(),
     )
     .map_err(|error| anyhow::anyhow!("{error:?}"))?;
     let crm_access_rollout: Arc<dyn teams::domain::crm_member_access::CrmAccessRollout> =
@@ -733,7 +749,10 @@ async fn run_server() -> anyhow::Result<()> {
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup)
     .with_crm_access_rollout(crm_access_rollout)
-    .with_invite_rewarder(Arc::new(invite_rewards));
+    .with_invite_rewarder(Arc::new(invite_rewards))
+    .with_member_access_lost(Arc::new(
+        crate::outbound::team_owned_entity_cleanup::TeammateMemberAccessLost(install_offboarding),
+    ));
     let computer_rollout = feature_flags
         .clone()
         .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
@@ -756,22 +775,13 @@ async fn run_server() -> anyhow::Result<()> {
         .with_rollout(computer_rollout),
     );
     // Agent teammates: off for every admin unless `enable-agent-teammates`
-    // is on for them in PostHog.
+    // is on for them in PostHog; on their own machines, also
+    // `enable-self-hosted-teammates`.
     let team_agents_service = Arc::new(team_agents::domain::service::TeamAgentServiceImpl::new(
         team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
         team_agents::outbound::team_membership::TeamsMembership::new(teams_service.clone()),
-        team_agents::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
-            user_api_key::domain::service::UserApiKeyServiceImpl::new(
-                user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(db.clone()),
-            ),
-        )),
-        team_agents::outbound::agent_git_repos::AgentGitRepos::new(
-            agent_git::client::AgentGitClient::new(
-                macro_service_urls::AgentGitServiceUrl::new()?.to_string(),
-                internal_key.clone(),
-            )
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?,
-        ),
+        agent_api_keys(&db),
+        agent_git_repos(&internal_key)?,
         team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers::new(
             computer_service.clone(),
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
@@ -783,6 +793,26 @@ async fn run_server() -> anyhow::Result<()> {
             team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
         ),
         crate::outbound::agent_addresses::AgentAddresses,
+        crate::outbound::agent_picture_changes::BrokerAgentPictureChanges::new(
+            macro_event_broker.clone(),
+        ),
+        // The base browsers upload agent pictures to and load them from.
+        team_agents::domain::avatar::PictureBase::new(
+            macro_service_urls::StaticFilePublicUrl::new()?.to_string(),
+        ),
+        team_agents::domain::service::SelfHosting {
+            installs: team_agents::outbound::pg_teammate_installs::PgTeammateInstalls::new(
+                db.clone(),
+            ),
+            runtimes: crate::outbound::teammate_runtimes::HarnessTeammateRuntimes::new(
+                harness_url.clone(),
+                &internal_key,
+            )?,
+            images: crate::outbound::teammate_runtimes::teammate_runtime_images(),
+            public_environment: Box::new(crate::outbound::agent_addresses::PublicAgentAddresses(
+                config.environment,
+            )),
+        },
     ));
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
@@ -850,6 +880,13 @@ async fn run_server() -> anyhow::Result<()> {
     } else {
         tracing::info!("computers agents worker off (COMPUTERS_AGENT_EFFECTS unset)");
     }
+    // Takes agent teammates off owners' own machines that may no longer
+    // host them (the owner left the team, lost admin, or unpaired the
+    // machine). Idempotent, so every replica sweeps; drained with the rest.
+    computer_billing.spawn(run_teammate_host_offboarding(
+        team_agents_service.clone(),
+        computer_billing_stop.clone(),
+    ));
     computer_billing.close();
     // The Stripe event inbox: the webhook stores events; every replica's
     // worker applies due cursors (leased, so replicas never collide), and
@@ -1175,6 +1212,56 @@ async fn run_computer_agent_effects(
             Err(error) => {
                 tracing::error!(error = ?error, "computer agent effects pass failed");
             }
+        }
+    }
+}
+
+/// Agents' API keys, for the agent service and team deletion.
+fn agent_api_keys(
+    db: &sqlx::PgPool,
+) -> team_agents::outbound::agent_api_keys::UserApiKeys<
+    user_api_key::domain::service::UserApiKeyServiceImpl<
+        user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,
+    >,
+> {
+    team_agents::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
+        user_api_key::domain::service::UserApiKeyServiceImpl::new(
+            user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(db.clone()),
+        ),
+    ))
+}
+
+/// Agents' workspace repositories, for the agent service and team deletion.
+fn agent_git_repos(
+    internal_key: &str,
+) -> anyhow::Result<team_agents::outbound::agent_git_repos::AgentGitRepos> {
+    Ok(team_agents::outbound::agent_git_repos::AgentGitRepos::new(
+        agent_git::client::AgentGitClient::new(
+            macro_service_urls::AgentGitServiceUrl::new()?.to_string(),
+            internal_key.to_owned(),
+        )
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+    ))
+}
+
+/// How often agents on machines that may no longer host them are taken off.
+const TEAMMATE_HOST_OFFBOARDING_TICK: std::time::Duration = std::time::Duration::from_secs(60);
+
+async fn run_teammate_host_offboarding(
+    team_agents: Arc<crate::api::context::TeamAgentsServiceType>,
+    stop: CancellationToken,
+) {
+    use team_agents::domain::ports::TeamAgentService;
+    let mut interval = tokio::time::interval(TEAMMATE_HOST_OFFBOARDING_TICK);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            () = stop.cancelled() => return,
+            _ = interval.tick() => {}
+        }
+        // Each round is its own `team_agents.offboard_hosts` span.
+        if let Err(error) = team_agents.offboard_unentitled_hosts().await {
+            tracing::error!(error = ?error, "teammate host offboarding round failed");
         }
     }
 }

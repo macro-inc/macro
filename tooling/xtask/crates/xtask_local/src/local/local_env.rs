@@ -587,8 +587,22 @@ impl AgentHarnessEnv {
             "OVERRIDE_MCP_SERVICE_URL".into(),
             self.mcp_service_url.into(),
         );
+        // A teammate runtime image built and `docker load`ed on this machine,
+        // so an own-machine teammate can run on a local stack. Empty (unset)
+        // unless the developer passes one through the process env:
+        // `OVERRIDE_TEAMMATE_RUNTIME_IMAGE_AMD64=<repository>@sha256:<hex> just run_local`.
+        for arch in TEAMMATE_RUNTIME_IMAGE_OVERRIDES {
+            env.insert(arch.into(), String::new());
+        }
     }
 }
+
+/// `team_agents`' `TeammateRuntimeImage` overrides, honoured only by a local
+/// stack.
+pub const TEAMMATE_RUNTIME_IMAGE_OVERRIDES: [&str; 2] = [
+    "OVERRIDE_TEAMMATE_RUNTIME_IMAGE_AMD64",
+    "OVERRIDE_TEAMMATE_RUNTIME_IMAGE_ARM64",
+];
 
 /// Internal service-to-service auth secrets. Deterministic per instance so every
 /// container (services, sync, lexical) agrees. `INTERNAL_API_SECRET_KEY` is the

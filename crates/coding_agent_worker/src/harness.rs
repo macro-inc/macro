@@ -22,7 +22,8 @@ use agent_runtime_protocol::domain::connection::{
     ConnectionError, ModelProbeHandler, RuntimeChannel,
 };
 use agent_runtime_protocol::domain::schema::v0::{
-    AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
+    AcpMessage, ModelProbeResult, SystemEvent, TeammateHostReport, ToRuntimeMessage,
+    ToServerMessage,
 };
 use tokio::sync::{Notify, oneshot};
 use tokio::task::JoinSet;
@@ -48,6 +49,141 @@ pub enum BridgeError {
     Harness(String),
 }
 
+/// The teammates this macrod hosts in containers; none outside Unix.
+#[cfg(unix)]
+pub type HostTeammates = crate::teammate::HostTeammates;
+/// The teammates this macrod hosts in containers; none outside Unix.
+#[cfg(not(unix))]
+pub enum HostTeammates {}
+
+/// The teammates this macrod hosts, once hosting is set up: at start, or
+/// by a later retry when setting it up failed (`daemon.rs`). Each dial reads
+/// it, and a connection made without it redials once it is set up.
+#[derive(Clone)]
+pub struct Hosting(Arc<tokio::sync::watch::Sender<Option<Arc<HostTeammates>>>>);
+
+impl Default for Hosting {
+    fn default() -> Self {
+        Self(Arc::new(tokio::sync::watch::Sender::new(None)))
+    }
+}
+
+impl Hosting {
+    /// Hosting already set up.
+    #[cfg(test)]
+    pub fn with(teammates: Arc<HostTeammates>) -> Self {
+        let hosting = Self::default();
+        hosting.set(teammates);
+        hosting
+    }
+
+    /// Hosting is set up.
+    pub fn set(&self, teammates: Arc<HostTeammates>) {
+        self.0.send_replace(Some(teammates));
+    }
+
+    /// The teammates, if hosting is set up.
+    pub fn current(&self) -> Option<Arc<HostTeammates>> {
+        self.0.borrow().clone()
+    }
+
+    /// Resolves once hosting is set up.
+    pub async fn ready(&self) {
+        let mut hosting = self.0.subscribe();
+        let _ = hosting.wait_for(Option::is_some).await;
+    }
+}
+
+/// Why hosting teammates couldn't be set up.
+#[derive(Debug, thiserror::Error)]
+pub enum HostingSetupError {
+    /// The teammate settings in the config are wrong: trying again won't
+    /// help until they are fixed.
+    #[error("the teammate settings are invalid: {0}")]
+    Settings(rootcause::Report),
+    /// Something that may pass by itself (a file another macrod writes).
+    #[error("could not set up hosting teammates: {0}")]
+    Failed(rootcause::Report),
+}
+
+/// Which call carried the harness credentials the service answered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CredentialPath {
+    /// The runtime gateway's WebSocket dial.
+    RuntimeDial,
+    /// The trigger stream's calls (its bound-agent reads).
+    Stream,
+}
+
+/// The service refused this machine's harness credentials on `path` (it
+/// was unpaired or removed, or that path is failing): stop the teammates it
+/// runs once the refusal persists.
+pub fn credentials_refused(
+    teammates: Option<&std::sync::Arc<HostTeammates>>,
+    path: CredentialPath,
+) {
+    let Some(teammates) = teammates else {
+        return;
+    };
+    #[cfg(unix)]
+    teammates.credentials_refused(path);
+    #[cfg(not(unix))]
+    let _ = path;
+    #[cfg(not(unix))]
+    match **teammates {}
+}
+
+/// Nothing calls the service on `path` any more: its refusal no longer
+/// holds the teammates stopped.
+pub fn stopped_calling(teammates: Option<&std::sync::Arc<HostTeammates>>, path: CredentialPath) {
+    let Some(teammates) = teammates else {
+        return;
+    };
+    #[cfg(unix)]
+    teammates.stopped_calling(path);
+    #[cfg(not(unix))]
+    let _ = path;
+    #[cfg(not(unix))]
+    match **teammates {}
+}
+
+/// The service accepted this machine's harness credentials on `path`: run
+/// again the teammates a refusal stopped, once no path is refused.
+pub fn credentials_accepted(
+    teammates: Option<&std::sync::Arc<HostTeammates>>,
+    path: CredentialPath,
+) {
+    let Some(teammates) = teammates else {
+        return;
+    };
+    #[cfg(unix)]
+    teammates.credentials_accepted(path);
+    #[cfg(not(unix))]
+    let _ = path;
+    #[cfg(not(unix))]
+    match **teammates {}
+}
+
+/// The teammates to serve on one connection, with the engine check made
+/// before its dial.
+pub type TeammateHosting = (Arc<HostTeammates>, TeammateHostReport);
+
+/// What one connection's teammate traffic asks of the relay.
+#[derive(Debug)]
+pub enum TeammateEvent {
+    /// Send this to the service.
+    Send(ToServerMessage),
+    /// The engine answers again, but this connection's dial didn't list
+    /// the teammate capability: redial (once no turn is running) so the
+    /// service can send teammates here.
+    Redial,
+}
+
+#[cfg(unix)]
+type TeammateLink = crate::teammate::Link;
+#[cfg(not(unix))]
+type TeammateLink = std::convert::Infallible;
+
 /// Observes every line crossing the harness's stdio.
 pub type LineTap = Arc<dyn Fn(&str, LineDirection) + Send + Sync>;
 
@@ -72,7 +208,8 @@ pub enum BridgeEnd {
 /// one. `handoff` asks the bridge to stop at a line boundary and hand the
 /// agent over instead.
 /// `agents_changed` is raised when the service says the agents bound to this
-/// harness may have changed.
+/// harness may have changed. `teammates`, when this macrod hosts any, gets
+/// the connection's teammate messages and sends their reports.
 #[expect(clippy::too_many_arguments, reason = "the bridge's whole input")]
 pub async fn bridge(
     harness: &Harness,
@@ -84,6 +221,8 @@ pub async fn bridge(
     handoff: &mut Handoffs,
     computer: Option<Arc<Computer>>,
     agents_changed: &Notify,
+    teammates: Option<TeammateHosting>,
+    hosting: &Hosting,
 ) -> Result<BridgeEnd, BridgeError> {
     let probes = HarnessModelProbes {
         process: probe_process(harness, cwd),
@@ -103,6 +242,17 @@ pub async fn bridge(
             event: SystemEvent::AcpReady,
         })
         .map_err(|_| BridgeError::Announce(ConnectionError::Closed))?;
+    let mut teammates = teammates
+        .map(|hosting| open_teammate_link(hosting, to_service.as_ref().expect("just set")));
+    // Teammates are hosted on Unix only; elsewhere the service is told so,
+    // and the Invite form shows the machine with that reason.
+    #[cfg(not(unix))]
+    let _ = to_service
+        .as_ref()
+        .expect("just set")
+        .send(ToServerMessage::TeammateHost {
+            report: unsupported_host_report(),
+        });
 
     let line_turns = turns.clone();
     // Observe protocol traffic without logging credentials in session-start env.
@@ -129,6 +279,8 @@ pub async fn bridge(
                 handoff,
                 computer.as_ref(),
                 agents_changed,
+                &mut teammates,
+                hosting,
             )
             .await
         }
@@ -213,6 +365,8 @@ async fn relay(
     handoff: &mut Handoffs,
     computer: Option<&Arc<Computer>>,
     agents_changed: &Notify,
+    teammates: &mut Option<TeammateLink>,
+    hosting: &Hosting,
 ) -> Result<Relayed, BridgeError> {
     let to_service = to_service_slot
         .clone()
@@ -220,8 +374,19 @@ async fn relay(
     // Owned by the relay: ending it aborts every probe subprocess.
     let mut probe_tasks = JoinSet::new();
     let mut self_knowledge = SelfKnowledge::default();
+    // A redial is due (to list what this dial didn't), once no turn runs:
+    // ending the connection would end a running turn in Macro.
+    let mut redial_pending = false;
     loop {
+        if redial_pending && turns.is_idle() {
+            tracing::info!("redialing so the dial lists teammate hosting");
+            return Ok(Relayed::Closed);
+        }
         tokio::select! {
+            () = hosting.ready(), if teammates.is_none() && !redial_pending => {
+                tracing::info!("hosting teammates was set up after this dial; redialing once no turn runs");
+                redial_pending = true;
+            }
             event = agent.next_event() => match event {
               AgentEvent::Line(line) => {
                 let Some(line) = line else {
@@ -291,18 +456,40 @@ async fn relay(
                         hosted_runtimes::domain::telemetry::attach(&span, traceparent.as_deref());
                         let _entered = span.enter();
                         match apply_agent(&environment.0, traceparent.as_deref()) {
-                            Ok(staged) => tracing::info!(?staged, "handled the agent teammate's environment"),
+                            Ok(staged) => {
+                                tracing::info!(?staged, "handled the agent teammate's environment");
+                                // macrod starts the agent on it, when it controls the unit.
+                                #[cfg(unix)]
+                                if staged == crate::agent_env::Staged::Written && let Some(computer) = computer {
+                                    computer.agent_delivered();
+                                }
+                            }
                             Err(error) => {
                                 span.record("otel.status_code", "ERROR");
                                 tracing::error!(error = ?error, "could not stage the agent teammate's environment");
                             }
                         }
                     }
+                    Some(message @ (ToRuntimeMessage::RunTeammate { .. } | ToRuntimeMessage::StopTeammate { .. })) => {
+                        handle_teammate_message(teammates.as_ref(), message);
+                    }
+                    Some(ToRuntimeMessage::RecheckTeammateHost { traceparent, .. }) => recheck_teammate_host(teammates.as_ref(), traceparent),
                     Some(other) => tracing::debug!(message = ?other, "ignoring an unknown runtime message"),
                     None => return Ok(Relayed::Closed),
                 }
             }
             Some(_) = probe_tasks.join_next(), if !probe_tasks.is_empty() => {}
+            event = next_teammate_event(teammates) => match event {
+                TeammateEvent::Send(message) => {
+                    if to_service.send(message).is_err() {
+                        return Ok(Relayed::Closed);
+                    }
+                }
+                TeammateEvent::Redial => {
+                    tracing::info!("the container engine answers again; redialing once no turn runs");
+                    redial_pending = true;
+                }
+            },
             request = handoff.next() => {
                 #[cfg(unix)]
                 {
@@ -373,6 +560,84 @@ async fn hand_off(
             None
         }
     }
+}
+
+#[cfg(unix)]
+fn open_teammate_link(
+    (teammates, report): TeammateHosting,
+    to_service: &tokio::sync::mpsc::UnboundedSender<ToServerMessage>,
+) -> TeammateLink {
+    crate::teammate::Link::open(teammates, report, to_service)
+}
+
+#[cfg(not(unix))]
+fn open_teammate_link(
+    (teammates, _report): TeammateHosting,
+    _to_service: &tokio::sync::mpsc::UnboundedSender<ToServerMessage>,
+) -> TeammateLink {
+    match *teammates {}
+}
+
+/// What a machine that can't host teammates reports.
+#[cfg(not(unix))]
+fn unsupported_host_report() -> agent_runtime_protocol::domain::schema::v0::TeammateHostReport {
+    use agent_runtime_protocol::domain::schema::v0::{
+        HostArch, HostOs, TeammateHostProblem, TeammateHostReport,
+    };
+    TeammateHostReport {
+        engine: None,
+        engines: Vec::new(),
+        os: HostOs::Windows,
+        arch: match std::env::consts::ARCH {
+            "x86_64" => HostArch::Amd64,
+            "aarch64" => HostArch::Arm64,
+            _ => HostArch::Other,
+        },
+        cpus: 0,
+        memory_mib: 0,
+        disk_free_mib: None,
+        problem: Some(TeammateHostProblem::UnsupportedPlatform),
+        installs: Vec::new(),
+    }
+}
+
+/// The next teammate report to send, or a redial; never resolves without
+/// teammates.
+async fn next_teammate_event(teammates: &mut Option<TeammateLink>) -> TeammateEvent {
+    #[cfg(unix)]
+    if let Some(link) = teammates {
+        return link.next().await;
+    }
+    #[cfg(not(unix))]
+    let _ = teammates;
+    std::future::pending().await
+}
+
+/// Check hosting again now, as the service asked; without teammates there
+/// is nothing to check.
+fn recheck_teammate_host(teammates: Option<&TeammateLink>, traceparent: Option<String>) {
+    #[cfg(unix)]
+    if let Some(link) = teammates {
+        link.recheck(traceparent);
+    }
+    #[cfg(not(unix))]
+    let _ = (teammates, traceparent);
+}
+
+/// Hand a `RunTeammate` or `StopTeammate` to the teammates. The service
+/// sends them only to a macrod that listed the capability, so without
+/// teammates there is nothing to do but say so.
+fn handle_teammate_message(teammates: Option<&TeammateLink>, message: ToRuntimeMessage) {
+    #[cfg(unix)]
+    if let Some(link) = teammates {
+        match crate::teammate::TeammateRequest::from_message(message) {
+            Ok(request) => link.handle(request),
+            Err(other) => tracing::debug!(message = ?other, "not a teammate message"),
+        }
+        return;
+    }
+    let _ = (teammates, message);
+    tracing::warn!("ignoring a teammate message: this macrod hosts no teammates");
 }
 
 /// Relay one agent line, letting `self_knowledge` learn which session a

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM team t\n                WHERE t.id = $1\n                  AND (\n                      t.owner_id = $2\n                      OR EXISTS (\n                          SELECT 1 FROM team_user tu\n                          WHERE tu.team_id = $1 AND tu.user_id = $2 AND tu.team_role = 'owner'\n                      )\n                  )\n            ) AS \"owns!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owns!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a1d4cccd081d209f48e0bb783a0199f6c97f46788f9a48944f5be7623847f262"
+}

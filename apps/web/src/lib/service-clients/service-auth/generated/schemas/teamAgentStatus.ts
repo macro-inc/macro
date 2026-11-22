@@ -14,6 +14,8 @@ export type TeamAgentStatus =
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const TeamAgentStatus = {
   provisioning: 'provisioning',
+  downloading: 'downloading',
+  moving: 'moving',
   starting: 'starting',
   running: 'running',
   paused: 'paused',

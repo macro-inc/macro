@@ -1,7 +1,13 @@
-//! The addresses an agent teammate's brain reaches Macro at, as its computer
-//! sees them: each service's canonical URL type, resolved afresh for every
-//! enrollment. Local stacks override them per fleet (`OVERRIDE_*`).
+//! The addresses an agent teammate's brain reaches Macro at: each service's
+//! canonical URL type, resolved afresh for every enrollment.
+//!
+//! - [`AgentAddresses`]: as a Macro computer sees them. Local stacks
+//!   override them per fleet (`OVERRIDE_*`).
+//! - [`PublicAgentAddresses`]: as an owner's own machine sees them, the
+//!   environment's public defaults, never a fleet's override; on a local
+//!   stack, the same as a local Macro computer.
 
+use macro_service_urls::macro_env::Environment;
 use macro_service_urls::{
     AgentHarnessEgressUrl, AgentHarnessServiceUrl, ApiGatewayUrl, AuthServiceUrl,
     ConnectionGatewayWebsocketUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl,
@@ -44,6 +50,18 @@ fn is_loopback(url: &macro_service_urls::Url) -> bool {
 }
 
 fn checked(name: &'static str, raw: &str, websocket: bool) -> Result<String, TeamAgentError> {
+    checked_allowing(name, raw, websocket, false)
+}
+
+/// `raw` trimmed, if it is a reachable URL without credentials, query or
+/// fragment. A loopback host passes only when `loopback_ok` (a local stack
+/// whose own machine runs the teammate).
+fn checked_allowing(
+    name: &'static str,
+    raw: &str,
+    websocket: bool,
+    loopback_ok: bool,
+) -> Result<String, TeamAgentError> {
     let invalid = || TeamAgentError::internal(UnreachableAddress { name });
     let url = macro_service_urls::Url::parse(raw).map_err(|_| invalid())?;
     let scheme_ok = if websocket {
@@ -53,7 +71,7 @@ fn checked(name: &'static str, raw: &str, websocket: bool) -> Result<String, Tea
     };
     url.host_str().ok_or_else(invalid)?;
     if !scheme_ok
-        || is_loopback(&url)
+        || (is_loopback(&url) && !loopback_ok)
         || !url.username().is_empty()
         || url.password().is_some()
         || url.query().is_some()
@@ -62,6 +80,73 @@ fn checked(name: &'static str, raw: &str, websocket: bool) -> Result<String, Tea
         return Err(invalid());
     }
     Ok(raw.trim_end_matches('/').to_owned())
+}
+
+/// The service URLs, before they are checked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ServiceUrls {
+    storage: String,
+    auth: String,
+    cognition: String,
+    harness: String,
+    scheduled: String,
+    connection: String,
+    mcp: String,
+    gateway: String,
+    egress: String,
+    intake: String,
+}
+
+/// As a Macro computer reaches them: the process's URLs, overrides included.
+fn computer_facing() -> Result<ServiceUrls, TeamAgentError> {
+    Ok(ServiceUrls {
+        storage: DocumentStorageServiceUrl::new()
+            .map_err(TeamAgentError::internal)?
+            .to_string(),
+        auth: AuthServiceUrl::new()
+            .map_err(TeamAgentError::internal)?
+            .to_string(),
+        cognition: DocumentCognitionServiceUrl::new()
+            .map_err(TeamAgentError::internal)?
+            .to_string(),
+        harness: AgentHarnessServiceUrl::new()
+            .map_err(TeamAgentError::internal)?
+            .to_string(),
+        scheduled: ScheduledActionServiceUrl::new()
+            .map_err(TeamAgentError::internal)?
+            .to_string(),
+        connection: ConnectionGatewayWebsocketUrl::new()
+            .map_err(TeamAgentError::internal)?
+            .to_string(),
+        mcp: McpServiceUrl::new()
+            .map_err(TeamAgentError::internal)?
+            .to_string(),
+        gateway: ApiGatewayUrl::new()
+            .map_err(TeamAgentError::internal)?
+            .to_string(),
+        egress: AgentHarnessEgressUrl::new()
+            .map_err(TeamAgentError::internal)?
+            .to_string(),
+        intake: TelemetryIntakeUrl::new()
+            .map_err(TeamAgentError::internal)?
+            .to_string(),
+    })
+}
+
+/// As anyone on the internet reaches them: the environment's defaults.
+fn public(environment: Environment) -> ServiceUrls {
+    ServiceUrls {
+        storage: DocumentStorageServiceUrl::default_for_environment(environment).to_string(),
+        auth: AuthServiceUrl::default_for_environment(environment).to_string(),
+        cognition: DocumentCognitionServiceUrl::default_for_environment(environment).to_string(),
+        harness: AgentHarnessServiceUrl::default_for_environment(environment).to_string(),
+        scheduled: ScheduledActionServiceUrl::default_for_environment(environment).to_string(),
+        connection: ConnectionGatewayWebsocketUrl::default_for_environment(environment).to_string(),
+        mcp: McpServiceUrl::default_for_environment(environment).to_string(),
+        gateway: ApiGatewayUrl::default_for_environment(environment).to_string(),
+        egress: AgentHarnessEgressUrl::default_for_environment(environment).to_string(),
+        intake: TelemetryIntakeUrl::default_for_environment(environment).to_string(),
+    }
 }
 
 /// The agent's telemetry intake, or none when it is this machine's loopback,
@@ -79,17 +164,28 @@ fn telemetry(raw: &str) -> Result<Option<(&'static str, String)>, TeamAgentError
 }
 
 fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
-    let storage = DocumentStorageServiceUrl::new().map_err(TeamAgentError::internal)?;
-    let auth = AuthServiceUrl::new().map_err(TeamAgentError::internal)?;
-    let cognition = DocumentCognitionServiceUrl::new().map_err(TeamAgentError::internal)?;
-    let harness = AgentHarnessServiceUrl::new().map_err(TeamAgentError::internal)?;
-    let scheduled = ScheduledActionServiceUrl::new().map_err(TeamAgentError::internal)?;
-    let connection = ConnectionGatewayWebsocketUrl::new().map_err(TeamAgentError::internal)?;
-    let mcp = McpServiceUrl::new().map_err(TeamAgentError::internal)?;
-    let gateway = ApiGatewayUrl::new().map_err(TeamAgentError::internal)?;
-    let egress = AgentHarnessEgressUrl::new().map_err(TeamAgentError::internal)?;
+    environment(computer_facing()?, false)
+}
+
+/// The brain's variables from `urls`, each checked.
+fn environment(
+    urls: ServiceUrls,
+    loopback_ok: bool,
+) -> Result<Vec<(&'static str, String)>, TeamAgentError> {
+    let checked = |name, raw: &str, websocket| checked_allowing(name, raw, websocket, loopback_ok);
+    let ServiceUrls {
+        storage,
+        auth,
+        cognition,
+        harness,
+        scheduled,
+        connection,
+        mcp,
+        gateway,
+        egress,
+        intake,
+    } = urls;
     let egress = checked(AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME, &egress, false)?;
-    let intake = TelemetryIntakeUrl::new().map_err(TeamAgentError::internal)?;
     let telemetry = telemetry(&intake)?;
     Ok(vec![
         (
@@ -152,5 +248,34 @@ fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
 impl EnrollmentEnvironment for AgentAddresses {
     fn environment(&self) -> Result<Vec<(&'static str, String)>, TeamAgentError> {
         resolve()
+    }
+}
+
+/// Resolves [`EnrollmentEnvironment`] for an owner's own machine: the
+/// environment's public addresses, never a fleet's override. A local stack
+/// is the exception: its teammate runs on the stack's machine, attached to
+/// the stack's network, so it gets what a local Macro computer gets (the
+/// in-network `OVERRIDE_*` names; a named instance's host ports and the
+/// container's own loopback would both miss the stack).
+pub struct PublicAgentAddresses(pub Environment);
+
+/// The URLs an owner's own machine in `environment` reaches Macro at, given
+/// what a Macro computer would get.
+fn own_machine(
+    environment: Environment,
+    computer_facing: impl FnOnce() -> Result<ServiceUrls, TeamAgentError>,
+) -> Result<ServiceUrls, TeamAgentError> {
+    match environment {
+        Environment::Local => computer_facing(),
+        Environment::Develop | Environment::Production => Ok(public(environment)),
+    }
+}
+
+impl EnrollmentEnvironment for PublicAgentAddresses {
+    fn environment(&self) -> Result<Vec<(&'static str, String)>, TeamAgentError> {
+        environment(
+            own_machine(self.0, computer_facing)?,
+            matches!(self.0, Environment::Local),
+        )
     }
 }

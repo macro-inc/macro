@@ -48,6 +48,43 @@ pub struct Config {
     /// Whether a released macrod keeps itself up to date.
     #[serde(default)]
     pub update: UpdateSettings,
+    /// How agent teammates hosted here run.
+    #[serde(default)]
+    pub teammates: TeammatesSettings,
+}
+
+/// `[teammates]`: the container engine and the egress exceptions.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct TeammatesSettings {
+    /// Which engine runs them.
+    pub engine: EngineChoice,
+    /// `[[teammates.allow]]`: private destinations a teammate may reach
+    /// over TCP beyond the public internet; checked when macrod starts.
+    pub allow: Vec<AllowEntry>,
+}
+
+/// Which container engine runs teammates.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EngineChoice {
+    /// Docker, then Podman: the first that can enforce the egress policy.
+    #[default]
+    Auto,
+    /// Docker only.
+    Docker,
+    /// Podman only.
+    Podman,
+}
+
+/// One egress exception.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AllowEntry {
+    /// The destination network, e.g. `10.20.0.5/32`.
+    pub network: String,
+    /// Its TCP ports; at least one.
+    pub ports: Vec<u16>,
 }
 
 /// Self-update preferences. `MACROD_NO_UPDATE=1` turns updating off too.
@@ -120,12 +157,18 @@ pub struct MacroApi {
     pub storage_url: String,
     /// Base URL of the Macro web app, used for the pairing and settings links.
     pub web_url: String,
+    /// Local stack only: a Docker network (`macro-<instance>_services`) every
+    /// hosted teammate's container also joins, so the agent reaches the
+    /// stack's services by their in-network names. Never set elsewhere.
+    #[serde(default)]
+    pub teammate_network: Option<String>,
 }
 
 impl Default for MacroApi {
     fn default() -> Self {
         Self {
             egress_url: None,
+            teammate_network: None,
             api_url: "https://gateway.macro.com/agent-harness".to_owned(),
             storage_url: "https://gateway.macro.com/dss".to_owned(),
             web_url: "https://macro.com/app".to_owned(),

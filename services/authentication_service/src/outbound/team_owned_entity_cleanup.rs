@@ -24,6 +24,71 @@ pub struct TeamOwnedEntityCleanupConfig {
     pub scheduled_action_url: String,
 }
 
+/// Takes agent teammates off their owners' own machines: a team's ahead of
+/// its deletion, and those on machines that may no longer host them when a
+/// member is removed or demoted.
+#[async_trait::async_trait]
+pub trait TeamTeammateInstalls: Send + Sync {
+    async fn release_team(&self, team_id: Uuid) -> Result<(), Report>;
+
+    async fn offboard_unentitled(&self) -> Result<(), Report>;
+}
+
+#[async_trait::async_trait]
+impl<Repository, ApiKeys, Repos, Installs, Runtimes> TeamTeammateInstalls
+    for team_agents::domain::service::InstallOffboarding<
+        Repository,
+        ApiKeys,
+        Repos,
+        Installs,
+        Runtimes,
+    >
+where
+    Repository: team_agents::domain::ports::TeamAgentRepository,
+    ApiKeys: team_agents::domain::ports::AgentApiKeys,
+    Repos: team_agents::domain::ports::AgentRepos,
+    Installs: team_agents::domain::ports::TeammateInstalls,
+    Runtimes: team_agents::domain::ports::TeammateRuntimes,
+{
+    async fn release_team(&self, team_id: Uuid) -> Result<(), Report> {
+        team_agents::domain::service::InstallOffboarding::release_team(self, team_id)
+            .await
+            .map_err(|error| Report::new(error).into_dynamic())
+    }
+
+    async fn offboard_unentitled(&self) -> Result<(), Report> {
+        team_agents::domain::service::InstallOffboarding::offboard_unentitled(self)
+            .await
+            .map(|_offboarded| ())
+            .map_err(|error| Report::new(error).into_dynamic())
+    }
+}
+
+/// Parks the agents a removed or demoted member may no longer host, as soon
+/// as the team service says so; the 60 s sweep still backs it.
+#[derive(Clone)]
+pub struct TeammateMemberAccessLost(pub Arc<dyn TeamTeammateInstalls>);
+
+impl std::fmt::Debug for TeammateMemberAccessLost {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("TeammateMemberAccessLost")
+    }
+}
+
+impl teams::domain::member_access::MemberAccessLost for TeammateMemberAccessLost {
+    fn member_access_lost(
+        &self,
+        _team_id: Uuid,
+    ) -> teams::domain::member_access::MemberAccessFuture<'_> {
+        Box::pin(async move {
+            self.0
+                .offboard_unentitled()
+                .await
+                .map_err(|error| anyhow::anyhow!("{error:?}"))
+        })
+    }
+}
+
 /// [`OwnedEntityCleanup`] over the bot roster and the entity registry.
 #[derive(Clone)]
 pub struct TeamOwnedEntityCleanupAdapter<B, R> {
@@ -36,6 +101,7 @@ pub struct TeamOwnedEntityCleanupAdapter<B, R> {
     harness_url: String,
     scheduled_action_url: String,
     computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
+    teammate_installs: Arc<dyn TeamTeammateInstalls>,
 }
 
 impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
@@ -51,6 +117,7 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
         documents: Arc<DocumentStorageServiceClient>,
         config: TeamOwnedEntityCleanupConfig,
         computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
+        teammate_installs: Arc<dyn TeamTeammateInstalls>,
     ) -> Result<Self, Report> {
         Ok(Self {
             vault_metadata,
@@ -65,6 +132,7 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
             harness_url: config.harness_url,
             scheduled_action_url: config.scheduled_action_url,
             computers,
+            teammate_installs,
         })
     }
 
@@ -206,6 +274,14 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn release_computers(&self, team_id: Uuid) -> Result<(), Self::Err> {
         self.computers
+            .release_team(team_id)
+            .await
+            .map_err(ReportAsError::from)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn release_teammate_installs(&self, team_id: Uuid) -> Result<(), Self::Err> {
+        self.teammate_installs
             .release_team(team_id)
             .await
             .map_err(ReportAsError::from)

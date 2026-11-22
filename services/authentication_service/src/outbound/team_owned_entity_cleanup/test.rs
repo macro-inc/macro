@@ -14,6 +14,20 @@ impl crate::domain::computer_billing::TeamComputers for NoComputers {
     }
 }
 
+/// A team with no agents on its members' machines.
+struct NoTeammateInstalls;
+
+#[async_trait::async_trait]
+impl TeamTeammateInstalls for NoTeammateInstalls {
+    async fn release_team(&self, _team_id: Uuid) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
+
+    async fn offboard_unentitled(&self) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
+}
+
 fn record(owner: Owner) -> EntityRecord {
     EntityRecord {
         id: Uuid::from_u128(0xc4a7),
@@ -106,6 +120,7 @@ async fn empty_team_skips_disabled_vault_rpc_but_existing_state_requires_acknowl
             scheduled_action_url: server.uri(),
         },
         Arc::new(NoComputers),
+        Arc::new(NoTeammateInstalls),
     )
     .unwrap();
     adapter.prepare_team_deletion(team).await.unwrap();
@@ -162,6 +177,7 @@ async fn empty_deletion_proof_keeps_first_create_lease_admission_closed_until_de
             scheduled_action_url: server.uri(),
         },
         Arc::new(NoComputers),
+        Arc::new(NoTeammateInstalls),
     )
     .unwrap();
     let team = TeamId(Uuid::now_v7());

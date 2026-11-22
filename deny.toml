@@ -276,6 +276,7 @@ deny = [
     "search_processing_service", # Kafka consumer span tests only (dev-dependency)
     "search_service",            # Search-term redaction span tests only (dev-dependency)
     "sync_service",              # Cloudflare/WASM tracing setup uses tracing-web
+    "teammate_lifecycle",        # teammate-boot: the container launcher logs to stderr; macro_entrypoint would pull the service runtime into the image
     "tracing-opentelemetry",     # OpenTelemetry integration requires tracing-subscriber
     "tracing-panic",             # External crate allowed to use tracing-subscriber
     "tracing-tree",

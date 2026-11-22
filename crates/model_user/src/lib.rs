@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+mod avatar_face;
 mod language;
 
+pub use avatar_face::AvatarFace;
 pub use language::Language;
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
@@ -55,8 +57,11 @@ pub struct UserInfoWithMacroUserId {
 #[derive(Default, Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct UserProfilePicture {
     pub id: String,
-    pub url: String,
+    pub url: Option<String>,
     pub checksum: Option<String>,
+    /// The saved face recipe, including when its optional PNG could not be uploaded.
+    #[serde(default)]
+    pub avatar_face: Option<AvatarFace>,
 }
 
 #[derive(Default, Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]

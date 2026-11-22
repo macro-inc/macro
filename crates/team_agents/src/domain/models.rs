@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_user::AvatarFace;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -11,6 +12,8 @@ pub use harness_id::HarnessId;
 pub use hosted_runtimes::domain::ids::ComputerId;
 pub use hosted_runtimes::domain::models::PurchaseKey;
 pub use hosted_runtimes::domain::size::ComputerSize;
+
+use super::self_hosting::{HostEligibility, InstallFailure, InstallRunState};
 
 /// Longest agent name, in characters.
 pub const MAX_NAME_CHARS: usize = 64;
@@ -27,8 +30,14 @@ pub const AGENT_EMAIL_DOMAIN: &str = "agents.macro.invalid";
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum TeamAgentStatus {
-    /// Its computer is being bought, created or booted.
+    /// Its computer is being bought, created or booted, or its own machine
+    /// hasn't started on it yet.
     Provisioning,
+    /// Its own machine is fetching the teammate runtime image.
+    Downloading,
+    /// Moving between its owner's machines: the old one saves its memory
+    /// and stops it, then it starts on `moving_to`.
+    Moving,
     /// Its computer is up, and the agent hasn't reported itself online yet.
     Starting,
     /// Its computer is up, and the agent has reported itself online.
@@ -68,10 +77,46 @@ pub struct TeamAgent {
     /// The agent's Macro computer, once bought.
     #[cfg_attr(feature = "inbound", schema(value_type = Option<Uuid>))]
     pub computer_id: Option<ComputerId>,
+    /// The inviter's own machine the agent runs on, instead of a Macro
+    /// computer.
+    pub harness_id: Option<HarnessId>,
     /// Where the agent is.
     pub status: TeamAgentStatus,
+    /// What went wrong on the owner's own machine, when the machine gave up
+    /// on the agent or rolled it back to the version it ran before. Absent
+    /// otherwise, and for an agent on a Macro computer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub install_problem: Option<InstallProblem>,
+    /// The owner's machine the agent is moving to while its status is
+    /// `moving` (the old machine, `harness_id`, saves its memory and stops
+    /// it). Absent otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub moving_to: Option<HarnessId>,
     /// When the agent was invited.
     pub created_at: DateTime<Utc>,
+}
+
+/// What went wrong with an agent on its owner's own machine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum InstallProblem {
+    /// The machine gave up on the agent's latest version; it doesn't run.
+    Failed {
+        /// Why.
+        reason: InstallFailure,
+    },
+    /// The latest version kept failing, so the machine runs the version the
+    /// agent ran before.
+    RolledBack {
+        /// Why.
+        reason: InstallFailure,
+    },
+    /// Its machine may no longer host it (the machine's owner left the team,
+    /// lost admin, or unpaired it), so it was stopped there and its
+    /// credentials revoked. It keeps its account, seat and repository; an
+    /// admin moves it to a machine of theirs to run it again.
+    HostRemoved,
 }
 
 /// A team's agents.
@@ -100,16 +145,47 @@ pub struct CreateTeamAgent {
     /// How the agent behaves and talks. Seeds its workspace.
     #[serde(default)]
     pub personality: String,
-    /// The computer to buy.
-    #[cfg_attr(feature = "inbound", schema(value_type = String))]
-    pub size: ComputerSize,
+    /// The computer to buy, when `computer` is absent (the request shape
+    /// before own machines). Give one of `size` and `computer`.
+    #[serde(default)]
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
+    pub size: Option<ComputerSize>,
+    /// Where the agent runs: a new Macro computer, or one of the inviter's
+    /// own machines.
+    #[serde(default)]
+    pub computer: Option<InviteComputer>,
     /// Profile picture URL (a static file the caller uploaded).
     pub avatar_url: Option<String>,
+    /// Saved recipe; kept even when uploading its PNG failed.
+    #[serde(default)]
+    pub avatar_face: Option<AvatarFace>,
     /// The call voice picked in the invite; `None` keeps the starter
     /// agent's default.
     #[serde(default)]
     #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
     pub voice: Option<VoiceModel>,
+}
+
+/// Where an invited agent runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+// Field names are renamed one by one: utoipa ignores `rename_all_fields`, so
+// the schema would name a field differently from what serde reads.
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum InviteComputer {
+    /// Buy it a Macro computer of this size.
+    New {
+        /// The computer's size.
+        #[cfg_attr(feature = "inbound", schema(value_type = String))]
+        size: ComputerSize,
+    },
+    /// Run it on one of the inviter's own machines (macrod with a container
+    /// engine). No purchase.
+    Own {
+        /// The machine's harness.
+        #[serde(rename = "harnessId")]
+        harness_id: HarnessId,
+    },
 }
 
 /// An agent's display name: trimmed, 1 to [`MAX_NAME_CHARS`] characters.
@@ -149,10 +225,12 @@ pub struct TeamAgentInvite {
     pub job_description: String,
     /// How the agent behaves and talks, trimmed; may be empty.
     pub personality: String,
-    /// The computer to buy.
-    pub size: ComputerSize,
-    /// Profile picture URL, `https://`.
+    /// Where the agent runs.
+    pub computer: InviteComputer,
+    /// Profile picture URL, a Macro static file.
     pub avatar_url: Option<String>,
+    /// Face recipe the picture was drawn from, if it is a face.
+    pub avatar_face: Option<AvatarFace>,
     /// The call voice picked in the invite.
     pub voice: Option<VoiceModel>,
 }
@@ -189,6 +267,8 @@ pub struct NewAgentAccount {
     pub name: AgentName,
     /// Profile picture URL.
     pub avatar_url: Option<String>,
+    /// Saved face recipe, alongside its optional PNG URL.
+    pub avatar_face: Option<AvatarFace>,
     /// Workspace seed.
     pub persona_seed: PersonaSeed,
     /// The invite's purchase key: one agent per key per team.
@@ -312,6 +392,20 @@ impl TeamAgentStatus {
         }
     }
 
+    /// The status of an agent on its owner's own machine, from what the
+    /// machine last said and whether the agent ever reported itself online.
+    pub fn of_install(state: InstallRunState, came_online: bool) -> Self {
+        match state {
+            InstallRunState::Pending => Self::Provisioning,
+            InstallRunState::Downloading => Self::Downloading,
+            InstallRunState::Starting | InstallRunState::Restarting => Self::Starting,
+            InstallRunState::Running | InstallRunState::RolledBack if came_online => Self::Running,
+            InstallRunState::Running | InstallRunState::RolledBack => Self::Starting,
+            InstallRunState::Stopped => Self::Paused,
+            InstallRunState::Failed => Self::Failed,
+        }
+    }
+
     /// An agent whose invite made its account at `created_at` but has no
     /// computer yet: still provisioning within [`ORPHANED_INVITE_AFTER`],
     /// then failed, since the invite that should have bought it died.
@@ -343,9 +437,17 @@ pub enum TeamAgentError {
     /// The purchase key is empty, too long or not printable ASCII.
     #[error("the purchase key must be 1 to 128 printable ASCII characters")]
     InvalidPurchaseKey,
+    /// Neither or both of `size` and `computer` were given.
+    #[error("give either a computer size or where the agent runs")]
+    InvalidComputer,
     /// The avatar is not an HTTPS URL.
     #[error("the avatar must be an https URL")]
     InvalidAvatar,
+    /// The recipe has an unsupported version or exceeds its size limits.
+    #[error(
+        "the avatar face must be version 1, have a seed of 1 to 64 characters, and fit in 1 KiB"
+    )]
+    InvalidAvatarFace,
     /// The path is not a Macro user id.
     #[error("that is not a user id")]
     InvalidAgentId,
@@ -390,6 +492,16 @@ pub enum TeamAgentError {
     /// voice request.
     #[error("voices are unavailable right now")]
     VoiceUnavailable(rootcause::Report),
+    /// Self-hosted teammates aren't on for this admin
+    /// ([`super::self_hosting::SELF_HOSTED_TEAMMATES_FLAG`]).
+    #[error("running agent teammates on your own computer isn't available for this account yet")]
+    SelfHostedNotEnabled,
+    /// The machine can't host a teammate now; nothing was created.
+    #[error("that computer can't run an agent teammate right now")]
+    HostNotEligible(HostEligibility),
+    /// The agent runs on a Macro computer, not on an own machine.
+    #[error("this agent runs on a Macro computer")]
+    NotSelfHosted,
     /// Anything else.
     #[error("internal error: {0}")]
     Internal(rootcause::Report),

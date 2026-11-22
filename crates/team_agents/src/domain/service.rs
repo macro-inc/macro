@@ -14,17 +14,30 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+use super::avatar::{AgentAvatar, PictureBase};
 use super::models::{
-    AGENT_EMAIL_DOMAIN, AgentName, AgentReady, ComputerId, ComputerPurchase, CreateTeamAgent,
-    CreatedAccount, MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, PurchaseKey, TeamAgent,
-    TeamAgentError, TeamAgentInvite, TeamAgentRecord, TeamAgentStatus, TeamAgents,
+    AGENT_EMAIL_DOMAIN, AgentName, AgentReady, AgentRepo, ComputerId, ComputerPurchase,
+    CreateTeamAgent, CreatedAccount, HarnessId, InviteComputer, MAX_PROFILE_CHARS, NewAgentAccount,
+    PersonaSeed, PurchaseKey, TeamAgent, TeamAgentError, TeamAgentInvite, TeamAgentRecord,
+    TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
-    AgentApiKeys, AgentReadyNotices, AgentRepos, Computers, EnrollmentEnvironment,
-    TeamAgentRepository, TeamAgentService, TeamMembership,
+    AgentApiKeys, AgentPictureChanges, AgentReadyNotices, AgentRepos, Computers, CountedDelivery,
+    EnrollmentEnvironment, HeldRevoke, TeamAgentRepository, TeamAgentService, TeamMembership,
+    TeammateInstalls, TeammateRuntimes,
+};
+use super::self_hosting::{
+    CHECKPOINT_TIMEOUT, Checkpoint, CreatedInstall, HostEligibility, IssuedInstall, MoveTeammate,
+    NewTeammateInstall, RuntimeImages, SELF_HOSTED_TEAMMATES_FLAG, TeammateHost, TeammateHosts,
+    TeammateInstallRecord,
 };
 use super::voice::AgentVoice;
 
+mod host_rechecks;
+mod install_offboarding;
+mod self_hosted;
+
+pub use install_offboarding::InstallOffboarding;
 #[cfg(test)]
 mod test;
 
@@ -45,6 +58,9 @@ pub mod env_keys {
     pub const TEAM_ID: &str = "MACRO_TEAM_ID";
     /// The computer the brain runs on.
     pub const COMPUTER_ID: &str = "MACRO_COMPUTER_ID";
+    /// The install the brain runs as, on its owner's own machine; set
+    /// instead of [`COMPUTER_ID`].
+    pub const TEAMMATE_INSTALL_ID: &str = "MACRO_TEAMMATE_INSTALL_ID";
     /// The workspace repository's clone URL, without credentials.
     pub const REPO_URL: &str = "MACRO_REPO_URL";
     /// The workspace repository token (HTTP Basic password).
@@ -64,6 +80,8 @@ pub struct TeamAgentServiceImpl<
     Creators,
     Flags,
     Notices,
+    Installs,
+    Runtimes,
 > {
     repository: Repository,
     membership: Membership,
@@ -75,11 +93,50 @@ pub struct TeamAgentServiceImpl<
     flags: Option<Flags>,
     /// Tells an agent's inviter when the agent first comes online.
     notices: Notices,
+    /// The addresses a Macro computer reaches Macro at.
     environment: Box<dyn EnrollmentEnvironment>,
+    picture_changes: Box<dyn AgentPictureChanges>,
+    /// Where an agent's picture must have been uploaded.
+    pictures: PictureBase,
+    /// Installs on owners' own machines.
+    installs: Installs,
+    /// Tells a machine's socket holder that its installs changed.
+    runtimes: Runtimes,
+    /// The runtime image for each architecture.
+    images: RuntimeImages,
+    /// The public addresses an agent on its owner's own machine reaches
+    /// Macro at.
+    public_environment: Box<dyn EnrollmentEnvironment>,
+    /// Asks to check a machine again, coalesced per machine.
+    rechecks: host_rechecks::HostRechecks,
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
-    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
+/// Everything a self-hosted teammate needs from the service's caller.
+pub struct SelfHosting<Installs, Runtimes> {
+    /// Install storage and the inviter's machines.
+    pub installs: Installs,
+    /// Delivery nudges.
+    pub runtimes: Runtimes,
+    /// The runtime image for each architecture:
+    /// [`super::self_hosting::TeammateRuntimeImage::images`].
+    pub images: RuntimeImages,
+    /// Public addresses for own machines.
+    pub public_environment: Box<dyn EnrollmentEnvironment>,
+}
+
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices, Installs, Runtimes>
+    TeamAgentServiceImpl<
+        Repository,
+        Membership,
+        ApiKeys,
+        Repos,
+        Computer,
+        Creators,
+        Flags,
+        Notices,
+        Installs,
+        Runtimes,
+    >
 {
     /// Build the service. Without `flags`, agent teammates stay off.
     #[expect(
@@ -96,6 +153,9 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
         flags: Option<Flags>,
         notices: Notices,
         environment: impl EnrollmentEnvironment,
+        picture_changes: impl AgentPictureChanges,
+        pictures: PictureBase,
+        self_hosting: SelfHosting<Installs, Runtimes>,
     ) -> Self {
         Self {
             repository,
@@ -107,6 +167,13 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
             flags,
             notices,
             environment: Box::new(environment),
+            picture_changes: Box::new(picture_changes),
+            pictures,
+            installs: self_hosting.installs,
+            runtimes: self_hosting.runtimes,
+            images: self_hosting.images,
+            public_environment: self_hosting.public_environment,
+            rechecks: host_rechecks::HostRechecks::default(),
         }
     }
 }
@@ -133,7 +200,15 @@ fn slug(name: &str) -> String {
     }
 }
 
-fn validate(request: CreateTeamAgent) -> Result<TeamAgentInvite, TeamAgentError> {
+fn validate(
+    request: CreateTeamAgent,
+    pictures: &PictureBase,
+) -> Result<TeamAgentInvite, TeamAgentError> {
+    AgentAvatar {
+        face: request.avatar_face.clone(),
+        url: request.avatar_url.clone(),
+    }
+    .validate(pictures)?;
     let name = AgentName::try_new(&request.name)?;
     let purchase_key = PurchaseKey::try_new(request.purchase_key)
         .map_err(|_| TeamAgentError::InvalidPurchaseKey)?;
@@ -145,18 +220,20 @@ fn validate(request: CreateTeamAgent) -> Result<TeamAgentInvite, TeamAgentError>
             return Err(TeamAgentError::InvalidProfile);
         }
     }
-    if let Some(avatar) = &request.avatar_url
-        && !avatar.starts_with("https://")
-    {
-        return Err(TeamAgentError::InvalidAvatar);
-    }
+    // Requests from before own machines name only a size.
+    let computer = match (request.computer, request.size) {
+        (Some(computer), None) => computer,
+        (None, Some(size)) => InviteComputer::New { size },
+        (None, None) | (Some(_), Some(_)) => return Err(TeamAgentError::InvalidComputer),
+    };
     Ok(TeamAgentInvite {
         purchase_key,
         name,
         job_description,
         personality,
-        size: request.size,
+        computer,
         avatar_url: request.avatar_url,
+        avatar_face: request.avatar_face,
         voice: request.voice,
     })
 }
@@ -182,21 +259,90 @@ pub(crate) async fn ensure_enabled<Flags: FeatureFlags>(
     flags: Option<&Flags>,
     caller: &MacroUserIdStr<'_>,
 ) -> Result<(), TeamAgentError> {
-    let Some(flags) = flags else {
-        return Err(TeamAgentError::NotEnabled);
-    };
-    let enabled = flags
-        .load(caller)
-        .await
-        .inspect_err(|error| {
-            tracing::warn!(error = ?error, "could not load feature flags; agent teammates stay off");
-        })
-        .is_ok_and(|snapshot| snapshot.is_enabled(AGENT_TEAMMATES_FLAG));
-    if enabled {
+    if flag_on(flags, caller, AGENT_TEAMMATES_FLAG).await {
         Ok(())
     } else {
         Err(TeamAgentError::NotEnabled)
     }
+}
+
+/// Whether `flag` is on for `caller`. Fails closed: no flag provider or a
+/// failed load is off.
+async fn flag_on<Flags: FeatureFlags>(
+    flags: Option<&Flags>,
+    caller: &MacroUserIdStr<'_>,
+    flag: &str,
+) -> bool {
+    let Some(flags) = flags else {
+        return false;
+    };
+    flags
+        .load(caller)
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(error = ?error, flag, "could not load feature flags; the flag stays off");
+        })
+        .is_ok_and(|snapshot| snapshot.is_enabled(flag))
+}
+
+/// Where an agent's brain runs, for its environment.
+enum Placement {
+    /// On this Macro computer, at computer-facing addresses.
+    Computer(ComputerId),
+    /// As this install on its owner's own machine, at public addresses.
+    Install(Uuid),
+}
+
+/// The brain's environment: the addresses, its fresh key and repository
+/// token, who it is, and where it runs.
+fn agent_env(
+    addresses: Vec<(&'static str, String)>,
+    api_key: &super::models::AgentApiKey,
+    agent: &MacroUserIdStr<'_>,
+    record: &TeamAgentRecord,
+    repo: AgentRepo,
+    placement: Placement,
+) -> Result<AgentEnv, AgentEnrollmentError> {
+    let mut values = BTreeMap::new();
+    for (key, value) in addresses {
+        env_entry(&mut values, key, value)?;
+    }
+    env_entry(&mut values, env_keys::API_KEY, api_key.expose().to_owned())?;
+    env_entry(
+        &mut values,
+        env_keys::ANTHROPIC_AUTH_TOKEN,
+        api_key.expose().to_owned(),
+    )?;
+    env_entry(
+        &mut values,
+        env_keys::AGENT_USER_ID,
+        agent.as_ref().to_owned(),
+    )?;
+    env_entry(
+        &mut values,
+        env_keys::AGENT_NAME,
+        record.persona_seed.name.clone(),
+    )?;
+    env_entry(&mut values, env_keys::TEAM_ID, record.team_id.to_string())?;
+    match placement {
+        Placement::Computer(computer_id) => {
+            env_entry(&mut values, env_keys::COMPUTER_ID, computer_id.to_string())?;
+        }
+        Placement::Install(install_id) => {
+            env_entry(
+                &mut values,
+                env_keys::TEAMMATE_INSTALL_ID,
+                install_id.to_string(),
+            )?;
+        }
+    }
+    env_entry(&mut values, env_keys::REPO_URL, repo.url)?;
+    env_entry(
+        &mut values,
+        env_keys::REPO_TOKEN,
+        repo.token.expose().to_owned(),
+    )?;
+    AgentEnv::new(values).map_err(|_| AgentEnrollmentError::IssuanceFailed)
 }
 
 fn env_entry(
@@ -225,8 +371,19 @@ struct Undo {
     repo: bool,
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
-    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices, Installs, Runtimes>
+    TeamAgentServiceImpl<
+        Repository,
+        Membership,
+        ApiKeys,
+        Repos,
+        Computer,
+        Creators,
+        Flags,
+        Notices,
+        Installs,
+        Runtimes,
+    >
 where
     Repository: TeamAgentRepository,
     Membership: TeamMembership,
@@ -236,6 +393,8 @@ where
     Notices: AgentReadyNotices,
     Creators: agent_credentials::AgentCreators + 'static,
     Flags: FeatureFlags + 'static,
+    Installs: TeammateInstalls,
+    Runtimes: TeammateRuntimes,
 {
     async fn ensure_enabled(&self, caller: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
         ensure_enabled(self.flags.as_ref(), caller).await
@@ -370,6 +529,7 @@ where
                 created_by: created_by.clone(),
                 name: request.name.clone(),
                 avatar_url: request.avatar_url.clone(),
+                avatar_face: request.avatar_face.clone(),
                 persona_seed: seed.clone(),
                 purchase_key: request.purchase_key.clone(),
             })
@@ -398,18 +558,37 @@ where
     /// A repeat of an invite (a double click, or a retry after a lost
     /// answer) answers with the agent the first request made, and changes
     /// nothing: the first request owns the setup and its undo. Until that
-    /// one has bought the computer (a purchase still confirming counts), the
-    /// agent may yet be taken back, so the repeat is refused.
+    /// one has bought the computer (a purchase still confirming counts) or
+    /// made the install, the agent may yet be taken back, so the repeat is
+    /// refused.
     async fn repeated_invite(&self, record: TeamAgentRecord) -> Result<TeamAgent, TeamAgentError> {
         let agent = self.team_agent(record).await?;
-        let Some(computer_id) = agent.computer_id else {
-            return Err(TeamAgentError::InviteInProgress);
-        };
-        tracing::Span::current().record("computer_id", tracing::field::display(computer_id));
-        Ok(agent)
+        if let Some(computer_id) = agent.computer_id {
+            tracing::Span::current().record("computer_id", tracing::field::display(computer_id));
+            return Ok(agent);
+        }
+        if agent.harness_id.is_some() {
+            return Ok(agent);
+        }
+        Err(TeamAgentError::InviteInProgress)
     }
 
     async fn team_agent(&self, record: TeamAgentRecord) -> Result<TeamAgent, TeamAgentError> {
+        let install = self.installs.for_agent(&record.user_id).await?;
+        self.team_agent_with(record, install).await
+    }
+
+    /// The agent from its record and its install, if it has one.
+    async fn team_agent_with(
+        &self,
+        record: TeamAgentRecord,
+        install: Option<TeammateInstallRecord>,
+    ) -> Result<TeamAgent, TeamAgentError> {
+        // An agent runs either on its owner's own machine or on a Macro
+        // computer, never both.
+        if let Some(install) = install {
+            return Ok(Self::installed_agent(record, &install));
+        }
         let computer_id = self
             .computers
             .computer_for_agent(record.team_id, &record.user_id)
@@ -430,13 +609,17 @@ where
             personality: record.persona_seed.personality,
             created_by: record.created_by,
             computer_id,
+            harness_id: None,
             status,
+            install_problem: None,
+            moving_to: None,
             created_at: record.created_at,
         })
     }
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices> TeamAgentService
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices, Installs, Runtimes>
+    TeamAgentService
     for TeamAgentServiceImpl<
         Repository,
         Membership,
@@ -446,6 +629,8 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
         Creators,
         Flags,
         Notices,
+        Installs,
+        Runtimes,
     >
 where
     Repository: TeamAgentRepository,
@@ -456,6 +641,8 @@ where
     Notices: AgentReadyNotices,
     Creators: agent_credentials::AgentCreators + 'static,
     Flags: FeatureFlags + 'static,
+    Installs: TeammateInstalls,
+    Runtimes: TeammateRuntimes,
 {
     #[tracing::instrument(
         name = "team_agents.create",
@@ -470,11 +657,19 @@ where
     ) -> Result<TeamAgent, TeamAgentError> {
         let created_by = acting_user(&receipt)?;
         self.ensure_enabled(&created_by).await?;
-        let request = validate(request)?;
+        let request = validate(request, &self.pictures)?;
         let team_id = team_id(&receipt)?;
-        // A buyer the computers rollout doesn't include is refused before an
-        // account, seat or repository exists to take back.
-        self.computers.require_purchase_rollout(&created_by).await?;
+        // A buyer the computers rollout doesn't include, or a machine that
+        // can't host the agent, is refused before an account, seat or
+        // repository exists to take back.
+        match request.computer {
+            InviteComputer::New { .. } => {
+                self.computers.require_purchase_rollout(&created_by).await?;
+            }
+            InviteComputer::Own { harness_id } => {
+                self.require_own_host(&created_by, harness_id).await?;
+            }
+        }
 
         let mut undo = Undo::default();
         let (user_id, seed) = match self
@@ -489,12 +684,20 @@ where
             }
         };
 
+        let size = match request.computer {
+            InviteComputer::New { size } => size,
+            InviteComputer::Own { harness_id } => {
+                return self
+                    .install_invited(receipt, undo, harness_id, user_id, seed, created_by)
+                    .await;
+            }
+        };
         let purchase = ComputerPurchase {
             purchase_key: request.purchase_key.clone(),
             team_id,
             created_by: created_by.clone(),
             agent: user_id.clone(),
-            size: request.size,
+            size,
             name: request.name.clone(),
         };
         let computer_id = match self.computers.purchase(purchase).await {
@@ -516,7 +719,10 @@ where
             personality: seed.personality,
             created_by: Some(created_by),
             computer_id: Some(computer_id),
+            harness_id: None,
             status: TeamAgentStatus::Provisioning,
+            install_problem: None,
+            moving_to: None,
             created_at: chrono::Utc::now(),
         })
     }
@@ -532,9 +738,18 @@ where
             .list_for_team(team_id(&receipt)?)
             .await
             .map_err(TeamAgentError::internal)?;
+        let users: Vec<_> = records
+            .iter()
+            .map(|record| record.user_id.clone())
+            .collect();
+        let mut installs = self.installs.for_agents(&users).await?;
         let mut agents = Vec::with_capacity(records.len());
         for record in records {
-            agents.push(self.team_agent(record).await?);
+            let install = installs
+                .iter()
+                .position(|install| install.agent == record.user_id)
+                .map(|index| installs.swap_remove(index));
+            agents.push(self.team_agent_with(record, install).await?);
         }
         Ok(TeamAgents { agents })
     }
@@ -554,6 +769,13 @@ where
         // stops billing even after the rollout is turned off.
         let team_id = team_id(&receipt)?;
         let record = self.team_record(&receipt, agent).await?;
+
+        // An agent on its owner's own machine stops there first, so its last
+        // push lands; its removal finishes once the machine stopped it (or
+        // the wait gave up), and again here is a no-op until then.
+        if self.installs.for_agent(&record.user_id).await?.is_some() {
+            return self.remove_installed(&record).await;
+        }
 
         // The computer goes first, so nothing keeps running as the agent.
         // A purchase still confirming refuses here, before anything else.
@@ -580,6 +802,34 @@ where
             .remove_seat(&record.user_id)
             .await
             .map_err(TeamAgentError::internal)
+    }
+
+    #[tracing::instrument(
+        name = "team_agents.set_avatar",
+        skip_all,
+        fields(team_id = %receipt.entity().entity_id, agent_user_id = %agent_credentials::telemetry_id(agent.as_ref())),
+        err
+    )]
+    async fn set_avatar(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+        avatar: AgentAvatar,
+    ) -> Result<(), TeamAgentError> {
+        self.ensure_enabled(&acting_user(&receipt)?).await?;
+        let record = self.team_record(&receipt, agent).await?;
+        avatar.validate(&self.pictures)?;
+        let saved = self
+            .repository
+            .set_avatar(record.team_id, &record.user_id, &avatar)
+            .await
+            .map_err(TeamAgentError::internal)?;
+        if !saved {
+            return Err(TeamAgentError::NotFound);
+        }
+        self.picture_changes
+            .picture_changed(&record.user_id, avatar.url.as_deref());
+        Ok(())
     }
 
     #[tracing::instrument(
@@ -682,6 +932,114 @@ where
             .map_err(TeamAgentError::internal)
     }
 
+    #[tracing::instrument(name = "team_agents.hosts", skip_all, fields(team_id = %receipt.entity().entity_id), err)]
+    async fn hosts(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<TeammateHosts, TeamAgentError> {
+        let caller = acting_user(&receipt)?;
+        self.ensure_enabled(&caller).await?;
+        self.ensure_self_hosting(&caller).await?;
+        let hosts = self.installs.hosts_of(&caller).await?;
+        Ok(TeammateHosts {
+            hosts: hosts
+                .into_iter()
+                .map(|facts| TeammateHost::new(facts, &*self.images))
+                .collect(),
+        })
+    }
+
+    #[tracing::instrument(name = "team_agents.recheck_host", skip_all, fields(team_id = %receipt.entity().entity_id, %harness, sent = tracing::field::Empty), err)]
+    async fn recheck_host(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        harness: HarnessId,
+    ) -> Result<(), TeamAgentError> {
+        let caller = acting_user(&receipt)?;
+        self.ensure_enabled(&caller).await?;
+        self.ensure_self_hosting(&caller).await?;
+        // Someone else's machine looks the same as no machine.
+        if !self
+            .installs
+            .hosts_of(&caller)
+            .await?
+            .iter()
+            .any(|host| host.harness_id == harness)
+        {
+            return Err(TeamAgentError::NotFound);
+        }
+        // Each ask runs a full probe on the machine: one at a time, and at
+        // most one every `RECHECK_INTERVAL`; the rest join it (still 204).
+        let sent = self
+            .rechecks
+            .ask(harness, || self.runtimes.recheck_host(harness))
+            .await;
+        tracing::Span::current().record("sent", sent);
+        Ok(())
+    }
+
+    #[tracing::instrument(
+        name = "team_agents.move_install",
+        skip_all,
+        fields(team_id = %receipt.entity().entity_id, agent_user_id = %agent_credentials::telemetry_id(agent.as_ref()), harness_id = %request.harness_id),
+        err
+    )]
+    async fn move_install(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+        request: MoveTeammate,
+    ) -> Result<TeamAgent, TeamAgentError> {
+        self.move_installed(receipt, agent, request.harness_id)
+            .await
+    }
+
+    #[tracing::instrument(
+        name = "team_agents.issue_install",
+        skip(self),
+        fields(agent_user_id = tracing::field::Empty),
+        err
+    )]
+    async fn issue_install(
+        &self,
+        harness: HarnessId,
+        install_id: Uuid,
+        reported: Option<(u64, u64)>,
+    ) -> Result<Option<IssuedInstall>, AgentEnrollmentError> {
+        self.issue_installed(harness, install_id, reported).await
+    }
+
+    #[tracing::instrument(name = "team_agents.finish_checkpoint", skip(self), err)]
+    async fn finish_checkpoint(&self, install_id: Uuid) -> Result<(), TeamAgentError> {
+        self.finish_installed_checkpoint(install_id).await
+    }
+
+    #[tracing::instrument(
+        name = "team_agents.offboard_hosts",
+        skip(self),
+        fields(offboarded = tracing::field::Empty, revoked = tracing::field::Empty),
+        err
+    )]
+    async fn offboard_unentitled_hosts(&self) -> Result<usize, TeamAgentError> {
+        let (offboarded, revoked) = self.offboard_unentitled().await?;
+        let span = tracing::Span::current();
+        span.record("offboarded", offboarded);
+        span.record("revoked", revoked);
+        Ok(offboarded)
+    }
+
+    #[tracing::instrument(
+        name = "team_agents.offboard_host",
+        skip(self),
+        fields(%harness, offboarded = tracing::field::Empty),
+        err
+    )]
+    async fn offboard_host(&self, harness: HarnessId) -> Result<usize, TeamAgentError> {
+        let offboarded = self.offboarding().offboard_host(harness).await?;
+        tracing::Span::current().record("offboarded", offboarded);
+        Ok(offboarded)
+    }
+
     #[tracing::instrument(
         name = "team_agents.issue_enrollment",
         skip(self),
@@ -745,38 +1103,18 @@ where
                 AgentEnrollmentError::IssuanceFailed
             })?;
 
-        let mut values = BTreeMap::new();
-        for (key, value) in self.environment.environment().map_err(|error| {
+        let addresses = self.environment.environment().map_err(|error| {
             tracing::error!(error = ?error, "could not resolve the agent's addresses");
             AgentEnrollmentError::IssuanceFailed
-        })? {
-            env_entry(&mut values, key, value)?;
-        }
-        env_entry(&mut values, env_keys::API_KEY, api_key.expose().to_owned())?;
-        env_entry(
-            &mut values,
-            env_keys::ANTHROPIC_AUTH_TOKEN,
-            api_key.expose().to_owned(),
+        })?;
+        let env = agent_env(
+            addresses,
+            &api_key,
+            &agent,
+            &record,
+            repo,
+            Placement::Computer(computer_id),
         )?;
-        env_entry(
-            &mut values,
-            env_keys::AGENT_USER_ID,
-            agent.as_ref().to_owned(),
-        )?;
-        env_entry(
-            &mut values,
-            env_keys::AGENT_NAME,
-            record.persona_seed.name.clone(),
-        )?;
-        env_entry(&mut values, env_keys::TEAM_ID, record.team_id.to_string())?;
-        env_entry(&mut values, env_keys::COMPUTER_ID, computer_id.to_string())?;
-        env_entry(&mut values, env_keys::REPO_URL, repo.url)?;
-        env_entry(
-            &mut values,
-            env_keys::REPO_TOKEN,
-            repo.token.expose().to_owned(),
-        )?;
-        let env = AgentEnv::new(values).map_err(|_| AgentEnrollmentError::IssuanceFailed)?;
         tracing::info!(generation = generation.get(), "issued agent enrollment");
 
         Ok(Some(AgentEnrollment {
@@ -788,7 +1126,7 @@ where
 
 /// hosted_runtimes takes back the agent of a computer released after a failed
 /// first start through here.
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices, Installs, Runtimes>
     hosted_runtimes::domain::ports::AgentInvites
     for TeamAgentServiceImpl<
         Repository,
@@ -799,6 +1137,8 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
         Creators,
         Flags,
         Notices,
+        Installs,
+        Runtimes,
     >
 where
     Repository: TeamAgentRepository,
@@ -809,6 +1149,8 @@ where
     Creators: agent_credentials::AgentCreators + 'static,
     Flags: FeatureFlags + 'static,
     Notices: AgentReadyNotices,
+    Installs: TeammateInstalls,
+    Runtimes: TeammateRuntimes,
 {
     type Err = TeamAgentError;
 

@@ -76,6 +76,14 @@ pub(crate) async fn publish_deliver_agent(
     redis: &redis::Client,
     request: &DeliverAgent,
 ) -> Result<(), RuntimeBusError> {
+    publish(redis, request).await
+}
+
+/// Broadcast a runtime bus message to every replica.
+pub(crate) async fn publish(
+    redis: &redis::Client,
+    request: &impl serde::Serialize,
+) -> Result<(), RuntimeBusError> {
     let payload = serde_json::to_string(request)?;
     redis
         .get_multiplexed_async_connection()
@@ -209,16 +217,22 @@ impl IssuedAgents {
     }
 }
 
-// Untagged: an agent hand-off's required fields appear in no other event,
-// so it is tried first.
+// Untagged: an agent hand-off's, a teammate change's and a host recheck's
+// required fields appear in no other event, so they are tried first.
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum RuntimeBusEvent {
     DeliverAgent(DeliverAgent),
+    TeammatesChanged(crate::teammates::TeammatesChanged),
+    TeammateHostRecheck(crate::teammates::TeammateHostRecheck),
     Models(ModelProbeEvent),
     Command(Box<RuntimeCommandRequest>),
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each is a separate capability of the bus consumer; tests pass them one by one"
+)]
 pub(crate) async fn consume_runtime_commands<Harness>(
     redis: redis::Client,
     replica: ReplicaId,
@@ -229,6 +243,7 @@ pub(crate) async fn consume_runtime_commands<Harness>(
     deliver_agent: Arc<
         dyn Fn(DeliverAgent) -> futures::future::BoxFuture<'static, ()> + Send + Sync,
     >,
+    teammates: Option<Arc<crate::teammates::TeammateDelivery>>,
 ) -> anyhow::Result<()>
 where
     Harness: ForwardedCommands,
@@ -270,6 +285,34 @@ where
                 // Only the replica holding the connection delivers; the rest
                 // find nothing to hand it to.
                 probes.spawn(deliver_agent(request));
+                continue;
+            }
+            RuntimeBusEvent::TeammatesChanged(changed) => {
+                // Only the replica holding the machine's socket reconciles.
+                if let Some(teammates) = teammates.clone() {
+                    let span = changed.span();
+                    probes.spawn(
+                        async move {
+                            teammates
+                                .installs_changed(changed.teammates_changed_harness)
+                                .await;
+                        }
+                        .instrument(span),
+                    );
+                }
+                continue;
+            }
+            RuntimeBusEvent::TeammateHostRecheck(recheck) => {
+                // Only the replica holding the machine's socket sends it.
+                if let Some(teammates) = teammates.clone() {
+                    let span = recheck.span();
+                    probes.spawn(
+                        async move {
+                            teammates.recheck_host(recheck.recheck_teammate_host).await;
+                        }
+                        .instrument(span),
+                    );
+                }
                 continue;
             }
             RuntimeBusEvent::Command(request) => *request,

@@ -624,6 +624,12 @@ pub enum PurchaseRefusalCode {
     /// An earlier request with the same purchase key is still under way;
     /// retry with that key.
     InviteInProgress,
+    /// `/team_agents` only: the inviter's own machine can't host the agent
+    /// now; the body's `reason` (and `resource`) says why. Nothing was made.
+    HostNotEligible,
+    /// `/team_agents` only: hosting agents on one's own machine isn't on
+    /// for this account.
+    SelfHostedNotEnabled,
 }
 
 /// An agent teammate's computer as the team roster sees it.

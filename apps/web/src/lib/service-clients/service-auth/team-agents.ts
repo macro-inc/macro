@@ -5,10 +5,12 @@ import { type BaseFetchErrorCode, statusError } from '@core/util/safeFetch';
 import { ok } from 'neverthrow';
 import { match } from 'ts-pattern';
 import type {
+  AgentAvatar,
   AgentVoice,
   CreateTeamAgent,
   TeamAgent,
   TeamAgents,
+  TeammateHosts,
 } from './generated/schemas';
 import {
   type PurchaseRefusalErrorCode,
@@ -16,11 +18,17 @@ import {
 } from './purchase-refusal';
 
 export type {
+  AgentAvatar,
   AgentVoice,
   CreateTeamAgent,
+  FloorResource,
+  HostEligibility,
+  HostIneligibility,
   TeamAgent,
   TeamAgentStatus,
   TeamAgents,
+  TeammateHost,
+  TeammateHosts,
 } from './generated/schemas';
 
 export type CreateTeamAgentErrorCode =
@@ -89,13 +97,32 @@ const voiceUrl = (agentUserId: string) =>
 /** The caller's current team's agent teammates. Writes need team admin. */
 export const teamAgentsClient = {
   list: () => fetchWithToken<TeamAgents>(base),
-  create: (request: CreateTeamAgent) =>
+  create: (request: CreateTeamAgent, signal?: AbortSignal) =>
     fetchWithToken<
       TeamAgent,
       CreateTeamAgentErrorCode | PurchaseRefusalErrorCode
     >(base, {
       method: 'POST',
+      signal,
       body: JSON.stringify(request),
+      errorResponseHandler: createError,
+    }),
+  /** The caller's own paired machines, and whether each can host an agent. */
+  hosts: () => fetchWithToken<TeammateHosts>(`${base}/hosts`),
+  /** Ask one of the caller's machines to check its hosting again now. */
+  recheckHost: (harnessId: string) =>
+    fetchWithToken(`${base}/hosts/${encodeURIComponent(harnessId)}/recheck`, {
+      method: 'POST',
+    }),
+  /** Move an agent running on one of the caller's machines to another. */
+  move: (agentUserId: string, harnessId: string) =>
+    fetchWithToken<
+      TeamAgent,
+      CreateTeamAgentErrorCode | PurchaseRefusalErrorCode
+    >(`${base}/${encodeURIComponent(agentUserId)}/install`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ harnessId }),
       errorResponseHandler: createError,
     }),
   remove: (agentUserId: string) =>
@@ -112,6 +139,14 @@ export const teamAgentsClient = {
       return ok(null);
     return result;
   },
+  /** Replaces the agent's picture; team admins only. */
+  setAvatar: (agentUserId: string, avatar: AgentAvatar, signal?: AbortSignal) =>
+    fetchWithToken(`${base}/${encodeURIComponent(agentUserId)}/avatar`, {
+      method: 'PUT',
+      signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(avatar),
+    }),
   /** Used from the agent's next call. */
   setVoice: (agentUserId: string, voice: AgentVoice) =>
     fetchWithToken<AgentVoice, SetAgentVoiceErrorCode>(voiceUrl(agentUserId), {

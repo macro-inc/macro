@@ -28,8 +28,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use agent_runtime_protocol::domain::schema::v0::{
-    ACCEPTS_AGENTS_CHANGED, ACCEPTS_APPLY_AGENT, RUNTIME_ACCEPTS_HEADER, ToRuntimeMessage,
-    ToServerMessage,
+    ACCEPTS_AGENTS_CHANGED, ACCEPTS_APPLY_AGENT, ACCEPTS_RECHECK_TEAMMATE_HOST,
+    ACCEPTS_TEAMMATE_CONTAINER, RUNTIME_ACCEPTS_HEADER, ToRuntimeMessage, ToServerMessage,
 };
 use agent_runtime_protocol::outbound::websocket::connect_socket;
 use axum::Router;
@@ -185,6 +185,8 @@ fn runtime_accepts(headers: &HeaderMap) -> RuntimeAccepts {
         match message {
             ACCEPTS_AGENTS_CHANGED => accepts.agents_changed = true,
             ACCEPTS_APPLY_AGENT => accepts.apply_agent = true,
+            ACCEPTS_TEAMMATE_CONTAINER => accepts.teammate_container = true,
+            ACCEPTS_RECHECK_TEAMMATE_HOST => accepts.recheck_teammate_host = true,
             _ => {}
         }
     }

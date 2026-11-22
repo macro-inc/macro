@@ -24,6 +24,18 @@ export type AgentApiKey = {
 export type AgentApiKeyProvider = 'anthropic' | 'openai';
 
 /**
+ * Replace an agent's face and its PNG, or save a photo and clear the face.
+ * A missing URL clears the old PNG, so a failed render never leaves stale art.
+ */
+export type AgentAvatar = {
+    face?: null | AvatarFace;
+    /**
+     * Uploaded PNG or photo URL; `None` when the upload failed or to remove it.
+     */
+    url?: string | null;
+};
+
+/**
  * What an agent needs to start using the SDK.
  */
 export type AgentSetupResponse = {
@@ -123,6 +135,27 @@ export type AutoReloadSnapshot = {
      * Reload the balance back up to this, in customer cents.
      */
     target_balance_cents: number;
+};
+
+/**
+ * A versioned recipe rendered by `@macro-inc/agent-faces`. The server validates
+ * its envelope; the renderer owns the available parts and option counts.
+ */
+export type AvatarFace = {
+    /**
+     * Pinned parts and their zero-based option indexes.
+     */
+    pins: {
+        [key: string]: number;
+    };
+    /**
+     * Stable seed, between 1 and 64 characters.
+     */
+    seed: string;
+    /**
+     * Renderer version. Only version 1 can currently be saved.
+     */
+    v: number;
 };
 
 /**
@@ -527,10 +560,12 @@ export type CreateProfilePictureUploadRequest = {
  * Input for inviting an agent teammate and buying its computer.
  */
 export type CreateTeamAgent = {
+    avatarFace?: null | AvatarFace;
     /**
      * Profile picture URL (a static file the caller uploaded).
      */
     avatarUrl?: string | null;
+    computer?: null | InviteComputer;
     /**
      * What the agent is responsible for. Seeds its workspace; when this and
      * `personality` are empty the agent asks its owner what to take on.
@@ -550,9 +585,10 @@ export type CreateTeamAgent = {
      */
     purchaseKey: string;
     /**
-     * The computer to buy.
+     * The computer to buy, when `computer` is absent (the request shape
+     * before own machines). Give one of `size` and `computer`.
      */
-    size: string;
+    size?: string | null;
     /**
      * The call voice picked in the invite; `None` keeps the starter
      * agent's default.
@@ -891,6 +927,11 @@ export type ErrorResponse = {
      */
     message: string;
 };
+
+/**
+ * A resource of the hardware floor.
+ */
+export type FloorResource = 'cpus' | 'memory' | 'disk';
 
 export type GenerateEmailLinkRequest = {
     /**
@@ -1399,6 +1440,132 @@ export type GtmInviteOfferStatus = {
     offer?: null | GtmInviteOffer;
 };
 
+export type HarnessId = string;
+
+/**
+ * Whether a machine can host a teammate now, and why not.
+ */
+export type HostEligibility = {
+    /**
+     * It can.
+     */
+    ok: boolean;
+    reason?: null | HostIneligibility;
+    resource?: null | FloorResource;
+};
+
+/**
+ * A machine's container engine.
+ */
+export type HostEngine = {
+    /**
+     * Which engine.
+     */
+    kind: HostEngineKind;
+    /**
+     * Whether it runs without root.
+     */
+    rootless: boolean;
+    /**
+     * Its version, as it reports it.
+     */
+    version: string;
+};
+
+/**
+ * Whether an engine can confine a teammate's network.
+ */
+export type HostEngineIsolation = {
+    state: 'enforced';
+} | {
+    /**
+     * Why.
+     */
+    reason: HostIsolationProblem;
+    state: 'unavailable';
+} | {
+    state: 'notProbed';
+};
+
+/**
+ * A container engine, as the Invite dialog shows it.
+ */
+export type HostEngineKind = 'docker' | 'podman';
+
+/**
+ * Why a machine can't host a teammate now.
+ */
+export type HostIneligibility = 'offline' | 'notReported' | 'noEngine' | 'engineUnreachable' | 'unsupportedPlatform' | 'belowFloor' | 'innerSandboxUnavailable' | 'networkIsolationUnavailable';
+
+/**
+ * A container engine installed on a machine, chosen or not.
+ */
+export type HostInstalledEngine = {
+    /**
+     * Whether it can confine a teammate's network.
+     */
+    isolation: HostEngineIsolation;
+    /**
+     * Which engine.
+     */
+    kind: HostEngineKind;
+    /**
+     * Whether it runs without root.
+     */
+    rootless: boolean;
+    /**
+     * Its version, when it answered.
+     */
+    version?: string | null;
+};
+
+/**
+ * Why an engine can't confine a teammate's network.
+ */
+export type HostIsolationProblem = 'guardRefused' | 'readbackMismatch' | 'hostUnreadable' | 'engineFailed';
+
+/**
+ * A CPU architecture, as the Invite dialog shows it.
+ */
+export type HostPlatformArch = 'amd64' | 'arm64' | 'other';
+
+/**
+ * An operating system, as the Invite dialog shows it.
+ */
+export type HostPlatformOs = 'linux' | 'macos' | 'windows' | 'other';
+
+/**
+ * What a machine last reported about hosting teammates.
+ */
+export type HostReport = {
+    /**
+     * CPU architecture.
+     */
+    arch: HostPlatformArch;
+    /**
+     * Logical CPUs.
+     */
+    cpus: number;
+    /**
+     * Free disk for images and volumes, in MiB.
+     */
+    diskFreeMib?: number | null;
+    engine?: null | HostEngine;
+    /**
+     * Every engine installed, and whether each can confine a teammate's
+     * network.
+     */
+    engines: Array<HostInstalledEngine>;
+    /**
+     * Total memory, in MiB.
+     */
+    memoryMib: number;
+    /**
+     * Operating system.
+     */
+    os: HostPlatformOs;
+};
+
 export type InitGithubLinkResponse = {
     /**
      * The OAuth authorization URL to redirect the user to
@@ -1433,6 +1600,48 @@ export type InitOutlookLinkResponse = {
      * The link ID for tracking the OAuth flow.
      */
     link_id: string;
+};
+
+/**
+ * Why a machine gave up on an install's generation. Stored snake_case;
+ * camelCase on the API.
+ */
+export type InstallFailure = 'imageUnavailable' | 'imageMismatch' | 'engineRefused' | 'badConfiguration' | 'incompatibleRuntime' | 'crashLoop' | 'hostUnsupported' | 'networkIsolationUnavailable' | 'egressBlocked';
+
+/**
+ * What went wrong with an agent on its owner's own machine.
+ */
+export type InstallProblem = {
+    kind: 'failed';
+    /**
+     * Why.
+     */
+    reason: InstallFailure;
+} | {
+    kind: 'rolledBack';
+    /**
+     * Why.
+     */
+    reason: InstallFailure;
+} | {
+    kind: 'hostRemoved';
+};
+
+/**
+ * Where an invited agent runs.
+ */
+export type InviteComputer = {
+    kind: 'new';
+    /**
+     * The computer's size.
+     */
+    size: string;
+} | {
+    /**
+     * The machine's harness.
+     */
+    harnessId: HarnessId;
+    kind: 'own';
 };
 
 /**
@@ -1529,6 +1738,17 @@ export type MergeGithubPullRequestResponse = {
      * The merge commit's SHA.
      */
     sha: string;
+};
+
+/**
+ * Body of `POST /team_agents/{agent}/install`: move the agent to another of
+ * the admin's own machines.
+ */
+export type MoveTeammate = {
+    /**
+     * The machine to run the agent on.
+     */
+    harnessId: HarnessId;
 };
 
 export type PasswordRequest = {
@@ -1882,7 +2102,7 @@ export type PurchaseOffers = {
  * show their own way. One vocabulary for `/team/computers` and
  * `/team_agents`.
  */
-export type PurchaseRefusalCode = 'team_on_trial' | 'payment_declined' | 'no_room' | 'invite_in_progress';
+export type PurchaseRefusalCode = 'team_on_trial' | 'payment_declined' | 'no_room' | 'invite_in_progress' | 'host_not_eligible' | 'self_hosted_not_enabled';
 
 /**
  * A size on sale and what buying it charges today.
@@ -2454,10 +2674,13 @@ export type TeamAgent = {
      * Admin who invited the agent.
      */
     createdBy?: string | null;
+    harnessId?: null | HarnessId;
+    installProblem?: null | InstallProblem;
     /**
      * What the agent is responsible for.
      */
     jobDescription: string;
+    movingTo?: null | HarnessId;
     /**
      * Display name.
      */
@@ -2490,13 +2713,15 @@ export type TeamAgentErrorBody = {
      * Human-readable message.
      */
     message: string;
+    reason?: null | HostIneligibility;
+    resource?: null | FloorResource;
     size?: null | ComputerSize;
 };
 
 /**
  * Where an agent teammate is, from its computer.
  */
-export type TeamAgentStatus = 'provisioning' | 'starting' | 'running' | 'paused' | 'unhealthy' | 'failed' | 'released';
+export type TeamAgentStatus = 'provisioning' | 'downloading' | 'moving' | 'starting' | 'running' | 'paused' | 'unhealthy' | 'failed' | 'released';
 
 /**
  * A team's agents.
@@ -2655,6 +2880,44 @@ export type TeamWithMembers = {
      * The team
      */
     team: Team;
+};
+
+/**
+ * One of the inviter's own machines, for the Invite dialog.
+ */
+export type TeammateHost = {
+    /**
+     * Whether its macrod is connected now.
+     */
+    connected: boolean;
+    /**
+     * Whether it can host a teammate now.
+     */
+    eligibility: HostEligibility;
+    /**
+     * macOS and Windows engines (Docker Desktop, Podman machine) are
+     * allowed but untested.
+     */
+    experimental: boolean;
+    /**
+     * The machine's harness.
+     */
+    harnessId: HarnessId;
+    /**
+     * Its name.
+     */
+    name: string;
+    report?: null | HostReport;
+};
+
+/**
+ * The inviter's own machines.
+ */
+export type TeammateHosts = {
+    /**
+     * The machines, by name.
+     */
+    hosts: Array<TeammateHost>;
 };
 
 /**
@@ -2899,9 +3162,10 @@ export type UserOrganizationResponse = {
 };
 
 export type UserProfilePicture = {
+    avatar_face?: null | AvatarFace;
     checksum?: string | null;
     id: string;
-    url: string;
+    url?: string | null;
 };
 
 /**
@@ -5341,9 +5605,16 @@ export type CreateTeamAgentErrors = {
      * The card was declined (`payment_declined`); nothing was created
      */
     402: TeamAgentErrorBody;
-    403: ErrorResponse;
     /**
-     * No room for the size (`no_room`, with `size`), or the invite is in flight (`invite_in_progress`); nothing was created
+     * Not a person's own request, agent teammates are off, or hosting on one's own machine is off (`self_hosted_not_enabled`)
+     */
+    403: TeamAgentErrorBody;
+    /**
+     * The named machine isn't one of the inviter's own
+     */
+    404: ErrorResponse;
+    /**
+     * No room for the size (`no_room`, with `size`), the invite is in flight (`invite_in_progress`), or the own machine can't host the agent (`host_not_eligible`, with `reason` and `resource`); nothing was created
      */
     409: TeamAgentErrorBody;
     500: ErrorResponse;
@@ -5357,6 +5628,54 @@ export type CreateTeamAgentResponses = {
 };
 
 export type CreateTeamAgentResponse = CreateTeamAgentResponses[keyof CreateTeamAgentResponses];
+
+export type ListTeammateHostsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team_agents/hosts';
+};
+
+export type ListTeammateHostsErrors = {
+    401: ErrorResponse;
+    403: TeamAgentErrorBody;
+    500: ErrorResponse;
+};
+
+export type ListTeammateHostsError = ListTeammateHostsErrors[keyof ListTeammateHostsErrors];
+
+export type ListTeammateHostsResponses = {
+    200: TeammateHosts;
+};
+
+export type ListTeammateHostsResponse = ListTeammateHostsResponses[keyof ListTeammateHostsResponses];
+
+export type RecheckTeammateHostData = {
+    body?: never;
+    path: {
+        /**
+         * The machine's harness id.
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/team_agents/hosts/{harness_id}/recheck';
+};
+
+export type RecheckTeammateHostErrors = {
+    401: ErrorResponse;
+    403: TeamAgentErrorBody;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RecheckTeammateHostError = RecheckTeammateHostErrors[keyof RecheckTeammateHostErrors];
+
+export type RecheckTeammateHostResponses = {
+    204: void;
+};
+
+export type RecheckTeammateHostResponse = RecheckTeammateHostResponses[keyof RecheckTeammateHostResponses];
 
 export type ReportTeamAgentOnlineData = {
     body?: never;
@@ -5408,6 +5727,66 @@ export type DeleteTeamAgentResponses = {
 };
 
 export type DeleteTeamAgentResponse = DeleteTeamAgentResponses[keyof DeleteTeamAgentResponses];
+
+export type SetTeamAgentAvatarData = {
+    body: AgentAvatar;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/avatar';
+};
+
+export type SetTeamAgentAvatarErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetTeamAgentAvatarError = SetTeamAgentAvatarErrors[keyof SetTeamAgentAvatarErrors];
+
+export type SetTeamAgentAvatarResponses = {
+    204: void;
+};
+
+export type SetTeamAgentAvatarResponse = SetTeamAgentAvatarResponses[keyof SetTeamAgentAvatarResponses];
+
+export type MoveTeamAgentData = {
+    body: MoveTeammate;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/install';
+};
+
+export type MoveTeamAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: TeamAgentErrorBody;
+    404: ErrorResponse;
+    /**
+     * The agent runs on a Macro computer, or the machine can't host it (`host_not_eligible`)
+     */
+    409: TeamAgentErrorBody;
+    500: ErrorResponse;
+};
+
+export type MoveTeamAgentError = MoveTeamAgentErrors[keyof MoveTeamAgentErrors];
+
+export type MoveTeamAgentResponses = {
+    200: TeamAgent;
+};
+
+export type MoveTeamAgentResponse = MoveTeamAgentResponses[keyof MoveTeamAgentResponses];
 
 export type GetTeamAgentVoiceData = {
     body?: never;

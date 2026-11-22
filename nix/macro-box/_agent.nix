@@ -30,152 +30,58 @@ let
   # The agent's browser profile: its logins survive restarts and image
   # updates on the data disk.
   browserProfile = "${home}/browser";
-  # 9222 is macro's Chromium on :0.
-  cdpPort = 9223;
-  browserCdpUrl = "http://127.0.0.1:${toString cdpPort}";
+  # macro's own desktop is :0.
+  displayNumber = 1;
+  # The runtime closure, shared with the teammate runtime image.
+  shared = import ./_teammate-runtime.nix {
+    inherit pkgs;
+    inherit (cfg) runtime;
+    computerUse = cfg.computerUse.package;
+    inherit (config.macro.box) claudeCode;
+    paths = {
+      inherit
+        workspace
+        lastGood
+        failures
+        bootHead
+        desktopRuntime
+        displayNumber
+        ;
+      helperCredentials = "/run/credentials/macro-agent.service/agent.env";
+      setupTraceparent = "/run/macrod/agent-traceparent";
+      setupTraceparentUsed = "${state}/setup-traceparent";
+      # Unused here: `claude` is the system profile's, over the same file.
+      claudeCredential = "${claudeSignIn}/credential.json";
+    };
+  };
+  inherit (shared)
+    runtimePath
+    startAgent
+    agentStopped
+    desktopEnvironment
+    mcpServers
+    display
+    vncPort
+    browserCdpUrl
+    ;
   # The agent's desktop (its bus, AT-SPI and sound) runs outside macro's
   # user session, which would let it out of its sandbox: its sockets live
   # here, and nothing of /run/user/${uid} is in its view.
   desktopRuntime = "/run/macro-agent";
-  busAddress = "unix:path=${desktopRuntime}/bus";
-  pulseServer = "unix:${desktopRuntime}/pulse/native";
   # Every process of the agent and its desktop has this primary group, and
   # the firewall keeps it off macro's own desktop and browser.
   agentGroup = "macro-agent";
   # harnessd's Claude sign-in (`credential.json`), which the `claude`
   # wrapper reads.
   claudeSignIn = "${config.macro.box.harnessd.stateDirectory}/claude";
-  # macro's own desktop is :0.
-  displayNumber = 1;
-  display = ":${toString displayNumber}";
-  vncPort = 5900 + displayNumber;
 
-  # nixpkgs' Bun 1.3.13 times out in Playwright's connectOverCDP, which the
-  # agent's browser capability and its checks use; 1.4.2 connects. Drop this
-  # once nixpkgs ships >= 1.4.2.
-  bun =
-    assert lib.assertMsg (lib.versionOlder pkgs.bun.version "1.4.2")
-      "nixpkgs ships Bun ${pkgs.bun.version}; drop the agent's Bun override";
-    pkgs.bun.overrideAttrs {
-      version = "1.4.2";
-      src = pkgs.fetchurl {
-        url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64.zip";
-        hash = "sha256-NjaPrvdSeHXV/6UuU81IAhdB8qg+tiCKjdZAaNQiqRM=";
-      };
-    };
-
-  ffmpegX11grab = pkgs.runCommand "ffmpeg-x11grab" { } ''
-    mkdir -p $out/bin
-    ln -s ${pkgs.ffmpeg-full}/bin/ffmpeg $out/bin/ffmpeg-x11grab
-  '';
-  # What the runtime runs by name (calls share :1 through ffmpeg-x11grab and
-  # record the default sink with parec). `claude` comes
-  # from the system profile, where the image installs the wrapper that reads
-  # harnessd's sign-in.
-  runtimePath = [
-    bun
-    pkgs.git
-    pkgs.coreutils
-    pkgs.chromium
-    pkgs.pulseaudio
-    pkgs.ffmpeg-headless
-    ffmpegX11grab
-    # Secrets put a value on :1's clipboard.
-    pkgs.xclip
-    # For the runtime to run capability scripts and Claude's tools with the
-    # credentials directory masked (`bwrap --tmpfs /run/credentials`).
-    pkgs.bubblewrap
-  ];
-  scriptVariables = ''
-    workspace=${workspace}
-    last_good=${lastGood}
-    failures=${failures}
-    boot_head=${bootHead}
-    max_failed_boots=3
-    runtime=${cfg.runtime}
-    helper=${lib.getExe credentialHelper}
-    helper_credentials=/run/credentials/macro-agent.service/agent.env
-    setup_traceparent=/run/macrod/agent-traceparent
-    setup_traceparent_used=${state}/setup-traceparent
-  '';
-  credentialHelper = pkgs.writeShellApplication {
-    name = "git-credential-agent";
-    runtimeInputs = [
-      pkgs.gnused
-      pkgs.coreutils
-    ];
-    text = builtins.readFile ./files/agent-env-setting + builtins.readFile ./files/git-credential-agent;
-  };
-  startAgent = pkgs.writeShellApplication {
-    name = "start-agent";
-    runtimeInputs = runtimePath ++ [
-      pkgs.gnused
-      pkgs.diffutils
-    ];
-    text =
-      scriptVariables
-      + builtins.readFile ./files/agent-env-setting
-      + builtins.readFile ./files/start-agent;
-  };
-  agentStopped = pkgs.writeShellApplication {
-    name = "agent-stopped";
-    runtimeInputs = [ pkgs.coreutils ];
-    # It uses only some of the shared variables.
-    excludeShellChecks = [ "SC2034" ];
-    text = scriptVariables + builtins.readFile ./files/agent-stopped;
-  };
-
-  # GNOME's interface settings with toolkit-accessibility on by default:
-  # computer-use-linux reads Chromium's AT-SPI tree only when that key, or
-  # the AT-SPI bus's IsEnabled (which the bus launcher derives from it), says
-  # accessibility is on. There is no dconf, so the default is the value.
-  accessibilitySettings = pkgs.runCommand "agent-accessibility-settings" { nativeBuildInputs = [ pkgs.glib ]; } ''
-    mkdir -p $out
-    cp ${pkgs.glib.getSchemaPath pkgs.gsettings-desktop-schemas}/*.xml $out/
-    printf '[org.gnome.desktop.interface]\ntoolkit-accessibility=true\n' > $out/90_macro-agent.gschema.override
-    glib-compile-schemas --strict $out
-  '';
-
-  # Stdio MCP servers the runtime adds to its Claude Code query.
-  mcpServers = {
-    computer-use-linux = {
-      type = "stdio";
-      command = lib.getExe cfg.computerUse.package;
-      args = [ "mcp" ];
-      env = desktopEnvironment // {
-        # The agent's desktop is plain X11 under Openbox.
-        COMPUTER_USE_LINUX_SCREENSHOT_BACKEND = "x11";
-      };
-    };
-  };
-
-  # What every process on the agent's desktop sees.
-  desktopEnvironment = {
-    DISPLAY = display;
-    XDG_RUNTIME_DIR = desktopRuntime;
-    DBUS_SESSION_BUS_ADDRESS = busAddress;
-    PULSE_SERVER = pulseServer;
-    GSETTINGS_SCHEMA_DIR = accessibilitySettings;
-    # Chromium and GTK expose AT-SPI trees for computer use.
-    ACCESSIBILITY_ENABLED = "1";
-  };
-
-  environment = desktopEnvironment // {
+  environment = shared.environment // {
     HOME = home;
-    AGENT_SHELL = "1";
-    AGENT_WORKSPACE = workspace;
     # %d: the unit's credentials directory, where LoadCredential puts agent.env.
     MUPPET_CREDENTIALS_FILE = "%d/agent.env";
-    MUPPET_LAST_GOOD_FILE = lastGood;
     MUPPET_RESTART_FILE = restartFile;
     # Bound read-only below; the runtime binds it into Claude's sandbox.
     HARNESSD_STATE_DIRECTORY = claudeSignIn;
-    MUPPET_MCP_SERVERS_JSON = builtins.toJSON mcpServers;
-    # The agent's Chromium on its desktop, for muppet's browser utility.
-    MUPPET_BROWSER_CDP_URL = browserCdpUrl;
-    LIVEKIT_FFMPEG_PATH = lib.getExe pkgs.ffmpeg-headless;
-    # LiveKit's native modules link libstdc++.
-    LD_LIBRARY_PATH = "${pkgs.stdenv.cc.cc.lib}/lib";
   };
 
   # The agent and every unit of its desktop: macro's uid with the agent's
@@ -279,30 +185,6 @@ let
     bindsTo = [ "macro-agent-display.service" ];
     after = [ "macro-agent-display.service" ];
   };
-  # The agent's session bus: AT-SPI is activated on it, and nothing else
-  # (macro's has systemd's user manager).
-  busConfig = pkgs.writeText "macro-agent-bus.conf" ''
-    <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
-     "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
-    <busconfig>
-      <type>session</type>
-      <listen>${busAddress}</listen>
-      <auth>EXTERNAL</auth>
-      <servicedir>${pkgs.at-spi2-core}/share/dbus-1/services</servicedir>
-      <policy context="default">
-        <allow send_destination="*" eavesdrop="true"/>
-        <allow eavesdrop="true"/>
-        <allow own="*"/>
-      </policy>
-    </busconfig>
-  '';
-  # The agent's sound server: one null sink `agent`, the default, whose
-  # monitor a call records; there is no sound card.
-  soundConfig = pkgs.writeText "macro-agent-sound.pa" ''
-    load-module module-native-protocol-unix socket=${desktopRuntime}/pulse/native auth-anonymous=1
-    load-module module-null-sink sink_name=agent sink_properties=device.description=Agent
-    set-default-sink agent
-  '';
   waitForDisplay = pkgs.writeShellScript "wait-for-agent-display" ''
     until [ -S /tmp/.X11-unix/X${toString displayNumber} ]; do sleep 0.2; done
   '';
@@ -429,7 +311,7 @@ in
     # The agent's own desktop for computer use, beside macro's :0. Only :1's
     # filesystem socket is in its /tmp; no abstract one.
     systemd.services.macro-agent-display = desktopService displayDescription {
-      ExecStart = "${pkgs.tigervnc}/bin/Xvnc ${display} -geometry 1920x1080 -depth 24 -rfbport ${toString vncPort} -interface 127.0.0.1 -localhost -SecurityTypes None -UseBlacklist 0 -AlwaysShared -nolisten tcp -nolisten local";
+      ExecStart = shared.displayCommand;
     } { };
     # Whatever its menu starts stays in the sandbox.
     systemd.services.macro-agent-openbox = desktopService "Openbox on the agent teammate's display" {
@@ -437,10 +319,10 @@ in
       ExecStart = lib.getExe' pkgs.openbox "openbox";
     } afterDisplay;
     systemd.services.macro-agent-bus = desktopService "The agent teammate's session bus, with AT-SPI" {
-      ExecStart = "${lib.getExe' pkgs.dbus "dbus-daemon"} --nofork --nopidfile --config-file=${busConfig}";
+      ExecStart = shared.busCommand;
     } afterDisplay;
     systemd.services.macro-agent-sound = desktopService "The agent teammate's sound server" {
-      ExecStart = "${lib.getExe' pkgs.pulseaudio "pulseaudio"} --daemonize=no --exit-idle-time=-1 --log-target=stderr -n --file=${soundConfig}";
+      ExecStart = shared.soundCommand;
     } {
       environment = desktopEnvironment // {
         HOME = home;
@@ -453,18 +335,7 @@ in
       desktopService "Agent teammate's Chromium on ${display}, DevTools on ${browserCdpUrl}"
         {
           ExecStartPre = waitForDisplay;
-          ExecStart = lib.concatStringsSep " " [
-            (lib.getExe pkgs.chromium)
-            "--user-data-dir=${browserProfile}"
-            "--remote-debugging-address=127.0.0.1"
-            "--remote-debugging-port=${toString cdpPort}"
-            "--force-renderer-accessibility"
-            "--no-first-run"
-            "--no-default-browser-check"
-            "--disable-dev-shm-usage"
-            "--password-store=basic"
-            "--start-maximized"
-          ];
+          ExecStart = shared.browserCommand browserProfile;
         }
         {
           bindsTo = [ "macro-agent-display.service" ];

@@ -20,7 +20,10 @@ computer's harness keeps its agents bound when deleted (the unbind trigger
 skips it) so the control plane can delete them after `revoke_hosted_harness`.
 Neither its owner (`delete_harness`) nor its own daemon (`delete_self`) may
 delete a computer's harness: both get `HarnessError::ComputerHarness` (409);
-releasing the computer retires it.
+releasing the computer retires it. A successful unpair (either path) tells the
+`HarnessRetired` port (`src/domain/retired.rs`, best effort, no-op by default);
+document_storage_service wires it to authentication_service so agent teammates
+the machine hosted are parked at once.
 `hosted_pairing_claimed(pairing_id)` reads the durable pairing claim for the
 fleet generation gate, including the interval before macrod connects. Hosted
 claims take the same `hosted-enrollment:<computer UUID>` advisory guard as

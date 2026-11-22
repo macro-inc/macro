@@ -14,7 +14,7 @@ use tokio_util::task::AbortOnDropHandle;
 
 use crate::computer::Computer;
 use crate::config::{Harness, HarnessCredentials, MacroApi};
-use crate::harness::{self, BridgeEnd, Handoffs, LineTap};
+use crate::harness::{self, BridgeEnd, Handoffs, HostTeammates, Hosting, LineTap};
 use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::link;
 use crate::retry_delay::RetryDelays;
@@ -34,6 +34,12 @@ const HEALTHY_CONNECTION: Duration = Duration::from_secs(10);
 const FIRST_RECONNECT_DELAY: Duration = Duration::from_millis(250);
 const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(30);
 
+/// The first redial after the gateway refused the credentials.
+const FIRST_REFUSED_REDIAL: Duration = Duration::from_secs(1);
+
+/// The longest wait between redials while the credentials are refused.
+const MAX_REFUSED_REDIAL: Duration = Duration::from_secs(60);
+
 /// The daemon's connection to its harness's sessions.
 ///
 /// Owns one connection supervisor, independent of trigger delivery. Dropping
@@ -48,6 +54,9 @@ pub struct Runtime {
 impl Runtime {
     /// Start connecting with the given credentials and keep the harness
     /// available for model discovery and agent sessions until dropped.
+    /// `hosting`, once this macrod hosts teammates, has its engine checked
+    /// before every dial, which decides whether the dial lists the
+    /// teammate capability.
     #[expect(clippy::too_many_arguments, reason = "the supervisor's whole input")]
     pub fn start(
         macro_api: &MacroApi,
@@ -59,6 +68,7 @@ impl Runtime {
         adopted: Option<RunningAgent>,
         handoffs: Handoffs,
         computer: Option<Arc<Computer>>,
+        hosting: Hosting,
     ) -> Self {
         let (connected_tx, connected) = watch::channel(false);
         let agents_changed = Arc::new(Notify::new());
@@ -74,6 +84,7 @@ impl Runtime {
             adopted,
             handoffs,
             computer,
+            hosting,
         ));
         Self {
             connected,
@@ -109,8 +120,10 @@ impl Runtime {
 }
 
 /// Reconnect even after a clean close or a long outage: model discovery must
-/// recover without requiring an agent mention. Authentication failures stop
-/// the supervisor until the user re-pairs or restarts the daemon.
+/// recover without requiring an agent mention. A refusal (401 or 403) is
+/// redialed slowly, for good (every 10 minutes once it lasted 10); any
+/// other client error stops the supervisor
+/// until the user re-pairs or restarts the daemon.
 ///
 /// An `adopted` agent (handed over by the previous process image) serves the
 /// first connection instead of a fresh spawn. Otherwise the agent is started
@@ -130,15 +143,32 @@ async fn serve(
     mut adopted: Option<RunningAgent>,
     mut handoffs: Handoffs,
     computer: Option<Arc<Computer>>,
+    hosting: Hosting,
 ) {
+    // However the supervisor ends (a client error it doesn't redial, a
+    // handoff, or dropped), its dial's refusal must not hold the agents.
+    let _dial_refusal = ForgetDialRefusal(hosting.clone());
     let mut backoff = reconnect_strategy();
+    let mut refused_backoff = refused_strategy();
+    // When the gateway began refusing, while it still does.
+    let mut refused_since: Option<Instant> = None;
     loop {
         let mut lasted = None;
+        let mut refused = false;
         if adopted.is_none() {
             adopted = start_ahead(&harness, &cwd);
         }
+        let teammates = hosting.current();
+        let checked = check_teammate_host(teammates.as_ref()).await;
+        let hosts_teammates = checked
+            .as_ref()
+            .is_some_and(|(_, report)| report.engine.is_some() && report.problem.is_none());
+        let accepts = link::Accepts {
+            teammate_container: hosts_teammates,
+            recheck_teammate_host: teammates.is_some(),
+        };
         let dialed = tokio::select! {
-            dialed = tokio::time::timeout(DIAL_TIMEOUT, link::dial(&gateway_url, &token)) => dialed,
+            dialed = tokio::time::timeout(DIAL_TIMEOUT, link::dial(&gateway_url, &token, accepts)) => dialed,
             request = handoffs.next() => {
                 answer_between_bridges(request, adopted.take(), &turns);
                 return;
@@ -147,6 +177,10 @@ async fn serve(
         match dialed {
             Ok(Ok(channel)) => {
                 connected.send_replace(true);
+                harness::credentials_accepted(
+                    teammates.as_ref(),
+                    harness::CredentialPath::RuntimeDial,
+                );
                 tracing::info!(adopted = adopted.is_some(), "harness bridge starting");
                 let started = Instant::now();
                 match harness::bridge(
@@ -159,6 +193,8 @@ async fn serve(
                     &mut handoffs,
                     computer.clone(),
                     &agents_changed,
+                    checked,
+                    &hosting,
                 )
                 .await
                 {
@@ -176,6 +212,17 @@ async fn serve(
                 connected.send_replace(false);
                 lasted = Some(started.elapsed());
             }
+            Ok(Err(error)) if credentials_refused(&error) => {
+                // Unpaired, or the auth service failing for a while: dialed
+                // again slowly, for good, so an outage ends by itself and
+                // the agents it stopped run again on the next accept.
+                harness::credentials_refused(
+                    teammates.as_ref(),
+                    harness::CredentialPath::RuntimeDial,
+                );
+                refused = true;
+                tracing::warn!(error = ?error, "the runtime gateway refused this machine's credentials; redialing slowly (re-pair if it was removed)");
+            }
             Ok(Err(error)) => {
                 if !worth_redialing(&error) {
                     tracing::error!(error = ?error, "runtime connection refused; check configuration or re-pair");
@@ -186,13 +233,47 @@ async fn serve(
             Err(_) => tracing::warn!("runtime connection timed out; reconnecting"),
         }
         tokio::select! {
-            () = tokio::time::sleep(redial_delay(lasted, &mut backoff)) => {}
+            () = tokio::time::sleep(if refused {
+                let since = *refused_since.get_or_insert_with(Instant::now);
+                refused_redial_delay(since.elapsed(), &mut refused_backoff)
+            } else {
+                refused_since = None;
+                refused_backoff.reset();
+                redial_delay(lasted, &mut backoff)
+            }) => {}
             request = handoffs.next() => {
                 answer_between_bridges(request, adopted.take(), &turns);
                 return;
             }
         }
     }
+}
+
+/// Forgets the runtime dial's refusal when dropped: nothing dials then.
+struct ForgetDialRefusal(Hosting);
+
+impl Drop for ForgetDialRefusal {
+    fn drop(&mut self) {
+        harness::stopped_calling(
+            self.0.current().as_ref(),
+            harness::CredentialPath::RuntimeDial,
+        );
+    }
+}
+
+/// Check the container engine before a dial: macrod checks when it starts
+/// and again on every reconnect.
+async fn check_teammate_host(
+    teammates: Option<&Arc<HostTeammates>>,
+) -> Option<harness::TeammateHosting> {
+    let teammates = teammates?;
+    #[cfg(unix)]
+    {
+        let report = teammates.detect().await;
+        Some((Arc::clone(teammates), report))
+    }
+    #[cfg(not(unix))]
+    match **teammates {}
 }
 
 /// Start the agent while the runtime dials, so a session that arrives with
@@ -251,6 +332,22 @@ fn worth_redialing(error: &tungstenite::Error) -> bool {
         || status == tungstenite::http::StatusCode::TOO_MANY_REQUESTS
 }
 
+/// Whether the gateway refused the harness: a 401 (an invalid, expired or
+/// revoked token) or a 403 (a claim refused, or something in between, such
+/// as an edge). Both are redialed slowly and count toward stopping the
+/// teammates; only a refusal that persists stops them.
+pub(crate) fn credentials_refused(error: &tungstenite::Error) -> bool {
+    matches!(
+        error,
+        tungstenite::Error::Http(response)
+            if matches!(
+                response.status(),
+                tungstenite::http::StatusCode::UNAUTHORIZED
+                    | tungstenite::http::StatusCode::FORBIDDEN
+            )
+    )
+}
+
 /// How long to wait before the next dial, given how long the last
 /// connection lasted (`None` when the dial itself failed).
 fn redial_delay(lasted: Option<Duration>, backoff: &mut RetryDelays) -> Duration {
@@ -259,6 +356,29 @@ fn redial_delay(lasted: Option<Duration>, backoff: &mut RetryDelays) -> Duration
         return Duration::ZERO;
     }
     backoff.next_delay()
+}
+
+/// The redials of a machine whose credentials are refused: 1 s doubling to
+/// a minute, forever.
+/// How long the credentials stay refused before a machine counts as gone
+/// (unpaired), its agents long stopped.
+const REFUSED_FOR_LONG: Duration = Duration::from_secs(10 * 60);
+
+/// The wait between redials of a machine refused that long.
+const LONG_REFUSED_REDIAL: Duration = Duration::from_secs(10 * 60);
+
+/// The wait before the next redial of a machine refused for `refused_for`.
+fn refused_redial_delay(refused_for: Duration, backoff: &mut RetryDelays) -> Duration {
+    if refused_for >= REFUSED_FOR_LONG {
+        // Spread 20% either way, so machines unpaired together don't
+        // redial together.
+        return LONG_REFUSED_REDIAL.mul_f64(0.8 + rand::random::<f64>() * 0.4);
+    }
+    backoff.next_delay()
+}
+
+fn refused_strategy() -> RetryDelays {
+    RetryDelays::new(FIRST_REFUSED_REDIAL, MAX_REFUSED_REDIAL)
 }
 
 fn reconnect_strategy() -> RetryDelays {

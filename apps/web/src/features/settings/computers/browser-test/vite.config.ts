@@ -95,12 +95,10 @@ export default defineConfig({
   define: { 'import.meta.env.VITE_LOCAL_BACKEND_ORIGIN': '"same-origin"' },
   optimizeDeps: {
     esbuildOptions: { target: 'esnext' },
-    // Agents settings load lazily, after Add another agent; scan them up
-    // front so their dependencies never re-optimize (and reload the page)
-    // mid-test.
+    // The notification handler loads lazily; scan it up front so its
+    // dependencies never re-optimize (and reload the page) mid-test.
     entries: [
       'index.html',
-      'agent-settings.tsx',
       '../../../notifications/use-notification-updates.ts',
     ],
   },

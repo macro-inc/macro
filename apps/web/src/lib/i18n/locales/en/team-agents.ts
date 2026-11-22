@@ -1,9 +1,7 @@
 export default {
   inviteTitle: 'Invite an agent',
   agent: 'Agent',
-  intro:
-    'An agent is a member of your team with its own Macro computer. You talk to it in a DM or a channel, like anyone else.',
-  name: 'Name',
+  nameIt: 'Name it',
   namePlaceholder: 'Ada',
   tooLong: {
     one: 'Use at most {{count}} character',
@@ -27,30 +25,46 @@ export default {
   voiceInvalid: "That voice isn't available. Choose another one.",
   voiceSaveFailed:
     "Couldn't save the voice. Your choice is still selected; try again.",
-  computer: 'Computer',
-  computerHint: 'Its own computer, always on. Its seat is included.',
-  loadingSizes: 'Loading computer sizes…',
+  giveItAComputer: 'Give it a computer',
   sizesFailed: "Couldn't load computer sizes.",
   tryAgain: 'Try again',
-  nameRequired: 'Give your agent a name to continue.',
-  nameSuggestions: 'Try',
-  comesLater:
-    "Picture, voice and role come later. {{name}} asks you what to take on once it's online.",
-  comesLaterUnnamed:
-    "Picture, voice and role come later. It asks you what to take on once it's online.",
   add: 'Add {{name}}',
   addPriced: 'Add {{name}} · {{price}}',
+  addOn: 'Add {{name}} on {{host}}',
+  /** An agent on a machine the viewer didn't pair, so its name isn't theirs to read. */
+  failedImageUnavailable:
+    "Couldn't download the agent's runtime on {{host}}. Check its internet connection.",
+  failedImageMismatch:
+    "The runtime downloaded on {{host}} didn't match the one Macro sent.",
+  failedEngineRefused:
+    "The container engine on {{host}} wouldn't start it. Check that it's running.",
+  failedBadConfiguration:
+    "Its settings didn't apply on {{host}}. Macro sends them once more.",
+  failedIncompatibleRuntime:
+    'It needs a newer runtime image than {{host}} has.',
+  failedCrashLoop: 'It kept crashing on {{host}}.',
+  failedNetworkIsolation:
+    "Couldn't lock down its network on {{host}}, so it isn't running.",
+  failedEgressBlocked:
+    "{{host}} has no route to the internet, so it isn't running. It starts once {{host}} is back online.",
+  failedHostUnsupported:
+    "Agents can't run on {{host}}. Move it to another computer.",
+  hostRemoved:
+    "The computer it ran on can no longer host it for this team. Its chats and memory are kept; its inviter or the team's owner can move it to one of their computers.",
+  rolledBackCrashLoop:
+    'Running the previous version: the update kept crashing.',
+  rolledBackImageUnavailable:
+    "Running the previous version: the update couldn't be downloaded.",
+  rolledBackOther: "Running the previous version: the update didn't start.",
+  ownersComputer: "its owner's computer",
+  buyAComputer: 'Buy a computer',
+  yourComputers: 'Your computers',
   adding: 'Adding {{name}}…',
-  yourAgent: 'Your agent',
-  addCaption:
-    '{{name}} gets its own account and computer, and is online in a couple of seconds. It says hi first; tell it what to do from there.',
-  addingCaption: 'Starting {{name}}…',
   tryAgainPriced: 'Try again · {{price}}',
   declined:
     'Your card was declined. Nothing was charged and nothing was set up. Update the card, or try again if your bank has cleared it.',
-  declinedCaption:
-    'Try again charges the card on file once more. The name and size are kept.',
   updateCard: 'Update card',
+  noSizeForSale: 'Every computer size is sold out right now. Try again later.',
   noRoom:
     'No room for a {{size}} computer right now. Nothing was charged. Pick another size.',
   notStarted:
@@ -58,9 +72,7 @@ export default {
   refunded:
     "{{name}} didn't start again. The charge was undone and the computer released. Retry starts a fresh one; you aren't charged twice.",
   retryStart: 'Retry',
-  retryCaption: 'Retry keeps the name and size.',
   inviteInProgress: 'This agent is still being added. Wait a moment.',
-  noSizeForSale: 'No computer size is for sale right now.',
   invalid: 'Check the name, job description, and personality.',
   notEnabled: "Agent teammates aren't available for this team yet.",
   computerUnavailable: "Couldn't buy a computer for this agent.",
