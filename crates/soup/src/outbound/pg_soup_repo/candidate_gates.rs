@@ -220,12 +220,16 @@ pub(super) fn channel_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> St
 /// as their secondary item, the same rows the channels fold predicates on).
 ///
 /// The membership check runs once for the root, fenced like the gate itself,
-/// and compares the root's channel as a uuid, so it is one probe of the
-/// viewer's membership whatever the estimates. As a join compared as text
+/// and compares the root's channel as a uuid, so an index can take both the
+/// viewer and the channel: one probe per root in every plan measured (fresh
+/// and stale statistics, custom and generic). As a join compared as text
 /// (`cp.channel_id::text`), no index could take the channel, and each root
-/// walked every membership the viewer holds: 15,000 index entries per root
-/// for a viewer in 15,000 channels. The channel check sits in that `CASE`,
-/// not on `m`, so the root is found by its id alone.
+/// walked the viewer's memberships until it met its channel: up to 15,000
+/// index entries per root for a viewer in 15,000 channels. The channel check
+/// sits in that `CASE`, not on `m`, so the root is found by its id alone. The
+/// text comparison stays as a filter on the membership found: a channel id
+/// written in capitals casts to the same uuid, and hydration, which compares
+/// the text, hides that root.
 pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> String {
     let implied = implied_conjuncts_sql(
         filter.and_then(|f| f.channel_thread_filter.as_deref()),
@@ -260,6 +264,7 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
                         WHEN m.parent_entity_type = 'channel'
                             AND m.parent_entity_id ~ '{UUID_PATTERN}'
                         THEN m.parent_entity_id::uuid END
+                    AND cp.channel_id::text = m.parent_entity_id
                     AND cp.user_id = $1
                     AND cp.left_at IS NULL
                     {PER_CANDIDATE}

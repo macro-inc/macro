@@ -241,10 +241,11 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   it to that form, since the gates are shared with every page.
 - Compare a membership by the uuid column: `cp.channel_id = <uuid>`, with the
   text id cast behind a uuid-pattern guard, in an `EXISTS` fenced with
-  `PER_CANDIDATE` (`channel_thread_gate`). Written as
-  `cp.channel_id::text = ...`, no index can take the channel, and each
-  candidate walks every membership the viewer holds; as a join on the uuid,
-  stale statistics can still walk them by user.
+  `PER_CANDIDATE` (`channel_thread_gate`), and keep the text comparison as a
+  filter on the row found when callers compare the text. Written as
+  `cp.channel_id::text = ...` alone, no index can take the channel, and each
+  candidate walks the viewer's memberships until it meets its own; as a join
+  on the uuid, stale statistics can still walk them by user.
 - The initiative listing starts from the caller's access instead
   (`INITIATIVE_LISTING_ACCESS`): one `(source_id, entity_type, entity_id)`
   index descent per source returns only that source's initiative grants, and

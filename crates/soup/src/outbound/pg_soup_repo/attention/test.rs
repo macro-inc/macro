@@ -1424,3 +1424,30 @@ async fn a_thread_recompute_checks_one_membership_not_every_one_the_viewer_holds
     );
     Ok(())
 }
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_thread_whose_root_names_its_channel_in_capitals_stays_hidden(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
+    // The same channel, spelled in capitals: hydration compares the text, so
+    // the gate must not let the root through.
+    sqlx::query!(
+        "UPDATE comms_messages SET parent_entity_id = upper(parent_entity_id) WHERE id = $1",
+        Uuid::parse_str(THREAD_M)?,
+    )
+    .execute(&pool)
+    .await?;
+
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let only = vec![EntityType::ChannelMessage.with_entity_string(THREAD_M.to_string())];
+    let mut recompute = req(WORK, &link_ids, &sources);
+    recompute.only = Some(&only);
+    let page = attention_soup_page(&pool, recompute).await?;
+    assert_eq!(keys(&page), vec![]);
+    Ok(())
+}
