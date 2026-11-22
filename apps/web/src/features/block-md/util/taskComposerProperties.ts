@@ -282,7 +282,7 @@ export function createTaskComposerProperties(args: {
   >([]);
   const propertyDefinitions = () => {
     const fetched = systemPropertiesQuery.isSuccess
-      ? systemPropertiesQuery.data
+      ? (systemPropertiesQuery.data ?? [])
       : [];
     return [
       ...fetched,

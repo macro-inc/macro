@@ -12,13 +12,13 @@ import {
 } from '@property/tags/TagEditorDialog';
 import { useTagTeamSharingFlag } from '@property/tags/use-tag-team-sharing-flag';
 import {
+  parseTagNameConflict,
   useDeletePropertyOptionMutation,
   useMergeTagMutation,
   usePromoteTagMutation,
   useTagsQuery,
 } from '@queries/properties/tags';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { parseTagNameConflict } from '@service-properties/client';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';

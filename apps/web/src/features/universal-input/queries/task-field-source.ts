@@ -55,16 +55,25 @@ export function createTaskFieldSource(
       ];
     });
   const definitions = createMemo(() =>
-    query.isSuccess ? fromRows(query.data) : []
+    query.isSuccess ? fromRows(query.data ?? []) : []
   );
   const inferredFields = createMemo(() => fields().properties);
   const manualFields = createMemo(() => fields().taskProperties);
-  const loadRows = async () => {
-    if (query.isSuccess) return query.data;
-    const result = await query.refetch({ cancelRefetch: false });
-    if (!result.isSuccess)
-      throw result.error ?? new Error('Could not load task fields');
-    return result.data;
+  // One load at a time: a second refetch would cancel the first.
+  let loading: Promise<PropertyDefinitionResponse[]> | undefined;
+  const loadRows = (): Promise<PropertyDefinitionResponse[]> => {
+    if (query.isSuccess && query.data) return Promise.resolve(query.data);
+    loading ??= query
+      .refetch({ requestPolicy: 'cache-first' })
+      .then((result) => {
+        if (!result.data)
+          throw result.error ?? new Error('Could not load task fields');
+        return result.data;
+      })
+      .finally(() => {
+        loading = undefined;
+      });
+    return loading;
   };
   const people = useContactReferences(
     () => ({
