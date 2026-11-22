@@ -5,6 +5,7 @@
     --calendar-phone-axis-gap: 6px;
     --calendar-phone-card-radius: 20px;
     --calendar-phone-card-inset: 8px;
+    --calendar-grid-bottom-gap: 12px;
     padding-inline: 0 var(--calendar-phone-card-inset);
   }
 
@@ -33,13 +34,14 @@
     visibility: hidden;
   }
 
-  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-col-header-cell {
-    background: var(--color-page);
+  /* The external gutter exposes the centered midnight label above the card. */
+  html[data-touch-device="true"] .calendar-view .fc .fc-timegrid-slots tbody tr:first-child .fc-timegrid-slot-label-cushion {
+    transform: translateY(-50%);
   }
 
-  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-body .fc-day-sat,
-  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-body .fc-day-sun {
-    background: color-mix(in srgb, var(--color-hover) 50%, transparent);
+  /* Geometry still comes from FullCalendar; the phone overlay spans every column. */
+  html[data-touch-device="true"] .calendar-view .fc-timegrid-now-indicator-line::before {
+    background: transparent;
   }
 
   html[data-touch-device="true"] .calendar-view .fc-timegrid .calendar-day-header-weekday {

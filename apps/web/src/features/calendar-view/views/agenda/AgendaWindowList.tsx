@@ -20,7 +20,7 @@ export function AgendaWindowList(props: { date: Date }) {
         ref={setViewport}
         role="region"
         aria-label={t('calendar.agendaEvents')}
-        class="min-h-0 flex-1 overflow-y-auto touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+6rem)] [overflow-anchor:none]"
+        class="min-h-0 flex-1 overflow-y-auto touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+var(--calendar-grid-bottom-gap,12px))] [overflow-anchor:none]"
         onScroll={paging.onScroll}
       >
         <AgendaGroupingContext.Provider value={grouping}>

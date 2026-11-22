@@ -6,7 +6,7 @@
 	container-name: calendar-view;
 	container-type: inline-size;
 	--fc-page-bg-color: transparent;
-	--fc-neutral-bg-color: var(--color-hover);
+	--fc-neutral-bg-color: transparent;
 	--fc-neutral-text-color: var(--color-ink-muted);
 	--fc-border-color: var(--color-edge-muted);
 	--fc-event-bg-color: color-mix(
@@ -658,11 +658,6 @@
 	opacity: 0.5;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-day-sat,
-.calendar-view .fc .fc-dayGridMonth-view .fc-day-sun {
-	background: color-mix(in oklch, var(--color-ink) 2%, transparent);
-}
-
 .phone-month-page > .calendar-view {
 	visibility: hidden;
 }
@@ -754,8 +749,10 @@
 	height: auto;
 }
 
+/* The all-day lane ends before the timed card; only the timed grid has lines. */
+.calendar-view .fc .fc-timegrid .fc-daygrid-day,
 .calendar-view .fc .fc-timegrid .fc-daygrid-body {
-	border-bottom: var(--app-border-width) solid var(--fc-border-color);
+	border-width: 0;
 }
 
 .calendar-view .fc .fc-timegrid .fc-scrollgrid-section-liquid > td {
@@ -838,13 +835,9 @@
 	transform: none;
 }
 
-.calendar-view
-	.fc
-	.fc-timegrid-slots
-	tbody
-	tr:first-child
-	.fc-timegrid-slot-label-cushion {
-	visibility: hidden;
+/* The midnight label starts on the first line, rather than straddling the scroller edge. */
+.calendar-view .fc .fc-timegrid-slots tbody tr:first-child .fc-timegrid-slot-label-cushion {
+	transform: none;
 }
 
 .calendar-embed
@@ -874,6 +867,7 @@
 	--calendar-now-axis-radius: 0.125rem;
 	--calendar-now-axis-width: 0.625rem;
 	--calendar-now-expanded: 0;
+	height: 1px;
 	border: 0;
 	opacity: 1;
 	pointer-events: auto;
@@ -910,6 +904,7 @@
 	content: "";
 }
 
+/* FullCalendar clips the indicator and its accent stroke at this container's edge. */
 .calendar-view .fc .fc-timegrid-col .fc-timegrid-now-indicator-container {
 	overflow: visible;
 }
@@ -1012,9 +1007,9 @@ html[data-touch-device="true"] .calendar-view-content {
 }
 @media (max-width: 639px) {
 
-	/* Keep the grid full height; scroll content above the floating dock and New button. */
+	/* The floating chrome height is measured by the host; add only a small gap. */
 	.calendar-view .fc-timegrid-slots table {
-		margin-bottom: calc(var(--mobile-content-inset-bottom, 0px) + 6rem);
+		margin-bottom: calc(var(--mobile-content-inset-bottom, 0px) + var(--calendar-grid-bottom-gap, 12px));
 	}
 
 	/* The modal owns editing; the range ends remain visible behind its low sheet. */

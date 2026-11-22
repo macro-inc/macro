@@ -85,6 +85,37 @@ it('keeps hour geometry independent of horizontal page movement and follows vert
   expect(axis.faded()).toBe(false);
 });
 
+it('places the current-time label at the timed card line across scroll and paging', () => {
+  const { axis, scroller, moveHorizontal } = setup();
+  const line = document.createElement('div');
+  line.className = 'fc-timegrid-now-indicator-line';
+  line.innerHTML =
+    '<span class="calendar-now-time" data-axis-label="10:30">10:30 AM</span>';
+  scroller.append(line);
+  let lineTop = 254;
+  line.getClientRects = () =>
+    Object.assign([line.getBoundingClientRect()], {
+      item: (index: number) =>
+        index === 0 ? line.getBoundingClientRect() : null,
+    });
+  line.getBoundingClientRect = () => new DOMRect(46, lineTop, 344, 1);
+
+  moveHorizontal(-160);
+  expect(axis.state.now).toEqual({ text: '10:30', top: 567, height: 14 });
+  expect(axis.state.top + axis.currentTimeTop()!).toBe(lineTop);
+  expect(axis.state.top + axis.state.now!.top - axis.state.scrollTop + 7).toBe(
+    lineTop
+  );
+
+  scroller.scrollTop = 500;
+  lineTop = 174;
+  fireEvent.scroll(scroller);
+  moveHorizontal(0);
+  expect(axis.state.top + axis.state.now!.top - axis.state.scrollTop + 7).toBe(
+    lineTop
+  );
+});
+
 it('retires the old scroller listener with its owner', () => {
   const { axis, scroller } = setup();
   cleanup();

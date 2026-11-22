@@ -86,7 +86,7 @@ export function createMobileGridAxis(
         const now =
           indicator && clock && indicator.getClientRects().length > 0
             ? {
-                text: clock.textContent ?? '',
+                text: clock.dataset.axisLabel ?? clock.textContent ?? '',
                 top:
                   indicator.getBoundingClientRect().top -
                   box.top +
@@ -95,8 +95,18 @@ export function createMobileGridAxis(
                 height: 14,
               }
             : undefined;
+        // The line is portaled into the observed grid. Preserve its identity on
+        // unchanged measurements so its own DOM cannot trigger a measurement loop.
+        const currentNow = state.now;
+        const stableNow =
+          now &&
+          currentNow &&
+          now.top === currentNow.top &&
+          now.text === currentNow.text
+            ? currentNow
+            : now;
         setState({
-          now,
+          now: stableNow,
           top: box.top - boundaryBox.top,
           height: box.height,
           allDayTop: allDay
@@ -143,6 +153,10 @@ export function createMobileGridAxis(
   return {
     state,
     scrollElement,
+    currentTimeTop: () =>
+      state.now
+        ? state.now.top + state.now.height / 2 - state.scrollTop
+        : undefined,
     faded: () => state.scrollTop > state.openingScrollTop + 1,
   };
 }

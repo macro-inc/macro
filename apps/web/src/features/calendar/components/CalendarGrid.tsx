@@ -73,7 +73,14 @@ function CurrentTimeAxisIndicator(props: {
 }) {
   return (
     <span class="calendar-now-axis-indicator">
-      <span class="calendar-now-time">
+      <span
+        class="calendar-now-time"
+        data-axis-label={formatCompactCalendarTime(
+          props.date,
+          props.timeFormat,
+          false
+        )}
+      >
         {formatCalendarTime(props.date, props.timeFormat)}
       </span>
     </span>
