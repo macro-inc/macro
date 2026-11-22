@@ -171,6 +171,58 @@ it('reads each changed session row from the primary', async () => {
   expect(mocks.graphql).not.toHaveBeenCalled();
 });
 
+it('reads the rows again once a still-opening cache engine opens', async () => {
+  // A row written while the engine opens lands in line with list writes
+  // fetched before the change; only a read after it opens lands last.
+  let open = () => {};
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  let ready = false;
+  mocks.host.mockReturnValue({
+    isReady: () => ready,
+    whenReady: () => opened,
+  });
+  const pass = refreshAgentSessionLists('first');
+  await vi.waitFor(() => expect(mocks.row).toHaveBeenCalledTimes(1));
+  // Settle the pass's pending reads; nothing is read again until it opens.
+  for (let tick = 0; tick < 10; tick++) await Promise.resolve();
+  expect(mocks.row).toHaveBeenCalledTimes(1);
+  ready = true;
+  open();
+  await pass;
+  expect(mocks.row.mock.calls.map(([, variables]) => variables)).toEqual([
+    { sessionId: 'first' },
+    { sessionId: 'first' },
+  ]);
+  const reread = mocks.spans.find(
+    ({ name }) => name === 'agent_session.row_reread'
+  );
+  expect(reread).toMatchObject({
+    parent: 'agent_session.lists_refresh',
+    attrs: { 'agent_session.count': 1, 'graphql_cache.ready': true },
+  });
+  // The reread's row read is its own child, inside the same pass trace.
+  expect(
+    mocks.spans.filter(({ name }) => name === 'agent_session.row_read')
+  ).toEqual([
+    expect.objectContaining({ parent: 'agent_session.lists_refresh' }),
+    expect.objectContaining({ parent: 'agent_session.row_reread' }),
+  ]);
+});
+
+it('reads each row once when the cache engine is already open', async () => {
+  const whenReady = vi.fn(async () => {});
+  mocks.host.mockReturnValue({ isReady: () => true, whenReady });
+  await refreshAgentSessionLists('first');
+  expect(mocks.row).toHaveBeenCalledTimes(1);
+  expect(whenReady).not.toHaveBeenCalled();
+  expect(
+    mocks.spans.find(({ name }) => name === 'agent_session.lists_refresh')
+      ?.attrs['agent_session.lists_refresh.cache_opening']
+  ).toBe(false);
+});
+
 it('hydrates a REST row from the primary after its replica-backed lists refetch', async () => {
   mocks.cached.mockReturnValue({
     tag: 'agentSession',

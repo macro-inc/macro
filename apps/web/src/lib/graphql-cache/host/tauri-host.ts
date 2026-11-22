@@ -517,6 +517,14 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const ready = initialize();
+  let opened = false;
+  // Settles either way: a failed native init never opens.
+  const settled = ready.then(
+    () => {
+      opened = true;
+    },
+    () => undefined
+  );
   fireAndForget(
     (async () => {
       try {
@@ -556,6 +564,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
   return {
     clientId,
+    isReady: () => opened,
+    whenReady: () => settled,
     authority: {
       current: async () => {
         const context = Telemetry.captureContext();
