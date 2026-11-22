@@ -121,11 +121,11 @@ const SEARCH_WRITE_BATCH_SIZE: usize = 100;
 const SEARCH_LOAD: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2";
 const SEARCH_BROWSE: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?3";
 const SEARCH_BROWSE_AFTER: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 AND (timestamp_ms < ?3 OR (timestamp_ms = ?3 AND (__typename > ?4 OR (__typename = ?4 AND id > ?5)))) ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?6";
-/// An incomplete document of one partition that no optimistic layer shadows.
-/// Incomplete states are 1 to 3 (`projection_state_code`), so `state > 0`
-/// seeks the scope index to them instead of walking every complete document
-/// of the partition, as `state <> 0` does.
-const INCOMPLETE_SCOPE_DOCUMENT: &str = "SELECT 1 FROM index_documents AS d WHERE d.profile = ?1 AND d.partition = ?2 AND d.state > 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) LIMIT 1";
+/// An incomplete document of one partition that no optimistic layer shadows:
+/// any state but 0. Each side of the union seeks the scope index past the
+/// complete documents (`state <> 0` walks every one of them). Writers store
+/// 1 to 3, so the `state < 0` side only guards a malformed file.
+const INCOMPLETE_SCOPE_DOCUMENT: &str = "SELECT 1 FROM (SELECT d.record_key FROM index_documents AS d WHERE d.profile = ?1 AND d.partition = ?2 AND d.state > 0 UNION ALL SELECT d.record_key FROM index_documents AS d WHERE d.profile = ?1 AND d.partition = ?2 AND d.state < 0) AS d WHERE NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) LIMIT 1";
 const INDEX_DOCUMENT_UPSERT: &str = "INSERT INTO index_documents (record_key, profile, partition, state) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (record_key) DO UPDATE SET profile = excluded.profile, partition = excluded.partition, state = excluded.state RETURNING id";
 const INDEX_DOCUMENT_ID: &str = "SELECT id FROM index_documents WHERE record_key = ?1";
 const INDEX_DOCUMENT_DELETE: &str = "DELETE FROM index_documents WHERE record_key = ?1";

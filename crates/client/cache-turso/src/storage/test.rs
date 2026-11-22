@@ -2219,11 +2219,63 @@ fn incomplete_scope_check_seeks_to_incomplete_states() {
     .into_iter()
     .map(|row| required_text(&row, 3).unwrap())
     .collect::<Vec<_>>();
-    assert!(
-        details.iter().any(|detail| detail
-            .contains("index_documents_scope_idx (profile=? AND partition=? AND state>?)")),
-        "{details:#?}"
-    );
+    for bound in ["state>?", "state<?"] {
+        assert!(
+            details.iter().any(|detail| detail.contains(&format!(
+                "index_documents_scope_idx (profile=? AND partition=? AND {bound})"
+            ))),
+            "{details:#?}"
+        );
+    }
+}
+
+#[test]
+fn any_state_but_complete_makes_the_scope_incomplete() {
+    let storage = TursoStorage::open_in_memory("incomplete-scope-states").unwrap();
+    let token = |value| Token::new(value).unwrap();
+    let owner = || PredicateExpr::Exact {
+        attribute: token("owner"),
+        value: predicate_index::ExactValue::utf8("owner-1").unwrap(),
+    };
+    let query = ValidatedIndexQuery::new(predicate_index::IndexQuery {
+        profile: Profile::new(token("soup-flat-v1")),
+        partitions: vec![
+            predicate_index::PartitionPredicate {
+                partition: token("document"),
+                predicate: owner(),
+            },
+            predicate_index::PartitionPredicate {
+                partition: token("chat"),
+                predicate: owner(),
+            },
+        ],
+        sort_attribute: token("updated-at"),
+        sort_direction: SortDirection::Desc,
+        tie_break_direction: SortDirection::Desc,
+        limit: 20,
+    })
+    .unwrap();
+    let connection = storage.connection();
+    driver::execute(
+        &connection,
+        "INSERT INTO index_documents (record_key, profile, partition, state) VALUES ('GraphqlSoupDocument:1', 'soup-flat-v1', 'document', 0), ('GraphqlSoupChat:1', 'soup-flat-v1', 'chat', 0)",
+        Vec::new(),
+    )
+    .unwrap();
+    assert!(!predicate_scope_is_incomplete(&connection, &query).unwrap());
+    // 1 to 3 are what writers store; the others only a malformed file holds.
+    for state in [1, 2, 3, 7, -1] {
+        driver::execute(
+            &connection,
+            "UPDATE index_documents SET state = ?1 WHERE record_key = 'GraphqlSoupChat:1'",
+            vec![Value::from_i64(state)],
+        )
+        .unwrap();
+        assert!(
+            predicate_scope_is_incomplete(&connection, &query).unwrap(),
+            "state {state}"
+        );
+    }
 }
 
 #[test]
