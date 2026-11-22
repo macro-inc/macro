@@ -36,12 +36,17 @@ fn import_source(
 /// What the agent hears when an import plan could not be tied to its review.
 /// A run that cannot take a review is refused with its reason, so the agent
 /// tells the user instead of presenting an empty plan.
-fn attach_error(review: uuid::Uuid, error: import::domain::ports::ImportError) -> CodeModeError {
+fn attach_error(
+    review: uuid::Uuid,
+    source: import::domain::models::ImportSource,
+    error: import::domain::ports::ImportError,
+) -> CodeModeError {
     match error {
         import::domain::ports::ImportError::RunNotReviewable(refusal) => {
             tracing::info!(refusal = ?refusal, %review, "saved import review refused");
             CodeModeError::Unpresentable(format!(
-                "Review {review} was not presented: {refusal}. Tell the user why instead of presenting it again."
+                "Review {review} was not presented: {}. Tell the user why instead of presenting it again.",
+                refusal.describe(source)
             ))
         }
         error => {
@@ -55,10 +60,14 @@ fn attach_error(review: uuid::Uuid, error: import::domain::ports::ImportError) -
 
 /// The agent hears why an import review cannot be shown, and tells the user.
 /// Nothing was saved, so the message names no review.
-fn refused(refusal: &UnreviewableRun) -> CodeModeError {
+fn refused(
+    source: import::domain::models::ImportSource,
+    refusal: &UnreviewableRun,
+) -> CodeModeError {
     tracing::info!(refusal = ?refusal, "import review refused before it was saved");
     CodeModeError::Invalid(format!(
-        "The import review was not created: {refusal}. Tell the user why instead of presenting it again."
+        "The import review was not created: {}. Tell the user why instead of presenting it again.",
+        refusal.describe(source)
     ))
 }
 
@@ -117,13 +126,14 @@ where
         if record.kind() != ReviewKind::Import {
             return Ok(());
         }
-        let report = self.import_report(owner, import_source(record)?).await?;
+        let source = import_source(record)?;
+        let report = self.import_report(owner, source).await?;
         let refusal = match report.status {
             None => Some(UnreviewableRun::Missing),
-            Some(status) => UnreviewableRun::of(status, report.error),
+            Some(status) => UnreviewableRun::of(status, report.error_kind),
         };
         match refusal {
-            Some(refusal) => Err(refused(&refusal)),
+            Some(refusal) => Err(refused(source, &refusal)),
             None => Ok(()),
         }
     }
@@ -168,7 +178,10 @@ where
             .await
             .map_err(|error| match error {
                 import::domain::ports::ImportError::RunNotReviewable(refusal) => {
-                    CodeModeError::NotApprovable(format!("The import was not started: {refusal}."))
+                    CodeModeError::NotApprovable(format!(
+                        "The import was not started: {}.",
+                        refusal.describe(source)
+                    ))
                 }
                 error => CodeModeError::Invalid(error.to_string()),
             })
@@ -179,17 +192,13 @@ where
         record: &ReviewRecord,
     ) -> Result<(), CodeModeError> {
         if record.kind() == ReviewKind::Import {
+            let source = import_source(record)?;
             // The plan is tied to the review before the card appears, so the
             // card never shows a plan it cannot approve.
             self.import_service()?
-                .attach_workspace_review(
-                    owner,
-                    import_source(record)?,
-                    record.id.0,
-                    record.session_id,
-                )
+                .attach_workspace_review(owner, source, record.id.0, record.session_id)
                 .await
-                .map_err(|error| attach_error(record.id.0, error))?;
+                .map_err(|error| attach_error(record.id.0, source, error))?;
         }
         self.harness.present_tool(
             record.session_id,

@@ -46,6 +46,7 @@ where
         user: &MacroUserIdStr<'static>,
         to: RunStatus,
         error: Option<&str>,
+        error_kind: Option<RunErrorKind>,
     ) -> Result<bool> {
         // Read before the run moves: once it has, the rows still claimed go
         // back to staged and no longer say they were part of this write.
@@ -59,7 +60,7 @@ where
                 &[RunStatus::Importing, RunStatus::Dismissed],
                 to,
                 error,
-                None,
+                error_kind,
                 |run| {
                     let review = run.review?;
                     let settlement = settlement(source, &report, root_folder, run)?;

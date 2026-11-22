@@ -1285,8 +1285,9 @@ async fn a_review_is_refused_for_a_failed_or_missing_run_and_ties_nothing(pool: 
         .attach_review(&actor, ImportSource::Notion, review, session)
         .await;
     match failed {
-        Err(ImportError::RunNotReviewable(UnreviewableRun::Failed { error })) => {
-            assert_eq!(error.as_deref(), Some(reason));
+        Err(ImportError::RunNotReviewable(UnreviewableRun::Failed { error_kind })) => {
+            // A plain transition records no kind; the reason stays off it.
+            assert_eq!(error_kind, None);
         }
         other => panic!("expected a failed-run refusal, got {other:?}"),
     }
@@ -1461,8 +1462,8 @@ async fn only_the_ready_plan_a_review_holds_can_start_writing(pool: PgPool) {
         .start_reviewed_write(&actor, ImportSource::Notion, first)
         .await;
     match failed {
-        Err(ImportError::RunNotReviewable(UnreviewableRun::Failed { error })) => {
-            assert_eq!(error.as_deref(), Some("Notion was unreachable"));
+        Err(ImportError::RunNotReviewable(UnreviewableRun::Failed { error_kind })) => {
+            assert_eq!(error_kind, None);
         }
         other => panic!("expected a failed-run refusal, got {other:?}"),
     }
@@ -1540,5 +1541,146 @@ async fn a_plan_presented_while_ready_before_the_run_held_reviews_can_still_be_w
     assert_eq!(
         repo.list_runs(&actor).await.unwrap()[0].status,
         RunStatus::Importing
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_first_review_holds_a_plan_whatever_rows_an_older_review_left(pool: PgPool) {
+    let actor = ledger_actor(&pool, "review-hold").await;
+    let repo = PgImportRepo::new(pool.clone());
+    let session = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO agent_session (id, owner_id, bot_id, harness, model, workspace, for_warming) VALUES ($1, $2, '00000000-0000-0000-0000-00000000a2a2', 'macro-inmem', 'test-model', '/workspace', false)"#,
+        session,
+        actor.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (old, first, second) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+    for review in [old, first, second] {
+        sqlx::query!(
+            r#"INSERT INTO agent_session_review (id, agent_session_id, record) VALUES ($1, $2, '{}'::jsonb)"#,
+            review,
+            session,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let session = agent_session::domain::model::AgentSessionId::new_from_uuid(session);
+    assert!(
+        repo.start_run(&actor, ImportSource::Notion, &[])
+            .await
+            .unwrap()
+    );
+    let staged = repo
+        .replace_plan(
+            &actor,
+            ImportSource::Notion,
+            &[plan_row(
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                None,
+                "Engineering",
+            )],
+        )
+        .await
+        .unwrap();
+    // A staged row an earlier review's write left behind.
+    sqlx::query!(
+        "UPDATE import_entity SET review_id = $2 WHERE id = $1",
+        staged[0].id,
+        old,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        repo.transition_run(
+            &actor,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Ready,
+            None
+        )
+        .await
+        .unwrap()
+    );
+
+    // The run holds no review yet, so the first one presenting it takes it.
+    repo.attach_review(&actor, ImportSource::Notion, first, session)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.list_runs(&actor).await.unwrap()[0].review_id,
+        Some(first)
+    );
+    // Re-presenting the same review is fine; another review is refused.
+    repo.attach_review(&actor, ImportSource::Notion, first, session)
+        .await
+        .unwrap();
+    let elsewhere = repo
+        .attach_review(&actor, ImportSource::Notion, second, session)
+        .await;
+    assert!(
+        matches!(
+            elsewhere,
+            Err(ImportError::RunNotReviewable(
+                UnreviewableRun::PresentedElsewhere
+            ))
+        ),
+        "{elsewhere:?}"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_second_review_while_planning_is_refused(pool: PgPool) {
+    let actor = ledger_actor(&pool, "planning-hold").await;
+    let repo = PgImportRepo::new(pool.clone());
+    let session = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO agent_session (id, owner_id, bot_id, harness, model, workspace, for_warming) VALUES ($1, $2, '00000000-0000-0000-0000-00000000a2a2', 'macro-inmem', 'test-model', '/workspace', false)"#,
+        session,
+        actor.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (first, second) = (Uuid::now_v7(), Uuid::now_v7());
+    for review in [first, second] {
+        sqlx::query!(
+            r#"INSERT INTO agent_session_review (id, agent_session_id, record) VALUES ($1, $2, '{}'::jsonb)"#,
+            review,
+            session,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let session = agent_session::domain::model::AgentSessionId::new_from_uuid(session);
+    assert!(
+        repo.start_run(&actor, ImportSource::Notion, &[])
+            .await
+            .unwrap()
+    );
+    repo.attach_review(&actor, ImportSource::Notion, first, session)
+        .await
+        .unwrap();
+
+    let second_review = repo
+        .attach_review(&actor, ImportSource::Notion, second, session)
+        .await;
+    assert!(
+        matches!(
+            second_review,
+            Err(ImportError::RunNotReviewable(
+                UnreviewableRun::PresentedElsewhere
+            ))
+        ),
+        "{second_review:?}"
+    );
+    assert_eq!(
+        repo.list_runs(&actor).await.unwrap()[0].review_id,
+        Some(first)
     );
 }

@@ -83,11 +83,12 @@ pub enum UnreviewableRun {
     /// No plan was ever started for this source.
     #[error("there is no import plan to review; plan the import first")]
     Missing,
-    /// Planning failed; `error` says why (e.g. the grant lost access).
-    #[error("the import plan failed{}; nothing can be reviewed until it is planned again", .error.as_deref().map(|error| format!(": {error}")).unwrap_or_default())]
+    /// Planning failed; `error_kind` says why (e.g. the grant lost access).
+    /// Never carries the raw error, which can hold provider detail.
+    #[error("the import plan failed; nothing can be reviewed until it is planned again")]
     Failed {
-        /// The run's failure reason.
-        error: Option<String>,
+        /// Why the run failed, when it was recorded.
+        error_kind: Option<RunErrorKind>,
     },
     /// The plan is already being written.
     #[error("this import is already being written; there is no plan left to review")]
@@ -107,11 +108,28 @@ pub enum UnreviewableRun {
 }
 
 impl UnreviewableRun {
+    /// The refusal in a sentence for the agent: a failed plan says why from
+    /// its kind, for `source`.
+    pub fn describe(&self, source: ImportSource) -> String {
+        match self {
+            Self::Failed { error_kind } => format!(
+                "the import plan failed ({}); nothing can be reviewed until it is planned again",
+                RunErrorKind::explain(*error_kind, source)
+            ),
+            Self::Missing
+            | Self::Importing
+            | Self::Completed
+            | Self::Dismissed
+            | Self::StillPlanning
+            | Self::PresentedElsewhere => self.to_string(),
+        }
+    }
+
     /// Why a run in `status` cannot take a review, or `None` when it can.
-    pub fn of(status: RunStatus, error: Option<String>) -> Option<Self> {
+    pub fn of(status: RunStatus, error_kind: Option<RunErrorKind>) -> Option<Self> {
         match status {
             RunStatus::Running | RunStatus::Ready => None,
-            RunStatus::Failed => Some(Self::Failed { error }),
+            RunStatus::Failed => Some(Self::Failed { error_kind }),
             RunStatus::Importing => Some(Self::Importing),
             RunStatus::Completed => Some(Self::Completed),
             RunStatus::Dismissed => Some(Self::Dismissed),

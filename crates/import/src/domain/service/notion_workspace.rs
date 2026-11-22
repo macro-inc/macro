@@ -125,7 +125,6 @@ impl NotionApi for NoNotionApi {
     }
 }
 
-/// Run states a new plan or write may start from.
 /// Runs a new plan may replace. Never a write's guard: writing starts only
 /// from the review's own ready plan (`start_reviewed_write`).
 const SETTLED: [RunStatus; 4] = [
@@ -371,12 +370,13 @@ where
             return Ok(());
         }
         self.repo
-            .transition_run(
+            .transition_reviewed_run(
                 user,
-                self.workspace_source,
                 &[status],
                 RunStatus::Failed,
                 Some(IMPORT_STOPPED),
+                Some(RunErrorKind::Interrupted),
+                |_| None,
             )
             .await?;
         Err(ImportError::NotReady(
@@ -586,17 +586,19 @@ where
             }
             return;
         }
-        let (to, error) = match &outcome {
-            Ok(0) => (RunStatus::Completed, None),
+        let (to, error, kind) = match &outcome {
+            Ok(0) => (RunStatus::Completed, None, None),
             Ok(failed) => (
                 RunStatus::Completed,
                 Some(format!(
                     "{failed} objects could not be imported. Plan again to retry them."
                 )),
+                None,
             ),
             Err(error) => {
-                tracing::warn!(error = ?error, "notion import write failed");
-                (RunStatus::Failed, Some(failure_text(error)))
+                let kind = failure_kind(error);
+                tracing::warn!(error = ?error, kind = kind.as_ref(), "notion import write failed");
+                (RunStatus::Failed, Some(failure_text(error)), Some(kind))
             }
         };
         // Anything still claimed (a cancel, or a failure part way) goes back
@@ -618,7 +620,7 @@ where
                     .await;
             }
         }
-        if let Err(error) = self.end_write(user, to, error.as_deref()).await {
+        if let Err(error) = self.end_write(user, to, error.as_deref(), kind).await {
             tracing::warn!(error = ?error, "could not record the notion write outcome");
         }
         if self.workspace_source != ImportSource::Notion {
@@ -877,9 +879,8 @@ impl Place<'_> {
     }
 }
 
-/// A failure as the user reads it on the run or the row.
-/// The kind of a planning failure, recorded on the run for what the user and
-/// the agent are told.
+/// The kind of a plan or write failure, recorded on the run for what the
+/// user and the agent are told.
 pub(super) fn failure_kind(error: &ImportError) -> RunErrorKind {
     use import_notion::domain::ports::NotionError;
     use import_tracker::domain::model::TrackerError;
@@ -922,6 +923,7 @@ pub(super) fn failure_kind(error: &ImportError) -> RunErrorKind {
     }
 }
 
+/// A failure as the user reads it on the run or the row.
 fn failure_text(error: &ImportError) -> String {
     match error {
         ImportError::Other(error) => super::admission::failure_reason(error),

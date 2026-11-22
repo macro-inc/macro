@@ -158,6 +158,20 @@ impl NotionConnections for Connected {
     }
 }
 
+/// Notion refusing the connection, as it does a revoked token.
+struct Revoked;
+
+impl NotionConnections for Revoked {
+    type Api = Pages;
+
+    async fn for_user(
+        &self,
+        _: &MacroUserIdStr<'static>,
+    ) -> std::result::Result<Option<Pages>, NotionError> {
+        Err(NotionError::AccessLost)
+    }
+}
+
 struct AfterReplacement(Arc<Notify>);
 
 impl NotionConnections for AfterReplacement {
@@ -469,6 +483,7 @@ async fn a_run_that_keeps_stopping_is_given_up_with_its_rows_back_in_staged(pool
 
     assert_eq!(report.status, Some(RunStatus::Failed));
     assert_eq!(report.error.as_deref(), Some(IMPORT_STOPPED));
+    assert_eq!(report.error_kind, Some(RunErrorKind::Interrupted));
     assert_eq!(report.writing, 0);
     assert_eq!(report.waiting, 2, "both can be imported again");
 }
@@ -1008,4 +1023,42 @@ async fn a_failed_replan_leaves_the_old_card_unable_to_write(pool: PgPool) {
         repo.list_runs(&owner).await.unwrap()[0].status,
         RunStatus::Failed
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_write_that_loses_the_connection_records_why(pool: PgPool) {
+    let owner = user("write-revoked");
+    let (review, _) = approved_plan(&pool, &owner).await;
+    let repo = PgImportRepo::new(pool.clone());
+    assert!(
+        repo.transition_run(
+            &owner,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Ready,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    let tracker = TaskTracker::new();
+    let service = ImportServiceImpl::new(
+        PgImportRepo::new(pool.clone()),
+        Arc::new(NoConnector),
+        Arc::new(Writer::default()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Revoked))
+    .with_job_shutdown(tokio_util::sync::CancellationToken::new(), tracker.clone());
+
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+
+    let runs = repo.list_runs(&owner).await.unwrap();
+    assert_eq!(runs[0].status, RunStatus::Failed);
+    assert_eq!(runs[0].error_kind, Some(RunErrorKind::AccessLost));
 }

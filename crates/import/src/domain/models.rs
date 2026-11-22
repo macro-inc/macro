@@ -340,21 +340,46 @@ pub enum RunErrorKind {
     Unreachable,
     /// The AI work planning needs was refused (usage or billing).
     UsageRefused,
+    /// The run stopped before it finished (its process went away too
+    /// often); starting it again picks up what is left.
+    Interrupted,
     /// Anything else, on Macro's side.
     Internal,
 }
 
 impl RunErrorKind {
-    /// Whether reconnecting the source is the way out.
-    pub fn needs_reconnect(self) -> bool {
-        match self {
-            Self::AccessLost | Self::ConnectionUnavailable | Self::NotConnected => true,
-            Self::NotFound
-            | Self::Forbidden
-            | Self::RateLimited
-            | Self::Unreachable
-            | Self::UsageRefused
-            | Self::Internal => false,
+    /// Why a run failed, in a sentence for the agent, from its kind (`None`
+    /// for runs that failed before kinds were recorded). Never the raw error,
+    /// which can carry provider detail.
+    pub fn explain(kind: Option<Self>, source: ImportSource) -> String {
+        let name = source.label();
+        match kind {
+            Some(Self::NotFound) => format!(
+                "{name} said something the import needs is missing or isn't shared with Macro's connection"
+            ),
+            Some(Self::Forbidden) => {
+                format!("{name} doesn't let Macro's connection read part of the workspace")
+            }
+            Some(Self::AccessLost) => format!(
+                "{name} no longer accepts Macro's connection (it was revoked or expired), so the user needs to reconnect {name}"
+            ),
+            Some(Self::ConnectionUnavailable) => format!(
+                "Macro couldn't use the user's {name} connection, so the user needs to reconnect {name}"
+            ),
+            Some(Self::NotConnected) => {
+                format!("{name} isn't connected, so the user needs to connect it")
+            }
+            Some(Self::RateLimited) => {
+                format!("{name} kept rate limiting the import; it can be tried again later")
+            }
+            Some(Self::Unreachable) => format!("{name} couldn't be reached"),
+            Some(Self::UsageRefused) => {
+                "the AI work planning needs was refused (usage or billing)".to_string()
+            }
+            Some(Self::Interrupted) => {
+                "it stopped before it finished; starting it again picks up what is left".to_string()
+            }
+            Some(Self::Internal) | None => "something went wrong on Macro's side".to_string(),
         }
     }
 }

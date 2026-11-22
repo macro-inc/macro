@@ -132,6 +132,8 @@ struct Actions {
     action_started: tokio::sync::Notify,
     approvable: AtomicBool,
     fail_import: AtomicBool,
+    /// The import's write fence refuses the approved plan.
+    refuse_import: AtomicBool,
     /// Why a new review cannot be presented, when it cannot.
     refuse_presentation: Mutex<Option<String>>,
     /// Why a saved review can never be presented, found while presenting it.
@@ -203,6 +205,11 @@ impl ReviewActions for Actions {
         _: &ImportDraft,
     ) -> Result<ImportResult, CodeModeError> {
         self.act(account_holder, "import".into()).await;
+        if self.refuse_import.load(Ordering::SeqCst) {
+            return Err(CodeModeError::NotApprovable(
+                "The import was not started: the import plan failed.".into(),
+            ));
+        }
         if self.fail_import.load(Ordering::SeqCst) {
             return Err(invalid());
         }
@@ -273,6 +280,7 @@ impl Fixture {
             action_started: tokio::sync::Notify::new(),
             approvable: AtomicBool::new(true),
             fail_import: AtomicBool::new(false),
+            refuse_import: AtomicBool::new(false),
             refuse_presentation: Mutex::new(None),
             unpresentable: Mutex::new(None),
         });
@@ -1516,4 +1524,40 @@ async fn a_read_that_finds_a_review_can_never_be_presented_returns_it_settled() 
     );
     let read = f.service.read(&f.view(), record.id).await.unwrap();
     assert_eq!(read.items.states()[0].status, ReviewItemStatus::Dismissed);
+}
+
+#[tokio::test]
+async fn an_import_the_fence_refuses_goes_back_to_pending_with_why() {
+    let f = Fixture::new();
+    // Approvable when submitted; the plan failed before the write started.
+    f.actions.refuse_import.store(true, Ordering::SeqCst);
+    let row = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await
+        .unwrap();
+    f.service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            ReviewDecision::Submit {
+                revision: row.revision,
+                items: vec![],
+            },
+        )
+        .await
+        .unwrap();
+
+    let settled = f.settled(row.id).await;
+    let state = &settled.items.states()[0];
+    assert_eq!(state.status, ReviewItemStatus::Pending, "nothing started");
+    assert_eq!(
+        state.error.as_deref(),
+        Some("The import was not started: the import plan failed.")
+    );
 }

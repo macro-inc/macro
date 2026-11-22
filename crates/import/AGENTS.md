@@ -29,18 +29,19 @@ presents the review at once: the harness ties the staged rows and the
 take it too. Only a `running` or `ready` run takes a review: the harness checks
 the report before saving one, and `attach_review` refuses a run that is
 failed, being written, finished, cancelled or missing
-(`ImportError::RunNotReviewable`, a typed `UnreviewableRun` carrying the
-failure reason), so a failed plan never shows as an empty review. A ready
-run records the first review presenting it (`import_run.review_id`) and
-refuses any other (`PresentedElsewhere`). Writing starts only through
+(`ImportError::RunNotReviewable`, a typed `UnreviewableRun` carrying the kind, never the raw error), so a failed plan never shows as an empty
+review. The first review presenting a plan, while it is planned or once it is
+ready, holds it (`import_run.review_id`); any other is refused
+(`PresentedElsewhere`). Writing starts only through
 `start_reviewed_write`: one statement moves the run from `ready` to
 `importing` while that review holds it (or, for plans presented before the
 run recorded reviews, its staged rows do), and otherwise refuses typed
 (`StillPlanning`, `PresentedElsewhere`, failed, finished). `SETTLED` only
-says which runs a new plan may replace. A failed plan records its
-`RunErrorKind` (`import_run.error_kind`, from `failure_kind`); the report
-and runs carry it, and the agent's message and the web copy are written
-from the kind, never from `error`.
+says which runs a new plan may replace. A failed plan or write records its
+`RunErrorKind` (`import_run.error_kind`, from `failure_kind`; `Interrupted`
+when a run is given up on); the report and runs carry it, and the agent's
+messages (`RunErrorKind::explain`, `UnreviewableRun::describe`) and the web
+copy are written from the kind, never from `error`.
 Planning stages the whole tree as soon as the inventory is read,
 each row without a `decision` yet, then writes each decision-model batch's
 verdicts onto its rows as it lands (`update_plan_rows`); the report counts

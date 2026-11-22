@@ -11,5 +11,5 @@ ALTER TABLE import_run
     CHECK (error_kind IN (
         'not_found', 'forbidden', 'access_lost', 'connection_unavailable',
         'not_connected', 'rate_limited', 'unreachable', 'usage_refused',
-        'internal'
+        'interrupted', 'internal'
     ));

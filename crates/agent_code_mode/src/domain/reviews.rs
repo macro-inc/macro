@@ -750,15 +750,35 @@ impl ReviewService {
                         service.perform(&actor, &record, index).await
                     })
                     .await;
-                    let completed = match outcome {
-                        Ok(Ok(result)) => record.items.complete(index, result).is_ok(),
-                        _ => false,
+                    let (completed, not_started) = match outcome {
+                        Ok(Ok(result)) => (record.items.complete(index, result).is_ok(), None),
+                        // Refused before anything started: certain, not unknown.
+                        Ok(Err(CodeModeError::NotApprovable(reason))) => {
+                            tracing::info!(reason = %reason, "reviewed action refused before it started");
+                            (false, Some(reason))
+                        }
+                        Ok(Err(error)) => {
+                            tracing::warn!(error = ?error, "reviewed action failed");
+                            (false, None)
+                        }
+                        Err(_) => {
+                            tracing::warn!("reviewed action timed out");
+                            (false, None)
+                        }
                     };
                     if !completed
                         && let Some(item) = record.items.states_mut().get_mut(index)
                     {
-                        item.status = ReviewItemStatus::Unknown;
-                        item.error = Some("The submission outcome could not be confirmed. Check the destination before retrying.".into());
+                        match not_started {
+                            Some(reason) => {
+                                item.status = ReviewItemStatus::Pending;
+                                item.error = Some(reason);
+                            }
+                            None => {
+                                item.status = ReviewItemStatus::Unknown;
+                                item.error = Some("The submission outcome could not be confirmed. Check the destination before retrying.".into());
+                            }
+                        }
                     }
                     // A started import settles when its write ends; only one that
                     // could not start settles here.

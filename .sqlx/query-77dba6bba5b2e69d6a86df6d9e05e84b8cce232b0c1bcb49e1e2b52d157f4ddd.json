@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run\n            SET review_id = COALESCE(review_id, $3),\n                review_session_id = COALESCE(review_session_id, $4)\n            WHERE user_id = $1 AND source = $2 AND status IN ('running', 'ready')\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "77dba6bba5b2e69d6a86df6d9e05e84b8cce232b0c1bcb49e1e2b52d157f4ddd"
+}

@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT status::text AS \"status!\", error_kind, review_id\n            FROM import_run\n            WHERE user_id = $1 AND source = $2\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "error_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "review_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      true
+    ]
+  },
+  "hash": "cf56b8dea26362b2f790c18cfa06afee4bef5cc603adca4a6ddec895f477b8ee"
+}

@@ -8,7 +8,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::{ImportEntityDbRow, PgImportRepo, run_status_strings};
-use crate::domain::models::{ImportEntity, ImportSource, RunStatus, ScanCounts, TeamClaim};
+use crate::domain::models::{
+    ImportEntity, ImportSource, RunErrorKind, RunStatus, ScanCounts, TeamClaim,
+};
 use crate::domain::ports::{NotionPlanRepo, PlanRow, Result, UnreviewableRun};
 use std::str::FromStr;
 
@@ -237,45 +239,39 @@ impl NotionPlanRepo for PgImportRepo {
         // so the card never shows a plan nobody can approve.
         let run = sqlx::query!(
             r#"
-            SELECT run.status::text AS "status!", run.error, run.review_id,
-                   EXISTS (
-                       SELECT 1 FROM import_entity AS entity
-                       WHERE entity.user_id = run.user_id AND entity.source = run.source
-                         AND entity.status = 'staged' AND entity.metadata->'plan' IS NOT NULL
-                         AND entity.review_id IS NOT NULL AND entity.review_id <> $3
-                   ) AS "rows_presented_elsewhere!"
-            FROM import_run AS run
-            WHERE run.user_id = $1 AND run.source = $2
-            FOR UPDATE OF run
+            SELECT status::text AS "status!", error_kind, review_id
+            FROM import_run
+            WHERE user_id = $1 AND source = $2
+            FOR UPDATE
             "#,
             user.as_ref(),
             source.as_ref(),
-            review_id,
         )
         .fetch_optional(&mut *transaction)
         .await?
         .ok_or(UnreviewableRun::Missing)?;
         let status = RunStatus::from_str(&run.status)
             .map_err(|_| anyhow::anyhow!("unknown run status: {}", run.status))?;
-        if let Some(refusal) = UnreviewableRun::of(status, run.error) {
+        let error_kind = run
+            .error_kind
+            .map(|kind| {
+                RunErrorKind::from_str(&kind)
+                    .map_err(|_| anyhow::anyhow!("unknown run error kind: {kind}"))
+            })
+            .transpose()?;
+        if let Some(refusal) = UnreviewableRun::of(status, error_kind) {
             return Err(refusal.into());
         }
-        // A ready plan belongs to the review that presented it; another
-        // review would show it with none of its rows.
-        let held_elsewhere = match run.review_id {
-            Some(holder) => holder != review_id,
-            None => run.rows_presented_elsewhere,
-        };
-        if status == RunStatus::Ready && held_elsewhere {
+        // The first review presenting a plan holds it; another would show it
+        // with none of its rows and could never approve it.
+        if run.review_id.is_some_and(|holder| holder != review_id) {
             return Err(UnreviewableRun::PresentedElsewhere.into());
         }
         sqlx::query!(
             r#"
             UPDATE import_run
-            SET review_id = CASE WHEN status = 'running' THEN $3
-                                 ELSE COALESCE(review_id, $3) END,
-                review_session_id = CASE WHEN status = 'running' THEN $4
-                                         ELSE COALESCE(review_session_id, $4) END
+            SET review_id = COALESCE(review_id, $3),
+                review_session_id = COALESCE(review_session_id, $4)
             WHERE user_id = $1 AND source = $2 AND status IN ('running', 'ready')
             "#,
             user.as_ref(),
@@ -333,7 +329,7 @@ impl NotionPlanRepo for PgImportRepo {
         }
         // Nothing moved: say why, from the run as it is now.
         let run = sqlx::query!(
-            r#"SELECT status::text AS "status!", error FROM import_run WHERE user_id = $1 AND source = $2"#,
+            r#"SELECT status::text AS "status!", error_kind FROM import_run WHERE user_id = $1 AND source = $2"#,
             user.as_ref(),
             source.as_ref(),
         )
@@ -342,13 +338,20 @@ impl NotionPlanRepo for PgImportRepo {
         .ok_or(UnreviewableRun::Missing)?;
         let status = RunStatus::from_str(&run.status)
             .map_err(|_| anyhow::anyhow!("unknown run status: {}", run.status))?;
+        let error_kind = run
+            .error_kind
+            .map(|kind| {
+                RunErrorKind::from_str(&kind)
+                    .map_err(|_| anyhow::anyhow!("unknown run error kind: {kind}"))
+            })
+            .transpose()?;
         let refusal = match status {
             RunStatus::Running => UnreviewableRun::StillPlanning,
             RunStatus::Ready => UnreviewableRun::PresentedElsewhere,
             RunStatus::Failed
             | RunStatus::Importing
             | RunStatus::Completed
-            | RunStatus::Dismissed => UnreviewableRun::of(status, run.error)
+            | RunStatus::Dismissed => UnreviewableRun::of(status, error_kind)
                 .ok_or_else(|| anyhow::anyhow!("a {} run refused a write", run.status))?,
         };
         Err(refusal.into())

@@ -22,7 +22,7 @@ use uuid::Uuid;
 use super::super::notion_workspace::{CANCEL_CHECK_EVERY, write};
 use super::super::{AbortOnDrop, IMPORT_HEARTBEAT, ImportServiceImpl};
 use crate::domain::models::{
-    AdoptedRun, ImportSource, ImportStatus, NotionDecision, NotionJob, RunStatus,
+    AdoptedRun, ImportSource, ImportStatus, NotionDecision, NotionJob, RunErrorKind, RunStatus,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, NotionPlanRepo, NotionRunRepo, Result,
@@ -314,21 +314,27 @@ where
     async fn give_up(&self, user: &MacroUserIdStr<'static>, status: RunStatus) {
         tracing::warn!("giving up on a stalled workspace import");
         let failed = match status {
-            RunStatus::Importing => {
-                self.end_write(user, RunStatus::Failed, Some(IMPORT_STOPPED))
-                    .await
-            }
-            _ => {
-                self.repo
-                    .transition_run(
-                        user,
-                        self.workspace_source,
-                        &[status],
-                        RunStatus::Failed,
-                        Some(IMPORT_STOPPED),
-                    )
-                    .await
-            }
+            RunStatus::Importing => self
+                .end_write(
+                    user,
+                    RunStatus::Failed,
+                    Some(IMPORT_STOPPED),
+                    Some(RunErrorKind::Interrupted),
+                )
+                .await
+                .map(|_| ()),
+            _ => self
+                .repo
+                .transition_reviewed_run(
+                    user,
+                    &[status],
+                    RunStatus::Failed,
+                    Some(IMPORT_STOPPED),
+                    Some(RunErrorKind::Interrupted),
+                    |_| None,
+                )
+                .await
+                .map(|_| ()),
         };
         if let Err(error) = failed {
             tracing::warn!(error = ?error, "could not fail the stalled workspace import");
