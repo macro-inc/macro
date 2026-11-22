@@ -1,0 +1,63 @@
+crates/agent_egress/src/outbound/mcp_credentials/test.rs
+  s_8620e367135a73::t_f7b70bf0062d91 144,472
+crates/agent_harness/src/outbound/connected_apps/test.rs
+  s_8620e367135a73::t_0fffceb6ad7839 23
+crates/connectors/src/composition.rs
+  s_8620e367135a73::t_6afd613bb3c95e 11,225
+crates/connectors/src/domain/policy.rs
+  s_8620e367135a73::t_b6c88509d231d8 4,8,20,26,34,60,69-72
+crates/connectors/src/domain/policy/test.rs
+  s_8620e367135a73::t_2942a8e125c683 29,37-43,48-49,51-53,58-59,61-63,67-69,71,76,78
+crates/connectors/src/domain/ports.rs
+  s_8620e367135a73::t_ad70fdbdcb4cf3 209
+crates/connectors/src/domain/resolve.rs
+  s_8620e367135a73::t_475b57f535585a 30,35,63,75-76,164,168
+crates/connectors/src/domain/resolve/test.rs
+  s_8620e367135a73::t_eff96baaccc997 122-132,155-159,169-170,179,181,193,197,212,214,230,232,248,250,266,283,285,299,301,315,317,333-337,351,364,377,397,415,430,447,467,483,515,532,547,564,582,603,620,639,663,690,704,715,741,753,762,782,811,831,846,870,892-894,897,911-918
+crates/connectors/src/domain/resolve/test/properties.rs
+  s_8620e367135a73::t_d075b49546cf85 84-88,101-106,172,178-179,198,203,222,227,232,235,249,265,270,285,290,295,318,324,342,348,370,375
+crates/connectors/src/domain/service.rs
+  s_8620e367135a73::t_cbe5378930b6a9 13-14,16,145,149,152,157,159,213,223,236,243,263-264,268,270,274-277,289,328,332-334,368-372,376-377,383,497
+crates/connectors/src/domain/service/test.rs
+  s_8620e367135a73::t_627002a63e9c7e 7,138,907
+crates/connectors/src/fake.rs
+  s_8620e367135a73::t_e6fc379174cba1 12-14,146,152-155,220,294-296,298
+crates/connectors/src/inbound/axum_router/test.rs
+  s_8620e367135a73::t_12ad5981368dac 211
+crates/granola_sync/src/domain/service/test.rs
+  s_8620e367135a73::t_72f9dc16c5f362 323
+crates/granola_sync/src/outbound/accounts/test.rs
+  s_8620e367135a73::t_24490d36822525 35
+crates/granola_sync/src/outbound/api/test.rs
+  s_8620e367135a73::t_f00814be5a0a66 127
+crates/granola_sync/src/outbound/pg_repo/test.rs
+  s_8620e367135a73::t_8c60ce498caf29 258
+crates/import/src/outbound/mcp_slack_source/test.rs
+  s_8620e367135a73::t_96b53d821b4f46 644
+crates/import_linear/src/outbound/client/test.rs
+  s_8620e367135a73::t_ecca963f458bb4 98
+crates/import_notion/src/outbound/connected/test.rs
+  s_8620e367135a73::t_ad515a1cb2909c 109,125
+crates/import_tracker/src/outbound/connection/test.rs
+  s_8620e367135a73::t_84b7d3472c904e 118,136
+services/agent_harness_service/src/cognition/api/tool_selection/test.rs
+  s_8620e367135a73::t_3a6e4d70c17cdd 191
+services/agent_harness_service/src/routine_sessions/test.rs
+  s_8620e367135a73::t_c307bb0896fe33 60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8779a7d53ce0a90ba37b3e298cbe01371cd164d6",
+  "prompts": {},
+  "sessions": {
+    "s_8620e367135a73": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15e08697-488b-4482-984c-9df6826b2c36",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
