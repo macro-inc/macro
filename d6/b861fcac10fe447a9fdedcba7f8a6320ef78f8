@@ -1,0 +1,19 @@
+crates/agent_session/src/domain/action_history/test.rs
+  s_66bc7dfd939bb2::t_7444d6aa868e71 55-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d6b861fcac10fe447a9fdedcba7f8a6320ef78f8",
+  "prompts": {},
+  "sessions": {
+    "s_66bc7dfd939bb2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eeeb41d1-6a76-4cfc-8bcc-18dbe760419c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
