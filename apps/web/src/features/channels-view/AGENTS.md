@@ -13,7 +13,7 @@ Chat's desktop sidebar, mobile conversation lists, section membership, and route
 ## Data and loading
 
 - Seed sections from the channel directory only until the corresponding Soup source answers; an empty Soup page replaces the seed.
-- Resolve whole-membership actions (built-in section mute, snooze and read, section ids, scope checks) through `directory.readComplete(signal)`, aborted when the surface goes, or wait for `directory.complete()`: a filling directory holds only some channels.
+- Resolve whole-membership actions (built-in section mute, snooze and read, section ids, scope checks) through `directory.readComplete(signal)`, aborted when the surface goes or the viewer signs in again, or wait for `directory.complete()`: a filling directory holds only some channels.
 - Bound each seeded section to the normal first-page size and preserve membership and sorting; recreate the query graph and reference batches on account-session changes, including same-viewer reauthentication, without rebuilding for sort, cache, or tab changes.
 - Keep Soup's bounded unread projection and live updates authoritative; do not replace them with a full-list fetch.
 - Hydrate only referenced channels missing from the loaded sources.
