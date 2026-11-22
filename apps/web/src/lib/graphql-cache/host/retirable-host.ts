@@ -74,6 +74,9 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     get disabled() {
       return current.disabled;
     },
+    // A retired host routes to the no-op host, which is always ready.
+    isReady: () => current.isReady?.() ?? true,
+    whenReady: () => current.whenReady?.() ?? Promise.resolve(),
     currentRevision: () => current.currentRevision(),
     currentStorageGeneration: () => current.currentStorageGeneration(),
     readQuery: (args) => current.readQuery(args),

@@ -90,7 +90,7 @@ vi.mock('@queries/client', async () => {
 });
 
 import { AgentSessionRowDocument } from '@service-storage/graphql/generated/graphql';
-import { refreshAgentSessionLists } from './list-sync';
+import { CACHE_OPEN_WAIT_MS, refreshAgentSessionLists } from './list-sync';
 import { invalidateAgentSessionMetadata } from './session-metadata-sync';
 
 beforeEach(() => {
@@ -98,7 +98,10 @@ beforeEach(() => {
   mocks.host.mockReturnValue({});
   mocks.spans.length = 0;
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 it('coalesces a metadata burst into one REST list refresh', async () => {
   await Promise.all([
@@ -169,6 +172,132 @@ it('reads each changed session row from the primary', async () => {
     ],
   ]);
   expect(mocks.graphql).not.toHaveBeenCalled();
+});
+
+it('reads the rows again once a still-opening cache engine opens', async () => {
+  // A row written while the engine opens lands in line with list writes
+  // fetched before the change; only a read after it opens lands last.
+  let open = () => {};
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  let ready = false;
+  mocks.host.mockReturnValue({
+    isReady: () => ready,
+    whenReady: () => opened,
+  });
+  // The pass ends without waiting for the engine; nothing is read again
+  // until it opens.
+  await refreshAgentSessionLists('first');
+  for (let tick = 0; tick < 10; tick++) await Promise.resolve();
+  expect(mocks.row).toHaveBeenCalledTimes(1);
+  ready = true;
+  open();
+  await vi.waitFor(() => expect(mocks.row).toHaveBeenCalledTimes(2));
+  expect(mocks.row.mock.calls.map(([, variables]) => variables)).toEqual([
+    { sessionId: 'first' },
+    { sessionId: 'first' },
+  ]);
+  const reread = mocks.spans.find(
+    ({ name }) => name === 'agent_session.row_reread'
+  );
+  expect(reread).toMatchObject({
+    parent: 'agent_session.lists_refresh',
+    attrs: { 'agent_session.count': 1, 'graphql_cache.ready': true },
+  });
+  // The reread's row read is its own child, inside the same pass trace.
+  expect(
+    mocks.spans.filter(({ name }) => name === 'agent_session.row_read')
+  ).toEqual([
+    expect.objectContaining({ parent: 'agent_session.lists_refresh' }),
+    expect.objectContaining({ parent: 'agent_session.row_reread' }),
+  ]);
+});
+
+it('does not hold later passes while the cache engine opens', async () => {
+  vi.useFakeTimers();
+  mocks.host.mockReturnValue({
+    isReady: () => false,
+    whenReady: () => new Promise<void>(() => {}),
+  });
+  await refreshAgentSessionLists('first');
+  await refreshAgentSessionLists('second');
+  expect(mocks.rest.mock.calls.map(([ids]) => ids)).toEqual([
+    ['first'],
+    ['second'],
+  ]);
+  // Let the waiting reread give up, so it does not outlive this test.
+  await vi.advanceTimersByTimeAsync(CACHE_OPEN_WAIT_MS);
+});
+
+function openingHost() {
+  let open = () => {};
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  let ready = false;
+  mocks.host.mockReturnValue({ isReady: () => ready, whenReady: () => opened });
+  return () => {
+    ready = true;
+    open();
+  };
+}
+
+it('reads every session changed while the engine opens in one reread', async () => {
+  const open = openingHost();
+  await refreshAgentSessionLists('first');
+  await refreshAgentSessionLists('second');
+  open();
+  await vi.waitFor(() => expect(mocks.row).toHaveBeenCalledTimes(4));
+  for (let tick = 0; tick < 10; tick++) await Promise.resolve();
+  expect(mocks.row).toHaveBeenCalledTimes(4);
+  const rereads = mocks.spans.filter(
+    ({ name }) => name === 'agent_session.row_reread'
+  );
+  expect(rereads).toEqual([
+    expect.objectContaining({
+      attrs: expect.objectContaining({ 'agent_session.count': 2 }),
+    }),
+  ]);
+});
+
+it('queues the sessions again when the reread fails', async () => {
+  const open = openingHost();
+  await refreshAgentSessionLists('first');
+  mocks.row.mockRejectedValueOnce(new Error('primary unavailable'));
+  open();
+  // The failed reread queues a pass, which reads the row once more.
+  await vi.waitFor(() => expect(mocks.row).toHaveBeenCalledTimes(3));
+  expect(mocks.rest.mock.calls.map(([ids]) => ids)).toEqual([
+    ['first'],
+    ['first'],
+  ]);
+});
+
+it('gives up the reread when the cache engine does not open in time', async () => {
+  vi.useFakeTimers();
+  mocks.host.mockReturnValue({
+    isReady: () => false,
+    whenReady: () => new Promise<void>(() => {}),
+  });
+  await refreshAgentSessionLists('first');
+  await vi.advanceTimersByTimeAsync(CACHE_OPEN_WAIT_MS);
+  expect(mocks.row).toHaveBeenCalledTimes(1);
+  expect(
+    mocks.spans.find(({ name }) => name === 'agent_session.row_reread')?.attrs
+  ).toMatchObject({ 'graphql_cache.ready': false });
+});
+
+it('reads each row once when the cache engine is already open', async () => {
+  const whenReady = vi.fn(async () => {});
+  mocks.host.mockReturnValue({ isReady: () => true, whenReady });
+  await refreshAgentSessionLists('first');
+  expect(mocks.row).toHaveBeenCalledTimes(1);
+  expect(whenReady).not.toHaveBeenCalled();
+  expect(
+    mocks.spans.find(({ name }) => name === 'agent_session.lists_refresh')
+      ?.attrs['agent_session.lists_refresh.cache_opening']
+  ).toBe(false);
 });
 
 it('hydrates a REST row from the primary after its replica-backed lists refetch', async () => {

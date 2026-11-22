@@ -146,6 +146,13 @@ export interface CacheHost {
   readonly clientId: string;
   /** True for the storage-free fallback when browser cache APIs are unsupported. */
   readonly disabled?: boolean;
+  /** Whether the cache engine is open now. Writes made before it opens wait
+   * for it, so a reader that must see its write land last can check this.
+   * Absent on hosts that are always ready. */
+  isReady?(): boolean;
+  /** Settles once the engine is open, or once this host stops trying (fails
+   * or is disposed). Never rejects and never starts initialization. */
+  whenReady?(): Promise<void>;
 
   /** Returns the current revision of the active cache-engine generation. */
   currentRevision(): Promise<CacheRevision>;

@@ -311,6 +311,54 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('reports readiness once the engine opens, without starting it', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    expect(host.isReady?.()).toBe(false);
+    let opened = false;
+    const ready = host.whenReady?.().then(() => {
+      opened = true;
+    });
+    await Promise.resolve();
+    expect(opened).toBe(false);
+    expect(lastAdapter?.requests ?? []).toEqual([]);
+    // The first request starts initialization; readiness follows the handshake.
+    await host.currentStorageGeneration();
+    await ready;
+    expect(opened).toBe(true);
+    expect(host.isReady?.()).toBe(true);
+    await expect(host.whenReady?.()).resolves.toBeUndefined();
+    host.dispose();
+  });
+
+  it('settles readiness waiters when initialization fails', async () => {
+    vi.useFakeTimers();
+    configureAdapter = (fake) => {
+      fake.errors.set('init', 'OPFS initialization failed');
+    };
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+      onInitializationError: () => undefined,
+    });
+    const ready = host.whenReady?.();
+    const read = expect(
+      host.readQuery({ query: 'query Read { user }' })
+    ).rejects.toThrow('OPFS initialization failed');
+    await vi.runAllTimersAsync();
+    await read;
+    await expect(ready).resolves.toBeUndefined();
+    expect(host.isReady?.()).toBe(false);
+    host.dispose();
+  });
+
+  it('settles readiness waiters when the host is disposed first', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const ready = host.whenReady?.();
+    host.dispose();
+    await expect(ready).resolves.toBeUndefined();
+    expect(host.isReady?.()).toBe(false);
+  });
+
   it('notifies generation subscribers only when a live cache change resets storage', async () => {
     const host = createWorkerCacheHost({ scope: 'scope-1' });
     await host.currentStorageGeneration();

@@ -402,7 +402,40 @@ describe('createTauriCacheHost', () => {
     expect(onInitializationError).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'init failed' })
     );
+    // A failed engine never opens, but its readiness waiters settle.
+    await expect(host.whenReady?.()).resolves.toBeUndefined();
+    expect(host.isReady?.()).toBe(false);
     host.dispose();
+  });
+
+  it('reports readiness once native initialization completes', async () => {
+    const init = Promise.withResolvers<null>();
+    invokeMock.mockImplementation((command: string) =>
+      command === 'graphql_cache_init_with_schema'
+        ? init.promise
+        : Promise.resolve(null)
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    expect(host.isReady?.()).toBe(false);
+    const ready = host.whenReady?.();
+    init.resolve(null);
+    await ready;
+    expect(host.isReady?.()).toBe(true);
+    host.dispose();
+    expect(host.isReady?.()).toBe(false);
+  });
+
+  it('settles readiness waiters when disposed before native initialization completes', async () => {
+    invokeMock.mockImplementation((command: string) =>
+      command === 'graphql_cache_init_with_schema'
+        ? new Promise(() => {})
+        : Promise.resolve(null)
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const ready = host.whenReady?.();
+    host.dispose();
+    await ready;
+    expect(host.isReady?.()).toBe(false);
   });
 
   it('preserves the old queue and refuses writes when an OTA outpaces the native runtime', async () => {
