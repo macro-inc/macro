@@ -5,6 +5,7 @@ import { openThreadMessage } from '@channel/StandaloneThread/open-thread-message
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { useChannelName, useChannelType } from '@core/context/channels';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import { Button, Item, Card as UiCard } from '@ui';
 import { Card, CardBody } from '../../agent-cards/components/kit/card';
@@ -66,6 +67,9 @@ export function ChannelMessage(props: ChannelMessageProps) {
       ? rest
       : t('agentCards.channelThread');
   };
+  // Matches the label's `max-sm:hidden`: below `sm` (640 px) the button is an
+  // icon.
+  const iconOnly = isMobileWidth;
   const open = (messageId: string) =>
     openThreadMessage(
       orchestrator,
@@ -100,12 +104,17 @@ export function ChannelMessage(props: ChannelMessageProps) {
               variant="ghost"
               size="sm"
               aria-label={t('agentCards.openInChannel')}
-              // Above the card's corner: below, it covered the first message's
-              // time, and to the left, the channel name at phone width.
-              tooltip={{
-                content: t('agentCards.openInChannel'),
-                placement: 'top-end',
-              }}
+              // Only the icon-only form needs a tooltip; the labelled button would
+              // repeat itself. Above the card's corner it clears the channel name
+              // and the first message's time.
+              tooltip={
+                iconOnly()
+                  ? {
+                      content: t('agentCards.openInChannel'),
+                      placement: 'top-end',
+                    }
+                  : undefined
+              }
               onClick={() => open(props.messageId)}
             >
               <ArrowSquareOutIcon class="size-4 sm:hidden" aria-hidden="true" />
