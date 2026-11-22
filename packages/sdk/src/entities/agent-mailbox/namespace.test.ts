@@ -160,4 +160,24 @@ describe('agentMailbox', () => {
       ),
     ).toEqual(['k-1', 'k-1']);
   });
+
+  test('a send key is derived from a stable purpose, so a re-run of a program reuses it', () => {
+    const client = { email: {} } as unknown as MacroClient;
+    const purpose = 'reply to m-1 for task t-9';
+
+    const first = new AgentMailboxNamespace(client).sendKey(purpose);
+    const rerun = new AgentMailboxNamespace(client).sendKey(purpose);
+    const other = new AgentMailboxNamespace(client).sendKey(
+      'reply to m-2 for task t-9',
+    );
+
+    expect(first).toBe(rerun);
+    expect(first).not.toBe(other);
+    expect(first).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(() => new AgentMailboxNamespace(client).sendKey(' ')).toThrow(
+      'purpose',
+    );
+  });
 });

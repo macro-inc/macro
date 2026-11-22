@@ -13,8 +13,9 @@ export type AgentMailReplyOptions = {
   /** The owner's approving reply, quoted. Required on every send and reply. */
   userConfirmation: string;
   /**
-   * One key per reply, chosen before the first attempt (`crypto.randomUUID()`).
-   * Retry with the same key: the server sends it at most once.
+   * One key per reply, the same on every attempt: the server sends a key at
+   * most once. Derive it with `macro.agentMailbox.sendKey` from what the reply
+   * is for, never a random value a re-run of the program would mint again.
    */
   idempotencyKey: string;
 };
@@ -23,7 +24,7 @@ export type AgentMailReplyOptions = {
 export function requireIdempotencyKey(key: string | undefined): void {
   if (typeof key !== 'string' || key.length === 0) {
     throw new TypeError(
-      'idempotencyKey is required: pick one per message and reuse it on every retry',
+      'idempotencyKey is required: derive it with macro.agentMailbox.sendKey(purpose) and pass the same one on every retry',
     );
   }
 }
@@ -82,8 +83,8 @@ export class AgentMailMessage extends MacroEntity<MailMessage> {
 
   /**
    * Reply to this message from the agent's mailbox, after the owner approved
-   * the reply; quote their approval in `userConfirmation`, and retry with the
-   * same `idempotencyKey`.
+   * the reply; quote their approval in `userConfirmation`, and pass the same
+   * `idempotencyKey` (from `macro.agentMailbox.sendKey`) on every attempt.
    *
    * @send
    * @openworld

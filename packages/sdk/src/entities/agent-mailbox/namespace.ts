@@ -1,3 +1,4 @@
+import { v5 as uuidv5 } from 'uuid';
 import type { AgentMailboxResponse } from '../../../generated/email/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -16,12 +17,16 @@ export type AgentMailSendOptions = {
   /** The owner's approving reply, quoted. Required on every send and reply. */
   userConfirmation: string;
   /**
-   * One key per message, chosen before the first attempt (`crypto.randomUUID()`).
-   * Retry a failed or unanswered send with the same key: the server sends it
-   * at most once. A new key is a new message.
+   * One key per message, the same on every attempt: the server sends a key at
+   * most once. Each code-mode run is a new program, so derive it from what
+   * the send is for with `sendKey` (a task, turn or message id plus a
+   * purpose) rather than a random value a re-run would mint again.
    */
   idempotencyKey: string;
 };
+
+/** The UUID namespace agent mailbox send keys are derived in. */
+const SEND_KEY_NAMESPACE = '5b0f2d6e-8c1a-5e4f-9a7b-3d2c1e0f4a6b';
 
 /** One page of the agent's messages, newest first. */
 export type AgentMailPage = {
@@ -80,9 +85,29 @@ export class AgentMailboxNamespace {
   }
 
   /**
+   * The idempotency key for one send or reply, derived from a stable
+   * description of what it is for, so a re-run of the same program, or a
+   * later one doing the same job, sends it only once. Name the purpose with
+   * ids that do not change between runs.
+   *
+   * @example
+   * const key = macro.agentMailbox.sendKey(`reply to ${message.id} for task ${task.id}`);
+   * await message.reply({ textBody, userConfirmation, idempotencyKey: key });
+   * @mcp-exclude Derives a key locally with no request; an MCP call passes its own key.
+   */
+  sendKey(purpose: string): string {
+    if (purpose.trim().length === 0) {
+      throw new TypeError(
+        'sendKey needs a purpose: what this send is for, by stable ids',
+      );
+    }
+    return uuidv5(purpose, SEND_KEY_NAMESPACE);
+  }
+
+  /**
    * Send a new message from the mailbox, after the owner approved it; quote
-   * their approval in `userConfirmation`, and retry with the same
-   * `idempotencyKey`.
+   * their approval in `userConfirmation`, and pass the same `idempotencyKey`
+   * (from `sendKey`) on every attempt.
    *
    * @send
    * @openworld
