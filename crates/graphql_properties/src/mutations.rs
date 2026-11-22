@@ -558,7 +558,7 @@ where
     }
 
     /// Set a task property and return all dependency effects in one cache transaction.
-    #[tracing::instrument(name = "tasks.property.set", skip_all, fields(task_id = %input.entity_id), err(Debug))]
+    #[tracing::instrument(name = "tasks.property.set", skip_all, fields(task_id = tracing::field::Empty), err(Debug))]
     async fn set_task_property(
         &self,
         ctx: &Context<'_>,
@@ -571,6 +571,7 @@ where
         }
         let task_id = Uuid::parse_str(&input.entity_id)
             .map_err(|_| async_graphql::Error::new("Invalid task ID"))?;
+        tracing::Span::current().record("task_id", tracing::field::display(task_id));
         let definition_id = parse_id(input.property_definition_id, "propertyDefinitionId")?;
         if !matches!(
             definition_id,
