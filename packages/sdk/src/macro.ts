@@ -427,6 +427,7 @@ export type {
   ToolPermissionCatalog,
   ToolPermissionChange,
   ToolPermissionChanges,
+  ToolPermissionDefault,
   ToolPermissionGroup,
   ToolPermissionRule,
   ToolPermissionState,

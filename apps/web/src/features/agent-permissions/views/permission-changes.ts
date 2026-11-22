@@ -36,10 +36,11 @@ function changeName(
     }
     return toolKey(target);
   }
-  const group = catalog.groups.find((entry) => entry.id === target.group);
   const action = catalog.actions.find(
     (entry) => entry.action === target.action
   );
+  if (target.kind === 'action') return action?.name ?? target.action;
+  const group = catalog.groups.find((entry) => entry.id === target.group);
   return t('agentPermissions.controlLabel', {
     group: group?.name ?? target.group,
     action: action?.name ?? target.action,
@@ -54,6 +55,12 @@ function savedState(
 ) {
   const target = change.target;
   if (!view) return 'always';
+  if (target.kind === 'action') {
+    return (
+      view.defaults.find((entry) => entry.action === target.action)?.state ??
+      'always'
+    );
+  }
   if (target.kind === 'group_action') {
     return (
       actionPermission(groupPermissions(view, target.group), target.action)

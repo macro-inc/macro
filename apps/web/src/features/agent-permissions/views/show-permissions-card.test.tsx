@@ -107,7 +107,8 @@ describe('ShowPermissionsCard', () => {
           changes: [
             {
               target: { kind: 'group_action', group: 'email', action: 'send' },
-              state: 'always',
+              // Allow follows the (always) default: no explicit exception.
+              state: null,
             },
           ],
         },
