@@ -65,7 +65,7 @@ pub async fn get_property_definition(
 /// Returns None if the property doesn't exist, if the caller doesn't own it, or if it's a system property.
 /// The caller owns it when it is their user property, or a property of the team they belong to.
 /// System properties don't have owners and should be fetched via `get_property_definition`.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool, user_id))]
 pub async fn get_property_definition_with_owner(
     pool: &Pool<Postgres>,
     property_id: Uuid,
@@ -121,7 +121,7 @@ pub async fn get_property_definition_with_owner(
 
 /// Gets property definitions based on optional team and optional user access.
 /// Set `include_system` to true to also include system properties.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool, user_id))]
 pub async fn list_property_definitions(
     pool: &Pool<Postgres>,
     team_id: Option<Uuid>,
@@ -348,7 +348,7 @@ async fn read_property_definitions_with_options(
 
 /// Creates a new property definition, atomically creating any select options
 /// alongside it.
-#[tracing::instrument(skip(pool, options))]
+#[tracing::instrument(skip(pool, options, owner))]
 pub async fn create_property_definition(
     pool: &Pool<Postgres>,
     owner: PropertyDefinitionOwner<'_>,
@@ -470,7 +470,7 @@ pub async fn create_database_property_definition(
 /// A definition a user may bind as a column of `database_id`: a system one,
 /// their own, one of their teams', or one the database owns. `None` for
 /// anything else, which is indistinguishable from a missing definition.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, user_id), err)]
 pub async fn get_bindable_property_definition(
     pool: &Pool<Postgres>,
     property_definition_id: Uuid,
@@ -506,7 +506,7 @@ pub async fn get_bindable_property_definition(
 
 /// The definitions among `property_definition_ids` the user owns, directly
 /// or through a team they belong to; never a system or database-owned one.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, user_id), err)]
 pub async fn get_editable_property_definition_ids(
     pool: &Pool<Postgres>,
     property_definition_ids: &[Uuid],
@@ -611,7 +611,7 @@ pub(super) async fn create_property_option_tx(
 pub const TAG_DEFINITION_DISPLAY_NAME: &str = "Tags";
 
 /// Gets the single tag definition owned by the given owner, if it exists.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, owner), err)]
 pub async fn get_tag_definition(
     pool: &Pool<Postgres>,
     owner: PropertyDefinitionOwner<'_>,
@@ -669,7 +669,7 @@ pub async fn get_tag_definition(
 ///
 /// Tag definitions are TAG-typed, multi-select, and unique per owner (enforced by a partial
 /// unique index). A lost create race re-fetches the definition the winner just created.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, owner), err)]
 pub async fn get_or_create_tag_definition(
     pool: &Pool<Postgres>,
     owner: PropertyDefinitionOwner<'_>,
@@ -708,7 +708,7 @@ pub async fn get_or_create_tag_definition(
 
 /// Gets the tag definitions visible to a user — their own plus their teams' —
 /// with options attached. Team membership is resolved in the query.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool, user_id))]
 pub async fn get_caller_tag_definitions_with_options(
     pool: &Pool<Postgres>,
     user_id: &str,
