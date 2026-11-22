@@ -32,7 +32,14 @@ export type Act =
   | { k: 'send'; actor: PersonKey; key: Key; parent: Key | null }
   | { k: 'edit'; actor: PersonKey; target: Key; version: number }
   | { k: 'delete'; actor: PersonKey; target: Key }
-  | { k: 'react'; actor: PersonKey; target: Key; emoji: string };
+  | {
+      k: 'react';
+      actor: PersonKey;
+      target: Key;
+      emoji: string;
+      /** Set on a held reaction: what the page that made it asked for. */
+      add?: boolean;
+    };
 
 export type Outcome =
   /** The services have it. */
@@ -104,9 +111,9 @@ function change(state: State, act: Act, group: number): boolean {
   if (!target || target.deleted) return false;
   if (act.k === 'react') {
     const people = target.reactions[act.emoji] ?? [];
-    target.reactions[act.emoji] = people.includes(act.actor)
-      ? people.filter((person) => person !== act.actor)
-      : [...people, act.actor];
+    const add = act.add ?? !people.includes(act.actor);
+    const others = people.filter((person) => person !== act.actor);
+    target.reactions[act.emoji] = add ? [...others, act.actor] : others;
     return true;
   }
   if (target.author !== act.actor) return false;
@@ -247,7 +254,16 @@ export class Model {
     if (policy === 'drop') return 'dropped';
     const cut = this.cuts.get(act.actor as Windowed);
     if (!cut) throw new Error('a write is queued only on a cut device');
-    cut.pending.push({ act, place });
+    // A page asks for a reaction to be added or removed by what it shows,
+    // and two pages of one person can each ask for the same.
+    const held =
+      act.k === 'react'
+        ? {
+            ...act,
+            add: !this.hasReacted(act.actor, act.target, act.emoji, place),
+          }
+        : act;
+    cut.pending.push({ act: held, place });
     change(cut.frozen, act, group);
     return 'queued';
   }
