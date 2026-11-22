@@ -172,7 +172,6 @@ struct OtherScopes {
 /// Hold the request to the scopes the tokens beside the authenticating one
 /// sign or are stored with (`state`, when there is a database to look their
 /// correlations up in), and name the narrowest of them.
-
 async fn other_tokens_scope(
     state: Option<&CorrelationState>,
     specs: Option<&[&str]>,

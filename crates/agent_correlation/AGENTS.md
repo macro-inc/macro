@@ -68,8 +68,12 @@ code, not in its prompt. The harness also signs the scope into the credential
   run gets no unfurl host (harness `run_endpoints`), and a run under an
   allowlisted scope always goes through the egress proxy
   (`EgressRollout::egress_for`), so `--allow-net` names only the forwarder.
-  Other scoped runs follow the egress flag: going direct, they can still
-  reach `/unfurl` on the shared gateway origin until it rolls out. Under a scope whose
+  Other scoped runs follow the egress flag. Going direct, `--allow-net`
+  still names the shared gateway origin, so the only gate between them and
+  `/unfurl` there is the run bootstrap's in-process guard
+  (`code_execution`'s `bootstrap.mjs`), which a program that escapes the
+  sandbox's `fetch` gets past; the forwarder is the hard boundary only for
+  allowlisted scopes (mac-ujt). Under a scope whose
   `caps_document_tokens_to_view` is true (`job`), document tokens
   (`documents::encode_permission_token`, which also signs `agent_scope`)
   and collab-surface tokens (`encode_surface_token`) grant view only; the
