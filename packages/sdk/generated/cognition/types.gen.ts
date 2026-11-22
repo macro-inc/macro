@@ -1032,6 +1032,7 @@ export type ImportRun = {
      * Discovery failure detail, when the run failed.
      */
     error?: string | null;
+    error_kind?: null | RunErrorKind;
     /**
      * The review presenting the run's plan, once one does. A Notion plan is
      * presented while it is still `running`; rows staged after that take it.
@@ -1306,6 +1307,7 @@ export type NotionImportReport = {
      * Why the run failed, when it did.
      */
     error?: string | null;
+    errorKind?: null | RunErrorKind;
     /**
      * Objects that failed to import, with the failure.
      */
@@ -1798,6 +1800,13 @@ export type RejectToolCallRequest = {
  * The role of a message participant.
  */
 export type Role = 'user' | 'assistant' | 'system';
+
+/**
+ * Why a run failed, as a closed set readers branch on instead of the error
+ * text. Stored in `import_run.error_kind`; `None` on runs that failed
+ * before it was recorded.
+ */
+export type RunErrorKind = 'not_found' | 'forbidden' | 'access_lost' | 'connection_unavailable' | 'not_connected' | 'rate_limited' | 'unreachable' | 'usage_refused' | 'interrupted' | 'internal';
 
 /**
  * Outcome of accepting/declining staged rows via `POST /import/run`.

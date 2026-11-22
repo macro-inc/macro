@@ -6723,6 +6723,7 @@
           "rate_limited",
           "unreachable",
           "usage_refused",
+          "interrupted",
           "internal"
         ]
       },

@@ -50,6 +50,7 @@ vi.mock('@core/component/EntityIcon', () => ({
 }));
 vi.mock('@queries/pipedream-connectors', () => ({
   connectPipedreamApp: imports.connect,
+  usePipedreamOverlaysQuery: () => ({ isPending: true }),
 }));
 vi.mock('@queries/import', () => ({
   useImportQuery: () => ({
@@ -361,6 +362,23 @@ describe('import review', () => {
     expect(screen.queryByText(/Started by the agent/)).toBeNull();
   });
 
+  it('says why an approved import stopped, by its kind, never the raw error', () => {
+    imports.report = {
+      ...FAILED,
+      reviewId: 'review',
+      error: 'raw provider detail',
+      errorKind: 'interrupted',
+      imported: 1,
+      waiting: 2,
+    };
+    setup({ item: { status: 'completed' } });
+
+    expect(screen.getByRole('alert').textContent).toBe(
+      "Couldn't finish this import.It stopped before it finished. Start it again to pick up what is left."
+    );
+    expect(screen.queryByText(/raw provider detail/)).toBeNull();
+  });
+
   it('says what stays after the run was stopped', () => {
     imports.report = {
       status: 'dismissed',
@@ -448,6 +466,7 @@ describe('import review', () => {
       'rate_limited',
       'unreachable',
       'usage_refused',
+      'interrupted',
       'internal',
       null,
     ] as const) {
@@ -484,7 +503,11 @@ describe('import review', () => {
   });
 
   it('keeps the failure on a dismissed review and no rows waiting', () => {
-    imports.report = { ...FAILED, errorKind: 'access_lost' };
+    imports.report = {
+      ...FAILED,
+      reviewId: 'review',
+      errorKind: 'access_lost',
+    };
     setup({ item: { status: 'dismissed' } });
 
     expect(screen.getByRole('alert').textContent).toBe(
@@ -493,6 +516,14 @@ describe('import review', () => {
     expect(screen.queryByRole('list', { name: 'Import plan' })).toBeNull();
     expect(screen.queryByText('Waiting')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+  });
+
+  it('does not relabel a dismissed review with a later plan that failed', () => {
+    imports.report = { ...FAILED, errorKind: 'unreachable' };
+    setup({ item: { status: 'dismissed' } });
+
+    expect(screen.getByText('Dismissed — nothing was imported')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('saves who each object is shared with, down the tree', async () => {

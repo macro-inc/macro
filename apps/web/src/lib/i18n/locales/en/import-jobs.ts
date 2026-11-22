@@ -41,5 +41,6 @@ export default {
   failedRateLimited: 'Import failed: {{source}} is limiting requests',
   failedUnreachable: 'Import failed: {{source}} couldn’t be reached',
   failedUsageRefused: 'Import failed: AI usage was refused',
+  failedInterrupted: 'Import stopped before it finished',
   cancelled: 'Import cancelled',
 };

@@ -9,7 +9,10 @@ import {
   useImportQuery,
   useWorkspaceImportReportQuery,
 } from '@queries/import';
-import { connectPipedreamApp } from '@queries/pipedream-connectors';
+import {
+  connectPipedreamApp,
+  usePipedreamOverlaysQuery,
+} from '@queries/pipedream-connectors';
 import { ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { ImportPlanCard } from '../components/import-plan-card';
@@ -59,6 +62,9 @@ export function ImportReview(props: {
   });
   // Reconnecting runs the app's own connect flow for the source again; the
   // owner then asks the agent to plan again.
+  // Connecting reserves an overlaid app's tab inside the click, from the
+  // cached overlays, so they are loaded before the button is pressed.
+  usePipedreamOverlaysQuery();
   const [reconnecting, setReconnecting] = createSignal(false);
   const [reconnectFailed, setReconnectFailed] = createSignal(false);
   async function reconnect() {

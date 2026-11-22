@@ -83,6 +83,7 @@ function failedLabel(
       t('importJobs.failedUnreachable', { source: name })
     )
     .with('usage_refused', () => t('importJobs.failedUsageRefused'))
+    .with('interrupted', () => t('importJobs.failedInterrupted'))
     .with('internal', null, () => t('importJobs.failed'))
     .exhaustive();
 }

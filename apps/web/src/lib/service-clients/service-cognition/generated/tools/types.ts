@@ -3762,6 +3762,7 @@ export type RunErrorKind =
   | 'rate_limited'
   | 'unreachable'
   | 'usage_refused'
+  | 'interrupted'
   | 'internal';
 /**
  * What an imported item is in its source system. Each source has its own

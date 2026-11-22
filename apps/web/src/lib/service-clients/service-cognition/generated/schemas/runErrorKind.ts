@@ -22,5 +22,6 @@ export const RunErrorKind = {
   rate_limited: 'rate_limited',
   unreachable: 'unreachable',
   usage_refused: 'usage_refused',
+  interrupted: 'interrupted',
   internal: 'internal',
 } as const;

@@ -11,6 +11,7 @@ import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  failureCopy,
   type ImportDraft,
   type ImportedCopy,
   type ImportPlanEntry,
@@ -19,7 +20,6 @@ import {
   type ImportReviewPhase,
   type ImportTotal,
   type ImportVolume,
-  planFailureCopy,
   sourceLabel,
   volumeLabel,
 } from '../core/import-plan';
@@ -49,14 +49,15 @@ function ProgressBar(props: { done: number; total: number }) {
   );
 }
 
-/** A failed plan: a plain first line, then what happened, muted. */
-function PlanFailure(props: {
+/** A failed plan or write: a plain first line, then what happened, muted. */
+function Failure(props: {
+  stage: 'plan' | 'write';
   source: ImportDraft['source'];
   errorKind: RunErrorKind | null;
   /** Labelled `Dismissed` too, once the owner dismissed it. */
   dismissed: boolean;
 }) {
-  const copy = () => planFailureCopy(props.source, props.errorKind);
+  const copy = () => failureCopy(props.stage, props.source, props.errorKind);
   return (
     <div role="alert" class="flex min-w-0 flex-col gap-0.5">
       <p class="text-sm text-failure">
@@ -89,9 +90,9 @@ function PhaseStatus(props: {
   // Rebuild only when the phase changes, not on every progress tick.
   const kind = createMemo(() => props.phase.kind);
   const error = () =>
-    props.phase.kind === 'failed' || props.phase.kind === 'unknown'
-      ? props.phase.error
-      : null;
+    props.phase.kind === 'unknown' ? props.phase.error : null;
+  const writeFailure = () =>
+    props.phase.kind === 'failed' ? props.phase.errorKind : null;
   const planFailure = () =>
     match(props.phase)
       .with({ kind: 'planFailed' }, ({ errorKind }) => ({
@@ -146,9 +147,12 @@ function PhaseStatus(props: {
           </p>
         ))
         .with('failed', () => (
-          <p role="alert" class="text-sm text-failure">
-            {error()}
-          </p>
+          <Failure
+            stage="write"
+            source={props.source}
+            errorKind={writeFailure()}
+            dismissed={false}
+          />
         ))
         .with('planFailed', 'dismissed', () => (
           <Show
@@ -160,7 +164,8 @@ function PhaseStatus(props: {
             }
           >
             {(failure) => (
-              <PlanFailure
+              <Failure
+                stage="plan"
                 source={props.source}
                 errorKind={failure().errorKind}
                 dismissed={failure().dismissed}
@@ -332,7 +337,8 @@ function PlanContents(
     props.phase.kind === 'planFailed' || props.phase.kind === 'dismissed';
   const reconnect = () =>
     props.phase.kind === 'planFailed' &&
-    planFailureCopy(props.source ?? 'notion', props.phase.errorKind).reconnect;
+    failureCopy('plan', props.source ?? 'notion', props.phase.errorKind)
+      .reconnect;
   return (
     <>
       <header class="flex min-w-0 flex-col gap-0.5">

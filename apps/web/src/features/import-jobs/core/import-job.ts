@@ -22,8 +22,23 @@ export type ImportJobPhase =
   | { kind: 'failed'; errorKind: RunErrorKind | null }
   | { kind: 'cancelled' };
 
-/** How long a run that stopped moving stays in the tray. */
+/** How long a run waiting on the owner (a plan to approve) stays listed. */
 export const RECENT_MS = 60 * 60 * 1000;
+
+/** How long a finished or cancelled run stays listed, like a toast. */
+export const FINISHED_MS = 5 * 1000;
+
+/**
+ * How long after its last change a run that stopped moving stays listed:
+ * a finished one briefly, a failed one until it is dismissed.
+ */
+function listedFor(run: ImportRun): number {
+  return match(run.status)
+    .with('completed', 'dismissed', () => FINISHED_MS)
+    .with('failed', () => Number.POSITIVE_INFINITY)
+    .with('running', 'ready', 'importing', () => RECENT_MS)
+    .exhaustive();
+}
 
 export function isWorkspaceSource(
   source: ImportSource
@@ -43,8 +58,8 @@ export function isMoving(run: ImportRun, slackChannelsImporting: number) {
 }
 
 /**
- * The runs the tray lists: every moving run, and the rest while they
- * changed within `RECENT_MS` and were not dismissed.
+ * The runs the tray lists: every moving run, and the rest until dismissed
+ * or their listing time (`listedFor`) has passed.
  */
 export function visibleImportRuns(
   runs: readonly ImportRun[],
@@ -59,7 +74,7 @@ export function visibleImportRuns(
     if (options.dismissed.has(importJobKey(run))) return false;
 
     const age = options.now - Date.parse(run.updated_at);
-    return age < RECENT_MS;
+    return age < listedFor(run);
   });
 }
 
@@ -74,7 +89,8 @@ export function nextExpiry(
 ): number | null {
   const expiries = visible
     .filter((run) => !isMoving(run, slackChannelsImporting))
-    .map((run) => Date.parse(run.updated_at) + RECENT_MS);
+    .map((run) => Date.parse(run.updated_at) + listedFor(run))
+    .filter(Number.isFinite);
   return expiries.length === 0 ? null : Math.min(...expiries);
 }
 

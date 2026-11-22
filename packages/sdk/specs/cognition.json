@@ -5652,6 +5652,17 @@
             "type": ["string", "null"],
             "description": "Discovery failure detail, when the run failed."
           },
+          "error_kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunErrorKind",
+                "description": "Why the run failed, when it did and the kind was recorded."
+              }
+            ]
+          },
           "review_id": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -6071,6 +6082,17 @@
           "error": {
             "type": ["string", "null"],
             "description": "Why the run failed, when it did."
+          },
+          "errorKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunErrorKind",
+                "description": "The kind of failure, when the run failed and it was recorded. Show\nthe user copy for this, not `error`."
+              }
+            ]
           },
           "failures": {
             "type": "array",
@@ -6688,6 +6710,22 @@
         "type": "string",
         "description": "The role of a message participant.",
         "enum": ["user", "assistant", "system"]
+      },
+      "RunErrorKind": {
+        "type": "string",
+        "description": "Why a run failed, as a closed set readers branch on instead of the error\ntext. Stored in `import_run.error_kind`; `None` on runs that failed\nbefore it was recorded.",
+        "enum": [
+          "not_found",
+          "forbidden",
+          "access_lost",
+          "connection_unavailable",
+          "not_connected",
+          "rate_limited",
+          "unreachable",
+          "usage_refused",
+          "interrupted",
+          "internal"
+        ]
       },
       "RunImportOutcome": {
         "type": "object",

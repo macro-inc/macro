@@ -104,7 +104,8 @@ export type ImportReviewPhase =
   | { kind: 'importing' }
   | { kind: 'completed' }
   | { kind: 'stopped' }
-  | { kind: 'failed'; error: string }
+  /** An approved import's write failed; `errorKind` says why. */
+  | { kind: 'failed'; errorKind: RunErrorKind | null }
   /** `planFailure` when the plan had failed before it was dismissed. */
   | {
       kind: 'dismissed';
@@ -624,7 +625,7 @@ export function importReviewPhase(
         .with('dismissed', () => ({ kind: 'stopped' }))
         .with('failed', () => ({
           kind: 'failed',
-          error: progress?.error ?? 'The import failed.',
+          errorKind: progress?.errorKind ?? null,
         }))
         .with('importing', 'running', 'ready', () => ({ kind: 'importing' }))
         // Progress without a run status was counted from the rows because a
@@ -646,8 +647,8 @@ export function sourceLabel(source: ImportDraft['source']): string {
     .exhaustive();
 }
 
-/** What a failed plan's card says: a plain first line, then what happened. */
-export type PlanFailureCopy = {
+/** What a failed import's card says: a plain first line, then what happened. */
+export type FailureCopy = {
   headline: string;
   /** `null` when the server recorded no kind (an older host). */
   detail: string | null;
@@ -655,11 +656,12 @@ export type PlanFailureCopy = {
   reconnect: boolean;
 };
 
-/** Copy for a plan that failed with `errorKind`; never the raw error. */
-export function planFailureCopy(
+/** Copy for a plan or a write that failed with `errorKind`; never the raw error. */
+export function failureCopy(
+  stage: 'plan' | 'write',
   source: ImportDraft['source'],
   errorKind: RunErrorKind | null
-): PlanFailureCopy {
+): FailureCopy {
   const name = sourceLabel(source);
   const detail = match(errorKind)
     .returnType<string | null>()
@@ -693,11 +695,19 @@ export function planFailureCopy(
       'usage_refused',
       () => 'The AI work to plan it was refused. Check your plan’s usage.'
     )
+    .with(
+      'interrupted',
+      () =>
+        'It stopped before it finished. Start it again to pick up what is left.'
+    )
     .with('internal', () => 'Something went wrong on Macro’s side. Try again.')
     .with(null, () => null)
     .exhaustive();
   return {
-    headline: "Couldn't plan this import.",
+    headline:
+      stage === 'plan'
+        ? "Couldn't plan this import."
+        : "Couldn't finish this import.",
     detail,
     reconnect:
       errorKind === 'access_lost' || errorKind === 'connection_unavailable',

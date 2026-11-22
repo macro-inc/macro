@@ -3,6 +3,7 @@ import {
   alreadyInMacroSummary,
   buildPlanTree,
   EMPTY_IMPORT_DRAFT,
+  failureCopy,
   type ImportPlanEntry,
   type ImportProgress,
   importCount,
@@ -11,7 +12,6 @@ import {
   initiallyCollapsed,
   isShared,
   planCounts,
-  planFailureCopy,
   planningStatus,
   planSummary,
   planTotals,
@@ -376,20 +376,36 @@ describe('importReviewPhase', () => {
     ).toEqual({ kind: 'dismissed', planFailure: null });
   });
 
+  it('explains a write that failed by its kind', () => {
+    expect(failureCopy('write', 'notion', 'interrupted')).toEqual({
+      headline: "Couldn't finish this import.",
+      detail:
+        'It stopped before it finished. Start it again to pick up what is left.',
+      reconnect: false,
+    });
+    expect(failureCopy('write', 'notion', 'access_lost')).toEqual({
+      headline: "Couldn't finish this import.",
+      detail:
+        'Notion no longer accepts Macro’s connection. Reconnect Notion, then plan the import again.',
+      reconnect: true,
+    });
+    expect(failureCopy('write', 'jira', null).detail).toBeNull();
+  });
+
   it('explains each failure kind, offering a reconnect only for a lost connection', () => {
-    expect(planFailureCopy('notion', 'access_lost')).toEqual({
+    expect(failureCopy('plan', 'notion', 'access_lost')).toEqual({
       headline: "Couldn't plan this import.",
       detail:
         'Notion no longer accepts Macro’s connection. Reconnect Notion, then plan the import again.',
       reconnect: true,
     });
-    expect(planFailureCopy('notion', 'connection_unavailable')).toEqual({
+    expect(failureCopy('plan', 'notion', 'connection_unavailable')).toEqual({
       headline: "Couldn't plan this import.",
       detail:
         'Macro couldn’t use your Notion connection. Reconnect Notion, then plan the import again.',
       reconnect: true,
     });
-    expect(planFailureCopy('linear', null)).toEqual({
+    expect(failureCopy('plan', 'linear', null)).toEqual({
       headline: "Couldn't plan this import.",
       detail: null,
       reconnect: false,
@@ -401,9 +417,10 @@ describe('importReviewPhase', () => {
       'rate_limited',
       'unreachable',
       'usage_refused',
+      'interrupted',
       'internal',
     ] as const) {
-      const copy = planFailureCopy('notion', kind);
+      const copy = failureCopy('plan', 'notion', kind);
       expect(copy.reconnect, kind).toBe(false);
       expect(copy.detail, kind).toBeTruthy();
     }
@@ -428,9 +445,10 @@ describe('importReviewPhase', () => {
       importReviewPhase({ presentedAt: 1 }, completed, {
         ...progress,
         status: 'failed',
-        error: 'Notion is unreachable',
+        error: 'raw provider detail',
+        errorKind: 'interrupted',
       })
-    ).toEqual({ kind: 'failed', error: 'Notion is unreachable' });
+    ).toEqual({ kind: 'failed', errorKind: 'interrupted' });
     expect(
       importReviewPhase({ presentedAt: 1 }, completed, {
         ...progress,

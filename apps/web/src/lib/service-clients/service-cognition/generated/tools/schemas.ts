@@ -11414,6 +11414,7 @@ export const TrackerImportResponse = z.object({
             z.literal('rate_limited'),
             z.literal('unreachable'),
             z.literal('usage_refused'),
+            z.literal('interrupted'),
             z.literal('internal'),
           ];
           const errors = schemas.reduce<z.ZodError[]>(
@@ -11705,6 +11706,7 @@ export const ImportFromNotionResponse = z.object({
             z.literal('rate_limited'),
             z.literal('unreachable'),
             z.literal('usage_refused'),
+            z.literal('interrupted'),
             z.literal('internal'),
           ];
           const errors = schemas.reduce<z.ZodError[]>(
