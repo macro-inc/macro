@@ -1291,16 +1291,36 @@ async fn recover_adoption(
     recover_read_adoption(owner, adoption, from_version, counted).await
 }
 
+/// Why a recovery open could not read the adoption beside its files.
+#[derive(Debug)]
+enum AdoptionUnreadable {
+    Opfs(OpfsError),
+    #[cfg(test)]
+    Injected,
+}
+
+impl std::fmt::Display for AdoptionUnreadable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Opfs(error) => error.fmt(f),
+            #[cfg(test)]
+            Self::Injected => f.write_str("injected adoption read failure"),
+        }
+    }
+}
+
 /// Reads the adoption beside this owner's files for a recovery open.
-async fn read_adoption_for_recovery(owner: &mut OpfsOwner) -> Result<Option<Adoption>, String> {
+async fn read_adoption_for_recovery(
+    owner: &mut OpfsOwner,
+) -> Result<Option<Adoption>, AdoptionUnreadable> {
     #[cfg(test)]
     if ADOPTION_READ_FAILURES.with(|left| left.replace(left.get().saturating_sub(1)) > 0) {
-        return Err("injected adoption read failure".to_owned());
+        return Err(AdoptionUnreadable::Injected);
     }
     owner
         .read_adoption()
         .await
-        .map_err(|error| error.to_string())
+        .map_err(AdoptionUnreadable::Opfs)
 }
 
 /// Decides a readable adoption for a recovery open whose attempt is
@@ -1422,7 +1442,7 @@ async fn decide_adoption(mut owner: OpfsOwner, adoption: Adoption, from_version:
 async fn unreadable_adoption(
     scope: &str,
     mut owner: OpfsOwner,
-    error: String,
+    error: AdoptionUnreadable,
 ) -> Result<(OpfsOwner, Option<CarryForward>), JsValue> {
     let unknown = Some(CarryForward {
         kind: CarryForwardKind::Discarded,
