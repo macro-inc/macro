@@ -30,6 +30,11 @@ const mocks = vi.hoisted(() => ({
   bots: [] as Array<{ id: string }>,
 }));
 
+// The agent screen's View screen action has its own tests (agent-screen).
+vi.mock('@app/features/agent-screen/screen-user-action', () => ({
+  createScreenUserCardAction: () => () => undefined,
+}));
+
 vi.mock('@app/features/runtime-sharing/views/AgentRuntime', () => ({
   AgentRuntime: () => null,
 }));
