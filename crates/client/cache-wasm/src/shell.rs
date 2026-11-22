@@ -36,7 +36,10 @@ use soup_filter_cache_adapter::{
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use turso_opfs::{AdoptOutcome, OpenResult, OpfsError, OpfsErrorKind, OpfsOwner, PendingOutcome};
+use turso_opfs::{
+    AdoptOutcome, Adoption, AdoptionState, OpenResult, OpfsError, OpfsErrorKind, OpfsOwner,
+    PreviousLock, ReturnOutcome,
+};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
@@ -138,7 +141,7 @@ impl From<TursoStorageOpenOutcome> for CacheOpenOutcome {
 struct CarryForward {
     kind: CarryForwardKind,
     /// The older storage version involved, when known: it is not when an
-    /// unfinished move's journal could not be read.
+    /// unfinished move's marker could not be read.
     from_storage_version: Option<u32>,
 }
 
@@ -155,23 +158,26 @@ impl CarryForward {
 enum CarryForwardKind {
     /// It now sits at this build's identity and was opened from there.
     Moved,
-    /// An earlier open moved it, or began to, and never finished; this open
-    /// completed the move and opened it.
+    /// An earlier open moved it, or began to, and its first open here never
+    /// finished; this open completed the move and opened it.
     Resumed,
-    /// A context of the older build holds it, so this build started empty, or
-    /// reset the half of it an interrupted move left here.
+    /// A context of the older build holds it, so this build started empty.
     OlderInUse,
     /// This browser cannot move OPFS files, so this build started empty.
     Unsupported,
-    /// It does not start like a database and its WAL, so it stayed where it
-    /// is and this build started empty.
+    /// Its headers are not ones Turso opens, so it stayed where it is and this
+    /// build started empty.
     Unreadable,
-    /// Moving it failed, so this build started empty or reset.
+    /// Moving it, or reading whether a move is unfinished, failed. This build
+    /// started empty, or, when moved files may be here, failed the open
+    /// without deleting them.
     Failed,
-    /// It never opened here, so it went back to the older build's identity
-    /// and this build started empty.
+    /// Its first open here failed before this build wrote to it, so it went
+    /// back to the older build's identity and this build started empty.
     Returned,
-    /// It never opened here and could not go back, so this build reset it.
+    /// It cannot go back: this build already upgraded it, the older build
+    /// holds or reused its identity, or the WAL that belongs with a split
+    /// move's main file changed. This build reset it.
     Discarded,
 }
 
@@ -732,14 +738,39 @@ struct OpenedStorage {
     returned: Option<CarryForward>,
 }
 
-/// Opens this owner's files, resetting them when they cannot be used. With
-/// `adoption_pending`, the files may have just moved here from an older
-/// identity: a successful open ends that adoption, and an open that would
-/// reset them first hands them back to where they came from.
+/// Whether files an adoption brought to this build's identity have not opened
+/// here yet, as [`carry_forward`] leaves them for [`open_storage`].
+enum Pending {
+    /// No adoption marker sits beside this build's files.
+    None,
+    /// The files came from `identity`, written at storage `from_version`.
+    /// `previous` holds that identity's lock when it was free, which keeps the
+    /// older build away from its paths until this open ends.
+    Moved {
+        identity: String,
+        from_version: u32,
+        previous: Option<PreviousLock>,
+    },
+    /// Whether a marker sits there could not be read.
+    Unknown,
+}
+
+/// Releases `lock`, if any. Best effort: a lock that fails to release is let go
+/// when the worker ends, and holding it only keeps the older build waiting.
+async fn release_previous(lock: Option<PreviousLock>) {
+    if let Some(lock) = lock {
+        let _ = lock.release().await;
+    }
+}
+
+/// Opens this owner's files, resetting them when they cannot be used. When
+/// `pending` says the files just moved here, a successful open ends that
+/// adoption, and an open that would reset them first hands them back to the
+/// identity they came from if they are still what the older build wrote.
 async fn open_storage(
     scope: &str,
     owner: OpfsOwner,
-    adoption_pending: bool,
+    pending: Pending,
 ) -> Result<OpenedStorage, JsValue> {
     let mut returned = None;
     let (owner, reset_outcome) = match open_owner(owner).await? {
@@ -747,11 +778,15 @@ async fn open_storage(
             let connected = session.connect().map_err(err_js)?;
             match TursoStorage::from_opfs_session_with_outcome(connected, scope) {
                 Ok((storage, outcome)) => {
-                    if adoption_pending {
-                        // Best effort: a journal left behind only makes a
-                        // later recovery open hand these files back to the
-                        // older identity instead of deleting them.
+                    if !matches!(pending, Pending::None) {
+                        // Best effort: a marker left behind makes the next
+                        // open report a resumed move once, and a later
+                        // failing open compare the stored version, which
+                        // this open advanced, before handing anything back.
                         let _ = storage.finish_adoption().await;
+                    }
+                    if let Pending::Moved { previous, .. } = pending {
+                        release_previous(previous).await;
                     }
                     return Ok(OpenedStorage {
                         storage,
@@ -771,34 +806,69 @@ async fn open_storage(
                             .physical_reset_reason()
                             .expect("reset-required error has a reset reason"),
                     );
-                    let owner = if adoption_pending {
-                        // These files never opened here, and they may hold
-                        // the only copy of the older build's queue: hand
-                        // them back before starting this build afresh, as
-                        // it would have without the move.
-                        let mut owner = failure.preserve().map_err(err_js)?;
-                        returned = return_adoption(scope, &mut owner).await;
-                        owner
-                            .recovery_wipe()
-                            .await
-                            .map_err(|failure| storage_err_js(failure.error()))?
-                    } else {
-                        failure
+                    let owner = match pending {
+                        Pending::None => failure
                             .reset()
                             .await
-                            .map_err(|failure| storage_err_js(failure.error()))?
+                            .map_err(|failure| storage_err_js(failure.error()))?,
+                        Pending::Unknown => {
+                            // Files that may have just moved here could hold
+                            // the only copy of the older build's queue: keep
+                            // them for a recovery open to hand back.
+                            let owner = failure.preserve().map_err(err_js)?;
+                            owner.release().await.map_err(err_js)?;
+                            return Err(err_js("cache storage adoption state is unreadable"));
+                        }
+                        Pending::Moved {
+                            identity,
+                            from_version,
+                            previous,
+                        } => {
+                            let stored = failure.stored_storage_version();
+                            // The close checkpoints, so a returned file is
+                            // self-contained.
+                            let mut owner = failure.preserve().map_err(err_js)?;
+                            let handed =
+                                hand_back(&mut owner, &identity, from_version, stored, previous)
+                                    .await;
+                            let kind = match handed {
+                                Ok(kind) => kind,
+                                Err(error) => {
+                                    // The marker stays, so a recovery open
+                                    // tries again before it wipes.
+                                    owner.release().await.map_err(err_js)?;
+                                    return Err(storage_err_js(&error));
+                                }
+                            };
+                            returned = Some(CarryForward::new(kind, from_version));
+                            owner
+                                .recovery_wipe()
+                                .await
+                                .map_err(|failure| storage_err_js(failure.error()))?
+                        }
                     };
                     (owner, outcome)
                 }
             }
         }
-        OpenResult::ResetRequired(session) => (
-            session
-                .reset()
-                .await
-                .map_err(|failure| storage_err_js(failure.error()))?,
-            CacheOpenOutcome::ResetStorageUncertain,
-        ),
+        OpenResult::ResetRequired(session) => {
+            if let Pending::Moved {
+                from_version,
+                previous,
+                ..
+            } = pending
+            {
+                returned = Some(CarryForward::new(CarryForwardKind::Discarded, from_version));
+                release_previous(previous).await;
+            }
+            (
+                session
+                    .reset()
+                    .await
+                    .map_err(|failure| storage_err_js(failure.error()))?,
+                CacheOpenOutcome::ResetStorageUncertain,
+            )
+        }
     };
 
     match open_owner(owner).await? {
@@ -836,6 +906,37 @@ async fn open_storage(
     }
 }
 
+/// Moves files that failed their first open here back to `identity`, when
+/// that open left them at `from_version` (`stored`), the version they were
+/// moved at: then nothing this build wrote is in them, and the older build
+/// opens them as it left them. Otherwise, or when the older build holds or has
+/// reused its identity, they are this build's to discard.
+async fn hand_back(
+    owner: &mut OpfsOwner,
+    identity: &str,
+    from_version: u32,
+    stored: Option<u32>,
+    previous: Option<PreviousLock>,
+) -> Result<CarryForwardKind, OpfsError> {
+    if stored != Some(from_version) {
+        release_previous(previous).await;
+        return Ok(CarryForwardKind::Discarded);
+    }
+    let previous = match previous {
+        Some(lock) => Some(lock),
+        None => owner.lock_previous(identity).await?,
+    };
+    let Some(previous) = previous else {
+        return Ok(CarryForwardKind::Discarded);
+    };
+    let outcome = owner.return_adoption(&previous).await;
+    release_previous(Some(previous)).await;
+    Ok(match outcome? {
+        ReturnOutcome::Returned => CarryForwardKind::Returned,
+        ReturnOutcome::Refused => CarryForwardKind::Discarded,
+    })
+}
+
 /// Waits until the caller may touch storage while this owner holds the lock.
 /// Holding the lock only proves no other engine uses the files; the browser
 /// coordinator must also record that this engine's epoch may change them.
@@ -856,11 +957,39 @@ async fn await_storage_grant(
     }
 }
 
-/// What [`carry_forward`] did, and whether an adoption journal may sit beside
-/// this build's files, to be ended once they open.
+/// What [`carry_forward`] did, and the adoption it leaves for the open.
 struct Carried {
     report: Option<CarryForward>,
-    adoption_pending: bool,
+    pending: Pending,
+}
+
+impl Carried {
+    const fn nothing() -> Self {
+        Self {
+            report: None,
+            pending: Pending::None,
+        }
+    }
+
+    const fn reported(kind: CarryForwardKind, from_storage_version: Option<u32>) -> Self {
+        Self {
+            report: Some(CarryForward {
+                kind,
+                from_storage_version,
+            }),
+            pending: Pending::None,
+        }
+    }
+
+    const fn unknown(from_storage_version: Option<u32>) -> Self {
+        Self {
+            report: Some(CarryForward {
+                kind: CarryForwardKind::Failed,
+                from_storage_version,
+            }),
+            pending: Pending::Unknown,
+        }
+    }
 }
 
 /// The storage version in the name of one of this scope's databases.
@@ -868,84 +997,217 @@ fn previous_storage_version(scope: &str, identity: &str) -> Option<u32> {
     storage_version(&legacy_cache_database_name(scope), identity).map(|(_, _, storage)| storage)
 }
 
+/// The storage version of `identity` when it names a database of this scope
+/// this build upgrades in place: the only identities it adopts from.
+fn upgradable_storage_version(scope: &str, identity: &str) -> Option<u32> {
+    previous_storage_version(scope, identity).filter(|&version| {
+        cache_turso::storage_version_upgradable(version)
+            && cache_database_name(scope, version) == identity
+    })
+}
+
 /// Moves this scope's newest older database to this build's identity when this
 /// build has none yet, so the open upgrades it in place instead of starting
-/// empty. An adoption an earlier open began and never finished is completed
+/// empty. An adoption an earlier open began and never finished is resumed
 /// first. Otherwise only storage versions this build can upgrade are tried,
 /// newest first, and the first one that exists decides. When the move does not
 /// happen, this build starts empty, as it did before upgrades existed; files
 /// that moved but fail their first open go back ([`open_storage`]).
 async fn carry_forward(scope: &str, owner: &mut OpfsOwner) -> Carried {
-    let resume_failed = match owner.resume_adoption().await {
-        Ok(None) => false,
-        Ok(Some(pending)) => {
-            let from_storage_version = previous_storage_version(scope, &pending.previous_identity);
-            let kind = match pending.outcome {
-                PendingOutcome::Complete => CarryForwardKind::Resumed,
-                // An older build's context took its identity back meanwhile;
-                // whatever half is here resets on open.
-                PendingOutcome::Blocked | PendingOutcome::Returned => CarryForwardKind::OlderInUse,
-            };
-            return Carried {
-                report: Some(CarryForward {
-                    kind,
-                    from_storage_version,
-                }),
-                adoption_pending: true,
-            };
-        }
-        // Whether an adoption is pending is unknown; try the ordinary move,
-        // which never overwrites, and end any journal once the files open.
-        Err(_) => true,
-    };
-    let mut carried = Carried {
-        report: resume_failed.then_some(CarryForward {
-            kind: CarryForwardKind::Failed,
-            from_storage_version: None,
-        }),
-        adoption_pending: resume_failed,
-    };
+    match owner.read_adoption().await {
+        Ok(None) => {}
+        Ok(Some(adoption)) => return resume(scope, owner, adoption).await,
+        Err(_) => return Carried::unknown(None),
+    }
+    match owner.main_file_exists().await {
+        Ok(false) => {}
+        Ok(true) => return Carried::nothing(),
+        Err(_) => return Carried::reported(CarryForwardKind::Failed, None),
+    }
     let Some(oldest) = cache_turso::oldest_upgradable_storage_version() else {
-        return carried;
+        return Carried::nothing();
     };
-    for from_storage_version in (oldest..cache_turso::STORAGE_SCHEMA_VERSION).rev() {
-        let previous = cache_database_name(scope, from_storage_version);
-        let kind = match owner.adopt_previous(&previous).await {
-            Ok(AdoptOutcome::NothingToAdopt) => continue,
-            Ok(AdoptOutcome::TargetExists) => return carried,
-            Ok(AdoptOutcome::Adopted) => CarryForwardKind::Moved,
-            Ok(AdoptOutcome::PreviousInUse) => CarryForwardKind::OlderInUse,
+    for from_version in (oldest..cache_turso::STORAGE_SCHEMA_VERSION).rev() {
+        let identity = cache_database_name(scope, from_version);
+        let previous = match owner.lock_previous(&identity).await {
+            Ok(Some(previous)) => previous,
+            Ok(None) => return Carried::reported(CarryForwardKind::OlderInUse, Some(from_version)),
+            Err(_) => return Carried::reported(CarryForwardKind::Failed, Some(from_version)),
+        };
+        let kind = match owner.adopt(&previous).await {
+            Ok(AdoptOutcome::Adopted) => {
+                return Carried {
+                    report: Some(CarryForward::new(CarryForwardKind::Moved, from_version)),
+                    pending: Pending::Moved {
+                        identity,
+                        from_version,
+                        previous: Some(previous),
+                    },
+                };
+            }
+            Ok(AdoptOutcome::NothingToAdopt) => {
+                release_previous(Some(previous)).await;
+                continue;
+            }
+            Ok(AdoptOutcome::TargetExists) => {
+                release_previous(Some(previous)).await;
+                return Carried::nothing();
+            }
             Ok(AdoptOutcome::Unsupported) => CarryForwardKind::Unsupported,
             Ok(AdoptOutcome::Unreadable) => CarryForwardKind::Unreadable,
-            Err(_) => CarryForwardKind::Failed,
+            // A move that failed between its two renames, and could not put
+            // the main file back, leaves a split adoption to complete.
+            Err(_) => match owner.read_adoption().await {
+                Ok(None) => CarryForwardKind::Failed,
+                Ok(Some(adoption)) => {
+                    return complete(owner, adoption, from_version, Some(previous)).await;
+                }
+                Err(_) => {
+                    release_previous(Some(previous)).await;
+                    return Carried::unknown(Some(from_version));
+                }
+            },
         };
-        carried.adoption_pending |=
-            matches!(kind, CarryForwardKind::Moved | CarryForwardKind::Failed);
-        carried.report = Some(CarryForward::new(kind, from_storage_version));
-        return carried;
+        release_previous(Some(previous)).await;
+        return Carried::reported(kind, Some(from_version));
     }
-    carried
+    Carried::nothing()
 }
 
-/// Hands files an unfinished adoption brought to this build's identity back to
-/// the older identity, before this build discards its own files. `None` when
-/// no adoption was pending.
-async fn return_adoption(scope: &str, owner: &mut OpfsOwner) -> Option<CarryForward> {
-    let (kind, from_storage_version) = match owner.return_adoption().await {
-        Ok(None) => return None,
-        Ok(Some(pending)) => (
-            match pending.outcome {
-                PendingOutcome::Returned => CarryForwardKind::Returned,
-                PendingOutcome::Complete | PendingOutcome::Blocked => CarryForwardKind::Discarded,
-            },
-            previous_storage_version(scope, &pending.previous_identity),
-        ),
-        Err(_) => (CarryForwardKind::Failed, None),
+/// Resumes the adoption an earlier open of this build began and whose first
+/// open never succeeded.
+async fn resume(scope: &str, owner: &mut OpfsOwner, adoption: Adoption) -> Carried {
+    let Some(from_version) = upgradable_storage_version(scope, &adoption.previous_identity) else {
+        // Not an identity this build adopts from: the files here are its own.
+        return match owner.discard_adoption().await {
+            Ok(()) => Carried::nothing(),
+            Err(_) => Carried::unknown(None),
+        };
     };
-    Some(CarryForward {
-        kind,
-        from_storage_version,
-    })
+    // Held while the files first open here, when it is free; a context of the
+    // older build that holds it has found its identity empty already.
+    let previous = owner
+        .lock_previous(&adoption.previous_identity)
+        .await
+        .ok()
+        .flatten();
+    complete(owner, adoption, from_version, previous).await
+}
+
+/// Completes a split `adoption` and reports it resumed, or discards it when
+/// the WAL that belongs with its main file can no longer be brought here.
+async fn complete(
+    owner: &mut OpfsOwner,
+    adoption: Adoption,
+    from_version: u32,
+    previous: Option<PreviousLock>,
+) -> Carried {
+    if adoption.state == AdoptionState::Split {
+        match owner.complete_adoption(previous.as_ref()).await {
+            Ok(true) => {}
+            Ok(false) => {
+                // The main file alone may miss committed rows, so it is
+                // never opened: the open resets the incomplete pair.
+                release_previous(previous).await;
+                return match owner.discard_adoption().await {
+                    Ok(()) => Carried::reported(CarryForwardKind::Discarded, Some(from_version)),
+                    Err(_) => Carried::unknown(Some(from_version)),
+                };
+            }
+            Err(_) => {
+                release_previous(previous).await;
+                return Carried::unknown(Some(from_version));
+            }
+        }
+    }
+    Carried {
+        report: Some(CarryForward::new(CarryForwardKind::Resumed, from_version)),
+        pending: Pending::Moved {
+            identity: adoption.previous_identity,
+            from_version,
+            previous,
+        },
+    }
+}
+
+/// Before a recovery open wipes this build's files, hands back files an
+/// adoption brought here whose first open never succeeded, if they still say
+/// they are at the version they were moved at. The marker goes before the
+/// files are opened to read that version, so a worker lost while reading them
+/// leaves the next recovery nothing to read again.
+async fn recover_adoption(
+    scope: &str,
+    mut owner: OpfsOwner,
+) -> Result<(OpfsOwner, Option<CarryForward>), JsValue> {
+    let adoption = match owner.read_adoption().await {
+        Ok(Some(adoption)) => adoption,
+        Ok(None) => return Ok((owner, None)),
+        Err(_) => {
+            return Ok((
+                owner,
+                Some(CarryForward {
+                    kind: CarryForwardKind::Failed,
+                    from_storage_version: None,
+                }),
+            ));
+        }
+    };
+    let Some(from_version) = upgradable_storage_version(scope, &adoption.previous_identity) else {
+        return Ok((owner, None));
+    };
+    let discarded = Some(CarryForward::new(CarryForwardKind::Discarded, from_version));
+    let Ok(Some(previous)) = owner.lock_previous(&adoption.previous_identity).await else {
+        return Ok((owner, discarded));
+    };
+    let completed = adoption.state == AdoptionState::Complete
+        || matches!(owner.complete_adoption(Some(&previous)).await, Ok(true));
+    if !completed || owner.discard_adoption().await.is_err() {
+        release_previous(Some(previous)).await;
+        return Ok((owner, discarded));
+    }
+    let (mut owner, stored) = match read_storage_version(owner).await {
+        Ok(read) => read,
+        Err(error) => {
+            release_previous(Some(previous)).await;
+            return Err(error);
+        }
+    };
+    let kind = if stored == Some(from_version) {
+        match owner.return_adoption(&previous).await {
+            Ok(ReturnOutcome::Returned) => CarryForwardKind::Returned,
+            Ok(ReturnOutcome::Refused) | Err(_) => CarryForwardKind::Discarded,
+        }
+    } else {
+        CarryForwardKind::Discarded
+    };
+    release_previous(Some(previous)).await;
+    Ok((owner, Some(CarryForward::new(kind, from_version))))
+}
+
+/// Opens this owner's files only to read the storage version they say they
+/// were written at, then closes them, which checkpoints the WAL into the main
+/// file. `None` when they do not say so readably.
+async fn read_storage_version(owner: OpfsOwner) -> Result<(OpfsOwner, Option<u32>), JsValue> {
+    match owner.open().await {
+        Ok(OpenResult::Ready(session)) => {
+            let connected = session
+                .connect()
+                .map_err(|failure| storage_err_js(failure.error()))?;
+            let (version, owner) = TursoStorage::read_storage_version_and_close(connected);
+            Ok((owner.map_err(|error| storage_err_js(&error))?, version))
+        }
+        Ok(OpenResult::ResetRequired(session)) => Ok((
+            session
+                .reset()
+                .await
+                .map_err(|failure| storage_err_js(failure.error()))?,
+            None,
+        )),
+        Err(failure) => {
+            let error = storage_err_js(failure.error());
+            Ok((failure.into_owner().ok_or(error)?, None))
+        }
+    }
 }
 
 async fn acquire_storage(
@@ -967,12 +1229,11 @@ async fn acquire_storage(
         Some(grant) => await_storage_grant(owner, grant).await?,
         None => owner,
     };
-    let (owner, carried) = if recovery_wipe {
+    let (owner, Carried { report, pending }) = if recovery_wipe {
         // A recovery open discards this build's files and never moves older
-        // ones in. Files an unfinished adoption brought here go back first:
-        // their first open never finished, and they may hold the only copy of
-        // the older build's queue.
-        let returned = return_adoption(scope, &mut owner).await;
+        // ones in. Files whose first open here never succeeded go back first:
+        // they may hold the only copy of the older build's queue.
+        let (owner, report) = recover_adoption(scope, owner).await?;
         let owner = owner
             .recovery_wipe()
             .await
@@ -980,19 +1241,19 @@ async fn acquire_storage(
         (
             owner,
             Carried {
-                report: returned,
-                adoption_pending: false,
+                report,
+                pending: Pending::None,
             },
         )
     } else {
         let carried = carry_forward(scope, &mut owner).await;
         (owner, carried)
     };
-    let mut opened = open_storage(scope, owner, carried.adoption_pending).await?;
+    let mut opened = open_storage(scope, owner, pending).await?;
     if recovery_wipe {
         opened.outcome = CacheOpenOutcome::ResetStorageUncertain;
     }
-    let report = opened.returned.or(carried.report);
+    let report = opened.returned.or(report);
     Ok((opened, report))
 }
 
@@ -2722,7 +2983,7 @@ impl CacheEngine {
                     return Err(error);
                 }
             };
-            let storage = match open_storage(&scope, owner, false).await {
+            let storage = match open_storage(&scope, owner, Pending::None).await {
                 Ok(opened) => opened.storage,
                 Err(error) => {
                     state.reset_required = true;

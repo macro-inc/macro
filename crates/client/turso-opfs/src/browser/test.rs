@@ -131,7 +131,7 @@ async fn clean_pair(database_name: &str) {
     let root = worker_root().await.expect("worker OPFS root");
     recursive_remove(&root, database_name).await;
     recursive_remove(&root, &format!("{database_name}-wal")).await;
-    recursive_remove(&root, &format!("{database_name}{ADOPTION_JOURNAL_SUFFIX}")).await;
+    recursive_remove(&root, &format!("{database_name}{ADOPTION_MARKER_SUFFIX}")).await;
 }
 
 async fn replace_poisoned_registry_for_test() {

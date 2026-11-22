@@ -3056,14 +3056,82 @@ async fn move_without_opening(scope: &str) {
     let mut owner = OpfsOwner::acquire(&database_identity(scope))
         .await
         .expect("acquire this build's identity");
+    let previous = owner
+        .lock_previous(&cache_database_name(scope, 11))
+        .await
+        .expect("lock the older identity")
+        .expect("the older identity is free");
     assert_eq!(
         owner
-            .adopt_previous(&cache_database_name(scope, 11))
+            .adopt(&previous)
             .await
             .expect("move the older database"),
         AdoptOutcome::Adopted
     );
+    previous
+        .release()
+        .await
+        .expect("release the older identity");
     owner.release().await.expect("release");
+}
+
+/// Opens moved files and upgrades them as an open does, then closes them
+/// without ending the adoption, as an open whose last step failed would.
+async fn upgrade_without_finishing(scope: &str) {
+    let owner = OpfsOwner::acquire(&database_identity(scope))
+        .await
+        .expect("acquire this build's identity");
+    let OpenResult::Ready(session) = owner.open().await.expect("open moved database") else {
+        panic!("moved files are a complete pair")
+    };
+    let (storage, outcome) = TursoStorage::from_opfs_session_with_outcome(
+        session.connect().expect("connect moved database"),
+        scope,
+    )
+    .expect("moved database upgrades");
+    assert_eq!(
+        CacheOpenOutcome::from(outcome),
+        CacheOpenOutcome::UpgradedExisting {
+            from_storage_version: 11
+        }
+    );
+    close_turso(storage).await;
+}
+
+async fn close_turso(storage: TursoStorage) {
+    let TursoStorageCloseOutcome::Healthy(closed) = storage.try_close().expect("close") else {
+        panic!("the database is healthy")
+    };
+    closed
+        .preserve()
+        .expect("preserve")
+        .release()
+        .await
+        .expect("release");
+}
+
+async fn web_lock_free(lock: &str) -> bool {
+    run_js(
+        "return navigator.locks.request(name, { mode: 'exclusive', ifAvailable: true },
+          (lock) => lock !== null)",
+        lock,
+    )
+    .await
+    .as_bool()
+    .expect("lock probe is boolean")
+}
+
+/// Renames one OPFS file.
+async fn rename_opfs_file(from: &str, to: &str) {
+    run_js(
+        "return (async () => {
+          const [from, to] = JSON.parse(name);
+          const root = await navigator.storage.getDirectory();
+          await (await root.getFileHandle(from)).move(to);
+        })()",
+        &serde_json::json!([from, to]).to_string(),
+    )
+    .await;
 }
 
 #[wasm_bindgen_test(async)]
@@ -3071,7 +3139,7 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     const SCOPE: &str = "cache-wasm-unfinished-carry";
     let own = database_identity(SCOPE);
     let older = cache_database_name(SCOPE, 11);
-    let journal = format!("{own}-adopting");
+    let marker = format!("{own}-adopting");
     let carried = |kind| Some(CarryForward::new(kind, 11));
 
     // The worker stopped after the move, before the open finished, so the
@@ -3079,7 +3147,7 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     // this build starts afresh, as it would have without the move.
     let generation = older_database_with_a_queued_write(SCOPE, false).await;
     move_without_opening(SCOPE).await;
-    assert!(opfs_file_exists(&journal).await);
+    assert!(opfs_file_exists(&marker).await);
     let (engine, report) = open_cache_inner(SCOPE.into(), None, true, None, false)
         .await
         .expect("recovery open");
@@ -3094,7 +3162,7 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     resolved(engine.close()).await;
     assert!(opfs_file_exists(&older).await);
     assert!(opfs_file_exists(&format!("{older}-wal")).await);
-    assert!(!opfs_file_exists(&journal).await);
+    assert!(!opfs_file_exists(&marker).await);
 
     // Nothing was lost: without this build's file, the next open carries the
     // returned database forward with its query, queue and generation.
@@ -3115,7 +3183,7 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     assert_eq!(queue_depth(&engine).await, "1");
     assert_eq!(test_generation(&engine).await, generation);
     resolved(engine.close()).await;
-    assert!(!opfs_file_exists(&journal).await);
+    assert!(!opfs_file_exists(&marker).await);
 
     // After the same stop, an ordinary open completes the move instead, and
     // once it has opened, the files are this build's own: a later recovery
@@ -3137,7 +3205,7 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     assert_eq!(queue_depth(&engine).await, "1");
     assert_eq!(test_generation(&engine).await, generation);
     resolved(engine.close()).await;
-    assert!(!opfs_file_exists(&journal).await);
+    assert!(!opfs_file_exists(&marker).await);
     let (engine, report) = open_cache_inner(SCOPE.into(), None, true, None, false)
         .await
         .expect("recovery open after the move finished");
@@ -3161,7 +3229,7 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     resolved(engine.close()).await;
     assert!(opfs_file_exists(&older).await);
     assert!(opfs_file_exists(&format!("{older}-wal")).await);
-    assert!(!opfs_file_exists(&journal).await);
+    assert!(!opfs_file_exists(&marker).await);
 
     // Its own files now exist, so this build never tries it again.
     let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
@@ -3171,6 +3239,204 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     assert_eq!(report.outcome, CacheOpenOutcome::OpenedExisting);
     resolved(engine.close()).await;
     remove_opfs_pair(&older).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
+#[wasm_bindgen_test(async)]
+async fn the_older_build_stays_out_while_moved_files_first_open() {
+    const SCOPE: &str = "cache-wasm-carry-lock";
+    let older = cache_database_name(SCOPE, 11);
+    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    let mut owner = OpfsOwner::acquire(&database_identity(SCOPE))
+        .await
+        .expect("acquire this build's identity");
+    let carried = carry_forward(SCOPE, &mut owner).await;
+    assert_eq!(
+        carried.report,
+        Some(CarryForward::new(CarryForwardKind::Moved, 11))
+    );
+    assert!(matches!(
+        carried.pending,
+        Pending::Moved {
+            from_version: 11,
+            previous: Some(_),
+            ..
+        }
+    ));
+    // Until the moved files have opened here, no context of the older build
+    // can take its identity, so it cannot open, reset or recreate it.
+    assert!(!web_lock_free(&owner_lock_for(&older)).await);
+    let opened = open_storage(SCOPE, owner, carried.pending)
+        .await
+        .expect("first open of the moved files");
+    assert!(web_lock_free(&owner_lock_for(&older)).await);
+    assert_eq!(
+        opened.outcome,
+        CacheOpenOutcome::UpgradedExisting {
+            from_storage_version: 11
+        }
+    );
+    assert_eq!(opened.returned, None);
+    close_turso(opened.storage).await;
+    assert!(!opfs_file_exists(&format!("{}-adopting", database_identity(SCOPE))).await);
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("reopen");
+    assert_eq!(report.outcome, CacheOpenOutcome::OpenedExisting);
+    assert_eq!(report.carry_forward, None);
+    assert_eq!(queue_depth(&engine).await, "1");
+    assert_eq!(test_generation(&engine).await, generation);
+    resolved(engine.close()).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
+#[wasm_bindgen_test(async)]
+async fn moved_files_this_build_has_written_are_never_handed_back() {
+    const SCOPE: &str = "cache-wasm-carry-written";
+    const OTHER: &str = "cache-wasm-carry-written-other";
+    let own = database_identity(SCOPE);
+    let older = cache_database_name(SCOPE, 11);
+    let marker = format!("{own}-adopting");
+    let discarded = Some(CarryForward::new(CarryForwardKind::Discarded, 11));
+
+    // The upgrade committed storage 12 before a later check (here, the scope
+    // the file was written for) asked for a reset: the older build cannot
+    // open the file any more, so it is discarded, not handed back.
+    remove_opfs_pair(&older).await;
+    older_database_with_a_queued_write(OTHER, false).await;
+    move_opfs_pair(&cache_database_name(OTHER, 11), &older).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("open beside a database written for another scope");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::ResetIncompatible,
+            carry_forward: discarded,
+        }
+    );
+    assert_eq!(queue_depth(&engine).await, "0");
+    resolved(engine.close()).await;
+    assert!(!opfs_file_exists(&older).await);
+    assert!(!opfs_file_exists(&marker).await);
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+
+    // A worker stopped right after the upgrade committed, before the open
+    // finished: the recovery open reads storage 12 and discards the files.
+    older_database_with_a_queued_write(SCOPE, false).await;
+    cache_turso::migration_test_hooks::interrupt_after_steps(Some(1));
+    let stopped = open_cache_inner(SCOPE.into(), None, false, None, false).await;
+    cache_turso::migration_test_hooks::interrupt_after_steps(None);
+    assert!(cache_turso::migration_test_hooks::take_interrupted());
+    assert!(stopped.is_err());
+    assert!(opfs_file_exists(&marker).await);
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, true, None, false)
+        .await
+        .expect("recovery open after the upgrade committed");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::ResetStorageUncertain,
+            carry_forward: discarded,
+        }
+    );
+    assert_eq!(queue_depth(&engine).await, "0");
+    resolved(engine.close()).await;
+    assert!(!opfs_file_exists(&older).await);
+    assert!(!opfs_file_exists(&marker).await);
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+
+    // The files opened here, but ending the adoption failed and left its
+    // marker: an ordinary open reports the move resumed once and keeps the
+    // files; a recovery open reads storage 12 and never hands them back.
+    for recovery in [false, true] {
+        let generation = older_database_with_a_queued_write(SCOPE, false).await;
+        move_without_opening(SCOPE).await;
+        upgrade_without_finishing(SCOPE).await;
+        assert!(opfs_file_exists(&marker).await);
+        let (engine, report) = open_cache_inner(SCOPE.into(), None, recovery, None, false)
+            .await
+            .expect("open beside a leftover marker");
+        if recovery {
+            assert_eq!(
+                report,
+                OpenReport {
+                    outcome: CacheOpenOutcome::ResetStorageUncertain,
+                    carry_forward: discarded,
+                }
+            );
+            assert_eq!(queue_depth(&engine).await, "0");
+        } else {
+            assert_eq!(
+                report,
+                OpenReport {
+                    outcome: CacheOpenOutcome::OpenedExisting,
+                    carry_forward: Some(CarryForward::new(CarryForwardKind::Resumed, 11)),
+                }
+            );
+            assert_eq!(queue_depth(&engine).await, "1");
+            assert_eq!(test_generation(&engine).await, generation);
+        }
+        resolved(engine.close()).await;
+        assert!(!opfs_file_exists(&older).await);
+        assert!(!opfs_file_exists(&marker).await);
+        destroy_cache(SCOPE.into()).await.expect("destroy cache");
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_move_stopped_between_its_renames_completes_on_the_next_open() {
+    const SCOPE: &str = "cache-wasm-carry-split";
+    let own = database_identity(SCOPE);
+    let older = cache_database_name(SCOPE, 11);
+    // What a stop between the renames leaves: the main file and the marker
+    // here, the WAL (empty, as a close leaves it) still at the older identity.
+    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    move_without_opening(SCOPE).await;
+    rename_opfs_file(&format!("{own}-wal"), &format!("{older}-wal")).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("open after a stopped move");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::UpgradedExisting {
+                from_storage_version: 11
+            },
+            carry_forward: Some(CarryForward::new(CarryForwardKind::Resumed, 11)),
+        }
+    );
+    assert_eq!(read_soup(&engine).await["data"], soup_data("carried"));
+    assert_eq!(queue_depth(&engine).await, "1");
+    assert_eq!(test_generation(&engine).await, generation);
+    resolved(engine.close()).await;
+    assert!(!opfs_file_exists(&format!("{own}-adopting")).await);
+    remove_opfs_pair(&older).await;
+
+    // The same stop, then a recovery open: the pair is completed and handed
+    // back whole.
+    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    move_without_opening(SCOPE).await;
+    rename_opfs_file(&format!("{own}-wal"), &format!("{older}-wal")).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, true, None, false)
+        .await
+        .expect("recovery open after a stopped move");
+    assert_eq!(
+        report.carry_forward,
+        Some(CarryForward::new(CarryForwardKind::Returned, 11))
+    );
+    resolved(engine.close()).await;
+    remove_opfs_pair(&own).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("carry the returned database forward");
+    assert_eq!(
+        report.carry_forward,
+        Some(CarryForward::new(CarryForwardKind::Moved, 11))
+    );
+    assert_eq!(queue_depth(&engine).await, "1");
+    assert_eq!(test_generation(&engine).await, generation);
+    resolved(engine.close()).await;
     destroy_cache(SCOPE.into()).await.expect("destroy cache");
 }
 

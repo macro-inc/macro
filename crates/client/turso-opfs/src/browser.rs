@@ -389,66 +389,120 @@ impl OpfsOwner {
         removed
     }
 
-    /// Moves the complete main/WAL pair of `previous_identity`, an identity an
-    /// older build opened, to this owner's paths, so this owner opens it as
-    /// existing storage instead of starting empty.
+    /// Takes `previous_identity`'s exclusive Web Lock if it is free now, and
+    /// holds it until [`PreviousLock::release`] or drop. `None` when another
+    /// context holds or awaits it: a context of the build that owns that
+    /// identity has its files open, or is about to.
     ///
-    /// The previous identity's exclusive Web Lock is taken only if it is free
-    /// and is held for the whole move, so no context of the older build has the
-    /// files open. Main and WAL move together under their new names, so no
-    /// checkpoint is needed and every committed frame moves with them. Nothing
-    /// moves when this owner's paths already hold a file, when the previous
-    /// pair is incomplete or does not start like a database and its WAL, or
-    /// when this browser cannot move OPFS entries.
-    ///
-    /// Before the first move, a journal beside this owner's paths records the
-    /// previous identity. It stays until the first open of the moved files
-    /// succeeds ([`ConnectedOpfsSession::finish_adoption`]). Until then a stop
-    /// at any point, even between the two moves, is completed by
-    /// [`Self::resume_adoption`] or undone by [`Self::return_adoption`], never
-    /// left as two halves to reset. When the WAL move fails, the main file is
-    /// moved back.
-    pub async fn adopt_previous(
-        &mut self,
+    /// Holding it keeps that build away from its files while they move here,
+    /// while they first open here, and while they move back, so it never opens
+    /// half a pair or a pair this build is changing.
+    pub async fn lock_previous(
+        &self,
         previous_identity: &str,
-    ) -> Result<AdoptOutcome, OpfsError> {
-        let previous = approved_paths(previous_identity)?;
-        if previous == self.paths {
+    ) -> Result<Option<PreviousLock>, OpfsError> {
+        let paths = approved_paths(previous_identity)?;
+        if paths == self.paths {
             return Err(OpfsError::new(
                 OpfsErrorKind::InvalidName,
-                "an owner cannot adopt its own identity",
+                "an owner cannot lock its own identity as a previous one",
             ));
         }
-        let identity = previous_identity.to_owned();
-        let to = self.paths.clone();
-        self.in_adoption_phase(adopt_into(identity, previous, to))
-            .await
+        PreviousLock::request(previous_identity.to_owned(), paths).await
     }
 
-    /// Completes an adoption into this owner's paths that an earlier open
-    /// began and never finished: moves whichever of the pair is still at the
-    /// previous identity, under that identity's lock if it is free. `None`
-    /// when no adoption is pending.
+    /// Moves the complete main/WAL pair of the identity `previous` locks, an
+    /// identity an older build opened, to this owner's paths, so this owner
+    /// opens it as existing storage instead of starting empty.
     ///
-    /// The journal stays until the open succeeds, as after
-    /// [`Self::adopt_previous`].
-    pub async fn resume_adoption(&mut self) -> Result<Option<PendingAdoption>, OpfsError> {
+    /// Main and WAL move under their new names, so no checkpoint is needed and
+    /// every committed frame moves with them. Nothing moves when this owner's
+    /// main file exists, when the previous pair is incomplete, empty, or does
+    /// not have headers Turso opens, or when this browser cannot move OPFS
+    /// entries.
+    ///
+    /// Before the first move, a marker beside this owner's main file records
+    /// the previous identity and the size and header of its WAL. It stays until
+    /// the first open of the moved files succeeds
+    /// ([`ConnectedOpfsSession::finish_adoption`]), so a stop between the two
+    /// moves can be completed ([`Self::complete_adoption`]) and files that
+    /// never opened can go back ([`Self::return_adoption`]). When the WAL move
+    /// fails, the main file is moved back.
+    pub async fn adopt(&mut self, previous: &PreviousLock) -> Result<AdoptOutcome, OpfsError> {
+        let identity = previous.identity.clone();
+        let from = previous.paths.clone();
         let to = self.paths.clone();
-        self.in_adoption_phase(resume_into(to)).await
+        self.in_adoption_phase(adopt_pair(identity, from, to)).await
     }
 
-    /// Moves files an unfinished adoption brought to this owner's paths back
-    /// to the identity they came from, under that identity's lock if it is
-    /// free and only onto paths it does not hold, then removes the journal.
-    /// `None` when no adoption is pending.
-    ///
-    /// Call it before discarding this owner's files, so a database whose first
-    /// open never finished goes back to where the older build keeps it instead
-    /// of being deleted. Whatever could not go back stays here for the caller
-    /// to reset.
-    pub async fn return_adoption(&mut self) -> Result<Option<PendingAdoption>, OpfsError> {
+    /// The adoption into this owner's paths whose first open has not
+    /// succeeded yet, if a marker records one. A marker this adapter did not
+    /// write completely, or one whose main file never moved here (or moved
+    /// back), is removed, with any WAL left beside it, and reads as none.
+    pub async fn read_adoption(&mut self) -> Result<Option<Adoption>, OpfsError> {
         let to = self.paths.clone();
-        self.in_adoption_phase(return_from(to)).await
+        self.in_adoption_phase(read_pending(to)).await
+    }
+
+    /// Whether this owner's main file exists. Checked before adopting, so the
+    /// usual open, where this build's file already exists, never contends for
+    /// another identity's lock.
+    pub async fn main_file_exists(&mut self) -> Result<bool, OpfsError> {
+        let to = self.paths.clone();
+        self.in_adoption_phase(async move {
+            let root = adoption_root().await?;
+            Ok(existing_file(&root, to.get(FileRole::Main))
+                .await?
+                .is_some())
+        })
+        .await
+    }
+
+    /// Completes a [`AdoptionState::Split`] adoption, whose main file moved
+    /// here and whose WAL did not. A WAL that was empty is recreated here. A
+    /// non-empty one moves here only under `previous`, the lock of the identity
+    /// the marker names, and only while it still has the size and header the
+    /// marker recorded: once the older build reset that identity (it resets a
+    /// pair whose main file is missing), its WAL belongs to another database.
+    /// Returns whether this owner's pair is now complete; when it is not, the
+    /// moved main file cannot be opened safely and the caller discards it.
+    pub async fn complete_adoption(
+        &mut self,
+        previous: Option<&PreviousLock>,
+    ) -> Result<bool, OpfsError> {
+        let to = self.paths.clone();
+        let previous = previous.map(|lock| (lock.identity.clone(), lock.paths.clone()));
+        self.in_adoption_phase(complete_pair(to, previous)).await
+    }
+
+    /// Moves files an adoption brought to this owner's paths back to the
+    /// identity `previous` locks, so the build that wrote them finds them where
+    /// it left them, then removes the marker.
+    ///
+    /// Only a self-contained database goes back: this owner's WAL must be
+    /// empty (a close checkpoints it), and the previous identity must have no
+    /// main file and at most an empty WAL. Anything else is
+    /// [`ReturnOutcome::Refused`] and nothing moves. The caller decides that
+    /// the files are still what the older build wrote; this method only moves
+    /// them.
+    pub async fn return_adoption(
+        &mut self,
+        previous: &PreviousLock,
+    ) -> Result<ReturnOutcome, OpfsError> {
+        let to = self.paths.clone();
+        let from = previous.paths.clone();
+        self.in_adoption_phase(return_pair(to, from)).await
+    }
+
+    /// Removes the adoption marker beside this owner's paths, so the files here
+    /// are this owner's own from now on. Does nothing when there is none.
+    pub async fn discard_adoption(&mut self) -> Result<(), OpfsError> {
+        let to = self.paths.clone();
+        self.in_adoption_phase(async move {
+            let root = adoption_root().await?;
+            remove_if_present(&root, &marker_path(&to), false, BusyDeadline::start()).await
+        })
+        .await
     }
 
     /// Runs an adoption step with every other use of this owner's paths in
@@ -475,112 +529,174 @@ impl OpfsOwner {
     }
 }
 
-/// What [`OpfsOwner::adopt_previous`] did.
+/// What [`OpfsOwner::adopt`] did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AdoptOutcome {
     /// The previous identity's pair now sits at this owner's paths.
     Adopted,
-    /// This owner's paths already hold a file; nothing moved.
+    /// This owner's main file already exists; nothing moved.
     TargetExists,
     /// The previous identity has no complete pair, or both of its files are
     /// empty; nothing moved.
     NothingToAdopt,
-    /// The previous main file does not start with a database header, or its
-    /// WAL with a WAL header; nothing moved.
+    /// A previous file does not have a header Turso opens; nothing moved.
     Unreadable,
-    /// Another context holds or awaits the previous identity's lock; nothing
-    /// moved.
-    PreviousInUse,
     /// This browser cannot move OPFS entries; nothing moved.
     Unsupported,
 }
 
-/// An adoption an earlier open began and never finished, and what
-/// [`OpfsOwner::resume_adoption`] or [`OpfsOwner::return_adoption`] did with
-/// it.
+/// An adoption into an owner's paths whose first open has not succeeded yet.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PendingAdoption {
+pub struct Adoption {
     /// The identity the files came from.
     pub previous_identity: String,
-    /// Where the files are now.
-    pub outcome: PendingOutcome,
+    /// Which of the files moved.
+    pub state: AdoptionState,
 }
 
-/// Where the files of a [`PendingAdoption`] are now.
+/// Which files of an [`Adoption`] sit at the owner's paths.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PendingOutcome {
-    /// Both sit at this owner's paths, ready to open.
+pub enum AdoptionState {
+    /// Both, ready to open.
     Complete,
-    /// Both sit at the previous identity again, and this owner's paths are
-    /// empty.
+    /// Only the main file; the WAL is still at the previous identity, or gone.
+    /// See [`OpfsOwner::complete_adoption`].
+    Split,
+}
+
+/// What [`OpfsOwner::return_adoption`] did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReturnOutcome {
+    /// The database sits at the previous identity again, this owner's paths
+    /// are empty and the marker is gone.
     Returned,
-    /// The previous identity's lock was held, or its paths were taken, so
-    /// some files could not move. A resumed pair is then incomplete and its
-    /// open resets it; a returned one leaves the caller files to reset.
-    Blocked,
+    /// This owner's WAL was not empty, or the previous identity holds a
+    /// database again; nothing moved.
+    Refused,
+}
+
+/// An exclusive Web Lock on another identity, from
+/// [`OpfsOwner::lock_previous`]. Releasing it lets that identity's own build
+/// open its files again.
+pub struct PreviousLock {
+    identity: String,
+    paths: Paths,
+    /// Resolves the promise the lock callback returned, which releases the
+    /// lock.
+    release: Option<Function>,
+    /// The lock request, which settles once the lock is released.
+    settled: Option<Promise>,
+}
+
+impl fmt::Debug for PreviousLock {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PreviousLock")
+            .field("identity", &self.identity)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PreviousLock {
+    /// The identity this lock holds.
+    pub fn identity(&self) -> &str {
+        &self.identity
+    }
+
+    async fn request(identity: String, paths: Paths) -> Result<Option<Self>, OpfsError> {
+        let lock_error =
+            |operation, error: &JsValue| js_error(OpfsErrorKind::Lock, operation, error);
+        let worker = js_sys::global()
+            .dyn_into::<DedicatedWorkerGlobalScope>()
+            .map_err(|error| lock_error("DedicatedWorker lock scope", &error))?;
+        let manager = Reflect::get(worker.navigator().as_ref(), &JsValue::from_str("locks"))
+            .map_err(|error| lock_error("Web Lock manager", &error))?;
+        let request = Reflect::get(&manager, &JsValue::from_str("request"))
+            .and_then(|value| value.dyn_into::<Function>())
+            .map_err(|error| lock_error("Web Lock request function", &error))?;
+        let options = Object::new();
+        for (key, value) in [
+            ("mode", JsValue::from_str("exclusive")),
+            ("ifAvailable", JsValue::TRUE),
+        ] {
+            Reflect::set(options.as_ref(), &JsValue::from_str(key), &value)
+                .map_err(|error| lock_error("Web Lock options", &error))?;
+        }
+        let mut release = None;
+        let held = Promise::new(&mut |resolve, _reject| release = Some(resolve));
+        let mut granted = None;
+        let answered = Promise::new(&mut |resolve, _reject| granted = Some(resolve));
+        let (Some(release), Some(granted)) = (release, granted) else {
+            return Err(OpfsError::new(
+                OpfsErrorKind::Lock,
+                "Promise executor did not run synchronously",
+            ));
+        };
+        let callback = Closure::once_into_js(move |lock: JsValue| -> Promise {
+            let acquired = !lock.is_null() && !lock.is_undefined();
+            let _ = granted.call1(&JsValue::UNDEFINED, &JsValue::from_bool(acquired));
+            if acquired {
+                held
+            } else {
+                Promise::resolve(&JsValue::UNDEFINED)
+            }
+        });
+        let settled = request
+            .call3(
+                &manager,
+                &JsValue::from_str(&owner_lock_name(&identity)),
+                options.as_ref(),
+                &callback,
+            )
+            .and_then(|value| value.dyn_into::<Promise>())
+            .map_err(|error| lock_error("Web Lock request", &error))?;
+        // The callback answers before the request settles; a request that
+        // fails before calling it rejects instead.
+        let answer = JsFuture::from(Promise::race(&js_sys::Array::of2(&answered, &settled)))
+            .await
+            .map_err(|error| lock_error("Web Lock answer", &error))?;
+        if answer.as_bool() != Some(true) {
+            return Ok(None);
+        }
+        Ok(Some(Self {
+            identity,
+            paths,
+            release: Some(release),
+            settled: Some(settled),
+        }))
+    }
+
+    /// Releases the lock and waits until the browser has let it go.
+    pub async fn release(mut self) -> Result<(), OpfsError> {
+        if let Some(release) = self.release.take() {
+            release
+                .call0(&JsValue::UNDEFINED)
+                .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock release", &error))?;
+        }
+        if let Some(settled) = self.settled.take() {
+            JsFuture::from(settled)
+                .await
+                .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock release", &error))?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for PreviousLock {
+    fn drop(&mut self) {
+        // Let the lock go without waiting; nothing here touches files.
+        if let Some(release) = self.release.take() {
+            let _ = release.call0(&JsValue::UNDEFINED);
+        }
+    }
 }
 
 #[cfg(test)]
 thread_local! {
     /// Stops an adoption between its two moves, as a stopped process would.
     static STOP_BETWEEN_MOVES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// Runs `operation` while holding `lock_name` exclusively, only if the lock is
-/// free now. Returns `None`, without running it, when the lock is taken. The
-/// lock is released when the operation settles.
-async fn with_lock_if_available<T: 'static>(
-    lock_name: &str,
-    operation: impl std::future::Future<Output = Result<T, OpfsError>> + 'static,
-) -> Result<Option<T>, OpfsError> {
-    let worker = js_sys::global()
-        .dyn_into::<DedicatedWorkerGlobalScope>()
-        .map_err(|error| js_error(OpfsErrorKind::Lock, "DedicatedWorker lock scope", &error))?;
-    let manager = Reflect::get(worker.navigator().as_ref(), &JsValue::from_str("locks"))
-        .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock manager", &error))?;
-    let request = Reflect::get(&manager, &JsValue::from_str("request"))
-        .and_then(|value| value.dyn_into::<Function>())
-        .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock request function", &error))?;
-    let options = Object::new();
-    for (key, value) in [
-        ("mode", JsValue::from_str("exclusive")),
-        ("ifAvailable", JsValue::TRUE),
-    ] {
-        Reflect::set(options.as_ref(), &JsValue::from_str(key), &value)
-            .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock options", &error))?;
-    }
-    // The lock callback stores the operation's result here; it stays empty
-    // when the lock was taken and the operation never ran.
-    let result: std::rc::Rc<RefCell<Option<Result<T, OpfsError>>>> = std::rc::Rc::default();
-    let slot = result.clone();
-    let mut operation = Some(operation);
-    let callback = Closure::wrap(Box::new(move |lock: JsValue| -> Promise {
-        if lock.is_null() || lock.is_undefined() {
-            return Promise::resolve(&JsValue::UNDEFINED);
-        }
-        let Some(operation) = operation.take() else {
-            return Promise::reject(&JsValue::from_str("Web Lock callback ran twice"));
-        };
-        let slot = slot.clone();
-        wasm_bindgen_futures::future_to_promise(async move {
-            let outcome = operation.await;
-            *slot.borrow_mut() = Some(outcome);
-            Ok(JsValue::UNDEFINED)
-        })
-    }) as Box<dyn FnMut(JsValue) -> Promise>);
-    let pending = request
-        .call3(
-            &manager,
-            &JsValue::from_str(lock_name),
-            options.as_ref(),
-            callback.as_ref().unchecked_ref(),
-        )
-        .and_then(|value| value.dyn_into::<Promise>())
-        .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock request", &error))?;
-    let settled = JsFuture::from(pending).await;
-    drop(callback);
-    settled.map_err(|error| js_error(OpfsErrorKind::Move, "OPFS adoption", &error))?;
-    result.borrow_mut().take().transpose()
+    /// Makes the WAL move of the next adoption fail.
+    static FAIL_WAL_MOVE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 async fn existing_file(
@@ -595,6 +711,16 @@ async fn existing_file(
         Err(error) if is_not_found(&error) => Ok(None),
         Err(error) => Err(js_error(OpfsErrorKind::Move, "OPFS entry lookup", &error)),
     }
+}
+
+/// Creates `path` as an empty file if it does not exist.
+async fn create_empty(root: &FileSystemDirectoryHandle, path: &str) -> Result<(), OpfsError> {
+    let options = FileSystemGetFileOptions::new();
+    options.set_create(true);
+    JsFuture::from(root.get_file_handle_with_options(path, &options))
+        .await
+        .map(drop)
+        .map_err(|error| js_error(OpfsErrorKind::Recreate, "OPFS empty file create", &error))
 }
 
 /// `FileSystemHandle.move`, absent in browsers that cannot rename OPFS entries.
@@ -647,46 +773,42 @@ async fn present_files(
     ])
 }
 
-/// Checks this owner's paths before touching the previous identity, so the
-/// usual open, where this build's file already exists, costs one lookup and
-/// never contends for an older build's lock. Nothing else can create these
-/// paths meanwhile: this owner holds their lock.
-async fn adopt_into(
+/// Checks this owner's main file before reading the previous pair, so the
+/// usual open, where this build's file already exists, costs one lookup.
+/// Nothing else creates these paths meanwhile: this owner holds their lock,
+/// and the caller holds the previous identity's.
+async fn adopt_pair(
     previous_identity: String,
     from: Paths,
     to: Paths,
 ) -> Result<AdoptOutcome, OpfsError> {
     let root = adoption_root().await?;
-    for role in FileRole::ALL {
-        if existing_file(&root, to.get(role)).await?.is_some() {
-            return Ok(AdoptOutcome::TargetExists);
-        }
-    }
-    let lock_name = owner_lock_name(&previous_identity);
-    with_lock_if_available(&lock_name, move_pair(root, previous_identity, from, to))
-        .await
-        .map(|outcome| outcome.unwrap_or(AdoptOutcome::PreviousInUse))
-}
-
-async fn move_pair(
-    root: FileSystemDirectoryHandle,
-    previous_identity: String,
-    from: Paths,
-    to: Paths,
-) -> Result<AdoptOutcome, OpfsError> {
     let deadline = BusyDeadline::start();
+    if existing_file(&root, to.get(FileRole::Main))
+        .await?
+        .is_some()
+    {
+        return Ok(AdoptOutcome::TargetExists);
+    }
     let [Some(main), Some(wal)] = present_files(&root, &from).await? else {
         return Ok(AdoptOutcome::NothingToAdopt);
     };
-    match pair_headers(&main, &wal, deadline).await? {
+    let wal_fingerprint = match pair_headers(&main, &wal, deadline).await? {
         PairHeaders::Empty => return Ok(AdoptOutcome::NothingToAdopt),
         PairHeaders::Unreadable => return Ok(AdoptOutcome::Unreadable),
-        PairHeaders::Readable => {}
-    }
+        PairHeaders::Readable(wal) => wal,
+    };
     if move_function(&main).is_none() {
         return Ok(AdoptOutcome::Unsupported);
     }
-    write_journal(&root, &to, &previous_identity, deadline).await?;
+    // A WAL without its main file is unusable: an open of this owner resets
+    // it. Remove it so the previous WAL can take its name.
+    remove_if_present(&root, to.get(FileRole::Wal), false, deadline).await?;
+    let marker = Marker {
+        previous_identity,
+        wal: wal_fingerprint,
+    };
+    write_marker(&root, &to, &marker, deadline).await?;
     move_entry(&root, &main, to.get(FileRole::Main), deadline).await?;
     #[cfg(test)]
     if STOP_BETWEEN_MOVES.with(|stop| stop.replace(false)) {
@@ -695,140 +817,247 @@ async fn move_pair(
             "injected stop between moves",
         ));
     }
-    if let Err(error) = move_entry(&root, &wal, to.get(FileRole::Wal), deadline).await {
+    #[cfg(test)]
+    let moved = if FAIL_WAL_MOVE.with(|fail| fail.replace(false)) {
+        Err(OpfsError::new(
+            OpfsErrorKind::Move,
+            "injected WAL move failure",
+        ))
+    } else {
+        move_entry(&root, &wal, to.get(FileRole::Wal), deadline).await
+    };
+    #[cfg(not(test))]
+    let moved = move_entry(&root, &wal, to.get(FileRole::Wal), deadline).await;
+    if let Err(error) = moved {
         // Put the main file back so the previous pair stays whole. If that
-        // fails too, the journal stays and the next open completes or undoes
-        // the move.
+        // fails too, the marker stays and the adoption reads as split.
         if move_entry(&root, &main, from.get(FileRole::Main), deadline)
             .await
             .is_ok()
         {
-            let _ = remove_if_present(&root, &journal_path(&to), false, deadline).await;
+            let _ = remove_if_present(&root, &marker_path(&to), false, deadline).await;
         }
         return Err(error);
     }
     Ok(AdoptOutcome::Adopted)
 }
 
-/// Reads the pending adoption's previous identity, if one is recorded.
-async fn pending_previous(
-    root: &FileSystemDirectoryHandle,
-    to: &Paths,
-    deadline: BusyDeadline,
-) -> Result<Option<(String, Paths)>, OpfsError> {
-    let Some(previous) = read_journal(root, to, deadline).await? else {
+async fn read_pending(to: Paths) -> Result<Option<Adoption>, OpfsError> {
+    let root = adoption_root().await?;
+    let deadline = BusyDeadline::start();
+    let Some(marker) = read_marker(&root, &to, deadline).await? else {
         return Ok(None);
     };
-    match approved_paths(&previous) {
-        Ok(from) if from != *to => Ok(Some((previous, from))),
-        // Only a journal this adapter wrote names another valid identity.
-        _ => Ok(None),
+    let [main, wal] = present_files(&root, &to).await?;
+    if main.is_none() {
+        // The main file never moved here, or moved back: whatever WAL sits
+        // here cannot be opened, and the marker records nothing that happened.
+        remove_if_present(&root, to.get(FileRole::Wal), false, deadline).await?;
+        remove_if_present(&root, &marker_path(&to), false, deadline).await?;
+        return Ok(None);
     }
-}
-
-async fn resume_into(to: Paths) -> Result<Option<PendingAdoption>, OpfsError> {
-    let root = adoption_root().await?;
-    let deadline = BusyDeadline::start();
-    let Some((previous_identity, from)) = pending_previous(&root, &to, deadline).await? else {
-        return Ok(None);
-    };
-    let complete = if matches!(present_files(&root, &to).await?, [Some(_), Some(_)]) {
-        // The move finished; only the open did not.
-        true
-    } else {
-        let lock_name = owner_lock_name(&previous_identity);
-        with_lock_if_available(&lock_name, move_missing(root, from, to))
-            .await?
-            .unwrap_or(false)
-    };
-    Ok(Some(PendingAdoption {
-        previous_identity,
-        outcome: if complete {
-            PendingOutcome::Complete
+    Ok(Some(Adoption {
+        previous_identity: marker.previous_identity,
+        state: if wal.is_some() {
+            AdoptionState::Complete
         } else {
-            PendingOutcome::Blocked
+            AdoptionState::Split
         },
     }))
 }
 
-async fn return_from(to: Paths) -> Result<Option<PendingAdoption>, OpfsError> {
+async fn complete_pair(to: Paths, previous: Option<(String, Paths)>) -> Result<bool, OpfsError> {
     let root = adoption_root().await?;
     let deadline = BusyDeadline::start();
-    let Some((previous_identity, from)) = pending_previous(&root, &to, deadline).await? else {
-        return Ok(None);
+    let Some(marker) = read_marker(&root, &to, deadline).await? else {
+        return Ok(false);
     };
-    let lock_name = owner_lock_name(&previous_identity);
-    let returned = with_lock_if_available(&lock_name, move_missing(root.clone(), to.clone(), from))
-        .await?
-        .unwrap_or(false)
-        && matches!(present_files(&root, &to).await?, [None, None]);
-    // Whatever stayed here is the caller's to reset; the journal must not
-    // later pull in files the previous identity holds by then.
-    remove_if_present(&root, &journal_path(&to), false, deadline).await?;
-    Ok(Some(PendingAdoption {
-        previous_identity,
-        outcome: if returned {
-            PendingOutcome::Returned
-        } else {
-            PendingOutcome::Blocked
-        },
-    }))
+    match present_files(&root, &to).await? {
+        [Some(_), Some(_)] => return Ok(true),
+        [Some(_), None] => {}
+        [None, _] => return Ok(false),
+    }
+    if marker.wal.size == 0 {
+        create_empty(&root, to.get(FileRole::Wal)).await?;
+        return Ok(true);
+    }
+    let Some((identity, from)) = previous else {
+        return Ok(false);
+    };
+    if identity != marker.previous_identity {
+        return Err(OpfsError::new(
+            OpfsErrorKind::InvalidName,
+            "the lock held is not the identity the adoption marker names",
+        ));
+    }
+    let Some(wal) = existing_file(&root, from.get(FileRole::Wal)).await? else {
+        return Ok(false);
+    };
+    let (size, header) = file_prefix(&wal, WAL_HEADER_LEN, deadline).await?;
+    if size != marker.wal.size || header != marker.wal.header {
+        return Ok(false);
+    }
+    move_entry(&root, &wal, to.get(FileRole::Wal), deadline).await?;
+    Ok(true)
 }
 
-/// Moves each file present at `from` and absent at `to`, then reports whether
-/// `to` holds the complete pair. Runs under the previous identity's lock.
-async fn move_missing(
-    root: FileSystemDirectoryHandle,
-    from: Paths,
-    to: Paths,
-) -> Result<bool, OpfsError> {
+async fn return_pair(to: Paths, from: Paths) -> Result<ReturnOutcome, OpfsError> {
+    let root = adoption_root().await?;
     let deadline = BusyDeadline::start();
-    let sources = present_files(&root, &from).await?;
-    let targets = present_files(&root, &to).await?;
-    for (role, (source, target)) in FileRole::ALL.into_iter().zip(sources.iter().zip(&targets)) {
-        if let (Some(source), None) = (source, target) {
-            move_entry(&root, source, to.get(role), deadline).await?;
+    let [Some(main), Some(wal)] = present_files(&root, &to).await? else {
+        return Ok(ReturnOutcome::Refused);
+    };
+    if file_prefix(&wal, 0, deadline).await?.0 != 0 {
+        return Ok(ReturnOutcome::Refused);
+    }
+    let [previous_main, previous_wal] = present_files(&root, &from).await?;
+    if previous_main.is_some() {
+        return Ok(ReturnOutcome::Refused);
+    }
+    match previous_wal {
+        Some(previous_wal) => {
+            if file_prefix(&previous_wal, 0, deadline).await?.0 != 0 {
+                return Ok(ReturnOutcome::Refused);
+            }
         }
+        // The pair is whole the moment the main file arrives.
+        None => create_empty(&root, from.get(FileRole::Wal)).await?,
     }
-    Ok(matches!(
-        present_files(&root, &to).await?,
-        [Some(_), Some(_)]
-    ))
+    move_entry(&root, &main, from.get(FileRole::Main), deadline).await?;
+    // A stop from here on leaves a marker without a main file, which the next
+    // read removes together with this empty WAL.
+    remove_if_present(&root, to.get(FileRole::Wal), false, deadline).await?;
+    remove_if_present(&root, &marker_path(&to), false, deadline).await?;
+    Ok(ReturnOutcome::Returned)
 }
 
 /// The first bytes of an SQLite database file.
 const DATABASE_HEADER: &[u8; 16] = b"SQLite format 3\0";
+/// The size of an SQLite database header.
+const DATABASE_HEADER_LEN: usize = 100;
 /// The two magic numbers an SQLite WAL header starts with, big-endian.
 const WAL_MAGICS: [[u8; 4]; 2] = [[0x37, 0x7f, 0x06, 0x82], [0x37, 0x7f, 0x06, 0x83]];
+/// The WAL format version every SQLite WAL header carries.
+const WAL_FORMAT_VERSION: u32 = 3_007_000;
+/// The size of an SQLite WAL header.
+const WAL_HEADER_LEN: usize = 32;
+
+/// A WAL's size and its first [`WAL_HEADER_LEN`] bytes (fewer when it is
+/// shorter). The header carries random salts a reset changes, so a WAL that
+/// still matches is the one recorded.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct WalFingerprint {
+    size: u64,
+    header: Vec<u8>,
+}
 
 enum PairHeaders {
     /// Both files are empty: the pair never held a database.
     Empty,
-    /// Each non-empty file starts with its header.
-    Readable,
-    /// A non-empty file does not start with its header.
+    /// Each non-empty file has a header Turso opens, with matching page sizes.
+    Readable(WalFingerprint),
+    /// A non-empty file has a header Turso rejects.
     Unreadable,
 }
 
-/// Looks at the first bytes of the previous pair, so a file Turso could not
-/// open is never moved in to fail this owner's open.
+/// Reads the headers of the previous pair, so a file Turso could not open is
+/// never moved in to fail this owner's open.
 async fn pair_headers(
     main: &FileSystemFileHandle,
     wal: &FileSystemFileHandle,
     deadline: BusyDeadline,
 ) -> Result<PairHeaders, OpfsError> {
-    let (main_size, main_head) = file_prefix(main, DATABASE_HEADER.len(), deadline).await?;
-    let (wal_size, wal_head) = file_prefix(wal, WAL_MAGICS[0].len(), deadline).await?;
+    let (main_size, main_head) = file_prefix(main, DATABASE_HEADER_LEN, deadline).await?;
+    let (wal_size, wal_head) = file_prefix(wal, WAL_HEADER_LEN, deadline).await?;
     if main_size == 0 && wal_size == 0 {
         return Ok(PairHeaders::Empty);
     }
-    let main_readable = main_size == 0 || main_head == DATABASE_HEADER.as_slice();
-    let wal_readable = wal_size == 0 || WAL_MAGICS.iter().any(|magic| wal_head == magic.as_slice());
-    Ok(if main_readable && wal_readable {
-        PairHeaders::Readable
+    let main_page = (main_size > 0).then(|| database_page_size(&main_head));
+    let wal_page = (wal_size > 0).then(|| wal_page_size(&wal_head));
+    let readable = match (main_page, wal_page) {
+        (Some(None), _) | (_, Some(None)) | (None, None) => false,
+        (Some(Some(main)), Some(Some(wal))) => main == wal,
+        (Some(Some(_)), None) | (None, Some(Some(_))) => true,
+    };
+    Ok(if readable {
+        PairHeaders::Readable(WalFingerprint {
+            size: wal_size,
+            header: wal_head,
+        })
     } else {
         PairHeaders::Unreadable
     })
+}
+
+fn be_u16(bytes: &[u8], at: usize) -> Option<u16> {
+    bytes
+        .get(at..at + 2)?
+        .try_into()
+        .ok()
+        .map(u16::from_be_bytes)
+}
+
+fn be_u32(bytes: &[u8], at: usize) -> Option<u32> {
+    bytes
+        .get(at..at + 4)?
+        .try_into()
+        .ok()
+        .map(u32::from_be_bytes)
+}
+
+/// A page size SQLite allows: a power of two from 512 to 65536.
+fn valid_page_size(size: u32) -> bool {
+    (512..=65_536).contains(&size) && size.is_power_of_two()
+}
+
+/// The page size of a database header Turso opens, as its open checks it:
+/// a whole header, magic, page size, equal read and write versions it knows,
+/// usable space, the fixed payload fractions, and a UTF-8 or unset text
+/// encoding.
+fn database_page_size(header: &[u8]) -> Option<u32> {
+    if header.len() < DATABASE_HEADER_LEN
+        || header.get(..DATABASE_HEADER.len())? != DATABASE_HEADER.as_slice()
+    {
+        return None;
+    }
+    // 1 stands for 65536, which does not fit the field.
+    let page_size = match be_u16(header, 16)? {
+        1 => 65_536,
+        size => u32::from(size),
+    };
+    let &[
+        write_version,
+        read_version,
+        reserved,
+        max_embed,
+        min_embed,
+        leaf,
+    ] = header.get(18..24)?
+    else {
+        return None;
+    };
+    let encoding = be_u32(header, 56)?;
+    (valid_page_size(page_size)
+        && write_version == read_version
+        && matches!(write_version, 1 | 2)
+        && page_size.saturating_sub(u32::from(reserved)) >= 480
+        && (max_embed, min_embed, leaf) == (64, 32, 32)
+        && matches!(encoding, 0 | 1))
+    .then_some(page_size)
+}
+
+/// The page size of a WAL header Turso opens: a whole header, magic, format
+/// version and a valid page size.
+fn wal_page_size(header: &[u8]) -> Option<u32> {
+    if header.len() < WAL_HEADER_LEN {
+        return None;
+    }
+    let magic = header.get(..4)?;
+    let page_size = be_u32(header, 8)?;
+    (WAL_MAGICS.iter().any(|known| magic == known.as_slice())
+        && be_u32(header, 4)? == WAL_FORMAT_VERSION
+        && valid_page_size(page_size))
+    .then_some(page_size)
 }
 
 /// A file's size and up to its first `len` bytes.
@@ -852,66 +1081,126 @@ fn read_prefix(handle: &FileSystemSyncAccessHandle, len: usize) -> Result<(u64, 
     // OPFS sizes are non-negative integers below 2^53.
     let size = handle.get_size()? as u64;
     let mut bytes = vec![0; len];
-    let options = FileSystemReadWriteOptions::new();
-    options.set_at(0.0);
-    let read = handle.read_with_u8_array_and_options(&mut bytes, &options)?;
-    bytes.truncate((read as usize).min(len));
+    if len > 0 {
+        let options = FileSystemReadWriteOptions::new();
+        options.set_at(0.0);
+        let read = handle.read_with_u8_array_and_options(&mut bytes, &options)?;
+        bytes.truncate((read as usize).min(len));
+    }
     Ok((size, bytes))
 }
 
-/// Suffix of the journal file that records an adoption into an identity
-/// until its first open succeeds. No approved identity ends with it.
-const ADOPTION_JOURNAL_SUFFIX: &str = "-adopting";
-/// A journal holds one identity; anything longer was not written here.
-const MAX_JOURNAL_BYTES: usize = 4096;
+/// Suffix of the marker file that records an adoption into an identity until
+/// its first open succeeds. No approved identity ends with it.
+const ADOPTION_MARKER_SUFFIX: &str = "-adopting";
+/// The first bytes of every marker, so no other file reads as one.
+const MARKER_MAGIC: &[u8] = b"turso-opfs adoption v1\n";
+/// A marker holds one identity and a WAL header; anything longer was not
+/// written here.
+const MAX_MARKER_BYTES: usize = 4096;
 
-fn journal_path(paths: &Paths) -> String {
-    format!("{}{ADOPTION_JOURNAL_SUFFIX}", paths.get(FileRole::Main))
+/// What a marker records: where the files came from, and the WAL that went
+/// with the main file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Marker {
+    previous_identity: String,
+    wal: WalFingerprint,
 }
 
-/// Records `previous_identity` as the source of an adoption into `to`, and
-/// flushes it before any file moves.
-async fn write_journal(
+impl Marker {
+    /// Magic, identity length (u16) and bytes, WAL size (u64), header length
+    /// (u8) and bytes, all big-endian.
+    fn encode(&self) -> Option<Vec<u8>> {
+        let identity = self.previous_identity.as_bytes();
+        let identity_len = u16::try_from(identity.len()).ok()?;
+        let header_len = u8::try_from(self.wal.header.len()).ok()?;
+        let mut bytes = MARKER_MAGIC.to_vec();
+        bytes.extend_from_slice(&identity_len.to_be_bytes());
+        bytes.extend_from_slice(identity);
+        bytes.extend_from_slice(&self.wal.size.to_be_bytes());
+        bytes.push(header_len);
+        bytes.extend_from_slice(&self.wal.header);
+        (bytes.len() <= MAX_MARKER_BYTES).then_some(bytes)
+    }
+
+    /// The marker `bytes` hold exactly, or `None` for anything else.
+    fn decode(bytes: &[u8]) -> Option<Self> {
+        let rest = bytes.strip_prefix(MARKER_MAGIC)?;
+        let (identity_len, rest) = rest.split_first_chunk::<2>()?;
+        let (identity, rest) =
+            rest.split_at_checked(usize::from(u16::from_be_bytes(*identity_len)))?;
+        let (size, rest) = rest.split_first_chunk::<8>()?;
+        let (header_len, header) = rest.split_first()?;
+        let wal = WalFingerprint {
+            size: u64::from_be_bytes(*size),
+            header: header.to_vec(),
+        };
+        let valid_header = header.len() == usize::from(*header_len)
+            && header.len() <= WAL_HEADER_LEN
+            && u64::try_from(header.len()).ok() == Some(wal.size.min(WAL_HEADER_LEN as u64));
+        valid_header.then_some(())?;
+        Some(Self {
+            previous_identity: String::from_utf8(identity.to_vec()).ok()?,
+            wal,
+        })
+    }
+}
+
+fn marker_path(paths: &Paths) -> String {
+    format!("{}{ADOPTION_MARKER_SUFFIX}", paths.get(FileRole::Main))
+}
+
+/// Records `marker` beside `to` and flushes it before any file moves.
+async fn write_marker(
     root: &FileSystemDirectoryHandle,
     to: &Paths,
-    previous_identity: &str,
+    marker: &Marker,
     deadline: BusyDeadline,
 ) -> Result<(), OpfsError> {
-    let (handle, _) = open_sync_handle(root, &journal_path(to), deadline)
+    let bytes = marker
+        .encode()
+        .ok_or_else(|| OpfsError::new(OpfsErrorKind::Write, "adoption marker is too long"))?;
+    let (handle, _) = open_sync_handle(root, &marker_path(to), deadline)
         .await
-        .map_err(|error| entry_error(OpfsErrorKind::Write, "OPFS journal open", &error))?;
-    let written = write_journal_bytes(&handle, previous_identity.as_bytes());
+        .map_err(|error| entry_error(OpfsErrorKind::Write, "OPFS marker open", &error))?;
+    let written = write_marker_bytes(&handle, &bytes);
     let closed = close_sync_handle(&handle);
-    written.map_err(|error| js_error(OpfsErrorKind::Write, "OPFS journal write", &error))?;
-    closed.map_err(|error| js_error(OpfsErrorKind::Write, "OPFS journal close", &error))
+    written.map_err(|error| js_error(OpfsErrorKind::Write, "OPFS marker write", &error))?;
+    closed.map_err(|error| js_error(OpfsErrorKind::Write, "OPFS marker close", &error))
 }
 
-fn write_journal_bytes(handle: &FileSystemSyncAccessHandle, bytes: &[u8]) -> Result<(), JsValue> {
+fn write_marker_bytes(handle: &FileSystemSyncAccessHandle, bytes: &[u8]) -> Result<(), JsValue> {
     handle.truncate_with_f64(0.0)?;
     let options = FileSystemReadWriteOptions::new();
     options.set_at(0.0);
     let written = handle.write_with_u8_array_and_options(bytes, &options)?;
     if written as usize != bytes.len() {
-        return Err(JsValue::from_str("short OPFS journal write"));
+        return Err(JsValue::from_str("short OPFS marker write"));
     }
     handle.flush()
 }
 
-/// The identity a journal beside `to` records. A journal that is empty, too
-/// long or not UTF-8 was cut off before any file moved, so it reads as none.
-async fn read_journal(
+/// The marker beside `to`. One that this adapter did not write completely, or
+/// that names an identity it could not have adopted, is removed and reads as
+/// none: it was cut off before any file moved, or was never a marker.
+async fn read_marker(
     root: &FileSystemDirectoryHandle,
     to: &Paths,
     deadline: BusyDeadline,
-) -> Result<Option<String>, OpfsError> {
-    let Some(file) = existing_file(root, &journal_path(to)).await? else {
+) -> Result<Option<Marker>, OpfsError> {
+    let path = marker_path(to);
+    let Some(file) = existing_file(root, &path).await? else {
         return Ok(None);
     };
-    let (size, bytes) = file_prefix(&file, MAX_JOURNAL_BYTES + 1, deadline).await?;
-    if size == 0 || size > MAX_JOURNAL_BYTES as u64 || bytes.len() as u64 != size {
-        return Ok(None);
+    let (size, bytes) = file_prefix(&file, MAX_MARKER_BYTES + 1, deadline).await?;
+    let marker = (bytes.len() as u64 == size)
+        .then(|| Marker::decode(&bytes))
+        .flatten()
+        .filter(|marker| approved_paths(&marker.previous_identity).is_ok_and(|from| from != *to));
+    if marker.is_none() {
+        remove_if_present(root, &path, false, deadline).await?;
     }
-    Ok(String::from_utf8(bytes).ok())
+    Ok(marker)
 }
 
 impl Drop for OpfsOwner {
@@ -1127,15 +1416,14 @@ impl ConnectedOpfsSession {
     }
 
     /// Ends the adoption that brought these files to this identity, once
-    /// their first open has succeeded: removes the journal, so a later
-    /// recovery discards these files like any others instead of returning them
-    /// to the identity they came from. Does nothing when no adoption is
-    /// pending.
+    /// their first open has succeeded: removes the adoption marker, so these
+    /// files are this identity's own and nothing returns them to the identity
+    /// they came from. Does nothing when no adoption is pending.
     pub async fn finish_adoption(&self) -> Result<(), OpfsError> {
         let root = adoption_root().await?;
         remove_if_present(
             &root,
-            &journal_path(&self.paths),
+            &marker_path(&self.paths),
             false,
             BusyDeadline::start(),
         )
@@ -1819,7 +2107,7 @@ fn approved_paths(database_name: &str) -> Result<Paths, OpfsError> {
         || database_name == "."
         || database_name == ".."
         || database_name.ends_with("-wal")
-        || database_name.ends_with(ADOPTION_JOURNAL_SUFFIX)
+        || database_name.ends_with(ADOPTION_MARKER_SUFFIX)
         || database_name.contains(['/', '\\', '\0'])
     {
         return Err(OpfsError::new(
@@ -2546,10 +2834,10 @@ async fn reset_paths(paths: &Paths, recursive: bool) -> Result<(), OpfsError> {
     let root = worker_root()
         .await
         .map_err(|error| js_error(OpfsErrorKind::Remove, "OPFS reset root open", &error))?;
-    // The journal goes first: files left without it open as this identity's
-    // own, while a journal left without files could pull in files the
-    // previous identity holds by then.
-    remove_if_present(&root, &journal_path(paths), false, deadline).await?;
+    // The adoption marker goes first: files left without it open as this
+    // identity's own, and a marker left without a main file is removed as
+    // stale by the next read.
+    remove_if_present(&root, &marker_path(paths), false, deadline).await?;
     for role in FileRole::ALL {
         remove_if_present(&root, paths.get(role), recursive, deadline).await?;
         #[cfg(test)]
@@ -2581,7 +2869,7 @@ async fn reset_paths(paths: &Paths, recursive: bool) -> Result<(), OpfsError> {
     Ok(())
 }
 
-/// Removes both approved paths and any adoption journal beside them,
+/// Removes both approved paths and any adoption marker beside them,
 /// attempting each even if another fails.
 async fn remove_paths(paths: &Paths) -> Result<(), OpfsError> {
     let deadline = BusyDeadline::start();
@@ -2589,7 +2877,7 @@ async fn remove_paths(paths: &Paths) -> Result<(), OpfsError> {
         .await
         .map_err(|error| js_error(OpfsErrorKind::Remove, "OPFS remove root open", &error))?;
     let mut first_error = None;
-    if let Err(error) = remove_if_present(&root, &journal_path(paths), false, deadline).await {
+    if let Err(error) = remove_if_present(&root, &marker_path(paths), false, deadline).await {
         first_error.get_or_insert(error);
     }
     for role in FileRole::ALL {
