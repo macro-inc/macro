@@ -503,17 +503,19 @@ impl OpfsOwner {
     /// [`ReturnOutcome::WalNotEmpty`]; and the previous identity must have no
     /// main file and at most an empty WAL, or it is
     /// [`ReturnOutcome::Occupied`]. Either way nothing moves. A pair that is
-    /// not whole here is an error. Once the main file is back the result is
-    /// [`ReturnOutcome::Returned`], even if removing this owner's empty WAL or
-    /// the marker fails: the next read removes a marker left without a main
-    /// file. The caller decides that the files are still what the older build
-    /// wrote; this method only moves them.
+    /// not whole here is an error, and so is a `previous` that does not lock
+    /// the identity this owner's marker names, or no marker: files go back
+    /// only to where they came from. Once the main file is back the result
+    /// is [`ReturnOutcome::Returned`], even if removing this owner's empty
+    /// WAL or the marker fails: the next read removes a marker left without a
+    /// main file. The caller decides that the files are still what the older
+    /// build wrote; this method only moves them.
     pub async fn return_adoption(
         &mut self,
         previous: &PreviousLock,
     ) -> Result<ReturnOutcome, OpfsError> {
         let to = self.paths.clone();
-        let from = previous.paths.clone();
+        let from = (previous.identity.clone(), previous.paths.clone());
         self.in_adoption_phase(return_pair(to, from)).await
     }
 
@@ -822,6 +824,10 @@ thread_local! {
     /// How many times an entry operation waited on a busy entry, so a test
     /// can tell that one never waited without timing it.
     static BUSY_WAITS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    /// While set, removing the entry at this path fails, as it does while
+    /// another context holds it open, without first spending the busy wait.
+    static REMOVAL_FAILS_AT: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 async fn existing_file(
@@ -1057,9 +1063,25 @@ async fn complete_pair(
     Ok(CompleteOutcome::Completed)
 }
 
-async fn return_pair(to: Paths, from: Paths) -> Result<ReturnOutcome, OpfsError> {
+async fn return_pair(to: Paths, previous: (String, Paths)) -> Result<ReturnOutcome, OpfsError> {
     let root = adoption_root().await?;
     let deadline = BusyDeadline::start();
+    let (identity, from) = previous;
+    match read_marker(&root, &to, deadline).await? {
+        Some(marker) if marker.previous_identity == identity => {}
+        Some(_) => {
+            return Err(OpfsError::new(
+                OpfsErrorKind::InvalidName,
+                "the lock held is not the identity the adoption marker names",
+            ));
+        }
+        None => {
+            return Err(OpfsError::new(
+                OpfsErrorKind::Move,
+                "no adoption marker beside this owner's paths",
+            ));
+        }
+    }
     let [Some(main), Some(wal)] = present_files(&root, &to).await? else {
         return Err(OpfsError::new(
             OpfsErrorKind::Move,
@@ -3262,6 +3284,13 @@ async fn remove_if_present(
     recursive: bool,
     deadline: BusyDeadline,
 ) -> Result<(), OpfsError> {
+    #[cfg(test)]
+    if REMOVAL_FAILS_AT.with(|at| at.borrow().as_deref() == Some(path)) {
+        return Err(OpfsError::new(
+            OpfsErrorKind::Remove,
+            "injected OPFS path remove failure",
+        ));
+    }
     let options = FileSystemRemoveOptions::new();
     options.set_recursive(recursive);
     match retry_busy_entry(deadline, || root.remove_entry_with_options(path, &options)).await {

@@ -1038,16 +1038,16 @@ async fn a_return_whose_cleanup_fails_still_reports_the_files_returned() {
     write_pair(&old, 19).await;
     clean_pair(&new).await;
     assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
-    // Another context keeps the marker open, so removing it fails after the
-    // main file went back.
-    let root = worker_root().await.expect("root");
-    let (held, _) = open_sync_handle(&root, &marker_name(&new), BusyDeadline::start())
-        .await
-        .expect("hold the marker open");
-    assert_eq!(give_back(&old, &new).await, ReturnOutcome::Returned);
+    // Removing the marker fails after the main file went back, as it does
+    // while another context holds it open. (A marker held open from the
+    // start fails the return before anything moves: it reads the marker
+    // first.)
+    REMOVAL_FAILS_AT.with(|at| at.replace(Some(marker_name(&new))));
+    let outcome = give_back(&old, &new).await;
+    REMOVAL_FAILS_AT.with(|at| at.replace(None));
+    assert_eq!(outcome, ReturnOutcome::Returned);
     assert_eq!(read_pair(&old).await, 19);
     assert!(marker_exists(&new).await);
-    close_sync_handle(&held).expect("close the marker");
 
     // The marker left without a main file reads as no adoption, and goes.
     assert_eq!(read_adoption(&new).await, None);
@@ -1428,6 +1428,59 @@ async fn a_return_without_a_whole_pair_here_is_an_error() {
     assert_eq!(present(&old).await, [false, true]);
     assert_eq!(complete(&old, &new, true).await, CompleteOutcome::Completed);
     assert_eq!(open_and_finish(&new).await, 21);
+    clean_pair(&new).await;
+}
+
+#[wasm_bindgen_test]
+async fn a_return_goes_only_to_the_identity_the_marker_names() {
+    // The lock of an empty identity the marker does not name: nothing moves
+    // there, and the adoption still reads as it did.
+    let (old, new) = identities("return-other");
+    write_pair(&old, 24).await;
+    clean_pair(&new).await;
+    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
+    let (other, _) = identities("return-other-lock");
+    clean_pair(&other).await;
+    let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
+    let lock = owner
+        .lock_previous(&other)
+        .await
+        .expect("lock")
+        .expect("free");
+    assert_eq!(
+        owner
+            .return_adoption(&lock)
+            .await
+            .map_err(|error| error.kind()),
+        Err(OpfsErrorKind::InvalidName)
+    );
+    lock.release().await.expect("release previous");
+    owner.release().await.expect("release");
+    assert_eq!(present(&other).await, [false, false]);
+    assert_eq!(
+        moved(&new).await,
+        Some((old.clone(), AdoptionState::Complete))
+    );
+
+    // Without a marker the files here are this owner's own: they go nowhere.
+    let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
+    owner.discard_adoption().await.expect("discard");
+    let lock = owner
+        .lock_previous(&old)
+        .await
+        .expect("lock")
+        .expect("free");
+    assert_eq!(
+        owner
+            .return_adoption(&lock)
+            .await
+            .map_err(|error| error.kind()),
+        Err(OpfsErrorKind::Move)
+    );
+    lock.release().await.expect("release previous");
+    owner.release().await.expect("release");
+    assert_eq!(present(&old).await, [false, false]);
+    assert_eq!(read_pair(&new).await, 24);
     clean_pair(&new).await;
 }
 
