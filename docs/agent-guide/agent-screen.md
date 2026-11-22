@@ -37,10 +37,12 @@ Each appears only when the harness list gives the viewer access other than
 
 ## Taking over
 
-1. Click **Take over** (owners and admins). The pill turns amber: "You're
-   driving", and "{name} is paused · tools held" only when the harness froze
-   the agent. Where it couldn't, Take over is refused with "Couldn't pause the
-   agent on this computer…" and stays enabled.
+1. Click **Take over** (owners and admins). The header pill turns amber:
+   "You're driving". An amber frame goes round the picture, and a one-line
+   pill over it says "{name} is paused · tools held" (only when the harness
+   froze the agent) with the hand-back hints, which shorten and then drop as
+   the split narrows. Where the agent couldn't be paused, Take over is refused
+   with "Couldn't pause the agent on this computer…" and stays enabled.
 2. Keys go to the computer while the hidden keyboard field has focus
    (`data-owns-keyboard`: app hotkeys stand down). After a Take over on
    desktop the field is focused. Click the picture to focus it again.
@@ -61,10 +63,18 @@ computer back), a banner says "You're no longer driving" and why, with
 A dropped connection while driving says "Connection lost while you were
 driving. Reconnecting…" and wins the same drive back.
 
+On a phone the viewer is full screen: the dock and the New button stand
+down while it shows. In portrait the picture starts zoomed to fill the view
+(top-left corner in view); **Fit** in the zoom control shows all of it.
+
 ## Testing without a computer
 
 The views and the session are tested with fake transports (vitest, jsdom):
 `views/agent-screen.test.tsx` drives both layouts through drops, lapses and
 take-overs; `transports/vnc-frame/novnc-clipboard.test.ts` runs the real
-noVNC against a scripted RFB server. A real run needs a local stack with an
+noVNC against a scripted RFB server. The layouts have a backend-free browser
+regression over a stand-in transport (desktop split at 600 and 380 px, phone,
+light and dark, plus the DM header's status chip):
+`bunx playwright test --config src/features/agent-screen/browser-test/playwright.config.ts`
+from `apps/web`; `AGENT_SCREEN_SHOTS_DIR=<dir>` keeps a PNG of each state. A real run needs a local stack with an
 agent teammate's computer and the harness screen socket.
