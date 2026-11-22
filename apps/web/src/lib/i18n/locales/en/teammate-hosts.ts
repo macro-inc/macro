@@ -29,6 +29,11 @@ export default {
   trustTitle: 'Anything running as you on {{host}} can act as {{name}}',
   trustBody:
     "That includes coding agents macrod runs there and anyone with admin on {{host}}: they can read {{name}}'s files and credentials. {{name}} reaches the internet, but not {{host}} or the other machines on its network.",
+  trustTitleUnnamed:
+    'Anything running as you on {{host}} can act as this agent',
+  trustBodyUnnamed:
+    'That includes coding agents macrod runs there and anyone with admin on {{host}}: they can read its files and credentials. It reaches the internet, but not {{host}} or the other machines on its network.',
+  computersFailed: "Couldn't load computers.",
   ownComputerCaption:
     '{{name}} gets its own account and runs on {{host}}. It says hi once it starts.',
   chooseHost: 'Choose one of your computers to continue.',
@@ -42,7 +47,7 @@ export default {
   moveBody:
     '{{name}} saves its memory and stops on {{from}}, then starts on the computer you choose. Its browser sign-ins and its Claude sign-in stay behind.',
   moveBodyParked:
-    '{{name}} is stopped. It starts on the computer you choose, with its chats and memory. Its browser sign-ins and its Claude sign-in stayed behind.',
+    '{{name}} is paused. It starts on the computer you choose, with its chats and memory. Its browser sign-ins and its Claude sign-in stayed behind.',
   moveConfirm: 'Move',
   moveFailed: "Couldn't move {{name}}. Try again.",
   runsOn: '· on {{host}}',

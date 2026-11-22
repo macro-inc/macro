@@ -4,8 +4,11 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { AddAgentState } from '../core/team-agent-add';
 import { AGENT_COMPUTER_CHOICE, InviteAgentForm } from './invite-agent-form';
+import { TeammateTrustWarning } from './teammate-host-picker';
 
 beforeEach(() => {
+  // jsdom has no scrolling; the form brings its notices into view.
+  Element.prototype.scrollIntoView = vi.fn();
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -232,4 +235,52 @@ it('shows more options under the computer list, held while adding', () => {
   expect(option.matches(':disabled')).toBe(false);
   setState({ kind: 'adding' });
   expect(option.matches(':disabled')).toBe(true);
+});
+
+it('shows one error and no Add when neither the sizes nor the computers load', () => {
+  const noop = () => {};
+  const retryOffers = vi.fn();
+  const retryHosts = vi.fn();
+  render(() => (
+    <InviteAgentForm
+      offers={undefined}
+      offersFailed
+      onRetryOffers={retryOffers}
+      hostsFailed
+      onRetryHosts={retryHosts}
+      state={{ kind: 'editing' }}
+      purchaseKey="example"
+      onCancel={noop}
+      onSubmit={noop}
+      onRetryStart={noop}
+      onEdit={noop}
+      onBilling={noop}
+      hosts={() => <p>Couldn't list your computers.</p>}
+    />
+  ));
+  expect(screen.getAllByRole('alert')).toHaveLength(1);
+  expect(screen.getByText("Couldn't load computers.")).toBeTruthy();
+  expect(screen.queryByText("Couldn't list your computers.")).toBeNull();
+  expect(
+    (screen.getByRole('button', { name: 'Add Agent' }) as HTMLButtonElement)
+      .disabled
+  ).toBe(true);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(retryOffers).toHaveBeenCalledTimes(1);
+  expect(retryHosts).toHaveBeenCalledTimes(1);
+});
+
+it('names the agent in the trust warning once it has a name', () => {
+  render(() => <TeammateTrustWarning host="demo-laptop" name="" />);
+  expect(
+    screen.getByText(
+      'Anything running as you on demo-laptop can act as this agent'
+    )
+  ).toBeTruthy();
+  cleanup();
+  render(() => <TeammateTrustWarning host="demo-laptop" name="Ada" />);
+  expect(
+    screen.getByText('Anything running as you on demo-laptop can act as Ada')
+  ).toBeTruthy();
 });

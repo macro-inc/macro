@@ -100,6 +100,8 @@ export function InviteAgentPanel(props: {
             )
           : undefined
       }
+      hostsFailed={ownMachines() ? hosts.isError : undefined}
+      onRetryHosts={() => fireAndForget(hosts.refetch(), 'team-agent.hosts')}
       hostNotice={(host, name) => (
         <TeammateTrustWarning host={host.name} name={name} />
       )}

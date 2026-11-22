@@ -119,6 +119,7 @@ export function TeammateHostSkeleton() {
  */
 export function TeammateTrustWarning(props: {
   host: string;
+  /** Empty until the agent is named. */
   name: string;
 }): JSX.Element {
   return (
@@ -129,13 +130,20 @@ export function TeammateTrustWarning(props: {
       <WarningCircleIcon class="mt-0.5 size-4 shrink-0 text-warning" />
       <div class="flex min-w-0 flex-col gap-1">
         <p class="text-sm font-medium text-ink">
-          {t('teammateHosts.trustTitle', {
-            host: props.host,
-            name: props.name,
-          })}
+          {props.name
+            ? t('teammateHosts.trustTitle', {
+                host: props.host,
+                name: props.name,
+              })
+            : t('teammateHosts.trustTitleUnnamed', { host: props.host })}
         </p>
         <p class="text-xs text-ink-muted">
-          {t('teammateHosts.trustBody', { host: props.host, name: props.name })}
+          {props.name
+            ? t('teammateHosts.trustBody', {
+                host: props.host,
+                name: props.name,
+              })
+            : t('teammateHosts.trustBodyUnnamed', { host: props.host })}
         </p>
       </div>
     </div>

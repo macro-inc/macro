@@ -66,8 +66,9 @@ function refusalText(reason: AddRefusal): string {
  * Add an agent teammate: a name, its picture, and the computer it runs on,
  * priced the way Buy a computer prices it. The dialog stays open while the
  * agent is added and started, and every failure is shown here, with the name
- * and size kept. Add is always enabled: with no name it marks the field and
- * moves the caret there. Renders the dialog's body and footer through a
+ * and size kept. Add is enabled unless neither the sizes nor the inviter's
+ * computers loaded: with no name it marks the field and moves the caret
+ * there. Renders the dialog's body and footer through a
  * layout (`AgentInviteLayoutA`).
  */
 export function InviteAgentForm(props: {
@@ -101,7 +102,13 @@ export function InviteAgentForm(props: {
     selected: () => string | undefined;
     onSelect: (host: AgentHost) => void;
   }) => JSX.Element;
-  /** Under the list while one of the inviter's computers is picked. */
+  /** The inviter's computers failed to load; with the sizes failed too, one error says so. */
+  hostsFailed?: boolean;
+  onRetryHosts?: () => void;
+  /**
+   * Under the list while one of the inviter's computers is picked; `name` is
+   * empty until the agent is named.
+   */
   hostNotice?: (host: AgentHost, name: string) => JSX.Element;
   /** Add with one of the inviter's computers picked: nothing is bought. */
   onSubmitHost?: (invite: HostInvite) => void;
@@ -120,6 +127,12 @@ export function InviteAgentForm(props: {
     setHost(undefined);
     setChosenSize(chosen);
   };
+  // Picking a computer shows what hosting there means under the list; bring
+  // it into view, since on a phone it starts below the fold.
+  const chooseHost = (picked: AgentHost) => {
+    setHost(picked);
+    notice?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
   // Add was pressed with no name: the field says it needs one.
   const [asked, setAsked] = createSignal(false);
   // Add was pressed with every size sold out.
@@ -133,6 +146,9 @@ export function InviteAgentForm(props: {
   let nameInput: HTMLInputElement | undefined;
 
   const adding = () => props.state.kind === 'adding' || preparing();
+  // Neither the sizes nor the inviter's computers loaded: nothing to pick.
+  const nothingLoaded = () =>
+    props.offersFailed && (!props.hosts || !!props.hostsFailed);
   // A size with no room right now reads as sold out until the sizes reload.
   const noRoomSize = () =>
     props.state.kind === 'no_room' ? props.state.size : undefined;
@@ -325,7 +341,7 @@ export function InviteAgentForm(props: {
             when={offers()}
             fallback={
               <Show
-                when={props.offersFailed}
+                when={props.offersFailed && !(props.hosts && nothingLoaded())}
                 fallback={<ComputerSizeSkeleton />}
               >
                 <div
@@ -361,7 +377,26 @@ export function InviteAgentForm(props: {
               </>
             )}
           </Show>
-          <Show when={props.hosts}>
+          <Show when={props.hosts && nothingLoaded()}>
+            <div
+              role="alert"
+              class="flex flex-wrap items-center gap-2 text-sm text-ink-muted"
+            >
+              <span>{t('teammateHosts.computersFailed')}</span>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  props.onRetryOffers();
+                  props.onRetryHosts?.();
+                }}
+              >
+                {t('teamAgents.tryAgain')}
+              </Button>
+            </div>
+          </Show>
+          <Show when={!nothingLoaded() && props.hosts}>
             {(hosts) => (
               <>
                 <ChoiceGroupLabel>
@@ -369,7 +404,7 @@ export function InviteAgentForm(props: {
                 </ChoiceGroupLabel>
                 {hosts()({
                   selected: () => host()?.harnessId,
-                  onSelect: edit(setHost),
+                  onSelect: edit(chooseHost),
                 })}
               </>
             )}
@@ -445,12 +480,7 @@ export function InviteAgentForm(props: {
           </Switch>
           {/* What running on the inviter's computer means, while one is picked. */}
           <Show when={props.hostNotice && host()}>
-            {(picked) =>
-              props.hostNotice?.(
-                picked(),
-                trimmedName() || t('teamAgents.agent')
-              )
-            }
+            {(picked) => props.hostNotice?.(picked(), trimmedName())}
           </Show>
         </div>
       }
@@ -472,6 +502,7 @@ export function InviteAgentForm(props: {
           // adding it keeps focus, so a phone sheet's focus trap doesn't move
           // it to the name field when a refusal arrives; `submit` ignores
           // presses meanwhile.
+          disabled={nothingLoaded()}
           aria-disabled={adding() || undefined}
           aria-busy={adding() || undefined}
           data-disabled={adding() ? '' : undefined}

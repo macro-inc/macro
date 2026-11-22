@@ -19,7 +19,7 @@ async function copyCommand(command: string): Promise<boolean> {
 /** A macrod command the owner runs on their machine, with a copy button. */
 export function TeammateCommand(props: { command: string }) {
   return (
-    <span class="inline-flex max-w-full flex-wrap items-center gap-1">
+    <span class="inline-flex max-w-full items-center gap-1">
       <code class="min-w-0 break-all rounded bg-ink/6 px-1.5 py-0.5 font-mono text-xs text-ink">
         {props.command}
       </code>
