@@ -164,9 +164,10 @@ async fn upgrade_memory_on_a_retained_cache() {
         return;
     };
     let own = database_identity(BENCH_SCOPE);
-    // CACHE_MIGRATION_FROM=12 starts from the storage 12 shape instead.
+    // CACHE_MIGRATION_FROM=12 or 13 starts from that storage shape instead.
     let (from, source) = match option_env!("CACHE_MIGRATION_FROM") {
         Some("12") => (12, "twelve.turso"),
+        Some("13") => (13, "thirteen.turso"),
         _ => (11, "older.turso"),
     };
     let older = cache_database_name(BENCH_SCOPE, from);
