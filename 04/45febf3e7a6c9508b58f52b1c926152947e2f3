@@ -1,0 +1,49 @@
+services/document_storage_service/src/server.rs
+  s_cfd7ab2660542c::t_684b3efedc53cd 388-410,419,1723
+services/agent_harness_service/src/cognition/config.rs
+  s_cfd7ab2660542c::t_0fc89450d1cffa 201-282
+crates/connectors/src/composition.rs
+  s_cfd7ab2660542c::t_acecf2b5f1d616 14,21,36-44
+  s_cfd7ab2660542c::t_d1a2d0f01f2a10 45
+crates/ai_tools/src/mcp_app_catalog/test.rs
+  s_cfd7ab2660542c::t_aa8881fefbf5b3 2,4-6,8-10,12-13,17-21,25-28,32-35,38-53
+crates/ai_tools/src/lib.rs
+  s_cfd7ab2660542c::t_b9587dcb8b05a9 13,74
+crates/connectors/src/domain/service.rs
+  s_cfd7ab2660542c::t_7e7a93c19a3d98 587-591
+crates/ai_tools/Cargo.toml
+  s_cfd7ab2660542c::t_b8fcd82c8b9ca6 130
+crates/connectors/src/domain/service/test.rs
+  s_cfd7ab2660542c::t_7e7a93c19a3d98 550-558
+  s_cfd7ab2660542c::t_3e12f75fe5f604 549
+crates/ai_tools/src/bin/memory/context.rs
+  s_cfd7ab2660542c::t_7a58fb7a76230d 30-32
+crates/ai_tools/src/tool_context.rs
+  s_cfd7ab2660542c::t_0f2b84d31db73f 185-186
+  s_cfd7ab2660542c::t_20a60022094ecd 178,192,204-205
+crates/ai_tools/src/connectors_config.rs
+  s_cfd7ab2660542c::t_d266caee541a4e 54-64,81-86,100,103-104
+  s_cfd7ab2660542c::t_0dd056aaf0ca17 1-53,65-80,87-99,101-102,105-228
+crates/ai_tools/src/mcp_app_catalog.rs
+  s_cfd7ab2660542c::t_a9255f0dcdd09b 1-3,9-10,14-15,38-39,41,44,48-51,61,118,120-121,123-124,127-130,134,137-138,143,145-148,150,153-156
+crates/ai_tools/src/build_context.rs
+  s_cfd7ab2660542c::t_0f2b84d31db73f 205-207,218,235,641,813
+services/document_storage_service/src/api/context.rs
+  s_cfd7ab2660542c::t_684b3efedc53cd 555-560
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0445febf3e7a6c9508b58f52b1c926152947e2f3",
+  "prompts": {},
+  "sessions": {
+    "s_cfd7ab2660542c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "87bbe042-970c-465d-ab64-b3aff25d263f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
