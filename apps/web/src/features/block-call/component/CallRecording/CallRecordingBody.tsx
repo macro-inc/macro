@@ -9,15 +9,18 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { CallRecord } from '@service-call/client';
 import { Button, Layer, Tabs } from '@ui';
 import {
+  createEffect,
   createMemo,
   createSignal,
   type JSX,
   Match,
+  on,
   Show,
   Switch,
 } from 'solid-js';
@@ -27,6 +30,10 @@ import { createRecordingIdentity } from '../../primitives/recording-identity';
 import { createRecordingLayout } from '../../primitives/recording-layout';
 import { createRecordingNavigation } from '../../primitives/recording-navigation';
 import { createRecordingPlayback } from '../../primitives/recording-playback';
+import {
+  createRecordingSessions,
+  partTimeRange,
+} from '../../primitives/recording-sessions';
 import { createRecordingTimeline } from '../../primitives/recording-timeline';
 import { createTranscriptFollow } from '../../primitives/transcript-scroll';
 import { CallTranscript } from '../CallTranscript';
@@ -50,6 +57,10 @@ export function CallRecordingBody(props: {
   onClearMessageTarget?: () => void;
 }) {
   const record = () => props.record;
+  // Playback and the transcript read the selected part; summary, chat,
+  // participants and details read the whole call through `record`.
+  const parts = createRecordingSessions(record);
+  const playbackRecord = parts.playbackRecord;
   const panel = useSidePanel();
   const [videoRef, setVideoRef] = createSignal<HTMLVideoElement>();
   const [columnRef, setColumnRef] = createSignal<HTMLDivElement>();
@@ -57,7 +68,7 @@ export function CallRecordingBody(props: {
   const layout = createRecordingLayout({
     playback,
     columnRef,
-    hasRecording: () => !!record().recordingUrl,
+    hasRecording: () => !!playbackRecord().recordingUrl,
   });
   const {
     wideTranscript,
@@ -77,7 +88,6 @@ export function CallRecordingBody(props: {
     setTranscriptCardRef,
   } = layout;
   const transcriptFollow = createTranscriptFollow();
-  const recordingDuration = () => playback.duration() || undefined;
   const mobilePlaybackActive = () =>
     selectedTab() === 'transcript' && floatingPlayback() && !panel?.isOpen();
   const {
@@ -87,7 +97,85 @@ export function CallRecordingBody(props: {
     seekToSeconds,
     goToTranscriptSegment,
     videoSeekGeneration,
-  } = createRecordingTimeline(record, videoRef);
+  } = createRecordingTimeline(playbackRecord, videoRef);
+
+  // Until a part's metadata loads, its own window bounds chat offsets, so a
+  // later part's messages never point into this part's recording.
+  const recordingDuration = () => {
+    const loaded = playback.duration();
+    if (loaded) return loaded;
+    if (!parts.hasParts()) return undefined;
+    const { endedAt } = playbackRecord();
+    const start = timelineStartMs();
+    if (!endedAt || start === null) return undefined;
+    return Math.max(0, (Date.parse(endedAt) - start) / 1000);
+  };
+
+  // Switching parts swaps the source of the one mounted video. A seek or play
+  // must wait until that source is on the element, so it runs from this
+  // effect, which follows the src binding. Created before navigation, whose
+  // initial deep link may switch parts in the first flush.
+  let afterPartSwitch: (() => void) | undefined;
+  createEffect(
+    on(
+      () => playbackRecord().recordingUrl,
+      () => {
+        const action = afterPartSwitch;
+        afterPartSwitch = undefined;
+        action?.();
+      },
+      { defer: true }
+    )
+  );
+  const switchPart = (change: () => boolean, then?: () => void) => {
+    // Loading a new source resets the rate to the default; keep the viewer's.
+    const video = videoRef();
+    if (video) video.defaultPlaybackRate = video.playbackRate;
+    const previousUrl = playbackRecord().recordingUrl;
+    afterPartSwitch = then;
+    if (!change()) {
+      afterPartSwitch = undefined;
+      return;
+    }
+    // Two parts without a recording share no source to wait for.
+    if (playbackRecord().recordingUrl === previousUrl) {
+      afterPartSwitch = undefined;
+      then?.();
+    }
+  };
+  // A video mounted again after a part without a recording keeps the rate.
+  const attachVideo = (element: HTMLVideoElement | undefined) => {
+    if (element) {
+      element.defaultPlaybackRate = playback.rate();
+      element.playbackRate = playback.rate();
+    }
+    setVideoRef(element);
+  };
+  const playNextPart = () =>
+    switchPart(parts.advance, () => {
+      const video = videoRef();
+      if (video) fireAndForget(video.play(), 'call-recording');
+    });
+  // A linked transcript line in another part opens that part first.
+  const showTranscriptLine = (transcriptId: string) => {
+    let switched = false;
+    switchPart(
+      () => {
+        switched = parts.selectPartOfLine(transcriptId);
+        return switched;
+      },
+      () => goToTranscriptSegment(transcriptId)
+    );
+    if (!switched) goToTranscriptSegment(transcriptId);
+  };
+  const partTabs = createMemo(() =>
+    parts.sessions().map((session, index) => ({
+      value: String(index),
+      label: t('calls.detailPart', { number: index + 1 }),
+      tooltip: partTimeRange(session),
+    }))
+  );
+
   const { selectedTab, selectTab } = createRecordingNavigation({
     get callId() {
       return props.callId;
@@ -101,7 +189,7 @@ export function CallRecordingBody(props: {
     get messageTargetRequestKey() {
       return props.messageTargetRequestKey;
     },
-    goToTranscriptSegment,
+    goToTranscriptSegment: showTranscriptLine,
   });
 
   const { title: callTitle, currentSpeaker } = createRecordingIdentity(
@@ -145,8 +233,14 @@ export function CallRecordingBody(props: {
         const messages = createMemo(() =>
           recordingChatMessages(discussion.thread())
         );
+        // The transcript interleaves only the selected part's messages.
+        const partMessages = createMemo(() =>
+          messages().filter((message) =>
+            parts.inSelectedPart(message.created_at)
+          )
+        );
         const seekRecording = () =>
-          record().recordingUrl ? seekToSeconds : undefined;
+          playbackRecord().recordingUrl ? seekToSeconds : undefined;
         const readingTabs = () => {
           const tabs = [
             {
@@ -239,27 +333,54 @@ export function CallRecordingBody(props: {
                             onScroll={() => scrollIntent.observeScroll()}
                             class="recording-left-scroll contents @[1108px]/call-column:flex @[1108px]/call-column:min-h-0 @[1108px]/call-column:flex-1 @[1108px]/call-column:flex-col @[1108px]/call-column:gap-7 @[1108px]/call-column:overflow-y-auto @[1108px]/call-column:overscroll-contain @[1108px]/call-column:scrollbar-hidden @[1108px]/call-column:pb-24"
                           >
-                            <Show when={record().recordingUrl}>
-                              {(url) => (
-                                <section
-                                  ref={setPlayerRef}
-                                  class="flex shrink-0 flex-col gap-3 mobile:order-1"
-                                >
-                                  <div class="overflow-hidden rounded-2xl">
-                                    <CallRecordingVideo
-                                      url={url()}
-                                      playback={playback}
-                                      posterUrl={
-                                        record().recordingPreviewUrl ??
-                                        undefined
+                            <Show
+                              when={
+                                playbackRecord().recordingUrl ||
+                                parts.hasParts()
+                              }
+                            >
+                              <section
+                                ref={setPlayerRef}
+                                class="flex shrink-0 flex-col gap-3 mobile:order-1"
+                              >
+                                <Show when={playbackRecord().recordingUrl}>
+                                  {(url) => (
+                                    <div class="overflow-hidden rounded-2xl">
+                                      <CallRecordingVideo
+                                        url={url()}
+                                        playback={playback}
+                                        posterUrl={
+                                          playbackRecord()
+                                            .recordingPreviewUrl ?? undefined
+                                        }
+                                        onTimeUpdate={handleTimeUpdate}
+                                        onEnded={playNextPart}
+                                        setVideoRef={attachVideo}
+                                        transcriptControls={fullscreenControls()}
+                                      />
+                                    </div>
+                                  )}
+                                </Show>
+                                {/* Phones fill the row up to three parts and scroll beyond. */}
+                                <Show when={parts.hasParts()}>
+                                  <div class="min-w-0 overflow-x-auto scrollbar-hidden">
+                                    <Tabs
+                                      aria-label={t('calls.detailParts')}
+                                      size="md"
+                                      fullWidth={
+                                        isMobile() && partTabs().length <= 3
                                       }
-                                      onTimeUpdate={handleTimeUpdate}
-                                      setVideoRef={setVideoRef}
-                                      transcriptControls={fullscreenControls()}
+                                      options={partTabs()}
+                                      value={String(parts.index())}
+                                      onChange={(value) =>
+                                        switchPart(() =>
+                                          parts.select(Number(value))
+                                        )
+                                      }
                                     />
                                   </div>
-                                </section>
-                              )}
+                                </Show>
+                              </section>
                             </Show>
 
                             <div class="recording-reading flex min-w-0 shrink-0 flex-col gap-1 mobile:order-3">
@@ -356,7 +477,7 @@ export function CallRecordingBody(props: {
                             }}
                           >
                             <CallTranscript.Root
-                              transcript={record().transcript}
+                              transcript={playbackRecord().transcript}
                               record={record()}
                               timelineStartMs={timelineStartMs()}
                               durationSeconds={recordingDuration()}
@@ -364,7 +485,7 @@ export function CallRecordingBody(props: {
                               playing={!playback.paused()}
                               videoSeekGeneration={videoSeekGeneration()}
                               onSeekToSeconds={seekToSeconds}
-                              messages={messages()}
+                              messages={partMessages()}
                               active={transcriptActive()}
                               scrollElement={
                                 transcriptPanel() ? undefined : scrollRef()

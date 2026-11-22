@@ -12,7 +12,9 @@ export function CallRecordingVideo(props: {
     seconds: number,
     source: 'playback' | 'seeking' | 'seeked'
   ) => void;
-  setVideoRef?: (el: HTMLVideoElement) => void;
+  /** Playback reached the end of the recording. */
+  onEnded?: () => void;
+  setVideoRef?: (el: HTMLVideoElement | undefined) => void;
 }): JSX.Element {
   const media = createRecordingVideo(props);
   const { controls, hasVisibleVideo, playbackError, posterBlobUrl } = media;

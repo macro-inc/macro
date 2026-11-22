@@ -84,6 +84,9 @@ vi.mock('./CallRecordingChat', () => ({
 vi.mock('./CallRecordingMobileActions', () => ({
   CallRecordingMobileActions: () => null,
 }));
+vi.mock('./CallRecordingControls', () => ({
+  CallRecordingControls: () => null,
+}));
 vi.mock('./CallRecordingMobilePlayback', () => ({
   CallRecordingMobilePlayback: () => null,
 }));
@@ -100,6 +103,7 @@ function callRecord(isActive: boolean): CallRecord {
     shareWithTeam: false,
     startedAt: '2026-10-28T00:00:00Z',
     transcript: [],
+    sessions: [],
   } as unknown as CallRecord;
 }
 
@@ -127,6 +131,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('CallRecordingBody join button', () => {
@@ -186,4 +191,125 @@ it('keeps the full-width header mounted above the panel when its mode changes', 
   expect(screen.getByRole('button', { name: 'Header action' })).toBe(header);
   fireEvent.click(header);
   expect(action).toHaveBeenCalledOnce();
+});
+
+describe('CallRecordingBody parts', () => {
+  const PART_1 = 'https://recordings.example/part-1.mp4';
+  const PART_2 = 'https://recordings.example/part-2.mp4';
+  function twoPartRecord(): CallRecord {
+    return {
+      ...callRecord(false),
+      recordingUrl: PART_1,
+      recordingStartedAt: '2026-10-28T00:00:00Z',
+      sessions: [
+        {
+          startedAt: '2026-10-28T00:00:00Z',
+          endedAt: '2026-10-28T00:20:00Z',
+          recordingStartedAt: '2026-10-28T00:00:00Z',
+          recordingUrl: PART_1,
+        },
+        {
+          startedAt: '2026-10-28T00:30:00Z',
+          endedAt: '2026-10-28T00:50:00Z',
+          recordingStartedAt: '2026-10-28T00:30:00Z',
+          recordingUrl: PART_2,
+        },
+      ],
+      transcript: [
+        {
+          transcriptId: 'line-1',
+          sequenceNum: 1,
+          startedAt: '2026-10-28T00:05:00Z',
+          content: 'first part',
+          speakerId: 'user-id',
+        },
+        {
+          transcriptId: 'line-2',
+          sequenceNum: 2,
+          startedAt: '2026-10-28T00:40:00Z',
+          content: 'second part',
+          speakerId: 'user-id',
+        },
+      ],
+    };
+  }
+  // A recording mounts the player, whose layout observes its visibility.
+  beforeEach(() => {
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+  });
+  const video = () => {
+    const element = document.querySelector('video');
+    if (!element) throw new Error('expected the recording video');
+    return element;
+  };
+
+  it('plays the next part on the same video when a part ends', () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+    render(() => (
+      <CallRecordingBody record={twoPartRecord()} callId="call-id" />
+    ));
+    const element = video();
+    expect(element.getAttribute('src')).toBe(PART_1);
+
+    // Playback reaching the end pauses at the end, then ends.
+    Object.defineProperty(element, 'ended', {
+      configurable: true,
+      get: () => true,
+    });
+    fireEvent(element, new Event('pause'));
+    fireEvent(element, new Event('ended'));
+
+    expect(video()).toBe(element);
+    expect(element.getAttribute('src')).toBe(PART_2);
+    expect(play).toHaveBeenCalledOnce();
+  });
+
+  it('stays on a part when a paused seek reaches its end', () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+    render(() => (
+      <CallRecordingBody record={twoPartRecord()} callId="call-id" />
+    ));
+
+    // A paused seek to the end fires `ended` without a `pause`.
+    fireEvent(video(), new Event('ended'));
+
+    expect(video().getAttribute('src')).toBe(PART_1);
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it('opens the part of a linked transcript line before seeking into it', () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+    const seeks: { src: string | null; seconds: number }[] = [];
+    vi.spyOn(
+      HTMLMediaElement.prototype,
+      'currentTime',
+      'set'
+    ).mockImplementation(function (this: HTMLMediaElement, seconds: number) {
+      seeks.push({ src: this.getAttribute('src'), seconds });
+    });
+    render(() => (
+      <CallRecordingBody
+        record={twoPartRecord()}
+        callId="call-id"
+        transcriptTarget={{ transcriptId: 'line-2', gen: 1 }}
+      />
+    ));
+
+    expect(video().getAttribute('src')).toBe(PART_2);
+    // Ten minutes into the second part's recording, on the second source.
+    expect(seeks.at(-1)).toEqual({ src: PART_2, seconds: 600 });
+  });
 });
