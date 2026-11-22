@@ -414,21 +414,24 @@ addresses, as it gives a local Macro computer. Production never sets it.
   install store and finds each container by its label. One that is still
   running is adopted, never recreated. A container that is gone, or exited
   while macrod was down, is started again.
-- **Unpaired or removed machine.** When the service refuses macrod's
-  harness credentials (a 401 from the runtime dial or from the bound-agent
-  check the trigger stream makes every 10 seconds and at each reopen; a 403
-  is a claim's, not the credentials'), and still refuses them at least 10
-  seconds later with none accepted between, macrod stops every teammate it
-  runs and its holder, with 10 seconds' grace (the agent's key went with
-  the machine's). It keeps the volumes and the kept install, records why,
-  and reports `stopped`. From the unpair that takes up to about 40 seconds:
-  up to 10 to notice, a second refusal 10 to 20 later (the stream's reopen
-  backoff), then the grace. macrod keeps redialing a refused gateway, 1
-  second doubling to a minute apart, for good, and the first accepted dial
-  runs them again (the service stops any it no longer wants there), so an
-  auth outage ends by itself within about a minute of its end, without a
-  restart; an unpaired machine is never accepted, so its agents stay down.
-  A stop the service asked for is never undone.
+- **Unpaired or removed machine.** One window covers every path that
+  sends macrod's harness credentials: the runtime dial (a 401 or 403) and
+  the bound-agent check the trigger stream makes every 10 seconds and at
+  each reopen (a 401). When they are refused, and refused again 10 to 60
+  seconds after the first refusal with no harness call accepted between,
+  macrod stops every teammate it runs and its holder, with 10 seconds'
+  grace (the agent's key went with the machine's). It keeps the volumes
+  and the kept install, records why, and reports `stopped`. Any accepted
+  call, on either path, ends the refusal and runs those agents again (the
+  service stops any it no longer wants there), so an auth outage ends by
+  itself within about 10 seconds of its end (the next bound-agent check),
+  without a restart; a refusal later than 60 seconds starts the window
+  over, so blips far apart never add up. From the unpair the stop takes up
+  to about 40 seconds: up to 10 to notice, a second refusal 10 to 20 later
+  (the stream's reopen backoff), then the grace. A refused runtime dial is
+  redialed 1 second doubling to a minute apart, and every 10 minutes once
+  the refusal has lasted 10; an unpaired machine is never accepted, so its
+  agents stay down. A stop the service asked for is never undone.
 - **Crash loop.** Failed exits (not 0, not 75) restart with a backoff from
   2 to 60 seconds, for as long as they keep failing; macrod never gives up
   on a generation by itself. `crashLoop` is only the reason an image update

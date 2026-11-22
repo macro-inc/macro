@@ -2071,6 +2071,29 @@ async fn refuse_for_good(teammates: &Teammates<FakeEngine>) {
 }
 
 #[tokio::test(start_paused = true)]
+async fn refusals_further_apart_than_the_window_stop_nothing() {
+    // Two single blips an hour apart (say on two paths, with nothing
+    // accepted on the one that refused): not one refusal that persisted.
+    let mut fixture = fixture().await;
+    fixture.teammates.handle(run_request(1));
+    next_states(&mut fixture.statuses, 3).await;
+
+    fixture.teammates.credentials_refused();
+    tokio::time::sleep(super::REFUSAL_WINDOW + Duration::from_secs(1)).await;
+    fixture.teammates.credentials_refused();
+    tokio::time::sleep(super::REFUSAL_PERSISTS / 2).await;
+
+    assert!(fixture.statuses.try_recv().is_err());
+    assert!(
+        !fixture
+            .engine
+            .calls()
+            .iter()
+            .any(|call| matches!(call, Call::Stop(..)))
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_refusal_that_doesnt_persist_stops_nothing() {
     // A blip: refused, refused again too soon, then accepted.
     let mut fixture = fixture().await;

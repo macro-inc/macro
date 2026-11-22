@@ -208,6 +208,7 @@ impl Daemon {
                     &agents_changed,
                     &mut position,
                     &health,
+                    teammates.as_ref(),
                 )
                 .await
                 {
@@ -459,10 +460,14 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
     agents_changed: &Notify,
     position: &mut StreamPosition,
     health: &watch::Sender<TriggerStreamHealth>,
+    teammates: Option<&std::sync::Arc<crate::harness::HostTeammates>>,
 ) -> ServeOutcome {
     let read_at = std::time::SystemTime::now();
     let bots = match client.bound_agents().await {
         Ok(agents) => {
+            // Any accepted harness call ends a refusal and runs again what
+            // it stopped, whether or not the runtime connection redials.
+            crate::harness::credentials_accepted(teammates);
             position.agents_read(&agents.bot_ids, agents.read_by.unwrap_or(read_at));
             agents.bot_ids
         }
@@ -519,14 +524,14 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         tokio::select! {
             () = cancel.cancelled() => return ServeOutcome::Stopped,
             () = agents_changed.notified() => {
-                match bound_agents_changed(client, &bots, position).await {
+                match bound_agents_changed(client, &bots, position, teammates).await {
                     Ok(false) => {}
                     Ok(true) => return ServeOutcome::Idle,
                     Err(error) => return ended(error),
                 }
             }
             () = tokio::time::sleep(BOUND_AGENT_REFRESH) => {
-                match bound_agents_changed(client, &bots, position).await {
+                match bound_agents_changed(client, &bots, position, teammates).await {
                     Ok(false) => {}
                     Ok(true) => return ServeOutcome::Idle,
                     Err(error) => return ended(error),
@@ -564,9 +569,14 @@ async fn bound_agents_changed(
     client: &EventStreamClient,
     bots: &[String],
     position: &mut StreamPosition,
+    teammates: Option<&std::sync::Arc<crate::harness::HostTeammates>>,
 ) -> Result<bool, rootcause::Report> {
     let read_at = std::time::SystemTime::now();
-    match client.bound_agents().await {
+    let latest = client.bound_agents().await;
+    if latest.is_ok() {
+        crate::harness::credentials_accepted(teammates);
+    }
+    match latest {
         Ok(latest) if latest.bot_ids == bots => {
             position.agents_read(&latest.bot_ids, latest.read_by.unwrap_or(read_at));
             Ok(false)

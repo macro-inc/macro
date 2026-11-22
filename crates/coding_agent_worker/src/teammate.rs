@@ -217,6 +217,10 @@ pub const CREDENTIALS_REFUSED_GRACE: Duration = Duration::from_secs(10);
 /// refusal can be a passing auth or proxy failure.
 pub const REFUSAL_PERSISTS: Duration = Duration::from_secs(10);
 
+/// How long after the first refusal a second still counts: one later than
+/// this starts the wait over, so two blips far apart never add up.
+pub const REFUSAL_WINDOW: Duration = Duration::from_secs(60);
+
 /// The teammates this macrod hosts. Requests are handled one at a time, in
 /// order; dropping it stops supervising (the containers keep running).
 pub struct Teammates<EngineImpl: Engine> {
@@ -571,7 +575,12 @@ async fn manage<EngineImpl: Engine>(
             Work::Resume => resume(&shared, &mut supervisors),
             Work::CredentialsRefused => {
                 let now = tokio::time::Instant::now();
-                let first = *refused_since.get_or_insert(now);
+                // A refusal past the window starts it over: blips far apart
+                // never add up.
+                let first = match refused_since {
+                    Some(first) if now.duration_since(first) <= REFUSAL_WINDOW => first,
+                    _ => *refused_since.insert(now),
+                };
                 let persists = now.duration_since(first) >= REFUSAL_PERSISTS;
                 let span = tracing::info_span!("teammate.credentials_refused", persists);
                 if persists {

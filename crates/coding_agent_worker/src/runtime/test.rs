@@ -158,6 +158,50 @@ async fn refused_credentials_are_redialed_and_an_accepted_dial_runs_the_stopped_
     assert_eq!(engine.runs(), 1);
 }
 
+#[tokio::test]
+#[expect(
+    clippy::result_large_err,
+    reason = "the handshake callback's error type is fixed by tungstenite's Callback trait"
+)]
+async fn a_forbidden_dial_is_redialed_like_a_refusal() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let runtime = start_runtime(&listener);
+    let (socket, _) = listener.accept().await.unwrap();
+    let _ = tokio_tungstenite::accept_hdr_async(
+        socket,
+        |_: &tungstenite::handshake::server::Request, _| {
+            Err(tungstenite::http::Response::builder()
+                .status(403)
+                .body(None)
+                .unwrap())
+        },
+    )
+    .await;
+
+    let (socket, _) = tokio::time::timeout(Duration::from_secs(5), listener.accept())
+        .await
+        .expect("a forbidden machine dials again")
+        .unwrap();
+    let _socket = accept_async(socket).await.unwrap();
+    runtime.ensure_connected().await.unwrap();
+}
+
+#[test]
+fn a_machine_refused_for_long_redials_rarely() {
+    let mut backoff = refused_strategy();
+    // Within the first ten minutes: the slow backoff, at most a minute.
+    for _ in 0..20 {
+        assert!(
+            refused_redial_delay(Duration::from_secs(60), &mut backoff) <= Duration::from_secs(75)
+        );
+    }
+    // Refused that long, the agents are stopped long since: ten minutes.
+    assert_eq!(
+        refused_redial_delay(REFUSED_FOR_LONG, &mut backoff),
+        LONG_REFUSED_REDIAL
+    );
+}
+
 #[tokio::test(start_paused = true)]
 async fn dispatch_does_not_wait_forever_for_a_connection() {
     let (_sender, connected) = watch::channel(false);
@@ -189,10 +233,11 @@ fn retry_policy_distinguishes_temporary_refusals_from_invalid_credentials() {
                 .unwrap(),
         ));
         assert_eq!(worth_redialing(&error), retry, "HTTP {status}");
-        // Only a 401 is the credentials: the gateway's 403 is a claim's.
+        // A 401 or a 403 is a refusal: redialed slowly, counted toward
+        // stopping the teammates.
         assert_eq!(
             super::credentials_refused(&error),
-            status == 401,
+            status == 401 || status == 403,
             "HTTP {status}"
         );
     }

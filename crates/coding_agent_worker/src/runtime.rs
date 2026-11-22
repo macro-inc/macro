@@ -120,8 +120,9 @@ impl Runtime {
 }
 
 /// Reconnect even after a clean close or a long outage: model discovery must
-/// recover without requiring an agent mention. Refused credentials (401) are
-/// redialed slowly, for good; any other client error stops the supervisor
+/// recover without requiring an agent mention. A refusal (401 or 403) is
+/// redialed slowly, for good (every 10 minutes once it lasted 10); any
+/// other client error stops the supervisor
 /// until the user re-pairs or restarts the daemon.
 ///
 /// An `adopted` agent (handed over by the previous process image) serves the
@@ -146,6 +147,8 @@ async fn serve(
 ) {
     let mut backoff = reconnect_strategy();
     let mut refused_backoff = refused_strategy();
+    // When the gateway began refusing, while it still does.
+    let mut refused_since: Option<Instant> = None;
     loop {
         let mut lasted = None;
         let mut refused = false;
@@ -216,8 +219,10 @@ async fn serve(
         }
         tokio::select! {
             () = tokio::time::sleep(if refused {
-                refused_backoff.next_delay()
+                let since = *refused_since.get_or_insert_with(Instant::now);
+                refused_redial_delay(since.elapsed(), &mut refused_backoff)
             } else {
+                refused_since = None;
                 refused_backoff.reset();
                 redial_delay(lasted, &mut backoff)
             }) => {}
@@ -300,15 +305,19 @@ fn worth_redialing(error: &tungstenite::Error) -> bool {
         || status == tungstenite::http::StatusCode::TOO_MANY_REQUESTS
 }
 
-/// Whether the gateway refused the harness's credentials: a 401, which it
-/// answers for an invalid, expired or revoked harness token. Its 403 is
-/// for an acting-user or scope claim the dial doesn't make, so one is from
-/// something in between, not the credentials.
+/// Whether the gateway refused the harness: a 401 (an invalid, expired or
+/// revoked token) or a 403 (a claim refused, or something in between, such
+/// as an edge). Both are redialed slowly and count toward stopping the
+/// teammates; only a refusal that persists stops them.
 pub(crate) fn credentials_refused(error: &tungstenite::Error) -> bool {
     matches!(
         error,
         tungstenite::Error::Http(response)
-            if response.status() == tungstenite::http::StatusCode::UNAUTHORIZED
+            if matches!(
+                response.status(),
+                tungstenite::http::StatusCode::UNAUTHORIZED
+                    | tungstenite::http::StatusCode::FORBIDDEN
+            )
     )
 }
 
@@ -324,6 +333,21 @@ fn redial_delay(lasted: Option<Duration>, backoff: &mut RetryDelays) -> Duration
 
 /// The redials of a machine whose credentials are refused: 1 s doubling to
 /// a minute, forever.
+/// How long the credentials stay refused before a machine counts as gone
+/// (unpaired), its agents long stopped.
+const REFUSED_FOR_LONG: Duration = Duration::from_secs(10 * 60);
+
+/// The wait between redials of a machine refused that long.
+const LONG_REFUSED_REDIAL: Duration = Duration::from_secs(10 * 60);
+
+/// The wait before the next redial of a machine refused for `refused_for`.
+fn refused_redial_delay(refused_for: Duration, backoff: &mut RetryDelays) -> Duration {
+    if refused_for >= REFUSED_FOR_LONG {
+        return LONG_REFUSED_REDIAL;
+    }
+    backoff.next_delay()
+}
+
 fn refused_strategy() -> RetryDelays {
     RetryDelays::new(FIRST_REFUSED_REDIAL, MAX_REFUSED_REDIAL)
 }

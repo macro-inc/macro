@@ -385,6 +385,7 @@ async fn a_stalled_bound_agent_refresh_keeps_the_event_stream() {
         &agents_changed,
         &mut position,
         &health,
+        None,
     );
     tokio::pin!(serving);
 
@@ -446,6 +447,7 @@ async fn a_refused_credential_on_refresh_ends_the_event_stream() {
         &agents_changed,
         &mut position,
         &health,
+        None,
     )
     .await;
     let ServeOutcome::Ended { error, lasted } = outcome else {
@@ -453,6 +455,56 @@ async fn a_refused_credential_on_refresh_ends_the_event_stream() {
     };
     assert!(format!("{error}").contains("401"), "{error}");
     assert!(lasted.is_some(), "the stream had opened");
+}
+
+#[tokio::test]
+async fn an_accepted_bound_agent_read_runs_agents_stopped_for_refused_credentials() {
+    // Stopped from the stream path while the runtime connection stayed up:
+    // the next accepted harness call, here the bound-agent read, brings
+    // them back without a runtime redial.
+    let (teammates, engine, _directory) =
+        crate::teammate::test::fake_hosting_stopped_for_refused_credentials().await;
+    let mut statuses = teammates.subscribe();
+    let storage = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut api: Config = toml::from_str(include_str!("../../config.example.toml")).unwrap();
+    api.macro_api.storage_url = format!("http://{}", storage.local_addr().unwrap());
+    let (seen, _requests) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(serve_storage_with_second_refresh(storage, seen, None));
+    let client = EventStreamClient::new(
+        &api.macro_api,
+        &HarnessCredentials {
+            harness_id: harness_id::HarnessId::TEST_A,
+            token: "mhns_test".to_owned(),
+            pairing_id: None,
+        },
+    );
+    let cancel = CancellationToken::new();
+    let agents_changed = Notify::new();
+    let mut position = StreamPosition::new(std::time::SystemTime::now());
+    let (health, _) = watch::channel(TriggerStreamHealth::Connecting);
+    let serving = serve_once(
+        &client,
+        &NoWork,
+        &cancel,
+        &agents_changed,
+        &mut position,
+        &health,
+        Some(&teammates),
+    );
+    tokio::pin!(serving);
+
+    let running = async {
+        while statuses.recv().await.unwrap().state
+            != agent_runtime_protocol::domain::schema::v0::TeammateRunState::Running
+        {}
+    };
+    tokio::select! {
+        _ = &mut serving => panic!("serving ended"),
+        outcome = tokio::time::timeout(Duration::from_secs(5), running) => {
+            outcome.expect("the agent stopped for refused credentials runs again");
+        }
+    }
+    assert_eq!(engine.runs(), 1);
 }
 
 /// Never runs: no event reaches it.
