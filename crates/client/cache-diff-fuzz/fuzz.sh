@@ -160,13 +160,19 @@ one() {
         fi
         { echo "segment $segment"; cat "$seg/$seed.trace"; } >> "$up/$side.trace"
         # The side's counters are its segments' summed: a migration counts in a later segment.
+        # A segment whose counters can't be read fails the seed rather than
+        # leaving the earlier segments' counters standing for the whole chain.
         if [ "$segment" -eq 0 ]; then
-          cp "$seg/$seed.stats.json" "$out/$side/$seed.stats.json"
+          merged=$(cat "$seg/$seed.stats.json" 2> /dev/null) || merged=
         else
-          jq -s '.[0] + {counters: (reduce (.[].counters | to_entries[]) as $e ({}; .[$e.key] += $e.value))}' \
-            "$out/$side/$seed.stats.json" "$seg/$seed.stats.json" > "$up/$side.stats" \
-            && mv "$up/$side.stats" "$out/$side/$seed.stats.json"
+          merged=$(jq -s '.[0] + {counters: (reduce (.[].counters | to_entries[]) as $e ({}; .[$e.key] += $e.value))}' \
+            "$out/$side/$seed.stats.json" "$seg/$seed.stats.json" 2> /dev/null) || merged=
         fi
+        if [ -z "$merged" ]; then
+          status="$status $side-segment-$segment-no-stats"
+          break
+        fi
+        printf '%s\n' "$merged" > "$out/$side/$seed.stats.json"
         # A crash moves the engine to the next copy: the last is what the segment left.
         last=0
         while [ -d "$seg/w/$seed/db-$((last + 1))" ]; do last=$((last + 1)); done
