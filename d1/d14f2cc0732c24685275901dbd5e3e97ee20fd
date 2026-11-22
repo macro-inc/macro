@@ -1,0 +1,25 @@
+crates/agent_feedback/src/inbound/axum_router/test.rs
+  s_be0dcf8f48154b::t_500561d11e1e4f 184-185
+  s_be0dcf8f48154b::t_afe31b217d4026 193,202-203
+  s_be0dcf8f48154b::t_a3f36ad387b52d 186-192,195-201
+crates/agent_feedback/src/domain/service/test.rs
+  s_be0dcf8f48154b::t_a3f36ad387b52d 87-93,326-332,335,337-343,346,348-353,355,357-362,364
+  s_be0dcf8f48154b::t_500561d11e1e4f 86,325
+  s_be0dcf8f48154b::t_afe31b217d4026 85,94-95,324,333-334,365-366
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d1d14f2cc0732c24685275901dbd5e3e97ee20fd",
+  "prompts": {},
+  "sessions": {
+    "s_be0dcf8f48154b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84f26c56-f4ae-4114-a847-2d20de026f21",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
