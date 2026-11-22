@@ -907,26 +907,24 @@ async function keepOwnWritesInPages(
     held.retention.release();
     return;
   }
+  const taken = heldReads(client, held);
+  // Nothing of the write's read is held (it failed, or a later write's
+  // replaced it): there is nothing to keep.
+  if (taken.size === 0) {
+    held.retention.release();
+    return;
+  }
   const pages = client.getQueryData<readonly DirectoryChannel[]>(queryKey);
   if (!pages) {
     releaseOnceRead(client, query, started, held.retention);
     return;
   }
-  const writes = untrack(ownChannelWrites(client).writes);
-  const taken = new Map<string, DirectoryChannel | null>();
-  for (const id of held.channelIds) {
-    const write = writes[id];
-    if (write?.sequence === held.sequence) taken.set(id, write.channel);
-  }
-  if (taken.size > 0) {
-    const next = pages.filter(({ id }) => !taken.has(id));
-    for (const channel of taken.values())
-      if (channel?.isParticipant) insertInDirectoryOrder(next, channel);
-    client.setQueryData(queryKey, next, { updatedAt: state.dataUpdatedAt });
-  }
+  const next = pages.filter(({ id }) => !taken.has(id));
+  for (const channel of taken.values())
+    if (channel?.isParticipant) insertInDirectoryOrder(next, channel);
+  client.setQueryData(queryKey, next, { updatedAt: state.dataUpdatedAt });
   // The pages hold them now; an ended hold lets them go.
   held.retention.release();
-  if (taken.size === 0) return;
   await client.invalidateQueries({
     queryKey,
     exact: true,
@@ -934,14 +932,30 @@ async function keepOwnWritesInPages(
   });
 }
 
+/** The channels the store still holds as `held`'s read, each as read. */
+function heldReads(
+  client: QueryClient,
+  held: HeldOwnWrites
+): Map<string, DirectoryChannel | null> {
+  const writes = untrack(ownChannelWrites(client).writes);
+  const taken = new Map<string, DirectoryChannel | null>();
+  for (const id of held.channelIds) {
+    const write = writes[id];
+    if (write?.sequence === held.sequence) taken.set(id, write.channel);
+  }
+  return taken;
+}
+
 /** Ends `retention` once `query` has pages read since `started`, or leaves
- * the cache, whichever comes first; a clear of the store ends it too. */
+ * the cache, whichever comes first; a clear of the store ends it too. A
+ * retention the store already let go stays let go, with nothing to watch. */
 function releaseOnceRead(
   client: QueryClient,
   query: Query,
   started: number,
   retention: OwnWriteRetention
 ) {
+  if (retention.signal.aborted) return;
   const unsubscribe = client.getQueryCache().subscribe((event) => {
     if (event.query !== query) return;
     if (event.type === 'removed' || query.state.dataUpdatedAt >= started)

@@ -4051,6 +4051,23 @@ describe("the viewer's own channel writes", () => {
     }
   });
 
+  it('keeps nothing past the hold for a write whose read failed before any pages were read', async () => {
+    const network = fakeNetwork([channelRecord('a', { name: 'before' })], {
+      failingPages: Number.POSITIVE_INFINITY,
+      failingEntityReads: Number.POSITIVE_INFINITY,
+    });
+    const client = queryClient();
+    const directory = mountMemoryDirectory(network, client);
+    await vi.waitFor(() => expect(directory.complete()).toBe(false));
+    const subscribe = vi.spyOn(client.getQueryCache(), 'subscribe');
+
+    await writeOf(client, network, ['a']);
+
+    // No retention waits on pages that may never come.
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(ownChannelWrites(client).writes()).toEqual({});
+  });
+
   it('shows a later update by someone else over the write', async () => {
     const channels = [channelRecord('a', { name: 'before' })];
     const network = fakeNetwork(channels, {
