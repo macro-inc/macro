@@ -1,50 +1,58 @@
 import { toast } from '@core/component/Toast/Toast';
-import { throwOnErr } from '@core/util/result';
-import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
+import type { AddPropertyOptionRequest } from '@service-properties/generated/schemas/addPropertyOptionRequest';
+import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
+import type { UpdatePropertyOptionRequest } from '@service-properties/generated/schemas/updatePropertyOptionRequest';
+import { PropertyCatalogOptionsDocument } from '@service-storage/graphql/generated/graphql';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Accessor } from 'solid-js';
-import { propertiesServiceClient } from '../../service-clients/service-properties/client';
-import type { AddPropertyOptionRequest } from '../../service-clients/service-properties/generated/schemas/addPropertyOptionRequest';
-import type { PropertyOption } from '../../service-clients/service-properties/generated/schemas/propertyOption';
-import type { UpdatePropertyOptionRequest } from '../../service-clients/service-properties/generated/schemas/updatePropertyOptionRequest';
-import { queryClient } from '../client';
-import { type MutationCallbacks, withCallbacks } from '../utils';
-import { propertiesKeys } from './keys';
+import {
+  type CatalogListResult,
+  catalogListResult,
+  createListedAt,
+} from './catalog/list-result';
+import { toPropertyOptions } from './catalog/map';
+import {
+  type CatalogMutationCallbacks,
+  createCatalogMutation,
+} from './catalog/mutation';
+import { registerCatalogReader } from './catalog/readers';
+import {
+  addPropertyOption,
+  deletePropertyOption,
+  updatePropertyOption,
+} from './catalog/writes';
 
-// Stable empty default so `data` is never undefined: a shared query that errors
-// with undefined data under an app-shell Suspense boundary would remount-loop.
+// Stable empty default so `data` is never undefined while the list loads.
 const EMPTY_OPTIONS: PropertyOption[] = [];
 
-function propertyOptionsQueryOptions(
-  propertyDefinitionId: string,
-  enabled: boolean
-) {
-  return queryOptions({
-    queryKey: propertiesKeys.options({ propertyDefinitionId }).queryKey,
-    queryFn: () =>
-      throwOnErr(() =>
-        propertiesServiceClient.getPropertyOptions({
-          definition_id: propertyDefinitionId,
-        })
-      ),
-    enabled,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    placeholderData: EMPTY_OPTIONS,
-  });
-}
-
+/** One definition's options in display order, read live from the cache. */
 export function usePropertyOptionsQuery(
   propertyDefinitionId: Accessor<string>,
   enabled: Accessor<boolean> = () => true
-) {
-  return useQuery(() =>
-    propertyOptionsQueryOptions(propertyDefinitionId(), enabled())
+): CatalogListResult<PropertyOption> {
+  const stamp = createListedAt();
+  const variables = () => {
+    const id = propertyDefinitionId();
+    return enabled() && id ? { propertyDefinitionId: id } : undefined;
+  };
+  const query = createLiveQuery(
+    PropertyCatalogOptionsDocument,
+    variables,
+    () => ({
+      client: getGraphqlSoupClient(),
+      requestPolicy: 'cache-and-network',
+      keepPreviousData: false,
+      select: (data) => toPropertyOptions(data.user.propertyOptions),
+      onResult: stamp.onResult,
+    })
   );
-}
-
-function invalidatePropertyOptions(propertyDefinitionId: string) {
-  queryClient.invalidateQueries({
-    queryKey: propertiesKeys.options({ propertyDefinitionId }).queryKey,
+  registerCatalogReader({
+    kind: 'options',
+    propertyDefinitionId: () => variables()?.propertyDefinitionId,
+    refresh: () => query.refetch({ requestPolicy: 'network-only' }),
   });
+  return catalogListResult(query, stamp.listedAt, EMPTY_OPTIONS);
 }
 
 export type AddPropertyOptionAsyncMutation = ReturnType<
@@ -62,98 +70,68 @@ type UpdatePropertyOptionParams = {
   body: UpdatePropertyOptionRequest;
 };
 
-export function useUpdatePropertyOptionMutation(
-  callbacks?: MutationCallbacks<
-    PropertyOption,
-    Error,
-    UpdatePropertyOptionParams
-  >
-) {
-  return useMutation(() => ({
-    mutationFn: async (vars: UpdatePropertyOptionParams) => {
-      const result = await throwOnErr(
-        async () =>
-          await propertiesServiceClient.updatePropertyOption({
-            definition_id: vars.propertyDefinitionId,
-            option_id: vars.optionId,
-            body: vars.body,
-          })
-      );
-      return result;
-    },
-    ...withCallbacks<PropertyOption, Error, UpdatePropertyOptionParams>(
-      {
-        onError(error) {
-          console.error('Failed to update property option', error);
-          toast.failure('Failed to update option');
-        },
-        onSuccess: (_data, variables) => {
-          invalidatePropertyOptions(variables.propertyDefinitionId);
-        },
-      },
-      callbacks
-    ),
-  }));
-}
-
 type DeletePropertyOptionParams = {
   propertyDefinitionId: string;
   optionId: string;
 };
 
-export function useDeletePropertyOptionMutation(
-  callbacks?: MutationCallbacks<unknown, Error, DeletePropertyOptionParams>
+const updateFailed = () => toast.failure('Failed to update option');
+const deleteFailed = () => toast.failure('Failed to delete option');
+
+export function useUpdatePropertyOptionMutation(
+  callbacks?: CatalogMutationCallbacks<void, UpdatePropertyOptionParams>
 ) {
-  return useMutation(() => ({
-    mutationFn: async (vars: DeletePropertyOptionParams) => {
-      return await throwOnErr(
-        async () =>
-          await propertiesServiceClient.deletePropertyOption({
-            definition_id: vars.propertyDefinitionId,
-            option_id: vars.optionId,
-          })
-      );
-    },
-    ...withCallbacks<unknown, Error, DeletePropertyOptionParams>(
-      {
-        onError(error) {
-          console.error('Failed to delete property option', error);
-          toast.failure('Failed to delete option');
-        },
-        onSuccess: (_data, variables) => {
-          invalidatePropertyOptions(variables.propertyDefinitionId);
-        },
+  return createCatalogMutation(
+    (vars: UpdatePropertyOptionParams) =>
+      updatePropertyOption(
+        vars.propertyDefinitionId,
+        vars.optionId,
+        vars.body,
+        updateFailed
+      ),
+    {
+      onError(error) {
+        console.error('Failed to update property option', error);
+        updateFailed();
       },
-      callbacks
-    ),
-  }));
+    },
+    callbacks
+  );
 }
 
-export function useAddPropertyOptionMutation(
-  callbacks?: MutationCallbacks<PropertyOption, Error, AddPropertyOptionParams>
+export function useDeletePropertyOptionMutation(
+  callbacks?: CatalogMutationCallbacks<void, DeletePropertyOptionParams>
 ) {
-  return useMutation(() => ({
-    mutationFn: async (vars: AddPropertyOptionParams) => {
-      const result = await throwOnErr(
-        async () =>
-          await propertiesServiceClient.addPropertyOption({
-            definition_id: vars.propertyDefinitionId,
-            body: vars.body,
-          })
-      );
-      return result;
-    },
-    ...withCallbacks<PropertyOption, Error, AddPropertyOptionParams>(
-      {
-        onError(error) {
-          console.error('Failed to add property option', error);
-          toast.failure('Failed to add option');
-        },
-        onSuccess: (_data, variables) => {
-          invalidatePropertyOptions(variables.propertyDefinitionId);
-        },
+  return createCatalogMutation(
+    (vars: DeletePropertyOptionParams) =>
+      deletePropertyOption(
+        vars.propertyDefinitionId,
+        vars.optionId,
+        deleteFailed
+      ),
+    {
+      onError(error) {
+        console.error('Failed to delete property option', error);
+        deleteFailed();
       },
-      callbacks
-    ),
-  }));
+    },
+    callbacks
+  );
+}
+
+/** Adds an option; resolves with the server's option once it commits. */
+export function useAddPropertyOptionMutation(
+  callbacks?: CatalogMutationCallbacks<PropertyOption, AddPropertyOptionParams>
+) {
+  return createCatalogMutation(
+    (vars: AddPropertyOptionParams) =>
+      addPropertyOption(vars.propertyDefinitionId, vars.body),
+    {
+      onError(error) {
+        console.error('Failed to add property option', error);
+        toast.failure('Failed to add option');
+      },
+    },
+    callbacks
+  );
 }
