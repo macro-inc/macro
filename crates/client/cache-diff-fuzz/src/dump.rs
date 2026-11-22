@@ -383,7 +383,7 @@ fn render_text(value: &Value, names: &[String]) -> String {
 const OPTIMISTIC_SOURCE: &str = "@macro-cache/optimistic-source:";
 
 /// An optimistic layer's source, written again with its `projectionMutations`
-/// lacking each `{"attribute":NAME,"value":N}` of a `Patch`'s `sorts` or a
+/// lacking each `{"attribute":NAME,"value":N}` (N an i64) of a `Patch`'s `sorts` or a
 /// `Replace`'s `sort_facts`, and NAME
 /// in an `Unknown`'s `affected_attributes` that names another attribute (an
 /// empty list means every attribute, so a list of NAME alone stays). Any other
@@ -412,7 +412,7 @@ fn without_json_facts(text: &str, names: &[String]) -> String {
                 sorts.retain(|fact| {
                     !(fact.as_object().is_some_and(|fact| fact.len() == 2)
                         && fact.get("attribute").is_some_and(named)
-                        && fact.get("value").is_some_and(serde_json::Value::is_number))
+                        && fact.get("value").is_some_and(serde_json::Value::is_i64))
                 });
             }
         }
