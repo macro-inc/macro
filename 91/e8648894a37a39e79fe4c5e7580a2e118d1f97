@@ -1,0 +1,22 @@
+packages/sdk/tests/calls.test.ts
+  s_9671c7bc652ab5::t_01bb8c756bd5f9 239-280
+packages/sdk/src/entities/calls/call-record.ts
+  s_9671c7bc652ab5::t_7786ea396133b6 131-135,137,141-144,343-350
+  s_9671c7bc652ab5::t_5523205b789c26 351
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "91e8648894a37a39e79fe4c5e7580a2e118d1f97",
+  "prompts": {},
+  "sessions": {
+    "s_9671c7bc652ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a46e4f3c-7142-45e8-9694-084925c538ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

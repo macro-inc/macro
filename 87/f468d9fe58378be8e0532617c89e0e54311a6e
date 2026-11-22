@@ -1,0 +1,23 @@
+apps/web/src/features/block-call/AGENTS.md
+  s_9671c7bc652ab5::t_82f1654760d7ae 17,27-28
+docs/agent-guide/calls.md
+  s_9671c7bc652ab5::t_82f1654760d7ae 34-38,219-232,247-253,424-426
+apps/web/src/features/block-call/primitives/recording-sessions.ts
+  s_9671c7bc652ab5::t_1a802f091533af 60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "87f468d9fe58378be8e0532617c89e0e54311a6e",
+  "prompts": {},
+  "sessions": {
+    "s_9671c7bc652ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a46e4f3c-7142-45e8-9694-084925c538ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
