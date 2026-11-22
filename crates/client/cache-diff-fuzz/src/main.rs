@@ -66,6 +66,10 @@ struct Args {
     /// and the storage schema version masked (see `dump::tables`).
     #[arg(long)]
     decoded_facts: bool,
+    /// Compare the search index as one row per document (profile, bucket, text, time, hash),
+    /// whichever tables hold it (see `dump::tables`).
+    #[arg(long)]
+    decoded_search: bool,
     /// Leave out stored rows whose COLUMN holds the text VALUE, in every table
     /// declaring that column (repeatable; see `dump::tables`): rows a change
     /// stores on purpose, such as a new derived sort fact (`attribute=NAME`) or
@@ -274,6 +278,7 @@ fn run(
         &path,
         args.decoded_records,
         args.decoded_facts,
+        args.decoded_search,
         &args.ignore_rows,
         &args.ignore_json_fact,
     )

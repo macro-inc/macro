@@ -53,6 +53,11 @@ purpose (it says what).
   them as one blob per document), add `--decoded-facts`: `index_document_facts` is
   compared as each complete document's facts, decoded from the blob or gathered from
   the fact tables, and `meta`'s storage schema version is masked.
+- When a change moves the search index into slots (storage schema 14's `search_slots` and
+  `search_rows`, a bucket per row id range), add `--decoded-search`: those tables are
+  written as `search_documents` rows (profile, type, id, bucket, text, time, hash), without
+  slot numbers or row ids. A row whose slot is missing or belongs to another profile shows
+  in its bucket, and a bucket with more than one slot in `search_slots_shared`.
 - When the host checkpoints on its own once quiet (an idle task 100 ms after its last
   command), add `--real-pause 95` to `FUZZ_ARGS`: `idle`, `reopen` and `crash` ops
   first wait that long plus up to 30 ms in real time, so the host's copy runs, and the

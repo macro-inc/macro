@@ -2,6 +2,16 @@ use super::*;
 
 /// A cache file holding `sql`, dumped with `ignore` and `json_facts`.
 fn dump(sql: &str, ignore: &[(&str, &str)], json_facts: &[&str]) -> BTreeMap<String, Vec<String>> {
+    dump_with(sql, false, ignore, json_facts)
+}
+
+/// As [`dump`], with the search index decoded when `search` is set.
+fn dump_with(
+    sql: &str,
+    search: bool,
+    ignore: &[(&str, &str)],
+    json_facts: &[&str],
+) -> BTreeMap<String, Vec<String>> {
     let dir = std::env::temp_dir().join(format!(
         "cache-diff-fuzz-dump-{}-{}",
         std::process::id(),
@@ -27,7 +37,7 @@ fn dump(sql: &str, ignore: &[(&str, &str)], json_facts: &[&str]) -> BTreeMap<Str
         .map(|(column, value)| (column.to_string(), value.to_string()))
         .collect();
     let json_facts: Vec<_> = json_facts.iter().map(|name| name.to_string()).collect();
-    let out = tables(&path, false, false, &ignore, &json_facts).unwrap();
+    let out = tables(&path, false, false, search, &ignore, &json_facts).unwrap();
     let _ = std::fs::remove_dir_all(&dir);
     out
 }
@@ -123,4 +133,39 @@ fn json_facts_only_in_layer_text() {
     // Only the layers table holds projections.
     let other: Vec<String> = serde_json::from_str(&out["search_documents"][0]).unwrap();
     assert_eq!(other[0], format!("t:{source}"));
+}
+
+#[test]
+fn clustered_search_rows_dump_as_search_documents() {
+    let before = dump_with(
+        "CREATE TABLE search_documents (profile TEXT, __typename TEXT, id TEXT, bucket TEXT, search_text TEXT, timestamp_ms INTEGER, source_hash TEXT);
+         INSERT INTO search_documents VALUES ('quick-access-v1', 'Doc', 'a', 'docs', 'alpha', 5, 'h1'), ('quick-access-v1', 'Mail', 'b', 'mail', 'beta', 7, 'h2');",
+        true,
+        &[],
+        &[],
+    );
+    // Slots and row ids in another order than the rows were first written in.
+    let after = dump_with(
+        "CREATE TABLE search_slots (slot INTEGER PRIMARY KEY, profile INTEGER, bucket TEXT);
+         INSERT INTO search_slots VALUES (1, 1, 'mail'), (2, 1, 'docs');
+         CREATE TABLE search_rows (slot INTEGER, profile INTEGER, __typename TEXT, id TEXT, search_text TEXT, timestamp_ms INTEGER, source_hash TEXT);
+         INSERT INTO search_rows (rowid, slot, profile, __typename, id, search_text, timestamp_ms, source_hash) VALUES
+           (35184372088837, 2, 1, 'Doc', 'a', 'alpha', 5, 'h1'), (17592186044417, 1, 1, 'Mail', 'b', 'beta', 7, 'h2');",
+        true,
+        &[],
+        &[],
+    );
+    assert_eq!(before, after);
+    // A row in a slot of another profile, and a bucket with two slots, show.
+    let broken = dump_with(
+        "CREATE TABLE search_slots (slot INTEGER PRIMARY KEY, profile INTEGER, bucket TEXT);
+         INSERT INTO search_slots VALUES (1, 2, 'mail'), (2, 1, 'docs'), (3, 1, 'docs');
+         CREATE TABLE search_rows (slot INTEGER, profile INTEGER, __typename TEXT, id TEXT, search_text TEXT, timestamp_ms INTEGER, source_hash TEXT);
+         INSERT INTO search_rows VALUES (2, 1, 'Doc', 'a', 'alpha', 5, 'h1'), (1, 1, 'Mail', 'b', 'beta', 7, 'h2');",
+        true,
+        &[],
+        &[],
+    );
+    assert_ne!(before["search_documents"], broken["search_documents"]);
+    assert_eq!(broken["search_slots_shared"].len(), 1);
 }

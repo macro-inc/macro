@@ -21,6 +21,11 @@ use turso_core::{
 /// blob (storage schema 13 and later) or gathered from the fact tables (before),
 /// so builds on both sides of that schema change compare.
 ///
+/// With `search`, the search index of storage schema 14 and later (`search_slots`,
+/// and `search_rows` clustered by slot) is written as the `search_documents` rows
+/// the schemas before it hold: its slot numbers and row ids, which depend on the
+/// order buckets and rows were first written, are left out.
+///
 /// Each `(column, value)` in `ignore` leaves out the rows whose `column` holds
 /// the text `value`, in every table declaring that column, everywhere above too;
 /// `attribute` also leaves out the facts of that attribute in a decoded facts
@@ -31,6 +36,7 @@ pub fn tables(
     path: &Path,
     decoded: bool,
     facts: bool,
+    search: bool,
     ignore: &[(String, String)],
     json_facts: &[String],
 ) -> Result<BTreeMap<String, Vec<String>>, String> {
@@ -65,6 +71,9 @@ pub fn tables(
             ));
         })?;
         out.insert(name, table);
+    }
+    if search {
+        decode_search(&connection, ignore, &mut out)?;
     }
     if decoded {
         decode_records(&connection, ignore, &mut out)?;
@@ -115,29 +124,104 @@ fn decode_records(
         },
     )?;
     out.insert("records".into(), records);
-    if !out.contains_key("search_documents") {
+    // From the rows already read (or written by `decode_search`), in their column
+    // order: profile, __typename, id, bucket, search_text, timestamp_ms, source_hash.
+    if let Some(documents) = out.get_mut("search_documents") {
+        for row in documents.iter_mut() {
+            let Ok(mut values) = serde_json::from_str::<Vec<String>>(row) else {
+                continue;
+            };
+            let ours = values.len() == 7
+                && hashes
+                    .get(&(values[1].clone(), values[2].clone()))
+                    .is_some_and(|hash| values[6] == render(&Value::build_text(hash.clone())));
+            if ours {
+                values[6] = "h:record".to_owned();
+                *row = row_text(values.into_iter());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The profile a schema 14 search row's number stands for (`profile_code` in
+/// cache-turso); an unknown number is kept as one, so two different ones differ.
+fn search_profile(code: &Value) -> Value {
+    if render(code) == render(&Value::from_i64(1)) {
+        Value::build_text("quick-access-v1")
+    } else {
+        code.clone()
+    }
+}
+
+/// Writes schema 14's `search_slots` and `search_rows` as `search_documents`
+/// rows, as [`tables`] describes for `search`. A row whose slot has no
+/// `search_slots` row keeps the slot number as its bucket, marked, so it differs.
+fn decode_search(
+    connection: &Arc<Connection>,
+    ignore: &[(String, String)],
+    out: &mut BTreeMap<String, Vec<String>>,
+) -> Result<(), String> {
+    if !out.contains_key("search_rows") || !out.contains_key("search_slots") {
         return Ok(());
+    }
+    let mut slots = HashMap::new();
+    rows(
+        &mut select(connection, ignore, "search_slots", "slot, profile, bucket")?,
+        |values| {
+            slots.insert(render(&values[0]), (render(&values[1]), values[2].clone()));
+        },
+    )?;
+    // One slot per profile bucket: a second would split a bucket across two row ranges.
+    let mut buckets: BTreeMap<(String, String), usize> = BTreeMap::new();
+    for (profile, bucket) in slots.values() {
+        *buckets
+            .entry((profile.clone(), render(bucket)))
+            .or_default() += 1;
+    }
+    let shared: Vec<String> = buckets
+        .into_iter()
+        .filter(|(_, count)| *count > 1)
+        .map(|((profile, bucket), count)| {
+            row_text([profile, bucket, count.to_string()].into_iter())
+        })
+        .collect();
+    if !shared.is_empty() {
+        out.insert("search_slots_shared".into(), shared);
     }
     let mut documents = Vec::new();
     rows(
         &mut select(
             connection,
             ignore,
-            "search_documents",
-            "profile, __typename, id, bucket, search_text, timestamp_ms, source_hash",
+            "search_rows",
+            "slot, profile, __typename, id, search_text, timestamp_ms, source_hash",
         )?,
         |values| {
-            let key = (render(&values[1]), render(&values[2]));
-            let ours = matches!((&values[6], hashes.get(&key)),
-                (Value::Text(text), Some(hash)) if text.as_str() == hash);
-            documents.push(row_text(values.iter().enumerate().map(
-                |(index, value)| match index == 6 && ours {
-                    true => "h:record".to_owned(),
-                    false => render(value),
-                },
-            )));
+            let slot = render(&values[0]);
+            // The bucket a row is in is its slot's; a row naming another profile
+            // than its slot does shows as that mismatch.
+            let bucket = match slots.get(&slot) {
+                Some((profile, bucket)) if *profile == render(&values[1]) => render(bucket),
+                Some((profile, bucket)) => format!("slot-profile {profile} {}", render(bucket)),
+                None => format!("no-slot {slot}"),
+            };
+            documents.push(row_text(
+                [
+                    render(&search_profile(&values[1])),
+                    render(&values[2]),
+                    render(&values[3]),
+                    bucket,
+                    render(&values[4]),
+                    render(&values[5]),
+                    render(&values[6]),
+                ]
+                .into_iter(),
+            ));
         },
     )?;
+    out.remove("search_rows");
+    out.remove("search_slots");
     out.insert("search_documents".into(), documents);
     Ok(())
 }
