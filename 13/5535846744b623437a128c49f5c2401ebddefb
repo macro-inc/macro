@@ -50,6 +50,8 @@ crates/connectors/src/domain/resolve.rs
   s_3d0d2ab631115e::t_e433a6602e5a74 143,162
 .github/workspace-dep-closures.json
   s_3d0d2ab631115e::t_e82bba94ace725 4837,10947,10989,11031,11073,13150
+crates/connectors/src/outbound/native/source.rs
+  s_3d0d2ab631115e::t_ee82550bca8b1c 182-200
 ---
 {
   "schema_version": "authorship/3.0.0",
