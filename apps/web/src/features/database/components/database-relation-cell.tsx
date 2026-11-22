@@ -83,6 +83,16 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
       ? Math.max(0, ids().length - PHONE_CHIP_LIMIT)
       : 0;
   const openable = () => shown().filter(available);
+  /** The "+N more" / "Show less" row, laid out only on a narrow panel. */
+  let moreToggle: HTMLButtonElement | undefined;
+  const toggleShown = () =>
+    !!moreToggle && moreToggle.getClientRects().length > 0;
+  /** The cell's last tab stop hands Tab on to the next field. */
+  function tabOut(event: KeyboardEvent) {
+    if (event.key !== 'Tab' || event.shiftKey || !props.onNavigate?.(1)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }
   const candidates = () =>
     props.source
       .rows()
@@ -214,7 +224,11 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
               event.altKey
             )
               return;
-            if (event.key === 'Tab' && !event.shiftKey && openable().length)
+            if (
+              event.key === 'Tab' &&
+              !event.shiftKey &&
+              (openable().length || toggleShown())
+            )
               return;
             if (
               event.key === 'Tab' &&
@@ -249,7 +263,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
               class="flex min-w-0 items-center gap-1"
               classList={{
                 'overflow-hidden': !props.expanded,
-                'flex-wrap': props.expanded,
+                'w-full flex-wrap': props.expanded,
               }}
             >
               <For each={shown()}>
@@ -292,15 +306,8 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                       disabled={!available(id)}
                       onClick={() => openRecord(id)}
                       onKeyDown={(event) => {
-                        if (
-                          event.key === 'Tab' &&
-                          !event.shiftKey &&
-                          openable().at(-1) === id &&
-                          props.onNavigate?.(1)
-                        ) {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }
+                        if (openable().at(-1) === id && !toggleShown())
+                          tabOut(event);
                       }}
                     >
                       <ArrowRightIcon class="size-3" />
@@ -319,42 +326,27 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                   +{overflow()}
                 </span>
               </Show>
-              <Show when={narrowHidden()}>
-                {(hidden) => (
-                  <button
-                    type="button"
-                    aria-label={`Show ${hidden()} more ${props.source.name()}`}
-                    class={buttonClasses({
-                      variant: 'ghost',
-                      size: 'xs',
-                      class:
-                        'pointer-events-auto hidden basis-full justify-start @max-[24rem]/record-fields:inline-flex',
-                    })}
-                    onClick={() => setShowingAll(true)}
-                  >
-                    +{hidden()} more
-                  </button>
-                )}
-              </Show>
-              <Show
-                when={
-                  props.expanded &&
-                  showingAll() &&
-                  ids().length > PHONE_CHIP_LIMIT
-                }
-              >
+              {/* One button for both, so focus stays on it as it turns. */}
+              <Show when={props.expanded && ids().length > PHONE_CHIP_LIMIT}>
                 <button
+                  ref={moreToggle}
                   type="button"
-                  aria-label={`Show fewer ${props.source.name()}`}
+                  aria-expanded={showingAll()}
+                  aria-label={
+                    showingAll()
+                      ? `Show less ${props.source.name()}`
+                      : `+${narrowHidden()} more ${props.source.name()}`
+                  }
                   class={buttonClasses({
                     variant: 'ghost',
                     size: 'xs',
                     class:
                       'pointer-events-auto hidden basis-full justify-start @max-[24rem]/record-fields:inline-flex',
                   })}
-                  onClick={() => setShowingAll(false)}
+                  onClick={() => setShowingAll(!showingAll())}
+                  onKeyDown={tabOut}
                 >
-                  Show less
+                  {showingAll() ? 'Show less' : `+${narrowHidden()} more`}
                 </button>
               </Show>
             </span>
