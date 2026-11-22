@@ -695,6 +695,26 @@ describe('legacy channel list notifications', () => {
     ).toMatchObject({ state: 'seen', viewed_at: '2026-01-02T00:00:00Z' });
   });
 
+  it('spells a direct message the way notification checks read it', async () => {
+    const { mapGraphqlNotification } = await import('./graphql-soup');
+    const mapped = mapGraphqlNotification(
+      notification({
+        __typename: 'GraphqlChannelMessageReactionMetadata',
+        channelMessageReactionMessageId: 'message',
+        channelMessageReactionThreadId: null,
+        channelMessageReactionMessageContent: 'Ship it',
+        channelMessageReactionEmoji: '❤️',
+        channelMessageReactionChannelType: 'DIRECT_MESSAGE',
+        channelMessageReactionChannelName: 'Ada',
+        channelMessageReactionSenderProfilePictureUrl: null,
+      })
+    );
+    expect(mapped.notification_metadata).toMatchObject({
+      tag: 'channel_message_reaction',
+      content: { channelType: 'directMessage' },
+    });
+  });
+
   it('preserves mention and reply thread membership and message targets', async () => {
     const { mapGraphqlNotification } = await import('./graphql-soup');
     const { scopeChannelNotificationsForEntity } = await import(
