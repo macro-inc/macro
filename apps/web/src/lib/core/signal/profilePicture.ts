@@ -4,6 +4,7 @@ import { Telemetry } from '@macro-inc/observability';
 import { authServiceClient } from '@service-auth/client';
 import { until } from '@solid-primitives/promise';
 import { AsyncBatcher } from '@tanstack/pacer';
+import { ResultAsync } from 'neverthrow';
 import { type Accessor, getOwner, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { z } from 'zod';
@@ -55,16 +56,21 @@ type PendingFetch = {
 
 /** Ids waiting for the batcher, each with the promise its request settles. */
 const queued = new Map<string, PendingFetch>();
-/** Version of the latest request sent for each id still waiting on a response. */
-const inFlight = new Map<string, number>();
+/** The latest request sent for each id still waiting on a response. */
+const inFlight = new Map<string, { version: number } & PendingFetch>();
 /** How many mounted avatars show each id. */
 const mountCounts = new Map<string, number>();
 
-const batcher = new AsyncBatcher<string>(fetchBatch, {
-  wait: FETCH_BATCH_WAIT_MS,
-  maxSize: FETCH_BATCH_SIZE,
-  throwOnError: false,
-});
+const batcher = new AsyncBatcher<string>(
+  async (ids) => {
+    await fetchBatch(ids);
+  },
+  {
+    wait: FETCH_BATCH_WAIT_MS,
+    maxSize: FETCH_BATCH_SIZE,
+    throwOnError: false,
+  }
+);
 
 function pendingFetch(): PendingFetch {
   let resolve!: (ok: boolean) => void;
@@ -101,17 +107,20 @@ function needsFetch(id: string): boolean {
   if (queued.has(id)) return false;
   const sent = inFlight.get(id);
   // A request sent after the last invalidation will bring a fresh picture.
-  if (sent !== undefined && sent > invalidatedAt) return false;
+  if (sent && sent.version > invalidatedAt) return false;
   const entry = userProfilePictures[id];
   return !entry || isStale(entry) || isExpired(entry);
 }
 
 /**
- * Fetches `id` if it's missing, stale or expired. A missing user gets a
- * loading entry; a cached picture stays on screen until the new one arrives.
+ * Fetches `id` if it's missing, stale or expired, and returns the request that
+ * will refresh it, if any. A missing user gets a loading entry; a cached
+ * picture stays on screen until the new one arrives.
  */
 function ensureFresh(id: string): Promise<boolean> | undefined {
-  if (!needsFetch(id)) return queued.get(id)?.promise;
+  if (!needsFetch(id)) {
+    return queued.get(id)?.promise ?? inFlight.get(id)?.promise;
+  }
   if (!userProfilePictures[id]) {
     setUserProfilePictures(id, {
       id,
@@ -133,21 +142,26 @@ function ensureFresh(id: string): Promise<boolean> | undefined {
  * entries still `loading` are marked loaded with an expired timestamp so the
  * next access retries instead of waiting forever.
  */
-async function fetchBatch(ids: string[]): Promise<void> {
+async function fetchBatch(ids: string[]): Promise<boolean> {
   const version = ++clock;
-  const waiting: PendingFetch[] = [];
+  const request = { version, ...pendingFetch() };
+  const waiting: PendingFetch[] = [request];
   for (const id of ids) {
     const pending = queued.get(id);
     if (pending) waiting.push(pending);
     queued.delete(id);
-    inFlight.set(id, version);
+    inFlight.set(id, request);
   }
 
   let ok = false;
   try {
-    const result = await authServiceClient.postProfilePictures({
-      user_id_list: ids,
-    });
+    // A request that throws (an auth change mid-flight) fails like an error.
+    const result = (
+      await ResultAsync.fromPromise(
+        authServiceClient.postProfilePictures({ user_id_list: ids }),
+        (error) => error
+      )
+    ).andThen((response) => response);
     const isNewer = (id: string) =>
       (userProfilePictures[id]?.version ?? -1) > version;
 
@@ -162,7 +176,7 @@ async function fetchBatch(ids: string[]): Promise<void> {
           version: 0,
         });
       }
-      return;
+      return ok;
     }
 
     ok = true;
@@ -179,10 +193,11 @@ async function fetchBatch(ids: string[]): Promise<void> {
     }
   } finally {
     for (const id of ids) {
-      if (inFlight.get(id) === version) inFlight.delete(id);
+      if (inFlight.get(id) === request) inFlight.delete(id);
     }
     for (const pending of waiting) pending.resolve(ok);
   }
+  return ok;
 }
 
 function trackMount(id: string): void {
@@ -268,40 +283,65 @@ export async function refreshProfilePicture(userId: string): Promise<void> {
   await enqueue(userId);
 }
 
+/** Retries of a reconnect refetch whose request failed. */
+const RECONNECT_REFETCH_RETRIES = 1;
+
 let reconnectRefetchScheduled = false;
 
 /**
- * Refetches the mounted avatars that are still stale, in batched requests.
- * Unmounted entries wait for their next mount or read.
+ * Refetches the mounted avatars that are still stale, in requests of at most
+ * {@link FETCH_BATCH_SIZE} ids sent from this span. Unmounted entries wait for
+ * their next mount or read. Returns whether every request succeeded.
  */
-async function refetchMountedStale(): Promise<void> {
-  await Telemetry.span('profile_pictures.reconnect_refetch', async (span) => {
-    const ids = [...mountCounts.keys()].filter(needsFetch);
-    span.setAttr('profile_pictures.mounted_count', mountCounts.size);
-    span.setAttr('profile_pictures.refetch_count', ids.length);
-    const results = await Promise.all(ids.map(enqueue));
-    span.setAttr(
-      'profile_pictures.failed_count',
-      results.filter((ok) => !ok).length
+async function refetchMountedStale(): Promise<boolean> {
+  return await Telemetry.span(
+    'profile_pictures.reconnect_refetch',
+    async (span) => {
+      const ids = [...mountCounts.keys()].filter(needsFetch);
+      span.setAttr('profile_pictures.mounted_count', mountCounts.size);
+      span.setAttr('profile_pictures.refetch_count', ids.length);
+      let failed = 0;
+      for (let start = 0; start < ids.length; start += FETCH_BATCH_SIZE) {
+        const ok = await fetchBatch(ids.slice(start, start + FETCH_BATCH_SIZE));
+        if (!ok) failed += 1;
+      }
+      span.setAttr(
+        'profile_pictures.batch_count',
+        Math.ceil(ids.length / FETCH_BATCH_SIZE)
+      );
+      span.setAttr('profile_pictures.failed_batches', failed);
+      return failed === 0;
+    }
+  );
+}
+
+/** Runs {@link refetchMountedStale} after a random delay, once for many calls. */
+function scheduleMountedRefetch(retriesLeft: number): void {
+  if (reconnectRefetchScheduled) return;
+  reconnectRefetchScheduled = true;
+  setTimeout(() => {
+    reconnectRefetchScheduled = false;
+    fireAndForget(
+      (async () => {
+        const ok = await refetchMountedStale();
+        if (!ok && retriesLeft > 0) scheduleMountedRefetch(retriesLeft - 1);
+      })(),
+      'profile-pictures-reconnect-refetch'
     );
-  });
+  }, Math.random() * RECONNECT_REFETCH_MAX_JITTER_MS);
 }
 
 /**
  * Connection-gateway reconnect listener. `user_picture_changed` frames sent
  * while the socket was down are never replayed, so every cached picture is
  * marked stale (one counter bump, no network). Mounted avatars refetch after a
- * short random delay, batched; everything else refetches when it next mounts
- * or is read. Reconnects while a refetch is scheduled share it.
+ * short random delay, batched, with one retry if that fails; everything else
+ * refetches when it next mounts or is read. Reconnects while a refetch is
+ * scheduled share it.
  */
 export function invalidateProfilePicturesOnReconnect(): void {
   invalidatedAt = ++clock;
-  if (reconnectRefetchScheduled) return;
-  reconnectRefetchScheduled = true;
-  setTimeout(() => {
-    reconnectRefetchScheduled = false;
-    fireAndForget(refetchMountedStale(), 'profile-pictures-reconnect-refetch');
-  }, Math.random() * RECONNECT_REFETCH_MAX_JITTER_MS);
+  scheduleMountedRefetch(RECONNECT_REFETCH_RETRIES);
 }
 
 const userPictureChangedSchema = z.object({ user_id: z.string().min(1) });

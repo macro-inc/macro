@@ -25,8 +25,8 @@ const requestedIds = () =>
     ...(args as Args).user_id_list,
   ]);
 
-/** Past the reconnect jitter and the batch wait. */
-const AFTER_RECONNECT_MS = 2_100;
+/** Past the reconnect delay (half the jitter bound, see `Math.random` below). */
+const AFTER_RECONNECT_MS = 1_100;
 
 /** Mounts an avatar for `id` the way a component does; returns its url and unmount. */
 function mount(id: string) {
@@ -129,7 +129,25 @@ describe('profile pictures', () => {
     expect(await pictures.getProfilePictureUrl(id)).toBe('https://x/file/1');
   });
 
+  it('resolves a first load whose request throws', async () => {
+    const id = 'macro|first-load-throws@example.com';
+    postProfilePictures.mockImplementation(() =>
+      Promise.reject(new Error('token changed'))
+    );
+    const avatar = mount(id);
+    expect(await pictures.getProfilePictureUrl(id)).toBeUndefined();
+    expect(avatar.url()).toBeUndefined();
+  });
+
   describe('on reconnect', () => {
+    beforeEach(() => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    });
+
+    afterEach(() => {
+      vi.mocked(Math.random).mockRestore();
+    });
+
     it('fetches nothing for users no avatar shows', async () => {
       postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
       const ids = Array.from(
@@ -240,7 +258,7 @@ describe('profile pictures', () => {
       expect(requestedIds()).toEqual([[id]]);
     });
 
-    it('keeps cached urls when the refetch fails, and retries on the next mount', async () => {
+    it('keeps cached urls when the refetch fails, retries once, then waits for the next mount', async () => {
       const id = 'macro|resync-fail@example.com';
       postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
       const avatar = mount(id);
@@ -253,6 +271,9 @@ describe('profile pictures', () => {
       pictures.invalidateProfilePicturesOnReconnect();
       await vi.advanceTimersByTimeAsync(AFTER_RECONNECT_MS);
       expect(postProfilePictures).toHaveBeenCalledTimes(2);
+      expect(avatar.url()).toBe('https://x/file/1');
+      await vi.advanceTimersByTimeAsync(AFTER_RECONNECT_MS * 3);
+      expect(postProfilePictures).toHaveBeenCalledTimes(3);
       expect(avatar.url()).toBe('https://x/file/1');
       vi.useRealTimers();
 
@@ -284,6 +305,67 @@ describe('profile pictures', () => {
       await refreshed;
       await vi.advanceTimersByTimeAsync(AFTER_RECONNECT_MS);
       expect(avatar.url()).toBe('https://x/file/new');
+    });
+    it('splits many mounted avatars into requests of at most 100 ids', async () => {
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
+      const ids = Array.from(
+        { length: 250 },
+        (_, i) => `macro|many${i}@example.com`
+      );
+      const avatars = ids.map(mount);
+      await vi.waitFor(() =>
+        expect(avatars.every((a) => a.url() === 'https://x/file/1')).toBe(true)
+      );
+      postProfilePictures.mockClear();
+
+      vi.useFakeTimers();
+      pictures.invalidateProfilePicturesOnReconnect();
+      await vi.advanceTimersByTimeAsync(AFTER_RECONNECT_MS);
+      expect(requestedIds().map((batch) => batch.length)).toEqual([
+        100, 100, 50,
+      ]);
+      expect(requestedIds().flat().sort()).toEqual([...ids].sort());
+    });
+
+    it('still refetches a user one of two avatars shows', async () => {
+      const id = 'macro|two-avatars@example.com';
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/1'));
+      const first = mount(id);
+      const second = mount(id);
+      await vi.waitFor(() => expect(second.url()).toBe('https://x/file/1'));
+      first.unmount();
+      postProfilePictures.mockClear();
+
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/2'));
+      vi.useFakeTimers();
+      pictures.invalidateProfilePicturesOnReconnect();
+      await vi.advanceTimersByTimeAsync(AFTER_RECONNECT_MS);
+      expect(requestedIds()).toEqual([[id]]);
+      expect(second.url()).toBe('https://x/file/2');
+    });
+
+    it('waits for the refetch already in flight when a stale picture is read', async () => {
+      const id = 'macro|read-in-flight@example.com';
+      postProfilePictures.mockImplementation(picturesFor('https://x/file/old'));
+      const avatar = mount(id);
+      await vi.waitFor(() => expect(avatar.url()).toBe('https://x/file/old'));
+
+      const fetch = gated();
+      postProfilePictures.mockImplementation(async (args: Args) => {
+        fetch.sent();
+        await fetch.gate;
+        return picturesFor('https://x/file/new')(args);
+      });
+      vi.useFakeTimers();
+      pictures.invalidateProfilePicturesOnReconnect();
+      await vi.advanceTimersByTimeAsync(AFTER_RECONNECT_MS);
+      await fetch.wasSent;
+      vi.useRealTimers();
+
+      const read = pictures.getProfilePictureUrl(id);
+      fetch.release();
+      expect(await read).toBe('https://x/file/new');
+      expect(postProfilePictures).toHaveBeenCalledTimes(2);
     });
   });
 
