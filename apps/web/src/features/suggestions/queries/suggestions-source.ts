@@ -46,6 +46,24 @@ export function feedOptions(
   });
 }
 
+/** `feed` with `suggestion` open, added at its end if the feed no longer lists it. */
+function reopened(
+  feed: SuggestionFeed,
+  suggestion: Suggestion
+): SuggestionFeed {
+  const open = (held: Suggestion): Suggestion => ({ ...held, status: 'open' });
+  const listed = feed.suggestions.some((other) => other.id === suggestion.id);
+
+  return {
+    ...feed,
+    suggestions: listed
+      ? feed.suggestions.map((other) =>
+          other.id === suggestion.id ? open(other) : other
+        )
+      : [...feed.suggestions, open(suggestion)],
+  };
+}
+
 /**
  * The person's suggestions from the scheduler service. Nothing is read while suggestions
  * are off. The feed is read again after each write, since the server decides
@@ -78,11 +96,13 @@ export function useSuggestionsSource(): SuggestionsSource {
     ]);
   };
   // The sidebar's Ideas count is the routine suggestions feature's read, and
-  // a dismissed routine suggestion takes its idea with it.
-  const refreshIdeas = () =>
-    queryClient.invalidateQueries({
-      queryKey: routineSuggestionKeys.all.queryKey,
-    });
+  // a dismissed routine suggestion takes its idea with it. A read already
+  // out may predate the dismissal, so it is dropped, not joined.
+  const refreshIdeas = async () => {
+    const ideas = { queryKey: routineSuggestionKeys.all.queryKey };
+    await queryClient.cancelQueries(ideas);
+    await queryClient.invalidateQueries(ideas);
+  };
   /** Replace one suggestion in the feed held for `asked`, without a read. */
   const patch = (
     asked: ReturnType<typeof key>,
@@ -155,7 +175,9 @@ export function useSuggestionsSource(): SuggestionsSource {
       await throwOnErr(() =>
         scheduledActionClient.dismissSuggestion({ suggestionId: id })
       );
-      await Promise.all([refresh(), refreshIdeas()]);
+      // The row waits only for its own feed.
+      fireAndForget(refreshIdeas(), 'suggestions.ideas');
+      await refresh();
     },
     async stop(id) {
       await throwOnErr(() =>
@@ -163,14 +185,18 @@ export function useSuggestionsSource(): SuggestionsSource {
       );
       await refresh();
     },
-    async restore(id) {
+    async restore(suggestion) {
       const asked = key();
       await throwOnErr(() =>
-        scheduledActionClient.restoreSuggestion({ suggestionId: id })
+        scheduledActionClient.restoreSuggestion({
+          suggestionId: suggestion.id,
+        })
       );
       // Restored is open: say so before the read, which keeps what it held
-      // if it fails.
-      patch(asked, id, (suggestion) => ({ ...suggestion, status: 'open' }));
+      // if it fails. A dismissed one has left the feed, so it goes back in.
+      queryClient.setQueryData(asked, (held: SuggestionFeed | undefined) =>
+        held ? reopened(held, suggestion) : held
+      );
       await refresh();
     },
     viewed: () =>

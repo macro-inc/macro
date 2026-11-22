@@ -6,7 +6,7 @@ import {
 } from '@components/app/split-layout/context';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { createSignal, For } from 'solid-js';
+import { createSignal, For, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
@@ -140,6 +140,9 @@ function Fixture() {
     accept: async ({ id, updatedAt }) => {
       record(`accept ${id}`);
       if (scenario === 'accept-refused') throw new Error('refused');
+      if (scenario === 'slow-accept') {
+        await new Promise((done) => setTimeout(done, 800));
+      }
       if (scenario === 'changed' && updatedAt !== REWRITTEN_AT) {
         // Rewritten under the card: the server refuses and the feed is read again.
         // The rewrite moved where the run posts.
@@ -182,6 +185,7 @@ function Fixture() {
     dismiss: async (id) => {
       record(`dismiss ${id}`);
       if (scenario === 'dismiss-refused') throw new Error('refused');
+      await new Promise((done) => setTimeout(done, 800));
 
       const gone = suggestions()?.find((suggestion) => suggestion.id === id);
       if (gone) dismissedHere = [...dismissedHere, gone];
@@ -199,7 +203,7 @@ function Fixture() {
           : suggestion
       );
     },
-    restore: async (id) => {
+    restore: async ({ id }) => {
       record(`restore ${id}`);
       if (scenario === 'restore-refused') throw new Error('too late');
 
@@ -314,9 +318,23 @@ function Fixture() {
     openRoutines: (routineId) =>
       record(routineId ? `routines ${routineId}` : 'routines'),
   };
-  const [list, setList] = createSignal<ForYouList>(
-    FOR_YOU_LISTS.find((name) => name === PARAMS.get('list')) ?? 'today'
+  // As the app's route: the list is in the URL, so Back changes it too.
+  const listIn = (search: string) =>
+    FOR_YOU_LISTS.find(
+      (name) => name === new URLSearchParams(search).get('list')
+    ) ?? 'today';
+  const [list, setShownList] = createSignal<ForYouList>(
+    listIn(location.search)
   );
+  const setList = (next: ForYouList) => {
+    const url = new URL(location.href);
+    url.searchParams.set('list', next);
+    history.pushState(null, '', url);
+    setShownList(next);
+  };
+  const followHistory = () => setShownList(listIn(location.search));
+  window.addEventListener('popstate', followHistory);
+  onCleanup(() => window.removeEventListener('popstate', followHistory));
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('for-you');
   const panel = {
     handle: { isFirst: () => true, isPopover: () => false },

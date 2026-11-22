@@ -80,15 +80,19 @@ only, behind `enable-suggestions`.
   routine suggestion's `routine` sentence and when-line. Don't
   derive any of these here. Home asks for its rows with `?limit=5`
   (`queries/top-suggestions.ts`).
-- A dismissal is sent at once; the suggestion stays as a row for the visit,
-  and Undo calls `POST /suggestions/{id}/restore`, which the server allows
-  for a few minutes; a restored suggestion shows open at once, even if the
-  read after it fails. A dismissed routine suggestion has no Undo: its idea
+- A dismissal is sent at once and its row shows dismissed from the press
+  (the feed drops the suggestion before the call answers); it stays as a row
+  for the visit, and Undo calls `POST /suggestions/{id}/restore`, which the
+  server allows for a few minutes. `restore` takes the suggestion as the row
+  held it, so it shows open at once, back in the feed, even if the read after
+  it fails. A dismissed routine suggestion has no Undo: its idea
   goes with it, which the server can't bring back. A dismissal also reads
-  the routine ideas again, for the sidebar's Ideas count. A refused
+  the routine ideas again, for the sidebar's Ideas count, dropping a read
+  already out (it may predate the dismissal); the row doesn't wait for it. A refused
   dismissal leaves the row with the failed-action line; a refused Undo says
   it may be too late. The Undo that replaces a pressed ✓ or ✕ takes the
-  focus it left (`takeLostFocus`). Dismissing a
+  focus it left, once it can be pressed, unless the person pressed or
+  focused something outside the row meanwhile (`createFocusHandoff`). Dismissing a
   running suggestion stops its run (the control and the row say so), and
   restoring it brings it back open, not running.
 - Leaving For you calls `POST /suggestions/viewed` (also on `pagehide`, with
@@ -100,7 +104,9 @@ only, behind `enable-suggestions`.
   the person didn't see.
 - The page is a sidebar of lists and the chosen list (`?view=`, Today by
   default) under its name and the date (`views/for-you-view.tsx`,
-  `components/for-you-sidebar.tsx`). `core/lists.ts` says which suggestions
+  `components/for-you-sidebar.tsx`). Every change of list, from the sidebar
+  or from history, opens the list at its top, unless a link names a
+  suggestion to scroll to. `core/lists.ts` says which suggestions
   each list holds: Today all that wait or run, To do entity suggestions,
   Suggestions prompts and routines, Done what the server lists as done. Each
   list's count is the server's (`counts`), so a row that settles here stops

@@ -4,7 +4,17 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Button, cn, Item, Spinner, ToggleSwitch, Tooltip } from '@ui';
-import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createContext,
+  createEffect,
+  createSignal,
+  type JSX,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+  useContext,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { SuggestionItemParts } from '../context/suggestions-source';
 import { type FeedEntry, savedRoutineId } from '../core/lists';
@@ -438,6 +448,8 @@ function RowEnd(props: {
 }
 
 function MarkDoneButton(props: SuggestionRowProps) {
+  const handoff = useContext(FocusHandoffContext);
+
   return (
     <Button
       variant="ghost"
@@ -447,7 +459,10 @@ function MarkDoneButton(props: SuggestionRowProps) {
         title: props.entry.suggestion.title,
       })}
       tooltip={t('suggestions.markDone')}
-      onClick={props.onMarkDone}
+      onClick={() => {
+        handoff?.pressed();
+        props.onMarkDone();
+      }}
       data-suggestion-done
     >
       <CheckIcon class="size-4" />
@@ -456,6 +471,7 @@ function MarkDoneButton(props: SuggestionRowProps) {
 }
 
 function DismissButton(props: SuggestionRowProps) {
+  const handoff = useContext(FocusHandoffContext);
   const running = () => props.entry.state === 'running';
 
   return (
@@ -471,7 +487,10 @@ function DismissButton(props: SuggestionRowProps) {
       tooltip={t(
         running() ? 'suggestions.stopAndDismiss' : 'suggestions.dismiss'
       )}
-      onClick={props.onDismiss}
+      onClick={() => {
+        handoff?.pressed();
+        props.onDismiss();
+      }}
       data-suggestion-dismiss
     >
       <CloseIcon class="size-4" />
@@ -492,14 +511,47 @@ function WaitingHover(props: SuggestionRowProps) {
 }
 
 /**
- * The control that replaces one the person just pressed (Mark done, Dismiss)
- * takes the focus it left behind, so the keyboard stays on the row.
+ * The focus a pressed Mark done or Dismiss leaves behind when its row settles.
+ * The control that replaces it (Undo) takes it, once, unless the person has
+ * moved on: pressed or focused something outside the row meanwhile.
  */
-function takeLostFocus(element: HTMLElement) {
-  onElementConnect(element, () => {
-    const active = document.activeElement;
-    if (!active || active === document.body) element.focus();
+type FocusHandoff = {
+  pressed(): void;
+  take(element: HTMLElement, ready: () => boolean): void;
+};
+
+const FocusHandoffContext = createContext<FocusHandoff>();
+
+function createFocusHandoff(row: () => HTMLElement | undefined): FocusHandoff {
+  let armed = false;
+  const leftRow = (event: Event) => {
+    if (!(event.target instanceof Node) || !row()?.contains(event.target)) {
+      armed = false;
+    }
+  };
+  document.addEventListener('pointerdown', leftRow, true);
+  document.addEventListener('focusin', leftRow, true);
+  onCleanup(() => {
+    document.removeEventListener('pointerdown', leftRow, true);
+    document.removeEventListener('focusin', leftRow, true);
   });
+
+  return {
+    pressed: () => {
+      armed = true;
+    },
+    // A control mounts disabled while its row is busy, and a disabled
+    // control can't take focus: it takes it once it can be pressed.
+    take: (element, ready) =>
+      onElementConnect(element, () => {
+        createEffect(() => {
+          if (!ready() || !armed) return;
+          armed = false;
+          const active = document.activeElement;
+          if (!active || active === document.body) element.focus();
+        });
+      }),
+  };
 }
 
 /** A done row's time, in the interface language. */
@@ -511,6 +563,9 @@ function doneTime(at: string): string {
 
 /** The right side of the row, for its state. */
 function StateEnd(props: SuggestionRowProps) {
+  const handoff = useContext(FocusHandoffContext);
+  const takeLostFocus = (element: HTMLElement) =>
+    handoff?.take(element, () => !props.entry.busy);
   const suggestion = () => props.entry.suggestion;
   const routineId = () => savedRoutineId(suggestion());
 
@@ -651,6 +706,8 @@ function StateEnd(props: SuggestionRowProps) {
  * controls. Pressing the text opens it, looks at it, or opens what it left.
  */
 export function SuggestionRow(props: SuggestionRowProps) {
+  let row: HTMLDivElement | undefined;
+  const handoff = createFocusHandoff(() => row);
   const titleId = () => `suggestion-title-${props.entry.suggestion.id}`;
   const settled = () =>
     props.entry.state === 'markedDone' ||
@@ -680,34 +737,39 @@ export function SuggestionRow(props: SuggestionRowProps) {
   );
 
   return (
-    <Item
-      size="sm"
-      role="article"
-      aria-labelledby={titleId()}
-      data-suggestion={props.entry.suggestion.id}
-      data-suggestion-state={props.entry.state}
-      data-suggestion-settled={settled() ? '' : undefined}
-      class="group/suggestion h-14 border-0 px-4 py-2 has-focus-visible:bg-hover not-touch:hover:bg-hover"
-    >
-      <RowTile entry={props.entry} />
-      <Item.Content class="gap-0.5">
-        <Show
-          when={pressAction(props)}
-          fallback={<div class="flex min-w-0 flex-col gap-0.5">{title()}</div>}
-        >
-          {(press) => (
-            <button
-              type="button"
-              class="flex min-w-0 flex-col gap-0.5 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-focus"
-              onClick={() => press()()}
-            >
-              {title()}
-            </button>
-          )}
-        </Show>
-        <StateLine {...props} />
-      </Item.Content>
-      <StateEnd {...props} />
-    </Item>
+    <FocusHandoffContext.Provider value={handoff}>
+      <Item
+        ref={row}
+        size="sm"
+        role="article"
+        aria-labelledby={titleId()}
+        data-suggestion={props.entry.suggestion.id}
+        data-suggestion-state={props.entry.state}
+        data-suggestion-settled={settled() ? '' : undefined}
+        class="group/suggestion h-14 border-0 px-4 py-2 has-focus-visible:bg-hover not-touch:hover:bg-hover"
+      >
+        <RowTile entry={props.entry} />
+        <Item.Content class="gap-0.5">
+          <Show
+            when={pressAction(props)}
+            fallback={
+              <div class="flex min-w-0 flex-col gap-0.5">{title()}</div>
+            }
+          >
+            {(press) => (
+              <button
+                type="button"
+                class="flex min-w-0 flex-col gap-0.5 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-focus"
+                onClick={() => press()()}
+              >
+                {title()}
+              </button>
+            )}
+          </Show>
+          <StateLine {...props} />
+        </Item.Content>
+        <StateEnd {...props} />
+      </Item>
+    </FocusHandoffContext.Provider>
   );
 }

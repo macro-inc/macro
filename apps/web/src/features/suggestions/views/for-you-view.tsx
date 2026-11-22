@@ -8,7 +8,16 @@ import UndoIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button, cn } from '@ui';
-import { type Accessor, For, Match, Show, Switch, untrack } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  For,
+  Match,
+  on,
+  Show,
+  Switch,
+  untrack,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import { ForYouSidebar, listName } from '../components/for-you-sidebar';
 import { RefreshSuggestions } from '../components/refresh-suggestions';
@@ -255,11 +264,19 @@ export function ForYouView(props: {
   );
 
   let scroller: HTMLElement | undefined;
-  // Each list starts at its top: the lists share one scroller.
-  const selectList = (list: ForYouList) => {
-    scroller?.scrollTo({ top: 0 });
-    props.onSelectList(list);
-  };
+  // Each list starts at its top: the lists share one scroller, and a list
+  // can change from the sidebar or from history (Back). A link to one
+  // suggestion scrolls to it instead.
+  createEffect(
+    on(
+      () => props.list,
+      () => {
+        if (!props.focusedId) scroller?.scrollTo({ top: 0 });
+      },
+      { defer: true }
+    )
+  );
+  const selectList = (list: ForYouList) => props.onSelectList(list);
 
   return (
     <ViewShell.Root

@@ -1,4 +1,5 @@
 import { Telemetry } from '@macro-inc/observability';
+import { ResultAsync } from 'neverthrow';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type {
   SuggestionActions,
@@ -279,7 +280,7 @@ export function createSuggestionsFeed(
     /** Open again what the person marked done here; a refusal marks the row failed. */
     undoDone: (suggestion: Suggestion) =>
       act(suggestion, 'undo_done', async () => {
-        await source.restore(suggestion.id);
+        await source.restore(suggestion);
         setCompletedIds(without(suggestion.id));
       }),
     /** Stop a run under way and keep the suggestion: it is open again once the run stops. */
@@ -333,19 +334,29 @@ export function createSuggestionsFeed(
         const [about] = suggestion.about;
         if (about) actions.openItem(about);
       }),
-    /** Sent at once; a refusal leaves the row, marked failed. */
+    /**
+     * Sent at once, and the row shows dismissed from the press: the feed
+     * drops the suggestion as soon as the server has it, before the call
+     * answers. A refusal opens the row again, marked failed.
+     */
     dismiss: (suggestion: Suggestion) =>
       act(suggestion, 'dismiss', async () => {
-        await source.dismiss(suggestion.id);
-        setDismissed((list) => [
-          ...list.filter((other) => other.id !== suggestion.id),
-          suggestion,
-        ]);
+        const holdOthers = (list: Suggestion[]) =>
+          list.filter((other) => other.id !== suggestion.id);
+        setDismissed((list) => [...holdOthers(list), suggestion]);
+        const sent = await ResultAsync.fromPromise(
+          source.dismiss(suggestion.id),
+          (error) => error
+        );
+        if (sent.isErr()) {
+          setDismissed(holdOthers);
+          throw sent.error;
+        }
       }),
     /** Ask the server to bring it back; a refusal leaves the row, marked failed. */
     undoDismiss: (suggestion: Suggestion) =>
       act(suggestion, 'restore', async () => {
-        await source.restore(suggestion.id);
+        await source.restore(suggestion);
         setDismissed((list) =>
           list.filter((other) => other.id !== suggestion.id)
         );

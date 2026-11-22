@@ -2,9 +2,11 @@ import { routineSuggestionKeys } from '@app/features/routine-suggestions/queries
 import type { Suggestion as WireSuggestion } from '@service-scheduled-action/generated/schemas';
 import { renderHook, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { err, ok } from 'neverthrow';
+import { err, ok, ResultAsync } from 'neverthrow';
 import type { ParentProps } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
+import type { Suggestion } from '../core/suggestion';
+import { toSuggestion } from './decode';
 import { useSuggestionsSource } from './suggestions-source';
 
 const DONE: WireSuggestion = {
@@ -27,7 +29,10 @@ const DONE: WireSuggestion = {
 };
 const COUNTS = { open: 0, running: 0, failed: 0, done: 1 };
 
-const server = vi.hoisted(() => ({ feedFails: false }));
+const server = vi.hoisted(() => ({
+  feedFails: false,
+  listed: undefined as WireSuggestion[] | undefined,
+}));
 
 vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: {
@@ -35,7 +40,11 @@ vi.mock('@service-scheduled-action/client', () => ({
     listSuggestions: async () =>
       server.feedFails
         ? err([{ code: 'HTTP_ERROR', message: 'unavailable' }])
-        : ok({ suggestions: [], done: [DONE], counts: COUNTS }),
+        : ok({
+            suggestions: [],
+            done: server.listed ?? [DONE],
+            counts: COUNTS,
+          }),
     restoreSuggestion: async () => ok(undefined),
     dismissSuggestion: async () => ok(undefined),
   },
@@ -59,8 +68,16 @@ function mount() {
   return { client, source: result };
 }
 
+/** A wire suggestion as the row held it. */
+function decoded(wire: WireSuggestion): Suggestion {
+  const suggestion = toSuggestion(wire);
+  if (!suggestion) throw new Error('undecodable fixture');
+  return suggestion;
+}
+
 beforeEach(() => {
   server.feedFails = false;
+  server.listed = undefined;
 });
 
 it('shows a restored suggestion open even when the read after the restore fails', async () => {
@@ -70,9 +87,22 @@ it('shows a restored suggestion open even when the read after the restore fails'
   );
 
   server.feedFails = true;
-  await source.restore('suggestion-1');
+  await source.restore(decoded(DONE));
 
   expect(source.feed()?.suggestions[0]?.status).toBe('open');
+});
+
+it('puts a restored dismissal back in the feed, open, when the read after it fails', async () => {
+  server.listed = [];
+  const { source } = mount();
+  await waitFor(() => expect(source.feed()?.suggestions).toEqual([]));
+
+  server.feedFails = true;
+  await source.restore(decoded({ ...DONE, state: 'dismissed' }));
+
+  expect(source.feed()?.suggestions).toMatchObject([
+    { id: 'suggestion-1', status: 'open' },
+  ]);
 });
 
 it('reads routine ideas again after a dismissal, which can take an idea with it', async () => {
@@ -82,7 +112,40 @@ it('reads routine ideas again after a dismissal, which can take an idea with it'
 
   await source.dismiss('suggestion-1');
 
-  expect(
-    client.getQueryState(routineSuggestionKeys.all.queryKey)?.isInvalidated
-  ).toBe(true);
+  await waitFor(() =>
+    expect(
+      client.getQueryState(routineSuggestionKeys.all.queryKey)?.isInvalidated
+    ).toBe(true)
+  );
+});
+
+it('drops a read of the routine ideas that was out before the dismissal', async () => {
+  const { client, source } = mount();
+  await waitFor(() => expect(source.feed()).toBeDefined());
+  let answer: (ideas: string[]) => void = () => {};
+  // Cancelled by the dismissal, so it settles as an error.
+  const before = ResultAsync.fromPromise(
+    client.fetchQuery({
+      queryKey: routineSuggestionKeys.all.queryKey,
+      queryFn: () =>
+        new Promise<string[]>((resolve) => {
+          answer = resolve;
+        }),
+    }),
+    (error) => error
+  );
+
+  await source.dismiss('suggestion-1');
+  // The read answers with the ideas as they were before the dismissal.
+  answer(['dismissed idea']);
+  await before;
+
+  await waitFor(() =>
+    expect(
+      client.getQueryState(routineSuggestionKeys.all.queryKey)?.isInvalidated
+    ).toBe(true)
+  );
+  expect(client.getQueryData(routineSuggestionKeys.all.queryKey)).not.toEqual([
+    'dismissed idea',
+  ]);
 });

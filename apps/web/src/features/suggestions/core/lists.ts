@@ -67,11 +67,8 @@ export function inList(list: ForYouList, suggestion: Suggestion): boolean {
 export function settledState(suggestion: Suggestion): RowState {
   return match(suggestion)
     .with({ kind: 'routine' }, (): RowState => 'routineOn')
-    .with(
-      { kind: 'prompt' },
-      (prompt): RowState =>
-        prompt.runMode === 'background' ? 'finished' : 'markedDone'
-    )
+    .with({ kind: 'prompt', runMode: 'background' }, (): RowState => 'finished')
+    .with({ kind: 'prompt', runMode: 'composer' }, (): RowState => 'markedDone')
     .with({ kind: 'entity' }, (): RowState => 'markedDone')
     .exhaustive();
 }

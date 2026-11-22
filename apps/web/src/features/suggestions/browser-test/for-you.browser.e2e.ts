@@ -438,7 +438,10 @@ test('Run on a suggestion that changed shows the new text and starts nothing unt
   const suggestion = row(page, 'suggestion-background');
   await button(suggestion, 'Run').click();
 
-  await expect(suggestion.locator('[data-suggestion-changed]')).toBeVisible();
+  // Where the new version posts comes first, before the note.
+  await expect(suggestion.locator('[data-suggestion-changed]')).toHaveText(
+    /^Posts the weekly status summary in #leadership · /
+  );
   // Run is one press away, so where the new version posts is still said.
   await expect(suggestion.locator('[data-suggestion-sends]')).toHaveText(
     'Posts the weekly status summary in #leadership'
@@ -502,8 +505,8 @@ test('a refused Run still says what the run sends beside the failure', async ({
   const suggestion = row(page, 'suggestion-background');
   await button(suggestion, 'Run').click();
 
-  await expect(suggestion.getByRole('alert')).toContainText(
-    'That didn’t work. Try again.'
+  await expect(suggestion.getByRole('alert')).toHaveText(
+    'Posts the weekly status summary in #ops · That didn’t work. Try again.'
   );
   await expect(suggestion.locator('[data-suggestion-sends]')).toHaveText(
     'Posts the weekly status summary in #ops'
@@ -561,4 +564,51 @@ test('each list opens at its top, wherever the last one was scrolled', async ({
       .locator('section[aria-label="Suggestions"]')
       .evaluate((element) => element.scrollTop)
   ).toBe(0);
+});
+
+test('a list changed by Back opens at its top too', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 420 });
+  await page.goto('/');
+  await sidebarList(page, 'suggestions').click();
+  await expect(title(page)).toHaveText('Suggestions');
+  await page
+    .locator('section[aria-label="Suggestions"]')
+    .evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+
+  await page.goBack();
+  await expect(title(page)).toHaveText('Today');
+  expect(
+    await page
+      .locator('section[aria-label="Today"]')
+      .evaluate((element) => element.scrollTop)
+  ).toBe(0);
+});
+
+test('Undo leaves focus where the person moved it while marking done was sent', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=slow-accept');
+  const review = row(page, 'suggestion-review');
+  await button(review, 'Mark “Review the vendor contract” done').focus();
+  await page.keyboard.press('Enter');
+  // The person clicks elsewhere on the page before the server answers.
+  await page.locator('section[aria-label="Today"] h1').click();
+
+  await expect(review).toHaveAttribute('data-suggestion-state', 'markedDone');
+  await expect(button(review, 'Undo')).not.toBeFocused();
+});
+
+test.describe('in a 24-hour locale', () => {
+  test.use({ locale: 'en-GB', timezoneId: 'UTC' });
+
+  test('a done row says when, as the interface language writes times', async ({
+    page,
+  }) => {
+    await page.goto('/?list=done');
+    await expect(
+      row(page, 'suggestion-done').locator('[data-suggestion-time]')
+    ).toHaveText('08:05');
+  });
 });

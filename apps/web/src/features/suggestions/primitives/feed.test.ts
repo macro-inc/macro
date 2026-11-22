@@ -64,7 +64,7 @@ function host(suggestions: Suggestion[]) {
       drop(id);
     }),
     stop: vi.fn(async (_id: string) => {}),
-    restore: vi.fn(async (_id: string) => {}),
+    restore: vi.fn(async (_suggestion: Suggestion) => {}),
     viewed: vi.fn(),
   } satisfies SuggestionsSource;
   const actions = {
@@ -172,7 +172,9 @@ describe('suggestions feed', () => {
           serve([composerSuggestion, reviewSuggestion, replySuggestion]);
         });
         await feed.undoDone(reviewSuggestion);
-        expect(source.restore).toHaveBeenCalledWith('suggestion-review');
+        expect(source.restore).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'suggestion-review' })
+        );
         expect(rowsOf(feed)[1]).toEqual(['suggestion-review', 'open']);
       }
     );
@@ -526,7 +528,9 @@ describe('suggestions feed', () => {
       await feed.dismiss(composerSuggestion);
       await feed.undoDismiss(composerSuggestion);
 
-      expect(source.restore).toHaveBeenCalledWith('suggestion-composer');
+      expect(source.restore).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'suggestion-composer' })
+      );
       // The row is gone; the restored card comes back with the next read.
       expect(shownIds(feed)).toEqual([]);
     });
@@ -548,6 +552,27 @@ describe('suggestions feed', () => {
         failed: true,
       });
       dispose();
+    });
+  });
+
+  it('shows a row dismissed from the press, while the feed drops it before the server answers', async () => {
+    await withFeed([composerSuggestion], async (feed, { source, serve }) => {
+      let answer: () => void = () => {};
+      source.dismiss.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            answer = resolve;
+          })
+      );
+      const sent = feed.dismiss(composerSuggestion);
+      // The feed no longer lists it while the dismissal is still answering.
+      serve([]);
+      await source.refresh();
+
+      expect(rowsOf(feed)).toEqual([['suggestion-composer', 'dismissed']]);
+      answer();
+      await sent;
+      expect(rowsOf(feed)).toEqual([['suggestion-composer', 'dismissed']]);
     });
   });
 

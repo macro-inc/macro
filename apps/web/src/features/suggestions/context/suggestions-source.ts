@@ -29,9 +29,10 @@ export type SuggestionsSource = {
   stop(id: string): Promise<void>;
   /**
    * Take back a dismissal, or the person marking one done, within a few
-   * minutes of it.
+   * minutes of it. Takes the suggestion as the row held it, so it shows open
+   * even where the feed no longer lists it.
    */
-  restore(id: string): Promise<void>;
+  restore(suggestion: Suggestion): Promise<void>;
   /**
    * The person looked at the feed and is leaving it: what is proposed from
    * now on is new next time.
