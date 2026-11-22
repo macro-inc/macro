@@ -34,8 +34,8 @@ export const MUTANTS: Mutant[] = [
     name: 'alter-field',
     what: "Rows carry their page's notification time one minute early.",
     file: 'apps/web/src/lib/queries/soup/graphql/items.ts',
-    find: '? { ...mapped, notified_at: notifiedAt }',
-    replace: '? { ...mapped, notified_at: new Date(Date.parse(notifiedAt) - 60_000).toISOString() }',
+    find: '({ record, fetched, notifiedAt, updatedAt }) => {',
+    replace: '({ record, fetched, notifiedAt: listed, updatedAt }) => { const notifiedAt = listed && new Date(Date.parse(listed) - 60_000).toISOString();',
   },
   {
     name: 'stale-cache',

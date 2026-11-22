@@ -282,3 +282,10 @@ describe('homeCheckClosure with branch-only initiatives', () => {
     expect(homeCheckClosure(e, ['seq home touch signal dom:text'])?.suffix).toBe('dom:stale-mail-label');
   });
 });
+
+describe('fixed closures', () => {
+  it('explain nothing once the PR fixed them', () => {
+    expect(closureOf('seq home touch signal dom:stale-mail-label')).toBeUndefined();
+    expect(closureOf('seq home touch signal dom:stale-time-label')?.id).toBe('L1');
+  });
+});
