@@ -124,12 +124,31 @@ async function refetchLists(span: Span, sessions: string[]): Promise<void> {
   if (failed?.status === 'rejected') throw failed.reason;
 }
 
+/** How long a reread waits for the cache engine to open before giving up. */
+export const CACHE_OPEN_WAIT_MS = 60_000;
+
+/** Whether the engine opened within {@link CACHE_OPEN_WAIT_MS}. */
+async function cacheOpened(host: CacheHost): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, CACHE_OPEN_WAIT_MS);
+  });
+  try {
+    await Promise.race([host.whenReady?.(), timedOut]);
+  } finally {
+    clearTimeout(timer);
+  }
+  return host.isReady?.() ?? true;
+}
+
 /**
  * Read the rows again once the cache engine has opened. A row read while it
- * opens is written only when it opens, in line with the writes of lists that
- * loaded meanwhile from responses fetched before the change; until the next
- * write, such a list can show the old row (a rename seconds after page load).
- * The second read lands after them.
+ * opens is written only when it opens (or not at all, while a replaced engine
+ * is awaited), in line with the writes of lists that loaded meanwhile from
+ * responses fetched before the change; until the next write, such a list can
+ * show the old row (a rename seconds after page load). The second read lands
+ * after them. It runs after its pass, so a slow open never holds later passes,
+ * and gives up if the engine has not opened in {@link CACHE_OPEN_WAIT_MS}.
  */
 function rereadSessionRowsWhenCacheOpens(
   parent: Span,
@@ -138,15 +157,16 @@ function rereadSessionRowsWhenCacheOpens(
 ): Promise<void> {
   return parent.span('agent_session.row_reread', async (span) => {
     span.setAttr('agent_session.count', sessions.length);
-    await host.whenReady?.();
-    span.setAttr('graphql_cache.ready', host.isReady?.() ?? true);
-    await readSessionRows(span, sessions);
+    const ready = await cacheOpened(host);
+    span.setAttr('graphql_cache.ready', ready);
+    if (ready) await readSessionRows(span, sessions);
   });
 }
 
 /**
- * One pass over a batch: the REST list refetch, then the primary row reads,
- * read again if the cache engine was still opening.
+ * One pass over a batch: the REST list refetch, then the primary row reads.
+ * If the cache engine was still opening, the rows are read again once it
+ * opens, after the pass.
  * The phases start from the pass's span, not the ambient context, which does
  * not survive an `await`.
  */
@@ -164,7 +184,10 @@ function refreshBatch(sessions: string[], attempt: number): Promise<void> {
       );
       await readSessionRows(span, sessions);
       if (opening && host)
-        await rereadSessionRowsWhenCacheOpens(span, host, sessions);
+        fireAndForget(
+          rereadSessionRowsWhenCacheOpens(span, host, sessions),
+          'agent-session-row-reread'
+        );
     } catch (error) {
       span.error(error);
       throw error;
