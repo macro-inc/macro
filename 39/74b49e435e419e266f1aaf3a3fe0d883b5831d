@@ -38,10 +38,13 @@ crates/workspace-hack/Cargo.toml
   s_57e1c74013b228::t_7cad44b7c3799f 124,297
 rules/ast-grep/rust-no-transport-in-domain.yml
   s_57e1c74013b228::t_84d7060ce351ae 24-25,28
+  s_57e1c74013b228::t_9c4fff0f761c5a 26-27
 crates/connectors/src/domain/resolve.rs
   s_57e1c74013b228::t_5323a569426e1e 210
   s_57e1c74013b228::t_de812cfdecf27d 1-71,81-82,90-139,158-209,211-213
   s_57e1c74013b228::t_306640ca6e6da1 72-80,83-89,140-157
+crates/connectors/Cargo.toml
+  s_57e1c74013b228::t_9c4fff0f761c5a 49
 ---
 {
   "schema_version": "authorship/3.0.0",
