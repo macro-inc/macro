@@ -14,7 +14,8 @@ test('six-operation own-DOM range ignores one interior selectionchange only', as
   expect(result.first).toEqual(result.backward);
   expect(result.second).toEqual({
     ...result.backward,
-    dirty: false,
+    // A clean ViewSelection may omit dirty; a present value must be false.
+    ...('dirty' in result.second ? { dirty: false } : {}),
     anchor: { ...result.backward.anchor, offset: 6 },
     focus: { ...result.backward.focus, offset: 8 },
   });
