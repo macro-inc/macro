@@ -48,7 +48,7 @@ const searchTypes: readonly SearchType[] = [
  * @agent
  * Search is keyword search, not semantic: pass 1-3 words that would literally appear in the item, not the user's description. Whitespace-separated terms are ANDed; for documents and email each word is a prefix and terms may match different passages, while for other kinds the query is one adjacent phrase prefix, so long phrases match nothing. Quote a multi-word phrase; use matchType 'exact' for a whole word, identifier or email address. Search a person and a topic separately. To find someone's email, search their quoted address, not their name.
  *
- * Use macro.search.all(query) when the request does not name one kind of item, and keep any scope the user gives (types, inbox, tags) on follow-ups and retries. Channel messages are found with `types: ['channel']`; a message result's own `type` is `channel_message`, which is not a search type. Per-type searches remain for one kind: macro.documents.search returns document handles, macro.email.search email threads, macro.tasks.search tasks. SearchOpts and SearchOptions select searchOn: 'name', 'content', or 'name_content'. These iterators auto-paginate; bound the work explicitly and record when you stop before exhaustion.
+ * Use macro.search.all(query) when the request does not name one kind of item, and keep any scope the user gives (types, inbox, tags) on follow-ups and retries. Channel messages are found with `types: ['channel']`; a message result's own `type` is `channel_message`, which is not a search type. Messages come back only from searches that match content, and not at all when a tags filter is set; `searchOn: 'name'` returns channel names alone. Per-type searches remain for one kind: macro.documents.search returns document handles, macro.email.search email threads, macro.tasks.search tasks. SearchOpts and SearchOptions select searchOn: 'name', 'content', or 'name_content'. These iterators auto-paginate; bound the work explicitly and record when you stop before exhaustion.
  *
  * Every search, this one and every entity's, is a heavy request that often takes seconds; code mode sends at most four at once and queues the rest in call order. Search less rather than one at a time: search several kinds with one macro.search.all(query), passing types only for kinds the user named, rather than one per-type search each, don't split one question into near-duplicate queries, and run the independent searches that remain together with Promise.all or Promise.allSettled.
  *
@@ -81,7 +81,7 @@ const searchTypes: readonly SearchType[] = [
  * @example Find channel messages: the `channel` type covers them, and each comes back as a `channel_message` result
  * ```typescript
  * const page = await macro.search.page('design review', {types: ['channel']});
- * return {data: page.results.map(r => ({type: r.type, id: r.entity.id}))};
+ * return {data: page.results.filter(r => r.type === 'channel_message').map(r => ({type: r.type, id: r.entity.id}))};
  * ```
  *
  * @example Find a contract across email and documents, in one inbox
