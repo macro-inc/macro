@@ -42,7 +42,7 @@ export function addedAgentProgress(
   return (
     match(agent.status)
       .returnType<AddedAgentProgress>()
-      .with('provisioning', 'downloading', () => 'waiting')
+      .with('provisioning', 'downloading', 'moving', () => 'waiting')
       .with('starting', () =>
         waitsFor === 'computer_up' ? 'online' : 'waiting'
       )

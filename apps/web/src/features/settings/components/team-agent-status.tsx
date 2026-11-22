@@ -10,6 +10,7 @@ function statusLabel(status: TeamAgentStatus): string {
     match(status)
       .with('provisioning', () => t('teamAgents.statusProvisioning'))
       .with('downloading', () => t('teammateHosts.statusDownloading'))
+      .with('moving', () => t('teammateHosts.statusMoving'))
       .with('starting', () => t('teamAgents.statusStarting'))
       .with('running', () => t('teamAgents.statusRunning'))
       .with('paused', () => t('teamAgents.statusPaused'))
@@ -30,6 +31,7 @@ function dotState(
     .with(
       'provisioning',
       'downloading',
+      'moving',
       'starting',
       'paused',
       'released',
@@ -47,7 +49,11 @@ export function TeamAgentStatusLabel(props: { status: TeamAgentStatus }) {
       class="inline-flex items-center gap-1.5 text-xs text-ink-muted whitespace-nowrap"
     >
       <Show
-        when={props.status === 'provisioning' || props.status === 'starting'}
+        when={
+          props.status === 'provisioning' ||
+          props.status === 'moving' ||
+          props.status === 'starting'
+        }
         fallback={<StatusDot state={dotState(props.status)} />}
       >
         <Spinner size="sm" decorative />

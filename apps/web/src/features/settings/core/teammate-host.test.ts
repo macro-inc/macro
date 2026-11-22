@@ -6,6 +6,7 @@ import {
   hostEngineLabel,
   hostUnavailableReason,
   sortedHosts,
+  teammatePlacement,
 } from './teammate-host';
 
 const host = (overrides: Partial<TeammateHost>): TeammateHost => ({
@@ -124,5 +125,36 @@ describe('teammate hosts', () => {
     expect(canMoveTeammate(parked, undefined, [], { ownsTeam: true })).toBe(
       false
     );
+  });
+});
+
+describe('teammatePlacement', () => {
+  it('names the machine an agent moves to, never the one it leaves', () => {
+    expect(
+      teammatePlacement({
+        status: 'moving',
+        harnessId: 'laptop',
+        movingTo: 'desktop',
+      })
+    ).toEqual({ kind: 'movingTo', harnessId: 'desktop' });
+  });
+
+  it('names the machine it runs on once the move settled', () => {
+    expect(
+      teammatePlacement({ status: 'starting', harnessId: 'desktop' })
+    ).toEqual({ kind: 'on', harnessId: 'desktop' });
+  });
+
+  it('names no machine while it is parked or on a Macro computer', () => {
+    expect(
+      teammatePlacement({
+        status: 'paused',
+        harnessId: 'laptop',
+        installProblem: { kind: 'hostRemoved' },
+      })
+    ).toEqual({ kind: 'nowhere' });
+    expect(teammatePlacement({ status: 'running' })).toEqual({
+      kind: 'nowhere',
+    });
   });
 });

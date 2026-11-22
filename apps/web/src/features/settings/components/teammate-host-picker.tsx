@@ -6,6 +6,7 @@ import { Button } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import {
   hostEngineLabel,
+  hostEngineUnreachable,
   hostUnavailableReason,
   sortedHosts,
 } from '../core/teammate-host';
@@ -68,14 +69,34 @@ export function TeammateHostPicker(props: {
                   checked={props.selected === host.harnessId}
                   title={host.name}
                   description={unavailable() ?? hostEngineLabel(host)}
-                  disabled={props.disabled || !!unavailable()}
+                  // While the choice is held, the picked row stays readable.
+                  disabled={
+                    (props.disabled && props.selected !== host.harnessId) ||
+                    !!unavailable()
+                  }
                   onChange={() => props.onSelect(host.harnessId)}
                   aside={
-                    <Show when={host.experimental}>
-                      <span class="whitespace-nowrap text-xs font-medium text-ink-muted">
-                        {t('teammateHosts.hostExperimental')}
-                      </span>
-                    </Show>
+                    <>
+                      <Show when={host.experimental}>
+                        <span class="whitespace-nowrap text-xs font-medium text-ink-muted">
+                          {t('teammateHosts.hostExperimental')}
+                        </span>
+                      </Show>
+                      {/* Checked again by itself too; this asks now. */}
+                      <Show when={hostEngineUnreachable(host)}>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            props.onRetry();
+                          }}
+                        >
+                          {t('teammateHosts.checkAgain')}
+                        </Button>
+                      </Show>
+                    </>
                   }
                 />
               );
@@ -138,12 +159,7 @@ export function TeammateTrustWarning(props: {
             : t('teammateHosts.trustTitleUnnamed', { host: props.host })}
         </p>
         <p class="text-xs text-ink-muted">
-          {props.name
-            ? t('teammateHosts.trustBody', {
-                host: props.host,
-                name: props.name,
-              })
-            : t('teammateHosts.trustBodyUnnamed', { host: props.host })}
+          {t('teammateHosts.trustBody', { host: props.host })}
         </p>
       </div>
     </div>

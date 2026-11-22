@@ -1,6 +1,10 @@
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
-import { type TeamAgent, teamAgentsClient } from '@service-auth/team-agents';
+import {
+  type TeamAgent,
+  type TeammateHosts,
+  teamAgentsClient,
+} from '@service-auth/team-agents';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
@@ -9,12 +13,27 @@ import { teamAgentKeys } from './keys';
 
 type MoveTeamAgentArgs = { teamId: string; userId: string; harnessId: string };
 
+/** How often to read the machines again while one's engine didn't answer. */
+const UNREACHABLE_ENGINE_POLL_MS = 15_000;
+
+/** Reads again while a machine's engine didn't answer: it may come back by itself. */
+function teammateHostsPollInterval(query: {
+  state: { data: TeammateHosts | undefined };
+}): number | false {
+  const unreachable = query.state.data?.hosts.some(
+    (host) =>
+      !host.eligibility.ok && host.eligibility.reason === 'engineUnreachable'
+  );
+  return unreachable ? UNREACHABLE_ENGINE_POLL_MS : false;
+}
+
 function teammateHostsQueryOptions(teamId: string, enabled: boolean) {
   return {
     queryKey: teammateHostKeys.list(teamId).queryKey,
     enabled: enabled && !!teamId,
     queryFn: () => throwOnErr(teamAgentsClient.hosts),
     staleTime: 0,
+    refetchInterval: teammateHostsPollInterval,
   };
 }
 

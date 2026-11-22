@@ -39,6 +39,18 @@ import { TeammateCommand } from './teammate-command';
  */
 export const AGENT_COMPUTER_CHOICE = 'agent-computer';
 
+/** The longest name the Add button spells out before the machine's name. */
+const ADD_LABEL_NAME_CHARS = 24;
+
+function shortenedName(name: string): string {
+  const characters = Array.from(name);
+  if (characters.length <= ADD_LABEL_NAME_CHARS) return name;
+  return `${characters
+    .slice(0, ADD_LABEL_NAME_CHARS - 1)
+    .join('')
+    .trimEnd()}…`;
+}
+
 /** Names a part of the computer list; not itself a choice. */
 function ChoiceGroupLabel(props: { children: JSX.Element }) {
   return (
@@ -193,8 +205,12 @@ export function InviteAgentForm(props: {
   const addLabel = () => {
     const agentName = trimmedName() || t('teamAgents.agent');
     const picked = host();
+    // The machine must stay on the button, so a long name gives way.
     if (picked)
-      return t('teamAgents.addOn', { name: agentName, host: picked.name });
+      return t('teamAgents.addOn', {
+        name: shortenedName(agentName),
+        host: picked.name,
+      });
     const amount = price();
     return amount
       ? t('teamAgents.addPriced', { name: agentName, price: amount })

@@ -125,14 +125,20 @@ function MoveTeammate(props: {
           <Button
             type="button"
             variant="primary"
-            disabled={!target() || move.isPending}
+            disabled={!target()}
+            // Pressable while moving so it keeps its ink; `submit` ignores
+            // presses meanwhile.
+            aria-disabled={move.isPending || undefined}
+            aria-busy={move.isPending || undefined}
+            data-disabled={move.isPending ? '' : undefined}
             onClick={submit}
           >
             <Show
               when={move.isPending}
               fallback={t('teammateHosts.moveConfirm')}
             >
-              <SpinnerIcon class="size-4 animate-spin" />
+              <SpinnerIcon class="size-4 shrink-0 animate-spin" />
+              {t('teammateHosts.moving')}
             </Show>
           </Button>
         </Panel.Footer>

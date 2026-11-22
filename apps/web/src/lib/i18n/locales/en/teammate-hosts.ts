@@ -14,8 +14,9 @@ export default {
   hostOffline: 'Offline',
   hostNotReported: 'Update macrod to host agents',
   hostNoEngine: 'Install Podman or Docker to host agents here',
-  hostEngineUnreachable:
-    "Podman or Docker didn't answer. Is it running, and can you use it without sudo?",
+  hostEngineUnreachable: "Can't reach {{engine}} on {{host}} right now",
+  engineEither: 'Docker or Podman',
+  checkAgain: 'Check again',
   hostUnsupportedPlatform:
     "There's no agent runtime for this computer's system yet",
   hostBelowFloorCpus: 'Needs at least 2 CPUs',
@@ -27,11 +28,9 @@ export default {
   hostEngine: '{{engine}} {{version}}',
   hostRootless: 'rootless',
   trustTitle: 'Anything running as you on {{host}} can act as {{name}}',
-  trustBody:
-    "That includes coding agents macrod runs there and anyone with admin on {{host}}: they can read {{name}}'s files and credentials. {{name}} reaches the internet, but not {{host}} or the other machines on its network.",
   trustTitleUnnamed:
     'Anything running as you on {{host}} can act as this agent',
-  trustBodyUnnamed:
+  trustBody:
     'That includes coding agents macrod runs there and anyone with admin on {{host}}: they can read its files and credentials. It reaches the internet, but not {{host}} or the other machines on its network.',
   computersFailed: "Couldn't load computers.",
   ownComputerCaption:
@@ -42,6 +41,7 @@ export default {
   selfHostedNotEnabled:
     "Running agents on your own computers isn't available yet.",
   statusDownloading: 'Downloading',
+  statusMoving: 'Moving',
   moveToComputer: 'Move to another computer',
   moveTitle: 'Move {{name}}',
   moveBody:
@@ -49,10 +49,11 @@ export default {
   moveBodyParked:
     '{{name}} is paused. It starts on the computer you choose, with its chats and memory. Its browser sign-ins and its Claude sign-in stayed behind.',
   moveConfirm: 'Move',
+  moving: 'Moving…',
   moveFailed: "Couldn't move {{name}}. Try again.",
   runsOn: '· on {{host}}',
-  hostFailed:
-    "{{name}} didn't start on {{host}}, and nothing was bought. To see why, run this there:",
+  movingTo: 'to {{host}}',
+  hostFailed: "{{name}} didn't start on {{host}}. To see why, run this there:",
   removeBodyOwn:
     "It stops on {{host}}, and its files there are deleted. Its memory stays in its repository. This can't be undone.",
   ownClaudeHint: 'To use your Claude plan, run this on {{host}}:',

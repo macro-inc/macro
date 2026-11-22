@@ -15,7 +15,12 @@ export function hostUnavailableReason(host: TeammateHost): string | undefined {
       .with('offline', () => t('teammateHosts.hostOffline'))
       .with('notReported', () => t('teammateHosts.hostNotReported'))
       .with('noEngine', () => t('teammateHosts.hostNoEngine'))
-      .with('engineUnreachable', () => t('teammateHosts.hostEngineUnreachable'))
+      .with('engineUnreachable', () =>
+        t('teammateHosts.hostEngineUnreachable', {
+          engine: unreachableEngineName(host),
+          host: host.name,
+        })
+      )
       .with('unsupportedPlatform', () =>
         t('teammateHosts.hostUnsupportedPlatform')
       )
@@ -39,14 +44,32 @@ export function hostUnavailableReason(host: TeammateHost): string | undefined {
   );
 }
 
+/** The engine a machine couldn't reach: the one it uses, else the first installed. */
+function unreachableEngineName(host: TeammateHost): string {
+  const kind = host.report?.engine?.kind ?? host.report?.engines[0]?.kind;
+  if (!kind) return t('teammateHosts.engineEither');
+  return engineName(kind);
+}
+
+function engineName(kind: 'docker' | 'podman'): string {
+  return match(kind)
+    .with('docker', () => 'Docker')
+    .with('podman', () => 'Podman')
+    .exhaustive();
+}
+
+/** Whether the machine's engine didn't answer: it may answer by itself soon. */
+export function hostEngineUnreachable(host: TeammateHost): boolean {
+  return (
+    !host.eligibility.ok && host.eligibility.reason === 'engineUnreachable'
+  );
+}
+
 /** The machine's engine, e.g. "Podman 5.2.0 · rootless", if it reported one. */
 export function hostEngineLabel(host: TeammateHost): string | undefined {
   const engine = host.report?.engine;
   if (!engine) return undefined;
-  const name = match(engine.kind)
-    .with('docker', () => 'Docker')
-    .with('podman', () => 'Podman')
-    .exhaustive();
+  const name = engineName(engine.kind);
   const label = t('teammateHosts.hostEngine', {
     engine: name,
     version: engine.version,
@@ -104,4 +127,27 @@ export function canMoveTeammate(
     (parked && viewer.ownsTeam) ||
     ownHarnessIds.includes(agent.harnessId)
   );
+}
+
+/**
+ * Which of the owner's machines an agent's row names: the one it runs on,
+ * the one it is moving to while the old one saves its memory, or none
+ * while it is parked off a machine (or runs on a Macro computer).
+ */
+export type TeammatePlacement =
+  | { kind: 'on'; harnessId: string }
+  | { kind: 'movingTo'; harnessId: string }
+  | { kind: 'nowhere' };
+
+export function teammatePlacement(agent: {
+  status: string;
+  harnessId?: string | null;
+  movingTo?: string | null;
+  installProblem?: InstallProblem | null;
+}): TeammatePlacement {
+  if (agent.status === 'moving' && agent.movingTo)
+    return { kind: 'movingTo', harnessId: agent.movingTo };
+  if (!agent.harnessId || agent.installProblem?.kind === 'hostRemoved')
+    return { kind: 'nowhere' };
+  return { kind: 'on', harnessId: agent.harnessId };
 }

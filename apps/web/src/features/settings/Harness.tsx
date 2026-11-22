@@ -531,7 +531,7 @@ function HarnessRemoveDialog(props: {
         <Panel.Body class="p-5">
           <Dialog.Description class="text-sm leading-5 text-ink-muted">
             Agents using this machine will stop running until it's reconnected.
-            Agent teammates hosted on it are parked instead: their chats and
+            Agent teammates hosted on it are paused instead: their chats and
             memory are kept, and they run again only once moved to another
             computer. macrod on it will need to pair again.
           </Dialog.Description>

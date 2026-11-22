@@ -66,7 +66,11 @@ import { TeamMemberRow } from './components/team-member-row';
 import { TeammateCommand } from './components/teammate-command';
 import { TeammateRunsOn } from './components/teammate-runs-on';
 import { teamAgentComputer, teamAgentSetupStep } from './core/team-agent-setup';
-import { canMoveTeammate, ownMachineRemoveBody } from './core/teammate-host';
+import {
+  canMoveTeammate,
+  ownMachineRemoveBody,
+  teammatePlacement,
+} from './core/teammate-host';
 import { installProblemLine } from './core/teammate-install-problem';
 import {
   SettingsCard,
@@ -209,23 +213,37 @@ export function TeamMembers(props: { team: TeamSummary }) {
     () => selfHosted() && agents().some((agent) => !!agent.harnessId)
   );
   /** The name of the machine an agent runs on, if it runs on one of ours. */
-  const hostName = (agent: TeamAgent) => {
-    const harnessId = agent.harnessId;
-    if (!harnessId) return undefined;
+  const machineName = (harnessId: string) => {
     const hosts = hostsQuery.isSuccess ? hostsQuery.data.hosts : [];
     return (
       hosts.find((host) => host.harnessId === harnessId)?.name ??
       t('teamAgents.ownersComputer')
     );
   };
+  const hostName = (agent: TeamAgent) =>
+    agent.harnessId ? machineName(agent.harnessId) : undefined;
   /** The viewer's own machines: who may move an agent depends on them. */
   const ownHarnessIds = () =>
     hostsQuery.isSuccess
       ? hostsQuery.data.hosts.map((host) => host.harnessId)
       : [];
-  /** The machine it runs on, or nothing while it is parked off one. */
-  const hostedName = (agent: TeamAgent) =>
-    agent.installProblem?.kind === 'hostRemoved' ? undefined : hostName(agent);
+  /**
+   * The machine it runs on; nothing while it is parked off one or moving
+   * (the old machine is only saving its memory).
+   */
+  const hostedName = (agent: TeamAgent) => {
+    const placement = teammatePlacement(agent);
+    return placement.kind === 'on'
+      ? machineName(placement.harnessId)
+      : undefined;
+  };
+  /** The machine a moving agent is moving to. */
+  const movingToName = (agent: TeamAgent) => {
+    const placement = teammatePlacement(agent);
+    return placement.kind === 'movingTo'
+      ? machineName(placement.harnessId)
+      : undefined;
+  };
   const [moveAgent, setMoveAgent] = createSignal<TeamAgent>();
   const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
   const [pictureAgent, setPictureAgent] = createSignal<AgentPictureSelection>();
@@ -626,12 +644,19 @@ export function TeamMembers(props: { team: TeamSummary }) {
                       }
                       retrying={retryAgent.pending()}
                       runsOn={
-                        <Show when={selfHosted() && hostedName(agent)}>
-                          {(host) => <TeammateRunsOn host={host()} />}
+                        <Show
+                          when={selfHosted() && movingToName(agent)}
+                          fallback={
+                            <Show when={selfHosted() && hostedName(agent)}>
+                              {(host) => <TeammateRunsOn host={host()} />}
+                            </Show>
+                          }
+                        >
+                          {(host) => <TeammateRunsOn host={host()} moving />}
                         </Show>
                       }
                       claude={
-                        <Show when={isAdminOrOwner()}>
+                        <Show when={isAdminOrOwner() && !movingToName(agent)}>
                           <Show
                             when={selfHosted() && hostedName(agent)}
                             fallback={<TeamAgentClaude agent={agent} />}

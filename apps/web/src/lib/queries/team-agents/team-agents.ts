@@ -53,6 +53,8 @@ export function teamAgentsPollInterval(
   const moving = agents?.some(
     (agent) =>
       agent.status === 'provisioning' ||
+      agent.status === 'downloading' ||
+      agent.status === 'moving' ||
       agent.status === 'starting' ||
       agent.status === 'unhealthy'
   );
