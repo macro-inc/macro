@@ -678,7 +678,7 @@ describe('createScreenSession', () => {
     });
   });
 
-  it('shows asleep, without retrying, when the server ends a connect before the handshake', async () => {
+  it('shows asleep, without a reconnect backoff, when the server ends a connect before the handshake', async () => {
     let issued = 0;
     const capabilities: ScreenCapabilities = {
       requestTicket: async () => {
@@ -714,7 +714,8 @@ describe('createScreenSession', () => {
       await vi.advanceTimersByTimeAsync(60_000);
 
       expect(session.store.status).toEqual({ kind: 'asleep' });
-      expect(issued).toBe(1);
+      // Only the power checks, one every 10 s.
+      expect(issued).toBe(7);
       dispose();
     });
   });
@@ -1718,6 +1719,8 @@ describe('createScreenSession', () => {
         kind: 'ended',
         reason: 'didNotStart',
       });
+      // A final end: the boot's "Couldn't reach…" is not left under it.
+      expect(session.store.notice).toBeUndefined();
       // The boot's own tickets (after the asleep view's first): 25 in its two
       // minutes, and the one try already due when the window closed.
       const boot = tickets.slice(1);
@@ -2024,5 +2027,109 @@ describe('createScreenSession', () => {
       expect(connections[1].controls).toEqual(['takeOver']);
       dispose();
     });
+  });
+
+  it('follows an asleep computer: checks every 10 s while shown, connects when it is on, with no reconnect notice', async () => {
+    const tickets: number[] = [];
+    let on = false;
+    const connections: FakeConnection[] = [];
+    const real = fakeTransport(connections);
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () => {
+        tickets.push(Date.now());
+        return ok({
+          socketUrl: 'wss://screen.test/ws?ticket=t',
+          expiresAt: '',
+        });
+      },
+      transport: () => ({
+        kind: 'vnc',
+        connect: async (element, ticket, handlers, signal) => {
+          if (on) return real.connect(element, ticket, handlers, signal);
+          // As the harness says it: the screen closed, then "off".
+          handlers.onError({
+            code: 'sourceUnavailable',
+            message: "the computer's screen closed",
+          });
+          handlers.onEnded('computerOff');
+          throw new DOMException('closed', 'AbortError');
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      // A member: may watch, can't turn it on.
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => false,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      expect(session.store.status).toEqual({ kind: 'asleep' });
+      expect(session.store.notice).toBeUndefined();
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(tickets.length).toBe(4);
+      expect(session.store.status).toEqual({ kind: 'asleep' });
+      expect(session.store.notice).toBeUndefined();
+
+      // Turned on elsewhere: the next check connects on its own.
+      on = true;
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(session.store.status).toEqual({ kind: 'live' });
+      dispose();
+    });
+  });
+
+  it('checks an asleep computer only while the tab is shown, and at once when shown again', async () => {
+    let issued = 0;
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () => {
+        issued += 1;
+        return ok({
+          socketUrl: 'wss://screen.test/ws?ticket=t',
+          expiresAt: '',
+        });
+      },
+      transport: () => ({
+        kind: 'vnc',
+        connect: async (_element, _ticket, handlers) => {
+          handlers.onEnded('computerOff');
+          throw new DOMException('closed', 'AbortError');
+        },
+      }),
+    };
+    let visibility: DocumentVisibilityState = 'visible';
+    const visibilityState = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockImplementation(() => visibility);
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => false,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      expect(issued).toBe(1);
+      visibility = 'hidden';
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(issued).toBe(1);
+
+      visibility = 'visible';
+      document.dispatchEvent(new Event('visibilitychange'));
+      await settle();
+      expect(issued).toBe(2);
+      expect(session.store.status).toEqual({ kind: 'asleep' });
+      dispose();
+    });
+    visibilityState.mockRestore();
   });
 });

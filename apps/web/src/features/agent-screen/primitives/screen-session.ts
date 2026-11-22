@@ -42,6 +42,13 @@ const FLAPPING_MS = 10_000;
  */
 const RECENTLY_LIVE_WINDOW_MS = 60_000;
 
+/**
+ * While asleep and shown, how often the viewer checks whether the computer
+ * is on again (turned on by someone else): one ticket each, well under the
+ * per-person budget.
+ */
+const ASLEEP_RECHECK_MS = 10_000;
+
 /** Marks the previous connection's frame, kept on screen until the next is live. */
 const LAST_PICTURE_ATTRIBUTE = 'data-screen-last-picture';
 
@@ -321,15 +328,20 @@ export function createScreenSession(options: ScreenSessionOptions) {
       endBoot('ended');
       pendingHandBack = undefined;
     }
-    // Over for good (stopped, revoked, refused, gave up): there is no drive
-    // to win back, and the keyboard goes back to the app.
+    // Over for good (stopped, revoked, refused, gave up, asleep): there is no
+    // drive to win back, the keyboard goes back to the app, and a transient
+    // notice ("Reconnecting…") no longer applies.
     setStore({
       status: step.status,
       takingOver: false,
-      ...(step.kind === 'show' ? { controlLost: undefined } : {}),
+      ...(step.kind === 'show'
+        ? { controlLost: undefined, notice: undefined }
+        : {}),
     });
     if (step.kind === 'show') {
       record('computer.screen.status', { status: step.status.kind });
+      clearTimeout(retryTimer);
+      if (step.status.kind === 'asleep') scheduleAsleepCheck();
       return;
     }
     if (step.quick) quickUsed += 1;
@@ -566,9 +578,31 @@ export function createScreenSession(options: ScreenSessionOptions) {
     record('computer.screen.reconnect_shown');
     retry();
   }
+  /**
+   * Asleep, and turned on elsewhere (an owner, an agent): check again now
+   * and then while the tab is shown, and connect on its own once it's on.
+   * The view stays asleep meanwhile: no Connecting flash.
+   */
+  function scheduleAsleepCheck() {
+    clearTimeout(retryTimer);
+    if (document.visibilityState !== 'visible') return;
+    retryTimer = setTimeout(checkAsleep, ASLEEP_RECHECK_MS);
+  }
+  function checkAsleep() {
+    if (disposed || store.status.kind !== 'asleep') return;
+    if (document.visibilityState !== 'visible') return;
+    record('computer.screen.asleep_check');
+    fireAndForget(connect(0), 'agent-screen.asleep-check');
+  }
+
   function onVisibilityChange() {
     if (document.visibilityState !== 'visible') hiddenSinceOpen = true;
     reconnectIfShown();
+    // Shown again while asleep: check at once rather than wait a round.
+    if (store.status.kind === 'asleep') {
+      if (document.visibilityState === 'visible') checkAsleep();
+      else clearTimeout(retryTimer);
+    }
   }
   document.addEventListener('visibilitychange', onVisibilityChange);
 

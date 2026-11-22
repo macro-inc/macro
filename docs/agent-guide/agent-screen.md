@@ -44,6 +44,9 @@ Each appears only when the harness list gives the viewer access other than
   minute, and if still limited ends with **Try again**.
 - Once the view has ended (stopped, refused, gone), or while the computer is
   asleep or starting, only the overlay's own action shows: no Take over.
+- Asleep, the view checks every 10 s while the tab is shown (and at once
+  when it is shown again) and connects on its own once someone turns the
+  computer on. A final end or asleep clears any "Reconnecting…" notice.
 - **Turn on** says "Turning {name}'s computer on…" at once and keeps saying it
   through the boot: for up to two minutes, a screen that isn't up yet
   (`tunnelFailed`, `sourceUnavailable`, "off", a dropped socket) is retried
