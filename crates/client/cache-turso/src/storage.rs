@@ -1328,17 +1328,22 @@ impl Storage for TursoStorage {
             let (sql, values) = search::statement_with_base(contact_search::LOAD, slot, query)?;
             let mut key_buffer = String::new();
             driver::query_each(&connection, &sql, values, |row| {
-            let mut values = row.get_values();
-            let (Some(Value::Text(typename)), Some(Value::Text(id)), Some(Value::Blob(blob)), None) =
-                (values.next(), values.next(), values.next(), values.next())
-            else {
-                return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
-            };
-            let key = RecordKey::borrow_entity(typename.as_str(), id.as_str(), &mut key_buffer)?;
-            let record = decode_record(blob)
-                .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
-            visit(&key, &record);
-            Ok(())
+                let mut values = row.get_values();
+                let (
+                    Some(Value::Text(typename)),
+                    Some(Value::Text(id)),
+                    Some(Value::Blob(blob)),
+                    None,
+                ) = (values.next(), values.next(), values.next(), values.next())
+                else {
+                    return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
+                };
+                let key =
+                    RecordKey::borrow_entity(typename.as_str(), id.as_str(), &mut key_buffer)?;
+                let record = decode_record(blob)
+                    .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
+                visit(&key, &record);
+                Ok(())
             })
         })();
         self.latch_result(result)
@@ -3992,7 +3997,6 @@ const SEARCH_COLUMNS: &[ColumnSpec] = &[
     },
 ];
 
-
 const MUTATION_COLUMNS: &[ColumnSpec] = &[
     ColumnSpec {
         name: "id",
@@ -4630,12 +4634,8 @@ fn default_matches(value: Option<&Value>, expected_zero: bool) -> bool {
 }
 
 fn validate_search_indexes(connection: &Db) -> Result<(), TursoStorageError> {
-    let rows = driver::query(
-        connection,
-        "PRAGMA index_list('search_rows')",
-        Vec::new(),
-    )
-    .map_err(TursoStorageError::initialization)?;
+    let rows = driver::query(connection, "PRAGMA index_list('search_rows')", Vec::new())
+        .map_err(TursoStorageError::initialization)?;
     if rows.len() != 2 {
         return Err(compatibility());
     }

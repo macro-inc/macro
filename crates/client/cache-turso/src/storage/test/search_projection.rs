@@ -253,11 +253,7 @@ fn projection_rebuild_rolls_back_search_rows_and_version_on_failure() {
             .put_batch(vec![(key("GraphqlSoupChannel:channel"), channel(1, 3))])
             .await
             .unwrap();
-        raw_execute(
-            &storage,
-            "UPDATE search_rows SET timestamp_ms = 3",
-            vec![],
-        );
+        raw_execute(&storage, "UPDATE search_rows SET timestamp_ms = 3", vec![]);
         raw_execute(
             &storage,
             "UPDATE meta SET value = '1' WHERE key = 'quick_access_projection_version'",

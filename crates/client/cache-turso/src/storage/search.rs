@@ -13,16 +13,15 @@
 //! contact search, which must skip decoding records, still filters in SQL.
 
 use super::{
-    HashMap, SEARCH_WRITE_BATCH_SIZE, SearchDocument, SearchProfile, SearchQuery, driver, invariant, require_changed,
-    required_i64, required_text, text,
+    HashMap, SEARCH_WRITE_BATCH_SIZE, SearchDocument, SearchProfile, SearchQuery, driver,
+    invariant, require_changed, required_i64, required_text, text,
 };
 use crate::driver::Db;
 use crate::{PhysicalResetReason, TursoStorageError, key::RecordKey};
 use cache_core::search::SearchDocumentRef;
 use turso_core::{Numeric, Row, Value};
 
-pub(super) const SLOTS_TABLE: &str =
-    "CREATE TABLE search_slots (slot INTEGER PRIMARY KEY, profile INTEGER NOT NULL, bucket TEXT NOT NULL)";
+pub(super) const SLOTS_TABLE: &str = "CREATE TABLE search_slots (slot INTEGER PRIMARY KEY, profile INTEGER NOT NULL, bucket TEXT NOT NULL)";
 pub(super) const ROWS_TABLE: &str = "CREATE TABLE search_rows (slot INTEGER NOT NULL, profile INTEGER NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, PRIMARY KEY (profile, __typename, id))";
 pub(super) const BROWSE_INDEX: &str =
     "CREATE INDEX search_rows_browse_idx ON search_rows(slot, timestamp_ms DESC, __typename, id)";
@@ -33,7 +32,8 @@ pub(super) const SLOT_SHIFT: u32 = 44;
 const MAX_SLOT: i64 = (1 << (63 - SLOT_SHIFT)) - 1;
 const SLOT_SPAN: i64 = 1 << SLOT_SHIFT;
 
-pub(super) const SLOT_GET: &str = "SELECT slot FROM search_slots WHERE profile = ?1 AND bucket = ?2";
+pub(super) const SLOT_GET: &str =
+    "SELECT slot FROM search_slots WHERE profile = ?1 AND bucket = ?2";
 const SLOT_INSERT: &str = "INSERT INTO search_slots (slot, profile, bucket) VALUES ((SELECT coalesce(max(slot), 0) + 1 FROM search_slots), ?1, ?2)";
 const LAST_ROW: &str =
     "SELECT rowid FROM search_rows WHERE rowid BETWEEN ?1 AND ?2 ORDER BY rowid DESC LIMIT 1";

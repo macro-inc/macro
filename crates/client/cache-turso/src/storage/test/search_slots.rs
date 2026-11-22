@@ -67,10 +67,7 @@ fn each_bucket_owns_one_rowid_range_and_a_moved_row_leaves_its_old_range() {
     assert_eq!((task, doc), (2, 3));
     assert_eq!(
         rows(&storage),
-        vec![
-            (2 * ROW, 2, "a".into()),
-            (3 * ROW, 3, "b".into())
-        ]
+        vec![(2 * ROW, 2, "a".into()), (3 * ROW, 3, "b".into())]
     );
 
     // An update in the same bucket keeps its rowid.
@@ -81,10 +78,7 @@ fn each_bucket_owns_one_rowid_range_and_a_moved_row_leaves_its_old_range() {
     write(&storage, &[document("a", "document", 6)]);
     assert_eq!(
         rows(&storage),
-        vec![
-            (3 * ROW, 3, "b".into()),
-            (3 * ROW + 1, 3, "a".into())
-        ]
+        vec![(3 * ROW, 3, "b".into()), (3 * ROW + 1, 3, "a".into())]
     );
     let mut loaded = Vec::new();
     block_on(async {
@@ -101,7 +95,10 @@ fn each_bucket_owns_one_rowid_range_and_a_moved_row_leaves_its_old_range() {
     assert_eq!(loaded, vec![0, 2]);
 
     // An emptied range starts again at its first rowid; rows append in write order.
-    write(&storage, &[document("c", "task", 7), document("a", "task", 8)]);
+    write(
+        &storage,
+        &[document("c", "task", 7), document("a", "task", 8)],
+    );
     assert_eq!(
         rows(&storage),
         vec![

@@ -65,9 +65,13 @@ fn streamed_search_reset_failure_retires_storage_even_after_rows_were_visited() 
             .await
             .unwrap();
         let query = SearchQuery::new("ndl");
-        let slot = search::find_slot(&storage.connection(), SearchProfile::QuickAccessV1, "document")
-            .unwrap()
-            .unwrap();
+        let slot = search::find_slot(
+            &storage.connection(),
+            SearchProfile::QuickAccessV1,
+            "document",
+        )
+        .unwrap()
+        .unwrap();
         let (sql, _) = search::statement(slot).unwrap();
         driver::arm_reset_failure(&sql);
         let mut visited = 0;

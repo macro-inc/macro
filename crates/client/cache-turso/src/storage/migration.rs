@@ -339,7 +339,10 @@ fn upgrade_13_to_14(connection: &Db) -> Result<(), TursoStorageError> {
     while let Some(start) = from {
         let rows = driver::query_prepared(
             &mut rows_after,
-            vec![Value::from_i64(start), Value::from_i64(SEARCH_UPGRADE_BATCH)],
+            vec![
+                Value::from_i64(start),
+                Value::from_i64(SEARCH_UPGRADE_BATCH),
+            ],
         )?;
         let Some(last) = rows.last() else {
             break;
@@ -428,9 +431,10 @@ pub mod test_hooks {
         storage.require_healthy()?;
         let connection = storage.connection();
         storage.latch_result(driver::write_transaction(&connection, || {
-            for sql in STORAGE_13_SEARCH.into_iter().chain([
-                "UPDATE meta SET value = '13' WHERE key = 'storage_schema_version'",
-            ]) {
+            for sql in STORAGE_13_SEARCH
+                .into_iter()
+                .chain(["UPDATE meta SET value = '13' WHERE key = 'storage_schema_version'"])
+            {
                 driver::execute(&connection, sql, Vec::new())?;
             }
             Ok(())
