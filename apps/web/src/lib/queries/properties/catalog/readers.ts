@@ -2,7 +2,8 @@
  * The mounted readers of the property catalog. Writes use them to find which
  * cached lists a new record belongs in, and refreshes reach exactly the lists
  * someone is looking at; a list nobody shows refreshes when it mounts again,
- * since every reader loads `cache-and-network`.
+ * since every reader loads `cache-and-network`. Coming back online reloads
+ * the lists on screen, as TanStack's reconnect refetch did.
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -43,8 +44,17 @@ export type CatalogReader =
 
 const READERS = new Set<CatalogReader>();
 
+let reconnectInstalled = false;
+
+function reloadOnReconnect() {
+  if (reconnectInstalled || typeof window === 'undefined') return;
+  reconnectInstalled = true;
+  window.addEventListener('online', () => refreshCatalogReadersInBackground());
+}
+
 /** Registers a reader for the lifetime of the calling owner. */
 export function registerCatalogReader(reader: CatalogReader) {
+  reloadOnReconnect();
   READERS.add(reader);
   onCleanup(() => READERS.delete(reader));
 }

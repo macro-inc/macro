@@ -16,6 +16,7 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { type Accessor, createMemo, untrack } from 'solid-js';
+import { offlineAsSuccess } from './catalog/list-result';
 import {
   toDefinitionWithOptions,
   toGraphqlDefinitionScope,
@@ -125,7 +126,31 @@ export function useListPropertiesQuery(
       ),
     refresh: () => query.refetch({ requestPolicy: 'network-only' }),
   });
-  return query as unknown as PropertyDefinitionsQuery;
+  return offlineAsSuccess(query) as unknown as PropertyDefinitionsQuery;
+}
+
+/**
+ * Definitions with their options, once: from the cache when it holds the
+ * list, else from the server. Independent of any mounted reader, so a reader
+ * refreshing cannot cancel it.
+ */
+export async function loadPropertyDefinitionsWithOptions(
+  params: Omit<ListPropertiesQueryParams, 'includeOptions'>
+): Promise<PropertyDefinitionResponse[]> {
+  const result = await getGraphqlSoupClient()
+    .query(
+      PropertyCatalogDefinitionsWithOptionsDocument,
+      {
+        scope: toGraphqlDefinitionScope(params.scope),
+        forEntityType: (params.forEntityType ??
+          null) as GraphqlPropertyEntityType | null,
+      },
+      { requestPolicy: 'cache-first' }
+    )
+    .toPromise();
+  if (!result.data)
+    throw result.error ?? new Error('Property definitions returned no data');
+  return definitionsWithOptions(result.data);
 }
 
 /** One definition with its options, read from the server. */

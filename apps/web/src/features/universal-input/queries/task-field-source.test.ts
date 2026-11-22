@@ -12,7 +12,7 @@ import { createTaskFieldSource } from './task-field-source';
 const query = vi.hoisted(() => ({
   isSuccess: true,
   data: [] as PropertyDefinitionWithOptions[],
-  refetch: vi.fn(),
+  load: vi.fn(),
 }));
 const references = vi.hoisted(() => ({
   lookup:
@@ -24,6 +24,7 @@ const references = vi.hoisted(() => ({
 }));
 vi.mock('@queries/properties/definitions', () => ({
   useListPropertiesQuery: () => query,
+  loadPropertyDefinitionsWithOptions: (params: unknown) => query.load(params),
 }));
 vi.mock('@queries/contacts/use-references', () => ({
   useContactReferences: (
@@ -60,7 +61,7 @@ const ASSIGNEES: PropertyDefinitionWithOptions = {
 beforeEach(() => {
   query.isSuccess = true;
   query.data = [];
-  query.refetch.mockReset();
+  query.load.mockReset();
   references.lookup.mockReset();
   references.request = undefined;
   references.enabled = undefined;
@@ -94,7 +95,7 @@ it('loads a cold property catalog before supplying inference and creation metada
   await createRoot(async (dispose) => {
     try {
       query.isSuccess = false;
-      query.refetch.mockResolvedValue({ isSuccess: true, data: [ASSIGNEES] });
+      query.load.mockResolvedValue([ASSIGNEES]);
       const source = createTaskFieldSource(
         'me',
         () => fieldsSchema.parse({}),
@@ -107,9 +108,7 @@ it('loads a cold property catalog before supplying inference and creation metada
         (await source.createDefinitions()).get(SYSTEM_PROPERTY_IDS.ASSIGNEES)
           ?.is_multi_select
       ).toBe(true);
-      expect(query.refetch).toHaveBeenCalledWith({
-        requestPolicy: 'cache-first',
-      });
+      expect(query.load).toHaveBeenCalledWith({ scope: 'system' });
     } finally {
       dispose();
     }
@@ -135,13 +134,10 @@ it('creates with Companies and Contacts without offering them to extraction', as
         property_options: [],
       });
       query.isSuccess = false;
-      query.refetch.mockResolvedValue({
-        isSuccess: true,
-        data: [
-          definition(SYSTEM_PROPERTY_IDS.COMPANIES, 'Companies'),
-          definition(SYSTEM_PROPERTY_IDS.CONTACTS, 'Contacts'),
-        ],
-      });
+      query.load.mockResolvedValue([
+        definition(SYSTEM_PROPERTY_IDS.COMPANIES, 'Companies'),
+        definition(SYSTEM_PROPERTY_IDS.CONTACTS, 'Contacts'),
+      ]);
       const source = createTaskFieldSource(
         'me',
         () => fieldsSchema.parse({}),
@@ -368,10 +364,7 @@ it('reports property catalog failures instead of creating with empty definitions
   await createRoot(async (dispose) => {
     try {
       query.isSuccess = false;
-      query.refetch.mockResolvedValue({
-        isSuccess: false,
-        error: new Error('Task fields unavailable'),
-      });
+      query.load.mockRejectedValue(new Error('Task fields unavailable'));
       const source = createTaskFieldSource(
         'me',
         () => fieldsSchema.parse({}),

@@ -1,5 +1,5 @@
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
-import { createSignal } from 'solid-js';
+import { createSignal, getOwner, onCleanup } from 'solid-js';
 
 type MaybePromise = unknown;
 
@@ -32,7 +32,9 @@ function asError(cause: unknown): Error {
 /**
  * Binds one catalog write to a component: a pending flag plus the hook's
  * default callbacks, the caller's hook callbacks, then the call's own, in that
- * order. The write itself owns the cache: its optimistic layer, rollback and
+ * order. Once the owning component is gone, a call's own callbacks no longer
+ * run (as with TanStack's `mutate` options); the hook's still do. The write
+ * itself owns the cache: its optimistic layer, rollback and
  * settlement live in the GraphQL cache, not here.
  */
 export function createCatalogMutation<TVars, TData>(
@@ -41,8 +43,10 @@ export function createCatalogMutation<TVars, TData>(
   callbacks?: CatalogMutationCallbacks<TData, TVars>
 ): CatalogMutation<TData, TVars> {
   const [pending, setPending] = createSignal(0);
+  let disposed = false;
+  if (getOwner()) onCleanup(() => (disposed = true));
   const layers = (call?: CatalogMutationCallbacks<TData, TVars>) =>
-    [defaults, callbacks, call].filter(
+    [defaults, callbacks, disposed ? undefined : call].filter(
       (layer): layer is CatalogMutationCallbacks<TData, TVars> => !!layer
     );
 
