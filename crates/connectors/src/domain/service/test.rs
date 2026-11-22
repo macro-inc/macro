@@ -39,6 +39,8 @@ struct World {
     flags: HashMap<MacroUserIdStr<'static>, Result<bool, String>>,
     /// Sources whose listing fails.
     down: Vec<SourceKind>,
+    /// Sources whose catalog (`supports`) fails.
+    catalog_down: Vec<SourceKind>,
 }
 
 impl World {
@@ -47,6 +49,7 @@ impl World {
             store: Arc::new(Mutex::new(FakeStore::default())),
             flags: HashMap::new(),
             down: Vec::new(),
+            catalog_down: Vec::new(),
         }
     }
 
@@ -68,6 +71,11 @@ impl World {
 
     fn source_down(mut self, kind: SourceKind) -> Self {
         self.down.push(kind);
+        self
+    }
+
+    fn catalog_down(mut self, kind: SourceKind) -> Self {
+        self.catalog_down.push(kind);
         self
     }
 
@@ -110,8 +118,14 @@ impl World {
         .into_iter()
         .map(|kind| -> Arc<dyn Source> {
             let source = self.source(kind);
-            if self.down.contains(&kind) {
-                Arc::new(Down(source))
+            let store_down = self.down.contains(&kind);
+            let catalog_down = self.catalog_down.contains(&kind);
+            if store_down || catalog_down {
+                Arc::new(Down {
+                    source,
+                    store_down,
+                    catalog_down,
+                })
             } else {
                 Arc::new(source)
             }
@@ -131,31 +145,42 @@ impl World {
     }
 }
 
-/// A source whose store is down: listing fails, the rest still answers.
-struct Down(FakeSource);
+/// A source with an outage: its store (listing fails), its catalog
+/// (`supports` fails), or both. The rest still answers.
+struct Down {
+    source: FakeSource,
+    store_down: bool,
+    catalog_down: bool,
+}
 
 #[async_trait::async_trait]
 impl Source for Down {
     fn kind(&self) -> SourceKind {
-        self.0.kind()
+        self.source.kind()
     }
 
     async fn connections(
         &self,
-        _user: &MacroUserIdStr<'static>,
+        user: &MacroUserIdStr<'static>,
     ) -> Result<Vec<SourceConnection>, rootcause::Report> {
-        Err(rootcause::report!("store down"))
+        if self.store_down {
+            return Err(rootcause::report!("store down"));
+        }
+        self.source.connections(user).await
     }
 
     async fn supports(&self, app: &ConnectorId) -> Result<Option<Surfaces>, rootcause::Report> {
-        self.0.supports(app).await
+        if self.catalog_down {
+            return Err(rootcause::report!("catalog down"));
+        }
+        self.source.supports(app).await
     }
 
     async fn holders(
         &self,
         app: &ConnectorId,
     ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
-        self.0.holders(app).await
+        self.source.holders(app).await
     }
 
     async fn start_connect(
@@ -163,7 +188,7 @@ impl Source for Down {
         user: &MacroUserIdStr<'static>,
         key: &ConnectorKey,
     ) -> Result<ConnectStep, rootcause::Report> {
-        self.0.start_connect(user, key).await
+        self.source.start_connect(user, key).await
     }
 
     async fn complete_connect(
@@ -171,7 +196,7 @@ impl Source for Down {
         user: &MacroUserIdStr<'static>,
         app: &ConnectorId,
     ) -> Result<SourceConnection, rootcause::Report> {
-        self.0.complete_connect(user, app).await
+        self.source.complete_connect(user, app).await
     }
 
     async fn set_enabled(
@@ -180,7 +205,7 @@ impl Source for Down {
         key: &ConnectorKey,
         enabled: bool,
     ) -> Result<(), rootcause::Report> {
-        self.0.set_enabled(user, key, enabled).await
+        self.source.set_enabled(user, key, enabled).await
     }
 
     async fn rename(
@@ -189,7 +214,7 @@ impl Source for Down {
         key: &ConnectorKey,
         name: &str,
     ) -> Result<(), rootcause::Report> {
-        self.0.rename(user, key, name).await
+        self.source.rename(user, key, name).await
     }
 
     async fn remove(
@@ -197,7 +222,7 @@ impl Source for Down {
         user: &MacroUserIdStr<'static>,
         key: &ConnectorKey,
     ) -> Result<(), rootcause::Report> {
-        self.0.remove(user, key).await
+        self.source.remove(user, key).await
     }
 }
 
@@ -291,6 +316,46 @@ async fn tool_loading_answers_without_a_source_that_is_down_but_listing_fails() 
     assert_eq!(connections.status(&app_key("notion")), Status::NotConnected);
 
     assert!(connectors.list(&user()).await.is_err());
+}
+
+#[tokio::test]
+async fn connects_catalog_down_answers_as_if_the_rollout_were_off_for_tool_loading() {
+    let world = World::new()
+        .flagged(&user())
+        .holding(row(SourceKind::Connect, app_key("linear")))
+        .holding(row(SourceKind::Pipedream, app_key("asana")))
+        .holding(row(
+            SourceKind::Native,
+            server_key("https://tools.example.com/mcp"),
+        ))
+        .catalog_down(SourceKind::Connect);
+    let connectors = world.connectors();
+
+    let connections = connectors.connections(&user()).await.unwrap();
+    assert_eq!(connections.status(&app_key("linear")), Status::NotConnected);
+    assert_eq!(connections.status(&app_key("asana")), Status::Connected);
+    assert_eq!(
+        connections.status(&server_key("https://tools.example.com/mcp")),
+        Status::Connected
+    );
+    assert_eq!(connections.handles().count(), 2);
+
+    // Settings and API lookups must not guess.
+    assert!(connectors.list(&user()).await.is_err());
+    assert!(connectors.connection(&user(), &app("asana")).await.is_err());
+}
+
+#[tokio::test]
+async fn connects_catalog_is_not_asked_for_an_unflagged_user() {
+    let world = World::new()
+        .holding(row(SourceKind::Pipedream, app_key("linear")))
+        .catalog_down(SourceKind::Connect);
+    let connectors = world.connectors();
+
+    assert_eq!(
+        status_in(&connectors.list(&user()).await.unwrap(), &app_key("linear")),
+        Some(Status::Connected)
+    );
 }
 
 #[tokio::test]

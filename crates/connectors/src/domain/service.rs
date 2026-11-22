@@ -170,12 +170,16 @@ impl<O: OverlayCatalog> ReadOverlays for O {
     }
 }
 
-/// What to do when one source cannot list a user's connections.
+/// What to do when part of a user's answer cannot be read: one source's
+/// listing, or Connect's catalog.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SourceOutage {
-    /// Answer without that source. Safe for tool loading: leaving a source
+    /// Answer without what is down. Safe for tool loading: leaving a source
     /// out only removes connections, and the rules never count a connection
-    /// from a source other than the one they name.
+    /// from a source other than the one they name. Connect's catalog being
+    /// unreachable answers as if the Connect rollout were off, as a failed
+    /// flag read does (rule 9): Connect's connections are left out and the
+    /// rest count as they would without it.
     Skip,
     /// Fail the call: a listing or API lookup must not report "not
     /// connected" because a store was down.
@@ -241,8 +245,17 @@ impl Connectors {
         );
         let flag = Flag::from_read(flag);
         let overlays = overlays?;
-        let connections = connections?;
-        let connect = self.connect_support(flag, &overlays, &connections).await?;
+        let mut connections = connections?;
+        let connect = match self.connect_support(flag, &overlays, &connections).await {
+            Ok(connect) => connect,
+            Err(error) if outage == SourceOutage::Skip => {
+                tracing::warn!(error = ?error, "could not read Connect's catalog; answering as if the Connect rollout were off");
+                tracing::Span::current().record("connect_catalog_down", true);
+                connections.retain(|connection| connection.source != SourceKind::Connect);
+                ConnectSupport::default()
+            }
+            Err(error) => return Err(error),
+        };
 
         Ok(Snapshot {
             flag,
@@ -477,7 +490,7 @@ fn refusal_error(report: rootcause::Report) -> ConnectorsError {
 }
 
 impl McpConnectionsService for Connectors {
-    #[tracing::instrument(name = "connectors.mcp_connections", skip_all, err, fields(connections = tracing::field::Empty))]
+    #[tracing::instrument(name = "connectors.mcp_connections", skip_all, err, fields(connections = tracing::field::Empty, connect_catalog_down = tracing::field::Empty))]
     async fn connections(&self, user: &MacroUserIdStr<'static>) -> Result<McpConnections> {
         let snapshot = self.snapshot(user, SourceOutage::Skip).await?;
         let connections = snapshot.resolve(user).mcp;
