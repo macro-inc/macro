@@ -1,0 +1,106 @@
+apps/web/src/features/agent-feedback/tests/fake-client.ts
+  s_5cea741b7a82ae::t_24360c5d149969 11,23,36
+  s_5cea741b7a82ae::t_4fb2aa8e3d5a66 1-10,12-22,24-35,37-53
+apps/web/src/features/agent-feedback/agent-feedback.tsx
+  s_5cea741b7a82ae::t_ec3c569ae97768 1-70
+apps/web/src/features/agent-feedback/views/message-feedback-indicator.tsx
+  s_5cea741b7a82ae::t_ca7d9e337d4f2f 37-39
+  s_5cea741b7a82ae::t_56a5323dab914f 1-2,4-26,28-36,40-49
+  s_5cea741b7a82ae::t_ec3c569ae97768 3,27
+apps/web/src/features/agent-feedback/components/feedback-buttons.tsx
+  s_5cea741b7a82ae::t_ca7d9e337d4f2f 24-26,28-30
+  s_5cea741b7a82ae::t_c1a07c5d95d45a 1-23,27,31-84
+apps/web/src/features/agent-feedback/core/routes.ts
+  s_5cea741b7a82ae::t_560fdf472e2285 1-68
+apps/web/src/features/agent-feedback/core/subject.ts
+  s_5cea741b7a82ae::t_beda3ad47c3c50 1-67,69-90
+  s_5cea741b7a82ae::t_ca7d9e337d4f2f 68
+apps/web/src/features/agent-feedback/agent-feedback.test.tsx
+  s_5cea741b7a82ae::t_8527fc826508c2 65-73
+  s_5cea741b7a82ae::t_1ddc98fc46331f 101-103,110,112,120
+  s_5cea741b7a82ae::t_48b316cce69586 124-128
+  s_5cea741b7a82ae::t_24360c5d149969 13
+  s_5cea741b7a82ae::t_37fa41ba904a95 1-12,14-64,74-100,104-109,111,113-119,121-123,129-177
+apps/web/src/features/agent-feedback/queries/feedback.test.tsx
+  s_5cea741b7a82ae::t_24360c5d149969 27,121-123
+  s_5cea741b7a82ae::t_4fb2aa8e3d5a66 1-26,28-120,124-128
+apps/web/src/features/agent-feedback/views/response-feedback-buttons.tsx
+  s_5cea741b7a82ae::t_2550d03aff898c 1-26
+apps/web/src/features/agent-feedback/queries/feedback.ts
+  s_5cea741b7a82ae::t_560fdf472e2285 89-99,101-102,113-121
+  s_5cea741b7a82ae::t_40b50bd29a77b3 1-6,8,10-88,100,103,108-112,122-186
+  s_5cea741b7a82ae::t_ca7d9e337d4f2f 7,9,104-107
+apps/web/src/features/agent-feedback/views/message-feedback-drawer-rows.tsx
+  s_5cea741b7a82ae::t_ca7d9e337d4f2f 16
+  s_5cea741b7a82ae::t_56a5323dab914f 1-15,17-87
+rules/ast-grep/tsx-feature-data-no-ui.yml
+  s_5cea741b7a82ae::t_ea6626effa189a 18-19
+rules/ast-grep/tsx-feature-components-presentational.yml
+  s_5cea741b7a82ae::t_ea6626effa189a 18
+rules/ast-grep/tsx-feature-core-pure.yml
+  s_5cea741b7a82ae::t_ea6626effa189a 20
+rules/ast-grep/ts-feature-core-pure.yml
+  s_5cea741b7a82ae::t_ea6626effa189a 20
+rules/ast-grep/ts-feature-layers-use-context.yml
+  s_5cea741b7a82ae::t_ea6626effa189a 28-32
+rules/ast-grep/ts-feature-data-no-ui.yml
+  s_5cea741b7a82ae::t_ea6626effa189a 18-19
+apps/web/src/features/agent-feedback/views/response-feedback-scope.tsx
+  s_5cea741b7a82ae::t_2550d03aff898c 1-5,8-41
+  s_5cea741b7a82ae::t_ca7d9e337d4f2f 6-7
+apps/web/src/features/agent-feedback/queries/client.ts
+  s_5cea741b7a82ae::t_01351f61dbfb8a 26,28-36,42,58,67-68,76,79,100
+  s_5cea741b7a82ae::t_ca7d9e337d4f2f 55-57,59-62,69-73
+  s_5cea741b7a82ae::t_560fdf472e2285 81-82,128-129,160-161
+  s_5cea741b7a82ae::t_f24e625b0c7b09 12
+  s_5cea741b7a82ae::t_d24745bef810a2 1-11,13-25,27,37-41,43-54,63-66,74-75,77-78,80,83-99,101-103,120-127,130-159,162-184
+  s_5cea741b7a82ae::t_5e3135967b50dd 104-119
+apps/web/src/features/agent-feedback/context/response-feedback-context.tsx
+  s_5cea741b7a82ae::t_976b3eb7543111 1-30,35-71
+  s_5cea741b7a82ae::t_ca7d9e337d4f2f 31-34
+rules/ast-grep/tsx-feature-layers-use-context.yml
+  s_5cea741b7a82ae::t_ea6626effa189a 28-32
+apps/web/src/features/agent-feedback/components/feedback-note-dialog.tsx
+  s_5cea741b7a82ae::t_24360c5d149969 30-54,59-61
+  s_5cea741b7a82ae::t_c1a07c5d95d45a 1-7,9-29,56-58,62-65
+  s_5cea741b7a82ae::t_ca7d9e337d4f2f 8
+  s_5cea741b7a82ae::t_d03975e98da300 55
+apps/web/src/features/agent-feedback/views/message-feedback-toolbar.tsx
+  s_5cea741b7a82ae::t_56a5323dab914f 1-74
+apps/web/src/features/agent-feedback/primitives/create-response-feedback.ts
+  s_5cea741b7a82ae::t_b3cf038539113d 1-30,32-46,53,55,66-111
+  s_5cea741b7a82ae::t_23bb3445dd6f17 31,47-52,54,56-65
+apps/web/src/features/agent-feedback/primitives/create-response-feedback.test.ts
+  s_5cea741b7a82ae::t_24360c5d149969 33-37,47,50,80,83,91,93,141,144
+  s_5cea741b7a82ae::t_f454bdfa3bd4ef 1-32,38-46,48-49,51-79,81-82,84-90,92,94-140,142-143,145-160
+rules/ast-grep/ts-feature-components-presentational.yml
+  s_5cea741b7a82ae::t_ea6626effa189a 18
+apps/web/src/features/agent-feedback/tests/fake-source.ts
+  s_be0dcf8f48154b::t_58d2db26ca76ec 1-51
+apps/web/src/features/agent-feedback/queries/keys.ts
+  s_5cea741b7a82ae::t_fffcdd1ceaa24c 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "dbf1e8605675663340529a7906d0ec2126ccbc8b",
+  "prompts": {},
+  "sessions": {
+    "s_5cea741b7a82ae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d43a0945-1df5-435d-8ea8-695ab0be7f08",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_be0dcf8f48154b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84f26c56-f4ae-4114-a847-2d20de026f21",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
