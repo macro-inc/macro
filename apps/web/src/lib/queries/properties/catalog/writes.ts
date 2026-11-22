@@ -11,6 +11,9 @@
  * - Creating a definition, provisioning a tag set, and sharing or replacing a
  *   tag are answered by the server (it assigns ids and owners, and decides
  *   name collisions); the lists that hold them reload after it answers.
+ * - A write the server answers waits while the app is offline and goes once
+ *   it is back online, as TanStack paused a write started offline; a write
+ *   the cache queues shows at once and the queue sends it.
  */
 
 import {
@@ -48,6 +51,7 @@ import {
   getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
+import { onlineManager } from '@tanstack/solid-query';
 import type { AnyVariables, OperationResult } from '@urql/core';
 import { v7 as uuidv7 } from 'uuid';
 import { queryClient } from '../../client';
@@ -90,6 +94,21 @@ function errorOf(result: OperationResult): CatalogMutationError {
   );
 }
 
+/**
+ * Resolves once the app is online (`onlineManager`, the native network path on
+ * iOS and Android), as TanStack held a mutation started offline until then.
+ */
+export function whenOnline(): Promise<void> {
+  if (onlineManager.isOnline()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const unsubscribe = onlineManager.subscribe((online) => {
+      if (!online) return;
+      unsubscribe();
+      resolve();
+    });
+  });
+}
+
 type Settled<TData> =
   | { kind: 'committed'; data: TData | undefined; waited?: true }
   | { kind: 'queued' };
@@ -98,11 +117,18 @@ type Settled<TData> =
  * Submits one write and reads its outcome. A queued write (offline, or behind
  * an older write) either waits for its commit, or resolves at once and reports
  * a later refusal through `onLateFailure`; the cache has rolled it back by then.
+ * A write that goes straight to the server (`serverAnswered`) waits until the
+ * app is online before it is sent.
  */
 async function settle<TData, TVariables extends AnyVariables>(
   send: () => Promise<OperationResult<TData, TVariables>>,
-  options: { waitForCommit: boolean; onLateFailure?: (error: Error) => void }
+  options: {
+    waitForCommit: boolean;
+    serverAnswered: boolean;
+    onLateFailure?: (error: Error) => void;
+  }
 ): Promise<Settled<TData>> {
+  if (options.serverAnswered) await whenOnline();
   const settlements = observePropertyMutationSettlements(
     getGraphqlSoupCacheHost()
   );
@@ -170,7 +196,7 @@ export async function updatePropertyOption(
             },
           })
           .toPromise(),
-      { waitForCommit: false, onLateFailure }
+      { waitForCommit: false, serverAnswered: !usingCache(), onLateFailure }
     );
     span.setAttr('property.outcome', outcome.kind);
   });
@@ -192,7 +218,7 @@ export async function deletePropertyOption(
             optionId,
           })
           .toPromise(),
-      { waitForCommit: false, onLateFailure }
+      { waitForCommit: false, serverAnswered: !usingCache(), onLateFailure }
     );
     span.setAttr('property.outcome', outcome.kind);
   });
@@ -209,7 +235,7 @@ export async function deletePropertyDefinition(
         getGraphqlSoupClient()
           .mutation(DeletePropertyDefinitionDocument, { propertyDefinitionId })
           .toPromise(),
-      { waitForCommit: false, onLateFailure }
+      { waitForCommit: false, serverAnswered: !usingCache(), onLateFailure }
     );
     span.setAttr('property.outcome', outcome.kind);
   });
@@ -336,7 +362,7 @@ export async function addPropertyOption(
               }
             ).toPromise()
           : client.mutation(AddPropertyOptionDocument, { input }).toPromise(),
-      { waitForCommit: true }
+      { waitForCommit: true, serverAnswered: !host }
     );
     span.setAttr(
       'property.outcome',
@@ -383,7 +409,7 @@ export async function createPropertyDefinition(
             { optimisticMutation: false }
           )
           .toPromise(),
-      { waitForCommit: true }
+      { waitForCommit: true, serverAnswered: true }
     );
     const created =
       outcome.kind === 'committed'
@@ -416,7 +442,7 @@ export async function ensureTagSet(scope: TagScope): Promise<TagSetResponse> {
             { optimisticMutation: false }
           )
           .toPromise(),
-      { waitForCommit: true }
+      { waitForCommit: true, serverAnswered: true }
     );
     const set =
       outcome.kind === 'committed' ? outcome.data?.ensureTagSet : undefined;
@@ -486,7 +512,7 @@ export async function promoteTag(
             { optimisticMutation: false }
           )
           .toPromise(),
-      { waitForCommit: true }
+      { waitForCommit: true, serverAnswered: true }
     );
     const promoted =
       outcome.kind === 'committed' ? outcome.data?.promoteTag : undefined;
@@ -521,7 +547,7 @@ export async function mergeTag(
             { optimisticMutation: false }
           )
           .toPromise(),
-      { waitForCommit: true }
+      { waitForCommit: true, serverAnswered: true }
     );
     const merged =
       outcome.kind === 'committed' ? outcome.data?.mergeTag : undefined;

@@ -1,4 +1,5 @@
 import type { MutationSettlement } from '@graphql-cache/protocol';
+import { onlineManager } from '@tanstack/solid-query';
 import { CombinedError, type OperationResult } from '@urql/core';
 import { version as uuidVersion, validate as validateUuid } from 'uuid';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -36,7 +37,7 @@ vi.mock('@graphql-cache/index', async (importOriginal) => ({
 }));
 
 import { isCatalogErrorCode } from './errors';
-import { addPropertyOption } from './writes';
+import { addPropertyOption, deletePropertyOption } from './writes';
 
 const TAG = {
   type: 'select_string',
@@ -155,6 +156,37 @@ describe('adding an option', () => {
         (error: unknown) => error
       );
       expect(isCatalogErrorCode(refusal, code)).toBe(true);
+    }
+  });
+});
+
+describe('a write started offline', () => {
+  it('waits for the app to come online when the server answers it', async () => {
+    onlineManager.setOnline(false);
+    try {
+      soup.result = { data: { deletePropertyOption: true } };
+      const deleted = deletePropertyOption('def-1', 'opt-1', () => {});
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(soup.mutation).not.toHaveBeenCalled();
+      onlineManager.setOnline(true);
+      await deleted;
+      expect(soup.mutation).toHaveBeenCalledTimes(1);
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('goes to the cache queue at once when the cache predicts it', async () => {
+    onlineManager.setOnline(false);
+    try {
+      queueingHost();
+      // the queue never settles it here, so the test does not wait for it
+      const added = addPropertyOption('def-1', TAG);
+      await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
+      expect(added).toBeInstanceOf(Promise);
+    } finally {
+      onlineManager.setOnline(true);
     }
   });
 });
