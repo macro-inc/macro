@@ -107,9 +107,10 @@ struct Args {
     /// sides, so both read the same before and after.
     #[arg(long, default_value_t = 0.0, value_parser = share)]
     concurrent_reads: f64,
-    /// The share of email threads (0 to 1) in generated responses given 196 to
-    /// 222 properties, each of its own definition, so their distinct attributes
-    /// land around the predicate index's limit of 256 per document.
+    /// The share of email threads (0 to 1) given 237 to 243 properties, each of
+    /// its own definition, so their distinct attributes land around the predicate
+    /// index's limit of 256 per document. A thread is wide or not by its id, and
+    /// every copy of a wide thread carries the same properties.
     /// It changes the cases generated, so give it to both sides.
     #[arg(long, default_value_t = 0.0, value_parser = share)]
     wide_properties: f64,

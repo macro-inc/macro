@@ -45,7 +45,7 @@ pub struct Plan<'a> {
     pub revision: u64,
     /// Every timestamp of an entity equals its `time_ms`, so sort keys tie.
     pub tie: bool,
-    /// The share of email threads given `WIDE_PROPERTIES` properties.
+    /// The share of email threads, chosen by id, given `WIDE_PROPERTIES` properties.
     pub wide_properties: f64,
 }
 
@@ -54,6 +54,11 @@ struct EntityCtx {
     seed: u64,
     time_ms: i64,
     messages: usize,
+    /// For a wide email thread, the seed its properties come from: its id's,
+    /// not its revision's, so every copy of the thread has the same ones.
+    wide: Option<u64>,
+    /// A property whose value adds no attribute beyond its row's.
+    plain: bool,
 }
 
 pub struct Faker {
@@ -98,6 +103,8 @@ impl Faker {
             seed,
             time_ms: plan.items.first().map_or(NOW_MS, |item| item.time_ms),
             messages: 0,
+            wide: None,
+            plain: false,
         };
         let data = self.object(document, &ty, &[&operation.selection_set], ctx, None, plan);
         json!({ "data": data })
@@ -181,6 +188,8 @@ impl Faker {
                 seed: spec_seed(spec),
                 time_ms: spec.time_ms,
                 messages: spec.messages,
+                wide: None,
+                plain: false,
             };
         }
         let explicit_id = explicit_id.or(focused.map(|spec| spec.id.as_str()));
@@ -200,6 +209,15 @@ impl Faker {
         if let (Some(id), "GraphqlUser" | "GraphqlEmailLink") = (&id, concrete.as_str()) {
             // Shared entities read the same however often they appear.
             ctx.seed = mix(0, &format!("{concrete}:{id}"));
+        }
+        if concrete == "GraphqlSoupEmailThread" && plan.wide_properties > 0.0 {
+            // Decided by the id alone, so revisions that move a wide thread in
+            // and out of the Inbox keep its properties: only the facts they
+            // change cross the limit. No draw when the option is off.
+            let stable = id
+                .as_deref()
+                .map(|id| mix(0, &format!("wide-properties:{id}")));
+            ctx.wide = stable.filter(|&seed| Rng::new(seed).chance(plan.wide_properties));
         }
         let mut map = Map::new();
         for (key, group) in &fields {
@@ -303,6 +321,8 @@ impl Faker {
                                 seed,
                                 time_ms: spec.time_ms,
                                 messages: spec.messages,
+                                wide: None,
+                                plain: false,
                             },
                             Some(&spec.id),
                             plan,
@@ -326,6 +346,8 @@ impl Faker {
                                 seed,
                                 time_ms: ctx.time_ms - (index as i64) * 3_600_000,
                                 messages: 0,
+                                wide: None,
+                                plain: false,
                             },
                             Some(&id),
                             plan,
@@ -334,7 +356,37 @@ impl Faker {
                     .collect(),
             );
         }
-        let len = list_len(name, parent, rng, plan);
+        if name == "properties"
+            && parent == "GraphqlSoupEmailThread"
+            && let Some(stable) = ctx.wide
+        {
+            let len = Rng::new(mix(stable, "count")).range(WIDE_PROPERTIES.0, WIDE_PROPERTIES.1);
+            return Value::Array(
+                (0..len as usize)
+                    .map(|index| {
+                        let child = EntityCtx {
+                            seed: mix(stable, &format!("properties[{index}]")),
+                            wide: None,
+                            plain: index >= WIDE_MIXED,
+                            ..ctx
+                        };
+                        let mut item_rng = Rng::new(child.seed);
+                        self.value(
+                            document,
+                            parent,
+                            item,
+                            name,
+                            sets,
+                            child,
+                            &mut item_rng,
+                            plan,
+                            true,
+                        )
+                    })
+                    .collect(),
+            );
+        }
+        let len = list_len(name, rng);
         Value::Array(
             (0..len)
                 .map(|index| {
@@ -416,6 +468,8 @@ impl Faker {
                     seed: rng.next_u64(),
                     time_ms: jitter(ctx.time_ms, 86_400_000, rng, plan),
                     messages: ctx.messages,
+                    wide: None,
+                    plain: ctx.plain,
                 };
                 self.object(document, ty, sets, child, None, plan)
             }
@@ -435,6 +489,14 @@ impl Faker {
                     // Date ranges never project in the cache; the bench models
                     // the values the cache can index.
                     pool.retain(|candidate| property_data_type(candidate).is_some());
+                    if ctx.plain {
+                        pool.retain(|candidate| {
+                            !matches!(
+                                property_data_type(candidate),
+                                Some("SELECT_STRING" | "ENTITY")
+                            )
+                        });
+                    }
                 }
                 let concrete = pool[rng.below(pool.len() as u64) as usize].clone();
                 let child = EntityCtx {
@@ -493,22 +555,15 @@ fn mentions(document: &ExecutableDocument, sets: &[&SelectionSet], ty: &str) -> 
 }
 
 /// How many properties a wide email thread has. Each has its own definition and
-/// so its own row attribute, and a select or entity value with an option or
-/// reference one more (about 1.15 attributes a property). With a thread's 13 to
-/// 16 other attributes that comes to about 240 to 275, around the predicate
-/// index's limit of 256 distinct attributes per document.
-const WIDE_PROPERTIES: (u64, u64) = (196, 222);
+/// so its own row attribute; only the first `WIDE_MIXED` may hold a select or
+/// entity value, which adds one more. With a thread's 13 to 16 other attributes
+/// that comes to about 250 to 263, centred on the predicate index's limit of 256
+/// distinct attributes per document.
+const WIDE_PROPERTIES: (u64, u64) = (237, 243);
+const WIDE_MIXED: usize = 4;
 
-fn list_len(name: &str, parent: &Name, rng: &mut Rng, plan: &Plan<'_>) -> usize {
+fn list_len(name: &str, rng: &mut Rng) -> usize {
     match name {
-        // No draw unless asked for, so cases without wide threads stay as they were.
-        "properties"
-            if parent == "GraphqlSoupEmailThread"
-                && plan.wide_properties > 0.0
-                && rng.chance(plan.wide_properties) =>
-        {
-            rng.range(WIDE_PROPERTIES.0, WIDE_PROPERTIES.1) as usize
-        }
         "to" => rng.range(1, 3) as usize,
         "cc" => rng.range(0, 2) as usize,
         "bcc" | "attachmentsDraft" | "attachmentsForwarded" | "drafts" => 0,

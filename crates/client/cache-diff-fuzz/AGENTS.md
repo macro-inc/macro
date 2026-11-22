@@ -87,8 +87,10 @@ purpose (it says what).
   for each differing seed; rerun the segment with `--full` for the rows).
 - When a change touches the predicate index's limit of 256 distinct attributes per
   document, add `--wide-properties SHARE` to both sides: that share of email threads in
-  responses get 196 to 222 properties, each of its own definition, so their attributes
-  land around the limit. It changes the cases generated; without it no extra draw is made.
+  responses (chosen by id) get 237 to 243 properties, each of its own definition, so their
+  attributes land around the limit. Every copy of a wide thread carries the same properties,
+  so an optimistic copy that moves it in or out of the Inbox changes only the facts that
+  depend on that. It changes the cases generated; without it no extra draw is made.
 - `FUZZ_ARGS` goes to both sides; `FUZZ_ARGS_A` and `FUZZ_ARGS_B` to one each, for
   one build under two settings (e.g. `FUZZ_ARGS_B="--hot-capacity 16"` against
   itself: the hot tier is a cache, so its size must change nothing).

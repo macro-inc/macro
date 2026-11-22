@@ -465,7 +465,7 @@ impl<'a> Gen<'a> {
         self.ops.push(op);
     }
 
-    /// Give that share of the email threads in responses `WIDE_PROPERTIES`
+    /// Give that share of email threads, chosen by id, `WIDE_PROPERTIES`
     /// properties (see `faker`).
     pub fn wide_properties(mut self, share: f64) -> Self {
         self.wide_properties = share;
