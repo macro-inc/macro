@@ -936,20 +936,21 @@ mod over_the_wire {
         assert_eq!(ended["reason"], "error");
     }
 
-    /// A guest whose display takes 5 s to answer the injector.
-    struct SlowDisplay;
+    /// A guest whose display answers the injector only once told to.
+    struct HeldDisplay(Arc<Notify>);
 
-    impl GuestTunnel for SlowDisplay {
+    impl GuestTunnel for HeldDisplay {
         fn open(
             &self,
             _computer: ComputerId,
             _port: GuestPort,
         ) -> Pin<Box<dyn Future<Output = Result<GuestStream, TunnelError>> + Send + '_>> {
+            let answer = Arc::clone(&self.0);
             Box::pin(async move {
                 let (harness_end, guest_end) = tokio::io::duplex(1 << 16);
                 let (mut guest_reader, mut guest_writer) = tokio::io::split(guest_end);
                 tokio::spawn(async move {
-                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    answer.notified().await;
                     guest_writer.write_all(&greeting()).await.unwrap();
                     std::future::pending::<()>().await;
                     drop(guest_writer);
@@ -970,21 +971,83 @@ mod over_the_wire {
         }
     }
 
-    #[tokio::test(start_paused = true)]
-    async fn typed_input_waits_for_the_injector_only_within_the_drive() {
+    /// Alice's live drive from a socket of her own.
+    async fn alice_drives(screens: &Screens) -> (SessionId, Lease) {
+        let alice = grant("alice", Mode::Drive);
+        let session = screens.open_session(&alice).await.unwrap();
+        let TakeOver::Taken(lease) = screens.take_over(&alice, session).await.unwrap() else {
+            panic!("alice could not take over");
+        };
+        (session, lease)
+    }
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn typed_input_waits_for_the_injector_only_within_the_drive(pool: PgPool) {
+        let rig = rig(pool, grant("alice", Mode::Drive)).await;
+        let (session, lease) = alice_drives(&rig.screens).await;
+        // The drive ends, on this socket's clock, long before the display
+        // would answer.
         let (_drive, driving) = watch::channel(DrivingUntil(Some(
-            tokio::time::Instant::now() + Duration::from_secs(2),
+            tokio::time::Instant::now() + Duration::from_millis(300),
         )));
+        let display = HeldDisplay(Arc::new(Notify::new()));
+        let typing = Typing {
+            tunnel: &display,
+            screens: &rig.screens,
+            computer: COMPUTER,
+            session,
+        };
         let mut injector = None;
         let key = InputEvent::Key {
             keysym: 0x61,
             down: true,
         };
 
-        let typed = inject(&SlowDisplay, COMPUTER, &mut injector, &key, &driving).await;
+        let typed = tokio::time::timeout(
+            INJECTOR_HANDSHAKE_TIMEOUT / 2,
+            inject(&typing, &mut injector, &key, Some(&lease), &driving),
+        )
+        .await
+        .expect("the connect outlived the drive");
 
         assert!(matches!(typed, Err(Injection::NotDriving)), "{typed:?}");
-        assert!(injector.is_some(), "the connected injector is kept");
+    }
+
+    /// A drive that ends while the injector connects (handed back from
+    /// another tab) lets the waiting input through neither: the loop can't
+    /// see the change meanwhile, so the lease is read after the connect.
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn typed_input_after_a_hand_back_during_the_connect_never_goes_in(pool: PgPool) {
+        let rig = rig(pool, grant("alice", Mode::Drive)).await;
+        let (session, lease) = alice_drives(&rig.screens).await;
+        let (_drive, driving) = watch::channel(DrivingUntil(Some(lapses_at(&lease))));
+        let answer = Arc::new(Notify::new());
+        let display = HeldDisplay(Arc::clone(&answer));
+        let typing = Typing {
+            tunnel: &display,
+            screens: &rig.screens,
+            computer: COMPUTER,
+            session,
+        };
+        let mut injector = None;
+        let key = InputEvent::Key {
+            keysym: 0x61,
+            down: true,
+        };
+
+        let handed_back_meanwhile = async {
+            rig.screens
+                .hand_back(COMPUTER, grant("alice", Mode::Drive).user_id, None, None)
+                .await
+                .unwrap();
+            answer.notify_one();
+        };
+        let (typed, ()) = tokio::join!(
+            inject(&typing, &mut injector, &key, Some(&lease), &driving),
+            handed_back_meanwhile
+        );
+
+        assert!(matches!(typed, Err(Injection::NotDriving)), "{typed:?}");
     }
 
     /// Idle limits short enough for a test.

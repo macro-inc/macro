@@ -891,12 +891,31 @@ impl Connection {
                                 Self::error(sender, ErrorCode::NotDriver, "input is dropped while you are not driving").await
                             } else {
                                 visible_at = tokio::time::Instant::now();
-                                match inject(self.deps.tunnel.as_ref(), computer, &mut injector, &event, &driving).await {
+                                let typing = Typing {
+                                    tunnel: self.deps.tunnel.as_ref(),
+                                    screens: &self.deps.screens,
+                                    computer,
+                                    session: self.session,
+                                };
+                                match inject(&typing, &mut injector, &event, lease.as_ref(), &driving).await {
                                     Ok(()) => {
                                         activity.notify_one();
                                         Ok(())
                                     }
                                     Err(Injection::NotDriving) => {
+                                        // The drive may have ended unseen
+                                        // while the injector connected: say
+                                        // how, as the other paths do.
+                                        let was = lease.take();
+                                        lease = match self.deps.screens.lease(computer).await {
+                                            Ok(lease) => lease,
+                                            Err(error) => return internal(&error),
+                                        };
+                                        if self.state(sender, lease.as_ref(), surface).await.is_err()
+                                            || self.report_drive_end(sender, was, lease.as_ref()).await.is_err()
+                                        {
+                                            return Ending::plain(EndReason::Stopped);
+                                        }
                                         Self::error(sender, ErrorCode::NotDriver, "input is dropped while you are not driving").await
                                     }
                                     Err(Injection::Failed(error)) => {
@@ -1033,33 +1052,61 @@ impl Connection {
 /// Why typed input didn't reach the guest.
 #[derive(Debug)]
 enum Injection {
-    /// The drive ended before the input could go in; the injector stays.
+    /// The drive ended before the input could go in.
     NotDriving,
     /// The injector failed; the next input connects a new one.
     Failed(String),
 }
 
-/// Type `event` into the guest, connecting the injector on first use. The
-/// drive is checked again once the injector is connected, and the input
-/// goes in only before the drive's end: a lease that ends while the
-/// handshake runs lets nothing through.
-async fn inject(
-    tunnel: &dyn GuestTunnel,
+/// Where a socket's typed input goes, and what it is checked against.
+struct Typing<'a> {
+    tunnel: &'a dyn GuestTunnel,
+    screens: &'a Screens,
     computer: ComputerId,
+    session: SessionId,
+}
+
+/// Type `event` into the guest for `lease`'s drive, connecting the
+/// injector on first use. The socket's loop sees no lease change while a
+/// connect runs, so the connect is bounded by the lease's end and is
+/// followed by one read of the lease itself: input goes in only while that
+/// is still this socket's drive. Later inputs on the same injector follow
+/// the loop's lease, which it keeps current between messages; each send is
+/// bounded by the lease's end.
+async fn inject(
+    typing: &Typing<'_>,
     injector: &mut Option<RfbInjector>,
     event: &InputEvent,
+    lease: Option<&Lease>,
     driving: &watch::Receiver<DrivingUntil>,
 ) -> Result<(), Injection> {
-    if injector.is_none() {
-        *injector = Some(
-            connect_injector(tunnel, computer)
-                .await
-                .map_err(Injection::Failed)?,
-        );
-    }
+    let Some(lease) = lease.filter(|lease| lease.session_id == typing.session) else {
+        return Err(Injection::NotDriving);
+    };
     let DrivingUntil(Some(until)) = *driving.borrow() else {
         return Err(Injection::NotDriving);
     };
+    if injector.is_none() {
+        let connected =
+            tokio::time::timeout_at(until, connect_injector(typing.tunnel, typing.computer))
+                .await
+                .map_err(|_| Injection::NotDriving)?
+                .map_err(Injection::Failed)?;
+        *injector = Some(connected);
+        let current = typing.screens.lease(typing.computer).await.inspect_err(
+            |error| tracing::warn!(error = ?error, "could not check the drive before typed input"),
+        );
+        let still_driving = current.is_ok_and(|current| {
+            current.is_some_and(|current| {
+                current.session_id == typing.session
+                    && current.drive_id() == lease.drive_id()
+                    && current.is_live(chrono::Utc::now())
+            })
+        });
+        if !still_driving {
+            return Err(Injection::NotDriving);
+        }
+    }
     if tokio::time::Instant::now() >= until {
         return Err(Injection::NotDriving);
     }
@@ -1078,17 +1125,20 @@ async fn inject(
     }
 }
 
-/// The injector's own RFB connection to `computer`'s Xvnc. An Xvnc that
-/// accepts but never speaks must not stall the socket's loop: the
-/// handshake gets [`INJECTOR_HANDSHAKE_TIMEOUT`].
+/// The injector's own RFB connection to `computer`'s Xvnc. A tunnel that
+/// doesn't open, or an Xvnc that accepts but never speaks, must not stall
+/// the socket's loop: each gets [`INJECTOR_HANDSHAKE_TIMEOUT`].
 async fn connect_injector(
     tunnel: &dyn GuestTunnel,
     computer: ComputerId,
 ) -> Result<RfbInjector, String> {
-    let stream = tunnel
-        .open(computer, GuestPort::Rfb)
-        .await
-        .map_err(|error| error.to_string())?;
+    let stream = tokio::time::timeout(
+        INJECTOR_HANDSHAKE_TIMEOUT,
+        tunnel.open(computer, GuestPort::Rfb),
+    )
+    .await
+    .map_err(|_| "the computer's display did not open".to_owned())?
+    .map_err(|error| error.to_string())?;
     tokio::time::timeout(INJECTOR_HANDSHAKE_TIMEOUT, RfbInjector::connect(stream))
         .await
         .map_err(|_| "the computer's display did not answer".to_owned())?
