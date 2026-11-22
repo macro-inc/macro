@@ -465,16 +465,16 @@ describe('checking a channel the viewer left again', () => {
     }
   );
 
-  it.each([
+  it.each<[string, () => Promise<RemoveUnreadableResult | undefined>]>([
     [
       'deleted nothing',
-      async (): Promise<RemoveUnreadableResult> => ({
+      async () => ({
         removed: [],
         unconfirmed: [],
       }),
     ],
     ['answered nothing', async () => undefined],
-  ] as const)(
+  ])(
     'reports a delete that %s as skipped, and checks the channel again while the cache shows it joined',
     async (_how, remove) => {
       const h = setup(undefined, remove);
