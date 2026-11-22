@@ -22,7 +22,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 /// Which of the two test accounts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AccountKind {
-    /// The `@macro.com` account, on the `macro-connect` rollout.
+    /// The `@macro.com` account, on the Connect rollout.
     Flagged,
     /// The account off the rollout.
     Unflagged,

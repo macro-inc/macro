@@ -5,7 +5,7 @@
 use crate::Report;
 use crate::api::{Account, AccountKind};
 
-/// The API key of the `@macro.com` test account, on the `macro-connect`
+/// The API key of the `@macro.com` test account, on the Connect
 /// rollout: a Macro user API key (`mak_…`). A secret.
 pub const FLAGGED_API_KEY: &str = "CONNECTORS_E2E_FLAGGED_API_KEY";
 /// The API key of the test account off the rollout. A secret.
@@ -23,7 +23,7 @@ pub const NOTION_PAGE: &str = "CONNECTORS_E2E_NOTION_PAGE";
 
 /// One run's accounts and fixtures.
 pub struct Suite {
-    /// The `@macro.com` account, on the `macro-connect` rollout.
+    /// The `@macro.com` account, on the Connect rollout.
     pub flagged: Account,
     /// The account off the rollout.
     pub unflagged: Account,
