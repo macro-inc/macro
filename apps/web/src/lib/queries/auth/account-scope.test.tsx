@@ -1,10 +1,20 @@
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
 import { cleanup, render } from '@solidjs/testing-library';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/solid-query';
+import type { Client } from '@urql/core';
 import { type Ok, ok } from 'neverthrow';
 import { batch, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { fromPromise } from 'wonka';
+import { channelDirectoryPagesQueryOptions } from '../channel/directory';
+import { channelKeys } from '../channel/keys';
 import { ownChannelWrites } from '../channel/own-writes';
+import { channelName, channelUuid } from '../channel/tests/channel-uuid';
+import { channelRecord } from '../channel/tests/directory-fixtures';
 import { emailKeys } from '../email/keys';
 import {
   emailLinksQueryOptions,
@@ -17,6 +27,7 @@ import { authKeys } from './keys';
 
 const api = vi.hoisted(() => ({
   links: vi.fn(),
+  channelPages: vi.fn(),
   patch: vi.fn(),
   remove: vi.fn(),
   refresh: vi.fn(),
@@ -48,6 +59,24 @@ vi.mock('./user-info', () => ({ invalidateUserInfo: vi.fn() }));
 vi.mock('../calendar/sync', () => ({ invalidateCalendarViews: vi.fn() }));
 vi.mock('../soup/normalized-cache', () => ({ invalidateAllSoup: vi.fn() }));
 
+/** The soup client the directory pages read through: each read answers
+ * with `api.channelPages`'s next result. */
+const soupClient = {
+  query: () => fromPromise(api.channelPages()),
+} as unknown as Pick<Client, 'query'>;
+
+/** One directory page holding `names`'s channels, with no page after it. */
+const channelPage = (...names: string[]) => ({
+  data: {
+    user: {
+      soup: {
+        items: names.map((name) => channelRecord(channelUuid(name))),
+        nextCursor: null,
+      },
+    },
+  },
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   client = new QueryClient({
@@ -66,23 +95,37 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('switches a mounted list without exposing legacy or previous-account rows', async () => {
+it('switches mounted lists without exposing legacy or previous-account rows', async () => {
   const lateLinks =
     Promise.withResolvers<Ok<{ links: { id: string }[] }, unknown>>();
+  const lateChannels = Promise.withResolvers<ReturnType<typeof channelPage>>();
   api.links
     .mockResolvedValueOnce(ok({ links: [{ id: 'one-inbox' }] }))
     .mockReturnValueOnce(lateLinks.promise)
     .mockResolvedValueOnce(ok({ links: [{ id: 'two-inbox' }] }));
+  api.channelPages
+    .mockResolvedValueOnce(channelPage('one-channel'))
+    .mockReturnValueOnce(lateChannels.promise)
+    .mockResolvedValueOnce(channelPage('two-channel'));
   client.setQueryData(emailKeys.links._def, {
     links: [{ id: 'legacy-inbox' }],
   });
+  client.setQueryData(channelKeys.directory._def, [
+    { id: channelUuid('legacy') },
+  ]);
   function Lists() {
     const links = useEmailLinksQuery();
+    const channels = useQuery(() =>
+      channelDirectoryPagesQueryOptions(viewer(), () => soupClient)
+    );
     return (
       <output>
-        {JSON.stringify(
-          links.isPending ? [] : links.data?.links.map((link) => link.id)
-        )}
+        {JSON.stringify([
+          links.isPending ? [] : links.data?.links.map((link) => link.id),
+          channels.isPending
+            ? []
+            : channels.data?.map((channel) => channelName(channel.id)),
+        ])}
       </output>
     );
   }
@@ -91,9 +134,12 @@ it('switches a mounted list without exposing legacy or previous-account rows', a
       <Lists />
     </QueryClientProvider>
   ));
-  await view.findByText('["one-inbox"]');
+  await view.findByText('[["one-inbox"],["one-channel"]]');
   const oldRefresh = client.refetchQueries();
-  await vi.waitFor(() => expect(api.links).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => {
+    expect(api.links).toHaveBeenCalledTimes(2);
+    expect(api.channelPages).toHaveBeenCalledTimes(2);
+  });
   batch(() => {
     client.setQueryData(authKeys.userInfo.queryKey, {
       id: 'macro|two@example.com',
@@ -101,13 +147,19 @@ it('switches a mounted list without exposing legacy or previous-account rows', a
     });
     setViewer('macro|two@example.com');
   });
-  await view.findByText('["two-inbox"]');
+  await view.findByText('[["two-inbox"],["two-channel"]]');
   lateLinks.resolve(ok({ links: [{ id: 'late-private-inbox' }] }));
+  lateChannels.resolve(channelPage('late-channel'));
   await oldRefresh;
-  expect(view.container.textContent).toBe('["two-inbox"]');
+  expect(view.container.textContent).toBe('[["two-inbox"],["two-channel"]]');
   expect(client.getQueryData(emailKeys.links(viewer()).queryKey)).toEqual({
     links: [{ id: 'two-inbox' }],
   });
+  expect(
+    client
+      .getQueryData<{ id: string }[]>(channelKeys.directory(viewer()).queryKey)
+      ?.map((channel) => channelName(channel.id))
+  ).toEqual(['two-channel']);
 });
 
 it("leaves the previous account's cached inboxes alone when the mounted inbox list switches accounts", () => {
