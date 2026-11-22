@@ -302,6 +302,8 @@ async fn failure(response: Response, operation: Operation) -> ProviderError {
         StatusCode::FORBIDDEN => ProviderError::NotConfigured,
         StatusCode::NOT_FOUND => ProviderError::NotFound,
         StatusCode::CONFLICT if operation == Operation::CreateInbox => ProviderError::AddressTaken,
+        // An idempotent request still in flight: retry under the same key.
+        StatusCode::CONFLICT if operation == Operation::Send => ProviderError::Unavailable,
         StatusCode::TOO_MANY_REQUESTS if operation == Operation::Send => ProviderError::SendLimit,
         StatusCode::TOO_MANY_REQUESTS => ProviderError::Throttled,
         status if status.is_server_error() => ProviderError::Unavailable,

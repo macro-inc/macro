@@ -408,3 +408,43 @@ async fn two_inboxes_with_the_same_owner_tag_are_refused_rather_than_guessed() {
 
     assert!(matches!(found, Err(ProviderError::Unavailable)));
 }
+
+#[tokio::test]
+async fn a_conflict_on_send_or_reply_is_retryable_not_a_rejection() {
+    let (server, adapter) = adapter().await;
+    Mock::given(method("POST"))
+        .respond_with(
+            ResponseTemplate::new(409)
+                .set_body_json(json!({"error": {"code": "idempotency_in_progress"}})),
+        )
+        .mount(&server)
+        .await;
+    let key = MailboxKey::new(SCOPED_KEY.to_owned());
+    let message = OutgoingMessage {
+        to: vec!["person@example.com".to_owned()],
+        cc: vec![],
+        subject: "Hi".to_owned(),
+        text_body: "Hello".to_owned(),
+    };
+
+    let sent = adapter
+        .send(&inbox_id(), &key, &message, Uuid::from_u128(1))
+        .await;
+    let reply = adapter
+        .reply(
+            &inbox_id(),
+            &key,
+            &ProviderMessageId("m-1".to_owned()),
+            &ReplyMessage {
+                text_body: "Thanks".to_owned(),
+            },
+            Uuid::from_u128(2),
+        )
+        .await;
+
+    assert!(matches!(sent, Err(ProviderError::Unavailable)), "{sent:?}");
+    assert!(
+        matches!(reply, Err(ProviderError::Unavailable)),
+        "{reply:?}"
+    );
+}
