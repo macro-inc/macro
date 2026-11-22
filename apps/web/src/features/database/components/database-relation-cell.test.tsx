@@ -405,5 +405,12 @@ describe('opening a related record from its chip', () => {
     expect(screen.getAllByRole('button', { name: /^Open / })).toHaveLength(21);
     expect(screen.queryByText('+1')).toBeNull();
     expect(screen.queryByRole('button', { name: /^Show \d+ more/ })).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Show fewer Customers' })
+    );
+    expect(screen.getAllByRole('button', { name: /^Open / })).toHaveLength(20);
+    expect(
+      screen.getByRole('button', { name: 'Show 16 more Customers' })
+    ).toBeTruthy();
   });
 });

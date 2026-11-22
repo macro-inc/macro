@@ -112,6 +112,27 @@ for (const [name, viewport, touch] of [
       }
     });
 
+    test('draws each chip’s open arrow as a quiet button, lined up on a phone', async ({
+      page,
+    }) => {
+      await open(page);
+      const arrows = await page
+        .getByRole('dialog')
+        .getByRole('button', { name: /^Open / })
+        .evaluateAll((buttons) =>
+          buttons.map((button) => ({
+            right: Math.round(button.getBoundingClientRect().right),
+            fill: getComputedStyle(button).backgroundColor,
+          }))
+        );
+      expect(arrows).toHaveLength(3);
+      // A ghost button has no fill until it is hovered or pressed.
+      for (const arrow of arrows)
+        expect(arrow.fill).toMatch(/^(transparent|rgba\(.*,\s*0\))$/);
+      if (name === 'phone')
+        expect(new Set(arrows.map((arrow) => arrow.right)).size).toBe(1);
+    });
+
     test('shows many related records', async ({ page }) => {
       await open(page, 'tasks=many');
       const all = [
@@ -136,8 +157,20 @@ for (const [name, viewport, touch] of [
         });
         await more.click();
         await expect(more).toBeHidden();
+        await expect
+          .poll(chips)
+          .toEqual(all.map((text) => ({ text, cut: false })));
+        // Show less puts it back to five.
+        await page.getByRole('button', { name: 'Show fewer Tasks' }).click();
+        await expect
+          .poll(chips)
+          .toEqual(all.slice(0, 5).map((text) => ({ text, cut: false })));
+        await more.click();
       } else {
         await expect(more).toBeHidden();
+        await expect(
+          page.getByRole('button', { name: 'Show fewer Tasks' })
+        ).toBeHidden();
       }
       await expect
         .poll(chips)
