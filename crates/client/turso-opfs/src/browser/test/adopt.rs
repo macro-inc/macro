@@ -629,9 +629,6 @@ fn an_attempt_takes_the_first_free_slot_until_none_is_left() {
     assert_eq!(next_attempt(b"++++++++"), (8, None), "full: counts 8");
     // Any byte but a free slot's counts, so a slot written halfway reads.
     assert_eq!(next_attempt(b"\0-------"), (2, Some(1)));
-    // Slots missing from a count cut short count as used.
-    assert_eq!(next_attempt(b"--"), (7, Some(0)));
-    assert_eq!(next_attempt(b""), (8, None));
 }
 
 #[wasm_bindgen_test]
@@ -962,6 +959,23 @@ async fn attempts_are_counted_beside_the_marker_until_the_adoption_ends() {
         read_file(&attempts_name(&new)).await.as_deref(),
         Some(&b"++++++++"[..])
     );
+    // A count that is not exactly its eight slots counts nothing, so one cut
+    // short never spends attempts nobody made.
+    for wrong in [&b"-----"[..], &b"---------"[..]] {
+        write_file(&attempts_name(&new), wrong).await;
+        let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
+        assert_eq!(
+            owner.record_attempt().await.map_err(|error| error.kind()),
+            Err(OpfsErrorKind::Write),
+            "{} bytes",
+            wrong.len()
+        );
+        owner.release().await.expect("release");
+        assert_eq!(
+            read_file(&attempts_name(&new)).await.as_deref(),
+            Some(wrong)
+        );
+    }
     assert_eq!(open_and_finish(&new).await, 20);
     assert_eq!(read_file(&attempts_name(&new)).await, None);
 
@@ -1061,6 +1075,43 @@ async fn attempts_are_counted_while_the_marker_does_not_read() {
 
     // No database is named like a count, so none can alias one.
     assert!(approved_paths(&attempts_name(&old)).is_err());
+
+    // When the files beside a marker cannot be looked up, the read fails
+    // after the marker read, and the time the marker records still reads.
+    let (old, new) = identities("unread-files");
+    write_pair(&old, 26).await;
+    clean_pair(&new).await;
+    let before = js_sys::Date::now() as u64;
+    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
+    let after = js_sys::Date::now() as u64;
+    let root = worker_root().await.expect("root");
+    let wal = format!("{new}-wal");
+    recursive_remove(&root, &wal).await;
+    let directory = FileSystemGetDirectoryOptions::new();
+    directory.set_create(true);
+    JsFuture::from(root.get_directory_handle_with_options(&wal, &directory))
+        .await
+        .expect("a directory where the WAL belongs");
+    let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
+    assert_eq!(
+        owner.read_adoption().await.map_err(|error| error.kind()),
+        Err(OpfsErrorKind::Move)
+    );
+    let began = owner
+        .read_adoption_time()
+        .await
+        .expect("the marker reads")
+        .expect("a marker");
+    assert!(
+        (before..=after).contains(&began),
+        "{before} <= {began} <= {after}"
+    );
+    owner.release().await.expect("release");
+    assert!(marker_exists(&new).await);
+    clean_pair(&new).await;
+    let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
+    assert_eq!(owner.read_adoption_time().await.expect("no marker"), None);
+    owner.release().await.expect("release");
 }
 
 #[wasm_bindgen_test]

@@ -61,7 +61,8 @@ contract and the multi-target verification commands.
   `return_adoption` moves back only a self-contained database onto an identity
   holding none; the caller decides the files are still what the older build
   wrote, and bounds its retries with `record_attempt`, or by
-  `Adoption::adopted_at_ms` when an attempt cannot be counted. The marker is
+  `Adoption::adopted_at_ms` (`read_adoption_time` when the files beside the
+  marker do not read) when an attempt cannot be counted. The marker is
   written once, before any move; never write it again. Never read or move the
   older identity's files without its lock: a sync handle there can block the
   older build's open. Don't checkpoint or copy instead; a copy leaves the older

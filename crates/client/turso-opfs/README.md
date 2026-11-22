@@ -5,7 +5,8 @@ Browser-only Turso `Clock`/`IO`/`File` adapter for DedicatedWorker-owned OPFS.
 ## Ownership and recovery boundary
 
 `OpfsOwner::acquire(database_identity)` validates one direct-child canonical
-identity (reserving the `-wal` and `-adopting` suffixes) and derives both the
+identity (reserving the `-wal`, `-adopting` and `-adopting-attempts` suffixes)
+and derives both the
 exclusive Web Lock name and main/WAL paths from it. There are no independent
 scope/path inputs or main-as-WAL aliases that could map the same files to
 different locks. `open()` accepts no path argument. The lock remains held
@@ -54,17 +55,22 @@ own beside the marker (`<identity>-adopting-attempts`), written whole with
 eight free slots before the marker and before any file moves, so a new
 adoption never inherits an earlier count, counting overwrites one byte in place
 and needs no more storage, and it works while the marker does not read. Once
-every slot is used the count stays at eight without writing. The marker is
-written once and never changed; it also records when the adoption began
-(`Adoption::adopted_at_ms`), so a caller can bound attempts it cannot count by
-age. A read that returns fewer bytes than the file holds is an error, never a
-shorter marker or WAL header. A failed WAL move moves the main file back.
+every slot is used the count stays at eight without writing; a count that is
+not exactly its eight slots fails (`Write`), so a file cut short never counts
+attempts nobody made. The marker is written once and never changed; it also
+records when the adoption began (`Adoption::adopted_at_ms`), so a caller can
+bound attempts it cannot count by age. `read_adoption_time` reads that time from
+the marker alone, for when `read_adoption` fails on the files beside it. A read
+that returns fewer bytes than the file holds is an error, never a shorter
+marker or WAL header. A failed WAL move moves the main file back; when that
+fails too, the marker stays and the adoption reads as `Split`.
 Wiping or resetting an identity removes its marker and count with its pair. A
 `lock_previous` request dropped before it returns lets the lock go as soon as
 the browser grants it. `src/browser/test/adopt.rs` covers each outcome, the
 lock and a dropped request for it, Turso-invalid headers, both stops, splits
 with a matching and a changed WAL, stale and malformed markers, attempt counts
-(fresh per adoption, in place, saturating, while the marker does not read),
+(fresh per adoption, in place, saturating, a count of the wrong length, while
+the marker does not read), the adoption time while the files do not read,
 short reads, and refused returns in a real DedicatedWorker.
 
 The crate tests physical lock contention in its real DedicatedWorker. Actual

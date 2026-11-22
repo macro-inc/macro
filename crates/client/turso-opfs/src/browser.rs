@@ -501,7 +501,9 @@ impl OpfsOwner {
     /// before any file moved, so counting overwrites one byte in place, needs
     /// no more storage, works while the marker cannot be read, and never
     /// touches the marker. Once every slot is used it stays at eight without
-    /// writing. Fails when there is no count or it cannot be read or written.
+    /// writing. Fails when there is no count, when it is not exactly its
+    /// eight slots (so a count cut short never counts attempts nobody made),
+    /// or when it cannot be read or written.
     pub async fn record_attempt(&mut self) -> Result<u8, OpfsError> {
         let to = self.paths.clone();
         self.in_adoption_phase(async move {
@@ -515,6 +517,21 @@ impl OpfsOwner {
                     )
                 })?;
             count_attempt(&file, BusyDeadline::start()).await
+        })
+        .await
+    }
+
+    /// When the adoption into this owner's paths began, read from its marker
+    /// alone, for a caller whose [`read_adoption`](Self::read_adoption) failed
+    /// after the marker itself read, for example on the files beside it.
+    /// `None` when there is no marker, or one that does not read as written
+    /// (which is removed, as `read_adoption` removes it).
+    pub async fn read_adoption_time(&mut self) -> Result<Option<u64>, OpfsError> {
+        let to = self.paths.clone();
+        self.in_adoption_phase(async move {
+            let root = adoption_root().await?;
+            let marker = read_marker(&root, &to, BusyDeadline::start()).await?;
+            Ok(marker.map(|marker| marker.adopted_at_ms))
         })
         .await
     }
@@ -1270,15 +1287,11 @@ impl Marker {
 
 /// How many attempts the count `slots` holds after one more, and where that
 /// one is written: the first free slot, or nowhere once every slot is used.
-/// Slots missing from a count cut short count as used, so it can only run
-/// out sooner.
-fn next_attempt(slots: &[u8]) -> (u8, Option<usize>) {
-    let missing = FREE_ATTEMPTS.len().saturating_sub(slots.len());
-    let used = missing
-        + slots
-            .iter()
-            .filter(|&&byte| byte != FREE_ATTEMPT_BYTE)
-            .count();
+fn next_attempt(slots: &[u8; FREE_ATTEMPTS.len()]) -> (u8, Option<usize>) {
+    let used = slots
+        .iter()
+        .filter(|&&byte| byte != FREE_ATTEMPT_BYTE)
+        .count();
     let free = slots.iter().position(|&byte| byte == FREE_ATTEMPT_BYTE);
     let counted = used + usize::from(free.is_some());
     (u8::try_from(counted).unwrap_or(u8::MAX), free)
@@ -1303,7 +1316,10 @@ async fn count_attempt(
 }
 
 fn write_attempt(handle: &FileSystemSyncAccessHandle) -> Result<u8, JsValue> {
-    let (_, slots) = read_prefix(handle, FREE_ATTEMPTS.len())?;
+    // One byte more than a count holds, so a longer file fails too.
+    let (_, slots) = read_prefix(handle, FREE_ATTEMPTS.len() + 1)?;
+    let slots = <[u8; FREE_ATTEMPTS.len()]>::try_from(slots.as_slice())
+        .map_err(|_| JsValue::from_str("the attempt count is not its eight slots"))?;
     let (count, free) = next_attempt(&slots);
     if let Some(slot) = free.and_then(|slot| u32::try_from(slot).ok()) {
         write_byte_at(handle, ATTEMPT_BYTE, f64::from(slot))?;
