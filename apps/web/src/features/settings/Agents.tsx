@@ -212,6 +212,13 @@ export function Agents(props: {
   // by its row id; one at a time.
   const [permissionsFor, setPermissionsFor] =
     createSignal<ExpandedPermissions>();
+  // Macro's Permissions shows only when the API has the persona's (not on a
+  // 404); an agent the viewer manages always has some while the flag is on.
+  const macroPermissions = useAgentPermissionsAvailable(() => MACRO_NEW_BOT_ID);
+  const clearReveal = () =>
+    setPermissionsFor((current) =>
+      current ? { rowId: current.rowId, focus: current.focus } : undefined
+    );
   const togglePermissions = (rowId: string) =>
     setPermissionsFor((current) =>
       current?.rowId === rowId ? undefined : { rowId }
@@ -490,7 +497,12 @@ export function Agents(props: {
                   {(agent) => (
                     <AgentListRow
                       agent={agent}
-                      permissionsFlag={permissionsFlag()}
+                      permissionsAvailable={
+                        agent.id === MACRO_AGENT_BOT_ID
+                          ? macroPermissions()
+                          : permissionsFlag()
+                      }
+                      onRevealed={clearReveal}
                       permissions={
                         permissionsFor()?.rowId === agent.id
                           ? permissionsFor()
@@ -643,9 +655,12 @@ type ExpandedPermissions = {
 /** A row of Your agents, with its permissions expanded inline under it. */
 function AgentListRow(props: {
   agent: AgentSummary;
-  permissionsFlag: boolean;
+  /** The flag is on and the API has the agent's permissions. */
+  permissionsAvailable: boolean;
   permissions?: ExpandedPermissions;
   onTogglePermissions: () => void;
+  /** A link's reveal was carried out. */
+  onRevealed: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onMessage?: () => void;
@@ -654,21 +669,22 @@ function AgentListRow(props: {
   // Macro's permissions are its persona's, kept under the new Macro bot.
   const persona = () => props.agent.id === MACRO_AGENT_BOT_ID;
   const permissionsId = () => (persona() ? MACRO_NEW_BOT_ID : props.agent.id);
-  // Permissions shows only when the API has the agent's (not on a 404).
-  const available = useAgentPermissionsAvailable(permissionsId);
-  const open = () =>
-    props.permissionsFlag && available() && props.permissions !== undefined;
+  const expanded = () =>
+    props.permissionsAvailable ? props.permissions : undefined;
   let row: HTMLDivElement | undefined;
 
+  // A link scrolls the row into view and focuses Permissions once the
+  // button is there, then clears its reveal so a remount doesn't replay it.
   createEffect(
     on(
-      () => props.permissions?.reveal,
-      (reveal) => {
-        if (reveal === undefined || !row) return;
-        row.scrollIntoView({ block: 'start', behavior: 'smooth' });
-        row
+      () => (expanded()?.reveal === undefined ? undefined : row),
+      (element) => {
+        if (!element) return;
+        element.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        element
           .querySelector<HTMLElement>('[data-permissions-toggle]')
           ?.focus({ preventScroll: true });
+        props.onRevealed();
       }
     )
   );
@@ -682,19 +698,38 @@ function AgentListRow(props: {
         onMessage={props.onMessage}
         messagePending={props.messagePending}
         permissions={
-          available()
-            ? { open: open(), onToggle: props.onTogglePermissions }
+          props.permissionsAvailable
+            ? {
+                open: expanded() !== undefined,
+                onToggle: props.onTogglePermissions,
+              }
             : undefined
         }
       />
-      <Show when={open()}>
+      <Show when={expanded()}>
         <div class="pr-6 pb-5 pl-[4.5rem] touch:px-4">
-          <AgentPermissionsPanel
-            agentId={permissionsId()}
-            agentName={props.agent.name}
-            persona={persona()}
-            focus={props.permissions?.focus}
-          />
+          {/* Keyed on the focus: a new link to an open row opens at its own
+              action. */}
+          <Show
+            when={expanded()?.focus}
+            keyed
+            fallback={
+              <AgentPermissionsPanel
+                agentId={permissionsId()}
+                agentName={props.agent.name}
+                persona={persona()}
+              />
+            }
+          >
+            {(focus) => (
+              <AgentPermissionsPanel
+                agentId={permissionsId()}
+                agentName={props.agent.name}
+                persona={persona()}
+                focus={focus}
+              />
+            )}
+          </Show>
         </div>
       </Show>
     </div>

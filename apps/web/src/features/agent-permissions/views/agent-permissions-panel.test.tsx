@@ -194,6 +194,21 @@ describe('AgentPermissionsPanel', () => {
     ]);
   });
 
+  it('keeps an exception row in place while its change saves', async () => {
+    renderPanel();
+    const read = await expandRead();
+    const outside = within(read).getByRole('button', {
+      name: 'Outside chats: Read',
+    });
+    choose(
+      within(read).getByRole('button', { name: 'Contacts & CRM: Read' }),
+      'Deny'
+    );
+    await waitFor(() => expect(client.set).toHaveBeenCalledTimes(1));
+    // The other row was not remounted, so focus and open menus survive.
+    expect(outside.isConnected).toBe(true);
+  });
+
   it('never counts an exception on a pair no tool maps to', async () => {
     renderPanel();
     fireEvent.click(

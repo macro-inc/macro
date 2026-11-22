@@ -24,49 +24,52 @@ export function ToolSettingsList(props: {
       <p class="flex h-8 items-center text-[13px] font-medium text-ink">
         {t('agentPermissions.individualTools')}
       </p>
-      <For each={props.settings}>
-        {(setting) => (
-          <div
-            class="flex min-h-11 items-center gap-3"
-            classList={{ 'opacity-50': props.removing(setting) }}
-          >
-            <div class="flex min-w-0 flex-1 flex-col">
-              <span class="truncate text-sm text-ink">
-                {setting.tool.label}
-              </span>
-              <span class="flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted">
-                <span class="truncate">{setting.group.name}</span>
-                <Show when={setting.rule.viaAgent}>
-                  <span aria-hidden="true">·</span>
-                  <span class="inline-flex shrink-0 items-center gap-1">
-                    <RobotIcon aria-hidden="true" class="size-3" />
-                    {t('agentPermissions.setByAgent')}
-                  </span>
-                </Show>
-              </span>
-            </div>
-            <span class="inline-flex shrink-0 items-center gap-1.5 text-sm text-ink-muted">
-              <PermissionStateGlyph state={setting.rule.state} />
-              {stateLabel(setting.rule.state)}
-            </span>
-            <Show when={props.editable}>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('agentPermissions.removeToolSetting', {
-                  tool: setting.tool.label,
-                })}
-                tooltip={t('agentPermissions.removeToolSetting', {
-                  tool: setting.tool.label,
-                })}
-                disabled={props.removing(setting)}
-                onClick={() => props.onRemove(setting)}
+      {/* Keyed by the catalog tool, which keeps its identity across saves. */}
+      <For each={props.settings.map((entry) => entry.tool)}>
+        {(tool) => (
+          <Show when={props.settings.find((entry) => entry.tool === tool)}>
+            {(setting) => (
+              <div
+                class="flex min-h-11 items-center gap-3"
+                classList={{ 'opacity-50': props.removing(setting()) }}
               >
-                <XIcon class="size-3.5 shrink-0 pointer-events-none" />
-              </Button>
-            </Show>
-          </div>
+                <div class="flex min-w-0 flex-1 flex-col">
+                  <span class="truncate text-sm text-ink">{tool.label}</span>
+                  <span class="flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted">
+                    <span class="truncate">{setting().group.name}</span>
+                    <Show when={setting().rule.viaAgent}>
+                      <span aria-hidden="true">·</span>
+                      <span class="inline-flex shrink-0 items-center gap-1">
+                        <RobotIcon aria-hidden="true" class="size-3" />
+                        {t('agentPermissions.setByAgent')}
+                      </span>
+                    </Show>
+                  </span>
+                </div>
+                <span class="inline-flex shrink-0 items-center gap-1.5 text-sm text-ink-muted">
+                  <PermissionStateGlyph state={setting().rule.state} />
+                  {stateLabel(setting().rule.state)}
+                </span>
+                <Show when={props.editable}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t('agentPermissions.removeToolSetting', {
+                      tool: tool.label,
+                    })}
+                    tooltip={t('agentPermissions.removeToolSetting', {
+                      tool: tool.label,
+                    })}
+                    disabled={props.removing(setting())}
+                    onClick={() => props.onRemove(setting())}
+                  >
+                    <XIcon class="size-3.5 shrink-0 pointer-events-none" />
+                  </Button>
+                </Show>
+              </div>
+            )}
+          </Show>
         )}
       </For>
     </div>

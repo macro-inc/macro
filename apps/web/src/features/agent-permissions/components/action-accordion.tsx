@@ -148,25 +148,30 @@ export function ActionAccordion(props: {
               />
             </Show>
           </div>
-          <For each={props.exceptions}>
-            {(exception) => (
-              <ExceptionRow
-                group={exception.group.id}
-                name={exception.group.name}
-                label={t('agentPermissions.controlLabel', {
-                  group: exception.group.name,
-                  action: props.name,
-                })}
-                state={exception.state}
-                defaultState={props.defaultState}
-                editable={props.editable}
-                onSelect={(state) => {
-                  if (state !== exception.state) {
-                    props.onException(exception.group.id, state);
-                  }
-                }}
-              />
-            )}
+          {/* Rows are keyed by their catalog group, which keeps its identity
+              while states change, so a save never remounts an open menu. */}
+          <For each={props.exceptions.map((exception) => exception.group)}>
+            {(group) => {
+              const state = () =>
+                props.exceptions.find((entry) => entry.group.id === group.id)
+                  ?.state;
+              return (
+                <ExceptionRow
+                  group={group.id}
+                  name={group.name}
+                  label={t('agentPermissions.controlLabel', {
+                    group: group.name,
+                    action: props.name,
+                  })}
+                  state={state()}
+                  defaultState={props.defaultState}
+                  editable={props.editable}
+                  onSelect={(next) => {
+                    if (next !== state()) props.onException(group.id, next);
+                  }}
+                />
+              );
+            }}
           </For>
           <Show when={adding()} keyed>
             {(group) => (

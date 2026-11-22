@@ -1100,14 +1100,31 @@ describe('Agents', () => {
       expect(panel('Bug fixer')).toBeNull();
     });
 
-    it('hides Permissions when the API has none for the agent', () => {
+    it("hides Macro's Permissions when the API has none for it", () => {
       setPermissionsFlag(true);
       permissionMocks.served = false;
       agentMocks.query.data = [ownAgent];
       render(() => <Agents {...agentsPageProps} />);
-      expect(screen.queryByRole('button', { name: /'s permissions$/ })).toBe(
-        null
-      );
+      expect(
+        screen.queryByRole('button', { name: "Macro's permissions" })
+      ).toBeNull();
+      // An agent the viewer manages always has permissions; its panel says
+      // so itself if the API has none.
+      expect(
+        screen.getByRole('button', { name: "Bug fixer's permissions" })
+      ).toBeTruthy();
+    });
+
+    it('scrolls a linked row into view once, not again after the editor', () => {
+      setPermissionsFlag(true);
+      agentMocks.query.data = [ownAgent];
+      requestAgentPermissions('agent-1');
+      render(() => <Agents {...agentsPageProps} />);
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+      fireEvent.click(screen.getByRole('button', { name: /Back/ }));
+      expect(panel('Bug fixer')).toBeTruthy();
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
     });
 
     it('hides Permissions and an open panel when the flag turns off', () => {
