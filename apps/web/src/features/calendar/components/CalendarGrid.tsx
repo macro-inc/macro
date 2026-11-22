@@ -19,6 +19,7 @@ import {
   createMemo,
   createSignal,
   type JSX,
+  onCleanup,
   Show,
   untrack,
 } from 'solid-js';
@@ -136,6 +137,7 @@ export interface CalendarGridProps {
   dayDraft?: DayDraftRangeBinding;
   eventTimeChangePending?: boolean;
   onDatesSet?: (info: DatesSetArg) => void;
+  onEventInteractionChange?: (active: boolean) => void;
   onEventTimeChange?: (
     change: CalendarEventTimeChange,
     event: CalendarEvent | undefined
@@ -234,13 +236,19 @@ export function CalendarGrid(props: CalendarGridProps) {
   const handleEventInteractionStart = () => {
     interactionEventsById = props.eventsById;
     setEventInteractionActive(true);
+    props.onEventInteractionChange?.(true);
   };
   const handleEventInteractionStop = () => {
     queueMicrotask(() => {
       interactionEventsById = undefined;
       setEventInteractionActive(false);
+      props.onEventInteractionChange?.(false);
     });
   };
+
+  onCleanup(() => {
+    if (eventInteractionActive()) props.onEventInteractionChange?.(false);
+  });
 
   const eventElements = new Map<string, HTMLElement>();
   const [chipMounts, notifyChipMount] = createSignal(undefined, {

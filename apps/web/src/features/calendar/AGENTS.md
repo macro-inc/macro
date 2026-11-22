@@ -10,7 +10,7 @@ host lives in `../block-calendar/`.
 
 - `context/calendar-navigation-context.tsx`: host-neutral dates, visible ranges,
   period selection, and navigation commands. `components/CalendarPagerContext.tsx`
-  retains FullCalendar handles, three-page transitions, and occurrence data;
+  retains five FullCalendar handles, a native `SnapPager` ring, and occurrence data;
   `../calendar-view/views/grid-navigation/CalendarGridNavigation.tsx` adapts it at the host boundary.
 - `components/CalendarViewContext.tsx`: selection, source visibility, and display preferences.
 - `context/event-rsvp-context.ts` and `components/event-rsvp/`: shared response state
@@ -120,7 +120,11 @@ host lives in `../block-calendar/`.
 - The desktop month picker composes `components/month-picker/` parts and keeps
   its temporary year/date state in `primitives/create-month-picker.ts`; navigation
   uses the workspace navigation context. Keep grid paging and scroll timing in
-  `CalendarPagerContext.tsx`.
+  `CalendarPagerContext.tsx`; `SnapPager` owns native horizontal scrolling on phone
+  and desktop. Re-date only recycled pages after settling, never gate swipes on the
+  render queue, share active vertical scroll with all buffers, and lock horizontal
+  paging during FullCalendar drag/resize. Explicit date selections prepare only the
+  hidden destination before sliding, then update the date anchor at settlement.
 - Compose the desktop date-navigation/tabs/search row above the 22px month title
   and creation actions; the touch header uses separate shell menu, month,
   Today, and circular Search islands. Keep its loading skeleton aligned. The desktop month
@@ -145,7 +149,7 @@ host lives in `../block-calendar/`.
   its `view-` route id and component registry entry for the split-content bridge and shell metadata.
 - Keep phone grid layout tokens in `calendar-phone-grid.css`; hours sit outside
   the timed card, with day headers and all-day lanes above it. The active grid
-  supplies a stationary, opaque page-colored gutter through `create-mobile-grid-axis.ts`;
+  supplies a stationary, opaque panel-colored gutter through `create-mobile-grid-axis.ts`;
   synchronize its vertical scroll without fading the hour labels or showing an
   All day gutter label. Reveal only the timed card's shared 32px fade past the opening offset.
   Keep timed-card grid lines below the all-day row and do not shade weekends in any view.

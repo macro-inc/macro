@@ -1,11 +1,15 @@
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
+import { beginInteraction } from '@app/observability/flow';
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { fireAndForget } from '@core/util/fireAndForget';
 import type { Calendar, DatesSetArg } from '@fullcalendar/core';
-import { createPager, type PagerController } from '@ui/components/Pager';
+import { createSnapPager } from '@ui/components/SnapPager';
+import {
+  differenceInCalendarDays,
+  differenceInCalendarMonths,
+  startOfWeek,
+} from 'date-fns';
 import {
   type Accessor,
-  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -13,12 +17,14 @@ import {
   onCleanup,
   type ParentProps,
 } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import type { CalendarOccurrenceData } from '../hooks/use-calendar-occurrence-data';
 import type { CalendarEvent, CalendarGridPeriodView } from '../types';
+import { isSameLocalDate } from '../utils/calendar-date';
 import { timeGridScroller } from '../utils/time-grid-scroller';
 
-export const CALENDAR_PAGE_IDS = ['previous', 'current', 'next'] as const;
-export type CalendarPageId = (typeof CALENDAR_PAGE_IDS)[number];
+export const CALENDAR_PAGE_IDS = [0, 1, 2, 3, 4] as const;
+export type CalendarPageId = number;
 
 interface CalendarPageHandle {
   id: CalendarPageId;
@@ -26,34 +32,29 @@ interface CalendarPageHandle {
   dateInfo: Accessor<DatesSetArg | undefined>;
   element: Accessor<HTMLDivElement | undefined>;
   data: CalendarOccurrenceData;
-  /** Teammate out-of-office events overlaid on the page, when the surface
-   * renders them. Kept out of `data` so occurrence-derived consumers (e.g.
-   * availability) never mix in other people's events. */
   teamEvents?: Accessor<CalendarEvent[]>;
 }
 
 const shiftedDateForView = (
   date: Date,
   view: CalendarGridPeriodView,
-  offset: -1 | 1
+  offset: number
 ) => {
   const shifted = new Date(date);
-  if (view === 'dayGridMonth') {
+  if (view === 'dayGridMonth' && offset !== 0) {
     shifted.setDate(1);
     shifted.setMonth(shifted.getMonth() + offset);
   } else {
-    shifted.setDate(
-      shifted.getDate() +
-        offset *
-          (view === 'timeGridDay' ? 1 : view === 'timeGridThreeDay' ? 3 : 7)
-    );
+    const days =
+      view === 'timeGridDay' ? 1 : view === 'timeGridThreeDay' ? 3 : 7;
+    shifted.setDate(shifted.getDate() + offset * days);
   }
   return shifted;
 };
 
-const navigateCalendar = (api: Calendar, view: string, date?: Date) => {
+const navigateCalendar = (api: Calendar, view: string, date: Date) => {
   if (api.view.type !== view) api.changeView(view, date);
-  else if (date) api.gotoDate(date);
+  else api.gotoDate(date);
 };
 
 interface CalendarPagerContextProps extends ParentProps {
@@ -66,343 +67,278 @@ interface CalendarPagerContextProps extends ParentProps {
   onViewChange: (view: CalendarGridPeriodView) => void;
 }
 
+interface DateAnchor {
+  date: Date;
+  position: number;
+}
+interface CalendarNavigationState {
+  anchor: DateAnchor;
+  pendingAnchor: DateAnchor | undefined;
+  requestedDate: Date | undefined;
+}
+
 function createCalendarPagerContext(props: CalendarPagerContextProps) {
   const initialDate = props.initialDate ?? new Date();
-  const initialView = props.initialView;
-  const initialDates: Record<CalendarPageId, Date> = {
-    previous: shiftedDateForView(initialDate, initialView, -1),
-    current: initialDate,
-    next: shiftedDateForView(initialDate, initialView, 1),
-  };
+  const [navigation, setNavigation] = createStore<CalendarNavigationState>({
+    anchor: { date: initialDate, position: 0 },
+    pendingAnchor: undefined,
+    requestedDate: undefined,
+  });
+  const anchor = () => navigation.anchor;
+  const pendingAnchor = () => navigation.pendingAnchor;
+  const requestedDate = () => navigation.requestedDate;
+  const setAnchor = (value: DateAnchor) => setNavigation('anchor', value);
+  const setPendingAnchor = (value: DateAnchor | undefined) =>
+    setNavigation('pendingAnchor', value);
+  const setRequestedDate = (value: Date | undefined) =>
+    setNavigation('requestedDate', value);
+  let todayTarget: Date | undefined;
+  const [registryRevision, notifyRegistry] = createSignal(undefined, {
+    equals: false,
+  });
+  const handles = new Map<CalendarPageId, CalendarPageHandle>();
+  const rendered = new Map<CalendarPageId, string>();
+  const renderQueue = createRenderQueue();
+  const periodView = () => props.initialView;
+  let sharedScrollTop: number | undefined;
 
-  const [pageOrder, setPageOrder] =
-    createSignal<readonly CalendarPageId[]>(CALENDAR_PAGE_IDS);
-
-  const [activePageId, setActivePageId] =
-    createSignal<CalendarPageId>('current');
-
-  const [listenForPageRegistryChange, notifyPageRegistryChange] =
-    createSignal<void>(undefined, { equals: false });
-
-  const pageHandles = new Map<CalendarPageId, CalendarPageHandle>();
-
+  const pager = createSnapPager({
+    pageCount: CALENDAR_PAGE_IDS.length,
+    onNavigationCancel() {
+      setPendingAnchor(undefined);
+      setRequestedDate(undefined);
+      todayTarget = undefined;
+      synchronizePages();
+    },
+    onSettle(moved) {
+      const interaction = beginInteraction('calendar.page');
+      try {
+        props.onNavigate();
+        const pending = pendingAnchor();
+        if (pending?.position === pager.position()) {
+          setAnchor(pending);
+          setPendingAnchor(undefined);
+        } else if (moved === 0) {
+          setPendingAnchor(undefined);
+          setRequestedDate(undefined);
+        }
+        const requested = requestedDate();
+        if (requested && isSameLocalDate(requested, activeDate()))
+          setRequestedDate(undefined);
+        synchronizePages();
+        if (todayTarget && !pendingAnchor()) queueTodayScroll(todayTarget);
+      } finally {
+        interaction.end();
+      }
+    },
+  });
+  const activePageId = pager.activePage;
+  const pageOrder = pager.pageOrder;
   const pageHandle = (id: CalendarPageId) => {
-    listenForPageRegistryChange();
-    return pageHandles.get(id);
+    registryRevision();
+    return handles.get(id);
   };
-
   const activePage = createMemo(() => pageHandle(activePageId()));
   const activeData = createMemo(() => activePage()?.data);
   const activeDateInfo = createMemo(() => activePage()?.dateInfo());
-  const renderQueue = createRenderQueue();
-  // Arrow clicks accumulate against the requested date, not the last grid that
-  // finished rendering. A newer request can replace an unfinished transition.
-  const [requestedDate, setRequestedDate] = createSignal<Date>();
-  let isDisposed = false;
-  onCleanup(() => {
-    isDisposed = true;
-  });
-  const navigationDate = () =>
-    requestedDate() ??
-    pageHandle(pager.targetPage() ?? activePageId())
-      ?.dateInfo()
-      ?.view.calendar.getDate();
-  const clearRequestedDate = (date: Date) => {
-    if (requestedDate() === date) setRequestedDate(undefined);
-  };
-  const periodView = () => props.initialView;
+  const dateAt = (position: number) =>
+    shiftedDateForView(
+      anchor().date,
+      periodView(),
+      position - anchor().position
+    );
+  const activeDate = () => dateAt(pager.position());
+  const navigationDate = () => requestedDate() ?? activeDate();
   const isChangingView = () => activeDateInfo()?.view.type !== periodView();
+  const pageDate = (id: CalendarPageId) =>
+    dateAt(pager.position() + (pager.pages()[id]?.offset() ?? 0));
+  const signature = (date: Date) => `${periodView()}:${date.getTime()}`;
 
-  const scrollElementFor = (handle: CalendarPageHandle | undefined) =>
-    timeGridScroller(handle?.element());
+  const copyScrollPosition = () => {
+    const source = timeGridScroller(activePage()?.element());
+    if (source) sharedScrollTop = source.scrollTop;
+    if (sharedScrollTop === undefined) return;
+    for (const handle of handles.values()) {
+      if (handle.id === activePageId()) continue;
+      const target = timeGridScroller(handle.element());
+      if (target && target.scrollTop !== sharedScrollTop)
+        target.scrollTop = sharedScrollTop;
+    }
+  };
 
-  const copyActiveScrollPosition = () => {
-    const activeScrollElement = scrollElementFor(activePage());
-    if (!activeScrollElement) return;
-
+  // Recycled pages alone get new dates. Read their latest position inside each
+  // job, so another native swipe never waits on or commits an obsolete buffer.
+  function synchronizePages(force = false) {
     for (const id of pageOrder()) {
-      if (id === activePageId()) continue;
-      const scrollElement = scrollElementFor(pageHandle(id));
-      if (!scrollElement) continue;
-
-      scrollElement.scrollTop = activeScrollElement.scrollTop;
+      if (!handles.has(id)) continue;
+      if (!force && rendered.get(id) === signature(pageDate(id))) continue;
+      renderQueue.enqueue(
+        `page:${id}`,
+        () => {
+          const handle = handles.get(id);
+          const api = handle?.api();
+          if (!api) return;
+          const date = pageDate(id);
+          navigateCalendar(api, periodView(), date);
+          rendered.set(id, signature(date));
+          const scroller = timeGridScroller(handle?.element());
+          if (scroller && sharedScrollTop !== undefined)
+            scroller.scrollTop = sharedScrollTop;
+          if (id === activePageId()) {
+            const requested = requestedDate();
+            if (requested && isSameLocalDate(requested, date))
+              setRequestedDate(undefined);
+          }
+        },
+        id === activePageId()
+      );
     }
-  };
+  }
 
-  const synchronizePage = (
-    handle: CalendarPageHandle | undefined,
-    source: CalendarPageHandle | undefined,
-    direction: 'previous' | 'next'
-  ) => {
-    const api = handle?.api();
-    const sourceApi = source?.api();
-    if (!api || !sourceApi) return;
-
-    api.batchRendering(() => {
-      navigateCalendar(api, sourceApi.view.type, sourceApi.getDate());
-
-      if (direction === 'previous') {
-        api.prev();
-      } else {
-        api.next();
-      }
-    });
-  };
-
-  const queueBuffer = (id: CalendarPageId, direction: 'previous' | 'next') => {
-    const source = activePage();
-    renderQueue.enqueue(`buffer:${id}`, () => {
-      synchronizePage(pageHandle(id), source, direction);
-      copyActiveScrollPosition();
-    });
-  };
-
-  const synchronizeBuffers = () => {
-    const order = pageOrder();
-    const activeIndex = order.indexOf(activePageId());
-    const neighbors = [
-      [order[activeIndex - 1], 'previous'],
-      [order[activeIndex + 1], 'next'],
-    ] as const;
-    for (const [id, direction] of neighbors) {
-      if (id) queueBuffer(id, direction);
-    }
-  };
-
-  const rotatePages = (
-    destination: CalendarPageId,
-    direction: 'previous' | 'next'
-  ) => {
-    const order = pageOrder();
-    const recycledId =
-      direction === 'next' ? order[0] : order[order.length - 1];
-    const nextOrder =
-      direction === 'next'
-        ? [...order.slice(1), order[0]]
-        : [order[order.length - 1], ...order.slice(0, -1)];
-
-    props.onNavigate();
-    batch(() => {
-      setPageOrder(nextOrder);
-      setActivePageId(() => destination);
-    });
-
-    if (recycledId) queueBuffer(recycledId, direction);
-  };
-
-  const pager: PagerController<CalendarPageId> = createPager({
-    pageOrder,
-    activePage: activePageId,
-    canChangePage: ({ to }) =>
-      !isChangingView() &&
-      !renderQueue.hasPending() &&
-      pageHandle(to)?.api() !== undefined,
-    onDragStart: copyActiveScrollPosition,
-    onTransitionStart: () => {
-      props.onNavigate();
-      copyActiveScrollPosition();
-    },
-    onPageChange: (destination, { direction }) =>
-      rotatePages(destination, direction),
-  });
-
-  // A page mounted after the active one starts beside the period that page
-  // shows by then, which a navigation may already have moved.
   const initialDateFor = (id: CalendarPageId) => {
-    const order = pageOrder();
-    const offset = order.indexOf(id) - order.indexOf(activePageId());
-    const activeDate = activePage()?.api()?.getDate();
-    if (offset === 0 || !activeDate) return initialDates[id];
-
-    return shiftedDateForView(activeDate, periodView(), offset < 0 ? -1 : 1);
+    const date = pageDate(id);
+    rendered.set(id, signature(date));
+    return date;
   };
-
   const registerPage = (handle: CalendarPageHandle) => {
-    pageHandles.set(handle.id, handle);
-    notifyPageRegistryChange();
-
+    handles.set(handle.id, handle);
+    // Direct callers can register an already-mounted grid without initialDateFor.
+    if (!rendered.has(handle.id)) {
+      const date = handle.api()?.getDate();
+      if (date) rendered.set(handle.id, signature(date));
+    }
+    notifyRegistry();
+    synchronizePages();
     return () => {
-      if (pageHandles.get(handle.id) !== handle) return;
-      pageHandles.delete(handle.id);
-      notifyPageRegistryChange();
+      if (handles.get(handle.id) !== handle) return;
+      handles.delete(handle.id);
+      rendered.delete(handle.id);
+      notifyRegistry();
     };
   };
 
-  let settingsSyncFrame: number | undefined;
   createEffect(
     on(
-      () => [props.showWeekends(), props.weekStartsOn()],
-      (_settings, previousSettings) => {
-        if (previousSettings === undefined) return;
-        if (settingsSyncFrame !== undefined) {
-          cancelAnimationFrame(settingsSyncFrame);
-        }
-        settingsSyncFrame = requestAnimationFrame(() => {
-          settingsSyncFrame = undefined;
-          synchronizeBuffers();
+      () => [activePage()?.element(), activeDateInfo()],
+      () => {
+        const scroller = timeGridScroller(activePage()?.element());
+        if (!scroller) return;
+        if (sharedScrollTop !== undefined) scroller.scrollTop = sharedScrollTop;
+        copyScrollPosition();
+        scroller.addEventListener('scroll', copyScrollPosition, {
+          passive: true,
         });
+        onCleanup(() =>
+          scroller.removeEventListener('scroll', copyScrollPosition)
+        );
       }
     )
   );
-  onCleanup(() => {
-    if (settingsSyncFrame !== undefined) {
-      cancelAnimationFrame(settingsSyncFrame);
-    }
-  });
-
-  const updateSize = () => {
-    listenForPageRegistryChange();
-
-    for (const handle of pageHandles.values()) {
-      handle.api()?.updateSize();
-    }
-  };
-
-  const scheduleActiveUpdate = () => {
-    pager.cancel();
-    renderQueue.clear();
-    renderQueue.enqueue(
-      'active',
-      () => {
-        const api = activePage()?.api();
-        if (!api) return;
-        const date = requestedDate();
-        navigateCalendar(api, periodView(), date);
-        if (date) clearRequestedDate(date);
-        synchronizeBuffers();
-      },
-      true
-    );
-  };
 
   const gotoDate = (date: Date) => {
-    setRequestedDate(date);
+    if (pager.locked()) return;
+    todayTarget = undefined;
+    renderQueue.clear();
     props.onNavigate();
-    scheduleActiveUpdate();
+    setPendingAnchor({
+      date,
+      position: pager.position() + CALENDAR_PAGE_IDS.length,
+    });
+    setRequestedDate(date);
+    pager.goTo(CALENDAR_PAGE_IDS.length);
   };
-
-  const navigateToToday = () => {
-    const now = new Date();
-    gotoDate(now);
-    // Scroll after the active grid renders. A newer navigation clears this job
-    // together with the date update, so it cannot scroll an unrelated period.
+  function queueTodayScroll(now: Date) {
     renderQueue.enqueue('scroll-to-now', () => {
+      if (todayTarget !== now) return;
       activePage()
         ?.api()
         ?.scrollToTime({
-          // Keep the current-time marker below the scroller's top fade.
           minutes: Math.max(0, now.getHours() * 60 + now.getMinutes() - 60),
         });
-      copyActiveScrollPosition();
+      copyScrollPosition();
+      todayTarget = undefined;
     });
+  }
+  const navigateToToday = () => {
+    const now = new Date();
+    gotoDate(now);
+    todayTarget = now;
+    if (pager.phase() === 'idle') queueTodayScroll(now);
   };
-
-  const finishDateNavigation = async (
-    transition: Promise<boolean>,
-    date: Date,
-    onCommit?: () => void
-  ) => {
-    const changed = await transition;
-    if (isDisposed || requestedDate() !== date) return;
-    if (changed) {
-      clearRequestedDate(date);
-      onCommit?.();
-    } else {
-      gotoDate(date);
-    }
-  };
-
   const navigatePeriod = (direction: 'previous' | 'next') => {
-    const date = navigationDate();
-    if (!date) return;
-    const target = shiftedDateForView(
-      date,
-      periodView(),
-      direction === 'previous' ? -1 : 1
-    );
-    // Preserve the normal slide for a single click. Repeated clicks bypass the
-    // animation and stale buffers, coalescing directly to the latest date.
-    if (
-      requestedDate() ||
-      pager.phase() !== 'idle' ||
-      isChangingView() ||
-      renderQueue.hasPending()
-    ) {
-      gotoDate(target);
-      return;
-    }
-    setRequestedDate(target);
-    const transition =
-      direction === 'previous' ? pager.previous() : pager.next();
-    fireAndForget(finishDateNavigation(transition, target), 'calendar-pager');
-  };
-
-  const navigateToDate = (date: Date) => {
-    // A date aim can arrive before a period's hidden buffers are ready. Page
-    // transitions reject that destination; aim the active grid directly instead.
-    if (requestedDate() || isChangingView() || renderQueue.hasPending()) {
-      gotoDate(date);
-      return;
-    }
-    pager.cancel();
-    // A newer date aim supersedes any deferred gotoDate, even when the newer
-    // aim uses a page transition rather than the active-grid navigation path.
+    if (pager.locked()) return;
+    todayTarget = undefined;
     renderQueue.clear();
-
-    const sourceApi = activePage()?.api();
-    if (!sourceApi) return;
-
-    if (
-      date >= sourceApi.view.currentStart &&
-      date < sourceApi.view.currentEnd
-    ) {
-      gotoDate(date);
-      return;
-    }
-
-    const direction = date < sourceApi.view.currentStart ? 'previous' : 'next';
-    const order = pageOrder();
-    const activeIndex = order.indexOf(activePageId());
-    const destinationId =
-      direction === 'previous'
-        ? order[activeIndex - 1]
-        : order[activeIndex + 1];
-    const destinationApi = destinationId
-      ? pageHandle(destinationId)?.api()
-      : undefined;
-
-    if (!destinationApi) {
-      gotoDate(date);
-      return;
-    }
-
-    setRequestedDate(date);
-    destinationApi.batchRendering(() =>
-      navigateCalendar(destinationApi, sourceApi.view.type, date)
-    );
-
-    const transition =
-      direction === 'previous' ? pager.previous() : pager.next();
-    fireAndForget(
-      finishDateNavigation(transition, date, synchronizeBuffers),
-      'calendar-pager'
-    );
+    const delta = direction === 'previous' ? -1 : 1;
+    const target = shiftedDateForView(navigationDate(), periodView(), delta);
+    const pending = pendingAnchor();
+    if (pending)
+      setPendingAnchor({ date: target, position: pending.position + delta });
+    setRequestedDate(target);
+    props.onNavigate();
+    if (direction === 'previous') pager.previous();
+    else pager.next();
   };
-
+  const navigateToDate = (date: Date) => {
+    const current = activeDate();
+    const view = periodView();
+    let offset: number;
+    if (view === 'dayGridMonth')
+      offset = differenceInCalendarMonths(date, current);
+    else if (view === 'timeGridWeek') {
+      const weekStartsOn = props.weekStartsOn() === 1 ? 1 : 0;
+      offset =
+        differenceInCalendarDays(
+          startOfWeek(date, { weekStartsOn }),
+          startOfWeek(current, { weekStartsOn })
+        ) / 7;
+    } else {
+      offset = Math.floor(
+        differenceInCalendarDays(date, current) /
+          (view === 'timeGridThreeDay' ? 3 : 1)
+      );
+    }
+    if (Math.abs(offset) !== 1 || requestedDate()) {
+      gotoDate(date);
+      return;
+    }
+    renderQueue.clear();
+    props.onNavigate();
+    setPendingAnchor({ date, position: pager.position() + offset });
+    setRequestedDate(date);
+    // Prepare only the hidden destination for an explicit adjacent date.
+    // Never re-date the visible page while it is still under the user's finger.
+    if (pager.phase() === 'idle') {
+      const destination = pager
+        .pages()
+        .find((page) => page.offset() === offset);
+      const api = destination ? handles.get(destination.key)?.api() : undefined;
+      if (api && destination) {
+        navigateCalendar(api, view, date);
+        rendered.set(destination.key, signature(date));
+      }
+    }
+    pager.goTo(offset);
+  };
   const changeView = (view: CalendarGridPeriodView) => {
     if (periodView() === view) return;
-    pager.cancel();
+    const date = navigationDate();
+    todayTarget = undefined;
+    setPendingAnchor(undefined);
+    renderQueue.clear();
+    pager.reset();
+    setAnchor({ date, position: 0 });
+    setRequestedDate(undefined);
     props.onNavigate();
     props.onViewChange(view);
   };
-
-  // Route changes and date jumps share one coalesced active-grid update.
   createEffect(
-    on([periodView, () => activePage()?.api()], ([view, api], previous) => {
-      if (!api) return;
-      if (api.view.type === view && (!previous || previous[0] === view)) return;
-      scheduleActiveUpdate();
-    })
+    on(
+      [periodView, props.showWeekends, props.weekStartsOn],
+      (_value, previous) => {
+        if (previous) synchronizePages(true);
+      }
+    )
   );
 
   return {
@@ -414,13 +350,17 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     activePage,
     activeData,
     activeDateInfo,
+    activeDate,
     navigationDate,
     activeTeamEvents: () => activePage()?.teamEvents?.() ?? [],
     visibleRange: () => activeData()?.range(),
     initialDateFor,
-    isActive: (id: CalendarPageId) => activePageId() === id,
     registerPage,
-    updateSize,
+    isActive: (id: CalendarPageId) => activePageId() === id,
+    updateSize: () => {
+      for (const handle of handles.values()) handle.api()?.updateSize();
+    },
+    setPagingLocked: pager.setLocked,
     gotoDate,
     navigateToDate,
     navigateToToday,

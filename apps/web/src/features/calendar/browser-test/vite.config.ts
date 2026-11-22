@@ -106,7 +106,7 @@ export default defineConfig({
   // Every page is scanned at startup: a dependency found only once a page
   // loads makes Vite answer 504 and reload over a socket these tests do not open.
   optimizeDeps: {
-    entries: ['team-ooo.html', 'composer.html', 'grid.html'],
+    entries: ['team-ooo.html', 'composer.html', 'grid.html', 'snap-pager.html'],
     esbuildOptions: { target: 'esnext' },
   },
   server: {

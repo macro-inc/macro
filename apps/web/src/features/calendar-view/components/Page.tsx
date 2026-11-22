@@ -455,6 +455,9 @@ export function Page(props: {
         eventTimeChangePending={updateEventTime.isPending}
         onDatesSet={handleDatesSet}
         onEventTimeChange={handleEventTimeChange}
+        onEventInteractionChange={(active) => {
+          if (!active || isActive()) pager.setPagingLocked(active);
+        }}
       >
         {(grid) => (
           <>

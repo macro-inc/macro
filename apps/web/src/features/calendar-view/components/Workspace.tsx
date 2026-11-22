@@ -19,7 +19,7 @@ import { SplitPanel } from '@components/app/split-panel';
 import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Layer } from '@ui';
-import { Pager, PagerSwipeGestures } from '@ui/components/Pager';
+import { SnapPager } from '@ui/components/SnapPager';
 import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
@@ -49,7 +49,6 @@ import { Page } from './Page';
 import { SetupBanner, SetupStatus } from './SetupStatus';
 import { SyncStatus } from './SyncStatus';
 
-const CALENDAR_SWIPE_EDGE_INSET = 40;
 const NEIGHBOR_MOUNT_DEADLINE_MS = 600;
 
 /** One period's grid, starting beside what the active page shows by then. */
@@ -88,7 +87,9 @@ function CalendarPages() {
     );
 
     for (const id of neighbors) {
-      mountQueue.enqueue(id, () => setMountedPages((pages) => [...pages, id]));
+      mountQueue.enqueue(String(id), () =>
+        setMountedPages((pages) => [...pages, id])
+      );
     }
   };
 
@@ -165,20 +166,23 @@ function CalendarPages() {
             viewport={viewport}
           />
         </Show>
-        <Pager.Viewport class="size-full min-w-0 min-h-0">
-          <For each={CALENDAR_PAGE_IDS}>
-            {(pageId) => (
-              <Pager.Page id={pageId}>
-                <Show when={mountedPages().includes(pageId)}>
+        <SnapPager.Viewport
+          class="size-full min-w-0 min-h-0"
+          aria-label="Calendar period pages"
+        >
+          <For each={calendarPager.pager.pages()}>
+            {(page) => (
+              <SnapPager.Page page={page}>
+                <Show when={mountedPages().includes(page.key)}>
                   <CalendarPeriodPage
-                    id={pageId}
+                    id={page.key}
                     useNarrowDayHeaders={useNarrowDayHeaders()}
                   />
                 </Show>
-              </Pager.Page>
+              </SnapPager.Page>
             )}
           </For>
-        </Pager.Viewport>
+        </SnapPager.Viewport>
         <Show when={viewport()}>
           {(boundary) => (
             <SelectedCalendarEvent
@@ -189,19 +193,6 @@ function CalendarPages() {
               onClose={calendarView.closeEventDetails}
             />
           )}
-        </Show>
-        <Show when={isMobile()}>
-          <PagerSwipeGestures
-            edgeInset={CALENDAR_SWIPE_EDGE_INSET}
-            canStart={(event) =>
-              !(
-                event.target instanceof Element &&
-                event.target.closest(
-                  'button, input, select, textarea, [role="button"], .fc-event'
-                )
-              )
-            }
-          />
         </Show>
         <SetupStatus
           data={calendarPager.activeData()}

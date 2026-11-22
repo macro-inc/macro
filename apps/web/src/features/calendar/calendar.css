@@ -38,7 +38,7 @@
 }
 
 /* Neighboring pages keep static loading feedback, without offscreen animation. */
-.pager-page[aria-hidden="true"] .calendar-view [data-calendar-loading-placeholder] {
+.snap-pager-page[aria-hidden="true"] .calendar-view [data-calendar-loading-placeholder] {
 	animation: none;
 }
 @keyframes calendar-skeleton-pulse {

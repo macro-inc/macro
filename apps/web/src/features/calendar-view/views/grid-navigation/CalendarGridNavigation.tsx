@@ -3,7 +3,7 @@ import {
   type CalendarNavigationContext,
   CalendarNavigationProvider,
 } from '@app/features/calendar/context/calendar-navigation-context';
-import { Pager } from '@ui/components/Pager';
+import { SnapPager } from '@ui/components/SnapPager';
 import type { ParentProps } from 'solid-js';
 
 /** Adapts the grid pager to workspace navigation without exposing its renderer. */
@@ -15,7 +15,7 @@ export function CalendarGridNavigation(
   const calendarPager = useCalendarPager();
   const navigation: CalendarNavigationContext = {
     periodView: calendarPager.periodView,
-    activeDate: () => calendarPager.activeDateInfo()?.view.calendar.getDate(),
+    activeDate: calendarPager.activeDate,
     navigationDate: calendarPager.navigationDate,
     displayRange: () => {
       const info = calendarPager.activeDateInfo();
@@ -49,7 +49,9 @@ export function CalendarGridNavigation(
 
   return (
     <CalendarNavigationProvider value={navigation}>
-      <Pager.Root controller={calendarPager.pager}>{props.children}</Pager.Root>
+      <SnapPager.Root controller={calendarPager.pager}>
+        {props.children}
+      </SnapPager.Root>
     </CalendarNavigationProvider>
   );
 }

@@ -28,7 +28,7 @@ inside. Pinning a left panel preserves the gap. In Day and Week, the opening
 7am label remains fully readable below the all-day lane. Phone content extends
 behind floating creation and dock controls, with scroll clearance for the last row.
 Phone time-grid headers show short weekday labels above their dates. Hour labels
-sit in a stationary 46px opaque, page-colored gutter outside the rounded timed card;
+sit in a stationary 46px opaque, panel-colored gutter outside the rounded timed card;
 day headers and all-day lanes stay above it. The all-day row has no gutter label.
 Grid lines start below the all-day row, and no view shades weekends. Hours scroll
 vertically with the active grid while its columns and day headers swipe horizontally.
@@ -36,6 +36,12 @@ Midnight remains fully visible at scroll zero. The current-time line crosses the
 card with an accent time in its gutter. Only the timed card has the shared 32px top
 fade past the opening scroll position; the hour gutter never fades. Bottom clearance
 is limited to the floating New row and a small gap.
+Day, 3 days, Week, and Month page with a shared five-page native scroll-snap ring
+on phone and desktop. Adjacent arrows animate through native scrolling; far date
+jumps are instant once a running gesture settles, and reduced motion skips smooth
+scrolling. Buffer rendering never refuses a second swipe. Each page keeps its own
+vertical scroller, synchronized to the active one. Event drag/resize temporarily
+locks horizontal paging. The external hour gutter does not move horizontally.
 The phone all-day row starts at one 24px lane, grows for overlapping events, and
 keeps its 48px ceiling with FullCalendar's more link for overflow; no extra empty
 creation lane is reserved. Desktop lane sizing is unchanged.
