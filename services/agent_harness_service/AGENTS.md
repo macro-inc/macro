@@ -183,6 +183,12 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   (`tool_service.rs`) and can call only those; a native tool named directly
   is refused. ChatGPT gets the
   direct tools: its plugin directory refuses generic executors.
+  The server instructions follow the same mode on every handshake
+  (`initialize`, and the 2026-07-28 revision's `server/discover`, which
+  rmcp would otherwise answer from `get_info`'s direct-tools text). The
+  supported protocol revisions are capped at `NEWEST_PROTOCOL_VERSION`;
+  raising it requires teaching `every_handshake_describes_the_listed_tools`
+  the new revision's handshake.
   `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
   the session repo, Redis budgets and
   the gateway `ui_command` send.
