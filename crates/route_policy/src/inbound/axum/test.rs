@@ -405,6 +405,8 @@ async fn a_cors_preflight_with_no_credentials_is_not_refused_for_having_no_calle
     let request = Request::builder()
         .method(Method::OPTIONS)
         .uri("/keys")
+        .header("origin", "https://app.example")
+        .header("access-control-request-method", "POST")
         .body(Body::empty())
         .unwrap();
 
@@ -515,4 +517,28 @@ async fn a_decision_an_extractor_makes_again_is_the_one_the_response_and_span_de
             ("route_policy.code", "person_only"),
         ])
     );
+}
+
+#[tokio::test]
+async fn an_options_request_that_is_not_a_cors_preflight_needs_a_caller() {
+    let router = Router::new().route(
+        "/keys",
+        on(MethodFilter::OPTIONS, Category::CredentialMint, handled),
+    );
+    for headers in [
+        vec![],
+        vec![("origin", "https://app.example")],
+        vec![("access-control-request-method", "POST")],
+    ] {
+        let mut builder = Request::builder().method(Method::OPTIONS).uri("/keys");
+        for (name, value) in &headers {
+            builder = builder.header(*name, *value);
+        }
+        let response = router
+            .clone()
+            .oneshot(builder.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{headers:?}");
+    }
 }

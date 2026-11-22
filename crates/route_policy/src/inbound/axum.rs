@@ -168,7 +168,7 @@ where
             *request.method(),
             Method::GET | Method::HEAD | Method::OPTIONS
         );
-        let preflight = *request.method() == Method::OPTIONS;
+        let preflight = is_cors_preflight(&request);
         let decision = match request.extensions().get::<ActiveRollout>() {
             Some(ActiveRollout(rollout)) => RouteDecision::new(
                 caller,
@@ -291,4 +291,15 @@ impl IntoResponse for Refusal {
         )
             .into_response()
     }
+}
+
+/// A real CORS preflight: `OPTIONS` carrying both `Origin` and
+/// `Access-Control-Request-Method`. Any other `OPTIONS` request is an
+/// ordinary request and needs a caller like the rest.
+fn is_cors_preflight(request: &Request) -> bool {
+    *request.method() == Method::OPTIONS
+        && request.headers().contains_key(axum::http::header::ORIGIN)
+        && request
+            .headers()
+            .contains_key(axum::http::header::ACCESS_CONTROL_REQUEST_METHOD)
 }
