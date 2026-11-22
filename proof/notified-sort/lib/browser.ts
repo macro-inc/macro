@@ -355,3 +355,11 @@ export async function readHomeDom(lane: Lane, maxRows = 400): Promise<DomRow[]> 
     return [...rows.values()].sort((a, b) => a.top - b.top).map((x) => x.row) as never;
   }, maxRows);
 }
+
+/** A mounted reader's query flags and loaded pages, for the evidence of a miss. */
+export async function probeLiveDebug(lane: Lane, id: string): Promise<unknown> {
+  return lane.page.evaluate((id) => {
+    const probe = (window as never as { __proofProbe: any }).__proofProbe;
+    return { ...probe.liveDebug(id), resets: probe.resetReopens().length };
+  }, id);
+}

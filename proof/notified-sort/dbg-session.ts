@@ -36,6 +36,7 @@ const apps = await Promise.all([
 const specs: Record<string, ReadSpec> = {
   n: { source: { kind: 'home', tab: 'signal', facets: {}, foreignEntities: true }, maxPages: 1 },
   u: { source: { kind: 'preset', tab: 'signal' }, params: { sort_method: 'updated_at' }, maxPages: 1 },
+  p: { source: { kind: 'home', tab: 'signal', facets: { read: ['unread'], type: ['email', 'channels', 'none'] }, foreignEntities: true }, params: { limit: 1, sort_method: 'notified_at', sort_direction: 'desc' }, showForeign: true, fresh: false, maxPages: 3 } as ReadSpec,
 };
 const browser = await launchBrowser();
 const at = () => new Date().toISOString();
@@ -65,10 +66,10 @@ try {
     for (const lane of lanes) {
       const home = (await readHomeDom(lane)).filter((r) => r.kind === 'entity').length;
       const state = await lane.page.evaluate(() => {
-        const p = (window as never as { __proofProbe: { liveDebug: (id: string) => unknown; generations: () => unknown[] } }).__proofProbe;
-        return { n: p.liveDebug('n'), u: p.liveDebug('u'), gens: p.generations() };
+        const p = (window as never as { __proofProbe: { liveDebug: (id: string) => unknown; generations: () => unknown[]; resetReopens: () => unknown[] } }).__proofProbe;
+        return { n: p.liveDebug('n'), u: p.liveDebug('u'), p: p.liveDebug('p'), gens: p.generations(), reopens: (p as never as { resetReopens: () => unknown[] }).resetReopens().length };
       });
-      const line = `home=${home} n=${JSON.stringify(state.n)} u=${JSON.stringify(state.u)}`;
+      const line = `home=${home} reopens=${state.reopens} n=${JSON.stringify(state.n)} u=${JSON.stringify(state.u)} p=${JSON.stringify(state.p)}`;
       const gens = state.gens as unknown[];
       for (const g of gens.slice(seenGen.get(lane.side) ?? 0)) console.log(`${at()} ${lane.side} generation ${JSON.stringify(g)}`);
       seenGen.set(lane.side, gens.length);

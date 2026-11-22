@@ -406,7 +406,7 @@ function liveDebug(id: string) {
   const data = q.data as { entities?: unknown[] } | undefined;
   return {
     entities: data?.entities?.length ?? null,
-    isFetching: read("isFetching"), isLoading: read("isLoading"), hasPageData: read("hasPageData"),
+    isPending: read("isPending"), isFetching: read("isFetching"), isFetchingNextPage: read("isFetchingNextPage"), isLoading: read("isLoading"), pages: live.get(id)?.pages, hasPageData: read("hasPageData"),
     cacheStatus: read("cacheStatus"), hasNextPage: read("hasNextPage"), transport: read("transport"),
     error: q.error ? String((q.error as { message?: string }).message ?? q.error) : null,
   };

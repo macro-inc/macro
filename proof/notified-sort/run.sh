@@ -7,6 +7,7 @@
 #   proof/notified-sort/run.sh mutants   # seeds base+10.., one reduced run per planted mutant
 #   proof/notified-sort/run.sh test      # the harness unit tests, no stack
 #   proof/notified-sort/run.sh smoke     # a few cases, to check the setup
+#   proof/notified-sort/run.sh env       # one run configured by the PROOF_* environment
 #
 # Needs a run_local stack instance (PROOF_INSTANCE, default gqlns) started
 # from PROOF_REPO, and two installed worktrees: PROOF_OLD_WORKTREE at the
@@ -45,9 +46,9 @@ case "$mode" in
   smoke)
     run PROOF_SEED=$((seed_base + 0)) PROOF_RUN=smoke PROOF_LANES=2 PROOF_SIZES=0,1,101 PROOF_READS=60 PROOF_SEQUENCES=1 PROOF_STEPS=5 PROOF_DOM=2 PROOF_WORKERS=3 ;;
   quiet)
-    run PROOF_SEED=$((seed_base + 1)) PROOF_RUN=quiet PROOF_LANES=24 PROOF_SEQUENCES=5 PROOF_STEPS=20 PROOF_READS=3000 PROOF_WORKERS=8 ;;
+    run PROOF_SEED=$((seed_base + 1)) PROOF_RUN=quiet PROOF_LANES=24 PROOF_SEQUENCES=5 PROOF_STEPS=20 PROOF_READS=3000 PROOF_WORKERS=8 PROOF_SEQ_CONCURRENCY=${PROOF_SEQ_CONCURRENCY:-8} ;;
   load)
-    run PROOF_SEED=$((seed_base + 2)) PROOF_RUN=load PROOF_LOAD=1 PROOF_LANES=24 PROOF_SEQUENCES=4 PROOF_STEPS=20 PROOF_READS=2000 PROOF_WORKERS=8 ;;
+    run PROOF_SEED=$((seed_base + 2)) PROOF_RUN=load PROOF_LOAD=1 PROOF_LANES=24 PROOF_SEQUENCES=4 PROOF_STEPS=20 PROOF_READS=2000 PROOF_WORKERS=8 PROOF_SEQ_CONCURRENCY=${PROOF_SEQ_CONCURRENCY:-8} ;;
   mutants)
     i=10
     for m in baseline drop-row swap-order alter-field stale-cache skip-live; do
@@ -57,6 +58,8 @@ case "$mode" in
     done ;;
   all)
     "$0" quiet && "$0" load && "$0" mutants ;;
+  env)
+    run ;;
   *) echo "unknown mode $mode" >&2; exit 2 ;;
 esac
 node "$here/report.ts" || true

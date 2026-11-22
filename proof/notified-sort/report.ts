@@ -34,7 +34,7 @@ for (const run of runs.sort()) {
     minutes: Math.round(summary.ms / 60000),
     reads: summary.reads && { cases: summary.reads.cases, compared: summary.reads.compared, probeErrors: summary.reads.probeErrors, coverage: summary.reads.coverage, refTransports: summary.reads.reference?.transports },
     dom: summary.dom && { compared: summary.dom.compared, coverage: summary.dom.coverage },
-    sequences: summary.sequences && { sequences: summary.sequences.sequences, steps: summary.sequences.steps, stepOutcomes: summary.sequences.stepOutcomes, live: summary.sequences.live },
+    sequences: summary.sequences && { sequences: summary.sequences.sequences, steps: summary.sequences.steps, stepOutcomes: summary.sequences.stepOutcomes, live: summary.sequences.live, storageResets: summary.sequences.storageResets, liveReopens: summary.sequences.liveReopens },
     retries: summary.retries ?? {},
     closedBy,
     open,

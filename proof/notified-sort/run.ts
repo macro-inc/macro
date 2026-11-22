@@ -10,7 +10,8 @@
 //
 // Configuration (environment): PROOF_SEED, PROOF_RUN, PROOF_LANES,
 // PROOF_SIZES, PROOF_READS, PROOF_SEQUENCES, PROOF_STEPS, PROOF_WORKERS,
-// PROOF_DOM, PROOF_LOAD, PROOF_MUTANT, PROOF_PHASES, PROOF_REUSE.
+// PROOF_DOM, PROOF_LOAD, PROOF_MUTANT, PROOF_PHASES, PROOF_REUSE,
+// PROOF_SEQ_CONCURRENCY, PROOF_SEQ_LANES.
 
 import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,6 +21,7 @@ import {
   onRequestFailure,
   openLane,
   probeOpenLive,
+  probeLiveDebug,
   probeRead,
   probeSnapLive,
   readHomeDom,
@@ -115,6 +117,13 @@ const portBase = Number(env.PROOF_PORT_BASE ?? 30110);
 const apps: AppServer[] = [];
 let browser: Awaited<ReturnType<typeof launchBrowser>> | undefined;
 const stopLoad: (() => Promise<unknown>)[] = [];
+// A stopped run takes its dev servers with it.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, () => {
+    for (const app of apps) stopApp(app);
+    process.exit(143);
+  });
+}
 const summary: Record<string, unknown> = { run: runName, seed, now: genNow, mutant: mutant?.name ?? null, load, config: { lanesCount, sizes, readCount, sequencesPerLane, stepsPerSequence, LIVE_BOUND_MS } };
 try {
   apps.push(...(await Promise.all([
@@ -388,7 +397,9 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
   let sequences = 0;
   let stepCount = 0;
   const resetCount = [0, 0];
-  const laneViewers = world.viewers.filter((v) => v.role === 'lane');
+  const reopenCount = [0, 0];
+  // PROOF_SEQ_LANES runs sequences for only the first lanes (a trial).
+  const laneViewers = world.viewers.filter((v) => v.role === 'lane').slice(0, Number(env.PROOF_SEQ_LANES ?? Infinity));
 
   const runLane = async (viewerKey: string, laneIndex: number) => {
     const user = userFor(viewerKey);
@@ -435,6 +446,8 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
           const at = { lane: viewerKey, sequence: s, step: k, kind, entity: step.entity, entityKind: step.entityKind };
           const checks: Record<string, unknown> = {};
 
+          const phaseStart = Date.now();
+          const ms: Record<string, number> = {};
           // 1. Read-after-write: a fresh network read of every spec, both sides.
           const raw: [Row[], Row[]][] = [];
           for (let i = 0; i < specs.length; i++) {
@@ -461,6 +474,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             checks[`raw${i}`] = { tries, classes: [...new Set(diffs.map((d) => d.cls))], rows: [pairRead[0].entities.length, pairRead[1].entities.length], ...(errors.length ? { errors } : {}) };
           }
 
+          ms.raw = Date.now() - phaseStart;
           // 2. Live: each side's mounted list must reach its own fresh read
           // within the bound; then the two live lists are compared.
           const liveStart = Date.now();
@@ -554,6 +568,22 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             }
           }
           checks.live = reached;
+          ms.live = Date.now() - liveStart;
+          // A list that missed the bound is read again from a new mount, so
+          // one miss is counted at the step that made it and later steps start
+          // from a list that follows them. Its state at the miss (query flags,
+          // pages, the storage resets the probe saw) goes with the evidence.
+          const wedged: unknown[] = [];
+          for (let i = 0; i < specs.length; i++) {
+            for (const side of [0, 1]) {
+              if (reached[i][side] !== null) continue;
+              const state = await probeLiveDebug(lanes.live[side], ids[i]).catch((e) => String(e));
+              const reopened = await probeOpenLive(lanes.live[side], ids[i], user.macroUserId, specs[i]).then((r) => ({ entities: r.entities.length, matchesFresh: sameRows(project(r), raw[i][side]) }), (e) => String(e).slice(0, 200));
+              wedged.push({ spec: i, side: side ? 'new' : 'old', state, reopened });
+              reopenCount[side] += 1;
+            }
+          }
+          if (wedged.length) checks.reopened = wedged;
           // Where each missed live list parts from its fresh read, for the record.
           if (missNotes.length) checks.liveMisses = missNotes;
 
@@ -572,6 +602,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             if (errors.length) checks[`reload${i}errors`] = errors;
           }
 
+          ms.reload = Date.now() - phaseStart - ms.raw - ms.live;
           // 4. Every few steps, Home on screen (touch): the rows the viewer sees.
           if ((k + 1) % DOM_EVERY === 0) {
             const deadline = Date.now() + LIVE_BOUND_MS;
@@ -615,6 +646,8 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             tallyInto(classes, diffs, 'sequences');
             checks.dom = { rows: [rows[0].length, rows[1].length], classes: diffs.map((d) => d.cls) };
           }
+          ms.total = Date.now() - phaseStart;
+          checks.ms = ms;
           record('steps.jsonl', { ...at, time: new Date().toISOString(), ok: step.ok, status: step.status, note: step.note, checks });
         }
         await Promise.all(lanes.live.map((lane) => lane.page.evaluate(() => (window as never as { __proofProbe: { closeAllLive: () => void } }).__proofProbe.closeAllLive())));
@@ -631,14 +664,26 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
       for (const lanePair of Object.values(lanes)) await Promise.all(lanePair.map((lane: Lane) => lane.context.close().catch(() => undefined)));
     }
   };
-  await Promise.all(laneViewers.map((viewer, i) => runLane(viewer.key, i)));
+  // At most PROOF_SEQ_CONCURRENCY lanes run sequences at once (default: all):
+  // one browser serves every lane, and a starved browser misses live bounds
+  // for its own reasons.
+  const concurrency = Number(env.PROOF_SEQ_CONCURRENCY ?? laneViewers.length);
+  let nextLane = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, laneViewers.length) }, async () => {
+      while (nextLane < laneViewers.length) {
+        const i = nextLane++;
+        await runLane(laneViewers[i].key, i);
+      }
+    })
+  );
   const liveStats = Object.fromEntries(
     Object.entries(liveTimes).map(([key, times]) => {
       const ok = times.filter((t) => t >= 0).sort((x, y) => x - y);
       return [key, { n: times.length, within: ok.length, p50: ok[Math.floor(ok.length / 2)] ?? null, p95: ok[Math.floor(ok.length * 0.95)] ?? null, max: ok[ok.length - 1] ?? null }];
     })
   );
-  return { sequences, steps: stepCount, stepOutcomes: steps, classes: Object.fromEntries(classes), live: liveStats, storageResets: { old: resetCount[0], new: resetCount[1] } };
+  return { sequences, steps: stepCount, stepOutcomes: steps, classes: Object.fromEntries(classes), live: liveStats, storageResets: { old: resetCount[0], new: resetCount[1] }, liveReopens: { old: reopenCount[0], new: reopenCount[1] } };
 }
 
 /** Concurrent load for the whole run: notifications to other viewers through
