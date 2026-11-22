@@ -89,6 +89,12 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's
   fixed-line WAV sample per process, billed to the admin's team when it is
   synthesized.
+- `src/agent_feedback.rs`: ratings of agent responses (`crates/agent_feedback`)
+  under `/agent-feedback` and the internal `/internal/agent-feedback/events`
+  export, behind `enable-agent-response-feedback` on the shared flag client
+  (no `POSTHOG_API_KEY`: off). Adapts the session repository and
+  `scheduled_action::ExecutionRecords` to the crate's ports; its OpenAPI is
+  merged into `api::swagger::ApiDoc`.
 - `src/computers/moves.rs`: `POST /internal/computers/{id}/move` `{"toHost"}`
   and `GET /internal/computers/{id}/moves` (internal API key only): start and
   watch moving a computer to another host; the operator's move pass (every
