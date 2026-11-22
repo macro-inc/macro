@@ -1802,7 +1802,10 @@ below it (`transcript.browser.e2e.ts`): the press must land and the group must
 stay put, which `ThreadList`'s `holdOnDisclosure` provides.
 
 Reuse the responsive import review for Notion, Linear and Jira; scope report
-queries and cancellation to the saved draft source. Issue tracker handoffs
+queries and cancellation to the saved draft source. Compare edits with the latest
+queued draft, including a reversion to the saved value while a save is in flight.
+Approval flushes those edits before submitting their acknowledged revision; keep
+server conflicts fail-closed. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
 Desktop shows every import run in the corner's import tray
 (`features/import-jobs`, in `ToastRegion`), independent of the import dialog

@@ -87,7 +87,9 @@ export function createReviewController(
     if (busy() || error()) return;
     setValidation(undefined);
     const existing = saved().items.find((entry) => entry.id === item);
-    if (JSON.stringify(existing?.draft) === JSON.stringify(draft.draft)) return;
+    // Restoring the saved value must replace an older queued or in-flight edit.
+    const current = drafts.get(item)?.draft ?? existing?.draft;
+    if (JSON.stringify(current) === JSON.stringify(draft.draft)) return;
     drafts.set(item, draft);
     saveLater();
   }
