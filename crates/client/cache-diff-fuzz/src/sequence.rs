@@ -194,6 +194,7 @@ pub struct Gen<'a> {
     pools: Pools,
     ids: BTreeSet<String>,
     tie: bool,
+    wide_properties: f64,
     times: Vec<i64>,
     body: BodyProfile,
     clock: i64,
@@ -334,6 +335,7 @@ impl<'a> Gen<'a> {
             pools: Pools::default(),
             ids,
             tie,
+            wide_properties: 0.0,
             times,
             body,
             clock: NOW_MS,
@@ -443,6 +445,7 @@ impl<'a> Gen<'a> {
             body: self.body,
             revision: 0,
             tie: self.tie,
+            wide_properties: self.wide_properties,
         }
     }
 
@@ -460,6 +463,13 @@ impl<'a> Gen<'a> {
 
     fn push(&mut self, op: Op) {
         self.ops.push(op);
+    }
+
+    /// Give that share of the email threads in responses `WIDE_PROPERTIES`
+    /// properties (see `faker`).
+    pub fn wide_properties(mut self, share: f64) -> Self {
+        self.wide_properties = share;
+        self
     }
 
     pub fn generate(mut self, length: usize) -> Generated {

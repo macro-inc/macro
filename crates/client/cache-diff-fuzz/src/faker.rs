@@ -45,6 +45,8 @@ pub struct Plan<'a> {
     pub revision: u64,
     /// Every timestamp of an entity equals its `time_ms`, so sort keys tie.
     pub tie: bool,
+    /// The share of email threads given `WIDE_PROPERTIES` properties.
+    pub wide_properties: f64,
 }
 
 #[derive(Clone, Copy)]
@@ -332,7 +334,7 @@ impl Faker {
                     .collect(),
             );
         }
-        let len = list_len(name, rng);
+        let len = list_len(name, parent, rng, plan);
         Value::Array(
             (0..len)
                 .map(|index| {
@@ -490,8 +492,23 @@ fn mentions(document: &ExecutableDocument, sets: &[&SelectionSet], ty: &str) -> 
     sets.iter().any(|set| walk(document, set, ty, 0))
 }
 
-fn list_len(name: &str, rng: &mut Rng) -> usize {
+/// How many properties a wide email thread has. Each has its own definition and
+/// so its own row attribute, and a select or entity value with an option or
+/// reference one more (about 1.15 attributes a property). With a thread's 13 to
+/// 16 other attributes that comes to about 240 to 275, around the predicate
+/// index's limit of 256 distinct attributes per document.
+const WIDE_PROPERTIES: (u64, u64) = (196, 222);
+
+fn list_len(name: &str, parent: &Name, rng: &mut Rng, plan: &Plan<'_>) -> usize {
     match name {
+        // No draw unless asked for, so cases without wide threads stay as they were.
+        "properties"
+            if parent == "GraphqlSoupEmailThread"
+                && plan.wide_properties > 0.0
+                && rng.chance(plan.wide_properties) =>
+        {
+            rng.range(WIDE_PROPERTIES.0, WIDE_PROPERTIES.1) as usize
+        }
         "to" => rng.range(1, 3) as usize,
         "cc" => rng.range(0, 2) as usize,
         "bcc" | "attachmentsDraft" | "attachmentsForwarded" | "drafts" => 0,

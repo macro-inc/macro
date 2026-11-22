@@ -107,6 +107,12 @@ struct Args {
     /// sides, so both read the same before and after.
     #[arg(long, default_value_t = 0.0, value_parser = share)]
     concurrent_reads: f64,
+    /// The share of email threads (0 to 1) in generated responses given 196 to
+    /// 222 properties, each of its own definition, so their distinct attributes
+    /// land around the predicate index's limit of 256 per document.
+    /// It changes the cases generated, so give it to both sides.
+    #[arg(long, default_value_t = 0.0, value_parser = share)]
+    wide_properties: f64,
     /// Fail the first open right after it commits migration step K, as a
     /// process killed there would, then open again (a side built with
     /// MIGRATION_HOOKS=1). Meant for a run that starts from an older build's
@@ -168,7 +174,8 @@ fn main() -> Result<(), rootcause::Report> {
         let generated = match &args.case {
             Some(path) => read_case(path)?,
             None => {
-                let generator = sequence::Gen::new(&faker, &docs, &tabs, seed);
+                let generator = sequence::Gen::new(&faker, &docs, &tabs, seed)
+                    .wide_properties(args.wide_properties);
                 let length = args
                     .ops
                     .unwrap_or_else(|| 60 + (rng::mix(seed, "length") % 241) as usize);
