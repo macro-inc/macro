@@ -582,3 +582,71 @@ describe('a drive the agent takes back', () => {
     }
   );
 });
+
+describe('a drive the agent takes back, as captured on a real computer', () => {
+  // The screen socket's text frames from a capture of the unpaused path
+  // (the guest's pause helper broken while the driver types), in order, with
+  // their gaps: the lease change says nobody drives, and 38 ms later the
+  // harness says why.
+  const nobody = {
+    driver: null,
+    leaseId: null,
+    drivingHere: false,
+    agentHeld: false,
+    transport: 'vnc' as const,
+    viewers: 1,
+    waking: false,
+  };
+  const driving = {
+    driver: { name: 'Alex Rivera', isYou: true },
+    leaseId: 'lease-1',
+    drivingHere: true,
+    agentHeld: true,
+    transport: 'vnc' as const,
+    viewers: 1,
+    waking: false,
+  };
+
+  it.each([
+    ['desktop', AgentScreen],
+    ['phone', MobileAgentScreen],
+  ])(
+    '%s: says the agent could not stay paused, never a refused take-over, and offers Take over again',
+    async (_device, View) => {
+      vi.useFakeTimers();
+      const connections: Connection[] = [];
+      const { unmount } = renderView(View, connections);
+      await vi.advanceTimersByTimeAsync(0);
+      const socket = connections[0].handlers;
+
+      socket.onState(nobody);
+      await vi.advanceTimersByTimeAsync(2_348);
+      fireEvent.click(screen.getByRole('button', { name: /^Take over/ }));
+      await vi.advanceTimersByTimeAsync(366);
+      socket.onState(driving);
+      await vi.advanceTimersByTimeAsync(32);
+      socket.onState(driving);
+      await vi.advanceTimersByTimeAsync(15_570);
+      socket.onState(nobody);
+      await vi.advanceTimersByTimeAsync(38);
+      socket.onError({
+        code: 'agentNotPausable',
+        message:
+          'The agent couldn’t be kept paused, so it has the computer back.',
+      });
+      await vi.advanceTimersByTimeAsync(8_000);
+
+      expect(
+        screen.getByText(
+          'You’re no longer driving: Scout couldn’t stay paused, so it has the computer back.'
+        )
+      ).toBeTruthy();
+      expect(screen.queryByText(/after a while without input/)).toBeNull();
+      expect(screen.queryByText(/can’t be taken over right now/)).toBeNull();
+      expect(
+        screen.getByRole('button', { name: 'Take over again' })
+      ).toBeTruthy();
+      unmount();
+    }
+  );
+});
