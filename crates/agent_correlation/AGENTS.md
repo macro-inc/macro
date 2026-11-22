@@ -41,8 +41,14 @@ code, not in its prompt. The harness also signs the scope into the credential
   job everything (fails closed); a signed-scope-only service a job reads
   uses `enforce_signed_scope_serving` (static files). The test
   `every_service_declares_the_specs_it_serves` holds every service to it.
-  No scope shares. Signed-scope services
-  (`enforce_signed_scope`) hold a job to the same lists. `generation`:
+  No scope shares. Plain `enforce_signed_scope` binds no specs, so it
+  refuses an allowlisted scope everything. The unfurl service validates no
+  attribution: its `[unfurl]` refusals hold only if the run is given no
+  unfurl host. Under a scope whose `caps_document_tokens_to_view` is true
+  (`job`), `documents::encode_permission_token` mints view-only document
+  tokens that also sign the scope (`agent_scope`); a new default-deny scope
+  adds its arm there too. Collab-surface tokens have their own encoder and
+  are on no allowlist. `generation`:
   reads by method, its own writes, and `POST_READS`; `no_send` (a background
   run that sends nothing): anything but `SENDS`, the requests that reach
   someone else, carry data out (web fetch and search), or start work with

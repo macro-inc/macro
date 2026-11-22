@@ -264,7 +264,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Code runs (session, public MCP and routine steps) reach the SDK hosts
   through the runner's loopback forwarder for users with the PostHog flag
   `enable-code-execution-egress-proxy` (`code_mode::EgressRollout`); with no
-  flag client, the flag off or the flags unreadable, they go directly. The
+  flag client, the flag off or the flags unreadable, they go directly. A
+  scoped run (a session or public-MCP run whose correlation has a scope)
+  always goes through the forwarder, whatever the flag
+  (`EgressRollout::egress_for`). The
   answer is cached per user for 60 s (10 s after a failed read), so a run
   doesn't wait on PostHog (span `code_execution.egress_flag`, `cache`).
   Routine code steps run through `src/routine_code.rs`,

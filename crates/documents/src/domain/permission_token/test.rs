@@ -119,19 +119,18 @@ async fn a_capped_scope_mints_only_view_tokens() {
             SECRET,
         )
         .expect("token should encode");
-        decode_permission_token(&token, SECRET)
-            .expect("token should decode")
-            .access_level
+        let claims = decode_permission_token(&token, SECRET).expect("token should decode");
+        (claims.access_level, claims.agent_scope)
     };
-    assert_eq!(level(), AccessLevel::Edit);
+    assert_eq!(level(), (AccessLevel::Edit, None));
     for (scope, expected) in [
         (
             agent_correlation::scope::SessionScope::Job,
-            AccessLevel::View,
+            (AccessLevel::View, Some("job".to_owned())),
         ),
         (
             agent_correlation::scope::SessionScope::NoSend,
-            AccessLevel::Edit,
+            (AccessLevel::Edit, Some("no_send".to_owned())),
         ),
     ] {
         let minted = agent_correlation::context::scope_attribution(

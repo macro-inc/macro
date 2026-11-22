@@ -4,9 +4,9 @@
 
 
 [agent-harness]
-GET /agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps  # connected apps: a job uses none (admission refuses scoped credentials)
-GET /agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/tools  # connected apps: a job uses none (admission refuses scoped credentials)
-GET /agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/tools  # connected apps: a job uses none (admission refuses scoped credentials)
+GET /agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps  # connected apps: a job uses none
+GET /agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/tools  # connected apps: a job uses none
+GET /agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/tools  # connected apps: a job uses none
 GET /voices/{model}/sample  # plays a voice sample billed to the team
 GET /agent-repositories/branches  # fetches a caller-chosen git remote from Macro's servers
 

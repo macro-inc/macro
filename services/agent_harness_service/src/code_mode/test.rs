@@ -695,6 +695,14 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             name,
             "session run {scope:?}"
         );
+        // No egress flags (the owner's flag is off), yet a scoped run goes
+        // through the egress proxy.
+        let proxied = if scope.is_some() {
+            code_execution::domain::Egress::Proxied
+        } else {
+            code_execution::domain::Egress::Direct
+        };
+        assert_eq!(run.environment.egress, proxied, "session run {scope:?}");
         let run = UserRunCredentials {
             egress: EgressRollout::new(None),
             signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
@@ -710,6 +718,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         .await
         .unwrap();
         assert_eq!(signed(&run.token).as_deref(), name, "MCP run {scope:?}");
+        assert_eq!(run.egress, proxied, "MCP run {scope:?}");
     }
 }
 

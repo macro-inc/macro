@@ -49,6 +49,21 @@ impl<Flags> EgressRollout<Flags> {
 }
 
 impl<Flags: FeatureFlags> EgressRollout<Flags> {
+    /// The egress for a run acting as `user` under `scope`. A scoped run
+    /// always goes through the egress proxy, whatever the flag: the
+    /// forwarder carries only the hosts the run was given, so a scope's
+    /// refusals hold outside the sandbox too.
+    pub async fn egress_for(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        scope: Option<SessionScope>,
+    ) -> Egress {
+        match scope {
+            Some(_) => Egress::Proxied,
+            None => self.egress(user).await,
+        }
+    }
+
     /// The egress for runs acting as `user`.
     pub async fn egress(&self, user: &MacroUserIdStr<'_>) -> Egress {
         let Some(flags) = &self.flags else {
@@ -275,7 +290,7 @@ impl ExecutionCredentials for RunCredentials {
                 session_id: Some(identity.session.as_uuid()),
                 execution_id: Some(identity.execution.as_uuid()),
                 unattended: None,
-                egress: self.egress.egress(&actor).await,
+                egress: self.egress.egress_for(&actor, scope).await,
             },
             acting_user: actor,
         })
@@ -348,7 +363,10 @@ impl UserExecutionCredentials for UserRunCredentials {
             session_id: None,
             execution_id: None,
             unattended: None,
-            egress: self.egress.egress(user).await,
+            egress: self
+                .egress
+                .egress_for(user, correlation.as_ref().and_then(|signed| signed.scope))
+                .await,
         })
     }
 }

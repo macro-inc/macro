@@ -226,8 +226,9 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/databases/{id}/webhooks"),
     ("POST", "/webhook/webhooks"),
     ("POST", "/webhook/webhooks/{id}/validate"),
-    // Link previews fetch what they're given from Macro's servers (the run
-    // bootstrap also refuses unfurl's host to every scoped run).
+    // Link previews fetch what they're given from Macro's servers. The
+    // unfurl service validates no attribution, so this binds only where a
+    // scope is enforced; a scoped run must also be given no unfurl host.
     ("POST", "/unfurl/bulk"),
     ("POST", "/web/fetch"),
     ("POST", "/web/search"),
@@ -501,6 +502,7 @@ impl SessionScope {
             }
             Self::NoSend => !listed(SENDS, method, path),
             Self::DryRun => listed(POST_READS, method, path),
+            // Answered by its allowlist above.
             Self::Job => false,
         }
     }
