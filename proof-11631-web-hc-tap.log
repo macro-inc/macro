@@ -1,0 +1,25 @@
+--- web6 ---
+00:58:07.517 hc run t38  -> ok 
+00:58:12.557 hc send t38 "exec claude --session-id 06f009e4-eab2-4" -> REFUSED rc=5 t38 is still starting: its output has not settled
+00:58:16.096 hc send t38 "exec claude --session-id 06f009e4-eab2-4" -> ok 
+00:58:18.842 hc send macro-06f009e4eab2 "<macrod-runtime>
+You are running through macrod 0.1.0, th
+- Workspace: you work in `/home/wolf/tmp
+- MCP servers forwarded from Macro: macr
+</macrod-runtime>
+<m-agent-context>{"version":1,"text":"\u
+
+Session one: reply with the single word 
+<m-agent-context>{"version":1,"text":"<i" -> ok 
+00:58:51.137 hc run t39  -> ok 
+00:58:56.168 hc send t39 "exec claude --session-id 489440fc-4cb5-4" -> REFUSED rc=5 t39 is still starting: its output has not settled
+00:58:59.862 hc send t39 "exec claude --session-id 489440fc-4cb5-4" -> ok 
+00:59:02.596 hc send macro-489440fc4cb5 "<macrod-runtime>
+You are running through macrod 0.1.0, th
+- Workspace: you work in `/home/wolf/tmp
+- MCP servers forwarded from Macro: macr
+</macrod-runtime>
+<m-agent-context>{"version":1,"text":"\u
+
+Session two: reply with the single word 
+<m-agent-context>{"version":1,"text":"<i" -> ok 
