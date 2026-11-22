@@ -438,6 +438,29 @@ describe('describeInboxCard', () => {
       }),
     ]);
     expect(itemsOf(row).map((item) => item.by)).toEqual(['Someone']);
+    expect(describeInboxCard(row, people).who).toBe('Someone');
+  });
+
+  it('never credits an older reactor with the newest reaction', () => {
+    const row = stack('channel_messages', [
+      sent('2', 'channel_message_reaction', null as never, {
+        ...channel,
+        messageId: 'second',
+        messageContent: 'Design review moved to 3pm',
+        emoji: '👀',
+      }),
+      sent('1', 'channel_message_reaction', 'Leo', {
+        ...channel,
+        messageId: 'first',
+        messageContent: 'Can we ship Friday?',
+        emoji: '🎉',
+      }),
+    ]);
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'Someone',
+      what: 'Reacted 👀 to: Design review moved to 3pm',
+      body: '#launch',
+    });
   });
 
   it('skips the middle line when no notification carries the root', () => {

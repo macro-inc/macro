@@ -715,6 +715,22 @@ describe('legacy channel list notifications', () => {
     });
   });
 
+  it('reads a channel kind it does not know as a named channel', async () => {
+    const { mapGraphqlNotification } = await import('./graphql-soup');
+    const mapped = mapGraphqlNotification(
+      notification({
+        __typename: 'GraphqlChannelMessageSendMetadata',
+        channelMessageSendSender: 'sender',
+        channelMessageSendMessageId: 'message',
+        channelMessageSendChannelType: 'FUTURE_KIND' as never,
+      })
+    );
+    expect(mapped.notification_metadata).toMatchObject({
+      tag: 'channel_message_send',
+      content: { channelType: 'public' },
+    });
+  });
+
   it('preserves mention and reply thread membership and message targets', async () => {
     const { mapGraphqlNotification } = await import('./graphql-soup');
     const { scopeChannelNotificationsForEntity } = await import(

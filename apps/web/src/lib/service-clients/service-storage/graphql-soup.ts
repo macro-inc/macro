@@ -1277,9 +1277,10 @@ function notificationChannelType(
       .with('PRIVATE', () => 'private' as const)
       .with('DIRECT_MESSAGE', () => 'directMessage' as const)
       .with('TEAM', () => 'team' as const)
-      // A kind this client doesn't know reads as private, its bare name, never
-      // claiming to be a `#channel` it may not be.
-      .exhaustive(() => 'private' as const)
+      // A kind this client doesn't know reads as a named channel, as pushes
+      // name every channel but a direct message: never as a group chat, which
+      // would take a channel message's sender away from its row.
+      .exhaustive(() => 'public' as const)
   );
 }
 

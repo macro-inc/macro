@@ -374,7 +374,8 @@ function reactionCard(
     ? [...new Set(reactions.map((reaction) => reaction.emoji))].join(' ')
     : latest.emoji;
   return {
-    who: oneMessage ? who : (latestSender ?? who),
+    // The newest reaction speaks for itself, never through an older reactor.
+    who: (oneMessage ? who : latestSender) || UNKNOWN_SENDER_NAME,
     what: reactionText({ emoji, messageContent: latest.messageContent }),
     body: channelPlace(latest),
   };
