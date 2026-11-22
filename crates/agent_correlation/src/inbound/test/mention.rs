@@ -79,6 +79,23 @@ async fn mention_request_method(
     method: &str,
     path: &str,
 ) -> (StatusCode, usize) {
+    mention_request_on(
+        bearer,
+        cookie,
+        method,
+        path,
+        &["storage", "email", "cognition", "search"],
+    )
+    .await
+}
+
+async fn mention_request_on(
+    bearer: &str,
+    cookie: Option<&str>,
+    method: &str,
+    path: &str,
+    specs: &'static [&'static str],
+) -> (StatusCode, usize) {
     use tower::ServiceExt;
     let calls = Arc::new(AtomicUsize::new(0));
     let observed = calls.clone();
@@ -93,7 +110,7 @@ async fn mention_request_method(
                 repository: Arc::new(Repository {
                     calls: AtomicUsize::new(0),
                 }),
-                specs: Some(&["storage", "email", "cognition", "search"]),
+                specs: Some(specs),
             },
             propagate,
         ));
@@ -247,4 +264,70 @@ async fn mentions_refuse_email_chats_unified_search_and_unbound_channel_lookups(
             "{method} {path}"
         );
     }
+}
+
+#[tokio::test]
+async fn mentions_refuse_personal_enumeration_but_keep_authenticated_by_id_reads() {
+    let channel = Uuid::from_u128(910);
+    let bearer = mention_bearer(Some("channel_mention"), Some(channel));
+    let ordinary = mint(None, None, None, None);
+    let cases: &[(&'static [&'static str], &str)] = &[
+        (&["contacts"], "/contacts"),
+        (&["contacts"], "/contacts/search"),
+        (&["calendar"], "/availability-calendars"),
+        (&["calendar"], "/calendars"),
+        (
+            &["calendar"],
+            "/events/0192f1a0-0000-7000-8000-000000000001/provider-url",
+        ),
+        (&["storage"], "/calendar-events"),
+        (
+            &["storage"],
+            "/calendar-events/0192f1a0-0000-7000-8000-000000000001/ics",
+        ),
+        (
+            &["scheduled-action"],
+            "/scheduled-actions/0192f1a0-0000-7000-8000-000000000001/history",
+        ),
+        (&["storage"], "/documents"),
+        (&["storage"], "/documents/list"),
+    ];
+    let mut observed = Vec::new();
+    for (specs, path) in cases {
+        assert_eq!(
+            mention_request_on(&ordinary, None, "GET", path, specs).await,
+            (StatusCode::OK, 1),
+            "ordinary control {path}"
+        );
+        observed.push((
+            *path,
+            mention_request_on(&bearer, None, "GET", path, specs).await,
+        ));
+    }
+    let expected: Vec<_> = cases
+        .iter()
+        .map(|(_, path)| (*path, (StatusCode::FORBIDDEN, 0)))
+        .collect();
+    assert_eq!(
+        mention_request(
+            &bearer,
+            None,
+            "/documents/0192f1a0-0000-7000-8000-000000000001/markdown"
+        )
+        .await,
+        (StatusCode::OK, 1)
+    );
+    assert_eq!(
+        mention_request(
+            &bearer,
+            None,
+            &format!(
+                "/messages/channel/{channel}/threads/{}",
+                Uuid::from_u128(913)
+            )
+        )
+        .await,
+        (StatusCode::OK, 1)
+    );
+    assert_eq!(observed, expected);
 }

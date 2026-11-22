@@ -97,3 +97,123 @@ fn mentions_do_not_query_unified_search_through_any_service_prefix() {
         );
     }
 }
+
+#[test]
+fn mentions_do_not_list_contacts() {
+    assert!(SessionScope::ChannelMention.allows_on(
+        Some(&["storage"]),
+        "GET",
+        "/documents/0192f1a0-0000-7000-8000-000000000001/markdown"
+    ));
+    assert!(!SessionScope::ChannelMention.allows_on(Some(&["contacts"]), "GET", "/contacts"));
+}
+
+#[test]
+fn mentions_do_not_search_contacts() {
+    assert!(SessionScope::ChannelMention.allows_on(
+        Some(&["storage"]),
+        "GET",
+        "/documents/0192f1a0-0000-7000-8000-000000000001/markdown"
+    ));
+    assert!(!SessionScope::ChannelMention.allows_on(
+        Some(&["contacts"]),
+        "GET",
+        "/contacts/search"
+    ));
+}
+
+#[test]
+fn mentions_do_not_read_calendar_availability() {
+    assert!(SessionScope::ChannelMention.allows_on(
+        Some(&["storage"]),
+        "GET",
+        "/documents/0192f1a0-0000-7000-8000-000000000001/markdown"
+    ));
+    assert!(!SessionScope::ChannelMention.allows_on(
+        Some(&["calendar"]),
+        "GET",
+        "/availability-calendars"
+    ));
+}
+
+#[test]
+fn mentions_do_not_list_calendars() {
+    assert!(SessionScope::ChannelMention.allows_on(
+        Some(&["storage"]),
+        "GET",
+        "/documents/0192f1a0-0000-7000-8000-000000000001/markdown"
+    ));
+    assert!(!SessionScope::ChannelMention.allows_on(Some(&["calendar"]), "GET", "/calendars"));
+}
+
+#[test]
+fn mentions_do_not_read_calendar_provider_links() {
+    assert!(SessionScope::ChannelMention.allows_on(
+        Some(&["storage"]),
+        "GET",
+        "/documents/0192f1a0-0000-7000-8000-000000000001/markdown"
+    ));
+    assert!(!SessionScope::ChannelMention.allows_on(
+        Some(&["calendar"]),
+        "GET",
+        "/events/0192f1a0-0000-7000-8000-000000000001/provider-url"
+    ));
+}
+
+#[test]
+fn mentions_do_not_list_calendar_occurrences() {
+    assert!(SessionScope::ChannelMention.allows_on(
+        Some(&["storage"]),
+        "GET",
+        "/documents/0192f1a0-0000-7000-8000-000000000001/markdown"
+    ));
+    assert!(!SessionScope::ChannelMention.allows_on(Some(&["storage"]), "GET", "/calendar-events"));
+}
+
+#[test]
+fn mentions_do_not_export_calendar_ics() {
+    assert!(SessionScope::ChannelMention.allows_on(
+        Some(&["storage"]),
+        "GET",
+        "/documents/0192f1a0-0000-7000-8000-000000000001/markdown"
+    ));
+    assert!(!SessionScope::ChannelMention.allows_on(
+        Some(&["storage"]),
+        "GET",
+        "/calendar-events/0192f1a0-0000-7000-8000-000000000001/ics"
+    ));
+}
+
+#[test]
+fn mentions_do_not_read_routine_run_history() {
+    assert!(SessionScope::ChannelMention.allows_on(
+        Some(&["storage"]),
+        "GET",
+        "/documents/0192f1a0-0000-7000-8000-000000000001/markdown"
+    ));
+    assert!(!SessionScope::ChannelMention.allows_on(
+        Some(&["scheduled-action"]),
+        "GET",
+        "/scheduled-actions/0192f1a0-0000-7000-8000-000000000001/history"
+    ));
+}
+
+#[test]
+fn mentions_do_not_enumerate_documents() {
+    assert!(SessionScope::ChannelMention.allows_on(
+        Some(&["storage"]),
+        "GET",
+        "/documents/0192f1a0-0000-7000-8000-000000000001/markdown"
+    ));
+    assert!(!SessionScope::ChannelMention.allows_on(Some(&["storage"]), "GET", "/documents"));
+}
+
+#[test]
+fn mentions_do_not_list_documents() {
+    assert!(SessionScope::ChannelMention.allows_on(
+        Some(&["storage"]),
+        "GET",
+        "/documents/0192f1a0-0000-7000-8000-000000000001/markdown"
+    ));
+    assert!(!SessionScope::ChannelMention.allows_on(Some(&["storage"]), "GET", "/documents/list"));
+}
