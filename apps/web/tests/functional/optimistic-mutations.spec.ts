@@ -45,6 +45,38 @@ type Outcome =
   | { canonical: string[]; assignmentId?: string };
 type CacheMode = 'cached' | 'disabled' | 'retired';
 
+const EPOCH = new Date(0).toISOString();
+
+// The fixture's tag sets as the schema's records, for the catalog read.
+const catalogTagSets = tagSets.map((set) => ({
+  scope: set.scope === 'team' ? 'TEAM' : 'USER',
+  definition: set.definition && {
+    id: set.definition.id,
+    owner: { scope: 'USER', principalId: 'functional-viewer' },
+    displayName: set.definition.displayName,
+    dataType: set.definition.dataType,
+    isMultiSelect: set.definition.isMultiSelect,
+    specificEntityType: null,
+    isSystem: set.definition.isSystem,
+    isMetadata: set.definition.isMetadata,
+    createdAt: EPOCH,
+    updatedAt: EPOCH,
+    options: [],
+  },
+  options: set.options.map((option) => ({
+    id: option.id,
+    propertyDefinitionId: option.propertyDefinitionId,
+    displayOrder: option.displayOrder,
+    value: {
+      __typename: 'GraphqlStringPropertyOptionValue',
+      value: String(option.value.value),
+    },
+    color: option.color ?? null,
+    createdAt: EPOCH,
+    updatedAt: EPOCH,
+  })),
+}));
+
 /** Real GraphQL documents and schema; only server state and response timing are controlled. */
 async function mount(page: Page, mode: CacheMode, initial?: string[]) {
   const origin = test.info().project.use.baseURL;
@@ -89,10 +121,6 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
         headers: AUTHORITY_HEADERS,
         json: { team_id: TEAM_ID, allowed: true },
       });
-      return;
-    }
-    if (url.pathname === '/dss/properties/tags') {
-      await route.fulfill({ headers: AUTHORITY_HEADERS, json: tagSets });
       return;
     }
     if (
@@ -151,6 +179,7 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
       user: {
         id: 'functional-viewer',
         emailLinks: [],
+        tagSets: catalogTagSets,
         pendingEmailSends: { attempts: [], nextCursor: null },
         soup: ({ input }: { input: SoupInput }) => ({
           items: items.filter(

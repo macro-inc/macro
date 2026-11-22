@@ -8,8 +8,8 @@ import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
 import type { Property, PropertyApiValues } from '@property/types';
 import { queryClient } from '@queries/client';
+import { routeCatalogQueries } from '@queries/properties/catalog/fixture-routes';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { propertiesKeys } from '@queries/properties/keys';
 import { registerGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
 import { NOT_SET_GROUP_KEY } from '@queries/soup/grouped/types';
 import {
@@ -92,10 +92,6 @@ const placeholder = soupPropertyToProperty({
     updated_at: new Date(0).toISOString(),
   },
 });
-queryClient.setQueryData(
-  propertiesKeys.options({ propertyDefinitionId: definitionId }).queryKey,
-  placeholder.options
-);
 const saved = new Map<string, SoupPropertyFieldsFragment>();
 const pending: Array<(success: boolean) => void> = [];
 const [requestCount, setRequestCount] = createSignal(0);
@@ -170,6 +166,12 @@ window.fetch = async (input, init) => {
     data: { user: { ...user, soup: { items: taskIds.map(item) } } },
   });
 };
+
+// Outermost, so the catalog reads skip the soup routes above.
+routeCatalogQueries({
+  userId: 'macro|task-optimism@example.test',
+  options: { [definitionId]: placeholder.options ?? [] },
+});
 
 function Fixture() {
   const queries = taskIds.map((entityId) =>

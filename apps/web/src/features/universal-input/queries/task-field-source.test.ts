@@ -107,7 +107,9 @@ it('loads a cold property catalog before supplying inference and creation metada
         (await source.createDefinitions()).get(SYSTEM_PROPERTY_IDS.ASSIGNEES)
           ?.is_multi_select
       ).toBe(true);
-      expect(query.refetch).toHaveBeenCalledWith({ cancelRefetch: false });
+      expect(query.refetch).toHaveBeenCalledWith({
+        requestPolicy: 'cache-first',
+      });
     } finally {
       dispose();
     }

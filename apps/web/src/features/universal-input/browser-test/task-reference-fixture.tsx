@@ -1,7 +1,7 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { authKeys } from '@queries/auth/keys';
 import { emailKeys } from '@queries/email/keys';
-import { propertiesKeys } from '@queries/properties/keys';
+import { routeCatalogQueries } from '@queries/properties/catalog/fixture-routes';
 import type { PropertyDefinitionWithOptions } from '@service-properties/generated/schemas/propertyDefinitionWithOptions';
 import type { QueryClient } from '@tanstack/solid-query';
 import { onCleanup } from 'solid-js';
@@ -23,27 +23,24 @@ export function seedTaskReferences(client: QueryClient) {
     authenticated: true,
   });
   client.setQueryData(emailKeys.links(VIEWER).queryKey, { links: [] });
-  client.setQueryData<PropertyDefinitionWithOptions[]>(
-    propertiesKeys.definitions({ scope: 'system', includeOptions: true })
-      .queryKey,
-    [
-      {
-        definition: {
-          id: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-          display_name: 'Assignees',
-          data_type: 'ENTITY',
-          is_multi_select: true,
-          specific_entity_type: 'USER',
-          is_metadata: false,
-          is_system: true,
-          owner: { scope: 'system' },
-          created_at: '',
-          updated_at: '',
-        },
-        property_options: [],
+  const definitions: PropertyDefinitionWithOptions[] = [
+    {
+      definition: {
+        id: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+        display_name: 'Assignees',
+        data_type: 'ENTITY',
+        is_multi_select: true,
+        specific_entity_type: 'USER',
+        is_metadata: false,
+        is_system: true,
+        owner: { scope: 'system' },
+        created_at: '',
+        updated_at: '',
       },
-    ]
-  );
+      property_options: [],
+    },
+  ];
+  onCleanup(routeCatalogQueries({ userId: VIEWER, definitions }));
   registerContactFixture([
     {
       id: 'macro|person99999@example.com',
