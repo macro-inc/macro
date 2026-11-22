@@ -27,6 +27,21 @@ describe('selectionBlocks', () => {
     ]);
   });
 
+  it('keeps the order asked for a group shown only for its named tool', () => {
+    const blocks = selectionBlocks(CATALOG, {
+      groups: [
+        { group: 'documents', actions: ['send'] },
+        { group: 'email', actions: ['send'] },
+      ],
+      tools: [{ service: 'storage', operation: 'delete_document' }],
+    });
+    expect(blocks.map((block) => block.group.id)).toEqual([
+      'documents',
+      'email',
+    ]);
+    expect(blocks[0].actions).toEqual([]);
+  });
+
   it('puts named tools under their group, after the named actions', () => {
     const blocks = selectionBlocks(CATALOG, {
       groups: [{ group: 'email', actions: ['send'] }],

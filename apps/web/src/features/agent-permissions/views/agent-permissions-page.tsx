@@ -272,7 +272,7 @@ export function AgentPermissionsPage(props: {
       <ResetPermissionsDialog
         open={confirmingReset()}
         agent={props.agentName}
-        counts={counts()}
+        counts={counts().reset}
         pending={resetMutation.isPending}
         onOpenChange={setConfirmingReset}
         onConfirm={() => fireAndForget(reset(), 'agent-permissions')}

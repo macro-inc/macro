@@ -41,7 +41,6 @@ export function selectionBlocks(
     const actions = (
       asked.actions?.length ? asked.actions : visibleActions(group)
     ).filter((action) => hasTools(group, action));
-    if (actions.length === 0) continue;
     const block = blockFor(group);
     for (const action of actions) {
       if (!block.actions.includes(action)) block.actions.push(action);
@@ -59,7 +58,11 @@ export function selectionBlocks(
     }
   }
 
-  for (const block of blocks) {
+  // A group left with nothing (it named only actions no tool has) goes.
+  const shown = blocks.filter(
+    (block) => block.actions.length > 0 || block.tools.length > 0
+  );
+  for (const block of shown) {
     block.actions.sort(
       (a, b) => ACTION_ORDER.indexOf(a) - ACTION_ORDER.indexOf(b)
     );
@@ -69,5 +72,5 @@ export function selectionBlocks(
         a.label.localeCompare(b.label)
     );
   }
-  return blocks;
+  return shown;
 }

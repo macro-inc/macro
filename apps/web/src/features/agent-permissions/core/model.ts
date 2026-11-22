@@ -239,6 +239,11 @@ export function settingCounts(
     byPerson: shown.filter((rule) => !rule.viaAgent).length,
     byAgent: shown.filter((rule) => rule.viaAgent).length,
     tools: shown.filter((rule) => rule.target.kind === 'tool').length,
+    /** What Reset clears, hidden settings included. */
+    reset: {
+      byAgent: rules.filter((rule) => rule.viaAgent).length,
+      tools: rules.filter((rule) => rule.target.kind === 'tool').length,
+    },
   };
 }
 

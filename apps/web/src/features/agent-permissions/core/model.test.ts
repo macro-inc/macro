@@ -179,6 +179,7 @@ describe('counts', () => {
       byPerson: 1,
       byAgent: 1,
       tools: 1,
+      reset: { byAgent: 1, tools: 1 },
     });
   });
 

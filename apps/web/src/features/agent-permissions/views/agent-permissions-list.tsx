@@ -38,11 +38,13 @@ import { PermissionsNoMatch } from '../components/permissions-notes';
 import {
   ACTION_ORDER,
   actionPermission,
+  visibleActions as actionsWithTools,
   changeForAction,
   type GroupMatch,
   groupActionTarget,
   groupPermissions,
   groupSummary,
+  visibleGroups as groupsWithTools,
   type PermissionSearch,
   ruleFor,
   searchPermissions,
@@ -51,8 +53,6 @@ import {
   toolKey,
   toolOverride,
   toolTarget,
-  visibleActions as actionsWithTools,
-  visibleGroups as groupsWithTools,
 } from '../core/model';
 import type { PendingChanges } from '../primitives/pending-changes';
 
@@ -75,8 +75,8 @@ type ToolSection = {
 
 /**
  * Every catalog group with a tool as a collapsible row: a control per action
- * it has tools for, and the group's individual tools. Owns expansion, the tool filter and paging;
- * saving goes through `changes`.
+ * it has tools for, and the group's individual tools. Owns expansion, the
+ * tool filter and paging; saving goes through `changes`.
  */
 export function AgentPermissionsList(props: {
   agentName: string;
@@ -329,7 +329,8 @@ export function AgentPermissionsList(props: {
   };
 
   // A deep link opens its group (in the initial store), then scrolls to its
-  // row, flashes it and moves focus to its control.
+  // row, flashes it and moves focus to its control. A row the page doesn't
+  // show (an action no tool has) falls back to its group.
   onMount(() => {
     const focus = props.focus;
     if (!focus) return;
@@ -338,19 +339,22 @@ export function AgentPermissionsList(props: {
       : focus.action
         ? targetKey(groupActionTarget(focus.group, focus.action))
         : undefined;
-    const row = key
+    const keyed = key
       ? container?.querySelector<HTMLElement>(
           `[data-permission-row="${CSS.escape(key)}"]`
         )
-      : container?.querySelector<HTMLElement>(
-          `[data-permission-group="${CSS.escape(focus.group)}"]`
-        );
+      : undefined;
+    const row =
+      keyed ??
+      container?.querySelector<HTMLElement>(
+        `[data-permission-group="${CSS.escape(focus.group)}"]`
+      );
     if (!row) return;
     row.scrollIntoView({ block: 'center' });
     row
       .querySelector<HTMLElement>('input:checked, button, input')
       ?.focus({ preventScroll: true });
-    if (!key) return;
+    if (!key || !keyed) return;
     setFlashKey(key);
     const timer = setTimeout(() => setFlashKey(undefined), FLASH_MS);
     onCleanup(() => clearTimeout(timer));

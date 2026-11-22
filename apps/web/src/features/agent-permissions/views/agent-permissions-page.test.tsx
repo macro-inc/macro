@@ -326,6 +326,16 @@ describe('AgentPermissionsPage', () => {
     });
     expect((button as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByText(/settings? changed/)).toBeNull();
+
+    fireEvent.click(button);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain(
+      'Every setting goes back to Always allow.'
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reset' }));
+    await waitFor(() =>
+      expect(client.reset).toHaveBeenCalledWith('agent-1', expect.anything())
+    );
   });
 
   it('narrows to what matches the search', async () => {
