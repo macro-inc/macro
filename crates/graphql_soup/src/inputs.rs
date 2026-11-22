@@ -42,6 +42,8 @@ pub struct SoupInitialInput {
     filters: Option<GraphqlEntityFilterAst>,
     /// Direction to order the page in. Defaults to DESC.
     sort_direction: Option<GraphqlSortDirection>,
+    /// Where the page reads its channels. Defaults to REPLICA.
+    channel_reads: Option<SoupChannelReads>,
 }
 
 /// Input for continuing a Soup query.
@@ -58,6 +60,23 @@ pub struct SoupContinuationInput {
     /// The cursor does not carry it, so re-send whatever the initial query
     /// used or the continuation flips order mid-list.
     sort_direction: Option<GraphqlSortDirection>,
+    /// Where the page reads its channels. Defaults to REPLICA. The cursor
+    /// does not carry it, so re-send whatever the initial query used.
+    channel_reads: Option<SoupChannelReads>,
+}
+
+/// Where a Soup page reads its channels.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Default, Debug)]
+pub enum SoupChannelReads {
+    /// The read replica, like every other Soup list.
+    #[default]
+    Replica,
+    /// The primary, where the REST channel list reads them, so the page
+    /// reflects every committed membership change: a channel the viewer just
+    /// left or joined is never listed the other way. Only the channels move;
+    /// every other entity type in the page still reads the replica. Meant for
+    /// complete passes over the viewer's channel directory, not ordinary lists.
+    Primary,
 }
 
 /// Direction a Soup page is ordered in.
@@ -262,6 +281,15 @@ enum GraphqlGroupByField {
 }
 
 impl SoupInput {
+    /// Where this page reads its channels.
+    pub(crate) fn channel_reads(&self) -> SoupChannelReads {
+        match self {
+            Self::Initial(input) => input.channel_reads,
+            Self::Continuation(input) => input.channel_reads,
+        }
+        .unwrap_or_default()
+    }
+
     /// Convert this value into the request representation.
     pub(crate) fn into_request(
         self,

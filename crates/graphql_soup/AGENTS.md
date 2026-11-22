@@ -26,6 +26,10 @@ viewer pattern), which apply to every type defined here.
   named channel the viewer can open, a public or team channel they never
   joined included, as the REST channel read does; `isParticipant` on the
   record says which. Joined-only lists must still filter on it.
+- `resolve_soup` runs a page with `channelReads: PRIMARY` on the
+  `PrimaryChannelSoup` in the request data and errors when it is missing,
+  never falling back to the replica service. The cursor does not carry the
+  choice; continuations send it again.
 - Build `AgentSessionEntityLoader` and `PrimarySoupItemLoader` with `::new`,
   which rechecks the viewer's team. PRs are stored for the team; without it,
   a session row reads `pullRequestState: null` and overwrites the list's
