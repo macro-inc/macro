@@ -149,6 +149,13 @@ code, not in its prompt. The harness also signs the scope into the credential
 - Depends on `macro_auth` only for the HTTP adapter.
 - Used by code-mode credential minting, HTTP services, and the event broker.
 
+- `ChannelMention` is default-deny via `scope/mention_{reads,writes}.txt`:
+  only listed workspace reads, no program writes or memory reads. A verified
+  mention claim adds this restriction even to old tokens and secondary
+  credentials; the original signed and stored scopes are still checked.
+  Mention attribution never grants access. Document grants cap at View;
+  background NoSend runs retain ordinary own-document edits.
+
 ## Checks
 
 - `cargo test -p agent_correlation --all-features`.

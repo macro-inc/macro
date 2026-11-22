@@ -74,6 +74,14 @@ async fn refuses_signed_request_before_dispatch(claims: SignedClaims, method: &s
             CorrelationState {
                 jwt,
                 repository: Arc::new(NoCorrelations),
+                specs: Some(&[
+                    "storage",
+                    "calendar",
+                    "cognition",
+                    "connection",
+                    "agent-harness",
+                    "properties",
+                ]),
             },
             propagate,
         ));

@@ -263,7 +263,6 @@ POST /dictation/transcribe
 POST /documents
 POST /documents/create_canvas
 POST /documents/create_markdown
-POST /documents/create_skill
 POST /documents/create_snippet
 POST /documents/create_spreadsheet
 POST /documents/create_task
@@ -335,7 +334,6 @@ PUT /documents/{document_id}/appearance
 PUT /documents/{document_id}/markdown
 PUT /documents/{document_id}/revert_delete
 PUT /documents/{document_id}/simple_save
-PUT /documents/{document_id}/skill_description
 PUT /forms/{id}/appearance
 PUT /forms/{id}/layout
 PUT /forms/{id}/responses/mine

@@ -24,9 +24,11 @@ decides whether to trigger, authorizes, and delivers a reply.
   `DescribeCodeTools` and `ReadCodeDocs`. Programs run on the agent harness
   (`POST /internal/code-mode/user-executions`, internal key) as the mentioning
   user attributed to Macro AI, the same identity as the direct tools, with a
-  signed NoSend scope and the original mention claim. Programs cannot post
-  messages, fetch or search the web, call connected apps, change calendar or
-  booking state, or write later-run instructions; DSS delivers the final reply.
+  signed allowlisted ChannelMention scope and the original mention claim.
+  Programs make only explicitly listed workspace reads; they cannot write,
+  query memory, mint tokens, delegate work or call connected apps. Their
+  egress always uses the forwarder, even with its rollout flag off, and has
+  no unfurl upstream; DSS delivers the final reply.
   A call to
   a tool the code-mode reply was not offered is refused, never dispatched.
 - `src/outbound/lexical_comment_marks.rs`: comment-mark delivery for document bots.

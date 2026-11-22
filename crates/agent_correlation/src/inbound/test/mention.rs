@@ -38,7 +38,7 @@ fn legacy_mentions_keep_the_new_restriction_on_allowed_reads() {
             .body(())
             .unwrap()
             .into_parts();
-        let accepted = checked_signed_scope(Some(&token), &parts).unwrap();
+        let accepted = checked_signed_scope(Some(&token), &parts, Some(&["storage"])).unwrap();
         assert_eq!(
             accepted.known().map(SessionScope::as_str),
             Some("channel_mention"),
@@ -56,5 +56,5 @@ fn a_mention_claim_cannot_widen_an_unknown_signed_scopes_get_only_fallback() {
         .body(())
         .unwrap()
         .into_parts();
-    assert!(checked_signed_scope(Some(&token), &parts).is_err());
+    assert!(checked_signed_scope(Some(&token), &parts, Some(&["search"])).is_err());
 }

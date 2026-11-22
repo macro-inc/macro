@@ -145,6 +145,9 @@ fn verified_api_tokens(
 /// session's, then a run's that sends nothing.
 fn narrowest(first: Option<SessionScope>, second: Option<SessionScope>) -> Option<SessionScope> {
     match (first, second) {
+        (Some(SessionScope::ChannelMention), _) | (_, Some(SessionScope::ChannelMention)) => {
+            Some(SessionScope::ChannelMention)
+        }
         (Some(SessionScope::DryRun), _) | (_, Some(SessionScope::DryRun)) => {
             Some(SessionScope::DryRun)
         }
@@ -234,7 +237,17 @@ fn checked_signed_scope(
     specs: Option<&[&str]>,
 ) -> Result<SignedScope, CorrelationRejection> {
     let scope = SignedScope::from_claim(token.and_then(|token| token.agent_scope.as_deref()));
-    if !scope.allows_on(specs, parts.method.as_str(), parts.uri.path()) {
+    // A verified legacy mention adds the new restriction; it never replaces
+    // the original scope (an unknown scope still permits GET only).
+    let mention = token.is_some_and(|token| token.channel_mention_id.is_some());
+    if !scope.allows_on(specs, parts.method.as_str(), parts.uri.path())
+        || (mention
+            && !SessionScope::ChannelMention.allows_on(
+                specs,
+                parts.method.as_str(),
+                parts.uri.path(),
+            ))
+    {
         tracing::warn!(
             ?scope,
             method = %parts.method,
@@ -244,7 +257,11 @@ fn checked_signed_scope(
         );
         return Err(CorrelationRejection(CorrelationError::OutOfScope));
     }
-    Ok(scope)
+    Ok(if mention {
+        SignedScope::Known(SessionScope::ChannelMention)
+    } else {
+        scope
+    })
 }
 
 /// The SDK's display verb. Callers read it only after the correlation that
@@ -359,6 +376,11 @@ async fn propagate_request(
             Ok(scope) => scope,
             Err(rejection) => return rejection.into_response(),
         };
+    let mention = tokens
+        .authenticating
+        .iter()
+        .chain(&tokens.others)
+        .find_map(|token| token.channel_mention_id);
     let token = tokens.authenticating;
     let signed = match checked_signed_scope(token.as_ref(), &parts, state.specs) {
         Ok(signed) => signed,
@@ -395,13 +417,14 @@ async fn propagate_request(
     let attribution = Attribution {
         correlation_id,
         routine_id: token.as_ref().and_then(|token| token.routine_id),
-        channel_mention_id: token.as_ref().and_then(|token| token.channel_mention_id),
+        channel_mention_id: mention,
         signed_scope: others_scope.signed_scope || !matches!(signed, SignedScope::Unscoped),
         session_id: correlation.map(|(_, correlation)| correlation.session_id),
         scope: narrowest(
-            correlation
-                .and_then(|(_, correlation)| correlation.scope)
-                .or(signed.known()),
+            narrowest(
+                correlation.and_then(|(_, correlation)| correlation.scope),
+                signed.known(),
+            ),
             others_scope.narrowest,
         ),
         verb: correlation_id.and_then(|_| sdk_verb(&parts)),
@@ -415,6 +438,7 @@ async fn propagate_request(
             "agent_sdk_request",
             agent_correlation_id = correlation_id.map(|id| id.to_string()),
             routine_id = attribution.routine_id.map(|id| id.to_string()),
+            channel_mention_id = attribution.channel_mention_id.map(|id| id.to_string()),
         ))
         .await
 }
@@ -506,7 +530,7 @@ async fn refuse_signed_scopes_request(
     // scoped one gains nothing.
     for token in tokens.authenticating.iter().chain(&tokens.others) {
         let scope = SignedScope::from_claim(token.agent_scope.as_deref());
-        if scope != SignedScope::Unscoped {
+        if scope != SignedScope::Unscoped || token.channel_mention_id.is_some() {
             tracing::warn!(
                 ?scope,
                 method = %parts.method,

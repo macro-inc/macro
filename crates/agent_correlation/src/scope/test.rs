@@ -534,13 +534,24 @@ fn the_no_send_scope_classifies_every_write_in_the_specs() {
 /// its refused list.
 #[test]
 fn a_job_classifies_every_read_and_allows_only_its_lists() {
-    let scope = SessionScope::Job;
+    assert_classified_scope(
+        SessionScope::Job,
+        include_str!("job_reads.txt"),
+        include_str!("job_writes.txt"),
+        include_str!("job_refused_reads.txt"),
+    );
+}
+
+fn assert_classified_scope(
+    scope: SessionScope,
+    reads: &'static str,
+    writes: &'static str,
+    refused: &'static str,
+) {
     let listed: std::collections::BTreeSet<(&str, &str, &str)> =
-        list_lines(include_str!("job_reads.txt"))
-            .chain(list_lines(include_str!("job_writes.txt")))
-            .collect();
+        list_lines(reads).chain(list_lines(writes)).collect();
     let refused_reads: std::collections::BTreeSet<(&str, &str, &str)> =
-        list_lines(include_str!("job_refused_reads.txt")).collect();
+        list_lines(refused).collect();
     let mut operations = std::collections::BTreeSet::new();
     let mut mismatched = Vec::new();
     let mut unplaced = Vec::new();
@@ -572,11 +583,11 @@ fn a_job_classifies_every_read_and_allows_only_its_lists() {
         .collect();
     assert!(
         mismatched.is_empty(),
-        "a job's lists and scope disagree: {mismatched:#?}"
+        "scope lists and enforcement disagree: {mismatched:#?}"
     );
     assert!(
         unplaced.is_empty(),
-        "place each read in job_reads.txt or job_refused_reads.txt, once: {unplaced:#?}"
+        "classify every read exactly once: {unplaced:#?}"
     );
     assert!(
         unknown.is_empty(),
@@ -1105,3 +1116,5 @@ fn audit_no_send_refuses_persistence_that_later_runs_can_execute() {
         );
     }
 }
+
+mod mention;

@@ -8,6 +8,8 @@ mod test;
 /// A narrower scope than the person's own access.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionScope {
+    /// A channel mention: only explicitly listed context reads, never writes.
+    ChannelMention,
     /// A hidden suggestion generation session: it reads, writes suggestions and
     /// routine suggestions through its own tools, and drafts email; nothing
     /// else.
@@ -89,6 +91,14 @@ static JOB_ALLOWLIST: std::sync::LazyLock<Allowlist> = std::sync::LazyLock::new(
     Allowlist::from_lists(
         include_str!("scope/job_reads.txt"),
         include_str!("scope/job_writes.txt"),
+    )
+});
+
+/// Channel programs read only the context explicitly approved for replies.
+static MENTION_ALLOWLIST: std::sync::LazyLock<Allowlist> = std::sync::LazyLock::new(|| {
+    Allowlist::from_lists(
+        include_str!("scope/mention_reads.txt"),
+        include_str!("scope/mention_writes.txt"),
     )
 });
 
@@ -515,6 +525,7 @@ impl SessionScope {
             Self::NoSend => "no_send",
             Self::DryRun => "dry_run",
             Self::Job => "job",
+            Self::ChannelMention => "channel_mention",
         }
     }
 
@@ -525,6 +536,7 @@ impl SessionScope {
             "no_send" => Some(Self::NoSend),
             "dry_run" => Some(Self::DryRun),
             "job" => Some(Self::Job),
+            "channel_mention" => Some(Self::ChannelMention),
             _ => None,
         }
     }
@@ -590,7 +602,7 @@ impl SessionScope {
             Self::NoSend => !listed(SENDS, method, path),
             Self::DryRun => listed(POST_READS, method, path),
             // Answered by its allowlist above.
-            Self::Job => false,
+            Self::Job | Self::ChannelMention => false,
         }
     }
 
@@ -600,7 +612,9 @@ impl SessionScope {
     /// person's full access, outside the scope.
     pub fn may_assign_agents(self) -> bool {
         match self {
-            Self::Generation | Self::NoSend | Self::DryRun | Self::Job => false,
+            Self::Generation | Self::NoSend | Self::DryRun | Self::Job | Self::ChannelMention => {
+                false
+            }
         }
     }
 
@@ -609,7 +623,7 @@ impl SessionScope {
     /// lasts an hour and edits the document past the scope's lists.
     pub fn caps_document_tokens_to_view(self) -> bool {
         match self {
-            Self::Job => true,
+            Self::Job | Self::ChannelMention => true,
             Self::Generation | Self::NoSend | Self::DryRun => false,
         }
     }
@@ -619,6 +633,7 @@ impl SessionScope {
     pub fn allowlist(self) -> Option<&'static Allowlist> {
         match self {
             Self::Job => Some(&JOB_ALLOWLIST),
+            Self::ChannelMention => Some(&MENTION_ALLOWLIST),
             Self::Generation | Self::NoSend | Self::DryRun => None,
         }
     }
@@ -629,7 +644,9 @@ impl SessionScope {
     /// [`crate::context::refuse_sharing`], since a path can't tell.
     pub fn allows_sharing(self) -> bool {
         match self {
-            Self::Generation | Self::NoSend | Self::DryRun | Self::Job => false,
+            Self::Generation | Self::NoSend | Self::DryRun | Self::Job | Self::ChannelMention => {
+                false
+            }
         }
     }
 }

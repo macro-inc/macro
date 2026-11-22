@@ -67,7 +67,7 @@ async fn audit_a_signed_mention_refuses_sends_and_persistent_instructions() {
     assert_eq!(decoded.agent_id, Some(bot_id::MACRO_AI_BOT_ID.as_uuid()));
     let app = Router::new()
         .route(
-            "/read",
+            "/documents/00000000-0000-0000-0000-000000000001/markdown",
             get(move || async move {
                 assert_eq!(
                     agent_correlation::context::current_channel_mention(),
@@ -79,6 +79,7 @@ async fn audit_a_signed_mention_refuses_sends_and_persistent_instructions() {
         .fallback(|| async { StatusCode::OK })
         .layer(middleware::from_fn_with_state(
             CorrelationState {
+                specs: Some(&["storage"]),
                 jwt,
                 repository: Arc::new(NoCorrelations),
             },
@@ -117,7 +118,7 @@ async fn audit_a_signed_mention_refuses_sends_and_persistent_instructions() {
     let response = app
         .oneshot(
             Request::builder()
-                .uri("/read")
+                .uri("/documents/00000000-0000-0000-0000-000000000001/markdown")
                 .header("authorization", format!("Bearer {bearer}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -125,5 +126,5 @@ async fn audit_a_signed_mention_refuses_sends_and_persistent_instructions() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(decoded.agent_scope.as_deref(), Some("no_send"));
+    assert_eq!(decoded.agent_scope.as_deref(), Some("channel_mention"));
 }

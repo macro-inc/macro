@@ -448,7 +448,7 @@ impl SignedClaims {
             agent_via: None,
             agent_session_id: None,
             agent_correlation_id: None,
-            agent_scope: Some(agent_correlation::scope::SessionScope::NoSend),
+            agent_scope: Some(agent_correlation::scope::SessionScope::ChannelMention),
             routine_id: None,
             channel_mention_id: Some(channel_mention_id),
         }

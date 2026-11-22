@@ -73,6 +73,12 @@ async fn a_mention_uses_the_forwarder_even_when_the_egress_flag_is_off(pool: sql
     };
     assert_eq!(token.channel_mention_id, Some(mention));
     assert_eq!(token.agent_scope.as_deref(), Some("channel_mention"));
+    assert!(
+        SessionScope::parse(token.agent_scope.as_deref().unwrap())
+            .unwrap()
+            .allowlist()
+            .is_some()
+    );
 }
 
 /// Uses the actual mention issuer and Deno runner. The gateway is a local

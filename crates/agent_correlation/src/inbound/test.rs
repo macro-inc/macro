@@ -46,6 +46,7 @@ fn mint(
     scope: Option<&str>,
 ) -> String {
     encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_id: None,
         fusionauth_id: "fixture".into(),
         macro_user_id: "macro|owner@example.com".into(),
         organization_id: None,
@@ -514,6 +515,7 @@ async fn a_scoped_token_in_the_cookie_scopes_the_request_whatever_else_it_carrie
         None,
     );
     let someone_else = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_id: None,
         fusionauth_id: "fixture".into(),
         macro_user_id: "macro|someone@example.com".into(),
         organization_id: None,
@@ -658,6 +660,7 @@ async fn propagate_refuses_tokens_of_different_users() {
         .layer(axum::middleware::from_fn_with_state(state, propagate));
     let owner = token(None, None);
     let someone_else = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_id: None,
         fusionauth_id: "fixture".into(),
         macro_user_id: "macro|someone@example.com".into(),
         organization_id: None,

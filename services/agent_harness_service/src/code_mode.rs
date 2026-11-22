@@ -175,7 +175,8 @@ fn native_tool_allowed(scope: SessionScope, tool: &str) -> bool {
         SessionScope::Generation
         | SessionScope::NoSend
         | SessionScope::DryRun
-        | SessionScope::Job => matches!(
+        | SessionScope::Job
+        | SessionScope::ChannelMention => matches!(
             tool,
             "ExecuteCode"
                 | "DescribeCodeTools"
@@ -379,11 +380,8 @@ impl UserExecutionCredentials for UserRunCredentials {
     }
 }
 
-/// Credentials for a channel-mention bot's program: the mentioning user's
-/// access attributed to Macro AI, as the bot's direct tools act, signed with
-/// the mention so email sends and credential minting refuse it. (Its hosts
-/// keep email's: deployed services share one gateway origin, so leaving the
-/// host out would not narrow Deno's network allowlist.)
+/// Mention credentials keep the original user, bot actor and mention, with
+/// an allowlisted scope, forced proxy and no anonymous unfurl upstream.
 pub struct MentionRunCredentials {
     pub egress: EgressRollout,
     pub signer: MacroApiTokenSigner,
@@ -408,11 +406,14 @@ impl agent_code_mode::domain::MentionExecutionCredentials for MentionRunCredenti
         Ok(RunEnvironment {
             token,
             trace_headers: trace_headers(),
-            endpoints: self.endpoints.clone(),
+            endpoints: run_endpoints(&self.endpoints, true),
             session_id: None,
             execution_id: None,
             unattended: None,
-            egress: self.egress.egress(user).await,
+            egress: self
+                .egress
+                .egress_for(user, Some(SessionScope::ChannelMention))
+                .await,
         })
     }
 }
