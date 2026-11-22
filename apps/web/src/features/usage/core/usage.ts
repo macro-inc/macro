@@ -44,14 +44,6 @@ export const MAX_TARGET_BALANCE_CENTS = 500_000;
  */
 export const MIN_MONTHLY_SPEND_LIMIT_CENTS = 500;
 
-/** Development remains interactive; production follows the UI rollout flag. */
-export function isUsageAvailable(
-  production: boolean,
-  flagEnabled: boolean | undefined
-) {
-  return !production || flagEnabled === true;
-}
-
 export function monthlyUsagePercent(usedCents: number, includedCents: number) {
   if (includedCents <= 0) return usedCents > 0 ? 100 : 0;
   return Math.min(100, Math.max(0, (usedCents / includedCents) * 100));

@@ -3,6 +3,7 @@ import {
   createMemoryPaneStore,
   createSplitRouter,
   type Entry,
+  type PaneId,
   type SplitRouter,
   type SplitRoutes,
 } from '@app/lib/split-router';
@@ -39,7 +40,11 @@ import type { BlockOrchestrator } from '@core/orchestrator';
 import { cleanup, render } from '@solidjs/testing-library';
 import { onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createTabManager, type TabManager } from '../tab-manager';
+import {
+  createTabManager,
+  MAX_PARKED_TABS,
+  type TabManager,
+} from '../tab-manager';
 
 const panels = vi.hoisted(() => ({ mounted: 0, unmounted: 0 }));
 
@@ -159,10 +164,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Unmount first: clearing the tab manager while a later tab is live would
+  // mount the tabless layer without the stubs.
+  cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   setGlobalTabManager(undefined);
-  cleanup();
   panels.mounted = 0;
   panels.unmounted = 0;
 });
@@ -274,6 +281,46 @@ describe('desktop tab layers', () => {
     expect(router.layout()).toEqual(stacked);
     expect(panels.mounted).toBe(3);
     expect(panels.unmounted).toBe(0);
+  });
+
+  it(`keeps split state for at most ${MAX_PARKED_TABS} parked tabs as tabs are evicted`, async () => {
+    const { router, tabManager, manager } = setup('/channels/channel-one');
+    await flush(router);
+    const seen = new Set<PaneId>();
+    const retainedSplits = () =>
+      [...seen].filter((pane) => manager.splitState(splitOf(pane))).length;
+
+    const counts: number[] = [];
+    for (let i = 0; i < MAX_PARKED_TABS * 3; i += 1) {
+      tabManager.newTab();
+      await flush(router);
+      for (const pane of router.retainedPanes()) seen.add(pane);
+      counts.push(retainedSplits());
+    }
+
+    // One live tab and up to MAX_PARKED_TABS parked ones, each one pane:
+    // the count grows until tabs start being evicted, then stays put.
+    expect(counts).toEqual(
+      counts.map((_, i) => Math.min(i + 2, MAX_PARKED_TABS + 1))
+    );
+    // Tabs still parked keep their splits.
+    for (const pane of router.retainedPanes()) {
+      expect(manager.splitState(splitOf(pane))).toBeDefined();
+    }
+  });
+
+  it('closing a background tab forgets its splits', async () => {
+    const { router, tabManager, manager } = setup('/channels/channel-one');
+    await flush(router);
+    const first = tabManager.activeTabId();
+    const [firstPane] = router.panes();
+    tabManager.newTab();
+    await flush(router);
+    expect(manager.splitState(splitOf(firstPane!))).toBeDefined();
+
+    tabManager.closeTab(first);
+    await flush(router);
+    expect(manager.splitState(splitOf(firstPane!))).toBeUndefined();
   });
 
   it('closing a tab unmounts only its panes', async () => {

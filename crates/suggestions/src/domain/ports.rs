@@ -253,6 +253,16 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         reason: ResolveReason,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Make the person's reply suggestion `id` done because they answered its
+    /// item, if it is still open; whether it moved. The message it waited on
+    /// is cleared, as when it is resolved.
+    fn answer(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
 /// Whether the person can open an item.

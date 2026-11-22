@@ -33,6 +33,12 @@ export interface EmailThreadViewContext {
       options?: InvitationRenderOptions
     ) => JSX.Element;
     renderOperation?: (message: EmailMessage) => JSX.Element;
+    /**
+     * What the host knows about where a saved reply draft came from, drawn
+     * as the footer of the card that holds its composer; nothing for a
+     * draft it knows nothing about.
+     */
+    renderDraftOrigin?: (draftId: string) => JSX.Element;
     renderAvatar?: (message: EmailMessage) => JSX.Element;
     readReceipt?: (message: EmailMessage) => ReadReceipt | undefined;
     showReadReceiptPixel?: (message: EmailMessage) => boolean;

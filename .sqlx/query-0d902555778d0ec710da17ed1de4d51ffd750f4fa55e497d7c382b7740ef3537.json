@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM crm_email_policy_work WHERE team_id = $1 AND user_id = $2\n               AND work_id = $3 AND consent_incarnation = $4 AND policy_version = $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0d902555778d0ec710da17ed1de4d51ffd750f4fa55e497d7c382b7740ef3537"
+}

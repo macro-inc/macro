@@ -1,0 +1,115 @@
+/* Product illustrations share the accepted quiet email-demo material.
+   Scope to feature pages so homepage and onboarding styling stay independent. */
+.feature-page {
+  --graphic-surface: #141414;
+  --graphic-edge: #ffffff0c;
+  --graphic-message-edge: #ffffff08;
+}
+
+.feature-page .feature-page-section .feature-demo-backdrop::before {
+  opacity: .25;
+}
+
+/* One edge per window, without a second specular rim or cast shadow. */
+.feature-page .feature-page-section
+  :is(.email-feature-demo:not(:has(.mail-sharing-stage)) .mail-app, .product-demo, .mail-sharing-email, .homepage-email-surface, .calendar-story-glass, .forms-card, .booking-story-card, .benefit-glass, .workspace-feature-scene, .macro-preview-back, .macro-preview-front, .mds-card, .homepage-pipeline-demo) {
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--graphic-edge);
+}
+.feature-page .feature-page-section
+  :is(.product-demo, .homepage-email-surface, .booking-story-card, .workspace-feature-scene, .macro-preview-back, .macro-preview-front, .mds-card, .homepage-pipeline-demo)::after { content: none; }
+
+/* Split stories already have an outer frame; their email window needs no
+   additional surround. Keep the surrounding conversation transparent. */
+.feature-page .mail-sharing-stage .mail-app {
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+.feature-page .mail-sharing-email::before { content: none; }
+
+.feature-page
+  :is(.mail-thread [data-message-body-id], .homepage-email-surface) {
+  background: var(--graphic-surface);
+  box-shadow: inset 0 0 0 1px var(--graphic-message-edge);
+  backdrop-filter: none;
+}
+.feature-page .mail-thread [data-message-body-id]::after { content: none; }
+
+/* Diagrams retain their annotation geometry and quieter, single-edge pills. */
+.feature-page .paper-feature-art {
+  --color-ui-glass-highlight: transparent;
+  --color-ui-glass-edge: var(--graphic-edge);
+  --color-ui-floating-edge: var(--graphic-edge);
+  --paper-floating-shadow: 0 0 transparent;
+}
+.feature-page .paper-feature-glass {
+  background: color-mix(in srgb, var(--color-ink) 4%, transparent);
+  box-shadow: inset 0 0 0 1px var(--graphic-edge);
+}
+.feature-page .email-auto-tag-highlight {
+  background: color-mix(in srgb, var(--color-ink) 4%, transparent);
+  box-shadow: inset 0 0 0 1px var(--graphic-message-edge);
+}
+.feature-page .email-auto-tag-callout span {
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--graphic-edge);
+  font-size: 12px;
+}
+.feature-page .email-task-actions,
+.feature-page .email-task-actions > button { border-radius: 999px; }
+.feature-page .mail-routine-push {
+  box-shadow: inset 0 0 0 1px var(--graphic-edge);
+  background: var(--graphic-surface);
+}
+
+/* Keep the shared rule stronger than individual graphic layout rules. */
+.feature-page .feature-page-section .feature-demo-art
+  :is(.product-demo, .mds-card, .homepage-pipeline-demo, .workspace-feature-scene, .booking-story-card) {
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--graphic-edge);
+}
+.feature-page .feature-page-section .mds-card::before { content: none; }
+/* Spreadsheet previews contain two standalone windows instead of one frame. */
+.feature-page .feature-page-section .macro-product-canvas[data-theme-light] :is(.macro-preview-back, .macro-preview-front) {
+  box-shadow: inset 0 0 0 1px var(--graphic-edge),
+    0 0 0 7px #ffffff04, 0 0 0 8px var(--graphic-edge);
+}
+.feature-page .feature-page-section .macro-product-canvas
+  :is(.macro-preview-back, .macro-preview-front, .homepage-email-surface, .demo-cursor-card)::after { content: none; }
+.feature-page .feature-page-section :is(.benefit-callout > span, .benefit-tag, .calendar-story-choice) {
+  border: 0;
+  background: var(--graphic-surface);
+  box-shadow: inset 0 0 0 1px var(--graphic-edge);
+  border-radius: 999px;
+}
+.feature-page .feature-page-section :is(.chat-shortcut-dock, .email-shortcut-dock) > button {
+  border-radius: 999px;
+  font-size: 11px;
+}
+.feature-page .feature-page-section :is(.chat-shortcut-dock, .email-shortcut-dock) kbd {
+  border-radius: 999px;
+  font-size: 11px;
+  box-shadow: inset 0 0 0 1px var(--graphic-edge);
+}
+.feature-page .chat-shortcut-dock { padding: 14px 0 6px; }
+.feature-page .chat-shortcut-dock kbd { background: var(--graphic-surface); }
+.feature-page .chat-shortcut-dock > button[data-active='true'] kbd {
+  background: var(--color-ink);
+  color: var(--color-surface-0);
+}
+@media (max-width: 699px) {
+  .feature-page .feature-page-section :is(.chat-shortcut-dock, .email-shortcut-dock) > button { font-size: 9.5px; }
+}
+
+html:is([data-theme-light='true'], [data-palette='cream']) .feature-page {
+  --graphic-surface: var(--color-panel);
+  --graphic-edge: color-mix(in srgb, var(--color-ink) 9%, transparent);
+  --graphic-message-edge: color-mix(in srgb, var(--color-ink) 6%, transparent);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .feature-page .feature-demo-art[data-glass-frame] > .feature-demo-primary {
+    background: var(--graphic-surface);
+    backdrop-filter: none;
+  }
+}

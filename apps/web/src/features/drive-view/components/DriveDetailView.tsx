@@ -4,6 +4,7 @@ import {
 } from '@app/components/entity-detail/EntityDetail';
 import { EntityDetailBreadcrumbItem } from '@app/components/entity-detail/EntityDetailBreadcrumbItem';
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
+import { EntityDetailFrame } from '@app/components/entity-detail/EntityDetailFrame';
 import {
   type EntityDetailNavigationEntry,
   type EntityDetailTarget,
@@ -16,15 +17,12 @@ import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
-import { ErrorBoundary, For, Match, Show, Switch } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 import { useOptionalDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
 import { FileDetailBreadcrumbItem } from '../views/FileDetailBreadcrumbItem';
-import {
-  MarkdownDetail,
-  MarkdownDetailBodyState,
-} from '../views/MarkdownDetail';
+import { DetailErrorBoundary, MarkdownDetail } from '../views/MarkdownDetail';
 import { DriveBreadcrumbsOutlet } from './DriveBreadcrumbs';
 
 function DriveDetailAncestorBreadcrumbs(props: { orderOffset: number }) {
@@ -85,11 +83,13 @@ function DriveDetailTopBar() {
 
   return (
     <ViewShell.TopBar class="touch:flex">
-      <DriveBreadcrumbsOutlet
-        aria-label="File location"
-        fallback={<EntityDetailBreadcrumbSkeleton />}
-      />
-      <div class="ml-auto flex shrink-0 items-center gap-1">
+      <ViewShell.TopBarTitle>
+        <DriveBreadcrumbsOutlet
+          aria-label="File location"
+          fallback={<EntityDetailBreadcrumbSkeleton />}
+        />
+      </ViewShell.TopBarTitle>
+      <ViewShell.TopBarActions>
         <SidePanel.HeaderActionsOutlet />
         <Show when={activeDetail()}>
           {(detail) => (
@@ -102,7 +102,7 @@ function DriveDetailTopBar() {
           )}
         </Show>
         <SidePanel.Toggle />
-      </div>
+      </ViewShell.TopBarActions>
     </ViewShell.TopBar>
   );
 }
@@ -124,6 +124,16 @@ function StackEntityDetail(props: {
       : undefined;
   };
 
+  const duplicate = (target: DocumentDetailTarget, id: string, name: string) =>
+    navigationStack.navigate(
+      entityDetailTarget.document({
+        id,
+        fileType: 'md',
+        subType: target.subType,
+        fallbackName: name,
+      })
+    );
+
   return (
     <Switch>
       <Match when={markdownTarget()}>
@@ -134,6 +144,8 @@ function StackEntityDetail(props: {
               documentId={target().id}
               kind={kind()}
               fallbackName={target().fallbackName}
+              onDuplicate={(id, name) => duplicate(target(), id, name)}
+              onDelete={navigationStack.pop}
             >
               {(context) => (
                 <MarkdownDetailBreadcrumbItem
@@ -147,16 +159,7 @@ function StackEntityDetail(props: {
                   projectId={context.data.metadata.projectId ?? undefined}
                   appearance={context.data.metadata.appearance}
                   onClose={navigationStack.pop}
-                  onDuplicate={(id, name) =>
-                    navigationStack.navigate(
-                      entityDetailTarget.document({
-                        id,
-                        fileType: 'md',
-                        subType: target().subType,
-                        fallbackName: name,
-                      })
-                    )
-                  }
+                  onDuplicate={(id, name) => duplicate(target(), id, name)}
                 />
               )}
             </MarkdownDetail>
@@ -166,8 +169,21 @@ function StackEntityDetail(props: {
       <Match when={true}>
         <EntityDetail
           target={props.entry.data}
+          onClose={navigationStack.pop}
+          onDuplicate={(id, name) => {
+            const target = props.entry.data;
+            if (target.type !== 'document') return;
+            navigationStack.navigate(
+              entityDetailTarget.document({
+                id,
+                fileType: target.fileType,
+                subType: target.subType,
+                fallbackName: name,
+              })
+            );
+          }}
           previewHeaderLeading={
-            <Show when={hasBlockHeader(props.entry.data)}>
+            <Show when={hasBlockHeader(props.entry.data) && props.order > 0}>
               <DriveBreadcrumbsOutlet
                 aria-label="File location"
                 class="max-w-[min(40vw,24rem)] overflow-hidden"
@@ -214,52 +230,48 @@ function StackEntityDetail(props: {
 
 export function DriveDetailView() {
   const drive = useOptionalDriveView();
+  const navigationStack = useDriveDetailNavigation();
   const breadcrumbOrderOffset = () =>
-    drive
+    drive && navigationStack.showsLocation()
       ? driveLocationBreadcrumbs(
           drive.state.value().location,
           drive.sidebar.folders()
         ).length
       : 0;
-  const navigationStack = useDriveDetailNavigation();
   const activeHasBlockHeader = () => {
     const target = navigationStack.active()?.data;
     return target !== undefined && hasBlockHeader(target);
   };
-
   return (
     <>
       <DriveDetailAncestorBreadcrumbs orderOffset={breadcrumbOrderOffset()} />
       <SidePanel.Root floating>
-        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <Show when={!activeHasBlockHeader()}>
-            <DriveDetailTopBar />
-          </Show>
-          <div class="relative min-h-0 min-w-0 flex-1">
-            <Show when={navigationStack.active()}>
-              {(entry) => (
-                <ErrorBoundary
-                  fallback={(error, reset) => (
-                    <MarkdownDetailBodyState
-                      error={error}
-                      actionLabel="Reset"
-                      onAction={reset}
-                    />
-                  )}
-                >
-                  <StackEntityDetail
-                    entry={entry()}
-                    order={
-                      breadcrumbOrderOffset() +
-                      navigationStack.entries().length -
-                      1
-                    }
-                  />
-                </ErrorBoundary>
-              )}
+        <EntityDetailFrame
+          target={navigationStack.active()?.data}
+          topBar={
+            <Show when={!activeHasBlockHeader()}>
+              <DriveDetailTopBar />
             </Show>
-          </div>
-        </div>
+          }
+        >
+          <Show when={navigationStack.active()}>
+            {(entry) => (
+              <DetailErrorBoundary
+                entityType={entry().data.type}
+                entityId={entry().data.id}
+              >
+                <StackEntityDetail
+                  entry={entry()}
+                  order={
+                    breadcrumbOrderOffset() +
+                    navigationStack.entries().length -
+                    1
+                  }
+                />
+              </DetailErrorBoundary>
+            )}
+          </Show>
+        </EntityDetailFrame>
       </SidePanel.Root>
     </>
   );

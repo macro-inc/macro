@@ -65,9 +65,9 @@ MacroDB migrations.
   form attachment all gate on `macro_services/sync_health.rs`: only calendars
   with Busy on count, a transient failure serves stored events for
   `STALE_AVAILABILITY_WINDOW` after the next sync was due (the last good sync,
-  or a day after it for a daily-synced Google system calendar), and the creation
-  calendar refuses only a permanent or reauthorization failure. Change them
-  together.
+  or a day after it for a calendar synced daily: Google's system calendars and
+  an Outlook mailbox's own read-only ones), and the creation calendar refuses
+  only a permanent or reauthorization failure. Change them together.
 
 ## Related
 

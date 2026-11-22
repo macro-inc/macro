@@ -8,6 +8,8 @@ import { ViewSidebar } from './ViewSidebar';
 export function SidebarCreateHeader(props: {
   title: string;
   label: string;
+  /** The button's visible label, when it says more than "New". */
+  createText?: string;
   onCreate: () => void;
   /** View controls (e.g. filters) beside search, at the header's right. */
   actions?: JSX.Element;
@@ -19,23 +21,25 @@ export function SidebarCreateHeader(props: {
 }) {
   return (
     <header class="flex shrink-0 flex-col">
-      <Show when={!isTouchDevice()}>
-        <ViewSidebar.Header
-          search={props.search}
-          searchLabel={props.searchLabel}
-          searchOpen={props.searchOpen}
-          onSearchOpenChange={props.onSearchOpenChange}
-          actions={props.actions}
-        >
-          <div class="flex min-w-0 items-center gap-1">
-            <ViewSidebar.CloseButton class="shrink-0" />
-            <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
-          </div>
-        </ViewSidebar.Header>
-      </Show>
+      <ViewSidebar.Header
+        search={props.search}
+        searchLabel={props.searchLabel}
+        searchOpen={props.searchOpen}
+        onSearchOpenChange={props.onSearchOpenChange}
+        actions={props.actions}
+      >
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton class="shrink-0" />
+          <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
+        </div>
+      </ViewSidebar.Header>
       <ViewSidebar.Primary>
         {props.createAction ?? (
-          <SidebarCreateButton label={props.label} onCreate={props.onCreate} />
+          <SidebarCreateButton
+            label={props.label}
+            text={props.createText}
+            onCreate={props.onCreate}
+          />
         )}
       </ViewSidebar.Primary>
     </header>
@@ -44,6 +48,8 @@ export function SidebarCreateHeader(props: {
 
 export function SidebarCreateButton(props: {
   label: string;
+  /** The desktop button's visible label; it says "New" without one. */
+  text?: string;
   onCreate: () => void;
   ref?: (element: HTMLElement) => void;
 }) {
@@ -68,6 +74,7 @@ export function SidebarCreateButton(props: {
       <ViewCreateButton
         presentation="sidebar"
         aria-label={props.label}
+        text={props.text}
         ref={props.ref}
         {...pressHandlers((event) => {
           event.preventDefault();

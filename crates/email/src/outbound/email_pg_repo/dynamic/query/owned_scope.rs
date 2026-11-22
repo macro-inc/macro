@@ -13,9 +13,11 @@
 //!   conditions an index serves: the inbox, the filter's thread-level terms
 //!   and the cursor. The *superset* stream sorts the threads the address
 //!   indexes list (`matching_threads`, without mailbox facts), which is cheap
-//!   when the addresses are rare in the mail. The *inbox* stream merges each
-//!   inbox's newest threads from `idx_email_threads_non_spam_link_ts_id`, up
-//!   to a window of threads, which is cheap when they are common.
+//!   when the addresses are rare in the mail. The initial sparse superset
+//!   fetches each distinct match by primary key, so its estimate cannot
+//!   turn those IDs into a filter over the whole mailbox. The *inbox* stream
+//!   merges each inbox's newest threads from `idx_email_threads_non_spam_link_ts_id`,
+//!   up to a window of threads, which is cheap when they are common.
 //! - Each streamed thread then gets the general builder's preview pick, its
 //!   latest message the view and the filter accept, in order, until the page
 //!   fills; a thread with none drops out. The pick is the general builder's
@@ -44,11 +46,11 @@
 //!
 //! A walked thread whose messages miss the addresses costs the pick a read of
 //! each of them, so on a cold cache a window of addresses gone quiet costs
-//! several times their superset. Every statement reads a bounded number of
-//! rows ([`MAX_ROUND_WINDOW`] threads, [`MAX_SUPERSET_CAP`] superset rows),
-//! and the walks and the probes grow geometrically, so a page costs a small
-//! multiple of the cheaper of walking to its last row and reading the
-//! superset. The request as a whole has no bound: a superset past
+//! several times their superset. The windows and emitted probe rows are
+//! capped ([`MAX_ROUND_WINDOW`] threads, [`MAX_SUPERSET_CAP`] superset rows),
+//! and their sizes grow geometrically. These caps do not bound recipients
+//! rejected by a role filter or messages inspected by a thread's preview
+//! pick. The request as a whole has no bound: a superset past
 //! [`MAX_SUPERSET_CAP`] rows leaves only the walk, which goes on to the
 //! page's last row or the end of the inboxes, about what reading that
 //! superset would cost. A page never comes up short to save rounds, so it
@@ -77,6 +79,9 @@ use item_filters::ast::email::EmailLiteral;
 use sqlx::{PgConnection, Postgres, QueryBuilder};
 use tracing::field::Empty;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod stream_plan;
 
 use super::super::SqlFragment;
 use super::super::filters::{
@@ -198,6 +203,8 @@ pub(crate) fn inbox_window(query_limit: i64, window_per_row: i64) -> i64 {
 enum Stream {
     /// The threads the address indexes list, sorted.
     Superset,
+    /// A superset the initial capped probe found small enough for indexed lookups.
+    SparseSuperset,
     /// Each inbox's newest threads, merged, up to `window` threads.
     Inboxes { window: i64 },
 }
@@ -309,9 +316,12 @@ impl<'a> OwnedRead<'a> {
             .copied()
             .filter(|inbox| owners.iter().all(|owner| owner == inbox))
             .collect();
-        let Some(superset) =
-            build_address_superset(email_filter, &params.resolved, &params.link_ids)
-        else {
+        let Some(superset) = build_address_superset(
+            email_filter,
+            &params.resolved,
+            &params.link_ids,
+            tuning.superset_limit,
+        ) else {
             return Err(Box::new(params));
         };
         let contact_scope = build_contact_scope(email_filter, &params.resolved, &params.link_ids);
@@ -359,7 +369,7 @@ impl<'a> OwnedRead<'a> {
             (stats, Vec::new())
         } else {
             let superset_rows = self
-                .superset_rows(connection, self.tuning.superset_limit)
+                .superset_rows(connection, self.tuning.superset_limit, true)
                 .await?;
             span.record("superset_rows", superset_rows);
             self.read(connection, superset_rows).await?
@@ -391,7 +401,9 @@ impl<'a> OwnedRead<'a> {
             walked: 0,
         };
         if superset_rows <= self.tuning.superset_limit {
-            let rows = self.page(connection, Stream::Superset, None, limit).await?;
+            let rows = self
+                .page(connection, Stream::SparseSuperset, None, limit)
+                .await?;
             return Ok((stats, rows));
         }
         let mut window = inbox_window(limit, self.tuning.window_per_row);
@@ -427,7 +439,7 @@ impl<'a> OwnedRead<'a> {
                 if self.tuning.probes_again(cap, over) {
                     stats.probes += 1;
                     stats.probe_cap = Some(cap);
-                    if self.superset_rows(connection, cap).await? <= cap {
+                    if self.superset_rows(connection, cap, false).await? <= cap {
                         rows.extend(
                             self.page(connection, Stream::Superset, Some(below), left)
                                 .await?,
@@ -512,19 +524,29 @@ impl<'a> OwnedRead<'a> {
         &self,
         connection: &mut PgConnection,
         cap: i64,
+        indexed: bool,
     ) -> Result<i64, sqlx::Error> {
-        let mut builder = QueryBuilder::new("");
-        self.push_contact_ctes(&mut builder, "WITH ");
-        builder.push("\n        SELECT count(*) FROM (SELECT 1 FROM (\n            ");
-        self.push_branches(&mut builder, "UNION ALL");
-        builder.push("\n        ) AS superset LIMIT ");
-        builder.push_bind(cap.saturating_add(1).max(0));
-        builder.push(") AS capped");
-        builder
+        self.probe(cap, indexed)
             .build_query_scalar()
             .persistent(false)
             .fetch_one(&mut *connection)
             .await
+    }
+
+    fn probe(&self, cap: i64, indexed: bool) -> QueryBuilder<'static, Postgres> {
+        let mut builder = QueryBuilder::new("");
+        self.push_contact_ctes(&mut builder, "WITH ");
+        builder.push("\n        SELECT count(*) FROM (SELECT 1 FROM (\n            ");
+        let branches = if indexed {
+            &self.superset.indexed_branches
+        } else {
+            &self.superset.branches
+        };
+        self.push_branches(&mut builder, branches, "UNION ALL");
+        builder.push("\n        ) AS superset LIMIT ");
+        builder.push_bind(cap.saturating_add(1).max(0));
+        builder.push(") AS capped");
+        builder
     }
 
     /// The hoisted contact CTEs the branches read, the first after `lead`.
@@ -538,8 +560,13 @@ impl<'a> OwnedRead<'a> {
         }
     }
 
-    fn push_branches(&self, builder: &mut QueryBuilder<'static, Postgres>, operator: &str) {
-        for (index, branch) in self.superset.branches.iter().cloned().enumerate() {
+    fn push_branches(
+        &self,
+        builder: &mut QueryBuilder<'static, Postgres>,
+        branches: &[SqlFragment],
+        operator: &str,
+    ) {
+        for (index, branch) in branches.iter().cloned().enumerate() {
             if index > 0 {
                 builder.push(format!("\n            {operator}\n            "));
             }
@@ -557,7 +584,7 @@ impl<'a> OwnedRead<'a> {
     ) -> QueryBuilder<'static, Postgres> {
         let sort_ts_field = get_sort_timestamp_field(self.view);
         let mut builder = QueryBuilder::new("");
-        if matches!(stream, Stream::Superset) {
+        if matches!(stream, Stream::Superset | Stream::SparseSuperset) {
             self.push_contact_ctes(&mut builder, "\n        WITH ");
             let separator = if self.superset.contact_ctes.is_empty() {
                 "\n        WITH "
@@ -567,7 +594,12 @@ impl<'a> OwnedRead<'a> {
             builder.push(format!(
                 "{separator}matching_threads AS MATERIALIZED (\n            "
             ));
-            self.push_branches(&mut builder, "UNION");
+            let branches = if matches!(stream, Stream::SparseSuperset) {
+                &self.superset.indexed_branches
+            } else {
+                &self.superset.branches
+            };
+            self.push_branches(&mut builder, branches, "UNION");
             builder.push("\n        )");
         }
         push_page_head(&mut builder, &self.params, true);
@@ -634,11 +666,29 @@ impl<'a> OwnedRead<'a> {
         sort_ts_field: &str,
     ) {
         match stream {
-            Stream::Superset => {
-                self.push_stream_select(builder, sort_ts_field);
+            Stream::Superset | Stream::SparseSuperset => {
+                if matches!(stream, Stream::SparseSuperset) {
+                    self.push_stream_columns(builder, sort_ts_field);
+                    // A recipient lookup can change the CTE's estimate enough
+                    // to scan the mailbox. Fetch the proven-small ID set first;
+                    // DISTINCT keeps one thread when several messages match.
+                    builder.push(
+                        r#"
+                    FROM (SELECT DISTINCT thread_id FROM matching_threads) matched
+                    CROSS JOIN LATERAL (
+                        SELECT * FROM email_threads WHERE id = matched.thread_id OFFSET 0
+                    ) AS t
+                    WHERE "#,
+                    );
+                } else {
+                    self.push_stream_select(builder, sort_ts_field);
+                }
                 builder.push("t.link_id = ANY(");
                 builder.push_bind(self.inboxes.clone());
-                builder.push(") AND t.id IN (SELECT thread_id FROM matching_threads)");
+                builder.push(")");
+                if matches!(stream, Stream::Superset) {
+                    builder.push(" AND t.id IN (SELECT thread_id FROM matching_threads)");
+                }
                 self.push_stream_filters(builder, sort_ts_field, below);
                 builder.push(
                     r#"
@@ -678,13 +728,21 @@ impl<'a> OwnedRead<'a> {
     /// A stream's columns, up to its `WHERE`. All Mail's `created_at` and
     /// `updated_at` are its sort date, as in the general builder.
     fn push_stream_select(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
+        self.push_stream_columns(builder, ts);
+        builder.push(
+            r#"
+                    FROM email_threads t
+                    WHERE "#,
+        );
+    }
+
+    /// Shared projection for mailbox walks and matched-thread fetches.
+    fn push_stream_columns(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
         builder.push(format!(
             r#"
                     SELECT t.id, t.provider_id, t.link_id, t.inbox_visible, t.is_read,
                            t.is_signal, t.project_id,
-                           {ts} AS created_at, {ts} AS updated_at, {ts} AS effective_ts
-                    FROM email_threads t
-                    WHERE "#
+                           {ts} AS created_at, {ts} AS updated_at, {ts} AS effective_ts"#
         ));
     }
 

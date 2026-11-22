@@ -11,6 +11,8 @@ export interface UserUnsubscribe {
   item_id: string;
   /** The item type */
   item_type: string;
+  /** The item still notifies the user when a message @mentions them directly. */
+  mentions_only?: boolean;
   /** None for permanent mutes; notifications resume automatically at this deadline. */
   snoozed_until?: UserUnsubscribeSnoozedUntil;
 }

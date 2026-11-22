@@ -736,7 +736,7 @@ describe('Message tool runs', () => {
             row('find:0', 'Search email'),
             row('read:0', 'Read email thread'),
             row('read:1', 'Read attachment'),
-            row('draft', 'Workspace step failed', 'failed'),
+            row('draft', 'A step failed', 'failed'),
           ]
         )}
         inFlight={false}
@@ -769,7 +769,7 @@ describe('Message tool runs', () => {
           null,
           [
             row('a', 'Read', 'completed', 'a.rs'),
-            row('live', 'Working in your workspace', 'running'),
+            row('live', 'Working on it', 'running'),
           ]
         )}
         inFlight

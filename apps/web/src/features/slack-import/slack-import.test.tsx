@@ -27,9 +27,7 @@ const host = vi.hoisted(() => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: host.enabled }),
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableSlackArchiveImport: {},
-}));
+vi.mock('@core/constant/featureFlags', () => ({}));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettings: host.openSettings }),
 }));
@@ -37,10 +35,7 @@ vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
 vi.mock('@app/features/connector-import/primitives/promotion', () => ({
   hideImportPromotion: host.hidePromotion,
 }));
-vi.mock('@core/pipedream/flag', () => ({
-  usePipedreamMcpFlag: () => () => true,
-}));
-vi.mock('@core/pipedream/pendingConnect', () => ({
+vi.mock('@core/connectors/pendingConnect', () => ({
   requestConnectApp: host.requestConnect,
 }));
 vi.mock('@core/util/reloadForNewerBuild', () => ({
@@ -109,22 +104,22 @@ describe('Slack import production boundary', () => {
     await screen.findByText('Mounted import');
     host.props!.onConnect!();
     expect(host.requestConnect).toHaveBeenCalledWith(
-      'slack_v2',
+      'slack',
       'import-slack-channels'
     );
     expect(host.openSettings).toHaveBeenCalledWith('Connected');
   });
 
-  it.each([
-    { isAdmin: false, enabled: true },
-    { isAdmin: true, enabled: false },
-  ])('mounts no queries for $isAdmin admin / $enabled flag', (gate) => {
-    host.enabled = gate.enabled;
-    render(() => <SlackImport teamId="team" isAdmin={gate.isAdmin} />);
-    expect(screen.queryByText('Mounted import')).toBeNull();
-    expect(host.channels).not.toHaveBeenCalled();
-    expect(host.createSource).not.toHaveBeenCalled();
-  });
+  it.each([{ isAdmin: false, enabled: true }])(
+    'mounts no queries for $isAdmin admin / $enabled flag',
+    (gate) => {
+      host.enabled = gate.enabled;
+      render(() => <SlackImport teamId="team" isAdmin={gate.isAdmin} />);
+      expect(screen.queryByText('Mounted import')).toBeNull();
+      expect(host.channels).not.toHaveBeenCalled();
+      expect(host.createSource).not.toHaveBeenCalled();
+    }
+  );
 
   it('remounts on team changes, unmounts on role revocation and wires all completion refreshes', async () => {
     const [admin, setAdmin] = createSignal(true);

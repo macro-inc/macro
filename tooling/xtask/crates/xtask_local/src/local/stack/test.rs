@@ -14,14 +14,14 @@ fn stack_state_roundtrips() {
         egress_url: None,
         preview_ssh_host: None,
         traces_enabled: false,
-        computers: Some(Fleet::Incus),
+        computers: Some(Fleet::Docker),
     };
     let json = serde_json::to_string(&state).unwrap();
     let back: StackState = serde_json::from_str(&json).unwrap();
     assert_eq!(back.mode, "local");
     assert_eq!(back.frontend, "static");
     assert_eq!(back.binaries_dir, Some(PathBuf::from("/tmp/binaries")));
-    assert_eq!(back.computers, Some(Fleet::Incus));
+    assert_eq!(back.computers, Some(Fleet::Docker));
     assert!(mode_from_label(&back.mode).is_ok());
     assert!(mode_from_label("nonsense").is_err());
 }

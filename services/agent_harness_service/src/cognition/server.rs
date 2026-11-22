@@ -6,7 +6,7 @@ use crate::cognition::{
     config::{Config, Environment},
     service::{
         self,
-        integration_analytics::{IntegrationAnalytics, IntegrationChange, IntegrationEvent},
+        integration_analytics::{IntegrationAnalytics, IntegrationChange},
     },
 };
 use ai_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
@@ -96,14 +96,15 @@ impl CognitionRuntime {
 ///
 /// `import_jobs` are the harness's import jobs: this runtime's Notion imports
 /// and the stalled-import sweeper run on them, and the harness hands them
-/// over on shutdown. `mcp_http` is the harness's guarded client for users'
-/// own MCP servers.
+/// over on shutdown. `composed` is the process's one connectors composition:
+/// chat, imports, Granola's sync and onboarding read connections through it
+/// and the `/connectors` routes serve it.
 pub async fn build(
     config: Config,
     db: sqlx::PgPool,
     event_broker_tracker: TaskTracker,
     import_jobs: ai_tools::ImportJobs,
-    mcp_http: mcp_client::outbound::guarded_http::McpHttp,
+    composed: &connectors::composition::Composed,
 ) -> anyhow::Result<CognitionRuntime> {
     let public_url = macro_service_urls::CognitionPublicUrl::new()?;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -251,7 +252,9 @@ pub async fn build(
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
+        EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
+            crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+        )),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
@@ -362,6 +365,12 @@ pub async fn build(
         connection_gateway: channels_connection_gateway.clone(),
         sqs: aws_sdk_sqs::Client::new(&aws_config),
         macro_event_broker: macro_event_broker.clone(),
+        environment: config.environment,
+        feature_flags: ai_tools::service_feature_flags(
+            config.posthog_api_key.value(),
+            config.posthog_host.value(),
+            config.environment,
+        )?,
     };
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
@@ -385,14 +394,6 @@ pub async fn build(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
-    let document_tool_context = match ai_tools::canvas_artifacts_rollout(
-        config.posthog_api_key.value(),
-        config.posthog_host.value(),
-        config.environment,
-    )? {
-        Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
-        None => document_tool_context,
-    };
 
     tracing::info!("initialized document tool context");
 
@@ -455,7 +456,9 @@ pub async fn build(
     ));
     let user_email_service = Arc::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
+                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+            )),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             sqs_client.clone(),
             crm_service.clone(),
@@ -591,151 +594,33 @@ pub async fn build(
 
     // The import pipeline: staged/imported external items, Slack discovery,
     // and the Notion page import job. Built before the tool service context
-    // so the chat toolset gets a wired import context.
-    let mcp_encryption_key = mcp_client::domain::models::AesKey::try_from(
-        config.mcp_credentials_key_secret_name.as_ref(),
-    )
-    .context("invalid MCP credentials encryption key")?;
+    // so the chat toolset gets a wired import context. Granola's webhook
+    // secrets are sealed with a key derived from the MCP credentials key.
+    let mcp_encryption_key =
+        connectors::composition::AesKey::try_from(config.mcp_credentials_key_secret_name.as_ref())
+            .context("invalid MCP credentials encryption key")?;
     let granola_signing_key = *mcp_encryption_key.as_bytes();
-    let mcp_server_repo = mcp_client::outbound::NativeServerStore::new(
-        mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key),
-        Some(Arc::new(
-            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
-                (*auth_service_client).clone(),
-            ),
-        )),
-    );
+    let connections = Arc::new(composed.connectors.clone());
 
-    // The Pipedream MCP stack, fully separate from the native one above
-    // (own endpoints, own table, own toolset). Without credentials its
-    // endpoints answer 501 and its toolsets come up empty. Connect-flow
-    // webhooks need both URI and secret; a half-set pair is ignored so we
-    // never mint a callback we cannot serve.
-    let pipedream_client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>> = match (
-        config.pipedream_client_id.value(),
-        config.pipedream_client_secret.value(),
-        config.pipedream_project_id.value(),
-    ) {
-        (Some(client_id), Some(client_secret), Some(project_id)) => {
-            let webhook_uri = match (
-                config.pipedream_webhook_uri.value(),
-                config.pipedream_webhook_secret.value(),
-            ) {
-                (Some(uri), Some(_)) => Some(uri.to_owned()),
-                (None, None) => None,
-                _ => {
-                    tracing::warn!(
-                        "ignoring incomplete Pipedream webhook config; set both PIPEDREAM_WEBHOOK_URI and PIPEDREAM_WEBHOOK_SECRET"
-                    );
-                    None
-                }
-            };
-            let client = pipedream_mcp::outbound::api::PipedreamClient::new(
-                pipedream_mcp::outbound::api::PipedreamConfig {
-                    client_id: client_id.to_owned(),
-                    client_secret: client_secret.to_owned(),
-                    project_id: project_id.to_owned(),
-                    environment: config
-                        .pipedream_environment
-                        .value()
-                        .unwrap_or(match config.environment {
-                            Environment::Production => "production",
-                            _ => "development",
-                        })
-                        .to_owned(),
-                    api_url: config
-                        .pipedream_api_url
-                        .value()
-                        .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_API_URL)
-                        .to_owned(),
-                    mcp_url: config
-                        .pipedream_mcp_url
-                        .value()
-                        .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_MCP_URL)
-                        .to_owned(),
-                    allowed_origins: match config.pipedream_allowed_origins.value() {
-                        Some(origins) => origins
-                            .split(',')
-                            .map(|origin| origin.trim().to_owned())
-                            .filter(|origin| !origin.is_empty())
-                            .collect(),
-                        None => match config.environment {
-                            Environment::Production => vec!["https://macro.com".to_owned()],
-                            Environment::Develop => vec![
-                                "https://dev.macro.com".to_owned(),
-                                "http://localhost:3000".to_owned(),
-                            ],
-                            Environment::Local => vec!["http://localhost:3000".to_owned()],
-                        },
-                    },
-                },
-            )
-            .context("failed to build Pipedream client")?;
-            Some(Arc::new(match webhook_uri {
-                Some(uri) => client.with_webhook_uri(uri),
-                None => client,
-            }))
-        }
-        _ => {
-            tracing::info!("Pipedream credentials not set; Pipedream MCP connectors disabled");
-            None
-        }
-    };
-    // Macro Connect beside Pipedream: a user the `macro-connect` rollout is
-    // on for is on Connect alone; everyone else stays on Pipedream.
-    let connect_adapter = ai_tools::connect_adapter(config.connect_customer_key.value())?;
-    let rollout = ai_tools::macro_connect_rollout(
-        config.posthog_api_key.value(),
-        config.posthog_host.value(),
-        config.environment,
-    )?;
-    let connectors: ai_tools::ToolPipedreamConnection = pipedream_client.as_ref().map(|client| {
-        let backends = pipedream_mcp::outbound::dispatch::ConnectorBackends::new(
-            client.clone(),
-            connect_adapter.clone(),
-        );
-        Arc::new(match &rollout {
-            Some(rollout) => backends.with_rollout(rollout.clone()),
-            None => backends,
-        })
-    });
-    let pipedream_repo =
-        pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone());
     let granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>> =
-        pipedream_client.as_ref().map(|client| {
-            Arc::new(granola_sync::domain::service::Service {
-                repo: granola_sync::outbound::pg_repo::PgSyncRepository::new(
-                    db.clone(),
-                    &granola_signing_key,
-                ),
-                granola: granola_sync::outbound::api::GranolaApi(client.clone()),
-                accounts: granola_sync::outbound::accounts::ConnectedAccounts(
-                    pipedream_repo.clone(),
-                ),
-                verifier: granola_sync::outbound::signature::StandardWebhooks,
-                calls: Arc::new(call::domain::imports::CallImportServiceImpl(
-                    call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(
-                        db.clone(),
-                    ),
-                    macro_event_broker.clone(),
-                )),
-                public_url: public_url.to_string(),
-            }) as Arc<dyn granola_sync::domain::service::SyncService>
-        });
+        Some(Arc::new(granola_sync::domain::service::Service {
+            repo: granola_sync::outbound::pg_repo::PgSyncRepository::new(
+                db.clone(),
+                &granola_signing_key,
+            ),
+            granola: granola_sync::outbound::api::GranolaApi(Arc::clone(&connections)),
+            accounts: granola_sync::outbound::accounts::ConnectedAccounts(Arc::clone(&connections)),
+            verifier: granola_sync::outbound::signature::StandardWebhooks,
+            calls: Arc::new(call::domain::imports::CallImportServiceImpl(
+                call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(db.clone()),
+                macro_event_broker.clone(),
+            )),
+            public_url: public_url.to_string(),
+        })
+            as Arc<dyn granola_sync::domain::service::SyncService>);
     let granola_worker = granola_sync
         .as_ref()
         .map(|service| tokio::spawn(granola_sync::inbound::run_worker(service.clone())));
-
-    // The one sanctioned meeting point of the two MCP stacks: agents load
-    // tools through this selector, which prefers a user's Pipedream
-    // connectors and falls back to the native ones (see `mcp_select`).
-    // The import service's live Slack source shares this selector.
-    let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
-        Arc::new(mcp_server_repo.clone()),
-        mcp_http.clone(),
-        Arc::new(pipedream_repo.clone()),
-        Arc::new(connectors.clone()),
-    ));
 
     // Nudges the user's connected clients when import rows flip, so setup
     // sections and chat surfaces update immediately instead of on the next
@@ -786,32 +671,23 @@ pub async fn build(
     let import_service = Arc::new(
         import::domain::service::ImportServiceImpl::new(
             ai_tools::build_import_repo(db.clone()),
-            mcp_selector.clone(),
+            Arc::clone(&connections),
             Arc::new(entity_creator),
             recorder.clone(),
         )
         .with_slack_source(Arc::new(
-            import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
+            import::outbound::mcp_slack_source::McpSlackSource::new(Arc::clone(&connections)),
         ))
         .with_tracker_connections(
-            Arc::new(
-                import_linear::outbound::client::PipedreamLinearConnections::new(
-                    Arc::new(pipedream_repo.clone()),
-                    connectors.clone(),
-                ),
-            ),
-            Arc::new(
-                import_jira::outbound::client::PipedreamJiraConnections::new(
-                    Arc::new(pipedream_repo.clone()),
-                    connectors.clone(),
-                ),
-            ),
+            Arc::new(import_linear::outbound::client::LinearConnections::new(
+                Arc::clone(&connections),
+            )),
+            Arc::new(import_jira::outbound::client::JiraConnections::new(
+                Arc::clone(&connections),
+            )),
         )
         .with_notion_connections(Arc::new(
-            import_notion::outbound::pipedream::PipedreamNotionConnections::new(
-                Arc::new(pipedream_repo.clone()),
-                connectors.clone(),
-            ),
+            import_notion::outbound::connected::ConnectedNotion::new(Arc::clone(&connections)),
         ))
         .with_admission(admission.clone())
         .with_notifier(import_notify)
@@ -834,6 +710,7 @@ pub async fn build(
         &databases_tool_context,
         soup_service.clone(),
         db.clone(),
+        side_effect_clients.feature_flags.clone(),
     );
     let crm_tool_context = ai_tools::build_crm_tool_context(db.clone());
     let pipeline_tool_context = ai_tools::build_pipeline_tool_context(
@@ -880,7 +757,7 @@ pub async fn build(
             recorder.clone(),
         ),
         cognition_tool_context: ai_tools::build_cognition_tool_context()?,
-        connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None, None),
+        connector_tool_context: ai_tools::build_connector_tool_context(Some(composed)),
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
@@ -925,9 +802,6 @@ pub async fn build(
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),
         ),
-        mcp_server_tool_context: ai_tools::ToolMcpServerToolContext::wired(
-            mcp_client::domain::service::ServerDirectory::new(Arc::new(mcp_server_repo.clone())),
-        ),
         chat_tool_context,
         channel_tool_context,
         channel_media_upload_tool_context: ai_tools::build_channel_media_upload_tool_context()?,
@@ -936,7 +810,7 @@ pub async fn build(
             ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             DocumentStorageServiceUrl::new()?.to_string(),
-            pipedream_client.clone(),
+            Some(composed.connectors.clone()),
         ),
         read_agent_session_context: ai_tools::build_read_agent_session_context(
             db.clone(),
@@ -962,7 +836,6 @@ pub async fn build(
             &document_tool_context,
         ),
         schedule_tool_context: ai_tools::build_routine_tool_context()?,
-        anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         web_search_provider: ai_tools::build_web_search_provider_from_env(),
         admission,
         recorder,
@@ -994,90 +867,33 @@ pub async fn build(
 
     let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
         onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
-        Arc::new(mcp_server_repo.clone()),
+        Arc::clone(&connections),
     ));
 
     tracing::info!("initialized onboarding service");
 
-    let mcp_client_public_url = &public_url;
-    let mcp_client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(
-        format!("{mcp_client_public_url}/mcp/servers/auth/client-metadata"),
-        format!("{mcp_client_public_url}/mcp/servers/auth/callback"),
-    );
-    let mcp_oauth_state_store =
-        mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client.clone());
-    let mcp_pre_registered =
-        mcp_client::domain::provider_registry::PreRegisteredProviders::from_env()?;
-    let mcp_oauth = mcp_client::outbound::oauth::OAuthService::new(
-        mcp_server_repo.clone(),
-        mcp_oauth_state_store,
-        mcp_client_metadata.clone(),
-        mcp_http,
-        mcp_pre_registered,
-    );
-    // Record connector connects and disconnects for product analytics.
+    // The `/connectors` routes and the public callbacks over the process's
+    // connectors, recording connects and disconnects for product analytics.
     let integration_analytics = IntegrationAnalytics::from_config(&config, &db);
-    let analytics_for_auth_hook = integration_analytics.clone();
-    let mcp_auth_hook: mcp_client::inbound::axum_router::McpAuthCompletedHook =
-        Arc::new(move |record: mcp_client::domain::models::McpServerRecord| {
-            analytics_for_auth_hook.record(
-                record.user_id,
-                IntegrationChange::Connected,
-                IntegrationEvent::mcp_server(&record.url),
-            );
-            Box::pin(async {})
-        });
-    let analytics_for_mcp_removed_hook = integration_analytics.clone();
-    let mcp_removed_hook: mcp_client::inbound::axum_router::McpServerRemovedHook =
-        Arc::new(move |record: mcp_client::domain::models::McpServerRecord| {
-            if let Some(event) = IntegrationEvent::removed_mcp_server(&record) {
-                analytics_for_mcp_removed_hook.record(
-                    record.user_id,
-                    IntegrationChange::Disconnected,
-                    event,
-                );
-            }
-            Box::pin(async {})
-        });
-    let mcp_state = mcp_client::inbound::McpRouterState::new(
-        mcp_server_repo,
-        mcp_oauth,
-        authorization_state.clone(),
-        mcp_client_metadata,
-    )
-    .with_auth_completed_hook(mcp_auth_hook)
-    .with_server_removed_hook(mcp_removed_hook);
-
-    let analytics_for_pipedream_hook = integration_analytics.clone();
-    let pipedream_auth_hook: pipedream_mcp::inbound::axum_router::PipedreamAuthCompletedHook =
-        Arc::new(
-            move |connection: pipedream_mcp::domain::models::PipedreamConnection| {
-                analytics_for_pipedream_hook.record(
-                    connection.user_id,
-                    IntegrationChange::Connected,
-                    IntegrationEvent::pipedream(&connection.app_slug),
-                );
-                Box::pin(async {})
-            },
-        );
-    let pipedream_disconnected_hook: pipedream_mcp::inbound::axum_router::PipedreamDisconnectedHook =
-        Arc::new(
-            move |connection: pipedream_mcp::domain::models::PipedreamConnection| {
-                integration_analytics.record(
-                    connection.user_id,
-                    IntegrationChange::Disconnected,
-                    IntegrationEvent::pipedream(&connection.app_slug),
-                );
-                Box::pin(async {})
-            },
-        );
-    let pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
-        pipedream_repo,
-        connectors,
+    let connectors_state = connectors::inbound::axum_router::ConnectorsRouterState::new(
+        composed.connectors.clone(),
+        composed.catalog.clone(),
         authorization_state.clone(),
     )
-    .with_auth_completed_hook(pipedream_auth_hook)
-    .with_disconnected_hook(pipedream_disconnected_hook);
+    .with_importable(importable_apps()?)
+    .with_connected_hook(connectors::inbound::each_of(
+        std::iter::once(integration_analytics.hook(IntegrationChange::Connected))
+            .chain(
+                granola_sync
+                    .clone()
+                    .map(granola_sync::inbound::connected_hook),
+            )
+            .collect(),
+    ))
+    .with_removed_hook(integration_analytics.hook(IntegrationChange::Disconnected));
+    let callbacks_state =
+        connectors::inbound::callbacks::CallbacksState::new(composed.sign_ins.clone())
+            .with_connected_hook(integration_analytics.hook(IntegrationChange::Connected));
 
     let cancellation = tokio_util::sync::CancellationToken::new();
     if !matches!(config.environment, Environment::Local) {
@@ -1145,10 +961,10 @@ pub async fn build(
                 redis: (*redis_client).clone(),
             },
         },
-        mcp_state,
-        pipedream_state,
+        connectors_state,
+        callbacks_state,
+        connectors: composed.connectors.clone(),
         granola_sync,
-        mcp_selector,
         import_service,
         onboarding_service,
         macro_event_broker: macro_event_broker.clone(),
@@ -1162,4 +978,39 @@ pub async fn build(
         workers,
         cancellation,
     })
+}
+
+/// The apps Macro imports from, and what each import reads: Linear, Jira and
+/// Notion through the app's REST API, Slack's channels and the agent-led
+/// imports (the web's connector-import catalog) through the app's MCP tools.
+fn importable_apps() -> anyhow::Result<connectors::inbound::dto::Importable> {
+    use connectors::ConnectorId;
+    use connectors::inbound::dto::{ImportSurface, Importable};
+
+    let mut importable = Importable::new();
+    for (slug, surface) in [
+        ("linear", ImportSurface::Api),
+        ("jira", ImportSurface::Api),
+        ("notion", ImportSurface::Api),
+        ("slack", ImportSurface::Mcp),
+        ("airtable_oauth", ImportSurface::Mcp),
+        ("asana", ImportSurface::Mcp),
+        ("box", ImportSurface::Mcp),
+        ("close", ImportSurface::Mcp),
+        ("confluence", ImportSurface::Mcp),
+        ("dropbox", ImportSurface::Mcp),
+        ("github", ImportSurface::Mcp),
+        ("google_drive", ImportSurface::Mcp),
+        ("hubspot", ImportSurface::Mcp),
+        ("microsoft_onedrive", ImportSurface::Mcp),
+        ("monday", ImportSurface::Mcp),
+        ("salesforce_rest_api", ImportSurface::Mcp),
+        ("trello", ImportSurface::Mcp),
+    ] {
+        importable = importable.with(
+            ConnectorId::parse(slug).context("an import's app slug is not an app slug")?,
+            surface,
+        );
+    }
+    Ok(importable)
 }

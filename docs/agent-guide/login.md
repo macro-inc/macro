@@ -26,6 +26,10 @@ completion without submitting that consumed code again. Queued edits stay preser
 and the app opens only after cleanup succeeds. Changing the email, going back or
 requesting another code starts a new attempt that must verify with the server.
 
+The iOS picker includes **Continue with Apple**. Google and Apple glyphs scale
+into their 20px slots without cropping; the phone browser regression checks the
+Apple drawing stays within its viewport.
+
 ## Google sign-in on a local stack
 
 A local stack without real Google keys runs the Gmail emulator in Google's
@@ -99,6 +103,18 @@ permissions. Check that opening consent alone does not report an account
 connected, that returning from consent shows the second account, and that
 canceling leaves the app usable and says nothing was connected. iOS and Android
 continue to use their native authentication sessions.
+
+The deep link reaches the callback route through the split router, which mounts
+it a task before Solid Router's location shows it, so the callback reads
+`link_id` only once the location has landed on the route. The route's
+`view.inbox-link-callback` span records the wait
+(`email.link.callback.location.waited`), whether `link_id` and `token` arrived
+(never the token's value), the link id, the consent error or notice code, and
+the reported outcome (`email.link.callback.outcome`), with provisioning as an
+`email.link.callback.init` child. Without an installed desktop app,
+`src/features/auth/tests/inbox-link-deep-link.test.tsx` in `apps/web` drives the
+bridge's `navigate` payload through Solid Router, the split router and the
+callback; OS delivery of the `macro://` URL still needs a real desktop build.
 
 Every callback outcome is announced on web, desktop, and native. Init also
 succeeds when the provider's account chooser returns an account that is already
@@ -316,32 +332,32 @@ restores the correct step, shows the connected address, and allows continuation.
 
 Tools show a stable featured list: Linear, Notion, Slack, then startup tools
 such as PostHog and Stripe, followed by small-business tools such as QuickBooks.
-The featured Pipedream metadata is checked in; the remaining catalog uses one
-live paginated query. Search still covers the full directory. Verify load more,
-search, cancel/retry connection, and state persistence on return. Paging and
-Slack aliases must not duplicate cards. New Slack connections use `slack_v2`;
-existing `slack` accounts remain recognized. Production release requires a real
-Slack authorization and a successful read-only tool call, not just fixture tests.
-Cards use the Pipedream logo, with bundled icons and a generic plug as fallbacks.
+The featured catalog metadata is checked in; the remaining catalog uses one
+live paginated query (`GET /connectors/catalog`). Search still covers the full
+directory. Verify load more, search, cancel/retry connection, and state
+persistence on return. Paging must not duplicate cards; the server lists Slack
+once as `slack`. Production release requires a real Slack authorization and a
+successful read-only tool call, not just fixture tests.
+Cards use the catalog logo, with bundled icons and a generic plug as fallbacks.
 The catalog scrolls with the page; Continue stays visible in a sticky footer.
 At desktop and phone widths, verify scrolling over the cards moves the page,
 the last row remains reachable, and Continue stays fully visible after searching.
 
-GitHub uses Macro's native OAuth/re-authorization flow and returns to the tools
-step. It shows **Account linked**, distinct from agent-tool readiness. A
-**Configure GitHub repositories** action opens native GitHub App installation;
-repository access must not be inferred from the account link. No Pipedream
-GitHub card is offered. The same setup remains available in Settings.
+GitHub connects like any other tool: the server answers how (the Macro
+GitHub account link through `/app/connect/github`, or Macro Connect's consent
+page for someone on Connect), and the tile reads **Connected** only when the
+server says GitHub is. Once it is, a **Configure GitHub repositories** action
+opens native GitHub App installation; repository access must not be inferred
+from the connection. No catalog GitHub card is offered. The same setup remains
+available in Settings.
 
 Gmail and Google Calendar are hidden, including search and later pages. Google
-Drive and Google Sheets remain available in browse and search, with separate
-Pipedream connection state. Native Gmail and Calendar consent does not request
-Drive or Sheets scopes. Enabled native MCP and Pipedream connections show
-Connected. Disabled existing connections show Enable and reuse their stored
-authorization. Native and hosted tools coexist in both chat and sandbox agents,
-with native preference for known overlapping providers and Slack alias deduplication.
-Connection status failures have an explicit retry; they must not prevent
-independent providers such as native GitHub from connecting. Verify unknown
+Drive and Google Sheets remain available in browse and search, with their own
+connection state. Native Gmail and Calendar consent does not request Drive or
+Sheets scopes. Every tile's state is the server's (`GET /connectors`):
+connected apps show Connected, disabled ones show Enable and reuse their stored
+authorization, and a connection that no longer counts shows Connect.
+A failed connection-status read disables every tile until its explicit retry. Verify unknown
 status never launches a duplicate OAuth flow and continuation remains possible.
 Someone already on a team when they leave the tools step (joined by invite
 link or by domain) never sees the team step: Continue goes to the plan step, or

@@ -96,6 +96,7 @@ fn requests_are_bounded_and_operations_carry_the_right_text() {
                 idempotency_key: key,
                 message: content,
                 reply_to: None,
+                user_confirmation: None,
             },
             no_mentions,
         )
@@ -128,6 +129,7 @@ fn requests_are_bounded_and_operations_carry_the_right_text() {
                     idempotency_key: key,
                     message: content,
                     reply_to: None,
+                    user_confirmation: None,
                 },
                 no_mentions
             )
@@ -143,6 +145,7 @@ fn requests_are_bounded_and_operations_carry_the_right_text() {
                     mentions: vec![]
                 },
                 reply_to: None,
+                user_confirmation: None,
             },
             no_mentions
         )
@@ -173,4 +176,22 @@ fn only_the_author_changes_a_recent_message() {
         ..mine
     };
     assert!(authorize_mutation(Mutation::Edit, &old, identity, now).is_err());
+}
+
+/// A quoted approval gates the request but is not part of what is sent: a
+/// retry with or without it is the same intent, and it is never stored.
+#[test]
+fn the_users_quoted_approval_is_not_part_of_the_send() {
+    let request = |user_confirmation| SendReply {
+        idempotency_key: Uuid::from_u128(7),
+        message: ReplyContent::Text {
+            text: "on my way".into(),
+            mentions: vec![],
+        },
+        reply_to: None,
+        user_confirmation,
+    };
+    let quoted = send_intent(&request(Some("yes, send it".into())));
+    assert_eq!(quoted, request(None));
+    assert_eq!(quoted.user_confirmation, None);
 }

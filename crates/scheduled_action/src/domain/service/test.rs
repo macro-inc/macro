@@ -44,6 +44,11 @@ const FOREIGN_USER: &str = "macro|other@macro.com";
 pub(crate) struct FakeRepo {
     actions: Mutex<Vec<ScheduledAction>>,
     activities: Mutex<Vec<activity::Activity>>,
+    /// Routines whose owner chose their appearance.
+    owner_chosen: Mutex<Vec<Uuid>>,
+    /// An owner's choice that commits while the next agent's pick waits
+    /// for the routine's row.
+    owner_choice_before_the_pick: Mutex<Option<model_entity::EntityAppearance>>,
     records: Mutex<Vec<ActionExecutionRecord>>,
     /// Runs in progress, as claims would show them.
     running: Mutex<Vec<RunningRun>>,
@@ -146,20 +151,37 @@ impl ScheduledActionRepo for FakeRepo {
     async fn set_appearance(
         &self,
         change: crate::domain::appearance::ChangeAppearance,
-    ) -> Result<Option<model_entity::EntityAppearance>> {
+    ) -> Result<AppearanceSet> {
         let mut actions = self.actions.lock().unwrap();
         let action = actions
             .iter_mut()
             .find(|action| action.id == Some(change.id))
             .ok_or_else(|| anyhow::anyhow!("scheduled action not found"))?;
+        let mut owner_chosen = self.owner_chosen.lock().unwrap();
+        if change.chooser == AppearanceChooser::Agent
+            && let Some(look) = self.owner_choice_before_the_pick.lock().unwrap().take()
+        {
+            action.appearance = look;
+            owner_chosen.push(change.id);
+        }
+        let chosen = owner_chosen.contains(&change.id);
+        if chosen && change.chooser == AppearanceChooser::Agent {
+            return Ok(AppearanceSet::Kept {
+                current: action.appearance.clone(),
+            });
+        }
+        if !chosen && change.chooser == AppearanceChooser::Owner {
+            owner_chosen.push(change.id);
+        }
         let Some(activity) = change.activity(&action.appearance) else {
-            return Ok(None);
+            return Ok(AppearanceSet::Kept {
+                current: action.appearance.clone(),
+            });
         };
         self.activities.lock().unwrap().push(activity);
-        Ok(Some(std::mem::replace(
-            &mut action.appearance,
-            change.appearance,
-        )))
+        Ok(AppearanceSet::Changed {
+            previous: std::mem::replace(&mut action.appearance, change.appearance),
+        })
     }
 
     async fn create_action(&self, mut action: ScheduledAction) -> Result<ScheduledAction> {
@@ -466,6 +488,7 @@ pub(crate) fn configuration(events: bool) -> ActionConfiguration {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         description: String::new(),
+        appearance: None,
     }
 }
 
@@ -479,6 +502,7 @@ fn update(config: ActionConfiguration) -> ActionConfigurationUpdate {
         enabled: Some(config.enabled),
         run_visibility: Some(config.run_visibility),
         description: Some(config.description),
+        appearance: config.appearance,
     }
 }
 
@@ -523,7 +547,11 @@ async fn validates_before_persistence_and_rejects_cross_owner_selection() {
     *sessions.error.lock().unwrap() = Some(RoutineSessionError::Forbidden);
     config.task["user_prompt"] = json!("replacement");
     let error = svc
-        .update_action(edit_receipt(created.id.unwrap()), update(config))
+        .update_action(
+            edit_receipt(created.id.unwrap()),
+            update(config),
+            Requester::Person,
+        )
         .await
         .unwrap_err();
     assert_eq!(error.downcast_ref(), Some(&RoutineSessionError::Forbidden));
@@ -561,7 +589,7 @@ async fn without_sessions_agents_are_refused_but_models_and_explicit_switches_ar
         .unwrap();
     let id = created.id.unwrap();
     let error = base
-        .update_action(edit_receipt(id), update(config))
+        .update_action(edit_receipt(id), update(config), Requester::Person)
         .await
         .unwrap_err();
     assert_eq!(
@@ -574,7 +602,7 @@ async fn without_sessions_agents_are_refused_but_models_and_explicit_switches_ar
     for enabled in [false, true] {
         model.enabled = enabled;
         let error = base
-            .update_action(edit_receipt(id), update(model.clone()))
+            .update_action(edit_receipt(id), update(model.clone()), Requester::Person)
             .await
             .unwrap_err();
         assert_eq!(
@@ -585,7 +613,7 @@ async fn without_sessions_agents_are_refused_but_models_and_explicit_switches_ar
     }
     model.task["agent"] = json!(null);
     let switched = base
-        .update_action(edit_receipt(id), update(model.clone()))
+        .update_action(edit_receipt(id), update(model.clone()), Requester::Person)
         .await
         .unwrap();
     assert_eq!(switched.task, model.task);
@@ -617,7 +645,7 @@ async fn unavailable_agents_can_be_paused_deleted_and_have_history_read_without_
         *sessions.error.lock().unwrap() = Some(RoutineSessionError::RuntimeUnavailable);
         if !claimed {
             let error = svc
-                .update_action(edit_receipt(id), update(config.clone()))
+                .update_action(edit_receipt(id), update(config.clone()), Requester::Person)
                 .await
                 .unwrap_err();
             assert_eq!(
@@ -628,14 +656,14 @@ async fn unavailable_agents_can_be_paused_deleted_and_have_history_read_without_
         let validations = sessions.validations.lock().unwrap().len();
         config.enabled = false;
         let paused = svc
-            .update_action(edit_receipt(id), update(config.clone()))
+            .update_action(edit_receipt(id), update(config.clone()), Requester::Person)
             .await
             .unwrap();
         assert!(!paused.enabled);
         assert_eq!(paused.task, created.task);
         assert_eq!(paused.claimed.is_some(), claimed);
         // Disabling still works if acceptance has since been turned off.
-        base.update_action(edit_receipt(id), update(config))
+        base.update_action(edit_receipt(id), update(config), Requester::Person)
             .await
             .unwrap();
         svc.get_execution_records(view_receipt(id)).await.unwrap();
@@ -735,8 +763,12 @@ async fn default_gate_rejects_event_creation_and_transition_but_allows_cron() {
         .await
         .unwrap();
     assert_policy(
-        svc.update_action(edit_receipt(cron.id.unwrap()), update(configuration(true)))
-            .await,
+        svc.update_action(
+            edit_receipt(cron.id.unwrap()),
+            update(configuration(true)),
+            Requester::Person,
+        )
+        .await,
         ActionPolicyError::EventManagementDisabled,
     );
 }
@@ -760,7 +792,11 @@ async fn gate_off_rejects_enabling_an_existing_event_action() {
     config.enabled = true;
     assert_policy(
         disabled
-            .update_action(edit_receipt(action.id.unwrap()), update(config))
+            .update_action(
+                edit_receipt(action.id.unwrap()),
+                update(config),
+                Requester::Person,
+            )
             .await,
         ActionPolicyError::EventManagementDisabled,
     );
@@ -896,12 +932,17 @@ async fn nonowners_can_neither_read_nor_manage_routines() {
             ActionPolicyError::NotFound,
         );
         assert_policy(
-            svc.update_action(edit_receipt(id), update(configuration(true)))
-                .await,
+            svc.update_action(
+                edit_receipt(id),
+                update(configuration(true)),
+                Requester::Person,
+            )
+            .await,
             ActionPolicyError::NotFound,
         );
         assert_policy(
-            svc.set_enabled(edit_receipt(id), false).await,
+            svc.set_enabled(edit_receipt(id), false, Requester::Person)
+                .await,
             ActionPolicyError::NotFound,
         );
         assert_policy(
@@ -1013,7 +1054,7 @@ async fn updates_advance_revision_and_only_trigger_changes_or_enabling_reset_act
     svc.repo.actions.lock().unwrap()[0].event_activated_at = Some(past);
     config.task["prompt"] = json!("changed");
     let updated = svc
-        .update_action(edit_receipt(id), update(config.clone()))
+        .update_action(edit_receipt(id), update(config.clone()), Requester::Person)
         .await
         .unwrap();
     assert_eq!(updated.configuration_revision.get(), 2);
@@ -1021,14 +1062,14 @@ async fn updates_advance_revision_and_only_trigger_changes_or_enabling_reset_act
     assert_eq!(updated.event_activated_at, Some(past));
     config.enabled = false;
     let disabled = svc
-        .update_action(edit_receipt(id), update(config.clone()))
+        .update_action(edit_receipt(id), update(config.clone()), Requester::Person)
         .await
         .unwrap();
     assert_eq!(disabled.configuration_revision.get(), 3);
     assert_eq!(disabled.event_activated_at, Some(past));
     config.enabled = true;
     let enabled = svc
-        .update_action(edit_receipt(id), update(config.clone()))
+        .update_action(edit_receipt(id), update(config.clone()), Requester::Person)
         .await
         .unwrap();
     assert_eq!(enabled.configuration_revision.get(), 4);
@@ -1039,12 +1080,16 @@ async fn updates_advance_revision_and_only_trigger_changes_or_enabling_reset_act
     )
     .unwrap();
     let changed = svc
-        .update_action(edit_receipt(id), update(config))
+        .update_action(edit_receipt(id), update(config), Requester::Person)
         .await
         .unwrap();
     assert!(changed.event_activated_at.unwrap() > past);
     let cron = svc
-        .update_action(edit_receipt(id), update(configuration(false)))
+        .update_action(
+            edit_receipt(id),
+            update(configuration(false)),
+            Requester::Person,
+        )
         .await
         .unwrap();
     assert!(cron.event_activated_at.is_none());
@@ -1065,7 +1110,7 @@ async fn active_execution_blocks_replacement_but_allows_disabling_even_with_gate
     replacement.name = "new name".into();
     assert_policy(
         enabled
-            .update_action(edit_receipt(id), update(replacement))
+            .update_action(edit_receipt(id), update(replacement), Requester::Person)
             .await,
         ActionPolicyError::UpdateConflict,
     );
@@ -1076,13 +1121,13 @@ async fn active_execution_blocks_replacement_but_allows_disabling_even_with_gate
         grants(&enabled.repo),
     );
     assert_policy(
-        svc.update_action(edit_receipt(id), update(config.clone()))
+        svc.update_action(edit_receipt(id), update(config.clone()), Requester::Person)
             .await,
         ActionPolicyError::EventManagementDisabled,
     );
     config.enabled = false;
     let disabled = svc
-        .update_action(edit_receipt(id), update(config))
+        .update_action(edit_receipt(id), update(config), Requester::Person)
         .await
         .unwrap();
     assert!(!disabled.enabled);
@@ -1148,7 +1193,7 @@ async fn expired_claim_allows_configuration_replacement() {
         Some(Utc::now() - MAX_ACTION_TIME - chrono::Duration::seconds(1));
     config.name = "renamed".into();
     let updated = svc
-        .update_action(edit_receipt(id), update(config))
+        .update_action(edit_receipt(id), update(config), Requester::Person)
         .await
         .unwrap();
     assert_eq!(updated.name, "renamed");
@@ -1207,13 +1252,22 @@ async fn activation_changes_are_idempotent_and_keep_configuration() {
     let id = created.id.unwrap();
     assert!(matches!(rx.try_recv(), Ok(DispatchEvent::Create(_))));
 
-    let unchanged = svc.set_enabled(edit_receipt(id), true).await.unwrap();
+    let unchanged = svc
+        .set_enabled(edit_receipt(id), true, Requester::Person)
+        .await
+        .unwrap();
     assert_eq!(unchanged.configuration_revision.get(), 1);
     assert_eq!(unchanged.updated_at, created.updated_at);
     assert!(rx.try_recv().is_err());
 
-    let paused = svc.set_enabled(edit_receipt(id), false).await.unwrap();
-    let repeated = svc.set_enabled(edit_receipt(id), false).await.unwrap();
+    let paused = svc
+        .set_enabled(edit_receipt(id), false, Requester::Person)
+        .await
+        .unwrap();
+    let repeated = svc
+        .set_enabled(edit_receipt(id), false, Requester::Person)
+        .await
+        .unwrap();
     assert!(!repeated.enabled);
     assert_eq!(repeated.configuration_revision.get(), 2);
     assert_eq!(repeated.updated_at, paused.updated_at);
@@ -1221,7 +1275,10 @@ async fn activation_changes_are_idempotent_and_keep_configuration() {
     assert!(rx.try_recv().is_err());
 
     svc.repo.actions.lock().unwrap()[0].next_run_at = Some(Utc::now() - chrono::Duration::days(1));
-    let resumed = svc.set_enabled(edit_receipt(id), true).await.unwrap();
+    let resumed = svc
+        .set_enabled(edit_receipt(id), true, Requester::Person)
+        .await
+        .unwrap();
     assert!(resumed.enabled);
     assert_eq!(resumed.configuration_revision.get(), 3);
     assert!(
@@ -1360,18 +1417,26 @@ async fn gate_off_allows_pausing_an_event_action_but_not_resuming_it() {
         enabled.dispatcher_tx.clone(),
         grants(&enabled.repo),
     );
-    let paused = gated.set_enabled(edit_receipt(id), false).await.unwrap();
+    let paused = gated
+        .set_enabled(edit_receipt(id), false, Requester::Person)
+        .await
+        .unwrap();
     assert!(!paused.enabled);
     assert_eq!(paused.event_activated_at, action.event_activated_at);
     assert_policy(
-        gated.set_enabled(edit_receipt(id), true).await,
+        gated
+            .set_enabled(edit_receipt(id), true, Requester::Person)
+            .await,
         ActionPolicyError::EventManagementDisabled,
     );
     assert!(!enabled.repo.actions.lock().unwrap()[0].enabled);
 
     let past = Utc::now() - chrono::Duration::days(1);
     enabled.repo.actions.lock().unwrap()[0].event_activated_at = Some(past);
-    let resumed = enabled.set_enabled(edit_receipt(id), true).await.unwrap();
+    let resumed = enabled
+        .set_enabled(edit_receipt(id), true, Requester::Person)
+        .await
+        .unwrap();
     assert!(
         resumed.event_activated_at.unwrap() > past,
         "events published while paused must not be replayed"
@@ -1387,11 +1452,15 @@ async fn running_actions_can_be_paused_but_not_resumed() {
         .unwrap();
     let id = created.id.unwrap();
     svc.repo.actions.lock().unwrap()[0].claimed = Some(Utc::now());
-    let paused = svc.set_enabled(edit_receipt(id), false).await.unwrap();
+    let paused = svc
+        .set_enabled(edit_receipt(id), false, Requester::Person)
+        .await
+        .unwrap();
     assert!(!paused.enabled);
     assert!(paused.claimed.is_some());
     assert_policy(
-        svc.set_enabled(edit_receipt(id), true).await,
+        svc.set_enabled(edit_receipt(id), true, Requester::Person)
+            .await,
         ActionPolicyError::UpdateConflict,
     );
     assert!(!svc.repo.actions.lock().unwrap()[0].enabled);
@@ -1414,18 +1483,27 @@ async fn resuming_revalidates_the_stored_agent_but_pausing_does_not() {
     let id = created.id.unwrap();
     *sessions.error.lock().unwrap() = Some(RoutineSessionError::RuntimeUnavailable);
     let validations = sessions.validations.lock().unwrap().len();
-    let paused = svc.set_enabled(edit_receipt(id), false).await.unwrap();
+    let paused = svc
+        .set_enabled(edit_receipt(id), false, Requester::Person)
+        .await
+        .unwrap();
     assert_eq!(paused.task, created.task);
     assert_eq!(sessions.validations.lock().unwrap().len(), validations);
 
-    let error = svc.set_enabled(edit_receipt(id), true).await.unwrap_err();
+    let error = svc
+        .set_enabled(edit_receipt(id), true, Requester::Person)
+        .await
+        .unwrap_err();
     assert_eq!(
         error.downcast_ref(),
         Some(&RoutineSessionError::RuntimeUnavailable)
     );
     assert!(!base.repo.actions.lock().unwrap()[0].enabled);
     *sessions.error.lock().unwrap() = None;
-    let resumed = svc.set_enabled(edit_receipt(id), true).await.unwrap();
+    let resumed = svc
+        .set_enabled(edit_receipt(id), true, Requester::Person)
+        .await
+        .unwrap();
     assert!(resumed.enabled);
     assert_eq!(resumed.task, created.task);
 }
@@ -1440,7 +1518,9 @@ async fn configuration_updates_that_omit_activation_keep_it() {
         .id
         .unwrap();
     for enabled in [false, true] {
-        svc.set_enabled(edit_receipt(id), enabled).await.unwrap();
+        svc.set_enabled(edit_receipt(id), enabled, Requester::Person)
+            .await
+            .unwrap();
         let input = serde_json::from_value(json!({
             "name": format!("renamed while enabled={enabled}"),
             "kind": "Agent",
@@ -1448,7 +1528,10 @@ async fn configuration_updates_that_omit_activation_keep_it() {
             "task": {"model": "model", "prompt": "summarize", "user_prompt": "task"},
         }))
         .unwrap();
-        let updated = svc.update_action(edit_receipt(id), input).await.unwrap();
+        let updated = svc
+            .update_action(edit_receipt(id), input, Requester::Person)
+            .await
+            .unwrap();
         assert_eq!(updated.enabled, enabled);
         assert_eq!(updated.name, format!("renamed while enabled={enabled}"));
     }
@@ -1475,14 +1558,14 @@ async fn editing_an_overdue_one_off_keeps_its_unconsumed_firing() {
     }
     config.name = "Renamed while waiting for the worker".into();
     let updated = svc
-        .update_action(edit_receipt(id), update(config.clone()))
+        .update_action(edit_receipt(id), update(config.clone()), Requester::Person)
         .await
         .unwrap();
     assert_eq!(updated.next_run_at, Some(firing));
     svc.repo.actions.lock().unwrap()[0].next_run_at = None;
     config.name = "Renamed after completion".into();
     let updated = svc
-        .update_action(edit_receipt(id), update(config))
+        .update_action(edit_receipt(id), update(config), Requester::Person)
         .await
         .unwrap();
     assert_eq!(updated.next_run_at, None);
@@ -1504,10 +1587,14 @@ async fn a_past_once_time_is_due_on_save_but_never_rearmed_after_it_ran() {
 
     // The dispatcher ran it: nothing is left to run.
     svc.repo.actions.lock().unwrap()[0].next_run_at = None;
-    let paused = svc.set_enabled(edit_receipt(id), false).await.unwrap();
+    let paused = svc
+        .set_enabled(edit_receipt(id), false, Requester::Person)
+        .await
+        .unwrap();
     assert_eq!(paused.next_run_at, None);
     assert_policy(
-        svc.set_enabled(edit_receipt(id), true).await,
+        svc.set_enabled(edit_receipt(id), true, Requester::Person)
+            .await,
         ActionPolicyError::NoFutureFirings,
     );
 
@@ -1519,7 +1606,7 @@ async fn a_past_once_time_is_due_on_save_but_never_rearmed_after_it_ran() {
     ]}))
     .unwrap();
     let updated = svc
-        .update_action(edit_receipt(id), update(config))
+        .update_action(edit_receipt(id), update(config), Requester::Person)
         .await
         .unwrap();
     assert_eq!(updated.next_run_at, Some(later));
@@ -1554,6 +1641,7 @@ async fn conditions_are_rejected_unless_the_host_can_check_them() {
             .update_action(
                 edit_receipt(plain.id.unwrap()),
                 update(conditional_configuration()),
+                Requester::Person,
             )
             .await,
         ActionPolicyError::ConditionsDisabled,
@@ -1679,7 +1767,7 @@ async fn saving_names_code_steps_and_resaving_without_the_names_changes_nothing(
     // A client that doesn't echo the ids sends the same routine.
     let id = created.id.unwrap();
     let updated = svc
-        .update_action(edit_receipt(id), update(config))
+        .update_action(edit_receipt(id), update(config), Requester::Person)
         .await
         .unwrap();
     assert_eq!(
@@ -1728,7 +1816,9 @@ async fn a_github_trigger_runs_only_once_github_is_linked() {
         .unwrap();
     let id = paused.id.unwrap();
     assert_policy(
-        unlinked.set_enabled(edit_receipt(id), true).await,
+        unlinked
+            .set_enabled(edit_receipt(id), true, Requester::Person)
+            .await,
         ActionPolicyError::GithubNotLinked,
     );
 
@@ -1742,7 +1832,7 @@ async fn a_github_trigger_runs_only_once_github_is_linked() {
     .with_github_links(Linked(true));
     assert!(
         linked
-            .set_enabled(edit_receipt(id), true)
+            .set_enabled(edit_receipt(id), true, Requester::Person)
             .await
             .unwrap()
             .enabled
@@ -1772,11 +1862,18 @@ async fn a_description_is_trimmed_kept_when_omitted_cleared_when_empty_and_bound
     // Clients that predate the field omit it, which keeps it.
     let mut input = update(configuration(false));
     input.description = None;
-    let kept = svc.update_action(edit_receipt(id), input).await.unwrap();
+    let kept = svc
+        .update_action(edit_receipt(id), input, Requester::Person)
+        .await
+        .unwrap();
     assert_eq!(kept.description, "Label invoices.");
 
     let cleared = svc
-        .update_action(edit_receipt(id), update(configuration(false)))
+        .update_action(
+            edit_receipt(id),
+            update(configuration(false)),
+            Requester::Person,
+        )
         .await
         .unwrap();
     assert_eq!(cleared.description, "");
@@ -1788,6 +1885,7 @@ async fn a_description_is_trimmed_kept_when_omitted_cleared_when_empty_and_bound
                 description: "a".repeat(MAX_DESCRIPTION_CHARS + 1),
                 ..configuration(false)
             }),
+            Requester::Person,
         )
         .await,
         ActionPolicyError::DescriptionTooLong,
@@ -1803,7 +1901,11 @@ async fn an_update_that_changes_nothing_keeps_the_revision() {
         .unwrap();
     let id = created.id.unwrap();
     let same = svc
-        .update_action(edit_receipt(id), update(configuration(false)))
+        .update_action(
+            edit_receipt(id),
+            update(configuration(false)),
+            Requester::Person,
+        )
         .await
         .unwrap();
     // A new revision would supersede event runs queued under the old one.
@@ -1815,11 +1917,294 @@ async fn an_update_that_changes_nothing_keeps_the_revision() {
                 name: "renamed".into(),
                 ..configuration(false)
             }),
+            Requester::Person,
         )
         .await
         .unwrap();
     assert_ne!(
         renamed.configuration_revision,
         created.configuration_revision
+    );
+}
+
+/// Every routine's upgrades, newest first: a later release that found the
+/// code still checks, over a model's rewrite of the task it holds, saved
+/// with nobody reviewing it.
+struct Rewritten(serde_json::Value);
+
+impl crate::domain::ports::CodeUpgrades for Rewritten {
+    async fn record_checked(
+        &self,
+        _: &ScheduledAction,
+        _: &routine_program::SdkFingerprint,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn claim_rewrite(
+        &self,
+        _: &ScheduledAction,
+        _: &routine_program::SdkFingerprint,
+    ) -> Result<bool> {
+        Ok(false)
+    }
+
+    async fn save_rewrite(
+        &self,
+        _: &ScheduledAction,
+        _: &routine_program::SdkFingerprint,
+        _: &serde_json::Value,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn needs_update(
+        &self,
+        _: &ScheduledAction,
+        _: &routine_program::SdkFingerprint,
+        _: &str,
+        _: Option<&serde_json::Value>,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn stale_routines(
+        &self,
+        _: &routine_program::SdkFingerprint,
+        _: Option<Uuid>,
+        _: u16,
+    ) -> Result<Vec<Uuid>> {
+        Ok(Vec::new())
+    }
+
+    async fn list_upgrades(&self, _: Uuid) -> Result<Vec<CodeUpgrade>> {
+        Ok(vec![
+            CodeUpgrade {
+                id: Uuid::from_u128(2),
+                from_sdk: Some("0.3.0+current".into()),
+                to_sdk: "0.4.0+next".into(),
+                outcome: crate::domain::code_upgrade::UpgradeOutcome::Checked,
+                reason: None,
+                previous_task: self.0.clone(),
+                task: None,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            },
+            CodeUpgrade {
+                id: Uuid::from_u128(1),
+                from_sdk: Some("0.2.0+old".into()),
+                to_sdk: "0.3.0+current".into(),
+                outcome: crate::domain::code_upgrade::UpgradeOutcome::Rewritten,
+                reason: None,
+                previous_task: json!({}),
+                task: Some(self.0.clone()),
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            },
+        ])
+    }
+}
+
+/// A model's rewrite saved unreviewed while the routine wrote as Macro
+/// must not start writing as its owner: switching it to their identity is
+/// refused until its code changes. Other edits still save.
+#[tokio::test]
+async fn an_unreviewed_rewrite_cannot_start_writing_as_the_owner() {
+    let repo = Arc::new(FakeRepo::default());
+    let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+    tokio::spawn(async move { while rx.recv().await.is_some() {} });
+    let daily = json!({ "type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC" });
+    let rewritten = json!([
+        { "type": "code", "title": "Create a task", "source": "export async function main() { /* rewritten */ }" },
+    ]);
+    let config = program_configuration(daily.clone(), rewritten.clone());
+    let created = ScheduledActionServiceImpl::new(
+        Arc::clone(&repo),
+        Arc::new(FakeExecutor::default()),
+        tx.clone(),
+        grants(&repo),
+    )
+    .with_event_routines(Rollout(Some(true)))
+    .with_code(
+        Arc::new(crate::domain::code_check::test::Checker::default()),
+        Arc::new(crate::domain::code_upgrade::NoCodeUpgrades),
+    )
+    .create_action(&user_principal(), config.clone())
+    .await
+    .unwrap();
+    let svc = ScheduledActionServiceImpl::new(
+        Arc::clone(&repo),
+        Arc::new(FakeExecutor::default()),
+        tx,
+        grants(&repo),
+    )
+    .with_event_routines(Rollout(Some(true)))
+    .with_code(
+        Arc::new(crate::domain::code_check::test::Checker::default()),
+        Arc::new(Rewritten(created.task.clone())),
+    );
+    let id = created.id.unwrap();
+
+    let mut as_owner = config.clone();
+    as_owner.task["dangerously_operate_as_user"] = json!(true);
+    assert_policy(
+        svc.update_action(
+            edit_receipt(id),
+            update(as_owner.clone()),
+            Requester::Person,
+        )
+        .await,
+        ActionPolicyError::UnreviewedRewrite,
+    );
+    // Renaming the step leaves the model's code as it was.
+    let mut retitled = as_owner.clone();
+    retitled.task["steps"][0]["title"] = json!("Make a task");
+    assert_policy(
+        svc.update_action(edit_receipt(id), update(retitled), Requester::Person)
+            .await,
+        ActionPolicyError::UnreviewedRewrite,
+    );
+
+    let mut renamed = config.clone();
+    renamed.name = "Renamed".into();
+    let saved = svc
+        .update_action(edit_receipt(id), update(renamed), Requester::Person)
+        .await
+        .unwrap();
+    assert_eq!(saved.name, "Renamed");
+
+    let mut edited = as_owner;
+    edited.task["steps"][0]["source"] = json!("export async function main() { /* reviewed */ }");
+    let saved = svc
+        .update_action(edit_receipt(id), update(edited), Requester::Person)
+        .await
+        .unwrap();
+    assert_eq!(saved.task["dangerously_operate_as_user"], true);
+}
+
+/// Only a person makes a routine write as them: an agent's program and a
+/// routine's run can't create one that does, nor switch an existing one on.
+#[tokio::test]
+async fn only_a_person_makes_a_routine_write_as_them() {
+    let repo = Arc::new(FakeRepo::default());
+    let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+    tokio::spawn(async move { while rx.recv().await.is_some() {} });
+    let svc = ScheduledActionServiceImpl::new(
+        Arc::clone(&repo),
+        Arc::new(FakeExecutor::default()),
+        tx,
+        grants(&repo),
+    )
+    .with_event_routines(Rollout(Some(true)))
+    .with_code(
+        Arc::new(crate::domain::code_check::test::Checker::default()),
+        Arc::new(crate::domain::code_upgrade::NoCodeUpgrades),
+    );
+    let daily = json!({ "type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC" });
+    let steps = json!([
+        { "type": "code", "title": "Create a task", "source": "export async function main() {}" },
+    ]);
+    let as_macro = program_configuration(daily, steps);
+    let mut as_owner = as_macro.clone();
+    as_owner.task["dangerously_operate_as_user"] = json!(true);
+    let agent_program = RunCaller {
+        routine: None,
+        correlation: None,
+        requester: Requester::Program,
+    };
+    let routine_run = RunCaller {
+        routine: Some(Uuid::from_u128(9)),
+        correlation: None,
+        requester: Requester::Program,
+    };
+    let person = RunCaller {
+        routine: None,
+        correlation: None,
+        requester: Requester::Person,
+    };
+
+    for program in [agent_program, routine_run] {
+        assert_policy(
+            svc.create_action_from(&user_principal(), as_owner.clone(), program, None)
+                .await,
+            ActionPolicyError::OwnerIdentityNeedsPerson,
+        );
+    }
+    let owned = svc
+        .create_action_from(&user_principal(), as_owner.clone(), person, None)
+        .await
+        .unwrap()
+        .into_action();
+    assert_eq!(owned.task["dangerously_operate_as_user"], true);
+
+    let id = svc
+        .create_action_from(&user_principal(), as_macro.clone(), agent_program, None)
+        .await
+        .unwrap()
+        .into_action()
+        .id
+        .unwrap();
+    assert_policy(
+        svc.update_action(
+            edit_receipt(id),
+            update(as_owner.clone()),
+            Requester::Program,
+        )
+        .await,
+        ActionPolicyError::OwnerIdentityNeedsPerson,
+    );
+    let switched = svc
+        .update_action(
+            edit_receipt(id),
+            update(as_owner.clone()),
+            Requester::Person,
+        )
+        .await
+        .unwrap();
+    assert_eq!(switched.task["dangerously_operate_as_user"], true);
+
+    // Once it writes as them, a program may rename it but not change its code.
+    let mut renamed = as_owner.clone();
+    renamed.name = "Renamed".into();
+    let saved = svc
+        .update_action(edit_receipt(id), update(renamed), Requester::Program)
+        .await
+        .unwrap();
+    assert_eq!(saved.name, "Renamed");
+    let mut recoded = as_owner.clone();
+    recoded.task["steps"][0]["source"] = json!("export async function main() { /* new */ }");
+    assert_policy(
+        svc.update_action(edit_receipt(id), update(recoded), Requester::Program)
+            .await,
+        ActionPolicyError::OwnerIdentityNeedsPerson,
+    );
+
+    // A program may switch it off, but only the person switches it back on.
+    let off = svc
+        .set_enabled(edit_receipt(id), false, Requester::Program)
+        .await
+        .unwrap();
+    assert!(!off.enabled);
+    assert_policy(
+        svc.set_enabled(edit_receipt(id), true, Requester::Program)
+            .await,
+        ActionPolicyError::OwnerIdentityNeedsPerson,
+    );
+    let on = svc
+        .set_enabled(edit_receipt(id), true, Requester::Person)
+        .await
+        .unwrap();
+    assert!(on.enabled);
+
+    // Every create route checks it: one naming a suggestion too.
+    assert_policy(
+        svc.create_action_from_suggestion(
+            &user_principal(),
+            as_owner,
+            Uuid::from_u128(11),
+            Requester::Program,
+        )
+        .await,
+        ActionPolicyError::OwnerIdentityNeedsPerson,
     );
 }

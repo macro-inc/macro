@@ -1,6 +1,5 @@
 import { ViewSkeleton } from '@app/components/view-shell/ViewSkeleton';
 import { CalendarGridSkeleton } from '@app/features/calendar/components/CalendarGridSkeleton';
-import { isMobile } from '@core/mobile/isMobile';
 
 const monthTitle = () =>
   new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(
@@ -12,7 +11,7 @@ export function CalendarViewSkeleton() {
   return (
     <ViewSkeleton.Root
       asidePreferenceKey="calendar"
-      aside={isMobile() ? false : { preserveDuringResize: false }}
+      aside={{ preserveDuringResize: false }}
     >
       <ViewSkeleton.Sidebar title="Calendar" createLabel="New" />
       <ViewSkeleton.Main

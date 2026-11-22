@@ -1,8 +1,9 @@
-import { SearchBar, ViewShell } from '@app/components/view-shell';
+import { SearchBar } from '@app/components/view-shell';
 import {
   ListHeader,
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { TasksControls } from '@app/features/tasks-view/components/TasksControls';
 import { useTasksDataSource } from '@app/features/tasks-view/queries/use-tasks-query';
@@ -104,24 +105,23 @@ function ActivityTasksBody(props: {
     </>
   );
   return (
-    <div class="flex size-full min-h-0 flex-col">
-      <Show
-        when={!isTouchDevice()}
-        fallback={
-          <ViewShell.Header>
-            <div class="flex min-w-0 items-center gap-2 px-4 py-2">
-              {controls()}
-              <SearchBar
-                label={t('crm.searchSalesTasks')}
-                placeholder={t('crm.searchSalesTasks')}
-                value={state.search}
-                onValueChange={(search) => setState('search', search)}
-                class="min-w-0 flex-1"
-              />
-            </div>
-          </ViewShell.Header>
-        }
-      >
+    <MobileListLayout
+      header={
+        isTouchDevice() ? (
+          <div class="flex min-w-0 items-center gap-2 px-4 py-2">
+            {controls()}
+            <SearchBar
+              label={t('crm.searchSalesTasks')}
+              placeholder={t('crm.searchSalesTasks')}
+              value={state.search}
+              onValueChange={(search) => setState('search', search)}
+              class="min-w-0 flex-1"
+            />
+          </div>
+        ) : undefined
+      }
+    >
+      <Show when={!isTouchDevice()}>
         <ListHeader title={props.title ?? t('crm.salesTasks')}>
           {controls()}
           <ListHeaderSearch
@@ -168,6 +168,6 @@ function ActivityTasksBody(props: {
           ]}
         />
       </div>
-    </div>
+    </MobileListLayout>
   );
 }

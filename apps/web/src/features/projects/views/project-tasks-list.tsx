@@ -1,67 +1,22 @@
 import { TasksControls } from '@app/features/tasks-view/components/TasksControls';
 import { TasksContent } from '@app/features/tasks-view/tasks-content';
-import {
-  TasksViewProvider,
-  type TasksViewProviderProps,
-  useTasksView,
-} from '@app/features/tasks-view/tasks-view-context';
-import { isMobile } from '@core/mobile/isMobile';
-import PlusIcon from '@icon/system/regular/plus.svg';
-import { Button } from '@ui';
-import { type JSX, type ParentProps, Show } from 'solid-js';
+import { useTasksView } from '@app/features/tasks-view/tasks-view-context';
+import { Show } from 'solid-js';
 import { ProjectTaskSearch } from '../components/project-task-search';
+import type { ProjectDetail } from '../core/project';
 import {
-  type ProjectSource,
-  useProjectsContext,
-} from '../context/projects-context';
-import { createProjectTasksDataSource } from '../queries/project-tasks';
-
-export type ProjectTasksProviderProps = ParentProps<{
-  projectId: string;
-  /** The host's read of this project, so the list doesn't send its own. */
-  source?: ProjectSource;
-  onOpenTask: NonNullable<TasksViewProviderProps['onOpenTask']>;
-  onCreateTask?: TasksViewProviderProps['onCreateTask'];
-}>;
+  ProjectTasksProvider,
+  type ProjectTasksProviderProps,
+} from '../project-tasks-provider';
+import { ProjectTaskActions } from './project-task-actions';
+import { ProjectTasksEmptyState } from './shared/project-tasks-empty-state';
 
 export type ProjectTasksListProps = Omit<
   ProjectTasksProviderProps,
   'children'
 > & {
-  projectName: string;
-  addTasksAction?: JSX.Element;
+  project: ProjectDetail;
 };
-
-/** Embeds Tasks layouts with project-scoped data, controllers, menus and editors. */
-export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
-  const context = useProjectsContext();
-  return (
-    <Show when={props.projectId} keyed>
-      {(projectId) => (
-        <TasksViewProvider
-          initialState={{ tab: 'team-tasks', groupBy: 'status', facets: {} }}
-          restoreEntryState
-          scopeKey={`initiative:${projectId}:tasks`}
-          searchNamespace="projectTasks"
-          onOpenTask={props.onOpenTask}
-          onCreateTask={props.onCreateTask}
-          onCloseTask={() => {}}
-          hideTaskProject
-          sourceFactory={(state, options) =>
-            createProjectTasksDataSource(
-              projectId,
-              props.source ?? context.createProjectSource(() => projectId),
-              state,
-              options
-            )
-          }
-        >
-          {props.children}
-        </TasksViewProvider>
-      )}
-    </Show>
-  );
-}
 
 export function ProjectTasksList(props: ProjectTasksListProps) {
   return (
@@ -79,30 +34,46 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
 function ProjectTasksListBody(props: ProjectTasksListProps) {
   const { state, setState } = useTasksView();
   return (
-    <div class="flex size-full min-h-0 flex-col">
+    <div class="flex size-full min-h-0 flex-col touch:pt-(--mobile-content-inset-top) touch:[&>*]:[--mobile-content-inset-top:0px]">
       <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
         <ProjectTaskSearch
-          projectName={props.projectName}
+          projectName={props.project.name}
           value={state.search}
           onValueChange={(search) => setState('search', search)}
         />
         <div class="ml-auto flex shrink-0 items-center gap-2">
-          <TasksControls />
-          {props.addTasksAction}
+          <TasksControls inline />
           <Show when={props.onCreateTask}>
-            <Button
-              variant="secondary"
-              size={isMobile() ? 'icon-md' : 'md'}
-              aria-label={isMobile() ? 'New task' : undefined}
-              onClick={() => props.onCreateTask?.()}
-            >
-              <PlusIcon class={isMobile() ? 'size-6' : 'size-4'} />
-              {isMobile() ? null : 'New task'}
-            </Button>
+            {(onCreateTask) => (
+              <ProjectTaskActions
+                project={props.project}
+                onCreateTask={onCreateTask()}
+              />
+            )}
           </Show>
         </div>
       </div>
-      <TasksContent />
+      {/* The authorized project detail owns task membership. A filtered or
+          disabled layout query cannot decide whether the project is empty. */}
+      <Show
+        when={props.project.taskIds.length === 0}
+        fallback={
+          <TasksContent
+            emptyContent={
+              <ProjectTasksEmptyState
+                project={props.project}
+                onCreateTask={props.onCreateTask}
+                search={state.search}
+              />
+            }
+          />
+        }
+      >
+        <ProjectTasksEmptyState
+          project={props.project}
+          onCreateTask={props.onCreateTask}
+        />
+      </Show>
     </div>
   );
 }

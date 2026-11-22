@@ -3,14 +3,10 @@ import {
   IntegrationRow,
   SettingsSurface,
 } from '@app/features/settings/primitives';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableSlackArchiveImport } from '@core/constant/featureFlags';
+import { requestConnectApp } from '@core/connectors/pendingConnect';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { usePipedreamMcpFlag } from '@core/pipedream/flag';
-import { requestConnectApp } from '@core/pipedream/pendingConnect';
-import { SLACK_CONNECT_SLUG } from '@core/pipedream/slugs';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import SlackIcon from '@icon/slack-color.svg';
 import { invalidateListChannels } from '@queries/channel/channels';
@@ -41,9 +37,8 @@ type Props = {
 };
 
 export function SlackImport(props: Props): JSX.Element {
-  const flag = useFeatureFlag(enableSlackArchiveImport);
   return (
-    <Show when={props.isAdmin && flag().enabled}>
+    <Show when={props.isAdmin}>
       <Show when={props.teamId} keyed>
         {(teamId) => (
           <Suspense
@@ -83,10 +78,9 @@ function SlackImportSettings(props: {
   const { channelsById } = useChannelsContext();
   const userId = useUserId();
   const client = getGraphqlSoupClient();
-  const pipedreamEnabled = usePipedreamMcpFlag();
   const { openSettings } = useSettingsState();
   const connectSlack = () => {
-    requestConnectApp(SLACK_CONNECT_SLUG, 'import-slack-channels');
+    requestConnectApp('slack', 'import-slack-channels');
     openSettings('Connected');
   };
   function channelHref(id: string): string | undefined {
@@ -130,9 +124,7 @@ function SlackImportSettings(props: {
       <ImportDialog
         teamId={props.teamId}
         trigger={props.trigger}
-        onConnect={
-          pipedreamEnabled() && !props.historyOnly ? connectSlack : undefined
-        }
+        onConnect={props.historyOnly ? undefined : connectSlack}
         onCompleted={onCompleted}
         channelHref={channelHref}
       />

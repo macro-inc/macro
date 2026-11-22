@@ -105,6 +105,11 @@ pub(crate) async fn detached_router_service(
     (std::sync::Arc::new(service), id)
 }
 
+/// The billing calls a router test's service made, in order.
+pub(crate) fn billing_calls(service: &RouterService) -> Vec<&'static str> {
+    service.billing.calls.lock().unwrap().clone()
+}
+
 pub(crate) fn assert_no_http_work(service: &RouterService) {
     assert_eq!(service.repo.computers.lock().unwrap().len(), 1);
     assert_eq!(*service.repo.reserve_calls.lock().unwrap(), 0);

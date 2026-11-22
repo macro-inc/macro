@@ -1177,3 +1177,5 @@ fn probes_grow_and_end_at_the_most() {
     assert!(CAPPED.probes_again(27, 10));
     assert!(!CAPPED.probes_again(27, 27));
 }
+
+mod sender_probe_cap;

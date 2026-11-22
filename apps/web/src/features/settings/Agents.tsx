@@ -5,6 +5,8 @@ import {
 } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import { t } from '@app/lib/i18n';
+import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import {
@@ -20,7 +22,7 @@ import {
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { usePipedreamMcpFlag } from '@core/pipedream/flag';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import MacroLogo from '@icon/macro-logo.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
@@ -52,8 +54,8 @@ import {
   useAgentModelsQueries,
 } from '@queries/agents/models';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
+import { useConnectors } from '@queries/connectors';
 import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
-import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import {
   useCurrentTeamQuery,
   useIsTeamAdmin,
@@ -84,6 +86,7 @@ import {
   agentSettingsRequest,
   consumeAgentSettingsRequest,
 } from './agentSettingsState';
+import { ConnectorAppPicker } from './ConnectorAppPicker';
 import { CursorConnectPage } from './CursorConnectPage';
 import { AgentSetupStrips } from './components/agent-setup-strips';
 import { AutoArchiveSetting } from './components/auto-archive-setting';
@@ -100,7 +103,6 @@ import {
   apiKeyProviderName,
   apiKeyProviderOf,
 } from './core/agent-api-key';
-import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
   ChoiceRow,
   SettingsCard,
@@ -847,8 +849,7 @@ function AgentEditorPage(props: {
   const [share, setShare] = createSignal<AgentShare>(
     props.agent?.bot.owner?.type === 'team' ? 'Team' : 'Private'
   );
-  const pipedreamMcp = usePipedreamMcpFlag();
-  const connections = usePipedreamConnectedSlugs();
+  const connections = useConnectors();
   const [mcp, setMcp] = createSignal<AgentMcpServers>(
     props.agent?.mcp ?? { scope: 'owner_connections' }
   );
@@ -922,13 +923,9 @@ function AgentEditorPage(props: {
       channelMode() === 'all'
         ? 'All channels'
         : `${selectedChannelIds().length} ${selectedChannelIds().length === 1 ? 'channel' : 'channels'}`,
-      ...(pipedreamMcp()
-        ? [
-            mcp().scope === 'owner_connections'
-              ? 'Your connected apps'
-              : `${selectedMcpServers().length} selected apps`,
-          ]
-        : []),
+      mcp().scope === 'owner_connections'
+        ? 'Your connected apps'
+        : `${selectedMcpServers().length} selected apps`,
     ].join(' · ');
   const modelPicker = () => (
     <div class="flex min-w-0 flex-col gap-1.5">
@@ -1247,6 +1244,16 @@ function AgentEditorPage(props: {
     close();
   };
 
+  const panel = useSplitPanel();
+  if (isTouchDevice()) {
+    useSplitBackInterceptor(() => {
+      if (panel && !panel.isPanelActive()) return false;
+      if (busy()) return true;
+      if (setup()) finishSetup();
+      else close();
+      return true;
+    });
+  }
   return (
     <Switch>
       <Match when={setup() === 'cursor'}>
@@ -1627,52 +1634,50 @@ function AgentEditorPage(props: {
                       </fieldset>
                     </Show>
 
-                    <Show when={pipedreamMcp()}>
-                      <AdvancedGroup
-                        title="Connections"
-                        description="Which connected apps (MCP tools) this agent can use."
-                      >
-                        <fieldset class="flex flex-col gap-2">
-                          <legend class="sr-only">Connections</legend>
-                          <ChoiceRow
-                            name="agent-mcp-mode"
-                            value="owner_connections"
-                            checked={mcp().scope === 'owner_connections'}
-                            title="Use my connected apps"
-                            description="The agent uses whatever apps the person running it has connected."
-                            onChange={() => setMcpScope('owner_connections')}
-                          />
-                          <ChoiceRow
-                            name="agent-mcp-mode"
-                            value="selected"
-                            checked={mcp().scope === 'selected'}
-                            title="Specific apps"
-                            description="Pick apps from the catalog. Each person connects their own account."
-                            onChange={() => setMcpScope('selected')}
-                          />
-                        </fieldset>
+                    <AdvancedGroup
+                      title="Connections"
+                      description="Which connected apps (MCP tools) this agent can use."
+                    >
+                      <fieldset class="flex flex-col gap-2">
+                        <legend class="sr-only">Connections</legend>
+                        <ChoiceRow
+                          name="agent-mcp-mode"
+                          value="owner_connections"
+                          checked={mcp().scope === 'owner_connections'}
+                          title="Use my connected apps"
+                          description="The agent uses whatever apps the person running it has connected."
+                          onChange={() => setMcpScope('owner_connections')}
+                        />
+                        <ChoiceRow
+                          name="agent-mcp-mode"
+                          value="selected"
+                          checked={mcp().scope === 'selected'}
+                          title="Specific apps"
+                          description="Pick apps from the catalog. Each person connects their own account."
+                          onChange={() => setMcpScope('selected')}
+                        />
+                      </fieldset>
 
-                        <Show when={mcp().scope === 'selected'}>
-                          <div class="mt-3 border-t border-edge-muted pt-3">
-                            <PipedreamAppPicker
-                              selected={selectedMcpServers()}
-                              onChange={setSelectedMcpServers}
-                              connectedSlugs={connections.slugs}
-                              connectionsReady={connections.ready}
-                              connectContainer={() => pageContentRef}
-                            />
-                          </div>
-                        </Show>
+                      <Show when={mcp().scope === 'selected'}>
+                        <div class="mt-3 border-t border-edge-muted pt-3">
+                          <ConnectorAppPicker
+                            selected={selectedMcpServers()}
+                            onChange={setSelectedMcpServers}
+                            connectedSlugs={connections.connectedApps}
+                            connectionsReady={connections.ready}
+                            connectContainer={() => pageContentRef}
+                          />
+                        </div>
+                      </Show>
 
-                        <Show when={share() === 'Team'}>
-                          <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
-                            Connections are personal. Teammates who use this
-                            agent connect these apps under Agents → Connections;
-                            the indicators here show only your own.
-                          </p>
-                        </Show>
-                      </AdvancedGroup>
-                    </Show>
+                      <Show when={share() === 'Team'}>
+                        <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
+                          Connections are personal. Teammates who use this agent
+                          connect these apps under Agents → Connections; the
+                          indicators here show only your own.
+                        </p>
+                      </Show>
+                    </AdvancedGroup>
 
                     <AdvancedGroup
                       title="Channels"

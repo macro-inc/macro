@@ -30,7 +30,7 @@ export function HomeListSkeleton(props: {
       <For each={props.loadingMore ? TITLE_WIDTHS.slice(0, 3) : TITLE_WIDTHS}>
         {(width) => (
           <ListSkeleton.Row class="soup-row-card mx-(--sidebar-gutter) my-(--sidebar-row-gap) touch:mx-(--soup-row-gutter) touch:h-16 touch:gap-3 touch:pl-(--soup-row-padding-l) touch:pr-3">
-            <div class="flex size-(--sidebar-icon-slot) shrink-0 items-center justify-center touch:size-8 mobile:size-(--soup-inbox-icon-diameter)">
+            <div class="flex size-(--sidebar-icon-slot) shrink-0 items-center justify-center touch:size-(--soup-inbox-icon-diameter)">
               <ListSkeleton.Bar class="size-4 rounded touch:size-full touch:rounded-full" />
             </div>
             <div class="flex min-w-0 flex-1 flex-col gap-2">

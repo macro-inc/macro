@@ -127,11 +127,23 @@ it('switches tabs with Tab after ArrowDown moves into the results', () => {
   expect(tab()).toBe('focus');
 });
 
-it('keeps Tab for the rows while the list itself has focus', () => {
+it('switches tabs with Tab while the list itself has focus', () => {
   const { tab, list } = setup();
   list().focus();
 
   press('Tab');
+  expect(tab()).toBe('focus');
+  press('Tab', { shiftKey: true });
+  expect(tab()).toBe('noise');
+});
+
+it('keeps Tab for the browser on a control inside a row', () => {
+  const { tab, list } = setup();
+  list().querySelector('button')!.focus();
+
+  press('Tab');
+  expect(tab()).toBe('noise');
+  press('Tab', { shiftKey: true });
   expect(tab()).toBe('noise');
 });
 

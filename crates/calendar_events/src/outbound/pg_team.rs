@@ -1,7 +1,8 @@
 //! PostgreSQL facts for source-scoped team reads.
 //!
-//! Only directly owned/delegated Google sources enter these queries. Neither
-//! channel grants nor team-derived grants can recursively expand access.
+//! Only directly owned/delegated Google and Outlook sources enter these
+//! queries. Neither channel grants nor team-derived grants can recursively
+//! expand access.
 
 use crate::domain::{
     models::{CalendarEvent, CalendarEventOverride, OccurrenceRange},

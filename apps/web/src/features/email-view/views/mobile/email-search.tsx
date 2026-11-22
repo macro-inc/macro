@@ -8,11 +8,11 @@ import { EmailRecentSearches } from '../../components/EmailRecentSearches';
 import type { EmailSearchSuggestions } from '../../search/create-email-search-suggestions';
 
 /**
- * Email's search page on a phone: the field and Cancel take the header, and
- * recent searches are listed while the field has focus. The view keeps its
- * email list below, which shows the results as you type.
+ * The field and Cancel of Email's search page on touch, in place of the list
+ * pane's pill row, so on wide touch it stays above the list beside a thread.
+ * The list below shows the results as you type.
  */
-export function EmailMobileSearch(props: {
+export function EmailMobileSearchField(props: {
   search: string;
   setSearch: (search: string) => void;
   suggestions: EmailSearchSuggestions;
@@ -44,71 +44,75 @@ export function EmailMobileSearch(props: {
   const keepFocus = (event: Event) => event.preventDefault();
 
   return (
-    <>
-      <MobileHeader>
-        {/* The header's left slot is only as wide as its content, so the row
-            takes the header's width less its gutters, as the pill row does. */}
-        <div class="flex w-[calc(100cqw_-_2*var(--mobile-chrome-gutter))] max-w-none flex-none items-center gap-2">
-          <MobileHeader.Island class="min-w-0 flex-1 gap-2 pr-1">
-            <SearchIcon
-              aria-hidden="true"
-              class="size-4 shrink-0 text-ink-extra-muted"
-            />
-            <CommandMenuSearchInput
-              ref={(element: HTMLInputElement) => {
-                input = element;
-                props.ref(element);
-              }}
-              type="search"
-              enterkeyhint="search"
-              autocomplete="off"
-              aria-label={t('emailViews.searchEmail')}
-              aria-controls={props.suggestions.listId}
-              aria-activedescendant={props.suggestions.activeId?.()}
-              placeholder={t('emailViews.searchEmail')}
-              class="text-base text-ink [&::-webkit-search-cancel-button]:hidden"
-              value={props.search}
-              onInput={(event) => props.setSearch(event.currentTarget.value)}
-              onFocus={() => props.suggestions.setFocused(true)}
-              onBlur={() => props.suggestions.setFocused(false)}
-              onKeyDown={(event) => {
-                if (isComposing(event)) return;
-                // Search drops the keyboard to show the results.
-                if (event.key === 'Enter') input?.blur();
-              }}
-            />
-            <Show when={props.search}>
-              <Button
-                aria-label={t('emailViews.clearSearch')}
-                variant="ghost"
-                size="icon-sm"
-                onPointerDown={keepFocus}
-                onMouseDown={keepFocus}
-                onClick={() => props.setSearch('')}
-              >
-                <XIcon class="size-4" />
-              </Button>
-            </Show>
-          </MobileHeader.Island>
-          <MobileHeader.Island class="!px-1">
-            <Button variant="ghost" size="sm" onClick={props.onCancel}>
-              {t('common.cancel')}
-            </Button>
-          </MobileHeader.Island>
-        </div>
-      </MobileHeader>
-      <Show when={props.suggestions.listed().length > 0}>
-        <div class="shrink-0 pt-(--mobile-content-inset-top)">
-          <EmailRecentSearches
-            suggestions={props.suggestions}
-            onPick={(index) => {
-              props.suggestions.pick(index);
-              input?.blur();
-            }}
-          />
-        </div>
-      </Show>
-    </>
+    <div class="flex w-full min-w-0 items-center gap-2">
+      <MobileHeader.Island class="min-w-0 flex-1 gap-2 pr-1">
+        <SearchIcon
+          aria-hidden="true"
+          class="size-4 shrink-0 text-ink-extra-muted"
+        />
+        <CommandMenuSearchInput
+          ref={(element: HTMLInputElement) => {
+            input = element;
+            props.ref(element);
+          }}
+          type="search"
+          enterkeyhint="search"
+          autocomplete="off"
+          aria-label={t('emailViews.searchEmail')}
+          aria-controls={props.suggestions.listId}
+          aria-activedescendant={props.suggestions.activeId?.()}
+          placeholder={t('emailViews.searchEmail')}
+          class="text-base text-ink [&::-webkit-search-cancel-button]:hidden"
+          value={props.search}
+          onInput={(event) => props.setSearch(event.currentTarget.value)}
+          onFocus={() => props.suggestions.setFocused(true)}
+          onBlur={() => props.suggestions.setFocused(false)}
+          onKeyDown={(event) => {
+            if (isComposing(event)) return;
+            // Search drops the keyboard to show the results.
+            if (event.key === 'Enter') input?.blur();
+          }}
+        />
+        <Show when={props.search}>
+          <Button
+            aria-label={t('emailViews.clearSearch')}
+            variant="ghost"
+            size="icon-sm"
+            onPointerDown={keepFocus}
+            onMouseDown={keepFocus}
+            onClick={() => props.setSearch('')}
+          >
+            <XIcon class="size-4" />
+          </Button>
+        </Show>
+      </MobileHeader.Island>
+      <MobileHeader.Island class="!px-1">
+        <Button variant="ghost" size="sm" onClick={props.onCancel}>
+          {t('common.cancel')}
+        </Button>
+      </MobileHeader.Island>
+    </div>
+  );
+}
+
+/** Recent searches below the search field while it has focus. */
+export function EmailMobileRecentSearches(props: {
+  suggestions: EmailSearchSuggestions;
+  /** Drops the keyboard to show the picked search's results. */
+  onPicked: () => void;
+}) {
+  return (
+    <Show when={props.suggestions.listed().length > 0}>
+      <div class="shrink-0 pt-(--mobile-content-inset-top)">
+        <EmailRecentSearches
+          suggestions={props.suggestions}
+          onPick={(index) => {
+            props.suggestions.pick(index);
+            props.onPicked();
+          }}
+        />
+      </div>
+    </Show>
   );
 }
 

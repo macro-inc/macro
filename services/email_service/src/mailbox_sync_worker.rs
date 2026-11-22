@@ -10,12 +10,19 @@ use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
+#[cfg(test)]
+mod test;
+
 /// How often each worker flushes its import counts and one worker logs the
 /// Outlook health snapshot.
 const HEALTH_INTERVAL: Duration = Duration::from_secs(60);
 
 /// Domain services own sync and retry decisions; this loop only schedules work
 /// and stops accepting work during shutdown. Interrupted work retains its lease.
+///
+/// A due folder page is claimed before every message read. An import keeps
+/// its folders' next pages due, so a folder with new mail would otherwise wait
+/// behind each worker's whole cycle of queued messages.
 pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
     service: MailboxSyncService<R, P, I>,
     cancellation: CancellationToken,
@@ -23,12 +30,15 @@ pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
     loop {
         let cycle = async {
             let mut worked = reported(service.discover_once().await);
-            worked |= reported(service.enumerate_once().await);
             for _ in 0..32 {
-                if !reported(service.reconcile_once().await) {
+                let enumerated = reported(service.enumerate_once().await);
+                let reconciled = reported(service.reconcile_once().await);
+                worked |= enumerated || reconciled;
+                // With no message to read, the next cycle checks the folder
+                // catalogs again instead of reading up to 32 more pages first.
+                if !reconciled {
                     break;
                 }
-                worked = true;
             }
             worked
         };

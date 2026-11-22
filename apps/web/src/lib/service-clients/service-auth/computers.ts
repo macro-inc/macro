@@ -9,20 +9,26 @@ import {
   getRestoreTeamComputerUrl,
   getRetryTeamComputerUrl,
 } from './generated/client';
-
 import type {
+  ComputerRollout,
   ComputerStatus,
+  ComputerUsage,
   PowerBody,
   PurchaseBody,
   Purchased,
   ReleaseBody,
   SizeOffer,
 } from './generated/schemas';
+import {
+  type PurchaseRefusalErrorCode,
+  readPurchaseRefusal,
+} from './purchase-refusal';
 
 export type {
   ComputerSize,
   ComputerStatus,
   ComputerStatusKind,
+  ComputerUsage,
   PurchaseBody as PurchaseComputerRequest,
   Quote,
   SetupStep,
@@ -174,10 +180,19 @@ async function offersError(
   return (await sharedComputerError(response)) ?? statusError(response.status);
 }
 
-/** 409 is a sold-out size, or a purchase key that belongs to another purchase. */
+/**
+ * The shared purchase refusals first (a declined card, no room, a trial);
+ * otherwise 409 is a purchase key that belongs to another purchase.
+ */
 async function purchaseError(
   response: Response
-): Promise<ResultError<BaseFetchErrorCode | PurchaseComputerErrorCode>> {
+): Promise<
+  ResultError<
+    BaseFetchErrorCode | PurchaseComputerErrorCode | PurchaseRefusalErrorCode
+  >
+> {
+  const refused = await readPurchaseRefusal(response);
+  if (refused) return refused;
   return match(response.status)
     .returnType<
       Promise<ResultError<BaseFetchErrorCode | PurchaseComputerErrorCode>>
@@ -249,6 +264,16 @@ export const computersClient = {
     withinDeadline((signal) =>
       fetchWithToken<ComputerStatus[]>(base, { signal })
     ),
+  /** Each computer's CPU and memory over the last day. */
+  usage: () =>
+    withinDeadline((signal) =>
+      fetchWithToken<ComputerUsage[]>(`${base}/usage`, { signal })
+    ),
+  /** Whether computers are rolled out to the caller (flag or dev allowlist). */
+  rollout: () =>
+    withinDeadline((signal) =>
+      fetchWithToken<ComputerRollout>(`${base}/rollout`, { signal })
+    ),
   offers: () =>
     withinDeadline((signal) =>
       fetchWithToken<SizeOffer[], OffersErrorCode>(`${base}/offers`, {
@@ -258,7 +283,10 @@ export const computersClient = {
     ),
   purchase: (request: PurchaseBody) =>
     withinDeadline((signal) =>
-      fetchWithToken<Purchased, PurchaseComputerErrorCode>(base, {
+      fetchWithToken<
+        Purchased,
+        PurchaseComputerErrorCode | PurchaseRefusalErrorCode
+      >(base, {
         method: 'POST',
         body: JSON.stringify(request),
         signal,

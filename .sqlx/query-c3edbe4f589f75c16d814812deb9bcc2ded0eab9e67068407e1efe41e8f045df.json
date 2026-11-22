@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Start from the viewer's own memberships and look everything else up by key,\n-- so the work is bounded by the channels the viewer is in. The OFFSET 0 fences\n-- keep that shape under a generic plan, which estimates every viewer at the\n-- table's average of a few memberships: the previous statement joined its\n-- matched terms back to the viewer's channels in a nested loop there, channels\n-- times matches, seconds for a viewer in a few thousand channels.\n--\n-- Channels are sorted before their names are resolved, so the LIMIT stops the\n-- participant lookups once a page has matched.\nSELECT c.id AS \"id!\", c.updated_at AS \"updated_at!\"\nFROM (\n    SELECT c.id, c.name, c.channel_type, c.updated_at\n    FROM (\n        SELECT me.channel_id\n        FROM comms_channel_participants me\n        WHERE me.user_id = $1\n            AND me.left_at IS NULL\n        OFFSET 0\n    ) mine\n    CROSS JOIN LATERAL (\n        SELECT c.id, c.name, c.channel_type, c.updated_at\n        FROM comms_channels c\n        WHERE c.id = mine.channel_id\n            AND (cardinality($2::uuid[]) = 0 OR c.id = ANY($2::uuid[]))\n            AND (cardinality($3::text[]) = 0 OR c.channel_type::text = ANY($3::text[]))\n            AND (\n                $4::timestamptz IS NULL\n                OR (c.updated_at, c.id) < ($4::timestamptz, $5::uuid)\n            )\n        OFFSET 0\n    ) c\n    ORDER BY c.updated_at DESC, c.id DESC\n    OFFSET 0\n) c\nCROSS JOIN LATERAL (\n    -- The other active participants' names, only for the channels named after\n    -- them: each person by id, each bot from the registry or by primary key.\n    SELECT array_agg(\n        CASE\n            WHEN other.user_id LIKE 'bot|%' THEN COALESCE(\n                (\n                    SELECT system_bot.name\n                    FROM unnest($8::uuid[], $9::text[]) AS system_bot(id, name)\n                    WHERE other.user_id = 'bot|' || system_bot.id::text\n                    LIMIT 1\n                ),\n                (\n                    -- Only a canonical id can equal 'bot|' || bots.id::text.\n                    SELECT bot.name\n                    FROM bots bot\n                    WHERE bot.id = CASE\n                            WHEN substr(other.user_id, 5)\n                                ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'\n                            THEN substr(other.user_id, 5)::uuid\n                        END\n                        AND bot.deleted_at IS NULL\n                ),\n                'Bot'\n            )\n            ELSE COALESCE(\n                (\n                    SELECT NULLIF(\n                        concat_ws(\n                            ' ',\n                            NULLIF(mui.first_name, 'N/A'),\n                            NULLIF(mui.last_name, 'N/A')\n                        ),\n                        ''\n                    )\n                    FROM \"User\" u\n                    JOIN macro_user_info mui ON mui.macro_user_id = u.macro_user_id\n                    WHERE u.id = other.user_id\n                ),\n                split_part(split_part(other.user_id, '|', 2), '@', 1)\n            )\n        END\n    ) AS names\n    FROM comms_channel_participants other\n    WHERE other.channel_id = c.id\n        AND other.left_at IS NULL\n        AND other.user_id <> $1\n        AND (\n            c.channel_type = 'direct_message'\n            OR (c.channel_type = 'private' AND NULLIF(BTRIM(c.name), '') IS NULL)\n        )\n) people\nWHERE cardinality($6::text[]) > 0\n    AND NOT EXISTS (\n        SELECT 1\n        FROM unnest($6::text[]) AS p(pattern)\n        WHERE NOT COALESCE(\n            (\n                NULLIF(BTRIM(c.name), '') IS NOT NULL\n                AND CASE\n                    WHEN $7::bool THEN c.name ~* p.pattern\n                    ELSE c.name ILIKE p.pattern\n                END\n            )\n            OR EXISTS (\n                SELECT 1\n                FROM unnest(people.names) AS person(name)\n                WHERE CASE\n                    WHEN $7::bool THEN person.name ~* p.pattern\n                    ELSE person.name ILIKE p.pattern\n                END\n            ),\n            false\n        )\n    )\nORDER BY c.updated_at DESC, c.id DESC\nLIMIT $10\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "TextArray",
+        "Timestamptz",
+        "Uuid",
+        "TextArray",
+        "Bool",
+        "UuidArray",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "c3edbe4f589f75c16d814812deb9bcc2ded0eab9e67068407e1efe41e8f045df"
+}

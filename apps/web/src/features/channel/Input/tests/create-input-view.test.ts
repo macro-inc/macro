@@ -88,4 +88,59 @@ describe('createInputView', () => {
       dispose();
     });
   });
+
+  it('keeps inputs mounted on one draft in step', () => {
+    const persistenceKey = makeInputValuePersistenceKey({
+      channelId: 'channel-1',
+    });
+    const mount = () =>
+      createInputView({
+        initialInput: { mode: 'channel', value: '' },
+        mentions: () => [],
+        attachmentTracker: createInputAttachmentTracker(),
+        persistenceKey,
+      });
+
+    createRoot((dispose) => {
+      const firstTab = mount();
+      const secondTab = mount();
+
+      firstTab.setValue('typed in the first tab');
+      expect(secondTab.value()).toBe('typed in the first tab');
+
+      secondTab.setValue('typed in the first tab, then the second');
+      expect(firstTab.value()).toBe('typed in the first tab, then the second');
+
+      firstTab.reset();
+      expect(secondTab.value()).toBe('');
+      dispose();
+    });
+  });
+
+  it('reads storage again once no input holds the draft', () => {
+    const persistenceKey = makeInputValuePersistenceKey({
+      channelId: 'channel-1',
+    });
+    const mount = () =>
+      createInputView({
+        initialInput: { mode: 'channel', value: '' },
+        mentions: () => [],
+        attachmentTracker: createInputAttachmentTracker(),
+        persistenceKey,
+      });
+
+    const firstTab = createRoot((dispose) => ({ view: mount(), dispose }));
+    createRoot((dispose) => {
+      mount().setValue('typed in the second tab');
+      dispose();
+    });
+    expect(firstTab.view.value()).toBe('typed in the second tab');
+    firstTab.dispose();
+
+    localStorage.setItem(persistenceKey, JSON.stringify('written elsewhere'));
+    createRoot((dispose) => {
+      expect(mount().value()).toBe('written elsewhere');
+      dispose();
+    });
+  });
 });

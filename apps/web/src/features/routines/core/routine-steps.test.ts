@@ -4,6 +4,7 @@ import {
   agentStep,
   assignedOutputs,
   firstAgent,
+  picksItems,
   programSteps,
   type StepDraft,
   stepsFromWire,
@@ -133,5 +134,33 @@ describe('step output names', () => {
     );
     // A different shape matches nothing.
     expect(assignedOutputs(sent, saved.slice(1)).size).toBe(0);
+  });
+});
+
+describe('picked items', () => {
+  const withTask = (value: { type: 'task'; id: string } | null) => ({
+    steps: [
+      {
+        ...unnamed('Follow the task'),
+        knobs: [
+          {
+            type: 'entity' as const,
+            name: 'task',
+            label: 'Task to follow',
+            entity_types: ['task' as const],
+            value,
+          },
+        ],
+      },
+    ],
+  });
+
+  it('are found only where a code step has picked one', () => {
+    expect(picksItems(withTask({ type: 'task', id: 't1' }))).toBe(true);
+    expect(picksItems(withTask(null))).toBe(false);
+    expect(picksItems({ steps: [code] })).toBe(false);
+    expect(
+      picksItems({ model: 'm', prompt: '', user_prompt: 'Summarize' })
+    ).toBe(false);
   });
 });

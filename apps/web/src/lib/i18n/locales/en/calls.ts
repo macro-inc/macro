@@ -31,6 +31,7 @@ export default {
     'Allow microphone or camera access in this site’s browser permissions, then try again.',
   layout: 'Layout',
   audioOutput: 'Audio output',
+  systemAudioOutput: 'Use your device’s sound controls to change audio output.',
   reactions: 'Reactions',
   fullscreen: 'Full screen',
   exitFullscreen: 'Exit full screen',

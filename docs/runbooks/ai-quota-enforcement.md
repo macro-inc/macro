@@ -229,20 +229,13 @@ handling, but settlement never creates or retries direct charges.
 reports `auto_reload` with the thresholds, `suspended`, and `active`.
 
 The frontend is not tied to this flag. Settings → Usage and the shared usage-limit
-dialog support all plans. Production activation follows the
-`enable-ai-usage-billing` PostHog flag: while off or loading, Usage shows the
-October 8, 2026 announcement with disabled controls and the dialog stays closed.
-Dev and local stay active regardless of the flag. No backend rollout endpoint is
-required. Foreground AI actions recognize the four quota
+dialog support all plans. No backend rollout endpoint is required. Foreground AI actions recognize the four quota
 codes below; clients return typed errors, and presentation happens in the app's
 mutation subscription or direct session/edit action handlers. Generic HTTP errors
 and background queries do not open dialogs. Free refusals offer a paid plan;
 paid refusals link to Usage settings. The monthly percentage uses
 `GET /ai-billing/summary`; plan allowances use `GET /ai-billing/plans`.
-Plan allowance copy and comparisons follow the `enable-ai-usage-billing` PostHog
-flag (`enableAiUsageBilling` in `apps/web/src/lib/core/constant/featureFlags.ts`),
-which defaults on in development builds and follows PostHog elsewhere;
-`VITE_ENABLE_AI_USAGE_BILLING` overrides it locally. Model usage multipliers have
+Model usage multipliers have
 been removed. The Auto-Reload dialog saves through `PATCH /ai-billing/auto-reload`
 and is the only surface that turns usage billing on.
 
@@ -278,7 +271,7 @@ inspect the content type and code rather than assuming every 503 is billing.
 
 ### Tools, protocols, queues, and background work
 
-- Subagent, native Anthropic tools, and AI editing return a failed tool result with
+- Subagent and AI editing return a failed tool result with
   the stable code and public explanation. These are tool/protocol failures, not
   necessarily HTTP 402/503 at the outer MCP transport. Do not treat an HTTP-success
   tool envelope as successful execution. No alternate provider is tried on refusal.
@@ -351,7 +344,6 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Structured completion / DynamicCompletionsApi | [completion handler](../../services/agent_harness_service/src/cognition/api/structured_completion.rs) | DCS main, same recorder across both phases | [both phases and OpenAPI](../../services/agent_harness_service/src/cognition/api/structured_completion/test.rs) |
 | Chat naming / ChatRename | [chat renamer](../../services/agent_harness_service/src/cognition/service/chat_renamer.rs) | DCS main, same recorder | [safe naming skip](../../services/agent_harness_service/src/cognition/service/chat_renamer/test.rs) |
 | Direct subagent / inherited feature | [operations service](../../crates/ai_tools/src/ai_operations.rs), [subagent](../../crates/ai_tools/src/subagent.rs) | Host common context: T, DCS main, or [MCP context](../../services/agent_harness_service/src/public_mcp/context.rs) using `pg_settling_recorder` | [zero provider calls](../../crates/ai_tools/src/ai_operations/test.rs), [concurrent caller isolation](../../crates/ai_tools/src/subagent/test.rs) |
-| Native Anthropic code tools / inherited feature | [invoke_server_tool](../../crates/anthropic/src/toolset.rs) before both provider branches | Same common contexts via `FromRef`; observation only, **no legacy aggregate producer** | [tool attribution/refusal](../../crates/anthropic/src/toolset/test.rs) |
 | `WebSearch`/`WebFetch` tools and cognition `POST /web/search`, `/web/fetch` / `web_search` | [WebSearchService](../../crates/web_search/src/domain/service.rs) admits `web_search` before the Tavily call | `UsageRecorder` records Tavily's reported credits (`provider_credits`, pricing id `tavily`), counted when enforcement is on | [service and router tests](../../crates/web_search/src/domain/service/test.rs) |
 | AI document editing / AiEditing | [document orchestration](../../crates/documents/src/domain/ai_editing.rs) after verified edit receipt | Common context's recorder, existing per-model worker usage | [domain](../../crates/documents/src/domain/ai_editing/test.rs), [direct tool and permission precedence](../../crates/documents/src/inbound/toolset/edit_document/test.rs) |
 | Notion page imports / Import | [import admission](../../crates/import/src/domain/service/admission.rs), [execution/rechecks](../../crates/import/src/domain/service.rs) | DCS main, wrapped recorder | [delayed/deterministic cases](../../crates/import/src/domain/service/test/admission.rs), [HTTP](../../crates/import/src/inbound/axum_router/test.rs) |

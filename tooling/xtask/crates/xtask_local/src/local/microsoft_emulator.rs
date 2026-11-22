@@ -24,6 +24,12 @@ const CONTAINER_PORT: u16 = 8080;
 const SEED_MOUNT: &str = "/etc/outlook-emulator/seed.yaml";
 /// The users and mailboxes a stack starts with.
 const SEED_FILE: &str = "crates/outlook_emulator/seed.example.yaml";
+/// The development certificate authority inside the container: the stack's
+/// proxy is signed by it, and change notifications are posted to the proxy.
+const AUTHORITY_MOUNT: &str = "/etc/outlook-emulator/ca.pem";
+const AUTHORITY_FILE: &str = "infra/local/certs/ca.pem";
+/// The workers that subscribe mailboxes to change notifications.
+pub const PUBSUB_WORKERS: &str = "email_pubsub_workers";
 /// The OAuth client the services and FusionAuth present. The emulator
 /// accepts any; the `local-` prefix marks it as no real application's.
 const CLIENT_ID: &str = "local-microsoft-client";
@@ -117,6 +123,8 @@ pub fn command(instance: &Instance) -> Vec<String> {
         &in_network(""),
         "--browser-url",
         &browser_origin(instance),
+        "--trust-certificate",
+        AUTHORITY_MOUNT,
     ]
     .iter()
     .map(|argument| argument.to_string())
@@ -126,6 +134,25 @@ pub fn command(instance: &Instance) -> Vec<String> {
 /// The seed file's bind mount.
 pub fn seed_volume() -> String {
     format!("{}:{SEED_MOUNT}:ro", repo_root().join(SEED_FILE).display())
+}
+
+/// The development certificate authority's bind mount.
+pub fn authority_volume() -> String {
+    format!(
+        "{}:{AUTHORITY_MOUNT}:ro",
+        repo_root().join(AUTHORITY_FILE).display()
+    )
+}
+
+/// Where the emulator posts a mailbox's change notifications: the email
+/// service through the stack's proxy. Microsoft Graph only notifies an HTTPS
+/// address, the workers only subscribe with one, and the proxy is the one
+/// HTTPS listener in the stack. Without it a mailbox is only polled.
+pub fn pubsub_workers_env(instance: &Instance) -> [(&'static str, String); 1] {
+    [(
+        "OVERRIDE_EMAIL_SERVICE_URL",
+        format!("https://proxy:{}/email", instance.port(Port::Proxy)),
+    )]
 }
 
 /// The published port: `<instance port>:<container port>`.

@@ -3,24 +3,25 @@ import { expect, test } from '@playwright/test';
 test('the session composer plus button lists connections and opens their settings', async ({
   page,
 }) => {
-  // Never reach a real service; the menu reads only the two connection lists.
+  // Never reach a real service; the menu reads only the connector list.
   await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) =>
     route.fulfill({ status: 404, json: [] })
   );
-  await page.route('**/cognition/pipedream/mcp/connections', (route) =>
+  await page.route('**/cognition/connectors', (route) =>
     route.fulfill({
       json: [
         {
-          app_slug: 'notion',
-          server_name: 'Notion',
-          enabled: true,
-          provider: 'pipedream',
+          key: 'app/notion',
+          target: { type: 'app', slug: 'notion' },
+          name: 'Notion',
+          status: 'connected',
+          connectable: true,
+          mcp: true,
+          api: true,
+          importAvailable: false,
         },
       ],
     })
-  );
-  await page.route('**/cognition/mcp/servers', (route) =>
-    route.fulfill({ json: [] })
   );
   await page.goto('/composer.html');
 

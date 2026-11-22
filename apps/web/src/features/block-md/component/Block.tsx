@@ -20,6 +20,7 @@ import {
 import {
   useCanComment,
   useCanEdit,
+  useGetPermissions,
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -108,6 +109,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const canComment = useCanComment();
   const canEdit = useCanEdit();
   const isOwner = useIsDocumentOwner();
+  const permissions = useGetPermissions();
 
   const documentEntity = (): DocumentEntity | undefined => {
     const metadata = blockMetadataSignal();
@@ -156,6 +158,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
                   >
                     <MobileMarkdownHeader
                       collaborationStatus={collaborationStatus}
+                      permissions={permissions()}
                     />
                   </Show>
                 </Suspense>

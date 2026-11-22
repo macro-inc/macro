@@ -34,25 +34,26 @@ pub enum EgressError {
     #[error("nothing is served at that path: {0}")]
     Unroutable(String),
 
-    /// Nothing can be addressed under this slug for the owner - not even
-    /// unconnected. With Pipedream every valid slug is addressable, so this
-    /// is reserved for a resolver that genuinely has nowhere to send the
-    /// call. An app the owner has not connected is not an error: its
-    /// `tools/call` is answered with a result saying so, and everything else
-    /// is forwarded for them.
+    /// The slug names no catalog app. An app the owner has not connected
+    /// is not this: its `tools/call` is answered with a result saying so.
     #[error("no MCP server named {0}")]
     UnknownServer(McpServerSlug),
 
-    /// The key names none of the owner's enabled custom servers. Unlike a
-    /// Pipedream slug there is nothing to address without a row: the URL
-    /// *is* the row, so a key that matches none - or matches one the owner
-    /// turned off - has nowhere to go.
+    /// The key names none of the owner's usable custom servers. There is
+    /// nothing to address without one: the URL *is* the connection, so a key
+    /// that matches none - or one the owner turned off - has nowhere to go.
     #[error("no custom MCP server with key {0}")]
     UnknownCustomServer(CustomMcpServerKey),
 
+    /// The session's agent was not given this app or server. The selected
+    /// app list is a permission: a sandbox reaches only what its agent's
+    /// author listed, whatever else the owner has connected.
+    #[error("the agent was not given this MCP server")]
+    OutOfScope,
+
     /// A request body the proxy had to read was bigger than it will read.
-    /// Only reachable on the path that answers `tools/call` for an
-    /// unconnected app; every other request streams through unread.
+    /// Only reachable on the paths that look inside an MCP request; every
+    /// other request streams through unread.
     #[error("request body exceeds what the proxy will read")]
     RequestTooLarge,
 
@@ -83,6 +84,15 @@ pub enum EgressError {
     /// semantically.
     #[error("upstream request failed: {0}")]
     Upstream(rootcause::Report),
+
+    /// The upstream refused the request with HTTP 429 before running it, so
+    /// the same request may be sent again once `retry_after` (its
+    /// `Retry-After` in seconds, when it sent one) has passed.
+    #[error("upstream rate limited the request")]
+    RateLimited {
+        /// How long the upstream asked callers to wait.
+        retry_after: Option<std::time::Duration>,
+    },
 
     /// Our side broke: storage, decryption, configuration.
     #[error("egress failed: {0}")]

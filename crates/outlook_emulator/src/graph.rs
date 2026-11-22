@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::body::Bytes;
-use axum::extract::{Path, RawQuery, Request, State as AxumState};
+use axum::extract::{DefaultBodyLimit, Path, RawQuery, Request, State as AxumState};
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
@@ -37,6 +37,11 @@ pub(crate) const API_VERSION: &str = "v1.0";
 const CONTROL_PREFIX: &str = "/_emulator";
 const DEFAULT_PAGE_SIZE: usize = 10;
 const MAX_PAGE_SIZE: usize = 1000;
+/// The largest request body taken: Graph takes requests of up to 4 MB, and
+/// one range of an upload session may be nearly that large.
+const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
+/// What Graph's front end answers a write that names no body length.
+const LENGTH_REQUIRED_PAGE: &str = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\"http://www.w3.org/TR/html4/strict.dtd\">\r\n<HTML><HEAD><TITLE>Length Required</TITLE></HEAD>\r\n<BODY><h2>Length Required</h2>\r\n<hr><p>HTTP Error 411. The request must be chunked or have a content length.</p>\r\n</BODY></HTML>\r\n";
 
 /// One Graph request, as the route table reads it.
 pub(crate) struct Call {
@@ -129,9 +134,20 @@ impl Ctx<'_> {
     /// Names the route the request matched, then applies injected faults
     /// and the mailbox's request limit.
     pub(crate) fn enter(&mut self, route: Route) -> Result<(), GraphError> {
+        self.enter_folder(route, None)
+    }
+
+    /// As `enter`, for a request on one folder's messages, the folder named
+    /// as its path names it: faults for that folder apply too.
+    pub(crate) fn enter_folder(
+        &mut self,
+        route: Route,
+        folder: Option<&str>,
+    ) -> Result<(), GraphError> {
         self.route = Some(route);
         let email = (!self.email.is_empty()).then_some(self.email.as_str());
-        if let Some(fault) = self.state.take_fault(email, route) {
+        let continuation = self.call.pairs.iter().any(|(name, _)| name == "$skiptoken");
+        if let Some(fault) = self.state.take_fault(email, route, folder, continuation) {
             self.delay = fault.delay_ms.map(Duration::from_millis);
             if let Some(error) = fault.error {
                 return Err(error.graph_error(fault.retry_after_seconds));
@@ -366,7 +382,7 @@ fn route(ctx: &mut Ctx<'_>) -> Handled {
             folders::create(ctx, Some(folder))
         }
         ["mailFolders", folder, "messages"] if method == Method::GET => {
-            ctx.enter(R::MessagesList)?;
+            ctx.enter_folder(R::MessagesList, Some(folder))?;
             messages::list(ctx, Some(folder))
         }
         ["mailFolders", folder, "messages"] if method == Method::POST => {
@@ -374,7 +390,7 @@ fn route(ctx: &mut Ctx<'_>) -> Handled {
             compose::create(ctx, Some(folder))
         }
         ["mailFolders", folder, "messages", "delta"] if method == Method::GET => {
-            ctx.enter(R::MessagesDelta)?;
+            ctx.enter_folder(R::MessagesDelta, Some(folder))?;
             messages::delta(ctx, folder)
         }
         ["mailFolders", _, "messages", id, action @ ..] => message(ctx, id, action),
@@ -485,13 +501,16 @@ fn route(ctx: &mut Ctx<'_>) -> Handled {
             ctx.enter(R::ContactsDelta)?;
             people::contacts_delta(ctx, folder)
         }
-        ["contactFolders", _, "contacts", _, "photo", "$value"] if method == Method::GET => {
+        [
+            "contactFolders",
+            folder,
+            "contacts",
+            contact,
+            "photo",
+            "$value",
+        ] if method == Method::GET => {
             ctx.enter(R::ContactsPhoto)?;
-            Err(GraphError::server(
-                404,
-                "ErrorItemNotFound",
-                "The specified object was not found in the store., The contact has no photo.",
-            ))
+            people::contact_photo(ctx, folder, contact)
         }
 
         other => Err(unknown(other)),
@@ -683,6 +702,9 @@ async fn graph(
         body.to_vec(),
         emulator.graph_url(),
     );
+    if lacks_length(&call.method, &headers) {
+        return logged(length_required(), None, None);
+    }
     let token = bearer(&headers);
     let segments: Vec<&str> = call.segments.iter().map(String::as_str).collect();
     match (&call.method, segments.as_slice()) {
@@ -699,8 +721,29 @@ async fn graph(
     }
 }
 
+/// Whether a write names no body length. A client that sends a `POST` or
+/// `PATCH` with no body (`/send`, `/createReply`) and leaves `Content-Length`
+/// out is refused by Graph's front end before the request reaches a mailbox.
+fn lacks_length(method: &Method, headers: &HeaderMap) -> bool {
+    matches!(*method, Method::POST | Method::PATCH)
+        && !headers.contains_key(header::CONTENT_LENGTH)
+        && !headers.contains_key(header::TRANSFER_ENCODING)
+}
+
+/// The front end's 411 page: HTML, with no Graph error code.
+fn length_required() -> Response {
+    (
+        StatusCode::LENGTH_REQUIRED,
+        [(header::CONTENT_TYPE, "text/html; charset=us-ascii")],
+        LENGTH_REQUIRED_PAGE,
+    )
+        .into_response()
+}
+
 pub(crate) fn router() -> Router<OutlookEmulator> {
-    Router::new().route(&format!("/{API_VERSION}/{{*path}}"), any(graph))
+    Router::new()
+        .route(&format!("/{API_VERSION}/{{*path}}"), any(graph))
+        .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
 }
 
 /// Records every provider request, with the route and mailbox its handler

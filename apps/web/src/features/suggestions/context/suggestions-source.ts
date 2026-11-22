@@ -1,4 +1,4 @@
-import type { Accessor, Component } from 'solid-js';
+import type { Accessor, Component, JSX } from 'solid-js';
 import type { Generation } from '../core/generation';
 import type {
   Suggestion,
@@ -68,12 +68,14 @@ export type SuggestionActions = {
  */
 export type SuggestionItemParts = {
   /**
-   * A source's icon and name as a quiet link; `from` is who wrote, for a
-   * thread. Shows nothing for an item the viewer can't read.
+   * A source's icon and name: a quiet link when `onOpen` is given, else text
+   * inside a row's line. `from` is who wrote, for a thread. Shows `fallback`
+   * for an item the viewer can't read.
    */
   Source: Component<{
     target: SuggestionTarget;
     from?: string;
-    onOpen(): void;
+    fallback?: JSX.Element;
+    onOpen?: () => void;
   }>;
 };

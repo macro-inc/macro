@@ -20,11 +20,13 @@
 //! Credentials: the signing keystore and Firebase config come from Doppler
 //! (`android-release/prd` via `ANDROID_RELEASE_DOPPLER_TOKEN`).
 
+use gh_workflow::expr::typed::{JobHandle, StepHandle, StepOutput, Str, github};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Release, ReleaseType, Run, Step, Use,
-    Workflow, WorkflowDispatch,
+    Concurrency, Event, Job, Level, Permissions, Release, ReleaseType, Run, Step, Use, Workflow,
+    WorkflowDispatch,
 };
 
+use crate::workflows::actions::{ActionsDownloadArtifact, ActionsUploadArtifact};
 use crate::workflows::android_build::{self, Artifact};
 use crate::workflows::{runners, steps, vars};
 
@@ -32,16 +34,20 @@ use crate::workflows::{runners, steps, vars};
 /// publish job.
 const APK_ARTIFACT: &str = "android-apk";
 
+/// The job that builds the APK, which `publish` waits for.
+const BUILD: JobHandle<()> = JobHandle::new("build", ());
+
 /// Build the workflow.
 pub fn android_apk_on_release() -> Workflow {
     Workflow::new("Android APK on Release")
         .on(Event::default()
             .release(Release::default().add_type(ReleaseType::Released))
             .workflow_dispatch(WorkflowDispatch::default()))
-        .concurrency(Concurrency::new(Expression::new(
-            "android-apk-on-release-${{ github.ref_name }}",
+        .concurrency(Concurrency::new(format!(
+            "android-apk-on-release-{}",
+            github().ref_name()
         )))
-        .add_job("build", build_job())
+        .add_job(BUILD, build_job())
         .add_job("publish", publish_job())
 }
 
@@ -54,9 +60,9 @@ fn build_job() -> Job {
         .timeout_minutes(90u32)
         .permissions(Permissions::default().contents(Level::Read))
         .add_env(("CI", "true"))
-        .add_env(("RELEASE_TAG", "${{ github.ref_name }}"))
+        .add_env(("RELEASE_TAG", github().ref_name()))
         .add_step(require_release())
-        .add_step(steps::checkout_ref("${{ github.ref }}"))
+        .add_step(steps::checkout_ref(github().git_ref()))
         .add_step(android_build::install_android_sdk())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup prerequisites", false))
@@ -71,11 +77,11 @@ fn build_job() -> Job {
 fn publish_job() -> Job {
     Job::default()
         .name("Attach the APK to the release")
-        .add_needs("build")
+        .add_needs(BUILD)
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(10u32)
         .permissions(Permissions::default().contents(Level::Write))
-        .add_env(("RELEASE_TAG", "${{ github.ref_name }}"))
+        .add_env(("RELEASE_TAG", github().ref_name()))
         .add_step(download_workflow_artifact())
         .add_step(upload_release_assets())
 }
@@ -99,8 +105,21 @@ fn require_release() -> Step<Run> {
               }
         "#})
         .shell("bash")
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
+        .add_env(("GH_TOKEN", github().token()))
 }
+
+struct PrepareOutputs {
+    /// The APK's file name, from the release metadata.
+    filename: StepOutput<Str>,
+}
+
+/// The [`prepare_version_and_signing`] step.
+const PREPARE: StepHandle<PrepareOutputs> = StepHandle::new(
+    "metadata",
+    PrepareOutputs {
+        filename: StepOutput::new("metadata", "filename"),
+    },
+);
 
 fn prepare_version_and_signing() -> Step<Run> {
     Step::new("Prepare version and signing")
@@ -112,7 +131,7 @@ fn prepare_version_and_signing() -> Step<Run> {
               tauri/src-tauri/gen/android/keystore.properties
             bun scripts/android-firebase.ts build --doppler "$RUNNER_TEMP/android-google-services.json"
         "#})
-        .id("metadata")
+        .id(PREPARE.id())
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(("DOPPLER_TOKEN", vars::ANDROID_RELEASE_DOPPLER_TOKEN))
@@ -138,31 +157,22 @@ fn verify_and_collect() -> Step<Run> {
         "#})
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(("APK_FILENAME", "${{ steps.metadata.outputs.filename }}"))
+        .add_env(("APK_FILENAME", PREPARE.outputs.filename.read()))
 }
 
 fn upload_workflow_artifact() -> Step<Use> {
-    Step::new("Upload verified APK")
-        .uses(
-            "actions",
-            "upload-artifact",
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
-        .add_with(("name", APK_ARTIFACT))
-        .add_with(("path", "android-artifacts/"))
-        .add_with(("if-no-files-found", "error"))
-        .add_with(("retention-days", 7))
+    ActionsUploadArtifact::new("Upload verified APK", "android-artifacts/")
+        .name(APK_ARTIFACT)
+        .if_no_files_found("error")
+        .retention_days(7)
+        .step()
 }
 
 fn download_workflow_artifact() -> Step<Use> {
-    Step::new("Download verified APK")
-        .uses(
-            "actions",
-            "download-artifact",
-            "634f93cb2916e3fdff6788551b99b062d0335ce0",
-        ) // v5
-        .add_with(("name", APK_ARTIFACT))
-        .add_with(("path", "android-artifacts"))
+    ActionsDownloadArtifact::new("Download verified APK")
+        .name(APK_ARTIFACT)
+        .path("android-artifacts")
+        .step()
 }
 
 /// `--clobber` lets a re-run replace this release's own APK; nothing else on
@@ -180,5 +190,5 @@ fn upload_release_assets() -> Step<Run> {
             gh release upload "$RELEASE_TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
         "#})
         .shell("bash")
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
+        .add_env(("GH_TOKEN", github().token()))
 }

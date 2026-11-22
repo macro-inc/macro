@@ -1,3 +1,4 @@
+import type * as PlatformModule from '@core/util/platform';
 import {
   keepPreviousData,
   partialMatchKey,
@@ -8,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { authKeys } from './auth/keys';
 import { calendarKeys } from './calendar/keys';
 import { channelKeys } from './channel/keys';
+import { crmProtectedQueryKey } from './crm-cache-scope';
 import { messageKeys } from './messages/keys';
 import { type PersistScope, setupQueryPersistence } from './persistence';
 import type {
@@ -20,6 +22,10 @@ import {
   shouldPersistChannelQuery,
 } from './persistence-scopes';
 
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof PlatformModule>()),
+  isTauri: () => true,
+}));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => true,
 }));
@@ -149,29 +155,27 @@ describe('setupQueryPersistence', () => {
   it('isolates writes to the matching scope store', () => {
     const queryClient = new QueryClient();
     const channelStore = createMockStore();
-    const emailStore = createMockStore();
+    const calendarStore = createMockStore();
 
     setupQueryPersistence({
       queryClient,
       scopes: [
         createScope(['channel'], channelStore),
-        createScope(['email', 'threadMessages'], emailStore),
+        createScope(['calendar'], calendarStore),
       ],
     });
 
     queryClient.setQueryData(['channel', 'a'], { value: 'ch' });
-    queryClient.setQueryData(['email', 'threadMessages', 't-1'], {
-      value: 'em',
-    });
+    queryClient.setQueryData(['calendar', 't-1'], { value: 'cal' });
 
     expect(channelStore.set).toHaveBeenCalledTimes(1);
-    expect(emailStore.set).toHaveBeenCalledTimes(1);
+    expect(calendarStore.set).toHaveBeenCalledTimes(1);
     expect(
       (channelStore.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey
     ).toEqual(['channel', 'a']);
     expect(
-      (emailStore.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey
-    ).toEqual(['email', 'threadMessages', 't-1']);
+      (calendarStore.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey
+    ).toEqual(['calendar', 't-1']);
   });
 
   it('ignores queries that match no scope', () => {
@@ -884,4 +888,218 @@ describe('account persistence reset', () => {
     persistence.dispose();
     queryClient.clear();
   });
+});
+
+describe('permission snapshot retirement', () => {
+  it('fences pending matching restores and removes unseen disk entries while preserving other data', async () => {
+    const queryClient = new QueryClient();
+    const store = createMockStore();
+    const entry = (key: readonly string[]): PersistedQueryEntry => ({
+      queryKey: key,
+      queryHash: JSON.stringify(key),
+      data: { value: 'retained' },
+      dataUpdatedAt: Date.now(),
+      persistedAt: Date.now(),
+      buster: 'test',
+    });
+    const email = entry(['email', 'threadMessages', 'open']);
+    const unseen = entry(['email', 'threadMessages', 'closed']);
+    const channel = entry(['channel', 'a']);
+    for (const row of [email, unseen, channel])
+      store.entries.set(row.queryHash, row);
+    let deliver!: (value: PersistedQueryEntry) => void;
+    store.get.mockImplementation((hash: string) =>
+      hash === email.queryHash
+        ? new Promise<PersistedQueryEntry>((resolve) => {
+            deliver = resolve;
+          })
+        : Promise.resolve(store.entries.get(hash))
+    );
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope([], store)],
+    });
+    const restore = persistence.restoreQuery(email.queryKey);
+    const other = persistence.restoreQuery(channel.queryKey);
+    await persistence.retire((key) => key[0] === 'email');
+    deliver(email);
+    await Promise.all([restore, other]);
+    expect(queryClient.getQueryData(email.queryKey)).toBeUndefined();
+    expect(queryClient.getQueryData(channel.queryKey)).toEqual({
+      value: 'retained',
+    });
+    expect(store.entries.has(email.queryHash)).toBe(false);
+    expect(store.entries.has(unseen.queryHash)).toBe(false);
+    expect(store.entries.has(channel.queryHash)).toBe(true);
+    persistence.dispose();
+    queryClient.clear();
+  });
+});
+
+it('keeps owner privacy controls through denial but clears them on account retirement', async () => {
+  const store = createMockStore();
+  const queryClient = new QueryClient();
+  const persistence = setupQueryPersistence({
+    queryClient,
+    scopes: [createScope([], store)],
+  });
+  const controls = [
+    ['crm', 'emailPolicy', 'owner'],
+    ['crm', 'emailPolicyPreview', 'owner'],
+    ['crm', 'emailPolicyHistory', 'owner', undefined],
+    ['crm', 'emailPolicyRevision', 'owner', 1],
+    ['crm', 'emailPrivacy', 'team', 'owner'],
+    ['crm', 'emailConsent', 'team', 'owner', 1],
+    ['crm', 'excludedEmailThreads', 'team', 'owner', 1, undefined, undefined],
+  ];
+  const company = ['crm', 'company', 'company'];
+  for (const key of [...controls, company])
+    queryClient.setQueryData(key, { value: 'saved' });
+  const updates: string[] = [];
+  const observer = new QueryObserver(queryClient, {
+    queryKey: controls[0],
+    enabled: false,
+  });
+  const unsubscribe = observer.subscribe((result) =>
+    updates.push(result.status)
+  );
+  await persistence.retire(crmProtectedQueryKey);
+  expect(queryClient.getQueryData(company)).toBeUndefined();
+  for (const key of controls)
+    expect(queryClient.getQueryData(key)).toEqual({ value: 'saved' });
+  expect(updates).not.toContain('pending');
+  await persistence.retire(() => true);
+  for (const key of controls)
+    expect(queryClient.getQueryData(key)).toBeUndefined();
+  unsubscribe();
+  persistence.dispose();
+  queryClient.clear();
+});
+
+it('restores an allowed cache without scanning every persisted payload until a denial', async () => {
+  const store = createMockStore();
+  const queryClient = new QueryClient();
+  const key = ['email', 'threadMessages', 'thread'];
+  const queryHash = JSON.stringify(key);
+  store.entries.set(queryHash, {
+    queryKey: key,
+    queryHash,
+    data: { body: 'offline mail' },
+    dataUpdatedAt: Date.now(),
+    persistedAt: Date.now(),
+    buster: 'test',
+  });
+  let denied = false;
+  const persistence = setupQueryPersistence({
+    queryClient,
+    scopes: [createScope([], store)],
+    exclude: (queryKey) => denied && queryKey[0] === 'email',
+  });
+  expect(store.prune).not.toHaveBeenCalled();
+  await persistence.restoreQuery(key);
+  expect(queryClient.getQueryData(key)).toEqual({ body: 'offline mail' });
+  denied = true;
+  await persistence.retire((queryKey) => queryKey[0] === 'email');
+  expect(store.prune).toHaveBeenCalledOnce();
+  expect(store.entries.has(queryHash)).toBe(false);
+  expect(queryClient.getQueryData(key)).toBeUndefined();
+  persistence.dispose();
+  queryClient.clear();
+});
+
+it('never restores or persists excluded content, even when another instance flushes it after pruning', async () => {
+  const store = createMockStore();
+  const olderClient = new QueryClient();
+  const currentClient = new QueryClient();
+  const older = setupQueryPersistence({
+    queryClient: olderClient,
+    scopes: [createScope([], store)],
+  });
+  const current = setupQueryPersistence({
+    queryClient: currentClient,
+    scopes: [createScope([], store)],
+    exclude: (key) => key[0] === 'email',
+  });
+  await current.retire((key) => key[0] === 'email');
+  const protectedKey = ['email', 'threadMessages', 'thread'];
+  olderClient.setQueryData(protectedKey, { body: 'old response' });
+  await older.flush();
+  await current.restoreQuery(protectedKey);
+  expect(currentClient.getQueryData(protectedKey)).toBeUndefined();
+  store.set.mockClear();
+  currentClient.setQueryData(protectedKey, { body: 'fresh response' });
+  expect(store.set).not.toHaveBeenCalled();
+  currentClient.setQueryData(['document', 'ordinary'], {
+    body: 'offline document',
+  });
+  expect(store.set).toHaveBeenCalledTimes(1);
+  older.dispose();
+  current.dispose();
+  olderClient.clear();
+  currentClient.clear();
+});
+
+it('drops excluded entries from disk without clearing memory or the entries it keeps', async () => {
+  const store = createMockStore();
+  const queryClient = new QueryClient();
+  let denied = false;
+  const persistence = setupQueryPersistence({
+    queryClient,
+    scopes: [createScope([], store)],
+    exclude: (key) => denied && key[0] !== 'identity',
+  });
+  const channels = ['channel', 'list'];
+  const identity = ['identity'];
+  queryClient.setQueryData(channels, { rows: ['fetched'] });
+  queryClient.setQueryData(identity, { id: 'viewer' });
+  expect(store.entries.size).toBe(2);
+  denied = true;
+  await persistence.pruneExcluded();
+  expect(store.entries.has(JSON.stringify(channels))).toBe(false);
+  expect(store.entries.has(JSON.stringify(identity))).toBe(true);
+  // Memory holds what this page fetched; only the disk is swept.
+  expect(queryClient.getQueryData(channels)).toEqual({ rows: ['fetched'] });
+  persistence.dispose();
+  queryClient.clear();
+});
+
+it('does not scan the disk for a sweep when no policy excludes anything', async () => {
+  const store = createMockStore();
+  const queryClient = new QueryClient();
+  const persistence = setupQueryPersistence({
+    queryClient,
+    scopes: [createScope([], store)],
+  });
+  await persistence.pruneExcluded();
+  expect(store.prune).not.toHaveBeenCalled();
+  persistence.dispose();
+  queryClient.clear();
+});
+
+it('quarantines disk snapshots after a failed retirement until a later prune succeeds', async () => {
+  const store = createMockStore();
+  const queryClient = new QueryClient();
+  const persistence = setupQueryPersistence({
+    queryClient,
+    scopes: [createScope([], store)],
+  });
+  const key = ['email', 'threadMessages', 'thread'];
+  store.flush.mockRejectedValueOnce(new Error('disk failure'));
+  await expect(persistence.retire((key) => key[0] === 'email')).rejects.toThrow(
+    'disk failure'
+  );
+  queryClient.setQueryData(key, { body: 'fresh allowed response' });
+  expect(queryClient.getQueryData(key)).toEqual({
+    body: 'fresh allowed response',
+  });
+  expect(store.set).not.toHaveBeenCalled();
+  await persistence.restoreQuery(key);
+  expect(store.get).not.toHaveBeenCalled();
+  await persistence.flush();
+  queryClient.setQueryData(key, { body: 'after prune' });
+  expect(store.entries.get(JSON.stringify(key))?.data).toEqual({
+    body: 'after prune',
+  });
+  persistence.dispose();
+  queryClient.clear();
 });

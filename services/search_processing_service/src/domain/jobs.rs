@@ -23,8 +23,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-#[cfg(test)]
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use aws_sdk_dynamodb::Client;
@@ -105,7 +103,7 @@ impl DefineTable for BackfillJobsTable {
 /// Two backends so `drain_source` doesn't need to know whether it's running
 /// against a real DynamoDB or a unit-test fake:
 ///
-/// - `Detached` — bumps an in-process atomic. Used by tests.
+/// - `Detached` — records progress in process memory. Used by tests.
 /// - `Dynamo` — fires `UpdateItem ADD enqueued :n` per page. Page bounds
 ///   are the same point the cancellation token is checked, so the round
 ///   trip cost is amortised over the page work.
@@ -115,12 +113,43 @@ pub struct JobProgress {
 
 enum ProgressBackend {
     #[cfg(test)]
-    Detached(AtomicUsize),
+    Detached(Mutex<DetachedProgress>),
     Dynamo {
         client: Client,
         table: Arc<str>,
         id: JobId,
     },
+}
+
+/// What a detached [`JobProgress`] has recorded.
+#[cfg(test)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct DetachedProgress {
+    pub enqueued: usize,
+    pub cursor: Option<String>,
+    pub updated: usize,
+    pub missing: usize,
+    pub failed: usize,
+    pub not_queued: usize,
+}
+
+/// Moves a job's cursor and adds one page's counts in a single write.
+const RECORD_PAGE_EXPRESSION: &str = "SET #cursor = :cursor \
+     ADD enqueued :processed, #updated :updated, #missing :missing, #failed :failed";
+
+/// What one page of a resumable backfill finished, recorded on its job.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PageProgress<'a> {
+    /// The last key the page covered; the job resumes after it.
+    pub cursor: &'a str,
+    /// Source rows the page read, added to `enqueued`.
+    pub processed: usize,
+    /// Index documents the page changed.
+    pub updated: usize,
+    /// Source rows with no index document to change.
+    pub missing: usize,
+    /// Index documents the page failed to change.
+    pub failed: usize,
 }
 
 impl JobProgress {
@@ -129,7 +158,7 @@ impl JobProgress {
     #[cfg(test)]
     pub fn detached() -> Self {
         Self {
-            backend: ProgressBackend::Detached(AtomicUsize::new(0)),
+            backend: ProgressBackend::Detached(Mutex::new(DetachedProgress::default())),
         }
     }
 
@@ -143,32 +172,108 @@ impl JobProgress {
     /// DynamoDB: a failed write logs and continues so a transient blip
     /// doesn't kill the whole drain (the next page's `ADD` reconciles).
     pub async fn add(&self, n: usize) {
+        #[cfg(test)]
+        if let ProgressBackend::Detached(progress) = &self.backend {
+            progress.lock().unwrap().enqueued += n;
+            return;
+        }
+        self.add_to_counter("enqueued", n).await;
+    }
+
+    /// Add `n` to the messages the search event queue would not take. Best
+    /// effort like [`Self::add`]; the job's terminal status does not depend
+    /// on it.
+    pub async fn add_not_queued(&self, n: usize) {
+        #[cfg(test)]
+        if let ProgressBackend::Detached(progress) = &self.backend {
+            progress.lock().unwrap().not_queued += n;
+            return;
+        }
+        self.add_to_counter("not_queued", n).await;
+    }
+
+    async fn add_to_counter(&self, counter: &'static str, n: usize) {
+        let (client, table, id) = match &self.backend {
+            #[cfg(test)]
+            ProgressBackend::Detached(_) => return,
+            ProgressBackend::Dynamo { client, table, id } => (client, table, id),
+        };
+        let result = client
+            .update_item()
+            .table_name(table.as_ref())
+            .key("id", AttributeValue::S(id.0.clone()))
+            .update_expression("ADD #counter :n")
+            .expression_attribute_names("#counter", counter)
+            .expression_attribute_values(":n", AttributeValue::N(n.to_string()))
+            .send()
+            .await;
+        if let Err(e) = result {
+            tracing::warn!(error=?e, id=%id, counter, "failed to update backfill progress in dynamodb");
+        }
+    }
+
+    /// Record a finished page of a resumable backfill: move the job's cursor
+    /// to the page's last key and add its counts. Best effort like
+    /// [`Self::add`]: a lost write leaves the cursor one page behind, and
+    /// resuming from there repeats only idempotent work.
+    pub async fn record_page(&self, page: PageProgress<'_>) {
         match &self.backend {
             #[cfg(test)]
-            ProgressBackend::Detached(a) => {
-                a.fetch_add(n, Ordering::Relaxed);
+            ProgressBackend::Detached(progress) => {
+                let mut progress = progress.lock().unwrap();
+                progress.enqueued += page.processed;
+                progress.cursor = Some(page.cursor.to_owned());
+                progress.updated += page.updated;
+                progress.missing += page.missing;
+                progress.failed += page.failed;
             }
             ProgressBackend::Dynamo { client, table, id } => {
+                let count = |n: usize| AttributeValue::N(n.to_string());
                 let result = client
                     .update_item()
                     .table_name(table.as_ref())
                     .key("id", AttributeValue::S(id.0.clone()))
-                    .update_expression("ADD enqueued :n")
-                    .expression_attribute_values(":n", AttributeValue::N(n.to_string()))
+                    .update_expression(RECORD_PAGE_EXPRESSION)
+                    .expression_attribute_names("#cursor", "cursor")
+                    .expression_attribute_names("#updated", "updated")
+                    .expression_attribute_names("#missing", "missing")
+                    .expression_attribute_names("#failed", "failed")
+                    .expression_attribute_values(
+                        ":cursor",
+                        AttributeValue::S(page.cursor.to_owned()),
+                    )
+                    .expression_attribute_values(":processed", count(page.processed))
+                    .expression_attribute_values(":updated", count(page.updated))
+                    .expression_attribute_values(":missing", count(page.missing))
+                    .expression_attribute_values(":failed", count(page.failed))
                     .send()
                     .await;
                 if let Err(e) = result {
-                    tracing::warn!(error=?e, id=%id, "failed to update backfill progress in dynamodb");
+                    tracing::warn!(error=?e, id=%id, "failed to record backfill page in dynamodb");
                 }
             }
         }
     }
 
+    /// The registry id of the job this progress belongs to.
+    pub fn job_id(&self) -> Option<&JobId> {
+        match &self.backend {
+            #[cfg(test)]
+            ProgressBackend::Detached(_) => None,
+            ProgressBackend::Dynamo { id, .. } => Some(id),
+        }
+    }
+
     #[cfg(test)]
     pub fn local_count(&self) -> usize {
+        self.local_progress().enqueued
+    }
+
+    #[cfg(test)]
+    pub fn local_progress(&self) -> DetachedProgress {
         match &self.backend {
-            ProgressBackend::Detached(a) => a.load(Ordering::Relaxed),
-            ProgressBackend::Dynamo { .. } => 0,
+            ProgressBackend::Detached(progress) => progress.lock().unwrap().clone(),
+            ProgressBackend::Dynamo { .. } => DetachedProgress::default(),
         }
     }
 }
@@ -183,6 +288,9 @@ pub enum JobStatus {
     Completed,
     Failed,
     Cancelled,
+    /// The search index refused writes and the job stopped instead of
+    /// retrying; resume it from its `cursor` once the index recovers.
+    Stopped,
 }
 
 impl JobStatus {
@@ -192,6 +300,7 @@ impl JobStatus {
             JobStatus::Completed => "completed",
             JobStatus::Failed => "failed",
             JobStatus::Cancelled => "cancelled",
+            JobStatus::Stopped => "stopped",
         }
     }
 
@@ -201,6 +310,7 @@ impl JobStatus {
             "completed" => Some(JobStatus::Completed),
             "failed" => Some(JobStatus::Failed),
             "cancelled" => Some(JobStatus::Cancelled),
+            "stopped" => Some(JobStatus::Stopped),
             _ => None,
         }
     }
@@ -213,9 +323,26 @@ pub struct JobSnapshot {
     pub enqueued: usize,
     pub started_at: DateTime<Utc>,
     pub finished_at: Option<DateTime<Utc>>,
-    /// Populated when `status == Failed`.
+    /// Populated when `status` is `failed` or `stopped`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The last key a resumable backfill finished; pass it back to resume
+    /// after it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    /// Index documents changed, for a backfill that updates the index directly.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated: Option<usize>,
+    /// Source rows with no index document to change.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing: Option<usize>,
+    /// Index documents the backfill failed to change.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failed: Option<usize>,
+    /// Messages the search event queue would not take after resends; a job
+    /// with any is `failed`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub not_queued: Option<usize>,
 }
 
 /// Bag of state the spawning code needs after [`BackfillJobs::start`]: the
@@ -310,8 +437,10 @@ impl BackfillJobs {
 
     /// Record the orchestrator's terminal result. Treats an `Ok` after the
     /// token fired as `Cancelled` so a clean `select!` exit still surfaces
-    /// to the status endpoint. Drops the local cancellation entry — a
-    /// finished job can no longer be cancelled.
+    /// to the status endpoint, and a [`BackfillError::Stopped`] as `Stopped`
+    /// with its cursor, and an `Ok` that left messages off the queue as
+    /// `Failed`, cancelled or not. Drops the local cancellation entry — a finished job
+    /// can no longer be cancelled.
     pub async fn finish(
         &self,
         id: &JobId,
@@ -324,11 +453,7 @@ impl BackfillJobs {
             .remove(id)
             .is_some_and(|t| t.is_cancelled());
 
-        let (status, error) = match result {
-            Ok(_) if was_cancelled => (JobStatus::Cancelled, None),
-            Ok(_) => (JobStatus::Completed, None),
-            Err(e) => (JobStatus::Failed, Some(format!("{e}"))),
-        };
+        let (status, error, cursor) = terminal_state(result, was_cancelled);
 
         let mut update = self
             .client
@@ -339,16 +464,26 @@ impl BackfillJobs {
             .expression_attribute_values(":s", AttributeValue::S(status.as_str().to_string()))
             .expression_attribute_values(":f", AttributeValue::S(Utc::now().to_rfc3339()));
 
-        let expr = if let Some(e) = error {
+        let mut assignments = vec!["#s = :s", "finished_at = :f"];
+        if let Some(e) = error {
             update = update
                 .expression_attribute_names("#e", "error")
                 .expression_attribute_values(":e", AttributeValue::S(e));
-            "SET #s = :s, finished_at = :f, #e = :e"
-        } else {
-            "SET #s = :s, finished_at = :f"
-        };
+            assignments.push("#e = :e");
+        }
+        // A job stopped before it finished a page has not recorded the
+        // cursor it started from.
+        if let Some(cursor) = cursor {
+            update = update
+                .expression_attribute_names("#cursor", "cursor")
+                .expression_attribute_values(":cursor", AttributeValue::S(cursor));
+            assignments.push("#cursor = :cursor");
+        }
 
-        update.update_expression(expr).send().await?;
+        update
+            .update_expression(format!("SET {}", assignments.join(", ")))
+            .send()
+            .await?;
         Ok(())
     }
 
@@ -391,6 +526,15 @@ impl BackfillJobs {
             .get("error")
             .and_then(|v| v.as_s().ok())
             .map(|s| s.to_string());
+        let cursor = item
+            .get("cursor")
+            .and_then(|v| v.as_s().ok())
+            .map(|s| s.to_string());
+        let count = |name: &str| {
+            item.get(name)
+                .and_then(|v| v.as_n().ok())
+                .and_then(|s| s.parse().ok())
+        };
 
         Ok(Some(JobSnapshot {
             job_id: id.clone(),
@@ -399,6 +543,11 @@ impl BackfillJobs {
             started_at,
             finished_at,
             error,
+            cursor,
+            updated: count("updated"),
+            missing: count("missing"),
+            failed: count("failed"),
+            not_queued: count("not_queued"),
         }))
     }
 
@@ -410,6 +559,32 @@ impl BackfillJobs {
         let guard = self.local_cancels.lock().unwrap();
         for cancel in guard.values() {
             cancel.cancel();
+        }
+    }
+}
+
+/// The status, error and cursor a finished job records.
+fn terminal_state(
+    result: Result<BackfillReceipt, BackfillError>,
+    was_cancelled: bool,
+) -> (JobStatus, Option<String>, Option<String>) {
+    match result {
+        Ok(receipt) if receipt.not_queued > 0 => (
+            JobStatus::Failed,
+            Some(format!(
+                "the search event queue refused {} of the backfill's messages",
+                receipt.not_queued
+            )),
+            None,
+        ),
+        Ok(_) if was_cancelled => (JobStatus::Cancelled, None, None),
+        Ok(_) => (JobStatus::Completed, None, None),
+        Err(e) => {
+            let (status, cursor) = match &e {
+                BackfillError::Stopped { cursor, .. } => (JobStatus::Stopped, cursor.clone()),
+                _ => (JobStatus::Failed, None),
+            };
+            (status, Some(format!("{e}")), cursor)
         }
     }
 }

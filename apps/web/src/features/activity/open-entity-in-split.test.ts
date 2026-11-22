@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { openEntityInSplit } from './open-entity-in-split';
 
 const mocks = vi.hoisted(() => ({
-  projectsEnabled: false,
   openWithSplit: vi.fn(),
   openDocument: vi.fn(),
 }));
@@ -13,25 +12,13 @@ vi.mock('@app/signal/splitLayout', () => ({
 vi.mock('@core/component/LexicalMarkdown/component/core/BlockLink', () => ({
   openDocument: mocks.openDocument,
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableProjects: { key: 'enable-projects' },
-  isFeatureEnabled: () => mocks.projectsEnabled,
-}));
 
 beforeEach(() => {
-  mocks.projectsEnabled = false;
   vi.clearAllMocks();
 });
 
 describe('activity project navigation', () => {
-  it('does not open native projects when the rollout is disabled', () => {
-    openEntityInSplit({ block: 'initiative', id: 'launch', newSplit: false });
-    expect(mocks.openWithSplit).not.toHaveBeenCalled();
-    expect(mocks.openDocument).not.toHaveBeenCalled();
-  });
-
-  it('opens native project discussions when the rollout is enabled', () => {
-    mocks.projectsEnabled = true;
+  it('opens native project discussions', () => {
     openEntityInSplit({
       block: 'initiative',
       id: 'launch',
@@ -44,7 +31,7 @@ describe('activity project navigation', () => {
     );
   });
 
-  it('keeps legacy folder navigation available when projects are disabled', () => {
+  it('keeps legacy folder navigation', () => {
     openEntityInSplit({ block: 'project', id: 'folder', newSplit: false });
     expect(mocks.openDocument).toHaveBeenCalledWith(
       'project',

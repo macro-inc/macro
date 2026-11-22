@@ -2,7 +2,9 @@ import { SplitHeaderContextMenu } from '@components/app/split-layout/components/
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import { callHandler } from '@kobalte/utils';
 import { mergeRefs } from '@solid-primitives/refs';
+import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import { Button, type ButtonProps, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import type { Component, JSX } from 'solid-js';
@@ -16,21 +18,32 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { useListSearchKeys } from './list-search-keys';
 import { SearchBar } from './SearchBar';
-import { ViewSidebarCloseButton, ViewSidebarToggle } from './ViewShell';
+import { SidebarSection } from './SidebarSection';
+import { SidebarSectionHeader } from './SidebarSectionHeader';
+import { SidebarSections } from './SidebarSections';
+import {
+  ViewSidebarCloseButton,
+  ViewSidebarToggle,
+} from './ViewNavigationControls';
+import { ViewShellContext } from './view-shell-context';
 
-function Root(props: JSX.HTMLAttributes<HTMLElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+const SidebarViewContext = createContext<{ view: () => string | undefined }>();
+
+function Root(props: JSX.HTMLAttributes<HTMLElement> & { reorderId?: string }) {
+  const [local, rest] = splitProps(props, ['children', 'class', 'reorderId']);
   return (
-    <aside
-      {...rest}
-      class={cn(
-        'flex size-full min-h-0 min-w-0 flex-col bg-panel',
-        local.class
-      )}
-      data-view-sidebar=""
-    >
-      {local.children}
-    </aside>
+    <SidebarViewContext.Provider value={{ view: () => local.reorderId }}>
+      <aside
+        {...rest}
+        class={cn(
+          'flex size-full min-h-0 min-w-0 flex-col bg-panel',
+          local.class
+        )}
+        data-view-sidebar=""
+      >
+        {local.children}
+      </aside>
+    </SidebarViewContext.Provider>
   );
 }
 
@@ -64,6 +77,11 @@ function Header(
     'onSearchOpenChange',
     'collapseControl',
   ]);
+  const ws = useContext(ViewShellContext);
+  // A sidebar docked beside touch content is that view's list, as on a phone,
+  // which has no header; sheets and overlays keep theirs.
+  const dockedOnTouch = () =>
+    isTouchDevice() && !!ws && !ws.aside.isSheet() && !ws.aside.isOverlay();
   const [open, setOpen] = createSignal(false);
   const searchOpen = () => local.searchOpen ?? open();
   let searchArea: HTMLDivElement | undefined;
@@ -84,12 +102,15 @@ function Header(
       );
   };
   return (
-    <>
+    <Show
+      when={!dockedOnTouch()}
+      fallback={<div aria-hidden="true" class="h-(--safe-top) shrink-0" />}
+    >
       <SplitHeaderContextMenu>
         <div
           {...rest}
           class={cn(
-            'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
+            'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) touch:h-[calc(var(--safe-top,0px)+3rem)] touch:pb-0 touch:pt-(--safe-top) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
             local.class
           )}
           data-view-sidebar-header=""
@@ -125,13 +146,13 @@ function Header(
           </SearchControlsContext.Provider>
         </div>
       </Show>
-    </>
+    </Show>
   );
 }
 
 /**
- * The search field of a sidebar that is the list it searches (Home, Chat),
- * in its header's search slot. It keeps the list search keys of
+ * The search field of a sidebar that is the list it searches (Home, Chat,
+ * Agents), in its header's search slot. It keeps the list search keys of
  * `ListHeaderSearch`: ArrowDown or Enter moves to the first result, Escape
  * leaves the field with the search, and Escape in the list clears it. An
  * empty field collapses back to the header's search button.
@@ -238,7 +259,7 @@ function Primary(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'min-w-0 px-(--sidebar-gutter) pt-(--sidebar-gutter) touch:pt-[calc(var(--safe-top,0px)+var(--sidebar-gutter))]',
+        'min-w-0 px-(--sidebar-gutter) pt-(--sidebar-gutter)',
         local.class
       )}
     >
@@ -277,9 +298,15 @@ function Control(props: ButtonProps) {
 }
 
 function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+  const [local, rest] = splitProps(props, ['children', 'class', 'ref']);
+  const view = useContext(SidebarViewContext);
+  const dnd = useDragDropContext();
+  let viewport: HTMLDivElement | undefined;
   return (
     <div
+      ref={mergeRefs(local.ref, (element) => {
+        viewport = element;
+      })}
       {...rest}
       class={cn(
         'flex min-h-0 min-w-0 flex-1 flex-col gap-(--sidebar-section-gap) overflow-auto px-(--sidebar-gutter) py-(--sidebar-content-inset)',
@@ -287,7 +314,13 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
       )}
       data-view-sidebar-content=""
     >
-      {local.children}
+      <Show when={dnd && view?.view()} fallback={local.children}>
+        {(id) => (
+          <SidebarSections view={id()} viewport={() => viewport}>
+            {local.children}
+          </SidebarSections>
+        )}
+      </Show>
     </div>
   );
 }
@@ -319,7 +352,9 @@ function Item(
     'aria-current',
     'class',
     'type',
+    'onClick',
   ]);
+  const shell = useContext(ViewShellContext);
   const ariaCurrent = () => {
     if (local['aria-current'] !== undefined) return local['aria-current'];
     if (local.active) return 'page';
@@ -331,6 +366,16 @@ function Item(
       {...rest}
       type={local.type ?? 'button'}
       aria-current={ariaCurrent()}
+      onClick={(
+        event: MouseEvent & {
+          currentTarget: HTMLButtonElement;
+          target: Element;
+        }
+      ) => {
+        callHandler(event, local.onClick);
+        if (!event.defaultPrevented && shell?.aside.isSheet())
+          shell.aside.collapse();
+      }}
       class={cn(
         'flex h-(--sidebar-row-height) w-full min-w-0 shrink-0 items-center justify-start gap-(--sidebar-label-gap) rounded-lg border-0 px-(--sidebar-item-inset) py-0 text-left text-sm leading-5 font-normal transition-none touch:h-11',
         'outline-none focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50',
@@ -475,6 +520,7 @@ function Footer(props: JSX.HTMLAttributes<HTMLDivElement>) {
 export const ViewSidebar = Object.assign(Root, {
   Root,
   Header,
+  Toggle: ViewSidebarToggle,
   Search,
   CloseButton: ViewSidebarCloseButton,
   Title,
@@ -483,6 +529,8 @@ export const ViewSidebar = Object.assign(Root, {
   Control,
   Content,
   Nav,
+  Section: SidebarSection,
+  SectionHeader: SidebarSectionHeader,
   Item,
   Icon,
   Trailing,

@@ -5,13 +5,14 @@ import {
   isCollaborationStatusVisible,
 } from '@components/app/CollaborationStatusIndicator';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
-import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import { SplitPermissionsBadge } from '@components/app/split-layout/components/SplitLabel';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
+import { AccessBadge } from '@components/app/split-layout/components/SplitLabel';
+import { Permissions } from '@core/component/SharePermissions';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
 import { type Accessor, Show } from 'solid-js';
-import { DispatchAgentButton } from '../../component/DispatchAgentMenu';
+import { markdownDocumentBlockName } from '../../component/MarkdownDetailBreadcrumbItem';
 import { useMarkdownName } from '../../component/MarkdownNameProvider';
 import {
   type MarkdownDocumentActions,
@@ -40,18 +41,33 @@ export function mobileMarkdownHeaderMenu(
 }
 
 /**
- * The Markdown block's header on touch, where every document and task opens
- * as this block: the title with its menu, sync state, Ask Macro, and Info.
+ * A Markdown document's header on touch: the title with its menu, sync state,
+ * Ask Macro, and Info. Its block shows it, and so does a touch view that shows
+ * the document beside its list (inside a `SplitHeaderScope`), so the header is
+ * the same in both and at every width. It reads the document from its context,
+ * not from a legacy Block.
  */
 export function MobileMarkdownHeader(props: {
   collaborationStatus: Accessor<SyncSourceStatus | undefined>;
+  /** The viewer's access for the title menu; the document's when omitted. */
+  permissions?: Permissions;
+  /** Where a host goes after the title menu's Duplicate and Delete. */
+  onDuplicate?: (id: string, name: string) => void;
+  onDelete?: () => void;
 }) {
-  const { documentId, kind } = useMarkdownDocument();
+  const { documentId, kind, permissions } = useMarkdownDocument();
   const { displayName } = useMarkdownName();
   const name = () => displayName() ?? '';
   const iconType = () => (kind() === 'document' ? 'md' : kind());
   const { fileOperations, actions } = useMarkdownDocumentTools();
   const headerEntity = useMarkdownHeaderEntity();
+  const menuPermissions = () => {
+    if (props.permissions !== undefined) return props.permissions;
+    if (permissions.isOwner()) return Permissions.OWNER;
+    if (permissions.canEdit()) return Permissions.CAN_EDIT;
+    if (permissions.canComment()) return Permissions.CAN_COMMENT;
+    return Permissions.CAN_VIEW;
+  };
 
   return (
     <>
@@ -67,12 +83,11 @@ export function MobileMarkdownHeader(props: {
                 />
               </MobileHeader.Island>
             </Show>
+            {/* No Dispatch Agent here: a phone has no room for it. Code
+                Actions is in the title menu. */}
             <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
               <MobileHeader.Island>
                 <div class="flex shrink-0 items-center gap-1">
-                  <Show when={kind() === 'task' && !isMobile()}>
-                    <DispatchAgentButton showPrimaryLabel />
-                  </Show>
                   <AskMacroButton
                     grouped
                     entity={{
@@ -102,17 +117,29 @@ export function MobileMarkdownHeader(props: {
         />
         <SkillBadge />
         <MobileHeader.Island>
-          <SplitPermissionsBadge />
+          <AccessBadge
+            canEdit={permissions.canEdit()}
+            canComment={permissions.canComment()}
+            canView
+          />
         </MobileHeader.Island>
       </MobileHeader>
 
-      <BlockSplitFileMenu
+      <SplitFileMenu
         id={documentId()}
         itemType="document"
         name={name()}
         ops={fileOperations}
         tools={mobileMarkdownHeaderMenu(actions)}
         entity={headerEntity()}
+        entityKind={markdownDocumentBlockName(kind())}
+        permissions={menuPermissions()}
+        onDuplicate={
+          props.onDuplicate
+            ? (id) => props.onDuplicate?.(id, name())
+            : undefined
+        }
+        onDelete={props.onDelete}
       />
     </>
   );

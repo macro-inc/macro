@@ -83,6 +83,21 @@ distribution(
   '@duration',
   [...SPLITS, tag('flow.root')]
 );
+// Client requests: response headers to the end of the first body read. The
+// span's own duration ends at the headers; on native the body arrives over
+// IPC and can take far longer. resource_name is the method for HTTP spans.
+distribution(
+  'macro.web.http.body_ms',
+  `${WEB} @http.body_outcome:complete`,
+  '@http.body_ms',
+  SPLITS
+);
+distribution(
+  'macro.web.graphql.body_ms',
+  `${WEB} resource_name:graphql.transport @graphql.body_outcome:complete`,
+  '@graphql.body_ms',
+  SPLITS
+);
 distribution(
   'macro.web.runtime.js_heap_used_bytes',
   `${WEB} resource_name:app.runtime.sample`,
@@ -188,6 +203,16 @@ export const webPerformanceDashboard = new datadog.Dashboard(
         lines(
           'Typing: p95 event duration (ms) by surface',
           `p95:macro.web.typing.event_duration_p95_ms${scope()} by {typing.surface}`
+        ),
+      ]),
+      graphGroup('Response bodies (headers to body read)', [
+        lines(
+          'HTTP body p75 / p95 (ms) by platform',
+          `p75:macro.web.http.body_ms${scope()} by {app.platform}, p95:macro.web.http.body_ms${scope()} by {app.platform}`
+        ),
+        lines(
+          'GraphQL body p75 / p95 (ms) by platform',
+          `p75:macro.web.graphql.body_ms${scope()} by {app.platform}, p95:macro.web.graphql.body_ms${scope()} by {app.platform}`
         ),
       ]),
       graphGroup('Runtime resources (visible tabs, ~60 s samples)', [

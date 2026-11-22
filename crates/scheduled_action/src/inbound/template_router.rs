@@ -198,6 +198,11 @@ pub async fn activate_template<T, Svc, Auth>(
     State(state): State<RoutineTemplateRouterState<T, Svc, Auth>>,
     Path(id): Path<Uuid>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    user: Result<
+        macro_authorization::MacroAuthorizationExtractor<Auth, macro_authorization::UserOrInternal>,
+        macro_authorization::MacroAuthorizationRejection,
+    >,
+    headers: axum::http::HeaderMap,
     body: Result<Json<ActionConfiguration>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
@@ -206,7 +211,14 @@ where
     Auth: MacroAuthorizationService,
 {
     let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
-    let created = state.service.activate_template(&principal, id, req).await?;
+    let requester = crate::inbound::axum_router::requester(
+        user.as_ref().ok().map(|user| &user.authorization),
+        &headers,
+    );
+    let created = state
+        .service
+        .activate_template(&principal, id, req, requester)
+        .await?;
     Ok((
         StatusCode::CREATED,
         Json(ScheduledActionResponse::from(created)),

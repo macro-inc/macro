@@ -30,12 +30,14 @@ import {
   splitContentFromLocation,
   upgradeLegacyPath,
 } from '@components/app/split-layout/split-router/legacy-route';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { type JSX, lazy } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
 import {
@@ -62,6 +64,7 @@ import {
   HomeEntityDetailRouteView,
   MailRouteView,
   MeetingRouter,
+  NewHomeRouteView,
   NotFound,
   NotificationsCalendarRouteView,
   NotificationsRouteView,
@@ -81,6 +84,7 @@ import {
   BookingReceiptRoutePage,
   EmailCallback,
   EmailLinkCallback,
+  GithubConnectRoutePage,
   LoginPage,
   LoginPopupSuccess,
   OnboardingPage,
@@ -142,6 +146,7 @@ import {
   foldersRoute,
   formRespondRoute,
   forYouRoute,
+  githubConnectRoute,
   homeCalendarRoute,
   homeChannelRoute,
   homeDocumentRoute,
@@ -156,6 +161,7 @@ import {
   loginRoute,
   meetRoute,
   mobileEmailSignupRoute,
+  newHomeRoute,
   notFoundRoute,
   notificationsCalendarRoute,
   notificationsRoute,
@@ -276,6 +282,10 @@ export function appRouteElements(): JSX.Element {
           definition={loginPopupSuccessRoute}
           component={LoginPopupSuccess}
         />
+        <Route
+          definition={githubConnectRoute}
+          component={GithubConnectRoutePage}
+        />
         <Route definition={loginRoute} component={LoginPage} />
         <Route definition={welcomeRoute} component={WelcomePage} />
         <Route
@@ -373,6 +383,7 @@ export function appRouteElements(): JSX.Element {
             component={HomeDetailRouteView}
           />
         </Route>
+        <Route definition={newHomeRoute} component={NewHomeRouteView} />
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={forYouRoute} component={ForYouRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
@@ -517,7 +528,7 @@ export function AppRouterView() {
         }),
         stacked: isNativeMobilePlatform,
       })}
-      middleware={createAppSplitRouterMiddleware({ isTouchDevice })}
+      middleware={createAppSplitRouterMiddleware({ isTouchDevice, isMobile })}
       globalSearch={['referral_code']}
       defaultRoute={() => ({ matches: [{ id: baseRoute.id, params: {} }] })}
     >

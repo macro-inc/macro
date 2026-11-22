@@ -1,7 +1,5 @@
 import type { ListFilterGroup } from '@app/components/view-shell';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useContactFilterOptions } from '@core/user/use-contact-filter-options';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { createMemo } from 'solid-js';
@@ -28,8 +26,6 @@ const typeOptions = [
 /** Filter model shared by the desktop filter dropdown and the mobile drawer. */
 export function useDriveFilters() {
   const { state } = useDriveView();
-  const databasesFlag = useFeatureFlag(enableDatabases);
-  const formsFlag = useFeatureFlag(enableForms);
 
   const tagGroup = useTagFilterGroup();
 
@@ -58,18 +54,12 @@ export function useDriveFilters() {
       groups.push({
         id: 'type',
         label: 'Type',
-        options: typeOptions
-          .filter(
-            (option) =>
-              (option.id !== 'database' || databasesFlag().enabled) &&
-              (option.id !== 'form' || formsFlag().enabled)
-          )
-          .map((option) => ({
-            id: option.id,
-            label: option.label,
+        options: typeOptions.map((option) => ({
+          id: option.id,
+          label: option.label,
 
-            icon: () => <EntityIcon targetType={option.type} size="xs" />,
-          })),
+          icon: () => <EntityIcon targetType={option.type} size="xs" />,
+        })),
       });
 
       if (showCreators()) {

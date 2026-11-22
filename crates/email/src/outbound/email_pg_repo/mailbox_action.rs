@@ -8,8 +8,16 @@ pub(super) async fn messages(
     link_id: Uuid,
     thread_id: Uuid,
 ) -> Result<Vec<MailboxActionMessage>, sqlx::Error> {
+    // A send waiting on delivery (queued, or refused and not yet cancelled)
+    // clears is_draft, but the provider still holds it as a draft until it
+    // is sent, so organization treats it as one.
     sqlx::query_as!(MailboxActionMessage, r#"
-        SELECT m.id,m.provider_id,m.is_draft,m.is_sent,m.is_read,
+        SELECT m.id,m.provider_id,
+            (m.is_draft OR NOT m.is_sent AND (
+                EXISTS(SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.link_id = m.link_id)
+                OR EXISTS(SELECT 1 FROM email_send_attempts a WHERE a.message_id = m.id AND a.link_id = m.link_id AND NOT a.cancelled AND NOT a.sent)
+            )) AS "is_draft!",
+            m.is_sent,m.is_read,
             f.in_inbox AS "in_inbox!", f.in_trash AS "in_trash!", f.in_junk AS "in_junk!", f.is_present AS "is_present!"
         FROM email_messages m JOIN email_message_mailbox_facts f ON f.id = m.id
         WHERE m.link_id = $1 AND m.thread_id = $2 ORDER BY m.id
@@ -23,7 +31,7 @@ pub(super) async fn enqueue(
     action: &MailboxAction,
     targets: &[MailboxActionTarget],
 ) -> Result<Uuid, sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    let mut tx = super::begin(pool).await?;
     // Serialize acceptance per mailbox and recheck the scoped delegation edge at
     // commit, so an access revocation cannot create new pending work.
     let binding = sqlx::query!(r#"

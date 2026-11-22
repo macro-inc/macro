@@ -1,5 +1,7 @@
+use contacts::domain::list_writes::ListWritesGate;
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
+use feature_flags::outbound::posthog::PostHogFeatureFlags;
 
 use crate::{config::Config, service::s3::S3};
 use account_manager::{
@@ -185,6 +187,20 @@ use webhook::{
 /// Event broker shared by DSS services.
 pub(crate) type DssEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
+/// The notification service behind the GraphQL mutations that change a
+/// notification's state. Unlike [`ai_tools::ToolNotificationService`], it
+/// publishes each change, so the viewer's other sessions and the server's
+/// own live feeds and unread counts hear a read or a done made here.
+pub(crate) type GraphqlNotificationWriter =
+    notification::domain::service::NotificationReaderService<
+        notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
+        ai_tools::ToolNotificationQueue,
+        ai_tools::NoOpSnsEndpointManager,
+        notification::outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher<
+            DssEventBroker,
+        >,
+    >;
+
 /// CRM service for DSS — no-op resolver since DSS doesn't populate.
 pub(crate) type DssCrmService = crm::domain::service::CrmServiceImpl<
     crm::outbound::companies_repo::CompaniesRepositoryImpl,
@@ -282,7 +298,7 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssEntityMutationService,
     FavoritesMutationServiceType,
     DssChannelService,
-    ai_tools::ToolNotificationService,
+    GraphqlNotificationWriter,
     Arc<ai_tools::ToolNotificationService>,
     complete_graph::PropertiesEntityPropertyReader<PropertiesService, EntityAccessService>,
     complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
@@ -330,7 +346,7 @@ pub(crate) type DssCalendarJoinRequestService =
         calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier<
             NotificationIngressType,
         >,
-        crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh,
+        calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh,
     >;
 
 /// Calendar join-request router state.
@@ -520,7 +536,9 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
                     notification::outbound::withdrawal::PgNotificationWithdrawal,
                 >,
             >,
-            ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+            ContactsChannelDispatcher<
+                ListWritesGate<SqsContactsIngress<SqsContactsQueue>, PostHogFeatureFlags>,
+            >,
             DssEventBroker,
         >,
     >,
@@ -533,8 +551,12 @@ pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, DssEventBroker, DssHarnessService, ai_tools::PipedreamMcpAppCatalog>;
+pub(crate) type DssBotService = BotServiceImpl<
+    PgBotsRepo,
+    DssEventBroker,
+    DssHarnessService,
+    ai_tools::ConnectorsAppCatalog<connectors::Connectors>,
+>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -693,11 +715,19 @@ pub(crate) type DssSqlState = databases_sql::inbound::axum_router::SqlRouterStat
     DatabasesServiceType,
     EntityAccessService,
     DssSoupService,
+    DssContactReads,
+    AuthorizationService,
+>;
+
+/// Contact reads that follow each viewer's `contacts-list-reads` flag between
+/// the legacy graph and the list-aware tables.
+pub(crate) type DssContactReads = contacts::domain::list_reads::FlaggedContactReads<
     contacts::domain::service::ContactsDomainService<
         contacts::outbound::repository::DbContactsRepository,
         Option<contacts::outbound::gateway::ConnectionGatewayNotifier>,
     >,
-    AuthorizationService,
+    contacts::outbound::repository::DbContactsRepository,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
 >;
 
 /// Type alias for the databases router state.
@@ -937,9 +967,7 @@ pub(crate) type DssWebhookState =
 pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
     EntityAccessService,
     PgWebhookRepo,
-    crate::outbound::stream_contacts::ContactsStreamChecker<
-        contacts::outbound::repository::DbContactsRepository,
-    >,
+    crate::outbound::stream_contacts::ContactsStreamChecker<DssContactReads>,
 >;
 
 /// Type alias for the webhook-event SSE router state.
@@ -959,6 +987,10 @@ pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRo
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub search_term_matching: Arc<dyn search_service::TermMatchingRollout>,
+    /// Each caller's unified search lane, shared by both search mounts.
+    pub search_lanes: Arc<search_service::SearchLanes>,
+    /// The search allowance each account's user API keys share, in Redis.
+    pub api_key_search_buckets: Arc<dyn search_service::SearchTokenBuckets>,
     pub passwords_state: passwords::inbound::router::PasswordRouterState<AuthorizationService>,
     pub passwords_agent_state:
         passwords::inbound::agent_router::AgentRouterState<AuthorizationService>,
@@ -978,6 +1010,7 @@ pub(crate) struct ApiContext {
     pub agent_session_log_subscriptions: complete_graph::AgentSessionLogSubscriptions,
     pub agent_session_activity_subscriptions: complete_graph::AgentSessionActivitySubscriptions,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
+    pub graphql_notification_writer: Arc<GraphqlNotificationWriter>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
@@ -1116,6 +1149,8 @@ impl From<&ApiContext> for SearchHandlerState {
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
             term_matching_rollout: ctx.search_term_matching.clone(),
+            search_lanes: ctx.search_lanes.clone(),
+            api_key_search_buckets: ctx.api_key_search_buckets.clone(),
         }
     }
 }

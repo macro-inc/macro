@@ -64,7 +64,14 @@ let
     outputHashAlgo = "sha256";
     outputHash = "sha256-mgnD+06wGiXNgFwKrJKv/9GFZoGGxozrMH6IynI/SiU=";
   };
+  # The template's code must run on the muppet this image ships: a template
+  # that needs a higher muppet API than it has fails here, at evaluation,
+  # instead of on every boot of every new agent.
+  muppetApiLevel = (lib.importJSON (muppetSource + "/package.json")).apiLevel or 0;
+  templateNeeds = (lib.importJSON (starterAgent + "/package.json")).muppetApi or 0;
 in
+assert lib.assertMsg (templateNeeds <= muppetApiLevel)
+  "packages/starter-agent needs muppet API ${toString templateNeeds}, but packages/muppet's apiLevel is ${toString muppetApiLevel}: raise muppet's apiLevel (with its api.json entry) first";
 pkgs.stdenvNoCC.mkDerivation {
   pname = "macro-agent-runtime";
   version = (lib.importJSON (muppetSource + "/package.json")).version or "0";

@@ -1,7 +1,5 @@
 import { PLANS, planFeatures } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import Check from '@icon/system/regular/check.svg';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
@@ -23,7 +21,6 @@ export function InviteOfferPanel(props: {
   onContinueFree: () => void;
 }) {
   const analytics = useAnalytics();
-  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
 
   onMount(() => {
     analytics.track('gtm_invite_offer_viewed', {
@@ -57,7 +54,7 @@ export function InviteOfferPanel(props: {
           </span>
         </div>
         <ul class="flex flex-col gap-2">
-          <Index each={planFeatures(aiUsageBilling().enabled)}>
+          <Index each={planFeatures(true)}>
             {(feature) => (
               <li class="flex items-center justify-between gap-2 text-xs">
                 <span class="flex items-center gap-1.5 text-ink-muted">

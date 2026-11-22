@@ -12,6 +12,7 @@ members = [
   "crates/stripe_inbox",
   "crates/openbao_client",
   "crates/access_requests",
+  "crates/source_items",
   "crates/agent_api_keys",
   "crates/agent_credentials",
   "crates/agent_git",
@@ -75,6 +76,8 @@ members = [
   "crates/web_search",
   "crates/dictation",
   "crates/email_api_client",
+  "crates/email_e2e",
+  "crates/connectors_e2e",
   "crates/entity_mutation",
   "crates/entity_registry/entity_registry",
   "crates/entity_registry/entity_registry_db_utils",
@@ -117,7 +120,11 @@ members = [
   "crates/harnessd_protocol",
   "crates/harnesses",
   "crates/hosted_runtimes",
-  "crates/incus_client",
+  "crates/firecracker_host_api",
+  "crates/pinned_tls",
+  "crates/computer_types",
+  "services/firecracker_guest_agent",
+  "services/firecracker_host",
   "crates/import",
   "crates/import_notion",
   "crates/import_tracker",
@@ -138,15 +145,15 @@ members = [
   "crates/memory",
   "crates/messages",
   "crates/model_owner",
-  "crates/mcp_select",
+  "crates/connectors",
   "crates/mcp_toolset",
   "crates/natural_time",
   "crates/notification_inbox",
   "crates/notification_state",
-  "crates/pipedream_mcp",
   "crates/granola_sync",
   "crates/onboarding",
   "crates/outlook_emulator",
+  "crates/model_emulator",
   "crates/ai_engine",
   "crates/docx_engine",
   "crates/fig_engine",
@@ -166,6 +173,7 @@ members = [
   "crates/system_skills",
   "crates/system_status",
   "crates/task_dedup",
+  "crates/task_templates",
   "crates/unfurl",
   "crates/single_flight",
   "crates/upstream_error",
@@ -215,6 +223,7 @@ members = [
   "services/organization_retention_handler",
   "services/organization_retention_trigger",
   "crates/scheduled_action",
+  "services/search_freshness_probe",
   "services/search_processing_service",
   "services/search_upload_handler",
   "services/sha_cleanup_worker",
@@ -243,6 +252,7 @@ harnessd_protocol = { path = "crates/harnessd_protocol" }
 pairing_id = { path = "crates/pairing_id" }
 openbao_client = { path = "crates/openbao_client" }
 macro_user_id = { path = "crates/macro_user_id" }
+model-entity = { path = "crates/model-entity" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -262,6 +272,7 @@ arboard = { version = "3.6.1", default-features = false, features = ["wayland-da
 # Templates use built-in defaults; omit the unused config parser and basic-toml.
 askama = { version = "0.14", default-features = false, features = ["derive", "std", "urlencode"] }
 async-graphql = "7.2.1"
+async-graphql-parser = "7.2.1"
 async-lock = "3"
 async-openai = { version = "0.36.1", features = [
   "byot",
@@ -277,6 +288,7 @@ aws-msk-iam-sasl-signer = "1.0.1"
 # SDK defaults also enable the deprecated `rustls` feature, which pulls in
 # rustls 0.21 / hyper 0.14. Keep the modern HTTPS client and the other defaults;
 # macro_aws_config uses BehaviorVersion::latest() with this transport.
+aws-sdk-cloudwatch = { version = "1.113.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-dynamodb = { version = "1.111.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-ecs = { version = "1.124.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-kms = { version = "1.104.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
@@ -309,6 +321,7 @@ cron = "0.16.0"
 csv = "1"
 csv-core = "0.1.13"
 dashmap = "6.1.0"
+derive_setters = "0.1.8"
 dateparser = "0.2.1"
 determinator = "0.12.0"
 dotenvy = "0.15.7"
@@ -328,6 +341,7 @@ glob = "0.3.3"
 # hakari release is built against.
 guppy = "0.17.24"
 h2 = "0.4"
+heck = "0.5"
 hex = "0.4.3"
 hkdf = "0.12.4"
 hmac = "0.12.1"
@@ -363,6 +377,7 @@ lambda_runtime = "0.13.0"
 lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
 libc = "0.2"
+memchr = "2"
 # Signal's curve25519 keys and XEdDSA; see crates/whatsmeow_signal/AGENTS.md.
 libsignal-core = { git = "https://github.com/signalapp/libsignal", tag = "v0.105.2" }
 livekit-api = { version = "0.4.16", default-features = false, features = [
@@ -377,9 +392,10 @@ livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
-loro = "1.16.2"
+loro = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
+merge = "0.2.0"
 mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
@@ -408,10 +424,13 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
+pretty_assertions = "1.4.1"
 progenitor-client = "0.15.1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
+proc-macro2 = "1"
 prost = "0.14"
 prost-build = "0.14"
+psl = "2.1"
 protox = "0.10"
 quote = "1"
 rand = "0.9.0"
@@ -459,6 +478,7 @@ shell-words = "1.1.1"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-serde = "=0.0.12"
 specta-typescript = "=0.0.12"
+sha1 = "0.10.6"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.6", features = [
   "chrono",
@@ -470,6 +490,7 @@ sqlx-core = { version = "0.8.6" }
 sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
 strsim = "0.11"
 strum = { version = "0.27.1", features = ["derive"] }
+syn = { version = "2", features = ["full"] }
 symphonia = { version = "0.6.1", default-features = false, features = [
   "isomp4",
   "mkv",
@@ -494,6 +515,7 @@ tokio-tungstenite = { version = "0.28", default-features = false, features = [
 tokio-tungstenite-signal = { package = "tokio-tungstenite", version = "0.27", default-features = false, features = ["handshake"] }
 tungstenite-signal = { package = "tungstenite", version = "0.27", default-features = false, features = ["handshake", "deflate"] }
 tokio-util = "0.7.13"
+tokio-vsock = "0.7.2"
 tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3"
 tower-http = { version = "0.6.1", features = [
@@ -555,6 +577,8 @@ doppleganger = "0.5"
 doppler-config = "0.1.2"
 js-sys = "0.3"
 scraper = "0.18"
+# The html5ever scraper 0.18 parses with: email_utils wraps its tree sink.
+html5ever = "0.26"
 serde_urlencoded = "0.7.1"
 strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"

@@ -51,3 +51,48 @@ fn dss_registers_all_database_webhook_operations_and_schemas() {
         assert_eq!(&dss["components"]["schemas"][name], schema, "{name}");
     }
 }
+
+#[test]
+fn email_policy_schemas_reject_unknown_fields_like_the_handlers() {
+    use crm::domain::email_policy_api::{EmailPolicyChange, EmailPolicyToken};
+    use crm::domain::email_rules::EmailInclusionRule;
+    use serde_json::json;
+
+    for value in [
+        json!({"kind": "thread", "thread_id": uuid::Uuid::nil(), "unexpected": true}),
+        json!({"kind": "address", "address": "member@example.com", "unexpected": true}),
+        json!({"kind": "contact", "contact_id": uuid::Uuid::nil(), "unexpected": true}),
+        json!({"kind": "domain", "domain": "example.com", "unexpected": true}),
+        json!({"kind": "company", "company_id": uuid::Uuid::nil(), "unexpected": true}),
+    ] {
+        assert!(serde_json::from_value::<EmailInclusionRule>(value).is_err());
+    }
+    for value in [
+        json!({"action": "replace_rules", "rules": {"schema_version": 1, "include": []}, "unexpected": true}),
+        json!({"action": "enable_all", "unexpected": true}),
+        json!({"action": "withdraw", "unexpected": true}),
+    ] {
+        assert!(serde_json::from_value::<EmailPolicyChange>(value).is_err());
+    }
+    for value in [
+        json!({"kind": "legacy", "fingerprint": "observation", "unexpected": true}),
+        json!({"kind": "policy", "consent_incarnation": uuid::Uuid::nil(), "policy_version": 1, "authority_fingerprint": "observation", "unexpected": true}),
+    ] {
+        assert!(serde_json::from_value::<EmailPolicyToken>(value).is_err());
+    }
+
+    let spec = dss_spec();
+    for (name, variant_count) in [
+        ("EmailInclusionRule", 5),
+        ("EmailPolicyChange", 3),
+        ("EmailPolicyToken", 2),
+    ] {
+        let variants = spec["components"]["schemas"][name]["oneOf"]
+            .as_array()
+            .unwrap();
+        assert_eq!(variants.len(), variant_count, "{name}");
+        for variant in variants {
+            assert_eq!(variant["additionalProperties"], false, "{name}: {variant}");
+        }
+    }
+}

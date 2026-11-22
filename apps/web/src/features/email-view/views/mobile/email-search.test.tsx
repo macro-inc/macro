@@ -1,13 +1,11 @@
-import {
-  SplitPanelContext,
-  type SplitPanelContextType,
-} from '@components/app/split-layout/context';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { createMutable } from 'solid-js/store';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createEmailSearchSuggestions } from '../../search/create-email-search-suggestions';
-import { EmailMobileSearch } from './email-search';
+import {
+  EmailMobileRecentSearches,
+  EmailMobileSearchField,
+} from './email-search';
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -21,12 +19,7 @@ beforeEach(() => {
 function renderPage(initialSearch = '') {
   const [search, setSearch] = createSignal(initialSearch);
   const onCancel = vi.fn();
-  const layoutRefs = createMutable<SplitPanelContextType['layoutRefs']>({});
-  const panel = {
-    handle: {},
-    layoutRefs,
-    mobileHeaderOwner: createSignal<symbol>(),
-  } as unknown as SplitPanelContextType;
+  let input: HTMLInputElement | undefined;
 
   render(() => {
     const suggestions = createEmailSearchSuggestions({
@@ -35,19 +28,21 @@ function renderPage(initialSearch = '') {
       setSearch,
     });
     return (
-      <SplitPanelContext.Provider value={panel}>
-        <header>
-          <div ref={(element) => (layoutRefs.headerLeft = element)} />
-          <div ref={(element) => (layoutRefs.headerRight = element)} />
-        </header>
-        <EmailMobileSearch
-          ref={() => {}}
+      <>
+        <EmailMobileSearchField
+          ref={(element) => {
+            input = element;
+          }}
           search={search()}
           setSearch={setSearch}
           suggestions={suggestions}
           onCancel={onCancel}
         />
-      </SplitPanelContext.Provider>
+        <EmailMobileRecentSearches
+          suggestions={suggestions}
+          onPicked={() => input?.blur()}
+        />
+      </>
     );
   });
 

@@ -3,6 +3,7 @@ use crate::domain::backfill_jobs::BackfillJobRepository;
 use crate::domain::mailbox::connection::ConnectionSourceError;
 use crate::domain::mailbox::inbox_sync::CrmContactRecipient;
 use ::crm::domain::{
+    email_policy_work::{EmailPolicyHistoryContact, EmailPolicyHistoryPage},
     email_privacy::EmailContributionMailbox,
     model::{CrmError, DepopulateContactOutcome},
 };
@@ -30,6 +31,8 @@ pub(super) struct State {
     pub link: Option<Link>,
     pub team: Option<Uuid>,
     pub consent: bool,
+    pub policy_page: Option<EmailPolicyHistoryPage>,
+    pub policy_requests: Vec<PopulateCrmPolicyPayload>,
     pub crm_contended: bool,
     pub document: bool,
     pub remaining_messages: bool,
@@ -41,7 +44,7 @@ pub(super) struct State {
     pub sent_contacts: Vec<CrmContactRecipient>,
     pub received_contacts: Vec<CrmContactRecipient>,
     pub sent: Vec<(BackfillPubsubMessage, Option<(i32, u32)>)>,
-    pub connections: Vec<HashSet<MacroUserIdStr<'static>>>,
+    pub connections: Vec<Vec<MacroUserIdStr<'static>>>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -54,6 +57,8 @@ impl Default for State {
             link: Some(link()),
             team: Some(TEAM),
             consent: true,
+            policy_page: None,
+            policy_requests: vec![],
             crm_contended: true,
             document: false,
             remaining_messages: false,
@@ -177,6 +182,7 @@ pub(super) fn crm_population() -> BackfillPubsubMessage {
     input(BackfillOperation::PopulateCrmContact(LinkScopedPayload {
         link_id: LINK,
         payload: PopulateCrmContactPayload {
+            live_mail: true,
             contact_email: "contact@example.com".into(),
             contact_name: None,
             first_at: Default::default(),
@@ -503,10 +509,12 @@ impl BackfillEffects for Fake {
     }
     async fn connect(
         &self,
-        users: HashSet<MacroUserIdStr<'static>>,
+        link: &Link,
+        recipients: Vec<MacroUserIdStr<'static>>,
     ) -> Result<(), rootcause::Report> {
+        assert_eq!(link.id, LINK);
         self.call("connect").map_err(rootcause::Report::new)?;
-        self.0.lock().unwrap().connections.push(users);
+        self.0.lock().unwrap().connections.push(recipients);
         Ok(())
     }
     async fn acquire_crm(&self, team: Uuid) -> anyhow::Result<Option<Self>> {
@@ -532,6 +540,32 @@ impl BackfillWritePermit for Fake {
     }
 }
 impl BackfillCrm for Fake {
+    async fn policy_history_page(
+        &self,
+        payload: &PopulateCrmPolicyPayload,
+    ) -> Result<Option<EmailPolicyHistoryPage>, CrmError> {
+        self.crm_call("policy_page")?;
+        let mut state = self.0.lock().unwrap();
+        state.policy_requests.push(payload.clone());
+        Ok(state.policy_page.clone())
+    }
+    async fn populate_policy_contact(
+        &self,
+        payload: &PopulateCrmPolicyPayload,
+        _: &EmailPolicyHistoryPage,
+        _: &EmailPolicyHistoryContact,
+    ) -> Result<(), CrmError> {
+        self.0.lock().unwrap().policy_requests.push(payload.clone());
+        self.crm_call("policy_contact")
+    }
+    async fn finish_policy_history_page(
+        &self,
+        payload: &PopulateCrmPolicyPayload,
+        _: &EmailPolicyHistoryPage,
+    ) -> Result<(), CrmError> {
+        self.0.lock().unwrap().policy_requests.push(payload.clone());
+        self.crm_call("policy_finish")
+    }
     async fn get_team_id_for_user(&self, user: &str) -> Result<Option<Uuid>, CrmError> {
         assert_eq!(user, "macro|owner@example.com");
         self.crm_call("team")?;

@@ -156,6 +156,7 @@ async fn disappearing_and_community_groups_are_added_like_any_other(pool: PgPool
                     mentions: vec![],
                 },
                 reply_to: None,
+                user_confirmation: None,
             },
             SendAuthority::Human,
         )

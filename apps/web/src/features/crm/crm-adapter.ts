@@ -7,16 +7,13 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableCrmActivity,
-  enableCrmLists,
-  enableCrmPipelines,
-} from '@core/constant/featureFlags';
+import { enableCrmLists } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { emailToMacroId, getInitialsFromName } from '@core/user';
 import { idToEmail } from '@core/user/util';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazy } from '@core/util/lazy';
 import type { EntityData } from '@entity';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { usePrimaryEmailLinkId } from '@queries/email/link';
@@ -35,14 +32,20 @@ import {
 } from '@queries/team/teams';
 import { patchTeamCrmSettings } from '@service-auth/crm';
 import { storageServiceClient } from '@service-storage/client';
+import {
+  crmAccessAuthority,
+  crmAccessState,
+} from '@service-storage/crm-access-authority';
+import { crmEmailPolicyClient } from '@service-storage/crm-email-policy';
 import { crmEmailPrivacyClient } from '@service-storage/crm-email-privacy';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { useNavigate } from '@solidjs/router';
 import { useQueryClient } from '@tanstack/solid-query';
-import { createMemo, lazy } from 'solid-js';
+import { createMemo } from 'solid-js';
 import { createTagFacetContext } from '../soup';
 import { createCrmActivityFilters } from './activity-filters-adapter';
 import { createCrmActivityState } from './activity-state-adapter';
+import { createAddToPipelineSource } from './add-to-pipeline-adapter';
 import type { CrmContext } from './context/crm-context';
 import type { CrmQuery, ItemListSource } from './context/crm-sources';
 import {
@@ -51,6 +54,7 @@ import {
 } from './creation-adapter';
 import { createAppCrmDisplayOptions } from './display-adapter';
 import { downloadCrmCsv } from './download-adapter';
+import { EmailThreadMention } from './email-thread-mention';
 import {
   copyCrmPipelineLink,
   copyCrmRecordLink,
@@ -84,6 +88,7 @@ import {
   useSetContactHiddenMutation,
   useSetContactNameMutation,
 } from './queries/contacts';
+import { createEmailPolicySource } from './queries/email-policy';
 import { createEmailPrivacySource } from './queries/email-privacy';
 import { fetchCrmExportCompanies } from './queries/export';
 import { useCrmLists } from './queries/lists';
@@ -113,6 +118,12 @@ const CrmRecordTasks = lazy(async () => ({
 
 const CrmActivityTasks = lazy(async () => ({
   default: (await import('./activity-tasks-adapter')).CrmActivityTasks,
+}));
+
+// Team › Members owns the roster and its CRM access switch.
+const CrmMemberAccess = lazy(async () => ({
+  default: (await import('@app/features/settings/views/crm-member-access'))
+    .CrmMemberAccessSection,
 }));
 
 /**
@@ -202,7 +213,6 @@ export function createAppCrmContext(): CrmContext {
   const layout = useSplitLayout();
   const panel = useSplitPanel();
   const createContext = useCreateContext();
-  const activityFlag = useFeatureFlag(enableCrmActivity);
   const navigate = useNavigate();
   const openCreateItem = async (kind: 'notes' | 'calls') => {
     if (kind === 'calls') {
@@ -214,6 +224,17 @@ export function createAppCrmContext(): CrmContext {
   };
   const createSettings = () => useTeamCrmConfig(deps);
   return {
+    canAccess: crmAccessAuthority.allowed,
+    accessState: crmAccessState,
+    retryAccess: crmAccessAuthority.refresh,
+    createEmailPolicy: () => {
+      const team = useCurrentTeamQuery();
+      return createEmailPolicySource(
+        { ...deps, policy: crmEmailPolicyClient },
+        () => (team.isSuccess ? team.data?.team.id : undefined),
+        userId
+      );
+    },
     createEmailPrivacy: () => {
       const team = useCurrentTeamQuery();
       return createEmailPrivacySource(
@@ -225,7 +246,7 @@ export function createAppCrmContext(): CrmContext {
     registerTaskComposerRecord(source) {
       if (!panel) return () => {};
       return createContext.register(panel.handle.id, () => ({
-        task: activityFlag().enabled ? crmTaskComposerContext(source()) : null,
+        task: crmTaskComposerContext(source()),
       }));
     },
     createPipelines: (teamId) => createPipelinesSource(deps, teamId),
@@ -234,7 +255,13 @@ export function createAppCrmContext(): CrmContext {
       graphql: getGraphqlSoupClient,
       storage: deps.storage,
     }),
+    createAddToPipeline: (record) =>
+      createAddToPipelineSource(
+        { ...deps, graphql: getGraphqlSoupClient },
+        record
+      ),
     PipelineSharing: PipelineShare,
+    MemberAccess: CrmMemberAccess,
     createPipelineTransfer: (pipeline) =>
       createPipelineTransfer(deps, pipeline),
     feedback: toast,
@@ -244,15 +271,12 @@ export function createAppCrmContext(): CrmContext {
     contactInitials: getInitialsFromName,
     userEmail: idToEmail,
     createNavigation: createAppCrmNavigation,
+    EmailThreadMention,
     copyRecordLink: copyCrmRecordLink,
     copyViewLink: copyCrmViewLink,
     copyPipelineLink: copyCrmPipelineLink,
     listsEnabled() {
       const flag = useFeatureFlag(enableCrmLists);
-      return () => flag().enabled;
-    },
-    pipelinesEnabled() {
-      const flag = useFeatureFlag(enableCrmPipelines);
       return () => flag().enabled;
     },
     createCompanyEmails: (...args) =>

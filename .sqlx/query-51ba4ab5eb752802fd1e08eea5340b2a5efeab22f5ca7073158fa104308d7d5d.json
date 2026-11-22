@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.id FROM email_links l\n               JOIN team_user member ON member.user_id = l.macro_id AND member.team_id = $1\n               WHERE l.id = $3 AND l.macro_id = $2\n                 AND (NOT $4 OR (l.is_primary AND l.deleting_at IS NULL\n                      AND l.disconnect_requested_at IS NULL AND NOT l.needs_reauth))\n               FOR SHARE OF l FOR KEY SHARE OF member",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "51ba4ab5eb752802fd1e08eea5340b2a5efeab22f5ca7073158fa104308d7d5d"
+}

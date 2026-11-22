@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"count!\"\n            FROM (\n                SELECT 1\n                FROM entity_access ea\n                WHERE ea.source_id = ANY($1)\n                    AND ea.entity_type = 'document'\n                LIMIT $2\n            ) held\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e9a9ab384d833ff64644f0c908904dd3ef62680a79e31a5f39e421ea7bb6dc29"
+}

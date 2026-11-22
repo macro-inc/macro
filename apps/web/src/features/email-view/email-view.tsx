@@ -1,30 +1,31 @@
 import {
+  CollectionPanes,
   useViewShell,
   ViewBreadcrumbs,
   ViewShell,
+  ViewSidebar,
 } from '@app/components/view-shell';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
+import {
+  DEFAULT_ASIDE_LAYOUT,
+  WIDE_TOUCH_ASIDE_SCALE,
+} from '@app/components/view-shell/view-shell-layout';
 import {
   useSavedView,
   useSavedViews,
 } from '@app/features/saved-views/queries/saved-views';
+import { SavedViewDraftHost } from '@app/features/saved-views/views/saved-view-draft-host';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { SplitRouter } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
-import {
-  PillButton,
-  type PillTabItem,
-  PillTabs,
-} from '@components/app/mobile/PillTabs';
-import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import { PillButton, PillTabs } from '@components/app/mobile/PillTabs';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import {
-  enableEmailSavedViews,
-  enableEmailWideSearch,
-} from '@core/constant/featureFlags';
+import { enableEmailWideSearch } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { useAndroidBackNavigation } from '@core/mobile/androidBack';
@@ -47,10 +48,15 @@ import {
 import { EmailFilterDrawer } from './components/EmailFilterDrawer';
 import { EmailHeader, EmailViewBreadcrumbItem } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
-import { EmailReader } from './components/EmailReader';
+import { EmailReader, EmailReaderEmpty } from './components/EmailReader';
 import { EmailRecentSearches } from './components/EmailRecentSearches';
 import { EmailSidebar } from './components/EmailSidebar';
-import { canSearchEmailTab, EMAIL_TABS } from './constants';
+import {
+  canSearchEmailTab,
+  EMAIL_INBOX_TAB_IDS,
+  EMAIL_TAB_LABELS,
+  isEmailInboxTab,
+} from './constants';
 import { focusEmailSearchResults } from './email-search-focus';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
@@ -58,7 +64,7 @@ import { createEmailMobileSearch } from './primitives/create-email-mobile-search
 import type { EmailListPane } from './reader-pane';
 import { createEmailSearchSuggestions } from './search/create-email-search-suggestions';
 import { emailTour } from './tour';
-import type { EmailTab, EmailViewStateOptions } from './types';
+import type { EmailViewStateOptions } from './types';
 import { useEmailSearchHotkeys } from './use-email-search-hotkeys';
 import { useEmailViewHotkeys } from './use-email-view-hotkeys';
 import { useReadingPaneHotkey } from './use-reading-pane-hotkey';
@@ -68,11 +74,13 @@ import {
 } from './use-reading-pane-list-width';
 import { useVisibleEmailTab } from './use-visible-email-tab';
 import {
-  EmailSavedViewsPicker,
   EmailSavedViewUnavailable,
   EmailSavedViewWarning,
 } from './views/email-saved-views';
-import { EmailMobileSearch } from './views/mobile/email-search';
+import {
+  EmailMobileRecentSearches,
+  EmailMobileSearchField,
+} from './views/mobile/email-search';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -111,7 +119,7 @@ function EmailListFallback() {
   );
 }
 
-function EmailPanes(props: {
+function DesktopEmailPanes(props: {
   list: JSX.Element;
   focusList: () => void;
   focusSearchResults: () => void;
@@ -154,13 +162,13 @@ function EmailPanes(props: {
 
   const listColumn = (beside?: 'reader') => (
     <>
+      <ViewTour tour={emailTour} />
       <EmailHeader
         tabOnly={beside === 'reader'}
         focusSearchResults={props.focusSearchResults}
         registerSearch={search.registerListSearch}
         searchSuggestions={searchSuggestions()}
       />
-      <ViewTour tour={emailTour} />
       <Show when={searchSuggestions()}>
         {(suggestions) => (
           <EmailRecentSearches
@@ -182,12 +190,15 @@ function EmailPanes(props: {
     <Show
       when={shell.detail.placement() === 'inline'}
       fallback={
-        <ViewShell.Main>
+        <ViewShell.Main class="relative">
           <SplitRouter.Outlet fallback={() => listColumn()} />
         </ViewShell.Main>
       }
     >
-      <ViewShell.Main onWidthChangeEnd={props.onListWidthChange}>
+      <ViewShell.Main
+        class="relative"
+        onWidthChangeEnd={props.onListWidthChange}
+      >
         {listColumn('reader')}
       </ViewShell.Main>
       <ViewShell.Detail class="border-l border-edge-muted">
@@ -200,7 +211,40 @@ function EmailPanes(props: {
   );
 }
 
-function EmailDesktopLayout(props: {
+function TouchEmailPanes(props: {
+  list: JSX.Element;
+  focusList: () => void;
+  setListPane: (pane: EmailListPane | undefined) => void;
+  onListWidthChange: (width: number) => void;
+}) {
+  const shell = useViewShell();
+  const { selectedThread, composing, closeThread, navigateToList } =
+    useEmailView();
+  return (
+    <CollectionPanes
+      list={
+        <>
+          <ViewTour tour={emailTour} />
+          <EmailMobileLayout>{props.list}</EmailMobileLayout>
+        </>
+      }
+      hasDetail={!!selectedThread() || composing()}
+      empty={<EmailReaderEmpty />}
+      onListWidthChangeEnd={props.onListWidthChange}
+      onBack={selectedThread() || composing() ? navigateToList : undefined}
+    >
+      <EmailReader
+        focusList={() => {
+          if (shell.breakpoints.narrow?.()) closeThread();
+          else props.focusList();
+        }}
+        setListPane={props.setListPane}
+      />
+    </CollectionPanes>
+  );
+}
+
+function EmailLayout(props: {
   list: JSX.Element;
   focusList: () => void;
   focusSearchResults: () => void;
@@ -209,60 +253,75 @@ function EmailDesktopLayout(props: {
   const { readingPane, composing } = useEmailView();
   // A new email takes the list's place, so the reading pane folds away.
   const readerBeside = () => readingPane() && !composing();
-  const [listWidth, setListWidth] = useReadingPaneListWidth();
+  const [storedListWidth, setListWidth] = useReadingPaneListWidth();
+  // Keep the shared reading-pane preference in desktop units, as sidebar
+  // widths are, so device changes do not compound the touch sizing.
+  const listScale = () =>
+    isTouchDevice()
+      ? (DEFAULT_ASIDE_LAYOUT.width * WIDE_TOUCH_ASIDE_SCALE) /
+        READING_PANE_LIST_WIDTH.default
+      : 1;
+  const listWidth = () => storedListWidth() * listScale();
+  const updateListWidth = (width: number) => setListWidth(width / listScale());
 
   return (
     <ViewShell.Root
+      contentLayout="collection"
       asidePreferenceKey="email"
       resizable
       aside={{ preserveDuringResize: false }}
-      main={
-        readerBeside()
-          ? {
-              preferredWidth: 640,
-              width: listWidth(),
-              min: READING_PANE_LIST_WIDTH.min,
-              max: READING_PANE_LIST_WIDTH.max,
-            }
-          : { preferredWidth: 640 }
-      }
-      detail={{
-        width: 640,
-        initialWidth: 'auto',
-        min: 440,
-        max: 4000,
-        whenNarrow: 'hide',
+      main={{
+        preferredWidth: 640,
+        width: listWidth(),
+        min:
+          isTouchDevice() || !readerBeside()
+            ? 320
+            : READING_PANE_LIST_WIDTH.min,
+        max: READING_PANE_LIST_WIDTH.max * listScale(),
       }}
-      detailOpen={readerBeside()}
+      detail={
+        isTouchDevice()
+          ? undefined
+          : {
+              width: 640,
+              initialWidth: 'auto',
+              min: 440,
+              max: 4000,
+              whenNarrow: 'hide',
+            }
+      }
+      detailOpen={!isTouchDevice() && readerBeside()}
     >
       <ViewShell.Aside>
         <EmailSidebar />
       </ViewShell.Aside>
-      <EmailPanes
-        list={props.list}
-        focusList={props.focusList}
-        focusSearchResults={props.focusSearchResults}
-        setListPane={props.setListPane}
-        onListWidthChange={setListWidth}
-      />
+      <Show
+        when={isTouchDevice()}
+        fallback={
+          <DesktopEmailPanes
+            list={props.list}
+            focusList={props.focusList}
+            focusSearchResults={props.focusSearchResults}
+            setListPane={props.setListPane}
+            onListWidthChange={updateListWidth}
+          />
+        }
+      >
+        <TouchEmailPanes
+          list={props.list}
+          focusList={props.focusList}
+          setListPane={props.setListPane}
+          onListWidthChange={updateListWidth}
+        />
+      </Show>
     </ViewShell.Root>
   );
 }
 
-// Focus leads, as it does in the desktop Inbox tabs.
-const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = [
-  ...EMAIL_TABS.filter((tab) => tab.id === 'focus'),
-  ...EMAIL_TABS.filter((tab) => tab.id !== 'focus'),
-].map((tab) => ({
-  value: tab.id,
-  get label() {
-    return tab.label;
-  },
-}));
-
 function EmailMobileLayout(props: ParentProps) {
   const isVisible = useVisibleEmailTab();
-  const { state, setState, setTab, savedViewActive } = useEmailView();
+  const { state, setState, setTab, tagViewTitle, savedViewActive } =
+    useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const suggestions = createEmailSearchSuggestions({
@@ -296,51 +355,59 @@ function EmailMobileLayout(props: ParentProps) {
   // the header's height again.
   const listsRecent = () => searching() && suggestions.listed().length > 0;
 
+  const inboxSelected = () => isEmailInboxTab(state.tab);
+  const tabs = () =>
+    inboxSelected()
+      ? EMAIL_INBOX_TAB_IDS.filter(isVisible).map((id) => ({
+          value: id,
+          label: EMAIL_TAB_LABELS[id],
+        }))
+      : [];
+
   return (
-    <>
-      <Show when={!searching()}>
-        <SplitHeaderLeft>
-          <div class="flex h-full w-full min-w-0 flex-1 items-center">
-            <PillTabs
-              scrollable
-              class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
-              contentClass="px-(--mobile-chrome-gutter)"
-              leading={
-                <>
-                  <Show
-                    when={
-                      wideSearchFlag().enabled && canSearchEmailTab(state.tab)
-                    }
-                  >
-                    <PillButton
-                      active={false}
-                      iconOnly
-                      aria-label={t('emailViews.searchEmail')}
-                      onClick={openSearch}
-                    >
-                      <SearchIcon class="size-5" />
-                    </PillButton>
+    <MobileListLayout
+      header={
+        <Show
+          when={searching()}
+          fallback={
+            <div class="flex min-w-0 items-center gap-2">
+              <PillTabs
+                scrollable
+                class="-ml-(--mobile-chrome-gutter) min-w-0 flex-1"
+                contentClass="px-(--mobile-chrome-gutter)"
+                leading={
+                  <ViewSidebar.Toggle action="expand" presentation="pill" />
+                }
+                items={tabs()}
+                trailing={
+                  <Show when={!inboxSelected()}>
+                    <HeaderIsland>
+                      <span class="truncate text-sm font-medium">
+                        {tagViewTitle() ?? EMAIL_TAB_LABELS[state.tab]}
+                      </span>
+                    </HeaderIsland>
                   </Show>
-                  <EmailFilterDrawer />
-                  <EmailSavedViewsPicker />
-                </>
-              }
-              items={MOBILE_EMAIL_TABS.filter((tab) => isVisible(tab.value))}
-              value={savedViewActive() ? undefined : state.tab}
-              onChange={setTab}
-            />
-          </div>
-        </SplitHeaderLeft>
-      </Show>
-      <main
-        class="flex size-full min-h-0 min-w-0 flex-col"
-        style={{
-          // Match Inbox: 0.5rem above the 2.5rem pills, then a 0.75rem gap.
-          '--mobile-content-inset-top': 'calc(var(--safe-top, 0px) + 3.75rem)',
-        }}
-      >
-        <Show when={searching()}>
-          <EmailMobileSearch
+                }
+                value={savedViewActive() ? undefined : state.tab}
+                onChange={setTab}
+              />
+              <Show
+                when={wideSearchFlag().enabled && canSearchEmailTab(state.tab)}
+              >
+                <PillButton
+                  active={false}
+                  iconOnly
+                  aria-label={t('emailViews.searchEmail')}
+                  onClick={openSearch}
+                >
+                  <SearchIcon class="size-5" />
+                </PillButton>
+              </Show>
+              <EmailFilterDrawer />
+            </div>
+          }
+        >
+          <EmailMobileSearchField
             ref={(input) => {
               searchInput = input;
             }}
@@ -350,16 +417,24 @@ function EmailMobileLayout(props: ParentProps) {
             onCancel={closeSearch}
           />
         </Show>
-        <div
-          class="min-h-0 flex-1"
-          style={
-            listsRecent() ? { '--mobile-content-inset-top': '0px' } : undefined
-          }
-        >
-          {props.children}
-        </div>
-      </main>
-    </>
+      }
+    >
+      <Show when={searching()}>
+        <EmailMobileRecentSearches
+          suggestions={suggestions}
+          onPicked={() => searchInput?.blur()}
+        />
+      </Show>
+      {/* Recent searches already sit below the header. */}
+      <div
+        class="min-h-0 flex-1"
+        style={
+          listsRecent() ? { '--mobile-content-inset-top': '0px' } : undefined
+        }
+      >
+        {props.children}
+      </div>
+    </MobileListLayout>
   );
 }
 
@@ -375,6 +450,9 @@ function EmailViewRoot() {
     setReadingPane,
     savedViews,
     savedViewScope,
+    savedViewCreation,
+    savedViewsList,
+    discardNewSavedView,
   } = useEmailView();
   const savedViewKey = () => savedViewScope()?.id;
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
@@ -383,7 +461,10 @@ function EmailViewRoot() {
   const focusSearchResults = () =>
     focusEmailSearchResults(panel, listElement());
 
-  onMount(() => panel.handle.setDisplayName('Email'));
+  onMount(() => {
+    panel.handle.setDisplayName('Email');
+    panel.handle.updateMeta?.({ splitPanelLayout: 'composable' });
+  });
 
   useReadingPaneHotkey({
     scopeId: panel.splitHotkeyScope,
@@ -439,20 +520,21 @@ function EmailViewRoot() {
   return (
     <StaticMarkdownContext>
       <SplitPanel.Root>
+        <Show when={savedViewCreation && savedViewsList}>
+          <SavedViewDraftHost
+            creation={savedViewCreation!}
+            refresh={savedViewsList!.refresh}
+            discard={discardNewSavedView}
+            selection={{ mail: ['tab', 'savedView'] }}
+          />
+        </Show>
         <SplitPanel.Body>
-          <Show
-            when={isTouchDevice()}
-            fallback={
-              <EmailDesktopLayout
-                list={list()}
-                focusList={focusList}
-                focusSearchResults={focusSearchResults}
-                setListPane={setListPane}
-              />
-            }
-          >
-            <EmailMobileLayout>{list()}</EmailMobileLayout>
-          </Show>
+          <EmailLayout
+            list={list()}
+            focusList={focusList}
+            focusSearchResults={focusSearchResults}
+            setListPane={setListPane}
+          />
         </SplitPanel.Body>
       </SplitPanel.Root>
     </StaticMarkdownContext>
@@ -461,16 +543,11 @@ function EmailViewRoot() {
 
 /** Email shares one list across desktop sidebar and mobile pill layouts. */
 export function EmailView(props: EmailViewProps) {
-  const savedViewsFlag = useFeatureFlag(enableEmailSavedViews);
-  const userId = useUserId();
-  // A loading flag is not off; it only keeps saved views hidden meanwhile.
-  const savedViewsEnabled = () => savedViewsFlag().enabled;
-  const viewerId = () => (savedViewsEnabled() ? userId() : undefined);
+  const viewerId = useUserId();
   return (
     <ListEntityMetadataQueryProvider>
       <EmailViewProvider
         initialState={props.initialState}
-        savedViewsEnabled={savedViewsEnabled}
         savedViewsSource={() =>
           useSavedViews({ viewerId, kind: EMAIL_SAVED_VIEW_KIND })
         }

@@ -51,11 +51,16 @@ between the sandbox and the rest of the product.
 - Add a trigger source: `crates/agent_trigger` (context) →
   `src/domain/trigger_router.rs` → `src/inbound/kafka.rs`.
 
-External runtimes receive the session's configured MCP selection when binding,
-including enabled owner connections and custom servers under `OwnerConnections`.
-Under `Selected`, an overlaid app (`pipedream_mcp` `mcp_overlays`) the owner
-authorized natively is advertised as that custom server instead of its slug;
-an app connected that way also satisfies the `app.connected` resume check.
+External runtimes receive the session's configured MCP selection when binding.
+`outbound/egress.rs` lists it from `connectors::McpConnectionsService`
+(`connections(owner).scoped(selection).destinations()`): under
+`OwnerConnections` every app and custom server the owner can use (a native
+server several overlaid apps share once, under the first), under
+`Selected` exactly the selected apps, connected or not, so an unconnected one
+answers with a connect prompt. Every app, overlaid ones included, is
+advertised by its app slug. The `app.connected` resume check
+(`outbound/connected_apps.rs`) reads the same service's `status`. Never
+filter connections by source, flag or `enabled` here.
 Use `external_mcp_servers` to preserve the host-reachable egress URL override.
 
 External chat replies use `domain/service/external_replies.rs` and the
@@ -90,7 +95,11 @@ and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,
 restoring each (`session/load` or `session/resume`) without a prompt, then
 dispatching whatever its durable queue still holds when no turn is running;
-attached, archived and managed sessions are skipped. A dial always restores sessions
+archived and managed sessions are skipped, and so are sessions already attached on
+the runtime's current connection. A session whose actor is still on the socket the
+redial displaced (each `RuntimeConnection` has a `RuntimeConnectionId`, which its
+sessions' attachments carry) is closed first, waiting for its `disconnected` frame,
+then attached to the new connection. A dial always restores sessions
 with a command in flight here, an unfinished turn (`has_unfinished_turn`: open, or
 open when the session disconnected, from `agent_session.turn_interrupted`), or a
 durable queue, however many; it fills the rest of `MAX_EAGER_PER_DIAL` (50) with
@@ -183,10 +192,31 @@ different replica than the socket it replaced, and a stalled replica can notice
 that socket's end long after. `RuntimeRegistry` mints a `RuntimeConnectionId` per
 dial and reports it to `HarnessPresence`; a close removes only its own row, and
 each replica renews the leases of what it holds, so a crash reads offline within
-the lease. To debug a harness in Datadog, search `@harness:<id>` for
+the lease. A renewal that restores the row of a connection the registry no
+longer holds (it closed after the renewal's snapshot) closes it again through
+`HarnessPresence::disconnected`, so a Macro computer still gets its disconnect.
+To debug a harness in Datadog, search `@harness:<id>` for
 `@telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected OR
-harness_runtime_lease_restored)`: each carries `connection` and `replica`, and a
-disconnect's `other_live_connections` above 0 is a stale close that changed nothing.
+harness_runtime_lease_restored OR harness_runtime_lease_restore_undone)`: each
+carries `connection`, all but the undo carry `replica` (the undo's own close
+follows as a `harness_runtime_disconnected` that does, in the same trace), and a disconnect's
+`other_live_connections` above 0 is a stale close that changed nothing. A
+restore just before a connection's `harness_runtime_connected` is a renewal
+that beat the attach write, and harmless. Each renewal is one trace: a
+`harness.registry.renew` span (`connections`, `restored`, `undone`) around the
+adapter's `harness.presence.renew` (`replica`, `renewed`, `restored`, `error`),
+with each undo's `harness.presence.disconnected` under it.
+When recording a dial bound an agent (`HarnessPresence::connected` returns
+`ConnectionRecorded::AgentBound`: a Macro computer gets its first agent on its
+first connect), the registry sends the runtime `ToRuntimeMessage::AgentsChanged`,
+and macrod re-reads its agents and reopens its trigger stream at once instead
+of at its next poll. It goes only to a runtime that listed `agents-changed` in
+the `x-macro-runtime-accepts` dial header (`RuntimeAccepts`, read by
+`inbound/runtime_gateway.rs`), so older runtimes never see it. Presence
+gets the `RuntimeAccepts` too: a Macro computer's macrod that doesn't list
+`apply-agent` can't take `ToRuntimeMessage::ApplyAgent`, so an agent
+teammate's computer fails its start at once (hosted_runtimes
+`Failure::AgentUnsupported`).
 
 Only directly authenticated users with edit access may answer ACP permissions or
 elicitations (`agent_session::ControlEvent::authorized`). Agent runs may deny or

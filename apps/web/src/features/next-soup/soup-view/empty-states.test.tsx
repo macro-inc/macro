@@ -2,11 +2,13 @@
  * @vitest-environment jsdom
  */
 
+import { render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
-import { shouldShowLoadError } from './empty-states';
+import { EmptyState, shouldShowLoadError } from './empty-states';
 
 vi.mock('@app/features/command/Launcher', () => ({
   useCreateAction: () => vi.fn(),
+  useCreatableEnabled: () => () => true,
 }));
 vi.mock('@channel/CreateChannelModal', () => ({
   openNewChannelModal: vi.fn(),
@@ -21,6 +23,9 @@ vi.mock('@core/email-link', () => ({
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({ data: undefined }),
   useIsTeamAdmin: () => () => false,
+}));
+vi.mock('@ui/components/Hotkey', () => ({
+  getNormalizedKeyString: () => '⌘K',
 }));
 vi.mock('./FolderDropZone', () => ({ FolderDropZone: () => null }));
 vi.mock('./soup-view-context', () => ({
@@ -47,5 +52,14 @@ describe('shouldShowLoadError', () => {
         forceEmptyState: true,
       })
     ).toBe(false);
+  });
+});
+
+describe('Search empty state', () => {
+  it('points to the command menu while Search waits for input', () => {
+    render(() => <EmptyState listView="search" />);
+    expect(screen.getByRole('status').textContent).toContain(
+      'Press ⌘K to jump to anything or run a command.'
+    );
   });
 });

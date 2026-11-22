@@ -1,3 +1,4 @@
+import { useViewShell } from '@app/components/view-shell';
 import { createTagFacetContext } from '@app/features/soup';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
@@ -28,14 +29,12 @@ import {
 import {
   type Accessor,
   createSignal,
-  For,
   getOwner,
   type JSX,
   type Owner,
   onCleanup,
   Show,
 } from 'solid-js';
-import { v7 as uuid } from 'uuid';
 import { createReorderItem } from '../../../components/drag-drop/create-reorder';
 import { createVerticalReorder } from '../../../components/drag-drop/create-vertical-reorder';
 import { DragSessionSensors } from '../../../components/drag-drop/drag-session-sensors';
@@ -43,18 +42,23 @@ import type { InsertionEdge } from '../../../components/drag-drop/horizontal-ins
 import { VerticalInsertionLine } from '../../../components/drag-drop/insertion-line';
 import {
   SavedViewList,
+  SavedViewListEntries,
   SavedViewListRow,
   type SavedViewRowReorder,
 } from '../../saved-views/components/saved-view-list';
 import { SavedViewMenuItems } from '../../saved-views/components/saved-view-menu';
-import { SavedViewPicker } from '../../saved-views/components/saved-view-picker';
-import type { SavedView } from '../../saved-views/core/saved-view';
+import {
+  appendSavedViewDraft,
+  type SavedView,
+} from '../../saved-views/core/saved-view';
 import {
   savedViewErrorMessage,
   useReorderSavedViews,
   useUpdateSavedView,
 } from '../../saved-views/queries/saved-view-actions';
+
 import { toSavedView } from '../../saved-views/queries/saved-views';
+import { SavedViewAppearanceMenu } from '../../saved-views/saved-view-appearance';
 import {
   DeleteSavedViewDialog,
   SavedViewDialog,
@@ -69,6 +73,7 @@ import {
   EMAIL_SAVED_VIEW_KIND,
   EMPTY_EMAIL_SAVED_VIEW_FILTERS,
   type EmailSavedViewFilters,
+  materializeEmailSavedView,
   readEmailSavedView,
 } from '../filters/email-saved-view';
 import { useEmailParticipantSuggestions } from '../queries/use-email-participant-suggestions';
@@ -78,11 +83,14 @@ export const EMAIL_SAVED_VIEWS_SECTION_ID = 'saved-views';
 
 /** The open view's name for headers and breadcrumbs. */
 export function useEmailSavedViewTitle(): Accessor<string | undefined> {
-  const { savedViews, savedViewActive } = useEmailView();
+  const { savedViews, savedViewActive, savedViewCreation } = useEmailView();
   return () => {
     if (!savedViewActive()) return undefined;
     const view = savedViews?.view();
-    return view?.kind === 'saved' ? view.record.name : t('emailViews.view');
+    return (
+      savedViewCreation?.current()?.name ??
+      (view?.kind === 'saved' ? view.record.name : t('emailViews.view'))
+    );
   };
 }
 
@@ -126,14 +134,19 @@ type BuilderProps = ManagedDialogProps & {
   initial: EmailSavedViewFilters;
   inboxes: readonly { id: string; label: string }[];
   onSaved: (record: SavedView) => void;
+  onFiltersChange?: (filters: EmailSavedViewFilters) => void;
+  onChange?: (fields: { name: string; sharedTeamId: string | null }) => void;
+  sharedTeamId?: string | null;
 } & (
     | {
         mode: 'create';
         id: string;
         name: string;
+        appearance?: SavedView['appearance'];
         title?: string;
         submitLabel?: string;
         source: 'builder' | 'save_filters' | 'duplicate';
+        existing?: SavedView;
       }
     | { mode: 'edit'; record: SavedView }
   );
@@ -148,7 +161,10 @@ function EmailSavedViewDialog(props: BuilderProps) {
   const fields = (
     <EmailSavedViewFields
       filters={filters()}
-      onChange={setFilters}
+      onChange={(filters) => {
+        setFilters(filters);
+        props.onFiltersChange?.(filters);
+      }}
       inboxes={props.inboxes}
       suggestions={suggestions}
       tags={tags()}
@@ -163,6 +179,7 @@ function EmailSavedViewDialog(props: BuilderProps) {
     viewerId: props.viewerId,
     isCurrent: props.isCurrent,
     onSaved: props.onSaved,
+    onChange: props.onChange,
     get invalid() {
       return decodeEmailSavedView(config()).isErr();
     },
@@ -182,7 +199,10 @@ function EmailSavedViewDialog(props: BuilderProps) {
       {...shared}
       mode="create"
       id={props.id}
+      existing={props.existing}
       name={props.name}
+      sharedTeamId={props.sharedTeamId}
+      appearance={props.appearance}
       config={config()}
       title={props.title}
       submitLabel={props.submitLabel}
@@ -206,12 +226,20 @@ type BuilderOpening =
       /** Started from the filters the list shows, rather than from nothing. */
       fromFilters?: boolean;
       copyOf?: SavedView;
+      continueDraft?: boolean;
     }
   | { mode: 'edit'; record: SavedView; filters: EmailSavedViewFilters };
 
 function useOpenEmailSavedViewBuilder(owner: Owner | null = getOwner()) {
-  const { savedViews, savedViewsList, selectSavedView, inboxOptions } =
-    useEmailView();
+  const {
+    savedViews,
+    savedViewsList,
+    selectSavedView,
+    inboxOptions,
+    savedViewCreation: creation,
+    startSavedView,
+    setFilters,
+  } = useEmailView();
   const captureRequest = useEmailSavedViewRequest();
   const viewerId = useUserId();
   return (opening: BuilderOpening): DialogHandle | undefined => {
@@ -238,31 +266,61 @@ function useOpenEmailSavedViewBuilder(owner: Owner | null = getOwner()) {
         }),
         { owner }
       );
-    const copyOf = opening.copyOf;
-    // The props accessor runs on every read; mint the id once.
-    const id = uuid();
-    return openDialog(
-      EmailSavedViewDialog,
-      () => ({
-        ...common,
-        mode: 'create' as const,
-        id,
-        name: copyOf
-          ? `${copyOf.name.slice(0, 113)} (copy)`
-          : t('viewMenus.newView'),
-        title: copyOf ? t('emailViews.duplicateTitle') : undefined,
-        submitLabel: copyOf ? t('emailViews.duplicate') : undefined,
-        source: copyOf
-          ? ('duplicate' as const)
-          : opening.fromFilters
-            ? ('save_filters' as const)
-            : ('builder' as const),
-        onSaved: (created: SavedView) => {
-          if (request.isCurrent()) selectSavedView(created.id);
-        },
-      }),
-      { owner }
+    const openNew = () => {
+      const draft = creation?.current();
+      if (!draft || !creation) return;
+      const request = captureRequest();
+      return openDialog(
+        EmailSavedViewDialog,
+        () => ({
+          ...common,
+          isCurrent: () =>
+            request.isCurrent() && creation.current()?.id === draft.id,
+          mode: 'create' as const,
+          id: draft.id,
+          existing: creation.persisted(),
+          name: draft.name,
+          sharedTeamId: draft.sharedTeamId,
+          appearance: draft.appearance,
+          title: opening.copyOf ? t('emailViews.duplicateTitle') : undefined,
+          submitLabel: opening.copyOf ? t('emailViews.duplicate') : undefined,
+          source: opening.copyOf
+            ? ('duplicate' as const)
+            : opening.fromFilters
+              ? ('save_filters' as const)
+              : ('builder' as const),
+          onChange: creation.update,
+          onFiltersChange: (filters) => {
+            creation.update({ config: configOf(filters) });
+            setFilters(
+              materializeEmailSavedView(
+                readEmailSavedView(configOf(filters)).config
+              )
+            );
+          },
+          onSaved: (created: SavedView) => {
+            if (request.isCurrent() && creation.confirm(created))
+              selectSavedView(created.id);
+          },
+        }),
+        { owner }
+      );
+    };
+    if (opening.continueDraft && creation?.current()) return openNew();
+    const name = opening.copyOf
+      ? `${opening.copyOf.name.slice(0, 113)} (copy)`
+      : t('viewMenus.newView');
+    let handle: DialogHandle | undefined;
+    startSavedView(
+      opening.filters,
+      name,
+      () => {
+        handle = openNew();
+      },
+      Boolean(opening.copyOf || opening.fromFilters),
+      opening.copyOf?.appearance
     );
+    return handle;
   };
 }
 
@@ -283,6 +341,7 @@ export function useCreateEmailSavedView(owner: Owner | null = getOwner()) {
       mode: 'create',
       filters: captured.value.filters,
       fromFilters: true,
+      continueDraft: true,
     });
   };
 }
@@ -336,6 +395,9 @@ function EmailSavedViewMenuItems(props: {
   return (
     <SavedViewMenuItems
       owned={props.record.ownerId === viewerId()}
+      appearance={
+        <SavedViewAppearanceMenu view={props.record} defer={props.defer} />
+      }
       onEdit={() => {
         const record = props.record;
         props.defer(() =>
@@ -423,22 +485,26 @@ function EmailSavedViewRow(props: {
  * the list itself changes, which the confirmed reorder's refresh brings.
  */
 function createEmailSavedViewOrder() {
-  const { savedViewsList, savedViewScope } = useEmailView();
+  const { savedViewsList, savedViewScope, savedViewCreation } = useEmailView();
+  const records = () =>
+    savedViewCreation?.items() ?? savedViewsList?.items() ?? [];
   const reorder = useReorderSavedViews({
     refresh: () => savedViewsList?.refresh() ?? Promise.resolve(),
   });
   const serverIds = () =>
-    (savedViewsList?.items() ?? []).map((record) => record.id).join(',');
+    records()
+      .map((record) => record.id)
+      .join(',');
   const [pending, setPending] = createSignal<{
     order: string[];
     baseline: string;
   }>();
   const items = () => {
-    const records = savedViewsList?.items() ?? [];
+    const source = records();
     const local = pending();
-    if (!local || local.baseline !== serverIds()) return records;
+    if (!local || local.baseline !== serverIds()) return source;
     const position = new Map(local.order.map((id, index) => [id, index]));
-    return [...records].sort(
+    return [...source].sort(
       (left, right) =>
         (position.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
         (position.get(right.id) ?? Number.MAX_SAFE_INTEGER)
@@ -479,10 +545,10 @@ function createEmailSavedViewOrder() {
 function EmailSavedViewRows(props: {
   onAction?: (action: () => void) => void;
   dialogOwner?: Owner | null;
-  /** Desktop rows drag to reorder; the phone picker moves through menus. */
+  /** Docked and overlay rows drag. Navigation sheet rows move through menus. */
   draggable?: boolean;
 }) {
-  const { savedViewsList } = useEmailView();
+  const { savedViewsList, savedViewCreation } = useEmailView();
   const [attachCreateHotkeys] = useHotkeyDOMScope('create-saved-view', true);
   const create = useCreateEmailSavedView(props.dialogOwner ?? getOwner());
   const owner = props.dialogOwner ?? getOwner();
@@ -498,24 +564,32 @@ function EmailSavedViewRows(props: {
   const run = (action: () => void) =>
     props.onAction ? props.onAction(action) : action();
   const empty = () =>
-    !savedViewsList?.loading() && savedViewsList?.items()?.length === 0;
+    !savedViewCreation?.current() &&
+    !savedViewsList?.loading() &&
+    savedViewsList?.items()?.length === 0;
   const rows = (draggable: boolean): JSX.Element => (
-    <For each={order.items()}>
+    <SavedViewListEntries
+      entries={appendSavedViewDraft(
+        order.items(),
+        savedViewCreation?.current()
+      )}
+      onDraftSelect={() => {}}
+    >
       {(record) => {
         const row = (reorderItem?: SavedViewRowReorder) => (
           <EmailSavedViewRow
-            record={record}
+            record={record()}
             run={run}
             owner={owner}
             reorder={reorderItem}
-            onMoveUp={draggable ? undefined : order.step(record.id, -1)}
-            onMoveDown={draggable ? undefined : order.step(record.id, 1)}
+            onMoveUp={draggable ? undefined : order.step(record().id, -1)}
+            onMoveDown={draggable ? undefined : order.step(record().id, 1)}
           />
         );
         if (!draggable) return row();
         // Drag items need the provider, which only the desktop list mounts.
         return row(
-          createReorderItem(record.id, {
+          createReorderItem(record().id, {
             canDrag: () => order.items().length > 1 && !order.busy(),
             // Presses on the row's menu trigger never drag.
             ignore: '[aria-haspopup]',
@@ -523,7 +597,7 @@ function EmailSavedViewRows(props: {
           })
         );
       }}
-    </For>
+    </SavedViewListEntries>
   );
   return (
     <Show when={savedViewsList}>
@@ -618,8 +692,9 @@ function EmailSavedViewRows(props: {
   );
 }
 
-/** The desktop sidebar's Saved views section. */
+/** The Saved views section of the Mail sidebar. */
 export function EmailSavedViewsSection() {
+  const { aside } = useViewShell();
   const {
     savedViewsEnabled,
     savedViewsList,
@@ -644,31 +719,9 @@ export function EmailSavedViewsSection() {
           createButtonRef={attachCreateHotkeys}
         />
         <SavedViewList.Content>
-          <EmailSavedViewRows draggable />
+          <EmailSavedViewRows draggable={!aside.isSheet()} />
         </SavedViewList.Content>
       </SavedViewList.Root>
-    </Show>
-  );
-}
-
-/** The mobile pill after Filters; its drawer lists and manages views. */
-export function EmailSavedViewsPicker() {
-  const { savedViewsEnabled, savedViewsList, savedViewActive } = useEmailView();
-  const viewerId = useUserId();
-  const title = useEmailSavedViewTitle();
-  // The drawer closes before its action opens a dialog; keep the outer owner.
-  const owner = getOwner();
-  return (
-    <Show when={savedViewsList && savedViewsEnabled()}>
-      <SavedViewPicker
-        active={savedViewActive()}
-        scopeKey={viewerId()}
-        label={title() ?? t('viewMenus.savedViews')}
-      >
-        {(onAction) => (
-          <EmailSavedViewRows onAction={onAction} dialogOwner={owner} />
-        )}
-      </SavedViewPicker>
     </Show>
   );
 }
@@ -815,7 +868,9 @@ export function EmailSavedViewCreateBanner(props: DrawerDialogProps) {
 
 /** Save changes and Reset while the open view has edits; errors stay beside them. */
 export function EmailSavedViewActions() {
-  const { savedViews, savedViewsList } = useEmailView();
+  const { savedViews, savedViewsList, savedViewCreation, leaveSavedView } =
+    useEmailView();
+  const saveNew = useCreateEmailSavedView();
   const captureRequest = useEmailSavedViewRequest();
   const reload = useReloadEmailSavedView();
   const viewerId = useUserId();
@@ -869,6 +924,17 @@ export function EmailSavedViewActions() {
       : null;
   return (
     <>
+      <Show when={savedViewCreation?.current()}>
+        <Button
+          variant="primary"
+          onClick={() => saveNew({ fromCurrent: true })}
+        >
+          {t('viewMenus.saveView')}
+        </Button>
+        <Button variant="ghost" onClick={leaveSavedView}>
+          {t('common.cancel')}
+        </Button>
+      </Show>
       <Show when={selected()?.dirty}>
         <HeaderActionGroup label={t('emailViews.viewActions')} size="md">
           <Show when={selected()?.record.ownerId === viewerId()}>

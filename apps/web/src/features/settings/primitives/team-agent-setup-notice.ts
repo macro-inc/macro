@@ -12,8 +12,8 @@ export type TeamAgentSetupNoticeAgent = NonNullable<
 export type TeamAgentSetupNoticeActions = {
   /** Opens the DM with the agent. */
   message: () => void;
-  /** Opens Bring your AI; only for those who own the agent's computer. */
-  bringAi?: () => void;
+  /** Opens Connect Claude plan; only for those who own the agent's computer. */
+  connectClaude?: () => void;
   /** Sets the failed computer up again. */
   retry: () => void;
 };
@@ -23,7 +23,7 @@ const showing = new Map<string, number>();
 
 /**
  * The in-app notice that an agent teammate is ready, or couldn't be set up,
- * for its inviter. Ready offers Message <Name>, and Bring your AI to owners
+ * for its inviter. Ready offers Message <Name>, and Connect Claude plan to owners
  * and admins; a failure offers Retry. It stays up a minute, since the
  * inviter left the invite minutes ago.
  */
@@ -57,12 +57,12 @@ export function showTeamAgentSetupNotice(
             variant: 'primary' as const,
             onClick: then(actions.message),
           },
-          ...(actions.bringAi
+          ...(actions.connectClaude
             ? [
                 {
-                  label: t('teamAgents.bringAi'),
+                  label: t('teamAgents.connectClaude'),
                   variant: 'secondary' as const,
-                  onClick: then(actions.bringAi),
+                  onClick: then(actions.connectClaude),
                 },
               ]
             : []),

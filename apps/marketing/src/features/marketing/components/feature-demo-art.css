@@ -2,7 +2,7 @@
 .feature-demo-art {
   --feature-glow: #7abde5;
   --feature-frame-radius: 26.25px;
-  --feature-frame-inset: 12px;
+  --feature-frame-inset: 8px;
   position: relative;
   isolation: isolate;
   padding: 36px 0 28px;
@@ -104,14 +104,14 @@
   .feature-demo-art .mail-sharing-splits > .mail-sharing-email { background: #111113; }
 }
 
-/* A 12px glass surround keeps the onboarding texture outside the UI. */
+/* An 8px glass surround keeps the onboarding texture outside the UI. */
 .feature-demo-art[data-glass-frame] > .feature-demo-primary {
   box-sizing: border-box;
   width: calc(100% + 2 * var(--feature-frame-inset));
   margin: calc(-1 * var(--feature-frame-inset));
   padding: var(--feature-frame-inset);
   border-radius: calc(var(--feature-frame-radius) + var(--feature-frame-inset));
-  background: linear-gradient(135deg, #ffffff0c, #ffffff03 55%, #65d8ac08);
+  background: linear-gradient(135deg, #ffffff04, transparent 55%, #65d8ac02);
   box-shadow: inset 0 0 0 1px #ffffff14, 0 16px 48px -24px #0008;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -135,7 +135,7 @@
   --workspace-texture-mask: radial-gradient(ellipse 42% 45% at 18% 30%, #000b, transparent 85%), radial-gradient(ellipse 38% 48% at 82% 70%, #0009, transparent 85%);
 }
 .feature-demo-art[data-glass-frame] > .feature-demo-backdrop::before {
-  opacity: .7;
+  opacity: .25;
   background:
     radial-gradient(ellipse 42% 42% at 18% 30%, color-mix(in srgb, var(--feature-glow) 18%, transparent), transparent 80%),
     radial-gradient(ellipse 38% 48% at 82% 70%, color-mix(in srgb, var(--feature-glow) 13%, transparent), transparent 82%);

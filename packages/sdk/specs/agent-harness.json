@@ -1157,7 +1157,7 @@
     "/agent-sessions/{session_id}/activity": {
       "get": {
         "tags": ["agent-sessions"],
-        "summary": "Read activity using the same visibility capability as the session transcript.",
+        "summary": "Read session-visible activity after filtering CRM rows for the requester.",
         "operationId": "get_agent_session_activity",
         "parameters": [
           {
@@ -3878,25 +3878,84 @@
             }
           },
           "400": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "403": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "404": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "409": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "422": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "503": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "504": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           }
         }
       }
@@ -3939,25 +3998,84 @@
             }
           },
           "400": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "403": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "404": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "409": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "422": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "503": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "504": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           }
         }
       }
@@ -5893,6 +6011,28 @@
           }
         }
       },
+      "ClaudeSignInError": {
+        "type": "object",
+        "description": "A failed computer route's body.",
+        "required": ["message"],
+        "properties": {
+          "code": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SignInRecoveryCode",
+                "description": "Set when the failure has a specific way out."
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Safe to show, but not to branch on."
+          }
+        }
+      },
       "ClaudeSignInStarted": {
         "type": "object",
         "description": "`POST /harnesses/{harness_id}/claude-sign-in` answer.",
@@ -5994,30 +6134,19 @@
       "ConnectMcpServerResponse": {
         "type": "object",
         "description": "Response from [`ConnectMcpServer`].",
-        "required": [
-          "url",
-          "serverName",
-          "alreadyConnected",
-          "authenticated",
-          "enabled",
-          "summary"
-        ],
+        "required": ["url", "serverName", "status", "enabled", "summary"],
         "properties": {
-          "alreadyConnected": {
-            "type": "boolean",
-            "description": "Whether the user already had this server before the call."
-          },
-          "authenticated": {
-            "type": "boolean",
-            "description": "Whether the server holds the user's sign-in."
-          },
           "enabled": {
             "type": "boolean",
-            "description": "Whether the server's tools are turned on."
+            "description": "Whether its tools are turned on."
           },
           "serverName": {
             "type": "string",
-            "description": "The server's display name."
+            "description": "The connector's display name."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConnectorStatus",
+            "description": "Where the user stands with it."
           },
           "summary": {
             "type": "string",
@@ -6025,7 +6154,7 @@
           },
           "url": {
             "type": "string",
-            "description": "The server's URL."
+            "description": "The server's URL, normalized."
           }
         }
       },
@@ -6129,6 +6258,11 @@
             "description": "Apps whose tools could not be listed."
           }
         }
+      },
+      "ConnectorStatus": {
+        "type": "string",
+        "description": "Where a user stands with an app or server.",
+        "enum": ["connected", "disabled", "needsReauth", "notConnected"]
       },
       "ConnectorTool": {
         "type": "object",
@@ -6535,7 +6669,7 @@
               },
               "connected": {
                 "type": "boolean",
-                "description": "Whether this caller has an enabled connection. For an app that\nconnects through its own MCP server, that connection is checked\nthere, not in Pipedream."
+                "description": "Whether this caller's connection to the app is usable now."
               },
               "operation": {
                 "type": "string",
@@ -6839,7 +6973,7 @@
           },
           "source": {
             "type": "string",
-            "description": "The submitted JavaScript module."
+            "description": "The submitted TypeScript module."
           },
           "status": {
             "$ref": "#/components/schemas/ExecutionStatus",
@@ -8534,6 +8668,18 @@
             ]
           }
         }
+      },
+      "SignInRecoveryCode": {
+        "type": "string",
+        "description": "How the user recovers from a failed Claude sign-in. The web dialog\nchooses its way out from this, never from the message.",
+        "enum": [
+          "invalid_code",
+          "malformed_code",
+          "sign_in_expired",
+          "computer_unreachable",
+          "computer_busy",
+          "rollout_disabled"
+        ]
       },
       "StartFreshAgentConversationRequest": {
         "type": "object",

@@ -33,8 +33,22 @@ tooling/agent-session-view/agent-session-view <session-id> --datadog   # + span 
 tooling/agent-session-view/agent-session-view <session-id> --serve 8000 # serve it on 127.0.0.1:8000
 ```
 
-`--serve` is unauthenticated and binds to loopback; add `--bind 0.0.0.0` (or
-the machine's tailnet IP) to open the page from another machine.
+`--serve` is unauthenticated, binds to loopback and answers only that one
+page.
+
+To share a rendered page over HTTPS on the tailnet only (not the LAN):
+
+```sh
+mkdir /tmp/asv-share && cp ~/.cache/agent-session-view/<id>.html /tmp/asv-share/  # that file alone
+python3 -m http.server <p> --bind 127.0.0.1 --directory /tmp/asv-share
+sudo tailscale serve --bg --https=<P> http://127.0.0.1:<p>
+# open https://<machine>.<tailnet>.ts.net:<P>/<id>.html; when done:
+sudo tailscale serve --https=<P> off
+```
+
+`--serve <p>` does the first two steps and prints the `tailscale serve`
+lines. The page has no auth and holds user content: tailnet only, never
+`tailscale funnel`, and take it down when done.
 
 Add `--env dev` for dev. Read the `.md` first: the header says where the
 time went and lists the slowest gaps and failures; each turn has a step table
@@ -43,7 +57,19 @@ line). The `.full.md` has the uncut code and results under the same step
 numbers. Gaps are model time plus anything not recorded as a step; with
 `--datadog`, tool steps run from their span's start to its end and each turn
 lists its model calls (first chunk, tokens, cache reads, largest prompt
-parts).
+parts) and its context: the SDK docs Jev selected (`selected:0` means the
+prompt held only the entity catalog), the eager, loaded and deferred tools,
+and flags. Read the header's Flags first: `no-sdk-index` with
+`guessed-sdk-methods` is the `invented-api` pattern with its cause.
+
+To read what the model actually read, add `--reconstruct`: each turn's
+`<macro_sdk>` docs, preamble and Macro prompt are rebuilt from source at the
+commit that served it and checked against the span's bytes and hash. The
+viewer shows each part's text and its status: verified, mismatch (the
+rebuilt text differs from what the span recorded), unverified (built from
+inputs the tool had to infer, or nothing to check against), or not
+reconstructed (per-user or private parts such as memory); the `.full.md`
+has the texts. The first run at a commit builds Rust, so expect a wait.
 
 ## Many sessions
 

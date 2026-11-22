@@ -1,12 +1,14 @@
 import { ContentLoading } from '@app/components/app/ContentLoading';
 import { MobileSearchInput } from '@app/features/command/mobile/MobileSearchInput';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
+import { unreadLabel } from '@app/features/notifications-inbox/core/inbox-unread';
 import { t } from '@app/lib/i18n';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
 import { lazyNamed } from '@core/util/lazyNamed';
+import { UnreadCount } from '@entity/components/UnreadCount';
 import { UnreadIndicator } from '@entity/components/UnreadIndicator';
 import CaretUpIcon from '@icon/system/regular/caret-up.svg';
 import DotsSixVerticalIcon from '@icon/system/regular/dots-six-vertical.svg';
@@ -17,8 +19,11 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { useNavigationUnread } from '../use-navigation-unread';
-
+import { unreadDescription } from '../unread-description';
+import {
+  type NavigationUnread,
+  useNavigationUnread,
+} from '../use-navigation-unread';
 import { MobileDockButton } from './MobileDockButton';
 import { MobileDockIsland } from './MobileDockIsland';
 import { MobileDrawer } from './MobileDrawer';
@@ -45,7 +50,7 @@ function MoreViewsDrawer(props: {
   visibleCount: number;
   onMove: (from: number, to: number) => void;
   isActive: (id: MobileDockNavId) => boolean;
-  hasUnread: (id: MobileDockNavId) => boolean;
+  unread: NavigationUnread;
   onNavigate: (id: MobileDockNavId) => void;
 }) {
   const { settingsOpen, toggleSettings } = useSettingsState();
@@ -74,7 +79,7 @@ function MoreViewsDrawer(props: {
           .some((view) => props.isActive(view.id))}
         unread={props.views
           .slice(props.visibleCount)
-          .some((view) => props.hasUnread(view.id))}
+          .some((view) => props.unread.has(view.id))}
       />
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
@@ -118,11 +123,12 @@ function MoreViewsDrawer(props: {
                         as={MobileDrawer.Item}
                         aria-label={view.label}
                         aria-description={
-                          props.hasUnread(view.id)
-                            ? t('mobile.unreadItems')
+                          props.unread.has(view.id)
+                            ? (unreadDescription(props.unread.count(view.id)) ??
+                              t('mobile.unreadItems'))
                             : undefined
                         }
-                        data-unread={props.hasUnread(view.id) ? '' : undefined}
+                        data-unread={props.unread.has(view.id) ? '' : undefined}
                         aria-current={
                           props.isActive(view.id) ? 'page' : undefined
                         }
@@ -135,10 +141,22 @@ function MoreViewsDrawer(props: {
                           class="size-4 shrink-0"
                         />
                         <span>{view.label}</span>
-                        <Show when={props.hasUnread(view.id)}>
-                          <span aria-hidden="true" class="ml-auto">
-                            <UnreadIndicator active class="size-1.5" />
-                          </span>
+                        <Show when={props.unread.has(view.id)}>
+                          <Show
+                            when={unreadLabel(props.unread.count(view.id))}
+                            fallback={
+                              <span aria-hidden="true" class="ml-auto">
+                                <UnreadIndicator active class="size-1.5" />
+                              </span>
+                            }
+                          >
+                            {(count) => (
+                              <UnreadCount
+                                label={count()}
+                                class="ml-auto ring-0"
+                              />
+                            )}
+                          </Show>
                         </Show>
                       </MobileDrawer.Close>
                     )}
@@ -179,11 +197,15 @@ function MoreViewsDrawer(props: {
  * layout (see MobileDockRow); the current view's button stays at full ink
  * while the rest dim.
  */
-function MobileNavigationDockRow() {
+function MobileNavigationDockRow(props: { vertical?: boolean }) {
   const navigate = useMobileNavNavigate();
   const foregroundView = useForegroundMobileView();
+  // Projects keeps its create action but belongs to the Tasks dock destination.
+  const activeView = () =>
+    foregroundView() === 'projects' ? 'tasks' : foregroundView();
   const availableViews = useMobileDockViews();
-  const hasUnread = useNavigationUnread();
+  // The dock's bell is Home, and opens Notifications when that view is on.
+  const unread = useNavigationUnread({ homeIsNotifications: true });
   const userId = useUserId();
   const preferences = createMemo(() =>
     createMobileDockOrder(
@@ -202,7 +224,9 @@ function MobileNavigationDockRow() {
   const navSize = createElementSize(navRef);
   // The measured island already excludes Search and gutters; reserve More.
   const visibleCount = () =>
-    dockVisibleCount(navSize.width, navSize.height, dockViews().length);
+    props.vertical
+      ? dockVisibleCount(navSize.height, navSize.width, dockViews().length)
+      : dockVisibleCount(navSize.width, navSize.height, dockViews().length);
   const move = (from: number, to: number) => {
     const span = Telemetry.span('mobile.dock.reorder');
     try {
@@ -221,25 +245,37 @@ function MobileNavigationDockRow() {
   };
 
   return (
-    <div class="flex w-full justify-between gap-(--mobile-chrome-gutter)">
+    <div
+      class={cn(
+        'flex w-full justify-between gap-(--mobile-chrome-gutter)',
+        props.vertical && 'h-full min-h-0 flex-col justify-end'
+      )}
+    >
       <MobileDockIsland
         ref={setNavRef}
-        class="h-(--mobile-chrome-button-size) min-w-0 flex-1 justify-between"
+        class={cn(
+          'min-w-0 flex-1 justify-between',
+          props.vertical
+            ? 'w-(--mobile-chrome-button-size) min-h-0 flex-col'
+            : 'h-(--mobile-chrome-button-size)'
+        )}
         style={{
-          'max-width': `calc(${dockViews().length + 1} * var(--mobile-chrome-button-size))`,
+          [props.vertical ? 'max-height' : 'max-width']:
+            `calc(${dockViews().length + 1} * var(--mobile-chrome-button-size))`,
         }}
       >
         <For each={dockViews().slice(0, visibleCount())}>
           {(button) => (
             <MobileDockButton
               icon={
-                foregroundView() === button.id
+                activeView() === button.id
                   ? (button.iconActive ?? button.icon)
                   : button.icon
               }
               ariaLabel={button.label}
-              active={foregroundView() === button.id}
-              unread={hasUnread(button.id)}
+              active={activeView() === button.id}
+              unread={unread.has(button.id)}
+              unreadCount={unread.count(button.id)}
               onClick={() => navigate(button.id)}
             />
           )}
@@ -248,8 +284,8 @@ function MobileNavigationDockRow() {
           views={dockViews()}
           visibleCount={visibleCount()}
           onMove={move}
-          isActive={(id) => foregroundView() === id}
-          hasUnread={hasUnread}
+          isActive={(id) => activeView() === id}
+          unread={unread}
           onNavigate={navigate}
         />
       </MobileDockIsland>
@@ -275,6 +311,7 @@ function MobileNavigationDockRow() {
 
 type MobileDockRowProps = {
   class?: string;
+  vertical?: boolean;
 };
 
 /**
@@ -289,11 +326,17 @@ export function MobileDockRow(props: MobileDockRowProps) {
     <div
       class={cn(
         'flex items-center gap-(--mobile-chrome-gap) px-(--mobile-chrome-gutter)',
+        props.vertical && 'h-full min-h-0 flex-col px-0',
         props.class
       )}
     >
-      <MobileBottomEdgeFade />
-      <Show when={SearchState.isOpen()} fallback={<MobileNavigationDockRow />}>
+      <Show when={!props.vertical}>
+        <MobileBottomEdgeFade />
+      </Show>
+      <Show
+        when={SearchState.isOpen()}
+        fallback={<MobileNavigationDockRow vertical={props.vertical} />}
+      >
         <MobileSearchInput />
       </Show>
     </div>

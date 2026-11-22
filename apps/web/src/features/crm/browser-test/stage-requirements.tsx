@@ -16,13 +16,19 @@ const unused = (): never => {
   throw new Error('Unused fixture capability');
 };
 const context: CrmContext = {
+  canAccess: () => true,
+  accessState: () => 'allowed',
+  retryAccess: async () => {},
+  EmailThreadMention: unused,
   createEmailPrivacy: unused,
+  createEmailPolicy: unused,
   createPipelines: unused,
   openCreateItem: unused,
   openEmailComposer: unused,
   PipelineEditor: unused,
   PipelineEntries: unused,
   PipelineSharing: unused,
+  MemberAccess: unused,
   createPipelineTransfer: unused,
   downloadCsv: unused,
   createContactPhoto: unused,
@@ -33,7 +39,7 @@ const context: CrmContext = {
   copyRecordLink: unused,
   createNavigation: unused,
   listsEnabled: unused,
-  pipelinesEnabled: unused,
+  createAddToPipeline: unused,
   createCompanyEmails: unused,
   createContactEmails: unused,
   createActivity: unused,

@@ -26,6 +26,11 @@ A Shift-click that also holds Option (Alt) opens below the split it came from:
 `split-below-intent.ts` remembers the click, as `tab-layout/open-in-tab-intent.ts`
 does for Cmd-click. Moving panes (swap left/right, mobile bring-to-front)
 keeps the tiles and their sizes and changes which split shows where.
+Bring-to-front activates the split at once and leaves the order to the
+router's move. Inside an effect or a `batch`, `splits()` follows the router
+only after the activation returns; while the router commits or runs a URL
+navigation, the move itself waits. Never wait on the new order there
+(`tests/stacked-panes.test.ts`).
 Directional focus (`Shift+H/J/K/L`, `Shift+Arrow`) picks its target from the
 tiles, not the pane order: `split-direction.ts` returns to the previously
 active split when it borders that side, else the one level with the focused
@@ -44,16 +49,44 @@ and `TiledSplits`, including a document that keeps its reading position as the
 splits beside it close, with browser scroll anchoring off as in WebKit:
 `bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
 
+## Mobile header hosts
+
+Composable views suppress the shared desktop header. On touch devices, a mounted
+`MobileHeader` still needs the split header's left and right portal targets.
+Keep that header mounted while a mobile header owner exists, and remove it when
+the owner leaves without remounting the view.
+
+## Native phone Back
+
+`MobileSplitContainer` shares `createMobileBackNavigation` between the header,
+Android system Back, and edge-swipe completion. Phone project details are one
+page: Back skips obsolete same-project Overview/Tasks entries and returns to the
+previous destination, preserving its scope, filters, and saved view. Direct links
+without another destination replace the current entry with Projects. The browser
+phone header uses the same operation. Touch tablets also keep a Projects fallback
+when a direct project link has no history; existing tablet section history stays
+unchanged. Detect project detail from route metadata,
+not the shared `tasks` component id, so the list-only rule does not hide its caret.
+A nested project task returns to its owning project before closing a pane,
+including direct task links; leaving that project skips its already-closed tasks.
+Separately opened tasks, other entries, and tablets retain pane-stack navigation.
+Route swipes keep the current pane still
+until completion because there is no second pane to reveal. Clear the swipe
+transform before route Back, even when the route changes during a pane drag.
+
 ## Opt-in view restoration
 
 `SplitLayoutProvider` owns a memory-only, account-scoped view-state store.
 A view opts in by calling `useViewRestoration()` in its stable route component.
-The default key comes from the current router location, with Agents conversations
-normalized to `agents`; pass an explicit key to override that grouping.
+The default key comes from `viewRestorationKey`: Agents conversations normalize
+to `agents`, and Tasks-hosted project routes use `projects` instead of `tasks`.
+The mounted workspace re-registers when that key changes. Pass an explicit key
+to override that grouping.
 
 The hook captures its current location, route state, and entry-state slices in
-`useBeforeLeave`. It stages the snapshot with the navigation's `onCommit`
-callback, so a refused, cancelled, failed, or superseded navigation cannot replace
+a pre-navigation guard, including descendant route changes inside a mounted
+workspace. It stages the snapshot with the navigation's `onCommit` callback,
+so a refused, cancelled, failed, or superseded navigation cannot replace
 the saved snapshot. Solid cleanup only unregisters the hook; it never saves state.
 
 Ordinary rail, Go To, and mobile dock navigation sets `resume: true` on the existing
@@ -76,6 +109,10 @@ leave guards, middleware, URL updates, and single-owner content claims.
 
 Resolve restoration keys and initial entry-state slices from the current router
 entry, not the layout mirror: an outlet can mount before the mirror updates.
+`SplitPanel` also resolves collection ownership from that entry's registered
+component metadata. CRM supplies its own collection state, while Calls requires
+the panel's `SoupViewContextProvider`; choosing the provider from the previous
+mount lets the new route render without its required context.
 
 The remaining notes below describe the original split layout.
 

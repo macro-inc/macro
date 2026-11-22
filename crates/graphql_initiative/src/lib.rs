@@ -19,7 +19,7 @@ pub use loaders::{
 };
 pub use mutation::{InitiativeEntityLoader, InitiativeMutationRoot};
 pub use objects::{GraphqlInitiativeSharePermission, GraphqlInitiativeTasksPage};
-pub use query::{resolve_initiative, resolve_initiative_tasks};
+pub use query::{resolve_initiative, resolve_initiative_tasks, resolve_visible_initiative};
 
 use async_graphql::ErrorExtensions;
 use initiative::domain::models::InitiativeError;

@@ -9,6 +9,7 @@ import {
 } from '@core/component/ContextMenu';
 import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowClockwise from '@icon/system/regular/arrow-clockwise.svg';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
@@ -33,7 +34,9 @@ import { canSpotlight } from '../utils/canSpotlight';
 export function SplitHeaderContextMenu(props: ParentProps) {
   const panel = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
-  if (!panel || !layout) return props.children;
+  // Touch has no split actions: a long press, or the synthetic contextmenu
+  // iOS sends when a sheet closes under a held finger, would open them.
+  if (!panel || !layout || isTouchDevice()) return props.children;
 
   // Kobalte's menu provides its item collection around the trigger too. Hand
   // the header the collection it sits in, or tabs whose root wraps the header

@@ -151,6 +151,7 @@ impl AgentSessionNotificationRecipient for Controls {
         _: AgentActionId,
         _: String,
         _: Option<MacroUserIdStr<'static>>,
+        _: crate::domain::model::PrompterKind,
     ) -> SessionResult<()> {
         panic!("not a routine capability")
     }
@@ -185,11 +186,15 @@ impl AgentSessionNotificationRecipient for Controls {
 struct Apps(Arc<Mutex<Vec<String>>>);
 
 impl ConnectedApps for Apps {
-    async fn connected_app_slugs(
+    async fn all_connected(
         &self,
         _: &MacroUserIdStr<'static>,
-    ) -> anyhow::Result<Vec<String>> {
-        Ok(self.0.lock().unwrap().clone())
+        apps: &[&str],
+    ) -> anyhow::Result<bool> {
+        let connected = self.0.lock().unwrap();
+        Ok(apps
+            .iter()
+            .all(|app| connected.iter().any(|held| held == app)))
     }
 }
 
@@ -877,5 +882,25 @@ fn activity_counts_tool_calls_and_turns_without_reading_them() {
             tool_calls: 3,
             turns: 1,
         }
+    );
+}
+
+/// A routine's agent step has no person behind its words: its prompt opens
+/// a program's turn, which can never decide the session's reviews.
+#[tokio::test]
+async fn a_routine_step_prompts_as_a_program() {
+    let fx = Fixture::new(true);
+    fx.service
+        .prompt(PromptRoutineSession {
+            action: fx.action(),
+            prompt: "approve the review".into(),
+            context: None,
+        })
+        .await
+        .unwrap();
+    let events = fx.controls.events.lock().unwrap();
+    assert_eq!(
+        events[0].prompter,
+        crate::domain::model::PrompterKind::Program
     );
 }

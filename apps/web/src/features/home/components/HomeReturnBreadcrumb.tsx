@@ -1,4 +1,5 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export function HomeReturnBreadcrumb(props: { onReturn: () => void }) {
   return (
@@ -7,7 +8,7 @@ export function HomeReturnBreadcrumb(props: { onReturn: () => void }) {
         data-allow-focus-in-preview
         onClick={props.onReturn}
       >
-        Home
+        {isTouchDevice() ? 'Notifications' : 'Home'}
       </ViewBreadcrumbs.ReturnButton>
       <ViewBreadcrumbs.Separator />
     </nav>

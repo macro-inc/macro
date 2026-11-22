@@ -4,6 +4,7 @@ use crate::domain::models::{AppInfo, Arch, Target};
 fn app_info() -> AppInfo {
     AppInfo {
         current_bundle_build: 42,
+        current_git_sha: None,
         native_build: 7,
         arch: Arch::Aarch64,
         target: Target::Ios,
@@ -60,5 +61,21 @@ fn update_check_url_strips_base_query_and_fragment() {
     assert_eq!(
         url.as_str(),
         "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7&manifest_schema=3"
+    );
+}
+
+#[test]
+fn update_check_url_names_the_embedded_commit_when_known() {
+    let client = BundleClient::new("https://gateway.macro.com/auth/".parse().unwrap());
+    let request = AppInfo {
+        current_git_sha: Some("cd95980".to_string()),
+        ..app_info()
+    };
+
+    let url = client.update_check_url(request).unwrap();
+
+    assert_eq!(
+        url.as_str(),
+        "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7&manifest_schema=3&current_git_sha=cd95980"
     );
 }

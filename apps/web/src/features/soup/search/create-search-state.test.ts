@@ -4,7 +4,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
-vi.mock('./context', () => ({ useOptionalSearchContext: () => undefined }));
 
 const [query, setQuery] = createStore({
   isSuccess: false,

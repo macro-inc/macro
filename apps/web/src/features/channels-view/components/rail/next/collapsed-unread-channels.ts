@@ -9,19 +9,18 @@ import { registerChannelListNotificationRefresh } from '@queries/channel/by-ids'
 import { queryReadyGate } from '@queries/gate';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { type Accessor, createEffect } from 'solid-js';
+import { channelTypesShownBy } from '../../../core/channel-types';
+
+const UNREAD_CHANNEL_FILTERS = defineQueryFilters({
+  include: { channelSeen: false, channelIsParticipant: [true] },
+});
 
 /** Read unread membership directly instead of exhausting every collapsed channel list. */
 export function useCollapsedUnreadChannels(enabled: Accessor<boolean>) {
   const query = useSoupAstItemsQuery(
     () => ({
       params: { limit: 100, sort_method: 'updated_at' },
-      body: compileToAst(
-        queryStateFrom(
-          defineQueryFilters({
-            include: { channelSeen: false, channelIsParticipant: [true] },
-          })
-        )
-      ),
+      body: compileToAst(queryStateFrom(UNREAD_CHANNEL_FILTERS)),
     }),
     () => ({
       enabled: enabled(),
@@ -29,7 +28,10 @@ export function useCollapsedUnreadChannels(enabled: Accessor<boolean>) {
       graphqlProjection: 'channel-list',
     })
   );
-  registerChannelListNotificationRefresh(query);
+  registerChannelListNotificationRefresh(
+    query,
+    channelTypesShownBy(UNREAD_CHANNEL_FILTERS)
+  );
   createEffect(() => {
     if (
       !query.isEnabled ||

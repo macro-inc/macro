@@ -1,6 +1,13 @@
+import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
+import {
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '@components/app/split-layout/context';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import {
+  type ComponentProps,
   createResource,
+  createRoot,
   createSignal,
   For,
   onMount,
@@ -9,7 +16,22 @@ import {
 } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
-import { AgentsView } from './AgentsView';
+import { AgentsView as Workspace } from './AgentsView';
+
+function AgentsView(props: ComponentProps<typeof Workspace>) {
+  const panel = {
+    panelSize: {
+      get width() {
+        return state.width();
+      },
+    },
+  } as SplitPanelContextType;
+  return (
+    <SplitPanelContext.Provider value={panel}>
+      <Workspace {...props} />
+    </SplitPanelContext.Provider>
+  );
+}
 
 /** A split history entry: what it shows and the view state captured into it. */
 type FakeEntry = {
@@ -18,6 +40,8 @@ type FakeEntry = {
 };
 
 const state = vi.hoisted(() => ({
+  touch: false,
+  width: (): number => 1000,
   contentId: { current: 'agents' },
   entry: { current: undefined as (() => FakeEntry) | undefined },
   captors: new Map<string, () => unknown>(),
@@ -31,19 +55,31 @@ const state = vi.hoisted(() => ({
   },
   draft: { read: (): string => '', write: (_draft: string) => {} },
   navigate: { current: (_id: string) => {} },
+  replace: { current: (_next: FakeEntry['content']) => {} },
+  back: { current: () => {} },
+  canGoBack: { current: (): boolean => false },
+  open: {
+    current: (_next: { id: string; params?: Record<string, unknown> }) => {},
+  },
   loads: new Map<string, (name: string) => void>(),
   mounts: [] as string[],
   pass: (props: ParentProps) => props.children,
 }));
 
 vi.mock('@app/components/view-shell', () => ({
+  useViewShell: () => ({
+    breakpoints: { narrow: () => false },
+    aside: { isOverlay: () => false },
+  }),
   ViewShell: { Root: state.pass, Aside: state.pass, Main: state.pass },
 }));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({
   startPendingSession: () => 'pending',
 }));
 vi.mock('@app/features/settings/AgentSettings', () => ({
-  AgentSettings: () => null,
+  AgentSettings: (props: { createKind?: string }) => (
+    <p>Agent creation: {props.createKind ?? 'none'}</p>
+  ),
 }));
 vi.mock('@app/features/settings/IntegrationsPage', () => ({
   IntegrationsPage: () => null,
@@ -69,7 +105,8 @@ vi.mock('@components/app/previewTarget', () => ({
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({
-    openWithSplit: (next: { id: string }) => {
+    openWithSplit: (next: { id: string; params?: Record<string, unknown> }) => {
+      state.open.current(next);
       state.navigate.current(next.id);
       return { status: 'replaced' };
     },
@@ -91,6 +128,10 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
         return () => state.captors.delete(key);
       },
       setDisplayName: () => {},
+      replace: ({ next }: { next: FakeEntry['content'] }) =>
+        state.replace.current(next),
+      goBack: () => state.back.current(),
+      canGoBack: () => state.canGoBack.current(),
     },
   }),
 }));
@@ -112,7 +153,9 @@ vi.mock(
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { alert: vi.fn() } }));
 vi.mock('@core/constant/featureFlags', () => ({ enableAgentUpdates: {} }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
-vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => state.touch,
+}));
 vi.mock('@entity', () => ({ ListEntityMetadataQueryProvider: state.pass }));
 vi.mock('@notifications/mark-row-seen', () => ({
   markRowNotificationsSeenOnOpen: () => {},
@@ -122,9 +165,6 @@ vi.mock('@queries/agent-session/warm', () => ({
 }));
 vi.mock('@queries/soup/items', () => ({
   useSoupAstItemsQuery: () => ({ isPending: true }),
-}));
-vi.mock('../../routines/routine-navigation', () => ({
-  routineContent: () => ({}),
 }));
 vi.mock('../../routines/routines-page', () => ({ RoutinesPage: () => null }));
 vi.mock('../agents-view.css', () => ({}));
@@ -164,7 +204,51 @@ vi.mock('../components/AgentsSidebar', () => ({
     </For>
   ),
 }));
-vi.mock('../components/Topbar', () => ({ Topbar: () => null }));
+vi.mock('./agents-sidebar/agents-sidebar', async () => ({
+  DesktopAgentsSidebar: (await import('../components/AgentsSidebar'))
+    .AgentsSidebar,
+}));
+vi.mock('../phone-list', () => ({
+  PhoneAgentsList: (props: {
+    archived: boolean;
+    onCreateAgent: () => void;
+    onOpenPage: (page: 'archived' | 'agents' | 'routines') => void;
+    onBack: () => void;
+    onOpenConversation: (conversation: {
+      id: string;
+      type: 'agent_session';
+    }) => void;
+  }) => (
+    <div>
+      <span>{props.archived ? 'Archived page' : 'Agents list'}</span>
+      <button onClick={() => props.onOpenPage('archived')}>Archived</button>
+      <button onClick={() => props.onOpenPage('agents')}>Roster</button>
+      <button onClick={() => props.onOpenPage('routines')}>Routines</button>
+      <button
+        onClick={() =>
+          props.onOpenConversation({ id: 'session', type: 'agent_session' })
+        }
+      >
+        Session
+      </button>
+      <button onClick={props.onBack}>List back</button>
+      <button onClick={props.onCreateAgent}>New agent</button>
+    </div>
+  ),
+}));
+vi.mock('./archived-conversations/archived-conversations', () => ({
+  ArchivedConversations: () => null,
+}));
+vi.mock(
+  '@app/features/block-agent/queries/change-session-archive-state',
+  () => ({
+    changeSessionArchiveState: vi.fn(),
+  })
+);
+vi.mock('../components/Topbar', () => ({
+  Topbar: (props: { onBack?: () => void }) =>
+    props.onBack ? <button onClick={props.onBack}>Page back</button> : null,
+}));
 vi.mock('../context/data-mode', () => ({
   DataModeProvider: state.pass,
   dataModeFor: () => 'chat',
@@ -179,6 +263,8 @@ vi.mock('../primitives/conversation-list-view', () => ({
   createConversationListView: () => ({
     filters: () => [],
     grouping: () => 'none',
+    sort: () => 'updated',
+    setSort: () => {},
     setSelected: () => {},
     clear: () => {},
     setGrouping: () => {},
@@ -267,9 +353,15 @@ function row(name: string) {
 }
 
 beforeEach(() => {
+  state.touch = false;
+  state.width = () => 1000;
   state.contentId.current = 'agents';
   state.entry.current = undefined;
   state.captors.clear();
+  state.replace.current = () => {};
+  state.back.current = () => {};
+  state.canGoBack.current = () => false;
+  state.open.current = () => {};
   setComposerDraft('');
   state.loads.clear();
   state.mounts.length = 0;
@@ -311,6 +403,27 @@ it('keeps the open conversation mounted when it is selected again', async () => 
   expect(screen.getByTestId('pane').textContent).toBe('Session a');
   expect(state.mounts).toEqual(['a']);
 });
+
+it.each(['restored', 'selected'])(
+  'retains the %s touch conversation when its pane folds',
+  async (selection) => {
+    state.touch = true;
+    const [width, setWidth] = createSignal(1000);
+    state.width = width;
+    await openLoadedConversation();
+    if (selection === 'selected') {
+      fireEvent.click(row('b'));
+      state.loads.get('b')?.('Session b');
+      await screen.findByText('Session b');
+    }
+    const pane = screen.getByTestId('pane');
+    const mounted = [...state.mounts];
+    setWidth(600);
+    expect(pane.closest('main')?.classList.contains('hidden')).toBe(false);
+    expect(screen.getByTestId('pane')).toBe(pane);
+    expect(state.mounts).toEqual(mounted);
+  }
+);
 
 it('does not restore a sent Ask Macro draft when Back mounts the composer again', () => {
   const asked = composerEntry('request-1', '@message ');
@@ -409,4 +522,182 @@ it('asks the composer for the agent a Try it opened it with, once per request', 
 
   setCurrent(tryIt('request-2'));
   expect(composer().dataset.requestedAgent).toBe('computer-agent@request-2');
+});
+
+it.each([
+  ['Archived', 'Archived page'],
+  ['Roster', 'Agents'],
+  ['Routines', 'Routines'],
+] as const)(
+  'returns from %s to the previous Agents list entry',
+  (label, page) => {
+    state.touch = true;
+    state.width = () => 390;
+    const first: FakeEntry = { content: { type: 'component', id: 'agents' } };
+    const [entry, setEntry] = createSignal(first);
+    state.entry.current = entry;
+    const history = [first];
+    state.replace.current = (next) => {
+      const item = { content: next };
+      history.push(item);
+      setEntry(item);
+    };
+    state.open.current = (next) => {
+      const item = { content: { type: 'component' as const, ...next } };
+      history.push(item);
+      setEntry(item);
+    };
+    state.canGoBack.current = () => history.length > 1;
+    state.back.current = () => {
+      history.pop();
+      setEntry(history.at(-1)!);
+    };
+    render(() => <AgentsView />);
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    if (label === 'Archived') expect(screen.getByText(page)).toBeTruthy();
+    else
+      expect(entry().content.id).toBe(
+        label === 'Routines' ? 'routines' : 'agents'
+      );
+    expect(history).toHaveLength(2);
+    if (label === 'Archived')
+      fireEvent.click(screen.getByRole('button', { name: 'List back' }));
+    else state.back.current();
+    expect(screen.getByText('Agents list')).toBeTruthy();
+    expect(history).toHaveLength(1);
+  }
+);
+
+it('returns from an agent page to Archived without pushing a restoration entry', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const [entry, setEntry] = createSignal<FakeEntry>({
+    content: { type: 'component', id: 'agents' },
+  });
+  state.entry.current = entry;
+  const history: FakeEntry[] = [entry()];
+  state.replace.current = (next) => {
+    const item = { content: next };
+    history.push(item);
+    setEntry(item);
+  };
+  state.back.current = () => {
+    history.pop();
+    setEntry(history.at(-1)!);
+  };
+  state.canGoBack.current = () => history.length > 1;
+  render(() => <AgentsView />);
+  fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Roster' }));
+  state.back.current();
+  expect(screen.getByText('Archived page')).toBeTruthy();
+  expect(history).toHaveLength(2);
+});
+
+it('opens a session from Archived with its previous page still in the stack', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const [entry, setEntry] = createSignal<FakeEntry>({
+    content: { type: 'component', id: 'agents' },
+  });
+  state.entry.current = entry;
+  const history: FakeEntry[] = [entry()];
+  state.replace.current = (next) => {
+    const item = { content: next };
+    history.push(item);
+    setEntry(item);
+  };
+  state.open.current = (next) => {
+    const item = { content: { type: 'component' as const, ...next } };
+    history.push(item);
+  };
+  render(() => <AgentsView />);
+  fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Session' }));
+  expect(history.map((item) => item.content.id)).toEqual([
+    'agents',
+    'agents',
+    'session',
+  ]);
+  // The phone stack returns to the still-mounted Archived pane.
+  expect(screen.getByText('Archived page')).toBeTruthy();
+});
+
+it('restores a phone composer request without replacing its history entry', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const asked = composerEntry('phone-request', '@message ');
+  state.entry.current = () => asked;
+  const replace = vi.fn();
+  state.replace.current = replace;
+  render(() => <AgentsView />);
+  expect(composer().value).toBe('@message ');
+  expect(screen.queryByText('Agents list')).toBeNull();
+  expect(replace).not.toHaveBeenCalled();
+});
+
+it('replaces a direct Archived entry with the list when no earlier page exists', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const [entry, setEntry] = createSignal<FakeEntry>({
+    content: {
+      type: 'component',
+      id: 'agents',
+      params: { agentPage: 'archived' },
+    },
+  });
+  state.entry.current = entry;
+  const replace = vi.fn((next: FakeEntry['content']) =>
+    setEntry({ content: next })
+  );
+  state.replace.current = replace;
+  render(() => <AgentsView />);
+  expect(screen.getByText('Archived page')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'List back' }));
+  expect(screen.getByText('Agents list')).toBeTruthy();
+  expect(replace).toHaveBeenCalledWith({ type: 'component', id: 'agents' });
+});
+
+it('retains the phone New agent creation intent through the history entry', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const [entry, setEntry] = createSignal<FakeEntry>({
+    content: { type: 'component', id: 'agents' },
+  });
+  state.entry.current = entry;
+  state.replace.current = (next) => setEntry({ content: next });
+  render(() => <AgentsView />);
+  fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
+  expect(entry().content.params?.createAgentKind).toBe('agent');
+  expect(screen.getByText('Agent creation: agent')).toBeTruthy();
+});
+
+it('lets an active editor intercept the phone page Back action', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const [entry] = createSignal<FakeEntry>({
+    content: {
+      type: 'component',
+      id: 'agents',
+      params: { agentPage: 'agents' },
+    },
+  });
+  state.entry.current = entry;
+  state.canGoBack.current = () => true;
+  const goBack = vi.fn();
+  state.back.current = goBack;
+  let dispose = () => {};
+  const intercept = vi.fn(() => true);
+  createRoot((cleanup) => {
+    dispose = cleanup;
+    useSplitBackInterceptor(intercept);
+  });
+  try {
+    render(() => <AgentsView />);
+    fireEvent.click(screen.getByRole('button', { name: 'Page back' }));
+    expect(intercept).toHaveBeenCalledOnce();
+    expect(goBack).not.toHaveBeenCalled();
+  } finally {
+    dispose();
+  }
 });

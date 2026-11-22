@@ -2,6 +2,7 @@
 
 mod calendar;
 mod control;
+mod delta_query;
 mod drafts;
 mod faults;
 mod mail;
@@ -10,7 +11,8 @@ mod subscriptions;
 mod sync;
 
 use email_api_client::OutlookApiClientRepository;
-use email_api_client::domain::models::{AccessToken, ProviderId};
+use email_api_client::domain::models::{AccessToken, MailFolder, MailFolderCatalog, ProviderId};
+use email_api_client::domain::ports::MailboxContentReader;
 use macro_service_urls::MicrosoftGraphUrl;
 
 use crate::{OutlookEmulator, Seed};
@@ -30,6 +32,14 @@ async fn start(seed: &str) -> (OutlookEmulator, OutlookApiClientRepository) {
 
 fn token(emulator: &OutlookEmulator, email: &str) -> AccessToken {
     AccessToken::new(emulator.access_token(email).unwrap())
+}
+
+/// The mailbox's folders, read through the real client.
+async fn folders(api: &OutlookApiClientRepository, token: &AccessToken) -> Vec<MailFolder> {
+    match api.folders(token).await.unwrap() {
+        MailFolderCatalog::Folders(folders) => folders,
+        MailFolderCatalog::NoMailbox { .. } => panic!("Graph answered 404 to the Inbox"),
+    }
 }
 
 fn id(value: &str) -> ProviderId {

@@ -15,12 +15,17 @@ pub enum SessionScope {
     /// A background run whose suggestion sends and posts nothing: it may change
     /// the person's own items, but nothing that reaches anyone else.
     NoSend,
+    /// A routine step's dry run (a rewrite's check before it is saved): it
+    /// reads and changes nothing, so code written to get past the dry run
+    /// inside its process still can't write.
+    DryRun,
 }
 
 /// Requests that reach someone else: sending or scheduling mail, invites
 /// and calendar changes guests hear of, posts, reactions, mentions, shares,
 /// channel and call membership, team and booking settings, routines (which
-/// act later), connected apps and their tools, and webhooks. Also the
+/// act later), connected apps and their tools, webhooks, pings, and fetching
+/// or searching the web, whose request carries what it's given out. Also the
 /// requests that start work with the person's full access: a new or warmed
 /// agent session, a session's control, queued prompts and app connections
 /// (which resume it), its tool approvals and review decisions, running or
@@ -46,6 +51,12 @@ const SENDS: &[(&str, &str)] = &[
     ("PUT", "/join-requests/{id}"),
     ("POST", "/calendar-events/{id}/join-requests"),
     ("POST", "/scheduling/bookings/{id}/change"),
+    ("POST", "/scheduling/bookings/{id}/approve"),
+    ("POST", "/scheduling/bookings/{id}/attendance"),
+    ("POST", "/scheduling/bookings/{id}/cancel"),
+    ("POST", "/scheduling/public/{id}/{id}/book"),
+    ("POST", "/scheduling/public/bookings/{id}/cancel"),
+    ("POST", "/scheduling/public/bookings/{id}/reschedule"),
     ("POST", "/scheduling/links"),
     ("PUT", "/team-sharing"),
     ("POST", "/messages/{type}/{id}"),
@@ -69,6 +80,7 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/external-chats/{id}/sends"),
     ("POST", "/external-chats/{id}/delivery"),
     ("POST", "/external-chats/{id}/messages/attachments"),
+    ("POST", "/user_notifications/send"),
     ("POST", "/agent-sessions"),
     ("POST", "/agent-sessions/warm"),
     ("POST", "/agent-sessions/{id}/app-connections"),
@@ -147,6 +159,8 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/databases/{id}/webhooks"),
     ("POST", "/webhook/webhooks"),
     ("POST", "/webhook/webhooks/{id}/validate"),
+    ("POST", "/web/fetch"),
+    ("POST", "/web/search"),
     ("POST", "/team/invite"),
     ("POST", "/team/invite-link"),
     ("POST", "/team/domain-notice"),
@@ -178,6 +192,7 @@ const SENDS: &[(&str, &str)] = &[
     ("PUT", "/channels/{id}/profile_picture"),
     ("POST", "/databases/webhooks/{id}"),
     ("PUT", "/crm/email-privacy"),
+    ("PUT", "/crm/email-privacy/policy"),
     ("POST", "/team/auto-join-domain/toggle"),
     ("PUT", "/scheduling/links/{id}"),
     ("PUT", "/scheduling/settings"),
@@ -187,8 +202,13 @@ const SENDS: &[(&str, &str)] = &[
 
 /// Requests that run any of a service's writes behind one path, outside
 /// every scope whatever their method: GraphQL runs mutations sent by POST or
-/// over its WebSocket, which opens with a GET. The SDK sends neither.
-const ANY_WRITE: &[(&str, &str)] = &[("POST", "/soup/graphql"), ("GET", "/soup/graphql/ws")];
+/// over its WebSocket, which opens with a GET. The SDK sends neither. Paths
+/// as document storage mounts them (its `items` router); its tests hold
+/// them to the mount.
+const ANY_WRITE: &[(&str, &str)] = &[
+    ("POST", "/items/soup/graphql"),
+    ("GET", "/items/soup/graphql/ws"),
+];
 
 /// Requests a generation session may make besides reads by method: its own
 /// tools and drafting email. Paths as the SDK sends them, `{…}` one segment.
@@ -207,6 +227,8 @@ const GENERATION_WRITES: &[(&str, &str)] = &[
 /// Reads the SDK sends as POST (batch lookups, search); the harness checks
 /// this list against the SDK's operation catalog.
 pub const POST_READS: &[(&str, &str)] = &[
+    ("POST", "/crm/email-privacy/policy/validate"),
+    ("POST", "/crm/email-privacy/policy/preview"),
     ("POST", "/agent-sessions/preview"),
     ("POST", "/github_pull_requests/mergeability"),
     ("POST", "/team/invite-link/team"),
@@ -244,6 +266,7 @@ impl SessionScope {
         match self {
             Self::Generation => "generation",
             Self::NoSend => "no_send",
+            Self::DryRun => "dry_run",
         }
     }
 
@@ -252,6 +275,7 @@ impl SessionScope {
         match name {
             "generation" => Some(Self::Generation),
             "no_send" => Some(Self::NoSend),
+            "dry_run" => Some(Self::DryRun),
             _ => None,
         }
     }
@@ -265,9 +289,10 @@ impl SessionScope {
     /// Whether a request with `method` to `path` is inside the scope. Reads
     /// by method are, unless the path runs writes too ([`ANY_WRITE`]). A
     /// generation session makes other requests only on its list or
-    /// [`POST_READS`]; a run that sends nothing makes any but the ones that
-    /// reach someone else. `path` may carry one service prefix before the
-    /// SDK's path. Credentials are not decided here: a scoped
+    /// [`POST_READS`], and a dry run only on [`POST_READS`]; a run that sends
+    /// nothing makes any but the ones that reach someone else. `path` may
+    /// carry one service prefix before the SDK's path. Credentials are not
+    /// decided here: a scoped
     /// credential is a `ScopedMacroApiJwt`, which `AccountHolderOrInternal`
     /// refuses on every route that issues one.
     pub fn allows(self, method: &str, path: &str) -> bool {
@@ -282,6 +307,7 @@ impl SessionScope {
                 listed(GENERATION_WRITES, method, path) || listed(POST_READS, method, path)
             }
             Self::NoSend => !listed(SENDS, method, path),
+            Self::DryRun => listed(POST_READS, method, path),
         }
     }
 
@@ -291,7 +317,7 @@ impl SessionScope {
     /// [`crate::context::refuse_sharing`], since a path can't tell.
     pub fn allows_sharing(self) -> bool {
         match self {
-            Self::Generation | Self::NoSend => false,
+            Self::Generation | Self::NoSend | Self::DryRun => false,
         }
     }
 }
@@ -364,21 +390,41 @@ const SERVICE_PREFIXES: &[&str] = &[
 ];
 
 /// Whether `path` is `template`'s SDK path, alone or under one service
-/// prefix, a `{…}` segment standing for any one segment.
+/// prefix, then alone or under one API version (`/v1`: document storage,
+/// cognition and notification also serve every route under `/{version}`).
+/// A `{…}` segment stands for any one segment. Segments are compared
+/// percent-decoded, as routers decode the parameters they match, so
+/// `/%76%31` is a version too.
 pub fn matches(path: &str, template: &str) -> bool {
-    let path = path.trim_end_matches('/');
-    let exact = |path: &str| {
-        let path: Vec<&str> = path.split('/').collect();
-        let template: Vec<&str> = template.trim_end_matches('/').split('/').collect();
+    let segments: Vec<std::borrow::Cow<'_, str>> = path
+        .trim_end_matches('/')
+        .split('/')
+        .map(|segment| urlencoding::decode(segment).unwrap_or(segment.into()))
+        .collect();
+    let template: Vec<&str> = template.trim_end_matches('/').split('/').collect();
+    let (Some((root, path)), Some((template_root, template))) =
+        (segments.split_first(), template.split_first())
+    else {
+        return false;
+    };
+    if !root.is_empty() || !template_root.is_empty() {
+        return false;
+    }
+    let exact = |path: &[std::borrow::Cow<'_, str>]| {
         path.len() == template.len()
-            && path.iter().zip(&template).all(|(segment, wanted)| {
+            && path.iter().zip(template).all(|(segment, wanted)| {
                 (wanted.starts_with('{') && wanted.ends_with('}') && !segment.is_empty())
                     || segment == wanted
             })
     };
-    exact(path)
-        || SERVICE_PREFIXES.iter().any(|prefix| {
-            path.strip_prefix(prefix)
-                .is_some_and(|rest| rest.starts_with('/') && exact(rest))
+    let unversioned = |path: &[std::borrow::Cow<'_, str>]| {
+        exact(path)
+            || path.split_first().is_some_and(|(version, rest)| {
+                lazy_regex::regex_is_match!(r"^v[0-9]+$", version) && exact(rest)
+            })
+    };
+    unversioned(path)
+        || path.split_first().is_some_and(|(prefix, rest)| {
+            SERVICE_PREFIXES.contains(&format!("/{prefix}").as_str()) && unversioned(rest)
         })
 }

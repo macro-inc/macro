@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ep.entity_id\n            FROM entity_properties ep\n            WHERE ep.entity_id > $1\n            ORDER BY ep.entity_id\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "01c1e22e61db60d9e72c9809024a3ca97cd7c5663c40e3316f209f33b991a783"
+}
