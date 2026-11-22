@@ -70,9 +70,27 @@ fn each_bucket_owns_one_rowid_range_and_a_moved_row_leaves_its_old_range() {
         vec![(2 * ROW, 2, "a".into()), (3 * ROW, 3, "b".into())]
     );
 
-    // An update in the same bucket keeps its rowid.
-    write(&storage, &[document("a", "task", 5)]);
+    // An update in the same bucket keeps its rowid and replaces every field the
+    // reads use, through the browse index too.
+    let mut renamed = document("a", "task", 5);
+    renamed.1.search_text = "renamed".into();
+    write(&storage, &[renamed]);
     assert_eq!(rows(&storage)[0], (2 * ROW, 2, "a".into()));
+    let stored = driver::query(
+        &storage.connection(),
+        "SELECT search_text, timestamp_ms, source_hash FROM search_rows INDEXED BY search_rows_browse_idx WHERE slot = 2 AND timestamp_ms = 5",
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(stored.len(), 1);
+    assert_eq!(
+        (
+            required_text(&stored[0], 0).unwrap(),
+            required_i64(&stored[0], 1).unwrap(),
+            required_text(&stored[0], 2).unwrap(),
+        ),
+        ("renamed".to_owned(), 5, "a-5".to_owned())
+    );
 
     // A move takes the next rowid of the new range and drops the old row.
     write(&storage, &[document("a", "document", 6)]);
