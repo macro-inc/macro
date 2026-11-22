@@ -147,7 +147,7 @@ let
       # One failed call in a quiet hour reads as 100%.
       floor = "$unavailable + $rejected >= 2";
       expression = "IF(calls > 0, 100 * (unavailable + rejected) / calls, 0)";
-      description = "{{ humanize $values.B.Value }}% of classifier calls in the last hour found it unavailable or were rejected, at least 2 of them. The go/stop number is under 1%. Unavailable threads are retried by the next sweep.";
+      description = "{{ humanize $values.B.Value }}% of classifier calls in the last hour found it unavailable or were rejected. The go/stop number is under 1%; the rules page only from 2 failures in the hour. Unavailable threads are retried by the next sweep.";
     }
     {
       panelId = 3;
@@ -174,7 +174,7 @@ let
       # One failed ask in a quiet hour reads as 100%.
       floor = "$failures >= 2";
       expression = "IF(calls > 0, 100 * failures / calls, 0)";
-      description = "{{ humanize $values.B.Value }}% of due date asks to the agent harness failed or timed out in the last hour, at least 2 of them. The go/stop number is under 5%. A thread whose ask failed is stored without a date.";
+      description = "{{ humanize $values.B.Value }}% of due date asks to the agent harness failed or timed out in the last hour. The go/stop number is under 5%; the rules page only from 2 failures in the hour. A thread whose ask failed is stored without a date.";
     }
     {
       panelId = 4;
