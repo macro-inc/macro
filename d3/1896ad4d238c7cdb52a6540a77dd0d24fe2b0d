@@ -1,0 +1,19 @@
+docs/agent-guide/settings.md
+  s_fd0d322c9b4e9f::t_3c2541f3770684 1264,1267-1269
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d31896ad4d238c7cdb52a6540a77dd0d24fe2b0d",
+  "prompts": {},
+  "sessions": {
+    "s_fd0d322c9b4e9f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "835aca54-afd4-44ad-a861-de4bd1504df1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
