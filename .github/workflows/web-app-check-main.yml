@@ -115,6 +115,8 @@ jobs:
               - 'apps/web/src/components/app/GlobalAppState.tsx'
               - 'apps/web/src/lib/core/context/user.ts'
               - 'apps/web/src/lib/core/user/displayName.ts'
+              - 'apps/web/src/components/app/split-layout/**'
+              - 'apps/web/src/components/ui/components/Dialog.tsx'
       - id: codegen
         name: Detect schema changes
         run: |
