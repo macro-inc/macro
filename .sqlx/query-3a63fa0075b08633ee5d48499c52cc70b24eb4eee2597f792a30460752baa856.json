@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ended.id AS \"id!\"\n            FROM (\n                SELECT cr.id FROM call_records cr WHERE cr.id = $2 AND cr.room_name = $1\n                UNION ALL\n                SELECT s.call_record_id FROM call_record_sessions s WHERE s.room_name = $1\n            ) ended\n            WHERE NOT EXISTS (SELECT 1 FROM calls WHERE room_name = $1)\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3a63fa0075b08633ee5d48499c52cc70b24eb4eee2597f792a30460752baa856"
+}

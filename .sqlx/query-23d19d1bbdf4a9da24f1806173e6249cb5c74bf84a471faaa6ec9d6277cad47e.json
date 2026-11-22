@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE call_records\n                       SET ended_at = GREATEST(ended_at, $2), duration_ms = duration_ms + $3\n                     WHERE id = $1\n                    RETURNING ended_at, duration_ms,\n                              (SELECT COUNT(*) FROM call_record_sessions WHERE call_record_id = $1) AS \"later_sessions!\"\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "duration_ms",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "later_sessions!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "23d19d1bbdf4a9da24f1806173e6249cb5c74bf84a471faaa6ec9d6277cad47e"
+}

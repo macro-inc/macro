@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT cr.id, cr.created_by, cr.share_permission_id, cr.ended_at,\n                  sp.team_share_access_level IS NOT NULL AS \"shared_with_team!\"\n           FROM call_entities ce\n           JOIN call_records cr ON cr.id = ce.id\n           JOIN \"SharePermission\" sp ON sp.id = cr.share_permission_id\n           WHERE ce.meeting_id = $1 AND ce.created_via = 'native'\n           ORDER BY cr.ended_at DESC\n           LIMIT 1\n           FOR UPDATE OF cr",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "share_permission_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "shared_with_team!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "376e187c87fc7244d1c4a00d88eec3379001e178a2d6ddebd1007509a38ee18b"
+}
