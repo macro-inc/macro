@@ -21,6 +21,12 @@ export function shouldShowScrollToBottomButton(
 type ScrollToBottomOverlayProps = {
   scrollState: Accessor<ThreadListScrollState | undefined>;
   onScrollToBottom: (behavior?: ScrollBehavior) => void;
+  /**
+   * The touch button's distance from the bottom of its container. Defaults
+   * to clearing the floating bottom chrome, for a list that scrolls behind
+   * it; a list that ends above that chrome passes its own gap.
+   */
+  touchBottom?: number;
 };
 
 export function ScrollToBottomOverlay(props: ScrollToBottomOverlayProps) {
@@ -49,7 +55,9 @@ export function ScrollToBottomOverlay(props: ScrollToBottomOverlayProps) {
           <div
             data-scroll-to-bottom
             class="absolute z-10 right-[calc(var(--safe-right,0px)+var(--mobile-chrome-gutter))]"
-            style={{ bottom: `${FloatRegions.hostHeight() + 12}px` }}
+            style={{
+              bottom: `${props.touchBottom ?? FloatRegions.hostHeight() + 12}px`,
+            }}
           >
             <MobileDockIsland>
               <MobileDockButton

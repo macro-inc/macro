@@ -27,6 +27,9 @@ import { WorkingLine } from '../ui/WorkingLine';
 import { Message } from './AgentMessage';
 import { ReplyToSelection } from './ReplyToSelection';
 
+/** Space between the touch jump-to-latest button and the composer below it. */
+const JUMP_BUTTON_GAP_PX = 12;
+
 export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
   const {
     messages,
@@ -145,14 +148,24 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
   // ThreadList preserves the end pin across keyboard/viewport and inset resizes.
   const insets = () =>
     isTouchDevice()
-      ? {
-          start: (splitPanel?.contentOffsetTop() ?? 0) + 16,
-          end: FloatRegions.hostHeight(),
-        }
+      ? { start: (splitPanel?.contentOffsetTop() ?? 0) + 16, end: 0 }
       : { start: 16, end: 0 };
 
+  // On touch the composer floats over the bottom of the pane, with a clear
+  // strip under it where the dock would be. The transcript ends where that
+  // floating chrome begins, so no text scrolls behind the composer or shows
+  // in the strip below it.
+  const bottomClearance = () =>
+    isTouchDevice()
+      ? { 'margin-bottom': `${FloatRegions.hostHeight()}px` }
+      : undefined;
+
   return (
-    <div class="relative flex-1 min-h-0" ref={setTranscriptEl}>
+    <div
+      class="relative flex-1 min-h-0"
+      style={bottomClearance()}
+      ref={setTranscriptEl}
+    >
       <ThreadList
         keys={keys}
         shortListAlign="start"
@@ -221,6 +234,7 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
       </ThreadList>
       <ScrollToBottomOverlay
         scrollState={scrollState}
+        touchBottom={JUMP_BUTTON_GAP_PX}
         onScrollToBottom={(behavior) => {
           setHighlightedId(undefined);
           navigation()?.scrollToLatest(behavior);

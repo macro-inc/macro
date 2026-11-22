@@ -424,7 +424,13 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     expect(row.style.transform).toBe(
       'translateY(calc(56px - var(--channel-scroll-adjustment, 0px)))'
     );
-    expect(view.scroller.scrollHeight).toBe(56 + 500 + 80);
+    // The transcript ends where the floating composer chrome begins, so its
+    // height clears the transcript instead of padding the end of the list.
+    expect(view.scroller.scrollHeight).toBe(56 + 500);
+    expect(
+      view.container.querySelector<HTMLElement>(':scope > div')!.style
+        .marginBottom
+    ).toBe('80px');
   });
 
   it('keeps a mounted row and its selection when its message object is replaced', async () => {
