@@ -28,8 +28,16 @@ key issuance, and account merge/link flows.
   eligibility and subscription checkout, and Macro computer purchase and
   billing (the `hosted_runtimes` team and internal routers, mounted with a
   `ComputerService` built here), and agent teammates (`crates/team_agents`
-  at `/team_agents`, plus its internal enrollment route; computer-facing
-  addresses come from `outbound/agent_addresses.rs`).
+  at `/team_agents`, plus its internal routes: enrollment, install
+  delivery, and `POST /internal/teammate_hosts/{harness_id}/offboard`, which
+  document_storage_service calls after an unpair; computer-facing addresses
+  come from `outbound/agent_addresses.rs`). Agents on owners' own machines are
+  parked through team_agents' `InstallOffboarding`, built in `server.rs` from
+  ports only and wired into the team service twice: team deletion
+  (`TeamOwnedEntityCleanupAdapter`) and `MemberAccessLost`
+  (`TeammateMemberAccessLost`, after a removal or demotion), both in
+  `outbound/team_owned_entity_cleanup.rs`; the 60 s
+  `run_teammate_host_offboarding` sweep backs them.
 - Not here: authorization/permission decisions on other entities →
   `crates/macro_authorization`; metered AI credits → `crates/ai_billing`;
   team lifecycle and seats → `crates/teams`; a person's interface language

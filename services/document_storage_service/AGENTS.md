@@ -56,6 +56,12 @@ threads, pins, recents, notifications, folders, activity.
 - `GET /threads/{thread_id}/channel-shares` lists explicit grants for an
   authenticated thread owner. The read checks current membership in each
   returned channel and sends the channel metadata needed by the roster.
+- `src/outbound/teammate_host_offboarding.rs`: the harnesses service's
+  `HarnessRetired` listener. After an unpair (owner or daemon) it calls
+  authentication_service's `POST /internal/teammate_hosts/{harness_id}/offboard`
+  (fleet internal key, trace headers, 10 s timeout) so that machine's agent
+  teammates are parked at once; a failure is logged and auth's 60 s sweep
+  catches up.
 - `src/outbound/docx_export.rs`: primary-database parts and immutable DOCX export
   objects keyed by part paths/hashes. The export route maps the documents domain's
   pending result to 409 with `Retry-After`; never reuse document-id-only archives.

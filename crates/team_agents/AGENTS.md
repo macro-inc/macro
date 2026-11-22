@@ -132,15 +132,19 @@ push), then `finish_checkpoint` (internal `.../{install}/checkpointed`, or at
 once when the machine is offline, or after `CHECKPOINT_TIMEOUT`) makes a new
 install id and generation on the target, or revokes and removes the agent
 with its install last. A finished move sets `revoke_pending`: nothing is
-delivered until the old machine's keys and repository token are revoked, so a
-late revoke never voids the new machine's key. Only the agent's inviter or
+delivered until the old machine's keys and repository token are revoked. A
+revoke runs under `begin_revoke`, which locks the row and rechecks
+`revoke_pending` (`SELECT … AND revoke_pending FOR UPDATE`) and clears it in
+the same transaction (`HeldRevoke::done`), so a sweep holding a stale copy of
+the row skips it instead of voiding the key the new machine was minted since. Only the agent's inviter or
 the current machine's owner may move it. A machine whose owner is no longer
 an owner or admin of the agent's team, or that was unpaired, gets nothing more
 (`issue_install` checks `host_entitled`), and its agents are parked: at once
 by `InstallOffboarding::offboard_unentitled` when the team service reports a
 removal or demotion (`teams::domain::member_access`), and by the internal
-`POST /internal/teammate_hosts/offboard` that document_storage_service calls
-after an unpair (`harnesses::domain::retired`); authentication_service's 60 s
+`POST /internal/teammate_hosts/{harness_id}/offboard` (`offboard_host`, only
+that machine's installs) that document_storage_service calls after an unpair
+(`harnesses::domain::retired`); authentication_service's 60 s
 sweep (`offboard_unentitled_hosts`) backs both. Parking: `park` waits for a
 delivery in flight and sets `parked_at` and `revoke_pending`, then the
 credentials are revoked; `installs_on` leaves a parked install out, so its
