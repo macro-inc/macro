@@ -221,6 +221,21 @@ pub type SharedSoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR
         AcR,
     >;
 
+/// The Soup service a schema's query root runs on. Request data the
+/// resolvers look up by that service's type, such as
+/// [`graphql_soup::PrimaryChannelSoup`], is typed through it so it cannot
+/// drift from the schema: `PrimaryChannelSoup<<Schema as SoupSchemaService>::Service>`.
+pub trait SoupSchemaService {
+    /// The query root's Soup service: `Arc<S>` in a [`SharedSoupSchema`].
+    type Service;
+}
+
+impl<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR, M, Sub> SoupSchemaService
+    for Schema<SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>, M, Sub>
+{
+    type Service = S;
+}
+
 /// GraphQL Soup schema type backed by the no-op services, used only for
 /// SDL export or introspection.
 pub type SchemaOnlySoupSchema = SoupSchema<
@@ -984,6 +999,12 @@ where
     #[graphql(flatten)]
     async fn channel_messages(&self) -> graphql_channel::GraphqlChannelQuery {
         graphql_channel::GraphqlChannelQuery::new(self.user_id.clone())
+    }
+
+    /// Authenticated user channel fields supplied by `graphql_channel`.
+    #[graphql(flatten)]
+    async fn channels(&self) -> graphql_channel::GraphqlChannelUserQuery {
+        graphql_channel::GraphqlChannelUserQuery::new(self.user_id.clone())
     }
 
     /// Authenticated user calendar fields supplied by `graphql_calendar`.
