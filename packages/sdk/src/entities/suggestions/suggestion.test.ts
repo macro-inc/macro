@@ -252,3 +252,29 @@ describe('Suggestion facts', () => {
     expect(requests).toEqual([{ path: { id: 'suggestion' } }]);
   });
 });
+
+describe('SuggestionNamespace reportRun', () => {
+  test('reportRun sends the line and answers what to fix', async () => {
+    const requests: unknown[] = [];
+    const client = {
+      scheduledAction: {
+        reportSuggestionRun: async (request: unknown) => {
+          requests.push(request);
+          return {
+            data: { ok: false, problems: ['`report` must be one plain line'] },
+          };
+        },
+      },
+    } as unknown as MacroClient;
+
+    const outcome = await new SuggestionNamespace(client).reportRun(
+      '12 seats added · Nothing was sent',
+    );
+
+    expect(requests).toEqual([
+      { body: { report: '12 seats added · Nothing was sent' } },
+    ]);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.problems).toEqual(['`report` must be one plain line']);
+  });
+});

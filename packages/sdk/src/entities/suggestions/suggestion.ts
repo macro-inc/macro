@@ -181,9 +181,17 @@ export class Suggestion {
    * (open it to see the result), when it started, its `state` as last
    * recorded (`starting`, `running`, `waiting`, `stopping` or `cancelling`
    * while under way; `finished`, `failed` or `cancelled` once settled), and
-   * when it entered that state.
+   * when it entered that state, and its `report`: the line it wrote saying
+   * what it did and what it sent, once it has.
    */
   get run():
+    | {
+        session: AgentSession;
+        startedAt: string;
+        state: RunStateName;
+        stateChangedAt: string;
+        report: string | undefined;
+      }
     | {
         session: AgentSession;
         startedAt: string;
@@ -198,6 +206,7 @@ export class Suggestion {
           startedAt: run.startedAt,
           state: run.state,
           stateChangedAt: run.stateChangedAt,
+          report: run.report ?? undefined,
         }
       : undefined;
   }

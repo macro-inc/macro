@@ -39,6 +39,7 @@ import type {
   RoutineCheck,
   RoutineSuggestions,
   RoutineTemplate,
+  RunReport,
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
@@ -2483,6 +2484,85 @@ export const reviewSuggestions = async (
     status: res.status,
     headers: res.headers,
   } as reviewSuggestionsResponse;
+};
+
+/**
+ * @summary A suggestion's background run says, in one line for the person, what it
+did and what it sent.
+ */
+export type reportSuggestionRunResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type reportSuggestionRunResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type reportSuggestionRunResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type reportSuggestionRunResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type reportSuggestionRunResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type reportSuggestionRunResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type reportSuggestionRunResponseSuccess =
+  reportSuggestionRunResponse200 & {
+    headers: Headers;
+  };
+export type reportSuggestionRunResponseError = (
+  | reportSuggestionRunResponse400
+  | reportSuggestionRunResponse401
+  | reportSuggestionRunResponse403
+  | reportSuggestionRunResponse404
+  | reportSuggestionRunResponse500
+) & {
+  headers: Headers;
+};
+
+export type reportSuggestionRunResponse =
+  | reportSuggestionRunResponseSuccess
+  | reportSuggestionRunResponseError;
+
+export const getReportSuggestionRunUrl = () => {
+  return `/suggestions/runs/report`;
+};
+
+export const reportSuggestionRun = async (
+  runReport: RunReport,
+  options?: RequestInit
+): Promise<reportSuggestionRunResponse> => {
+  const res = await fetch(getReportSuggestionRunUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(runReport),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportSuggestionRunResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as reportSuggestionRunResponse;
 };
 
 /**

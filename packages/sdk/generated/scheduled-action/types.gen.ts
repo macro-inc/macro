@@ -1575,6 +1575,19 @@ export type RunInfo = {
 export type RunMode = 'composer' | 'background';
 
 /**
+ * What a background run did, in one line for the person, written by the
+ * run before its last message.
+ */
+export type RunReport = {
+    /**
+     * What it did and what it sent, as the card shows it, such as "12 seats
+     * added · Nothing was sent". One plain line; it names no email address,
+     * phone number or street address.
+     */
+    report: string;
+};
+
+/**
  * What started a run, for its page.
  */
 export type RunStart = {
@@ -2069,6 +2082,11 @@ export type SuggestionReview = {
  * person's, with the full toolset, that never stops to ask.
  */
 export type SuggestionRun = {
+    /**
+     * The one line the run wrote for the person before it ended, saying
+     * what it did and what it sent; none until it writes one.
+     */
+    report?: string | null;
     /**
      * The agent session: open it to see the result.
      */
@@ -3275,6 +3293,38 @@ export type ReviewSuggestionsResponses = {
 };
 
 export type ReviewSuggestionsResponse = ReviewSuggestionsResponses[keyof ReviewSuggestionsResponses];
+
+export type ReportSuggestionRunData = {
+    body: RunReport;
+    path?: never;
+    query?: never;
+    url: '/suggestions/runs/report';
+};
+
+export type ReportSuggestionRunErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestion's background run, still under way, may report
+     */
+    403: string;
+    /**
+     * Suggestions are off for the user
+     */
+    404: string;
+    500: string;
+};
+
+export type ReportSuggestionRunError = ReportSuggestionRunErrors[keyof ReportSuggestionRunErrors];
+
+export type ReportSuggestionRunResponses = {
+    /**
+     * Whether the report was stored, and what to fix when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type ReportSuggestionRunResponse = ReportSuggestionRunResponses[keyof ReportSuggestionRunResponses];
 
 export type RecordSuggestionsSeenData = {
     body?: never;
