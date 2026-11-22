@@ -190,8 +190,9 @@ finishes it. Failed cards currently have no resume action, and degraded database
 links have no retry/reset action. Partial results point to the report rather
 than promising that another plan retries terminal links. **Open full review**
 shows the whole plan in a dialog
-(a full-height sheet on phones). On phones, **Linked from** wraps below each
-row’s controls; notices start collapsed behind their count before the tree. Tap
+(a full-height sheet on phones). On phones, plan titles wrap instead of clipping; counts and badges move below
+them, with per-row sharing controls still available. **Linked from** wraps below
+those controls; notices start collapsed behind their count before the tree. Tap
 the notice count to read every warning. Desktop starts the same notices disclosure expanded. **Import …** approves straight from the
 card, with no confirmation step. The agent ends that
 message with "Should I kick it off?"; when the owner answers yes in chat, it

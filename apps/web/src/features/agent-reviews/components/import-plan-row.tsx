@@ -267,14 +267,9 @@ export function ImportPlanRow(props: {
             .exhaustive()}
           size="xs"
         />
-        <span
-          class={cn(
-            'flex min-w-0 flex-1 flex-col',
-            linkedFrom()?.length && 'mobile:contents'
-          )}
-        >
+        <span class="flex min-w-0 flex-1 flex-col mobile:contents">
           <span
-            class="truncate text-sm mobile:min-w-0 mobile:flex-1"
+            class="truncate text-sm mobile:min-w-0 mobile:flex-1 mobile:whitespace-normal mobile:wrap-break-word"
             title={props.node.title}
           >
             {props.node.title || 'Untitled'}
@@ -288,44 +283,48 @@ export function ImportPlanRow(props: {
             </span>
           </Show>
           <Show when={props.node.decision === 'hand' && props.node.reason}>
-            <span class="truncate text-xs text-ink-muted">
+            <span class="truncate text-xs text-ink-muted mobile:order-last mobile:basis-full mobile:whitespace-normal mobile:wrap-break-word">
               {props.node.reason}
             </span>
           </Show>
         </span>
-        <Show when={props.node.kind === 'database' && props.node.rows !== null}>
-          <span class="shrink-0 text-xs text-ink-muted">
-            {props.node.rows} rows
-          </span>
-        </Show>
-        <Show when={written()}>
-          <SharingBadge
-            title={props.node.title || 'Untitled'}
-            shared={props.shared}
-            reason={props.node.sharedReason}
-            toggleable={
-              props.node.shareable && props.choosing && !props.disabled
-            }
-            muted={props.excluded}
-            onSharedChange={(shared) => props.onSharedChange(shared)}
-          />
-        </Show>
-        <Show
-          when={props.showStatus}
-          fallback={
-            <DecisionBadge
-              link={
-                isWritten(props.node.decision) &&
-                Boolean(props.node.linkedFrom?.length) &&
-                props.excluded
+        <span class="contents mobile:order-1 mobile:flex mobile:basis-full mobile:flex-wrap mobile:items-center mobile:justify-end mobile:gap-1.5">
+          <Show
+            when={props.node.kind === 'database' && props.node.rows !== null}
+          >
+            <span class="shrink-0 text-xs text-ink-muted">
+              {props.node.rows} rows
+            </span>
+          </Show>
+          <Show when={written()}>
+            <SharingBadge
+              title={props.node.title || 'Untitled'}
+              shared={props.shared}
+              reason={props.node.sharedReason}
+              toggleable={
+                props.node.shareable && props.choosing && !props.disabled
               }
-              decision={props.node.decision}
-              reason={props.node.reason}
+              muted={props.excluded}
+              onSharedChange={(shared) => props.onSharedChange(shared)}
             />
-          }
-        >
-          <RowStatus node={props.node} excluded={props.excluded} />
-        </Show>
+          </Show>
+          <Show
+            when={props.showStatus}
+            fallback={
+              <DecisionBadge
+                link={
+                  isWritten(props.node.decision) &&
+                  Boolean(props.node.linkedFrom?.length) &&
+                  props.excluded
+                }
+                decision={props.node.decision}
+                reason={props.node.reason}
+              />
+            }
+          >
+            <RowStatus node={props.node} excluded={props.excluded} />
+          </Show>
+        </span>
       </div>
       <Show when={hasRows() && props.showingRows}>
         <div
