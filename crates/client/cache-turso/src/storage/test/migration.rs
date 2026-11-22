@@ -266,6 +266,40 @@ fn versions_without_a_chain_and_failing_steps_still_reset() {
     });
 }
 
+/// The frozen-schema checks run inside the last step's transaction: a chain
+/// whose result they reject leaves the file exactly as the older build wrote
+/// it, still at the older version, so the browser can hand it back.
+#[test]
+fn a_rejected_upgrade_leaves_the_older_file_untouched() {
+    block_on(async {
+        let database = TursoMemoryDatabase::new("rejected-upgrade.db");
+        let mut storage = database.open("scope").unwrap();
+        populate(&mut storage).await;
+        test_hooks::add_unknown_table(&mut storage).unwrap();
+        downgrade_to_storage_11(&mut storage);
+        let schema = schema_rows(&storage.connection());
+        let rows = table_rows(&storage.connection());
+        storage.try_close().unwrap();
+        expect_reset_reason(database.open("scope"), PhysicalResetReason::Compatibility);
+
+        let state = database.state.lock().unwrap();
+        let raw = Database::open(
+            state.io.clone(),
+            &database.path,
+            OpenOptions::new(Arc::new(SqliteDialect)),
+        )
+        .unwrap();
+        let connection = raw.connect().unwrap();
+        assert_eq!(
+            crate::storage::migration::stored_storage_version(&connection),
+            Some(11)
+        );
+        assert_eq!(schema_rows(&connection), schema);
+        assert_eq!(table_rows(&connection), rows);
+        connection.close().unwrap();
+    });
+}
+
 #[test]
 fn hook_stops_after_a_committed_step_and_the_next_open_finishes() {
     block_on(async {
@@ -335,6 +369,9 @@ enum Interruption {
     CrashMidStep(usize),
     /// The files are copied right after the step commits, before a checkpoint.
     CrashAfterStep(usize),
+    /// The checks inside the last step's transaction reject what the chain
+    /// built, so that step rolls back.
+    RejectedByValidation,
 }
 
 fn interruption(steps: usize) -> impl Strategy<Value = Interruption> {
@@ -343,6 +380,7 @@ fn interruption(steps: usize) -> impl Strategy<Value = Interruption> {
         (0..steps).prop_map(Interruption::FailMidStep),
         (0..steps).prop_map(Interruption::CrashMidStep),
         (0..steps).prop_map(Interruption::CrashAfterStep),
+        Just(Interruption::RejectedByValidation),
     ]
 }
 
@@ -596,11 +634,29 @@ fn check_generated_chain(
         fresh_at_target(&source, &fresh, &expected, target);
         source.close().unwrap();
     }
+    // The last step checks what the chain built against the fresh schema, as
+    // the frozen-schema checks do for the registered steps.
+    let expected_schema = {
+        let (_expected_db, expected) = raw_open(&expected);
+        let schema = schema_fingerprint(&expected);
+        expected.close().unwrap();
+        schema
+    };
+    let accept_expected = |connection: &Arc<Connection>| {
+        if schema_fingerprint(connection) != expected_schema {
+            return Err(compatibility());
+        }
+        Ok(())
+    };
+    let validate = |connection: &Arc<Connection>| match interruption {
+        Interruption::RejectedByValidation => Err(compatibility()),
+        _ => accept_expected(connection),
+    };
 
     if let Interruption::CrashAfterStep(at) = interruption {
         test_hooks::interrupt_after_steps(Some(u32::try_from(at + 1).unwrap()));
     }
-    let first = run_steps(&connection, steps, target);
+    let first = run_steps(&connection, steps, target, &validate);
     test_hooks::interrupt_after_steps(None);
     let interrupted = test_hooks::take_interrupted();
     if let Interruption::CrashAfterStep(_) = interruption {
@@ -633,6 +689,20 @@ fn check_generated_chain(
             drop(database);
             live.clone()
         }
+        Interruption::RejectedByValidation => {
+            prop_assert_eq!(
+                first,
+                Err(TursoStorageError::PhysicalResetRequired(
+                    PhysicalResetReason::Compatibility
+                ))
+            );
+            // Every step before the last committed; the last rolled back with
+            // the checks, so the file still says the version before it.
+            prop_assert_eq!(stored_storage_version(&connection), i64::from(target) - 1);
+            connection.close().unwrap();
+            drop(database);
+            live.clone()
+        }
         Interruption::CrashMidStep(_) | Interruption::CrashAfterStep(_) => {
             connection.close().unwrap();
             drop(database);
@@ -641,7 +711,7 @@ fn check_generated_chain(
     };
     let clean = leak_steps(&planned, base, Interruption::None, &crashed, &survivor);
     let (_survivor_db, survivor) = raw_open(&survivor);
-    let resumed = run_steps(&survivor, clean, target);
+    let resumed = run_steps(&survivor, clean, target, &accept_expected);
     if matches!(interruption, Interruption::None) {
         prop_assert_eq!(resumed, Ok(None));
     } else {

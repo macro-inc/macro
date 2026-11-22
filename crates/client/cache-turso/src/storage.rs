@@ -236,6 +236,13 @@ impl TursoStorage {
         let fresh = session.disposition() == OpenDisposition::Fresh;
         let connection = session.connection();
         let result = initialize(&connection, scope, fresh);
+        // Read before the connection goes: whether a failed open left the file
+        // at the version it was written at decides whether the browser may
+        // still hand it back to the build that wrote it.
+        let stored_storage_version = result
+            .is_err()
+            .then(|| migration::stored_storage_version(&connection))
+            .flatten();
         drop(connection);
         match result {
             Ok(initialized) => Ok((
@@ -245,7 +252,11 @@ impl TursoStorage {
                 },
                 initialized.outcome(fresh),
             )),
-            Err(error) => Err(TursoStorageOpenFailure { error, session }),
+            Err(error) => Err(TursoStorageOpenFailure {
+                error,
+                stored_storage_version,
+                session,
+            }),
         }
     }
 
@@ -253,6 +264,24 @@ impl TursoStorage {
     /// that their open succeeded (`turso_opfs::ConnectedOpfsSession::finish_adoption`).
     pub async fn finish_adoption(&self) -> Result<(), OpfsError> {
         self.session.finish_adoption().await
+    }
+
+    /// Reads the storage version a connected session's file says it was
+    /// written at, without initializing or writing to it, then closes the
+    /// session and keeps its files. Used to decide whether files an unfinished
+    /// OPFS adoption brought here can go back to the identity they came from.
+    /// The close checkpoints, so kept files are self-contained afterwards.
+    pub fn read_storage_version_and_close(
+        session: ConnectedOpfsSession,
+    ) -> (Option<u32>, Result<OpfsOwner, OpfsError>) {
+        let connection = session.connection();
+        let version = migration::stored_storage_version(&connection);
+        drop(connection);
+        let owner = session
+            .try_close()
+            .map_err(|failure| failure.error().clone())
+            .and_then(|closed| closed.preserve());
+        (version, owner)
     }
 
     /// Browser-test-artifact-only helper used by the storage-control worker.
@@ -546,6 +575,7 @@ impl std::error::Error for TursoStorageResetFailure {
 #[cfg(target_arch = "wasm32")]
 pub struct TursoStorageOpenFailure {
     error: TursoStorageError,
+    stored_storage_version: Option<u32>,
     session: ConnectedOpfsSession,
 }
 
@@ -554,6 +584,15 @@ impl TursoStorageOpenFailure {
     /// Returns the payload-free storage classification.
     pub fn error(&self) -> TursoStorageError {
         self.error
+    }
+
+    /// The storage version the file said it was written at once the open
+    /// failed, or `None` when it no longer says so readably. Equal to the
+    /// version it was written at only when this open committed nothing to it:
+    /// every upgrade step advances the version in its own transaction, and the
+    /// last runs the frozen-schema checks before committing.
+    pub fn stored_storage_version(&self) -> Option<u32> {
+        self.stored_storage_version
     }
 
     /// Consumes a non-reset failure, closes Turso, and preserves main and WAL.

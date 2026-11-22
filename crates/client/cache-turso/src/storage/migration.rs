@@ -4,9 +4,12 @@
 //! Each registered step upgrades version `from` to `from + 1` in one write
 //! transaction that also advances `meta.storage_schema_version`. A process
 //! stopped during an upgrade therefore leaves the last committed step behind,
-//! and the next open resumes from there. After the last step `initialize` runs
-//! the checks every reopen runs, so an upgraded file must have exactly the
-//! tables and indexes a fresh file has, and its queue must be consistent.
+//! and the next open resumes from there. The last step's transaction also runs
+//! the frozen-schema checks every reopen runs, so an upgraded file must have
+//! exactly the tables and indexes a fresh file has before the current version
+//! is committed: a chain that would produce anything else rolls back and leaves
+//! the file at the version before its last step, which the browser can still
+//! hand back to the build that wrote it.
 //!
 //! A version with no complete chain of steps, a newer version, and a failing
 //! step are all classified for physical reset, as every version change was
@@ -16,7 +19,7 @@
 //! current schema constants, because a later version may change them while the
 //! step must still produce exactly the version after its own.
 
-use super::{STORAGE_SCHEMA_VERSION, compatibility, required_text, text};
+use super::{STORAGE_SCHEMA_VERSION, compatibility, required_text, text, validate_frozen_schema};
 use crate::{TursoStorageError, driver};
 use std::sync::Arc;
 use turso_core::Connection;
@@ -77,15 +80,23 @@ pub fn storage_version_upgradable(version: u32) -> bool {
 /// Upgrades an existing database to the current storage version. Returns the
 /// version it was written at when it was older.
 pub(super) fn upgrade(connection: &Arc<Connection>) -> Result<Option<u32>, TursoStorageError> {
-    run_steps(connection, STEPS, STORAGE_SCHEMA_VERSION)
+    run_steps(
+        connection,
+        STEPS,
+        STORAGE_SCHEMA_VERSION,
+        validate_frozen_schema,
+    )
 }
 
 /// Runs `steps`, a contiguous chain ending at `current - 1`, from the stored
-/// version. Separate from [`upgrade`] so tests can run generated chains.
+/// version, running `validate` inside the last step's transaction. Separate
+/// from [`upgrade`] so tests can run generated chains against their own
+/// schema.
 pub(super) fn run_steps(
     connection: &Arc<Connection>,
     steps: &[StorageUpgradeStep],
     current: u32,
+    validate: impl Fn(&Arc<Connection>) -> Result<(), TursoStorageError>,
 ) -> Result<Option<u32>, TursoStorageError> {
     let stored = stored_version(connection)?;
     if stored == current {
@@ -98,13 +109,17 @@ pub(super) fn run_steps(
     #[cfg(any(test, feature = "migration-test-hooks"))]
     let mut committed = 0_u32;
     for step in steps.iter().filter(|step| step.from >= stored) {
+        let target = step.from + 1;
         driver::write_transaction(connection, || {
             (step.apply)(connection)?;
             driver::execute(
                 connection,
                 "UPDATE meta SET value = ?1 WHERE key = 'storage_schema_version'",
-                vec![text(&(step.from + 1).to_string())],
+                vec![text(&target.to_string())],
             )?;
+            if target == current {
+                validate(connection)?;
+            }
             Ok(())
         })
         .map_err(TursoStorageError::initialization)?;
@@ -117,6 +132,13 @@ pub(super) fn run_steps(
         }
     }
     Ok(Some(stored))
+}
+
+/// The storage version a database says it was written at, or `None` when it
+/// does not say so readably. Never writes.
+#[cfg(any(test, target_arch = "wasm32"))]
+pub(super) fn stored_storage_version(connection: &Arc<Connection>) -> Option<u32> {
+    stored_version(connection).ok()
 }
 
 fn stored_version(connection: &Arc<Connection>) -> Result<u32, TursoStorageError> {
