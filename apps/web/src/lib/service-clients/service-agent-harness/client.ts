@@ -294,10 +294,10 @@ export const agentHarnessServiceClient = {
   },
 
   /** The actions waiting to dispatch in this session, oldest first. */
-  queue(sessionId: string) {
+  queue(sessionId: string, init: { signal?: AbortSignal } = {}) {
     return fetchWithToken<AgentSessionQueueResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/queue`,
-      { method: 'GET' }
+      { method: 'GET', signal: init.signal }
     );
   },
 

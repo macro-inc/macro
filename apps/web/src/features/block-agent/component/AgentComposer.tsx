@@ -21,6 +21,7 @@ import {
   type InputAttachmentData,
   uploadInputAttachments,
 } from '@channel/Input';
+import { SEND_OUTCOME_UNKNOWN } from '@core/agent-session/send-outcome';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -109,8 +110,10 @@ export function AgentComposer(props: {
   // observed there; only a refusal needs saying here. Resolves whether the
   // harness took the action, and its reason when it refused, so a refused
   // prompt can go back to the draft.
-  // A send that got no clear answer while the session checks the log for it.
-  const [checking, setChecking] = createSignal(false);
+  // Sends with no clear answer that their session is still checking, by
+  // session: the notice shows only for the session on screen.
+  const [checks, setChecks] = createSignal<string[]>([]);
+  const checking = () => checks().includes(sessionId() ?? '');
 
   const act = async (
     action: AgentAction,
@@ -118,13 +121,32 @@ export function AgentComposer(props: {
   ): Promise<{ taken: boolean; refusal?: string }> => {
     if (readOnly()) return { taken: false };
     try {
+      const checked = sessionId() ?? '';
+      let started = false;
       let result: Awaited<ReturnType<typeof issue>>;
       try {
-        result = await issue(action, { onChecking: () => setChecking(true) });
+        result = await issue(action, {
+          onChecking: () => {
+            started = true;
+            setChecks((all) => [...all, checked]);
+          },
+        });
       } finally {
-        setChecking(false);
+        if (started)
+          setChecks((all) => {
+            const index = all.indexOf(checked);
+            return all.filter((_, at) => at !== index);
+          });
       }
       if (!result?.isErr()) return { taken: true };
+      // Possibly sent: never put it back, or a resend could run it twice.
+      const unconfirmed = result.error.find(
+        (error) => error.code === SEND_OUTCOME_UNKNOWN
+      );
+      if (unconfirmed) {
+        toast.failure(unconfirmed.message);
+        return { taken: true };
+      }
       // A stopped agent says why in the transcript instead of a toast.
       const refused = result.error.find(isNoRuntimeAccessError);
       if (refused) return { taken: false, refusal: refused.message };

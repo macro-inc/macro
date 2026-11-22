@@ -566,6 +566,45 @@ describe('a message the harness does not take', () => {
     expect(mocks.toastFailure).not.toHaveBeenCalled();
   });
 
+  it('keeps an unconfirmed send out of the box and says to check the conversation', async () => {
+    mocks.issue.mockResolvedValue(
+      err([
+        {
+          code: 'SEND_OUTCOME_UNKNOWN',
+          message: "We couldn't confirm it was sent; check the conversation.",
+        },
+      ])
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    await vi.waitFor(() =>
+      expect(mocks.toastFailure).toHaveBeenCalledWith(
+        "We couldn't confirm it was sent; check the conversation."
+      )
+    );
+    expect(mocks.input?.draft).toBe('');
+  });
+
+  it('shows the checking notice only on the session being checked', async () => {
+    const [session, setSession] = createSignal('session-1');
+    mocks.sessionId = session;
+    mocks.issue.mockImplementation(
+      (_action: unknown, options: { onChecking?: () => void }) =>
+        new Promise(() => {
+          options.onChecking?.();
+        })
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    expect(
+      await screen.findByText('Checking whether it was sent…')
+    ).toBeTruthy();
+    setSession('session-2');
+    expect(screen.queryByText('Checking whether it was sent…')).toBeNull();
+  });
+
   it('leaves the composer empty once the message is taken', async () => {
     mocks.issue.mockResolvedValue(ok({ status: 'accepted', actionId: 'a' }));
     render(() => <AgentComposer />);

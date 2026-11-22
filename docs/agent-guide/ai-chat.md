@@ -2414,10 +2414,16 @@ must stay hidden; subsequent live messages must still appear.
   and leaves an earlier reason in place.
 - A send with no clear answer (a network failure, a 5xx or gateway timeout, a
   thrown request) is not treated as refused: the pending bubble stays, the box
-  stays empty, and the composer shows "Checking whether it was sent…" while the
-  session waits up to 10 s for the prompt's row in the log (matched by its
-  client-minted action id), then asks the queue. Found in either, it counts as
-  sent (or queued) with no error; otherwise the message comes back as above.
+  stays empty, and the composer shows "Checking whether it was sent…" (only on
+  that session) while the session waits up to 10 s for the prompt's row in the
+  log (matched by its client-minted action id), then reads the queue, waits
+  2 s more in case it just dispatched, and rereads the log. Found anywhere, it
+  counts as sent (or queued), with no error. The message comes back only when
+  the queue and the reread both answered without it. When either read fails,
+  or the session was let go meanwhile, the outcome is unknown: the text stays
+  out of the box and the composer says "We couldn't confirm it was sent; check
+  the conversation." Each check is one `agent.prompt.send_check` span with its
+  outcome (sent / notSent / unknown).
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.
   The list is capped at the smaller of 40% of the viewport height and 24rem. Past that

@@ -30,6 +30,8 @@ import {
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { ResultError } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import {
   AgentSessionLogUnavailable,
   forgetAgentSessionLog,
@@ -53,6 +55,7 @@ import type {
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { CombinedError } from '@urql/core';
 import { err, ok, type Result } from 'neverthrow';
+import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import {
   type LoadFailure,
@@ -62,7 +65,11 @@ import {
 } from './load-telemetry';
 import { frameDelivery, messagesOf, PromptTrace } from './prompt-telemetry';
 import { createdRecently, forgetSessionCreated } from './recently-created';
-import { isUnknownOutcome } from './send-outcome';
+import {
+  isUnknownOutcome,
+  SEND_OUTCOME_UNKNOWN,
+  type SendCheck,
+} from './send-outcome';
 import { publishSessionTurn } from './session-turn';
 import { typedInClientId } from './ui-client';
 
@@ -74,8 +81,16 @@ export type AgentSessionRecord = {
   bot: SessionBot;
 };
 
-export type IssueResult = Awaited<
+type ControlResult = Awaited<
   ReturnType<typeof agentHarnessServiceClient.control>
+>;
+type ControlError =
+  ControlResult extends Result<unknown, (infer Failure)[]> ? Failure : never;
+
+/** The harness's answer, or that a send with no clear answer stayed unconfirmed. */
+export type IssueResult = Result<
+  ControlResponse,
+  (ControlError | ResultError<typeof SEND_OUTCOME_UNKNOWN>)[]
 >;
 
 /**
@@ -85,6 +100,16 @@ export type IssueResult = Awaited<
  */
 export const UNKNOWN_OUTCOME_WAIT_MS = 10_000;
 
+/** The longest the queue read and the log reread may each take in a check. */
+const SEND_CHECK_READ_MS = 5_000;
+
+/**
+ * After the queue no longer holds the prompt, how long its row may take to
+ * reach the log: it may have dispatched while the queue was read, and the
+ * log is written in batches about every 1.5 s.
+ */
+const DISPATCH_GRACE_MS = 2_000;
+
 /**
  * The load was abandoned because every surface holding the session let go
  * before it finished.
@@ -93,6 +118,24 @@ export const UNKNOWN_OUTCOME_WAIT_MS = 10_000;
  * mid-fetch is ordinary, and a caller that cannot tell it apart from a failed
  * fetch either reports a phantom error or hides a real one.
  */
+/** The value, or `false` when it takes longer than `ms`. */
+async function within<Value>(
+  value: Promise<Value>,
+  ms: number
+): Promise<Value | false> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      value,
+      new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export class AgentSessionReleased extends Error {
   constructor(readonly sessionId: string) {
     super(`agent session released: ${sessionId}`);
@@ -237,6 +280,8 @@ export class AgentSession {
   /** The refetch in flight; it loops while another is requested. */
   private syncRun?: Promise<void>;
   private resyncRequested = false;
+  /** Rereads of the log that were fetched and folded. */
+  private refreshesSucceeded = 0;
   private resyncRetry = 0;
   private resyncTimer?: ReturnType<typeof setTimeout>;
   /**
@@ -440,21 +485,47 @@ export class AgentSession {
         (result?.isErr() === true && isUnknownOutcome(result.error)))
     ) {
       options.onChecking?.();
-      const settled = await this.settleUnknown(actionId, arrival.arrived);
+      const check = await this.checkSend(actionId, arrival.arrived);
       arrival.stop();
-      if (!settled)
-        trace?.end(
-          'failed',
-          thrown?.error ?? new Error('The prompt never reached the log.')
-        );
-      if (settled) {
-        if (speculated && settled.status === 'queued')
-          fireAndForget(
-            this.enqueue({ kind: 'retracted', actionId }),
-            'agent-session'
+      const status = result?.isErr() ? result.error[0]?.status : undefined;
+      this.recordSendCheck(check, status);
+      const settled = match(check)
+        .with({ outcome: 'sent' }, ({ status: sentStatus }) => {
+          trace?.accepted(actionId, sentStatus === 'queued');
+          if (speculated && sentStatus === 'queued')
+            fireAndForget(
+              this.enqueue({ kind: 'retracted', actionId }),
+              'agent-session'
+            );
+          return ok({ actionId, status: sentStatus });
+        })
+        .with({ outcome: 'unknown' }, () => {
+          trace?.end('failed', new Error('The send could not be confirmed.'));
+          // Not shown as pending forever: the log brings the row back if
+          // the harness ran it.
+          if (speculated)
+            fireAndForget(
+              this.enqueue({ kind: 'retracted', actionId }),
+              'agent-session'
+            );
+          return err([
+            {
+              name: 'Error',
+              code: SEND_OUTCOME_UNKNOWN,
+              message:
+                "We couldn't confirm it was sent; check the conversation.",
+            },
+          ]);
+        })
+        .with({ outcome: 'notSent' }, () => {
+          trace?.end(
+            'failed',
+            thrown?.error ?? new Error('The prompt never reached the harness.')
           );
-        return ok(settled);
-      }
+          return undefined;
+        })
+        .exhaustive();
+      if (settled) return settled;
     }
     arrival?.stop();
     if (thrown !== undefined || result === undefined) {
@@ -532,30 +603,96 @@ export class AgentSession {
   }
 
   /**
-   * What became of a prompt whose send got no clear answer: sent when its
-   * row reaches the log in time, queued when the harness holds it waiting
-   * behind a turn, otherwise not sent.
+   * What became of a prompt whose send got no clear answer. Sent when its
+   * row reaches the log, or the queue holds it. Not sent only when the
+   * queue and a fresh read of the log both answered without it. Anything
+   * less certain is unknown: the message must not come back as unsent.
    */
-  private async settleUnknown(
+  private async checkSend(
     actionId: string,
     arrived: Promise<void>
-  ): Promise<ControlResponse | undefined> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const seen = await Promise.race([
-      arrived.then(() => true),
-      new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(false), UNKNOWN_OUTCOME_WAIT_MS);
+  ): Promise<SendCheck> {
+    const startedAt = performance.now();
+    let seen = false;
+    void arrived.then(() => {
+      seen = true;
+    });
+    const waited = () => Math.round(performance.now() - startedAt);
+    const sent = (via: 'log' | 'queue', status: 'sent' | 'queued') =>
+      ({ outcome: 'sent', via, status, waitedMs: waited() }) as const;
+    const unknown = (
+      reason: 'released' | 'queue_unreadable' | 'log_unreadable'
+    ) => ({ outcome: 'unknown', reason, waitedMs: waited() }) as const;
+
+    if (await within(arrived, UNKNOWN_OUTCOME_WAIT_MS))
+      return sent('log', 'sent');
+    if (this.closed) return unknown('released');
+
+    const queue = await within(
+      agentHarnessServiceClient.queue(this.id, {
+        signal: AbortSignal.timeout(SEND_CHECK_READ_MS),
       }),
-    ]);
-    clearTimeout(timer);
-    if (seen) return { actionId, status: 'sent' };
-    const queue = await agentHarnessServiceClient
-      .queue(this.id)
-      .catch(() => undefined);
-    const waiting =
-      queue?.isOk() === true &&
-      queue.value.entries.some((entry) => entry.actionId === actionId);
-    return waiting ? { actionId, status: 'queued' } : undefined;
+      SEND_CHECK_READ_MS
+    ).catch((error: unknown) => {
+      console.warn(
+        '[agent-session] queue could not be read for a send check',
+        error
+      );
+      return false as const;
+    });
+    if (seen) return sent('log', 'sent');
+    if (queue === false || queue.isErr()) {
+      if (queue !== false)
+        console.warn(
+          '[agent-session] queue could not be read for a send check',
+          queue.error
+        );
+      return unknown('queue_unreadable');
+    }
+    if (queue.value.entries.some((entry) => entry.actionId === actionId))
+      return sent('queue', 'queued');
+
+    // Possibly dispatched while the queue was read: give its row a moment,
+    // then read the log itself.
+    if (await within(arrived, DISPATCH_GRACE_MS)) return sent('log', 'sent');
+    if (this.closed) return unknown('released');
+    const reread = await within(this.refreshed(), SEND_CHECK_READ_MS);
+    if (seen) return sent('log', 'sent');
+    if (this.closed) return unknown('released');
+    return reread === true
+      ? { outcome: 'notSent', waitedMs: waited() }
+      : unknown('log_unreadable');
+  }
+
+  /** One span per send check, with how it ended. */
+  private recordSendCheck(check: SendCheck, status: number | undefined): void {
+    try {
+      const span = Telemetry.span('agent.prompt.send_check');
+      span.setAttr('agent.session.id', this.id);
+      span.setAttr('agent.send_check.outcome', check.outcome);
+      span.setAttr('agent.send_check.waited_ms', check.waitedMs);
+      if (status !== undefined)
+        span.setAttr('agent.send_check.http_status', status);
+      match(check)
+        .with({ outcome: 'sent' }, ({ via }) =>
+          span.setAttr('agent.send_check.via', via)
+        )
+        .with({ outcome: 'unknown' }, ({ reason }) =>
+          span.setAttr('agent.send_check.reason', reason)
+        )
+        .with({ outcome: 'notSent' }, () => {})
+        .exhaustive();
+      span.end();
+    } catch {
+      // Telemetry never decides a send.
+    }
+  }
+
+  /** Reread and fold the log; true when the read succeeded. */
+  private async refreshed(): Promise<boolean> {
+    const before = this.refreshesSucceeded;
+    await this.refresh();
+    return this.refreshesSucceeded > before;
   }
 
   /**
@@ -1006,6 +1143,7 @@ export class AgentSession {
         if (log) {
           await this.apply([{ kind: 'snapshot', rows: log.rows }]);
           this.resyncRetry = 0;
+          this.refreshesSucceeded++;
         }
       } while (this.resyncRequested);
     } catch (error: unknown) {

@@ -487,7 +487,8 @@ describe('AgentSession', () => {
 
       const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
       const rejected = expect(issuing).rejects.toThrow('offline');
-      await vi.advanceTimersByTimeAsync(10_000);
+      // The wait, the queue read, the grace for a dispatch, the log reread.
+      await vi.advanceTimersByTimeAsync(13_000);
       await rejected;
 
       const [speculation] = inputs().filter(
@@ -590,6 +591,103 @@ describe('AgentSession', () => {
       }
     });
 
+    it('counts as sent when its row lands while the queue is read', async () => {
+      vi.useFakeTimers();
+      let actionId = '';
+      harness.control.mockImplementationOnce(
+        async (_id: string, request: { actionId: string }) => {
+          actionId = request.actionId;
+          return err([gatewayTimeout]);
+        }
+      );
+      const queueRead = deferred<unknown>();
+      harness.queue.mockReturnValueOnce(queueRead.promise);
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+
+        const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+        await vi.advanceTimersByTimeAsync(10_000);
+        // Dispatched from the queue meanwhile: gone from it, its row arriving.
+        fold.pushSession.mockResolvedValueOnce([confirmed(actionId)]);
+        deliver(row(2));
+        queueRead.resolve(ok({ entries: [] }));
+        await vi.advanceTimersByTimeAsync(0);
+        const result = await issuing;
+
+        expect(result.isOk() && result.value).toEqual({
+          actionId,
+          status: 'sent',
+        });
+      } finally {
+        live.release();
+        vi.useRealTimers();
+      }
+    });
+
+    it('counts a thrown request as sent when its row reaches the log', async () => {
+      let actionId = '';
+      harness.control.mockImplementationOnce(
+        async (_id: string, request: { actionId: string }) => {
+          actionId = request.actionId;
+          throw new Error('offline');
+        }
+      );
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+
+      const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+      await settle();
+      fold.pushSession.mockResolvedValueOnce([confirmed(actionId)]);
+      deliver(row(2));
+
+      const result = await issuing;
+      expect(result.isOk() && result.value).toEqual({
+        actionId,
+        status: 'sent',
+      });
+      live.release();
+    });
+
+    it.each([
+      ['the queue cannot be read', 'queue'],
+      ['the log cannot be reread', 'log'],
+      ['the session was let go', 'released'],
+    ])('stays unconfirmed, never unsent, when %s', async (_name, broken) => {
+      vi.useFakeTimers();
+      harness.control.mockResolvedValueOnce(err([gatewayTimeout]));
+      if (broken === 'queue')
+        harness.queue.mockResolvedValueOnce(
+          err([{ name: 'Error', code: 'NETWORK_ERROR', message: 'offline' }])
+        );
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+        if (broken === 'log')
+          logSource.fetched.mockRejectedValueOnce(new Error('offline'));
+
+        const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+        if (broken === 'released') {
+          await vi.advanceTimersByTimeAsync(5_000);
+          live.release();
+        }
+        await vi.advanceTimersByTimeAsync(20_000);
+        const result = await issuing;
+
+        expect(
+          result.isErr() && result.error.map((error) => error.code)
+        ).toEqual(['SEND_OUTCOME_UNKNOWN']);
+        const check = telemetry.spans.find(
+          (span) => span.name === 'agent.prompt.send_check'
+        );
+        expect(check?.attributes['agent.send_check.outcome']).toBe('unknown');
+        expect(check?.ends).toBe(1);
+      } finally {
+        if (broken !== 'released') live.release();
+        vi.useRealTimers();
+      }
+    });
+
     it('counts as not sent when the wait runs out without it', async () => {
       vi.useFakeTimers();
       harness.control.mockResolvedValueOnce(err([gatewayTimeout]));
@@ -602,10 +700,12 @@ describe('AgentSession', () => {
         expect(inputs().filter((input) => input.kind === 'retracted')).toEqual(
           []
         );
-        await vi.advanceTimersByTimeAsync(1_000);
+        await vi.advanceTimersByTimeAsync(4_000);
         const result = await issuing;
 
+        // Neither the queue nor a fresh read of the log has it.
         expect(result.isErr() && result.error).toEqual([gatewayTimeout]);
+        expect(logSource.watch).toHaveBeenCalledWith(SESSION, 'network-only');
         const [speculation] = inputs().filter(
           (input) => input.kind === 'speculated'
         );

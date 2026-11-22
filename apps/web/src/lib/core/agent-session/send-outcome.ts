@@ -21,3 +21,26 @@ export function isUnknownOutcome(errors: ResultError[]): boolean {
         (error.status === 408 || error.status >= 500))
   );
 }
+
+/**
+ * The code of the failure `issue` returns when a send could not be
+ * confirmed either way: the composer must not put the message back.
+ */
+export const SEND_OUTCOME_UNKNOWN = 'SEND_OUTCOME_UNKNOWN' as const;
+
+/** What a check of a send with no clear answer found. */
+export type SendCheck =
+  | {
+      outcome: 'sent';
+      /** Where it showed up. */
+      via: 'log' | 'queue';
+      status: 'sent' | 'queued';
+      waitedMs: number;
+    }
+  /** The queue and a fresh read of the log both answered without it. */
+  | { outcome: 'notSent'; waitedMs: number }
+  | {
+      outcome: 'unknown';
+      reason: 'released' | 'queue_unreadable' | 'log_unreadable';
+      waitedMs: number;
+    };
