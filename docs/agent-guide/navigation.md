@@ -1349,7 +1349,8 @@ an on/off switch, and one line under them:
   yet**, then **· N sub-routines** when its runs created any;
 - **Running now** with a spinning mark and, for its owner, **Stop** (named
   **Stop the run of <name>**), which ends the run in progress; it reads **Stopping…** until the
-  run ends, and the run's details then say it was stopped;
+  run ends (**Stop** comes back after 15 seconds if that end never arrives),
+  and the run's details then say it was stopped;
 - **Failed <when> · <why>** in failure colour, the whole reason in a tooltip;
 - **<trigger> · Off** while it is off.
 
