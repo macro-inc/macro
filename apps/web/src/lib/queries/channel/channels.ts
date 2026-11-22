@@ -3,9 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/index';
-import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import {
   type MessageResponse,
   storageServiceClient,
@@ -17,7 +15,6 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import {
   assertQueryAccount,
-  currentQueryAccount,
   isCurrentQueryAccount,
   mutationQueryAccount,
   type QueryAccount,
@@ -35,62 +32,6 @@ import {
   readCachedGraphqlChannels,
 } from './graphql';
 import { channelKeys } from './keys';
-
-const CHANNEL_LIST_PAGE_SIZE = 100;
-
-export async function fetchAllChannels(
-  signal?: AbortSignal,
-  account = currentQueryAccount()
-): Promise<ApiChannelWithLatest[]> {
-  const channels: ApiChannelWithLatest[] = [];
-  let cursor: string | undefined;
-
-  do {
-    assertQueryAccount(account);
-    signal?.throwIfAborted();
-    const page = await throwOnErr(() =>
-      storageServiceClient.getChannels({
-        cursor,
-        limit: CHANNEL_LIST_PAGE_SIZE,
-        signal,
-      })
-    );
-    assertQueryAccount(account);
-    signal?.throwIfAborted();
-    channels.push(...page.items);
-    cursor = page.next_cursor ?? undefined;
-  } while (cursor);
-
-  return channels;
-}
-
-export function listChannelsQueryOptions(
-  account: QueryAccount | undefined,
-  enabled: boolean
-) {
-  return {
-    queryKey: channelKeys.listChannels(account?.userId).queryKey,
-    queryFn: ({ signal }: { signal: AbortSignal }) =>
-      fetchAllChannels(signal, account),
-    enabled: !!account && enabled,
-  };
-}
-
-export function useListChannelsQuery(enabled: Accessor<boolean> = () => true) {
-  const account = useQueryAccount();
-  return useQuery(() => listChannelsQueryOptions(account(), enabled()));
-}
-
-/** The viewer's channel list: cached when loaded, with account/session admission. */
-export async function loadChannelList(): Promise<ApiChannelWithLatest[]> {
-  const account = currentQueryAccount();
-  assertQueryAccount(account);
-  const channels = await queryClient.ensureQueryData(
-    listChannelsQueryOptions(account, true)
-  );
-  assertQueryAccount(account);
-  return channels;
-}
 
 // Resolved account/generation inputs, not component accessors, are retained.
 export function cachedGraphqlChannelsQueryOptions(

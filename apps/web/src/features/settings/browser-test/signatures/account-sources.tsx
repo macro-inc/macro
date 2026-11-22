@@ -1,9 +1,10 @@
 import { unsupportedContactSync } from '@graphql-cache/people/test-support';
+import { useQuery } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
 import { createNoopCacheHost } from '../../../../lib/graphql-cache/host/noop-host';
 import type { PeopleContextState } from '../../../../lib/graphql-cache/people/generated';
 import { createPeopleCache } from '../../../../lib/graphql-cache/people/host';
-import { useListChannelsQuery } from '../../../../lib/queries/channel/channels';
+import { channelDirectoryPagesQueryOptions } from '../../../../lib/queries/channel/directory';
 import type {
   ContextChannel,
   PersonFacts,
@@ -17,6 +18,7 @@ import {
   SettingsSection,
 } from '../../primitives';
 import {
+  fixtureSoupClient,
   link,
   queryClient,
   refreshHeldAccountSources,
@@ -31,8 +33,10 @@ export function AccountSources() {
     queryKey: emailKeys.links(link.macro_id).queryKey,
   });
   const links = useEmailLinksQuery();
-  const channels = useListChannelsQuery();
   const viewer = useUserId();
+  const channels = useQuery(() =>
+    channelDirectoryPagesQueryOptions(viewer(), () => fixtureSoupClient)
+  );
   let owner: string | undefined;
   let state: PeopleContextState = { kind: 'missing' };
   let revision = 0;
@@ -69,22 +73,10 @@ export function AccountSources() {
       search: async () => ({ kind: 'contextPending' }),
     }),
   };
-  // The app passes its channel directory; this fixture's directory is the
-  // account's REST list, so its in-flight responses can be held.
+  // The app passes its channel directory; this fixture's is the directory's
+  // own pages query without a cache, so its in-flight responses can be held.
   const directory = (): ContextChannel[] | undefined =>
-    channels.isSuccess
-      ? channels.data.map((channel) => ({
-          id: channel.id,
-          name: channel.name ?? null,
-          channelType: 'direct_message',
-          updatedAt: channel.updated_at,
-          viewedAt: channel.viewed_at ?? null,
-          participants: channel.participants.map(({ user_id }) => ({
-            userId: user_id,
-          })),
-          botParticipants: [],
-        }))
-      : undefined;
+    channels.isSuccess ? channels.data : undefined;
   const publication = useContactContextPublisher(
     () => host,
     () => 0,
