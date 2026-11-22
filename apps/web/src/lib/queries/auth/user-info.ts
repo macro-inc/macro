@@ -170,6 +170,13 @@ export async function prefetchUserInfo() {
   );
 }
 
+/** The signed-in person's id as cached, for code outside a component. */
+export function cachedUserId(): string | undefined {
+  const data: unknown = queryClient.getQueryData(authKeys.userInfo.queryKey);
+  if (typeof data !== 'object' || data === null || !('id' in data)) return;
+  return typeof data.id === 'string' && data.id ? data.id : undefined;
+}
+
 /** Fetch user info and return the data. Use when you need the result. */
 export async function fetchUserInfo(options?: { fresh?: boolean }) {
   return queryClient.fetchQuery({

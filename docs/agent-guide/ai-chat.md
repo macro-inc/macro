@@ -2434,11 +2434,16 @@ must stay hidden; subsequent live messages must still appear.
   first try made it: it is adopted and a first prompt that rode the create
   goes on the card. "Id taken" on the first try is a warm id the harness
   couldn't hand over (expired, or another tab's): it falls back to a fresh id
-  as before. Once any try was unclear nothing later counts as a refusal: no
-  fresh id, no draft handed back. If the prompt rode the create, the error
-  view says the chat may not have been created and shows the card (Copy,
-  Dismiss); if it didn't, the prompt was never sent and comes back as the
-  draft. Each check is one `agent.prompt.send_check` span under the prompt's
+  as before, and that fresh id gets the same retry rules. Once any try was
+  unclear nothing later counts as a refusal: no fresh id, no draft handed
+  back. If the prompt rode the create, the error view says the chat may not
+  have been created and shows the card (Copy, Dismiss), also after a reload
+  of a create that never landed; if it didn't ride it, it was never sent and
+  comes back as the draft. The harness answers a taken id as a 409 with
+  `code: "session_id_taken"`.
+- Every send names its sender (`userId` is required on `startPendingSession`
+  and `AgentSession.issue`); a non-prompt action passes `NOT_A_PROMPT`. With
+  no signed-in user known, nothing is held and the error quotes the text. Each check is one `agent.prompt.send_check` span under the prompt's
   trace, with its outcome (sent / unknown) and each phase's duration.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.

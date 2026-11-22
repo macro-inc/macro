@@ -37,6 +37,18 @@ describe('session request errors', () => {
     await agentHarnessServiceClient.create({});
     expect(
       await errorHandler()(
+        new Response(
+          JSON.stringify({
+            code: 'session_id_taken',
+            error: 'this id is already taken',
+          }),
+          { status: 409, headers: { 'content-type': 'application/json' } }
+        )
+      )
+    ).toMatchObject({ code: 'SESSION_ID_TAKEN', status: 409 });
+    // A harness from before the code, during the rollout.
+    expect(
+      await errorHandler()(
         new Response('this id is already taken', {
           status: 409,
           headers: { 'content-type': 'text/plain' },

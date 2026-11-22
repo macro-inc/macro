@@ -5,7 +5,9 @@ import type { UpdateSession } from '../core/agent-update';
 const fake = vi.hoisted(() => ({
   acquired: vi.fn(),
   released: vi.fn(),
-  issued: vi.fn(async (_action: unknown) => ({ isErr: () => false })),
+  issued: vi.fn(async (_action: unknown, _options?: unknown) => ({
+    isErr: () => false,
+  })),
   listeners: new Set<(events: unknown[]) => void>(),
   load: vi.fn(async () => {}),
   snapshot: vi.fn(async () => ({
@@ -33,8 +35,9 @@ vi.mock('@core/agent-session/AgentSession', () => ({
   },
 }));
 vi.mock('@app/features/block-agent/queries/issue-session-action', () => ({
-  issueSessionAction: (_session: unknown, action: unknown) =>
-    fake.issued(action),
+  issueSessionAction: (_session: unknown, action: unknown, options: unknown) =>
+    fake.issued(action, options),
+  NOT_A_PROMPT: { userId: undefined },
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 
@@ -111,11 +114,14 @@ describe('createAgentUpdates', () => {
       answerPromise = model.answer(update, { optionId: 'allow' });
     });
     await answerPromise;
-    expect(fake.issued).toHaveBeenCalledWith({
-      type: 'respondToPermission',
-      requestId: 7,
-      answer: { kind: 'selected', optionId: 'allow' },
-    });
+    expect(fake.issued).toHaveBeenCalledWith(
+      {
+        type: 'respondToPermission',
+        requestId: 7,
+        answer: { kind: 'selected', optionId: 'allow' },
+      },
+      { userId: undefined }
+    );
     dispose();
   });
 });

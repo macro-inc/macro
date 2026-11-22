@@ -52,6 +52,8 @@ export const SEND_OUTCOME_UNKNOWN = 'SEND_OUTCOME_UNKNOWN' as const;
 /** The failure `issue` returns for an unconfirmed send, naming its action. */
 export type UnconfirmedSendError = ResultError<typeof SEND_OUTCOME_UNKNOWN> & {
   actionId: string;
+  /** `false` when no card holds it (no signed-in user), so it must be said. */
+  held?: false;
 };
 
 /** What a check of a send with no clear answer found. */

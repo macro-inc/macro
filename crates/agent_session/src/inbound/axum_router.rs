@@ -48,7 +48,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::coding_preferences::CodingPreferences;
-use crate::domain::error::{AgentSessionError, NO_RUNTIME_ACCESS_CODE};
+use crate::domain::error::{AgentSessionError, NO_RUNTIME_ACCESS_CODE, SESSION_ID_TAKEN_CODE};
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionPreview, ArchiveCause, ExternalSession, Message,
     SandboxSize, SessionBot, SessionSource, SessionStatus, SessionVisibility,
@@ -2173,7 +2173,14 @@ impl IntoResponse for CreateSessionApiError {
                 "this bot already has a session for this thread".to_owned(),
             ),
             Self::Domain(AgentSessionError::SessionIdTaken(_)) => {
-                (StatusCode::CONFLICT, "this id is already taken".to_owned())
+                return (
+                    StatusCode::CONFLICT,
+                    Json(serde_json::json!({
+                        "code": SESSION_ID_TAKEN_CODE,
+                        "error": "this id is already taken",
+                    })),
+                )
+                    .into_response();
             }
             Self::Domain(AgentSessionError::InvalidRepositorySelection(reason)) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned())

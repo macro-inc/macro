@@ -462,11 +462,15 @@ export class AgentSession {
   async issue(
     action: AgentAction,
     options: {
-      userId?: string;
+      /**
+       * The sender. Required: a send that stays unconfirmed is held for them,
+       * and only they see it. `undefined` only before sign-in loads.
+       */
+      userId: string | undefined;
       trace?: PromptTrace;
       /** The send got no clear answer; its arrival is being checked. */
       onChecking?: () => void;
-    } = {}
+    }
   ): Promise<IssueResult> {
     const actionId = uuidv7();
     const trace =
@@ -544,14 +548,24 @@ export class AgentSession {
         })
         .with({ outcome: 'unknown' }, () => {
           trace?.end('unconfirmed');
-          holdUnconfirmedSend(this.id, options.userId, { actionId, action });
+          const message =
+            "We couldn't confirm it was sent; check the conversation.";
+          if (options.userId) {
+            holdUnconfirmedSend(this.id, options.userId, { actionId, action });
+            return err([
+              { name: 'Error', code: SEND_OUTCOME_UNKNOWN, message, actionId },
+            ]);
+          }
+          // No one to hold it for, so no card would show it: the error keeps
+          // the text instead.
+          const text = action.type === 'prompt' ? action.prompt : '';
           return err([
             {
               name: 'Error',
               code: SEND_OUTCOME_UNKNOWN,
-              message:
-                "We couldn't confirm it was sent; check the conversation.",
+              message: text ? `${message} Your message: ${text}` : message,
               actionId,
+              held: false,
             },
           ]);
         })

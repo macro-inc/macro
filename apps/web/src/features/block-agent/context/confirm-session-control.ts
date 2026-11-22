@@ -2,7 +2,10 @@ import type { AgentSession } from '@core/agent-session/AgentSession';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
-import { issueSessionAction } from '../queries/issue-session-action';
+import {
+  issueSessionAction,
+  NOT_A_PROMPT,
+} from '../queries/issue-session-action';
 
 /** Unanswered this long, the log is read directly in case the live feed missed it. */
 const REFRESH_AFTER_MS = 10_000;
@@ -46,7 +49,8 @@ async function awaitConfirmation(
   action: AgentAction,
   span: Span
 ): Promise<void> {
-  const result = await issueSessionAction(session, action);
+  // A config change, never a prompt.
+  const result = await issueSessionAction(session, action, NOT_A_PROMPT);
   if (result.isErr()) {
     span.setAttr('agent.control.outcome', 'refused');
     throw new Error(result.error.map((error) => error.message).join(' '));

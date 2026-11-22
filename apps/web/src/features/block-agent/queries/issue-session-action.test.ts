@@ -20,8 +20,10 @@ test.each([
     const session = { issue: vi.fn().mockResolvedValue(refusal) };
     const action = { type: 'prompt', prompt: 'Hello' } as const;
 
-    expect(await issueSessionAction(session, action)).toBe(refusal);
-    expect(session.issue).toHaveBeenCalledWith(action);
+    expect(
+      await issueSessionAction(session, action, { userId: undefined })
+    ).toBe(refusal);
+    expect(session.issue).toHaveBeenCalledWith(action, { userId: undefined });
     expect(state.usageLimitOpen()).toBe(true);
     expect(state.usageLimitCode()).toBe(reason);
   }
@@ -38,7 +40,11 @@ test('leaves permission failures and accepted actions to their caller', async ()
   };
   const action = { type: 'prompt', prompt: 'Hello' } as const;
 
-  expect(await issueSessionAction(session, action)).toBe(failure);
-  expect(await issueSessionAction(session, action)).toBe(accepted);
+  expect(await issueSessionAction(session, action, { userId: undefined })).toBe(
+    failure
+  );
+  expect(await issueSessionAction(session, action, { userId: undefined })).toBe(
+    accepted
+  );
   expect(state.usageLimitOpen()).toBe(false);
 });

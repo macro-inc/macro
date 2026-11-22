@@ -55,7 +55,7 @@ describe('combined model and effort selection', () => {
     const f = fixture();
     const result = configureSessionModel(f.session, undefined, selection);
     await flush();
-    expect(f.issue.mock.calls).toEqual([
+    expect(f.issue.mock.calls.map(([action]) => [action])).toEqual([
       [{ type: 'setConfigOption', ...selection }],
     ]);
     f.confirm(1);
@@ -70,11 +70,13 @@ describe('combined model and effort selection', () => {
       finished = true;
     })();
     await flush();
-    expect(f.issue.mock.calls).toEqual([[{ type: 'setModel', model: 'new' }]]);
+    expect(f.issue.mock.calls.map(([action]) => [action])).toEqual([
+      [{ type: 'setModel', model: 'new' }],
+    ]);
     f.snapshot.metadata.model = 'new';
     f.confirm(1);
     await flush();
-    expect(f.issue.mock.calls[1]).toEqual([
+    expect(f.issue.mock.calls[1]?.slice(0, 1)).toEqual([
       { type: 'setConfigOption', ...selection },
     ]);
     expect(finished).toBe(false);
@@ -111,10 +113,13 @@ describe('combined model and effort selection', () => {
     expect(f.issue).not.toHaveBeenCalled();
     const result = configureSessionModel(f.session, 'old', selection);
     await flush();
-    expect(f.issue).toHaveBeenCalledWith({
-      type: 'setConfigOption',
-      ...selection,
-    });
+    expect(f.issue).toHaveBeenCalledWith(
+      {
+        type: 'setConfigOption',
+        ...selection,
+      },
+      { userId: undefined }
+    );
     f.confirm(1);
     await result;
   });
@@ -136,7 +141,7 @@ it('confirms speed independently of reasoning effort before the caller sends a p
     finished = true;
   });
   await flush();
-  expect(f.issue.mock.calls).toEqual([
+  expect(f.issue.mock.calls.map(([action]) => [action])).toEqual([
     [{ type: 'setConfigOption', configId: 'speed', value: 'ultrafast' }],
   ]);
   expect(finished).toBe(false);

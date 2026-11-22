@@ -27,6 +27,8 @@ export const UNCONFIRMED_SENDS_PREFIX = 'agent-session-unconfirmed:';
 const UNCONFIRMED_SEND_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** The most a session keeps; older ones go first. */
 const MAX_SENDS_PER_SESSION = 10;
+/** The most this browser keeps across sessions. */
+const MAX_SENDS_TOTAL = 100;
 /** A prompt larger than this is kept for this page only. */
 const MAX_STORED_CHARS = 100_000;
 
@@ -57,19 +59,81 @@ function isStored(value: unknown): value is Stored {
   );
 }
 
-/** Keys in storage for this session, for anyone. */
-function storedKeys(sessionId: string): string[] {
+/**
+ * Every stored key, by session: built by one scan of storage (which also
+ * drops expired ones), then kept current by this page's writes and other
+ * tabs' `storage` events, so a fold batch never scans storage.
+ */
+let index: Map<string, Set<string>> | undefined;
+let followingOtherTabs = false;
+
+const sessionOfKey = (key: string) =>
+  key.slice(UNCONFIRMED_SENDS_PREFIX.length).split(':')[0] ?? '';
+
+function storedIndex(): Map<string, Set<string>> {
+  if (index) return index;
+  index = new Map();
+  const now = Date.now();
   const keys: string[] = [];
   try {
-    const prefix = sessionPrefix(sessionId);
-    for (let index = 0; index < localStorage.length; index++) {
-      const key = localStorage.key(index);
-      if (key?.startsWith(prefix)) keys.push(key);
+    for (let at = 0; at < localStorage.length; at++) {
+      const key = localStorage.key(at);
+      if (key?.startsWith(UNCONFIRMED_SENDS_PREFIX)) keys.push(key);
     }
   } catch {
     // Unreadable storage holds nothing.
   }
-  return keys;
+  for (const key of keys) {
+    const stored = readKey(key);
+    if (!stored || now - stored.heldAt > UNCONFIRMED_SEND_TTL_MS)
+      removeKey(key);
+    else indexKey(key);
+  }
+  if (!followingOtherTabs && typeof window !== 'undefined') {
+    followingOtherTabs = true;
+    window.addEventListener('storage', (event) => {
+      if (event.key === null) {
+        index = undefined;
+        return;
+      }
+      if (!event.key.startsWith(UNCONFIRMED_SENDS_PREFIX)) return;
+      if (event.newValue === null) unindexKey(event.key);
+      else indexKey(event.key);
+    });
+  }
+  return index;
+}
+
+function indexKey(key: string) {
+  const map = index ?? storedIndex();
+  const session = sessionOfKey(key);
+  const keys = map.get(session) ?? new Set();
+  keys.add(key);
+  map.set(session, keys);
+}
+
+function unindexKey(key: string) {
+  const keys = index?.get(sessionOfKey(key));
+  keys?.delete(key);
+  if (keys?.size === 0) index?.delete(sessionOfKey(key));
+}
+
+/** Keys in storage for this session, for anyone. */
+function storedKeys(sessionId: string): string[] {
+  return [...(storedIndex().get(sessionId) ?? [])];
+}
+
+/** Keeps storage under {@link MAX_SENDS_TOTAL}, dropping the oldest. */
+function capTotal() {
+  const all = [...storedIndex().values()].flatMap((keys) => [...keys]);
+  if (all.length <= MAX_SENDS_TOTAL) return;
+  const dated = all
+    .map((key) => ({ key, heldAt: readKey(key)?.heldAt ?? 0 }))
+    .sort((left, right) => left.heldAt - right.heldAt);
+  for (const { key } of dated.slice(0, all.length - MAX_SENDS_TOTAL)) {
+    removeKey(key);
+    unindexKey(key);
+  }
 }
 
 function readKey(key: string): Stored | undefined {
@@ -88,6 +152,7 @@ function removeKey(key: string) {
   } catch {
     // Nothing more to do.
   }
+  unindexKey(key);
 }
 
 /** The person's unconfirmed prompts in a session, oldest first. */
@@ -127,6 +192,7 @@ export function holdUnconfirmedSend(
   if (userId && raw.length <= MAX_STORED_CHARS) {
     try {
       localStorage.setItem(key, raw);
+      indexKey(key);
       persisted = true;
     } catch {
       // Full or blocked: this page still keeps it.
@@ -140,6 +206,7 @@ export function holdUnconfirmedSend(
       Math.max(0, all.length - MAX_SENDS_PER_SESSION)
     ))
       dropUnconfirmedSends(sessionId, [old.actionId], { quiet: true });
+    capTotal();
   }
   notify(sessionId);
 }
@@ -197,6 +264,7 @@ export function subscribeUnconfirmedSends(
 
 /** Forget what this page holds outside storage: sign-out, or a test's reload. */
 export function forgetUnconfirmedSendsInMemory() {
+  index = undefined;
   const sessions = new Set(
     [...inMemory.values()].map((send) => send.sessionId)
   );

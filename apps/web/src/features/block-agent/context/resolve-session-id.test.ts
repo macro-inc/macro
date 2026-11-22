@@ -186,6 +186,7 @@ describe('an id whose create is in flight', () => {
       value: { actionId: 'prompt', status: 'sent' },
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       prompt: 'Hello',
       modelOverride: 'model-2',
       effortOverride: { configId: 'effort', value: 'low' },
@@ -200,6 +201,7 @@ describe('an id whose create is in flight', () => {
 
   it('keeps initial context as a draft after startup without issuing a prompt', async () => {
     const placeholder = startPendingSession({
+      userId: undefined,
       initialInput: 'Document context ',
     });
     await createRoot(async (dispose) => {
@@ -216,7 +218,7 @@ describe('an id whose create is in flight', () => {
   });
 
   it('has no session until the create lands, then is that session', async () => {
-    const placeholder = startPendingSession();
+    const placeholder = startPendingSession({ userId: undefined });
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);
       expect(resolved.sessionId()).toBeUndefined();
@@ -240,7 +242,7 @@ describe('an id whose create is in flight', () => {
   // A service that predates client-minted ids answers with its own; the
   // block adopts that one exactly as it adopted a placeholder's before.
   it('adopts the id the service answers with when it differs', async () => {
-    const minted = startPendingSession();
+    const minted = startPendingSession({ userId: undefined });
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => minted);
       create.resolve?.('server-minted');
@@ -257,7 +259,7 @@ describe('an id whose create is in flight', () => {
   });
 
   it('fails when the create fails', async () => {
-    const placeholder = startPendingSession();
+    const placeholder = startPendingSession({ userId: undefined });
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);
       create.reject?.();
@@ -280,6 +282,7 @@ describe('an id whose create is in flight', () => {
       value: { actionId: 'action-1', status: 'accepted' },
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       botId: 'persona-1',
       modelOverride: 'model-2',
       prompt: 'Fix the tests',
@@ -315,6 +318,7 @@ describe('an id whose create is in flight', () => {
       value: { actionId: 'action-1', status: 'accepted' },
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       initialInput: 'Ask about Offsite ',
       modelOverride: 'model-2',
       instructions: 'Use the Offsite database by default.',
@@ -347,6 +351,7 @@ describe('an id whose create is in flight', () => {
       })
     );
     const placeholder = startPendingSession({
+      userId: undefined,
       botId: 'persona',
       prompt: 'Hello',
     });
@@ -376,6 +381,7 @@ describe('an id whose create is in flight', () => {
       value: { actionId: 'prompt', status: 'sent' },
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       modelOverride: 'model-2',
       effortOverride: { configId: 'effort', value: 'low' },
       prompt: 'Hello',
@@ -398,6 +404,7 @@ describe('an id whose create is in flight', () => {
       value: { actionId: 'control', status: 'accepted' },
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       modelOverride: 'model-2',
       effortOverride: { configId: 'effort', value: 'ultra' },
       prompt: 'Hello',
@@ -439,6 +446,7 @@ describe('an id whose create is in flight', () => {
       value: { actionId: 'control', status: 'accepted' },
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       effortOverride: { configId: 'effort', value: 'ultra' },
       prompt: 'Hello',
     });
@@ -467,6 +475,7 @@ describe('an id whose create is in flight', () => {
       ],
     });
     const placeholder = startPendingSession({
+      userId: undefined,
       botId: 'persona',
       prompt: 'Hello',
     });
@@ -505,7 +514,7 @@ it.each(['Describe this', ''])(
         mimeType: 'image/png',
       },
     ];
-    const id = startPendingSession({ prompt, attachments });
+    const id = startPendingSession({ userId: undefined, prompt, attachments });
     create.resolve?.();
     await flush();
     expect(create.requests).toEqual([
@@ -543,7 +552,7 @@ it.each([undefined, 'explicit-user'])(
 
 it('falls back to a cold session when claiming a warm session fails', async () => {
   takeWarm.mockReturnValueOnce({ id: 'stale-warm', claim: 'hit' });
-  const placeholder = startPendingSession();
+  const placeholder = startPendingSession({ userId: undefined });
   expect(placeholder).toBe('stale-warm');
   create.reject?.();
   await vi.waitFor(() => {
@@ -563,7 +572,10 @@ it('falls back to a cold session when claiming a warm session fails', async () =
 
 it('starts a fresh session when a warm id it took has expired', async () => {
   takeWarm.mockReturnValueOnce({ id: 'expired-warm', claim: 'hit' });
-  const placeholder = startPendingSession({ prompt: 'Hello' });
+  const placeholder = startPendingSession({
+    userId: undefined,
+    prompt: 'Hello',
+  });
   // The claim missed, so the harness created under the same id: taken.
   create.reject?.({
     code: 'SESSION_ID_TAKEN',
@@ -625,7 +637,11 @@ it('never forks a warm id once a create got no clear answer, even when a retry i
   try {
     takeWarm.mockReturnValueOnce({ id: 'lost-warm', claim: 'hit' });
     const onFailure = vi.fn();
-    const placeholder = startPendingSession({ prompt: 'Hello', onFailure });
+    const placeholder = startPendingSession({
+      userId: undefined,
+      prompt: 'Hello',
+      onFailure,
+    });
     create.reject?.({
       code: 'HTTP_ERROR',
       status: 504,

@@ -58,6 +58,7 @@ export function AgentSessionProvider(
     pending,
     failed,
     error,
+    heldId,
     pendingPrompt,
     initialInput,
     acquired,
@@ -71,24 +72,25 @@ export function AgentSessionProvider(
   });
 
   const userId = useUserId();
+  const live = createAgentSession(sessionId, {
+    userId,
+    provisioning: pending,
+    onAcquire: acquired,
+  });
   // A create whose outcome stayed unknown leaves its first prompt held under
   // the block's id, with no session to show it in: the error view does.
   const [startupHeld, setStartupHeld] = createSignal<UnconfirmedSend[]>([]);
   createEffect(() => {
-    const id = props.blockId;
+    const id = heldId() ?? props.blockId;
     const user = userId();
-    if (!failed()) {
+    // Also after a reload: the create never landed, so the id loads nothing.
+    if (!failed() && !live.loadFailed()) {
       setStartupHeld([]);
       return;
     }
     const read = () => setStartupHeld(unconfirmedSends(id, user));
     read();
     onCleanup(subscribeUnconfirmedSends(id, read));
-  });
-  const live = createAgentSession(sessionId, {
-    userId,
-    provisioning: pending,
-    onAcquire: acquired,
   });
   // A block opened by sending a first prompt shows that prompt, and the
   // working line under it, from its very first paint. Nothing else can: the
@@ -214,7 +216,7 @@ export function AgentSessionProvider(
           startupError: error,
           startupHeld,
           dropStartupHeld: (actionId) =>
-            dropUnconfirmedSends(props.blockId, [actionId]),
+            dropUnconfirmedSends(heldId() ?? props.blockId, [actionId]),
           session: live.session,
           bot: live.bot,
           metadata: live.metadata,

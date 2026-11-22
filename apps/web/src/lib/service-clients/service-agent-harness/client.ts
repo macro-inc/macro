@@ -45,7 +45,11 @@ import {
   type NO_RUNTIME_ACCESS_ERROR,
   readNoRuntimeAccessError,
 } from './no-runtime-access';
-import { SESSION_ID_TAKEN, SESSION_ID_TAKEN_TEXT } from './session-id-taken';
+import {
+  isSessionIdTaken,
+  SESSION_ID_TAKEN,
+  SESSION_ID_TAKEN_TEXT,
+} from './session-id-taken';
 
 export type {
   ArchiveCause,
@@ -86,10 +90,7 @@ const sessionCreateError: ErrorResponseHandler<
   | typeof NO_RUNTIME_ACCESS_ERROR
   | typeof SESSION_ID_TAKEN
 > = async (response) => {
-  if (
-    response.status === 409 &&
-    (await response.clone().text()).trim() === SESSION_ID_TAKEN_TEXT
-  )
+  if (await isSessionIdTaken(response))
     return {
       code: SESSION_ID_TAKEN,
       status: 409,

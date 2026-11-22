@@ -135,8 +135,6 @@ function AgentBlockContent(props: {
     pending,
     retryLoad,
     startupError,
-    startupHeld,
-    dropStartupHeld,
   } = useAgentSession();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
@@ -162,10 +160,13 @@ function AgentBlockContent(props: {
             <Show
               when={accessDenied()}
               fallback={
-                <LoadErrorPanel
-                  title="Unable to load this agent session"
-                  onRetry={loadRetryable() ? retryLoad : undefined}
-                />
+                <div class="flex size-full flex-col">
+                  <LoadErrorPanel
+                    title="Unable to load this agent session"
+                    onRetry={loadRetryable() ? retryLoad : undefined}
+                  />
+                  <HeldStartupCards />
+                </div>
               }
             >
               <EmptyStatePanel
@@ -183,33 +184,7 @@ function AgentBlockContent(props: {
                 title="Unable to start this agent"
                 description={error()}
               />
-              <div class="mx-auto w-full max-w-2xl px-4">
-                <For each={startupHeld?.() ?? []}>
-                  {(held) => (
-                    <UnconfirmedSendCard
-                      text={
-                        held.action.type === 'prompt' ? held.action.prompt : ''
-                      }
-                      attachmentCount={
-                        held.action.type === 'prompt'
-                          ? (held.action.attachments?.length ?? 0)
-                          : 0
-                      }
-                      onCopy={() =>
-                        fireAndForget(
-                          navigator.clipboard.writeText(
-                            held.action.type === 'prompt'
-                              ? held.action.prompt
-                              : ''
-                          ),
-                          'agent-block'
-                        )
-                      }
-                      onDismiss={() => dropStartupHeld?.(held.actionId)}
-                    />
-                  )}
-                </For>
-              </div>
+              <HeldStartupCards />
             </div>
           )}
         </Show>
@@ -326,5 +301,39 @@ export default function BlockAgent() {
         </>
       )}
     </Show>
+  );
+}
+
+/**
+ * First prompts a lost create may have started, on the block that has no
+ * session to show them in: the startup error, or (after a reload, when the
+ * create never landed) the load failure.
+ */
+function HeldStartupCards() {
+  const { startupHeld, dropStartupHeld } = useAgentSession();
+  return (
+    <div class="mx-auto w-full max-w-2xl px-4">
+      <For each={startupHeld?.() ?? []}>
+        {(held) => (
+          <UnconfirmedSendCard
+            text={held.action.type === 'prompt' ? held.action.prompt : ''}
+            attachmentCount={
+              held.action.type === 'prompt'
+                ? (held.action.attachments?.length ?? 0)
+                : 0
+            }
+            onCopy={() =>
+              fireAndForget(
+                navigator.clipboard.writeText(
+                  held.action.type === 'prompt' ? held.action.prompt : ''
+                ),
+                'agent-block'
+              )
+            }
+            onDismiss={() => dropStartupHeld?.(held.actionId)}
+          />
+        )}
+      </For>
+    </div>
   );
 }

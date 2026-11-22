@@ -1,3 +1,4 @@
+import { NOT_A_PROMPT } from '@app/features/block-agent/queries/issue-session-action';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type {
@@ -110,6 +111,8 @@ export function createLiveSession(sessionId: Accessor<string | undefined>) {
     failed,
     denied,
     retry: () => setRetry((value) => value + 1),
-    issue: (action: AgentAction) => live()?.issue(action),
+    issue: (action: AgentAction) =>
+      // Answers and stops only: never a prompt.
+      live()?.issue(action, NOT_A_PROMPT),
   };
 }

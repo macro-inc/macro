@@ -267,11 +267,14 @@ describe('createMagicChipModel', () => {
           answer: { kind: 'selected', optionId: 'allow' },
         })
       ).toBe(true);
-      expect(live.issue).toHaveBeenCalledWith({
-        type: 'respondToPermission',
-        requestId,
-        answer: { kind: 'selected', optionId: 'allow' },
-      });
+      expect(live.issue).toHaveBeenCalledWith(
+        {
+          type: 'respondToPermission',
+          requestId,
+          answer: { kind: 'selected', optionId: 'allow' },
+        },
+        { userId: undefined }
+      );
       onMetadata(metadata(null));
       expect(model.presentation().kind).not.toBe('asking');
       expect(
@@ -618,11 +621,14 @@ describe('createMagicChipModel', () => {
       })
     ).toBe(true);
     // The answer rides the session's optimistic path, not a bare POST.
-    expect(live.issue).toHaveBeenCalledWith({
-      type: 'respondElicitation',
-      requestId: 9,
-      action: 'decline',
-    });
+    expect(live.issue).toHaveBeenCalledWith(
+      {
+        type: 'respondElicitation',
+        requestId: 9,
+        action: 'decline',
+      },
+      { userId: undefined }
+    );
 
     dispose();
   });

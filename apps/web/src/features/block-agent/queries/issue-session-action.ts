@@ -10,3 +10,9 @@ export async function issueSessionAction(
   if (result.isErr()) handleAiUsageLimitError(result.error);
   return result;
 }
+
+/**
+ * The options for a control action that is never a prompt (an answer, a
+ * stop, a config change): nothing is held for a sender, so none is needed.
+ */
+export const NOT_A_PROMPT = { userId: undefined } as const;

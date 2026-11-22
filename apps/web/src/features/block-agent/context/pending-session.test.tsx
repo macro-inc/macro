@@ -26,6 +26,19 @@ const harness = vi.hoisted(() => ({
   queue: vi.fn(),
 }));
 
+const warm = vi.hoisted(() => ({
+  take: vi.fn((): { id?: string; claim: string } => ({
+    claim: 'miss_none_ready',
+  })),
+}));
+vi.mock('@queries/agent-session/warm', () => ({
+  takeWarmAgentSession: warm.take,
+  replenishWarmAgentSession: () => {},
+}));
+const cachedUser = vi.hoisted(() => ({ id: undefined as string | undefined }));
+vi.mock('@queries/auth/user-info', () => ({
+  cachedUserId: () => cachedUser.id,
+}));
 vi.mock('@core/agent-fold/client', () => fold);
 vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   const actual =
@@ -160,6 +173,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   forgetUnconfirmedSendsInMemory();
+  cachedUser.id = undefined;
   flags.firstPromptOnCreate = true;
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({
@@ -190,7 +204,11 @@ describe('pending navigation ownership', () => {
   // A persona delivers its first prompt with a control POST once the session
   // exists; these cover who owns the fold while that POST is out.
   it('keeps one fold and the prompt trace when the POST finishes before mount', async () => {
-    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
+    const id = startPendingSession({
+      userId: undefined,
+      botId: 'persona',
+      prompt: 'Hello',
+    });
     await settle();
     const beforeMount = AgentSession.get(id);
     const trace = promptTrace();
@@ -266,7 +284,11 @@ describe('pending navigation ownership', () => {
     const delivery = deferred<ReturnType<typeof accepted>>();
     harness.create.mockReturnValue(creation.promise);
     harness.control.mockReturnValue(delivery.promise);
-    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
+    const id = startPendingSession({
+      userId: undefined,
+      botId: 'persona',
+      prompt: 'Hello',
+    });
     const destination = mount(id);
     creation.resolve(created(id));
     await settle();
@@ -290,7 +312,11 @@ describe('pending navigation ownership', () => {
   it('retains the POST owner when the destination unmounts during delivery', async () => {
     const delivery = deferred<ReturnType<typeof accepted>>();
     harness.control.mockReturnValue(delivery.promise);
-    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
+    const id = startPendingSession({
+      userId: undefined,
+      botId: 'persona',
+      prompt: 'Hello',
+    });
     await settle();
     const destination = mount(id);
     await settle();
@@ -305,7 +331,11 @@ describe('pending navigation ownership', () => {
   });
 
   it('expires a ready session whose navigation never mounts', async () => {
-    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
+    const id = startPendingSession({
+      userId: undefined,
+      botId: 'persona',
+      prompt: 'Hello',
+    });
     await settle();
     expect(AgentSession.get(id)).toBeDefined();
     await vi.advanceTimersByTimeAsync(5 * 60_000);
@@ -318,7 +348,11 @@ describe('pending navigation ownership', () => {
   it('bounds an abandoned create and does not retain a late result', async () => {
     const creation = deferred<ReturnType<typeof created>>();
     harness.create.mockReturnValue(creation.promise);
-    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
+    const id = startPendingSession({
+      userId: undefined,
+      botId: 'persona',
+      prompt: 'Hello',
+    });
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     expect(pendingSession(id)).toBeUndefined();
     creation.resolve(created(id));
@@ -331,7 +365,11 @@ describe('pending navigation ownership', () => {
   it('still delivers a slow create to its mounted destination after registry expiry', async () => {
     const creation = deferred<ReturnType<typeof created>>();
     harness.create.mockReturnValue(creation.promise);
-    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
+    const id = startPendingSession({
+      userId: undefined,
+      botId: 'persona',
+      prompt: 'Hello',
+    });
     const destination = mount(id);
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     expect(pendingSession(id)).toBeUndefined();
@@ -354,7 +392,11 @@ describe('pending navigation ownership', () => {
         },
       ])
     );
-    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
+    const id = startPendingSession({
+      userId: undefined,
+      botId: 'persona',
+      prompt: 'Hello',
+    });
     await settle();
     expect(pendingSession(id)?.error()).toBe('Runtime is disconnected.');
     expect(AgentSession.get(id)).toBeUndefined();
@@ -379,6 +421,7 @@ describe('pending navigation ownership', () => {
     const onDelivered = vi.fn();
     const onFailure = vi.fn();
     const id = startPendingSession({
+      userId: undefined,
       botId: 'persona',
       prompt: 'Hello',
       onDelivered,
@@ -443,7 +486,7 @@ describe('pending navigation ownership', () => {
         err([
           then === 'unreadable'
             ? {
-                code: 'HTTP_ERROR',
+                code: 'SESSION_ID_TAKEN',
                 status: 409,
                 message: 'this id is already taken',
               }
@@ -454,7 +497,8 @@ describe('pending navigation ownership', () => {
               },
         ])
       );
-    harness.get.mockResolvedValueOnce(err([gatewayTimeout]));
+    if (then === 'unreadable')
+      harness.get.mockResolvedValueOnce(err([gatewayTimeout]));
     const onFailure = vi.fn();
     const id = startPendingSession({
       prompt: 'Hello',
@@ -464,8 +508,86 @@ describe('pending navigation ownership', () => {
     await vi.advanceTimersByTimeAsync(10_000);
 
     expect(harness.create).toHaveBeenCalledTimes(2);
+    // The unreadable case really reads the session it was told exists.
+    expect(harness.get).toHaveBeenCalledTimes(then === 'unreadable' ? 1 : 0);
     expect(onFailure).not.toHaveBeenCalled();
     expect(pendingSession(id)?.error()).toContain('may not have been created');
+    expect(unconfirmedSends(id, 'macro|me@macro.com')).toHaveLength(1);
+  });
+
+  it('holds a first prompt whose warm fallback create got no clear answer, under the fallback id', async () => {
+    warm.take.mockReturnValueOnce({ id: 'expired-warm', claim: 'hit' });
+    const gatewayTimeout = {
+      code: 'HTTP_ERROR',
+      status: 504,
+      message: 'Agent request failed (HTTP 504).',
+    };
+    harness.create
+      .mockResolvedValueOnce(
+        err([
+          {
+            code: 'SESSION_ID_TAKEN',
+            status: 409,
+            message: 'this id is already taken',
+          },
+        ])
+      )
+      .mockResolvedValue(err([gatewayTimeout]));
+    const onFailure = vi.fn();
+    const id = startPendingSession({
+      prompt: 'Hello',
+      onFailure,
+      userId: 'macro|me@macro.com',
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    const ids = harness.create.mock.calls.map(([request]) => request.id);
+    expect(ids[0]).toBe('expired-warm');
+    const fallback = ids[1];
+    expect(fallback).not.toBe('expired-warm');
+    expect(ids.slice(1)).toEqual([fallback, fallback, fallback]);
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(pendingSession(id)?.heldId()).toBe(fallback);
+    expect(unconfirmedSends(fallback, 'macro|me@macro.com')).toHaveLength(1);
+  });
+
+  it('adopts its own lost create for a caller that passes no person', async () => {
+    // ChatWithAgentButton and other callers outside a component pass none.
+    cachedUser.id = 'macro|me@macro.com';
+    harness.create
+      .mockResolvedValueOnce(
+        err([
+          {
+            code: 'HTTP_ERROR',
+            status: 504,
+            message: 'Agent request failed (HTTP 504).',
+          },
+        ])
+      )
+      .mockResolvedValueOnce(
+        err([
+          {
+            code: 'SESSION_ID_TAKEN',
+            status: 409,
+            message: 'this id is already taken',
+          },
+        ])
+      );
+    harness.get.mockImplementationOnce(async (sessionId: string) =>
+      ok({ id: sessionId, ownerId: 'macro|me@macro.com' })
+    );
+    const onFailure = vi.fn();
+    const id = startPendingSession({
+      userId: undefined,
+      prompt: 'Hello',
+      onFailure,
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(pendingSession(id)?.error()).toBeUndefined();
+    expect(harness.create).toHaveBeenCalledTimes(2);
+    expect(pendingSession(id)?.sessionId()).toBe(id);
     expect(unconfirmedSends(id, 'macro|me@macro.com')).toHaveLength(1);
   });
 
@@ -505,7 +627,11 @@ describe('pending navigation ownership', () => {
         },
       ])
     );
-    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
+    const id = startPendingSession({
+      userId: undefined,
+      botId: 'persona',
+      prompt: 'Hello',
+    });
     await settle();
     const destination = mount(id);
     expect(pendingSession(id)?.error()).toBe('Could not create session.');
@@ -522,6 +648,7 @@ it('retains submitting context until the first prompt is accepted', async () => 
   const onDelivered = vi.fn();
   const onFailure = vi.fn();
   startPendingSession({
+    userId: undefined,
     botId: 'persona',
     prompt: 'Hello',
     onDelivered,
@@ -554,6 +681,7 @@ it('restores submitting context when speed configuration fails', async () => {
   const onDelivered = vi.fn();
   const onFailure = vi.fn();
   const id = startPendingSession({
+    userId: undefined,
     prompt: 'Keep this draft',
     modelOverride: 'openai/gpt-6-astra',
     speedOverride: { configId: 'speed', value: 'ultrafast' },
@@ -681,6 +809,7 @@ describe('first prompt on the create', () => {
 
   it("keeps an effort's first prompt for after the session is configured", async () => {
     const id = startPendingSession({
+      userId: undefined,
       prompt: 'Hello',
       effortOverride: { configId: 'effort', value: 'high' },
     });
@@ -691,7 +820,7 @@ describe('first prompt on the create', () => {
 
   it('sends the first prompt as a control POST while the rollout is off', async () => {
     flags.firstPromptOnCreate = false;
-    const id = startPendingSession({ prompt: 'Hello' });
+    const id = startPendingSession({ userId: undefined, prompt: 'Hello' });
     await settle();
 
     expect(harness.create.mock.calls[0][0]).toEqual({ id });
@@ -704,6 +833,7 @@ describe('first prompt on the create', () => {
 
   it("keeps a speed's first prompt for after the session is configured", async () => {
     const id = startPendingSession({
+      userId: undefined,
       prompt: 'Hello',
       speedOverride: { configId: 'speed', value: 'fast' },
     });
@@ -715,7 +845,12 @@ describe('first prompt on the create', () => {
   it('releases submitting context once the create carrying the prompt answers', async () => {
     const onDelivered = vi.fn();
     const onFailure = vi.fn();
-    startPendingSession({ prompt: 'Hello', onDelivered, onFailure });
+    startPendingSession({
+      userId: undefined,
+      prompt: 'Hello',
+      onDelivered,
+      onFailure,
+    });
     await settle();
     expect(onDelivered).toHaveBeenCalledOnce();
     expect(onFailure).not.toHaveBeenCalled();

@@ -45,6 +45,7 @@ import {
   replenishWarmAgentSession,
   takeWarmAgentSession,
 } from '@queries/agent-session/warm';
+import { cachedUserId } from '@queries/auth/user-info';
 import { refetchSoupEntity } from '@queries/soup/normalized-cache';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
@@ -72,6 +73,8 @@ export type PendingSession = {
   failed: Accessor<boolean>;
   /** The startup error returned by the service. */
   error: Accessor<string | undefined>;
+  /** Where a create with no clear answer held its first prompt. */
+  heldId: Accessor<string | undefined>;
   /**
    * The first prompt, so the block can show it as sent from the moment it
    * opens rather than once the create has answered.
@@ -102,8 +105,12 @@ export type StartPendingSessionOptions = {
   prompt?: string;
   /** Uploaded SFS files delivered with the first prompt. */
   attachments?: PromptAttachment[];
-  /** The sender, so the first prompt is attributed as the log will. */
-  userId?: string;
+  /**
+   * The sender, so the first prompt is attributed as the log will, a lost
+   * create's prompt is held for them, and only their session is adopted.
+   * Required so no caller forgets it; `undefined` only before sign-in loads.
+   */
+  userId: string | undefined;
   /** The submitting composer, independent of its position in a split layout. */
   submitSurface?: PromptSubmitSurface;
   /** Model to run on instead of the persona's, set as the session is created. */
@@ -139,7 +146,7 @@ export type StartPendingSessionOptions = {
  * the harness mints for actions, so it sorts by time with the server's own.
  */
 export function startPendingSession(
-  options: StartPendingSessionOptions = {}
+  options: StartPendingSessionOptions
 ): string {
   const { id: warmId, claim: warmClaim } = takeWarmAgentSession(options);
   const id = warmId ?? uuidv7();
@@ -186,6 +193,11 @@ export function startPendingSession(
   const promptClientId = typedInClientId();
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
+  // Every caller's person, so a held prompt is theirs and an adopted session
+  // can be checked as theirs, also for callers that pass none.
+  const userId = options.userId ?? cachedUserId();
+  // The id a lost create's first prompt is held under, for its error view.
+  const [heldId, setHeldId] = createSignal<string>();
   let navigation: AgentSession | undefined;
   let disposed = false;
   const releaseNavigation = () => {
@@ -212,6 +224,7 @@ export function startPendingSession(
     sessionId,
     failed: () => error() !== undefined,
     error,
+    heldId,
     prompt: options.prompt?.trim() || undefined,
     initialInput: options.initialInput,
     dispose: () => {
@@ -254,83 +267,94 @@ export function startPendingSession(
   // refusal like any other. Once a try was unclear, nothing later is a
   // refusal: the first may have landed, so it never forks to a fresh id and
   // never hands the prompt back.
-  const createSession = async (): Promise<{
+  type Created = {
     result: Awaited<ReturnType<typeof create>>;
     adopted: boolean;
-    /** Some try may have made the session under `id`. */
+    /** Some try may have made the session under `heldId`. */
     unknown: boolean;
-  }> => {
-    const attempt = async (
-      sessionId: string
-    ): Promise<Awaited<ReturnType<typeof create>>> => {
-      try {
-        return await create(sessionId);
-      } catch (error: unknown) {
-        console.warn('[agent-session] create threw', error);
-        return err([
-          {
-            name: 'Error',
-            code: 'NETWORK_ERROR',
-            message: 'Could not reach the agent service.',
-          },
-        ]);
-      }
-    };
-    let result = await attempt(id);
+    /** The id the last tries went under: the placeholder, or a fallback. */
+    heldId: string;
+  };
+  const attempt = async (
+    sessionId: string
+  ): Promise<Awaited<ReturnType<typeof create>>> => {
+    try {
+      return await create(sessionId);
+    } catch (error: unknown) {
+      console.warn('[agent-session] create threw', error);
+      return err([
+        {
+          name: 'Error',
+          code: 'NETWORK_ERROR',
+          message: 'Could not reach the agent service.',
+        },
+      ]);
+    }
+  };
+  // Creates under `sessionId`, asking again under it while no answer is clear.
+  // A warm id may fall back once to a fresh id, which follows the same rules.
+  const createUnder = async (
+    sessionId: string,
+    mayFallBack: boolean
+  ): Promise<Created> => {
+    const settled = (
+      result: Created['result'],
+      unknown: boolean,
+      adopted = false
+    ): Created => ({ result, adopted, unknown, heldId: sessionId });
+    let result = await attempt(sessionId);
     let unclear = false;
     for (const delay of CREATE_RETRY_DELAYS_MS) {
       if (!result.isErr() || !isUnknownOutcome(result.error)) break;
       unclear = true;
       trace?.stage('create_retry');
       await new Promise((resolve) => setTimeout(resolve, delay));
-      result = await attempt(id);
+      result = await attempt(sessionId);
     }
-    if (!result.isErr()) return { result, adopted: false, unknown: false };
+    if (!result.isErr()) return settled(result, false);
     const taken = result.error.some((error) => error.code === SESSION_ID_TAKEN);
     if (taken && unclear) {
       const existing = await agentHarnessServiceClient
-        .get(id)
+        .get(sessionId)
         .catch(() => undefined);
       if (existing?.isOk()) {
-        if (options.userId && existing.value.ownerId === options.userId)
-          return {
-            result: ok({ session: existing.value }),
-            adopted: true,
-            unknown: false,
-          };
+        if (userId && existing.value.ownerId === userId)
+          return settled(ok({ session: existing.value }), false, true);
         // Someone else's: this person's tries never made it.
-        return warmId
-          ? { result: await attempt(uuidv7()), adopted: false, unknown: false }
-          : { result, adopted: false, unknown: false };
+        return mayFallBack
+          ? createUnder(uuidv7(), false)
+          : settled(result, false);
       }
       // It exists but could not be read: still unconfirmed.
-      return { result, adopted: false, unknown: true };
+      return settled(result, true);
     }
-    if (unclear || isUnknownOutcome(result.error))
-      return { result, adopted: false, unknown: true };
+    if (unclear || isUnknownOutcome(result.error)) return settled(result, true);
     // An expired or failed reservation must not prevent ordinary creation.
-    if (warmId)
-      return {
-        result: await attempt(uuidv7()),
-        adopted: false,
-        unknown: false,
-      };
-    return { result, adopted: false, unknown: false };
+    return mayFallBack ? createUnder(uuidv7(), false) : settled(result, false);
   };
+  const createSession = () => createUnder(id, warmId !== undefined);
 
   fireAndForget(
     traced(() =>
       createSession()
-        .then(async ({ result, adopted, unknown }) => {
+        .then(async ({ result, adopted, unknown, heldId: lastId }) => {
           if (result.isErr() && unknown && promptActionId && firstPrompt) {
             // The prompt rode the create and may have started: it stays on
             // the card the error view shows, never back in the box.
-            holdUnconfirmedSend(id, options.userId, {
-              actionId: promptActionId,
-              action: firstPrompt,
-            });
+            setHeldId(lastId);
+            if (userId)
+              holdUnconfirmedSend(lastId, userId, {
+                actionId: promptActionId,
+                action: firstPrompt,
+              });
+            const quoted =
+              firstPrompt.type === 'prompt' ? firstPrompt.prompt : '';
             failUnconfirmed(
-              'The chat may not have been created, and your message may have been sent. Check your chats before sending it again.'
+              userId
+                ? 'The chat may not have been created, and your message may have been sent. Check your chats before sending it again.'
+                : // No one to hold it for, so nothing would show the card: the
+                  // error keeps the text instead.
+                  `The chat may not have been created, and your message may have been sent. Check your chats before sending it again. Your message: ${quoted}`
             );
             return;
           }
@@ -403,10 +427,10 @@ export function startPendingSession(
               // fast POST cannot destroy the fold before that view mounts.
               if (!disposed) navigation = AgentSession.acquire(created);
               setSessionId(created);
-              const userId = options.userId ?? result.value.session.ownerId;
+              const promptUserId = userId ?? result.value.session.ownerId;
               if (promptActionId && firstPrompt && adopted) {
                 // Whether the first create started it is unknown.
-                holdUnconfirmedSend(created, options.userId, {
+                holdUnconfirmedSend(created, promptUserId, {
                   actionId: promptActionId,
                   action: firstPrompt,
                 });
@@ -415,7 +439,7 @@ export function startPendingSession(
               } else if (promptActionId && firstPrompt && trace) {
                 trace.accepted(promptActionId, false);
                 session.adoptPrompt(promptActionId, firstPrompt, {
-                  userId,
+                  userId: promptUserId,
                   trace,
                 });
                 options.onDelivered?.();
@@ -423,7 +447,7 @@ export function startPendingSession(
                 const delivered = await issueSessionAction(
                   session,
                   firstPrompt,
-                  { userId, trace }
+                  { userId: promptUserId, trace }
                 );
                 // Possibly sent: the session keeps it as unconfirmed, and its
                 // composer shows it. Never hand it back as a failed draft.

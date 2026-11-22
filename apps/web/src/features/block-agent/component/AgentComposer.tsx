@@ -149,8 +149,13 @@ export function AgentComposer(props: {
       const unconfirmed = result.error.find(
         (error) => error.code === SEND_OUTCOME_UNKNOWN
       );
-      // The card for it (below) keeps the text instead.
-      if (unconfirmed) return { taken: true };
+      // The card for it (below) keeps the text instead, or, with no one to
+      // hold it for, the message quotes it.
+      if (unconfirmed) {
+        if ('held' in unconfirmed && unconfirmed.held === false)
+          toast.failure(unconfirmed.message);
+        return { taken: true };
+      }
       // A stopped agent says why in the transcript instead of a toast.
       const refused = result.error.find(isNoRuntimeAccessError);
       if (refused) return { taken: false, refusal: refused.message };

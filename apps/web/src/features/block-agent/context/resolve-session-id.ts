@@ -19,6 +19,8 @@ export type ResolvedSessionId = {
   /** The create failed. */
   failed: Accessor<boolean>;
   error: Accessor<string | undefined>;
+  /** Where a lost create held its first prompt, when it did. */
+  heldId: Accessor<string | undefined>;
   /** The first prompt of a create this block started, to show as sent while
    *  the create is still on the wire. */
   pendingPrompt: Accessor<string | undefined>;
@@ -54,6 +56,7 @@ export function resolveSessionId(blockId: Accessor<string>): ResolvedSessionId {
       entry()?.sessionId() === undefined,
     failed: () => entry()?.failed() ?? false,
     error: () => entry()?.error(),
+    heldId: () => entry()?.heldId(),
     pendingPrompt: () => entry()?.prompt,
     initialInput: () => entry()?.initialInput,
     acquired: () => forgetPendingSession(blockId()),

@@ -17,6 +17,9 @@ vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () =>
     mocks.manager ? { openWithSplit: mocks.openWithSplit } : undefined,
 }));
+vi.mock('@queries/auth/user-info', () => ({
+  cachedUserId: () => 'macro|me@macro.com',
+}));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({
   startPendingSession: mocks.startPendingSession,
 }));
@@ -65,7 +68,10 @@ describe('Ask Agent sessions', () => {
   });
   it('hands a submitted query to the agent as the first prompt', async () => {
     await openChatWithMessage('Find my latest invoices');
+    // The signed-in person, so a lost create's prompt is held for them and
+    // only their own session is adopted.
     expect(mocks.startPendingSession).toHaveBeenCalledWith({
+      userId: 'macro|me@macro.com',
       prompt: 'Find my latest invoices',
       initialInput: undefined,
     });
@@ -81,6 +87,7 @@ describe('Ask Agent sessions', () => {
       instructions: 'Use this database by default.',
     });
     expect(mocks.startPendingSession).toHaveBeenCalledWith({
+      userId: 'macro|me@macro.com',
       prompt: undefined,
       initialInput: '<m-document-mention>{}</m-document-mention> ',
       modelOverride: 'database-model',
@@ -97,6 +104,7 @@ describe('Ask Agent sessions', () => {
       if (query) await openChatWithMessageReplacingSplit(query, split);
       else await openChatWithInputReplacingSplit('', split);
       expect(mocks.startPendingSession).toHaveBeenCalledWith({
+        userId: 'macro|me@macro.com',
         prompt: query || undefined,
         initialInput: query ? undefined : '',
       });
