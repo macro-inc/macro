@@ -472,7 +472,7 @@ async fn relay(
                     Some(message @ (ToRuntimeMessage::RunTeammate { .. } | ToRuntimeMessage::StopTeammate { .. })) => {
                         handle_teammate_message(teammates.as_ref(), message);
                     }
-                    Some(ToRuntimeMessage::RecheckTeammateHost { .. }) => recheck_teammate_host(teammates.as_ref()),
+                    Some(ToRuntimeMessage::RecheckTeammateHost { traceparent, .. }) => recheck_teammate_host(teammates.as_ref(), traceparent),
                     Some(other) => tracing::debug!(message = ?other, "ignoring an unknown runtime message"),
                     None => return Ok(Relayed::Closed),
                 }
@@ -614,13 +614,13 @@ async fn next_teammate_event(teammates: &mut Option<TeammateLink>) -> TeammateEv
 
 /// Check hosting again now, as the service asked; without teammates there
 /// is nothing to check.
-fn recheck_teammate_host(teammates: Option<&TeammateLink>) {
+fn recheck_teammate_host(teammates: Option<&TeammateLink>, traceparent: Option<String>) {
     #[cfg(unix)]
     if let Some(link) = teammates {
-        link.recheck();
+        link.recheck(traceparent);
     }
     #[cfg(not(unix))]
-    let _ = teammates;
+    let _ = (teammates, traceparent);
 }
 
 /// Hand a `RunTeammate` or `StopTeammate` to the teammates. The service

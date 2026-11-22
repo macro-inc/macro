@@ -588,8 +588,9 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
 pub struct Link {
     teammates: Arc<HostTeammates>,
     statuses: broadcast::Receiver<Status>,
-    /// Asks the connection's check task for a check now.
-    asks: mpsc::UnboundedSender<()>,
+    /// Asks the connection's check task for a check now, with the asking
+    /// span's `traceparent`.
+    asks: mpsc::UnboundedSender<Option<String>>,
     /// What the check task found: its own task, so a relay busy with other
     /// traffic can't cancel a check midway.
     checked: mpsc::UnboundedReceiver<TeammateEvent>,
@@ -652,9 +653,10 @@ impl Link {
     }
 
     /// The service asks to check hosting again now (a person pressed
-    /// "Check again"): the result is reported as the next event.
-    pub fn recheck(&self) {
-        let _ = self.asks.send(());
+    /// "Check again"), from the span `traceparent` names: the result is
+    /// reported as the next event.
+    pub fn recheck(&self, traceparent: Option<String>) {
+        let _ = self.asks.send(traceparent);
     }
 }
 
@@ -675,7 +677,7 @@ async fn check_host(
     teammates: Arc<HostTeammates>,
     listed: bool,
     mut again: bool,
-    mut asked: mpsc::UnboundedReceiver<()>,
+    mut asked: mpsc::UnboundedReceiver<Option<String>>,
     events: mpsc::UnboundedSender<TeammateEvent>,
 ) {
     let mut ticks =
@@ -685,20 +687,29 @@ async fn check_host(
     // it (the service already has its report).
     let mut last_check: Option<tokio::time::Instant> = None;
     loop {
-        tokio::select! {
-            _ = ticks.tick(), if again => {}
+        // The span of a check the service asked for, joined to its trace.
+        let span = tokio::select! {
+            _ = ticks.tick(), if again => tracing::Span::none(),
             ask = asked.recv() => {
-                if ask.is_none() {
+                let Some(traceparent) = ask else {
                     return;
-                }
+                };
                 if last_check.is_some_and(|ended| ended.elapsed() < RECHECK_FOLD) {
+                    tracing::debug!("a recheck right after a check is answered by it");
                     continue;
                 }
+                let span = tracing::info_span!("teammate.recheck_host", folded = tracing::field::Empty);
+                hosted_runtimes::domain::telemetry::attach(&span, traceparent.as_deref());
+                span
             }
-        }
-        let report = teammates.detect().await;
+        };
+        let report = teammates.detect().instrument(span.clone()).await;
         // One check in flight: the asks made during it are answered by it.
-        while asked.try_recv().is_ok() {}
+        let mut folded = 0u32;
+        while asked.try_recv().is_ok() {
+            folded += 1;
+        }
+        span.record("folded", folded);
         last_check = Some(tokio::time::Instant::now());
         if !listed && can_host(&report) {
             let _ = events.send(TeammateEvent::Redial);

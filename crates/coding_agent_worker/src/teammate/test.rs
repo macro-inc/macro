@@ -1275,7 +1275,7 @@ async fn a_recheck_the_service_asks_for_reports_a_fresh_check() {
     let mut link = Link::open(Arc::clone(&teammates), report, &to_service);
     fixture.engine.state().info = Err(EngineUnavailable::Unreachable);
 
-    link.recheck();
+    link.recheck(None);
     let checked = tokio::time::timeout(Duration::from_secs(1), next_host_event(&mut link))
         .await
         .expect("checked at once");
@@ -1300,14 +1300,14 @@ async fn rechecks_asked_together_are_one_check() {
     let mut link = Link::open(Arc::clone(&teammates), report, &to_service);
 
     for _ in 0..5 {
-        link.recheck();
+        link.recheck(None);
     }
     let checked = tokio::time::timeout(Duration::from_secs(1), next_host_event(&mut link))
         .await
         .expect("checked at once");
     assert!(matches!(checked, TeammateEvent::Send(_)), "{checked:?}");
     tokio::time::sleep(Duration::from_secs(2)).await;
-    link.recheck();
+    link.recheck(None);
     assert!(
         tokio::time::timeout(Duration::from_secs(60), next_host_event(&mut link))
             .await
@@ -1315,7 +1315,10 @@ async fn rechecks_asked_together_are_one_check() {
         "the asks fold into the one check"
     );
 
-    link.recheck();
+    // Asked from a traced click: the check joins its trace.
+    link.recheck(Some(
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_owned(),
+    ));
     tokio::time::timeout(Duration::from_secs(1), next_host_event(&mut link))
         .await
         .expect("a later ask is checked");

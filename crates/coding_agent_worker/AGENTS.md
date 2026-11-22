@@ -132,7 +132,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   (`ENGINE_RECHECK`, its own task), and at once on the service's
   `RecheckTeammateHost` (listed as `recheck-teammate-host` whenever hosting
   is set up), sending each report. One check runs at a time: asks during
-  it, or within 5 s after it (`RECHECK_FOLD`), are answered by it. Once the machine can host on a dial
+  it, or within 5 s after it (`RECHECK_FOLD`), are answered by it. An asked
+  check runs in `teammate.recheck_host` (joined to the message's
+  `traceparent`, `folded` asks recorded), with `teammate.engine_check` under it. Once the machine can host on a dial
   without `teammate-container`, it asks for one redial and stops checking;
   the relay latches it and closes when no turn runs. The probe runs as
   `isolation-probe-<harness id prefix>`, so macrods sharing an engine don't
