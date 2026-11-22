@@ -21,7 +21,7 @@ const entry = (queryHash: string): PersistedQueryEntry => ({
   buster: 'test',
 });
 
-it('deletes the REST channel list and activity records, scoped or not, and keeps the directory', async () => {
+it('deletes the REST channel list and activity records, scoped or not, and keeps the directory and mentions', async () => {
   const store = createPerQueryIDBStore({
     dbName: createPersistenceKey(`channels-${getOrCreateCacheScope()}`, 1),
   });
@@ -31,8 +31,11 @@ it('deletes the REST channel list and activity records, scoped or not, and keeps
     '["channel","listChannels","user-1"]',
     '["channel","activity","user-1"]',
   ];
-  const directory = '["channel","directory","user-1"]';
-  for (const hash of [...retired, directory]) {
+  const kept = [
+    '["channel","directory","user-1"]',
+    '["channel","mentions","channel-1"]',
+  ];
+  for (const hash of [...retired, ...kept]) {
     store.set(entry(hash));
   }
   await store.flush();
@@ -43,5 +46,7 @@ it('deletes the REST channel list and activity records, scoped or not, and keeps
   for (const hash of retired) {
     expect(await store.get(hash)).toBeUndefined();
   }
-  expect(await store.get(directory)).toEqual(entry(directory));
+  for (const hash of kept) {
+    expect(await store.get(hash)).toEqual(entry(hash));
+  }
 });

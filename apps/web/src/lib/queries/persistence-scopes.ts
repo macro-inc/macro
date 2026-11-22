@@ -57,13 +57,10 @@ export function createQueryPersistenceScopes(
   const scopedKey = (name: string) =>
     createPersistenceKey(`${name}-${accountScope}`, 1);
   const channels = createPerQueryIDBStore({ dbName: scopedKey('channels') });
+  // By key range, so a launch with nothing left to delete reads no entry and
+  // the restores queued behind it barely wait.
   fireAndForget(
-    channels.prune(
-      ({ queryKey }) =>
-        !RETIRED_CHANNEL_QUERY_PREFIXES.some((prefix) =>
-          partialMatchKey(queryKey, prefix)
-        )
-    ),
+    channels.removeKeyPrefixes(RETIRED_CHANNEL_QUERY_PREFIXES),
     'query-persistence'
   );
 
