@@ -419,7 +419,7 @@ export function AgentInput(props: AgentInputProps) {
                       )}
                     />
                   </Show>
-                  <div class="ml-auto flex shrink-0 items-center gap-[3.75px]">
+                  <div class="ml-auto flex min-w-0 items-center gap-[3.75px]">
                     <Show when={props.modelControl}>
                       <div class="min-w-0">{props.modelControl}</div>
                     </Show>
