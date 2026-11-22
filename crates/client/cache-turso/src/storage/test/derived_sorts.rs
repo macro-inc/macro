@@ -363,7 +363,8 @@ fn a_document_at_the_attribute_limit_becomes_incomplete() {
         store(&storage, &shapes, None);
         store(&storage, &shapes, Some(mutation_id_to_sql(owner).unwrap()));
         // Three attributes of its own: document 1 reaches the limit, 2 stays
-        // one below it.
+        // one below it, with a second value on one attribute so it holds more
+        // rows than the limit allows attributes.
         let limit = predicate_index::MAX_ATTRIBUTES_PER_DOCUMENT;
         for (document_id, extra) in [(1, limit - 3), (2, limit - 4)] {
             for index in 0..extra {
@@ -377,6 +378,15 @@ fn a_document_at_the_attribute_limit_becomes_incomplete() {
                     );
                 }
             }
+        }
+        for table in ["exact_facts", "optimistic_exact_facts"] {
+            raw_execute(
+                &storage,
+                &format!(
+                    "INSERT INTO {table} (document_id, attribute, value) VALUES (2, 'prop-0', X'02')"
+                ),
+                vec![],
+            );
         }
         forget_version(&storage);
         crate::storage::derived_sorts::ensure_version(&storage.connection()).unwrap();
