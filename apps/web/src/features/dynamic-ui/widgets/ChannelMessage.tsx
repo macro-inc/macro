@@ -15,6 +15,15 @@ export type ChannelMessageProps = Omit<WidgetOf<'channelMessage'>, 'type'> & {
   caption?: string;
 };
 
+/** The caption names the channel as a whole word ("dev", not "devs"). */
+function namesChannel(caption: string, name: string) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `(^|[^\\p{L}\\p{N}_-])${escaped}($|[^\\p{L}\\p{N}_-])`,
+    'iu'
+  ).test(caption);
+}
+
 /**
  * A channel thread the agent shows: which channel it is from, a way to open
  * it there, and the thread, where a click opens that message in the channel.
@@ -38,7 +47,8 @@ export function ChannelMessage(props: ChannelMessageProps) {
     const name = channelName();
     const restatesChannel =
       name !== undefined &&
-      props.caption?.toLowerCase().includes(name.toLowerCase());
+      props.caption !== undefined &&
+      namesChannel(props.caption, name);
     return restatesChannel || props.caption === undefined
       ? t('agentCards.channelThread')
       : props.caption;

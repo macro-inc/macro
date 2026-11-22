@@ -153,4 +153,16 @@ describe('ChannelMessage', () => {
     view.getByText('Thread');
     expect(view.queryByText('Thread in #launch-planning')).toBeNull();
   });
+
+  it('keeps a view title that only contains the channel name inside a word', () => {
+    channelNames = { 'channel-1': 'dev' };
+    const view = render(() => (
+      <ChannelMessage
+        channelId="channel-1"
+        messageId="message-1"
+        caption="What the devs decided"
+      />
+    ));
+    view.getByText('What the devs decided');
+  });
 });
