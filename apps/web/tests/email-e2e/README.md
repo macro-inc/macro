@@ -73,6 +73,12 @@ thread reads and draft autosaves against the real services. Its Soup frames are
 protocol fixtures: the stack's HTTP recording proxy cannot relay WebSocket
 upgrades. Those counts measure client frame handling, not live Kafka delivery.
 
+The per-test gateway exposes `mailbox.emitRefresh` for typed, synthetic refresh
+frames while real server state stays unchanged. It is unavailable on the
+full-stack tier. The sender-menu suite keeps first-retry traces and records menu/row state in
+attachments and report annotations. Retry counts remain visible in the JSON
+report; the suite follows the shared retry policy.
+
 ## Writing a test
 
 ```ts

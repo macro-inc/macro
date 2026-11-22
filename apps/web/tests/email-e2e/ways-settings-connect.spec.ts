@@ -99,7 +99,7 @@ test.describe('retrying a consent when Outlook is offered too', () => {
     ).toBeVisible();
     await expect(
       chooser(page).getByRole('button', {
-        name: 'Outlook / Microsoft 365',
+        name: 'Outlook / Microsoft 365 Beta',
         exact: true,
       })
     ).toBeVisible();

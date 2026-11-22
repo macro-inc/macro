@@ -37,12 +37,128 @@ async function senderFilters(
   }));
 }
 
+// Keep retry traces and a bounded state receipt in the always-uploaded report.
+test.use({ trace: 'on-first-retry' });
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus || testInfo.retry > 0) {
+    const state = JSON.stringify({
+      menuItems: await page.getByRole('menuitem').allTextContents(),
+      rowIds: await rowIds(page),
+    });
+    testInfo.annotations.push({
+      type: 'sender-menu-state',
+      description: state,
+    });
+    await testInfo.attach('sender-menu-state', {
+      body: state,
+      contentType: 'application/json',
+    });
+  }
+});
+
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
 
 for (const provider of PROVIDERS) {
   test.describe(`the sender of a thread in ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, () => {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
+
+    test('unchanged live refreshes keep the sender menu and row stable', async ({
+      page,
+      mailbox,
+    }) => {
+      await mailbox.deliver({
+        from: 'Grace <grace@example.com>',
+        subject: 'Agenda',
+        text: 'About Agenda.',
+      });
+      await mailbox.deliver({
+        from: 'Hal <hal@example.com>',
+        subject: 'Team photos',
+        text: 'From Friday.',
+      });
+      const agenda = await mailbox.synced('Agenda');
+      const photos = await mailbox.synced('Team photos');
+      await mailbox.open();
+      await expect
+        .poll(async () => (await rowIds(page)).sort())
+        .toEqual([agenda.id, photos.id].sort());
+      await row(page, photos.id).click({ button: 'right' });
+      await page
+        .getByRole('menuitem', { name: 'Sender → Noise', exact: true })
+        .click();
+      await expect
+        .poll(() => senderFilters(mailbox))
+        .toEqual([{ address: 'hal@example.com', signal: false }]);
+      await expect.poll(() => rowIds(page)).toEqual([agenda.id]);
+      await page
+        .getByRole('radiogroup', { name: 'Inbox view' })
+        .getByText('Noise', { exact: true })
+        .click();
+      await expect.poll(() => rowIds(page)).toEqual([photos.id]);
+      const original = await row(page, photos.id).elementHandle();
+      if (!original)
+        throw new Error('Expected the Noise row before opening its menu');
+      await row(page, photos.id).click({ button: 'right' });
+      const signal = page.getByRole('menuitem', {
+        name: 'Sender → Signal',
+        exact: true,
+      });
+      await expect(signal).toBeVisible();
+      const wakes = [
+        () =>
+          mailbox.emitRefresh({
+            event: 'upsert_message',
+            link_id: mailbox.inbox.linkId,
+          }),
+        () =>
+          mailbox.emitRefresh({
+            event: 'backfill_progress',
+            link_id: mailbox.inbox.linkId,
+            status: 'complete',
+            completed_threads: 2,
+            total_threads: 2,
+          }),
+        () =>
+          page.evaluate(() =>
+            document.dispatchEvent(new Event('visibilitychange'))
+          ),
+      ];
+      for (const wake of wakes) {
+        const refreshed = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            new URL(response.url()).pathname.endsWith(
+              '/dss/items/soup/graphql'
+            ) &&
+            /\bquery\s+Soup\s*[( {]/.test(
+              response.request().postDataJSON()?.query ?? ''
+            )
+        );
+        await wake();
+        const response = await refreshed;
+        expect(response.status()).toBe(200);
+        await response.finished();
+        expect(await original.evaluate((element) => element.isConnected)).toBe(
+          true
+        );
+        expect(
+          await row(page, photos.id).evaluate(
+            (element, reference) => element === reference,
+            original
+          )
+        ).toBe(true);
+        await expect(signal).toBeVisible();
+      }
+      await signal.click();
+      await expect
+        .poll(() => senderFilters(mailbox))
+        .toEqual([{ address: 'hal@example.com', signal: true }]);
+      await mailbox.open();
+      await expect
+        .poll(async () => (await rowIds(page)).sort())
+        .toEqual([agenda.id, photos.id].sort());
+    });
 
     // When this fails, Block Sender shows its notice and the sender is not
     // blocked in the mailbox, or Undo leaves the sender blocked.
