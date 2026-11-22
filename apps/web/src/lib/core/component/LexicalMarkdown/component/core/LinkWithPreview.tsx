@@ -3,13 +3,24 @@ import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useUnfurl } from '@core/signal/unfurl';
 import { openExternalUrl } from '@core/util/url';
+import { flip, hide, offset, shift } from '@floating-ui/dom';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
+import { iosSafePadding } from '../../directive/iosFloatingMiddleware';
 import { useAppLinkDescriber, useAppLinkOpener } from './app-link-opener';
 
 false && floatWithElement;
+
+/** The nearest ancestor that scrolls, such as an agent transcript's column. */
+function scrollColumn(element: Element | undefined): Element | undefined {
+  for (let node = element?.parentElement; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (overflowY === 'auto' || overflowY === 'scroll') return node;
+  }
+  return undefined;
+}
 
 type LinkWithPreviewProps = ParentProps<{
   url: string;
@@ -70,7 +81,26 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
             style={{
               transform: 'translateY(0)',
             }}
-            use:floatWithElement={{ element: () => linkRef, spacing: 4 }}
+            // Kept inside the column the link scrolls in, so the card neither
+            // covers the icon rail nor reaches into a pane beside it.
+            use:floatWithElement={{
+              element: () => linkRef,
+              spacing: 4,
+              floatingOptions: {
+                middleware: [
+                  offset(4),
+                  flip({
+                    padding: iosSafePadding(4),
+                    boundary: scrollColumn(linkRef) ?? 'clippingAncestors',
+                  }),
+                  shift({
+                    padding: 4,
+                    boundary: scrollColumn(linkRef) ?? 'clippingAncestors',
+                  }),
+                  hide(),
+                ],
+              },
+            }}
           >
             {(() => {
               const described = describeLink?.(props.url);
