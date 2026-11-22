@@ -452,6 +452,30 @@ describe('channel directory reconciliation', () => {
     expect(telemetry.error).toHaveBeenCalledTimes(1);
   });
 
+  it('stops listing the cache when the lane run is cancelled', async () => {
+    const { host } = reconcileHost(['removed']);
+    const run = new AbortController();
+    host.search.mockImplementationOnce(async () => {
+      run.abort();
+      throw new Error('engine gone');
+    });
+    const fetch = server([{ nextCursor: null, entityIds: [] }]);
+
+    await expect(
+      createChannelDirectoryBackfillFetcher(
+        'viewer',
+        host,
+        fetch,
+        undefined,
+        primary(),
+        run.signal
+      )
+    ).rejects.toThrow('engine gone');
+    expect(host.search).toHaveBeenCalledTimes(1);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(telemetry.error).not.toHaveBeenCalled();
+  });
+
   it('pages without reconciling when the device cache is off', async () => {
     const fetch = server([{ nextCursor: null, entityIds: [] }]);
     const fetchPage = await fetcher(undefined, fetch);

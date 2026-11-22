@@ -27,7 +27,7 @@ import {
 } from '../channel/directory-lane';
 import {
   ChannelDirectoryPassUnproven,
-  createChannelDirectoryBackfillFetcher,
+  channelDirectoryBackfillFetcher,
 } from '../channel/directory-reconcile';
 import { useContactBackfill } from '../contacts/backfill';
 import type { ContextChannel } from '../contacts/context-facts';
@@ -79,7 +79,10 @@ export type SoupBackfillParams = {
   /** Optional network fetcher; defaults to the standard Soup operation. */
   fetchPage?: SoupBackfillFetchPage;
   /** Allocate per-scan membership evidence (never shared across users or retries). */
-  createFetchPage?: (userId: string) => Promise<SoupBackfillFetchPage>;
+  createFetchPage?: (
+    userId: string,
+    signal?: AbortSignal
+  ) => Promise<SoupBackfillFetchPage>;
   /** Access-scope reconciliation requires a fresh full scan after interruption. */
   restartOnRun?: boolean;
   /** Whether a retry after this error goes on from the failed attempt's
@@ -109,7 +112,7 @@ export const CHANNEL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: CHANNEL_DIRECTORY_CHECKPOINT_ID,
   // Every pass is a full one (the channel filter has no update-time literal),
   // so a finished pass also removes the cached channels it proves stale.
-  createFetchPage: createChannelDirectoryBackfillFetcher,
+  createFetchPage: channelDirectoryBackfillFetcher,
   refreshAll: true,
   // A pass resumed from a cursor cannot tell which channels are stale, and
   // the fetcher fails its last page, so a run always starts at the top.
@@ -242,7 +245,8 @@ export const NOISE_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
  * Shared thread it did not return, including threads outside the windows. */
 export const SHARED_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'shared-email-filter-metadata',
-  createFetchPage: createSharedMailBackfillFetcher,
+  // Its second parameter is the cache host, not the run's signal.
+  createFetchPage: (userId) => createSharedMailBackfillFetcher(userId),
   refreshAll: true,
   restartOnRun: true,
   emailRecency: [SIGNAL_EMAIL_WINDOW, NOISE_EMAIL_WINDOW],
@@ -489,7 +493,7 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
     if (retry) retry.pageFetcher = undefined;
     const create = params.createFetchPage;
     const fetchPage = create
-      ? yield* Effect.tryPromise(() => create(userId))
+      ? yield* Effect.tryPromise((signal) => create(userId, signal))
       : (params.fetchPage ?? fetchSoupPage);
     if (retry) retry.pageFetcher = { storageGeneration: generation, fetchPage };
     return fetchPage;

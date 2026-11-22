@@ -563,13 +563,18 @@ type ReconcileScope = {
  * reconcile: no cache, another viewer's, or a failed read. */
 async function readReconcileScope(
   host: ReconcileHost | undefined,
-  userId: string
+  userId: string,
+  signal?: AbortSignal
 ): Promise<ReconcileScope | undefined> {
   if (!host || host.disabled) return undefined;
   try {
-    const generation = await readContactCacheScope(host, userId, NEVER_ABORTED);
+    const generation = await readContactCacheScope(
+      host,
+      userId,
+      signal ?? NEVER_ABORTED
+    );
     if (generation === undefined) return undefined;
-    const documents = await listCachedChannelDocuments(host);
+    const documents = await listCachedChannelDocuments(host, signal);
     return {
       host,
       generation,
@@ -578,6 +583,8 @@ async function readReconcileScope(
       ),
     };
   } catch (error) {
+    // A cancelled run ends here; it is not a failed read.
+    if (signal?.aborted) throw error;
     // The lane still runs; it only skips reconciling this pass.
     Telemetry.error(error, { surface: 'channel-directory-reconcile' });
     return undefined;
@@ -653,11 +660,12 @@ export async function createChannelDirectoryBackfillFetcher(
   host: ReconcileHost | undefined = getGraphqlSoupCacheHost(),
   fetch: FetchPage = fetchDirectoryPage,
   session: () => string = cacheSessionGeneration.capture,
-  readFromPrimary: ReadFromPrimary = readChannelOnPrimary
+  readFromPrimary: ReadFromPrimary = readChannelOnPrimary,
+  signal?: AbortSignal
 ): Promise<FetchPage> {
   // Listed as the pass begins: a channel cached later by an event is not one
   // the pass could have missed.
-  let scope = await readReconcileScope(host, userId);
+  let scope = await readReconcileScope(host, userId, signal);
   const seen = new Set<string>();
   let lane: GraphqlSoupInitialInput | undefined;
   let firstPage = true;
@@ -706,7 +714,7 @@ export async function createChannelDirectoryBackfillFetcher(
 
     if (!host || host.disabled) return page;
     // The viewer's identity may have reached the cache only with this pass.
-    scope ??= await readReconcileScope(host, userId);
+    scope ??= await readReconcileScope(host, userId, options?.signal);
     // Owed whether or not this pass can reconcile.
     await rereadOwed(options?.signal);
     if (!completeEvidence || !evidence || !lane)
@@ -733,4 +741,20 @@ export async function createChannelDirectoryBackfillFetcher(
       );
     return page;
   };
+}
+
+/** The lane's fetcher: the production defaults, with the lane run's signal so
+ * a cancelled run stops listing the cache it no longer reconciles. */
+export function channelDirectoryBackfillFetcher(
+  userId: string,
+  signal?: AbortSignal
+): Promise<FetchPage> {
+  return createChannelDirectoryBackfillFetcher(
+    userId,
+    getGraphqlSoupCacheHost(),
+    fetchDirectoryPage,
+    cacheSessionGeneration.capture,
+    readChannelOnPrimary,
+    signal
+  );
 }

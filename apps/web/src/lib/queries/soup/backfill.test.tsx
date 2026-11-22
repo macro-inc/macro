@@ -33,7 +33,7 @@ vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
 // Reconciliation has its own tests; here the channel lane only pages.
 vi.mock('../channel/directory-reconcile', () => ({
   ChannelDirectoryPassUnproven: class extends Error {},
-  createChannelDirectoryBackfillFetcher:
+  channelDirectoryBackfillFetcher:
     async () => (input: unknown, options: unknown) =>
       graphqlMocks.hydrateGraphqlSoup({}, { input }, options),
 }));
@@ -291,6 +291,32 @@ describe('runSoupBackfills', () => {
       completed: true,
       pagesFetched: 1,
     });
+  });
+
+  it('cancels fetcher creation with the lane run', async () => {
+    const fetchPage = vi.fn(async () => ({ nextCursor: null }));
+    let creation: AbortSignal | undefined;
+    const createFetchPage = vi.fn(
+      (_userId: string, signal?: AbortSignal) =>
+        new Promise<typeof fetchPage>(() => {
+          creation = signal;
+        })
+    );
+    const fiber = Effect.runFork(
+      runSoupBackfill(
+        'user-1',
+        mockCacheHost,
+        { ...lane('core-entities', fetchPage), createFetchPage },
+        vi.fn()
+      )
+    );
+    await vi.waitFor(() => expect(creation).toBeDefined());
+    expect(creation?.aborted).toBe(false);
+
+    await Effect.runPromise(Fiber.interrupt(fiber));
+
+    expect(creation?.aborted).toBe(true);
+    expect(fetchPage).not.toHaveBeenCalled();
   });
 
   it('restarts before the next page when storage changes between pages', async () => {
