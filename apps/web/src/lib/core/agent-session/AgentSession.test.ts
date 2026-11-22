@@ -943,6 +943,26 @@ describe('AgentSession', () => {
       }
     });
 
+    it('keeps at most 100 held prompts on this browser, dropping the oldest', () => {
+      vi.useFakeTimers();
+      try {
+        for (let at = 0; at < 105; at++) {
+          vi.advanceTimersByTime(1);
+          holdUnconfirmedSend(`session-${at}`, USER, {
+            actionId: `send-${at}`,
+            action: { type: 'prompt', prompt: `${at}` },
+          });
+        }
+        forgetUnconfirmedSendsInMemory();
+        expect(unconfirmedSends('session-0', USER)).toEqual([]);
+        expect(unconfirmedSends('session-4', USER)).toEqual([]);
+        expect(unconfirmedSends('session-5', USER)).toHaveLength(1);
+        expect(unconfirmedSends('session-104', USER)).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('checks the session index, not all of storage, on every fold batch', () => {
       holdUnconfirmedSend(SESSION, USER, {
         actionId: 'kept',

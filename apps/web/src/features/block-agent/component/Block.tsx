@@ -169,11 +169,15 @@ function AgentBlockContent(props: {
                 </div>
               }
             >
-              <EmptyStatePanel
-                centered
-                title="You don't have access to this agent session"
-                description="Ask a participant to share it with you."
-              />
+              <div class="flex size-full flex-col">
+                <EmptyStatePanel
+                  centered
+                  title="You don't have access to this agent session"
+                  description="Ask a participant to share it with you."
+                />
+                {/* A reload of a create that never landed is refused too. */}
+                <HeldStartupCards />
+              </div>
             </Show>
           }
         >

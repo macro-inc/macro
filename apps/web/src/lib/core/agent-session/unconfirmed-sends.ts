@@ -20,8 +20,15 @@ export type UnconfirmedSend = { actionId: string; action: AgentAction };
 
 type Stored = UnconfirmedSend & { sessionId: string; heldAt: number };
 
-/** Every key this store writes starts with this. */
+/** Every held send's key starts with this. */
 export const UNCONFIRMED_SENDS_PREFIX = 'agent-session-unconfirmed:';
+
+/**
+ * A new chat's block id points here at the id its lost create held its
+ * prompt under, when that differs (a warm id's fallback), so the block finds
+ * it after a reload.
+ */
+export const HELD_AT_PREFIX = 'agent-session-held-at:';
 
 /** Long enough to come back to after a bad connection, not forever. */
 const UNCONFIRMED_SEND_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -130,10 +137,12 @@ function capTotal() {
   const dated = all
     .map((key) => ({ key, heldAt: readKey(key)?.heldAt ?? 0 }))
     .sort((left, right) => left.heldAt - right.heldAt);
+  const touched = new Set<string>();
   for (const { key } of dated.slice(0, all.length - MAX_SENDS_TOTAL)) {
     removeKey(key);
-    unindexKey(key);
+    touched.add(sessionOfKey(key));
   }
+  for (const sessionId of touched) notify(sessionId);
 }
 
 function readKey(key: string): Stored | undefined {
@@ -270,4 +279,46 @@ export function forgetUnconfirmedSendsInMemory() {
   );
   inMemory.clear();
   for (const sessionId of sessions) notify(sessionId);
+}
+
+/** Record that `blockId`'s lost create held its prompt under `heldId`. */
+export function pointHeldSends(
+  blockId: string,
+  heldId: string,
+  userId: string
+) {
+  if (blockId === heldId) return;
+  try {
+    localStorage.setItem(
+      userScopedStorageKey(`${HELD_AT_PREFIX}${blockId}`, userId),
+      JSON.stringify({ heldId, at: Date.now() })
+    );
+  } catch {
+    // Without storage the page still knows it until a reload.
+  }
+}
+
+/** Where `blockId`'s held sends live: a recorded fallback id, else itself. */
+export function heldSendsAt(blockId: string, userId: string | undefined) {
+  if (!userId) return blockId;
+  const key = userScopedStorageKey(`${HELD_AT_PREFIX}${blockId}`, userId);
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed: unknown = raw == null ? undefined : JSON.parse(raw);
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'heldId' in parsed &&
+      typeof parsed.heldId === 'string' &&
+      'at' in parsed &&
+      typeof parsed.at === 'number'
+    ) {
+      if (Date.now() - parsed.at <= UNCONFIRMED_SEND_TTL_MS)
+        return parsed.heldId;
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Unreadable: the block's own id.
+  }
+  return blockId;
 }

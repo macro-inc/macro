@@ -35,7 +35,10 @@ import {
   SEND_OUTCOME_UNKNOWN,
 } from '@core/agent-session/send-outcome';
 import { typedInClientId } from '@core/agent-session/ui-client';
-import { holdUnconfirmedSend } from '@core/agent-session/unconfirmed-sends';
+import {
+  holdUnconfirmedSend,
+  pointHeldSends,
+} from '@core/agent-session/unconfirmed-sends';
 import {
   enableFirstPromptOnCreate,
   isFeatureEnabled,
@@ -318,7 +321,9 @@ export function startPendingSession(
         .get(sessionId)
         .catch(() => undefined);
       if (existing?.isOk()) {
-        if (userId && existing.value.ownerId === userId)
+        // Whose it is can't be told before sign-in loads: still unconfirmed.
+        if (!userId) return settled(result, true);
+        if (existing.value.ownerId === userId)
           return settled(ok({ session: existing.value }), false, true);
         // Someone else's: this person's tries never made it.
         return mayFallBack
@@ -342,11 +347,13 @@ export function startPendingSession(
             // The prompt rode the create and may have started: it stays on
             // the card the error view shows, never back in the box.
             setHeldId(lastId);
-            if (userId)
+            if (userId) {
               holdUnconfirmedSend(lastId, userId, {
                 actionId: promptActionId,
                 action: firstPrompt,
               });
+              pointHeldSends(id, lastId, userId);
+            }
             const quoted =
               firstPrompt.type === 'prompt' ? firstPrompt.prompt : '';
             failUnconfirmed(

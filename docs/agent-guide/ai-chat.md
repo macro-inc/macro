@@ -2438,7 +2438,9 @@ must stay hidden; subsequent live messages must still appear.
   unclear nothing later counts as a refusal: no fresh id, no draft handed
   back. If the prompt rode the create, the error view says the chat may not
   have been created and shows the card (Copy, Dismiss), also after a reload
-  of a create that never landed; if it didn't ride it, it was never sent and
+  of a create that never landed (whose load is refused: the card shows in
+  that view too, and a warm placeholder points at the fallback id it was
+  held under); if it didn't ride it, it was never sent and
   comes back as the draft. The harness answers a taken id as a 409 with
   `code: "session_id_taken"`.
 - Every send names its sender (`userId` is required on `startPendingSession`

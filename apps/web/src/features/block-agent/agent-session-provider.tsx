@@ -1,10 +1,4 @@
 import { usePending } from '@app/observability/flow';
-import {
-  dropUnconfirmedSends,
-  subscribeUnconfirmedSends,
-  type UnconfirmedSend,
-  unconfirmedSends,
-} from '@core/agent-session/unconfirmed-sends';
 /** App-facing composition for the agent session and its controllers. */
 
 import { createInteractionController } from '@app/features/agent-interactions/primitives/create-interaction-controller';
@@ -30,7 +24,6 @@ import {
   type Accessor,
   createEffect,
   createSignal,
-  onCleanup,
   type ParentProps,
   Suspense,
 } from 'solid-js';
@@ -40,6 +33,7 @@ import {
   createQueueController,
   type QueueController,
 } from './context/create-queue-controller';
+import { createHeldStartupSends } from './context/held-startup-sends';
 import { resolveSessionId } from './context/resolve-session-id';
 import { createSteering } from './context/steer';
 import { createToolApprovalController } from './primitives/create-tool-approval-controller';
@@ -77,20 +71,13 @@ export function AgentSessionProvider(
     provisioning: pending,
     onAcquire: acquired,
   });
-  // A create whose outcome stayed unknown leaves its first prompt held under
-  // the block's id, with no session to show it in: the error view does.
-  const [startupHeld, setStartupHeld] = createSignal<UnconfirmedSend[]>([]);
-  createEffect(() => {
-    const id = heldId() ?? props.blockId;
-    const user = userId();
-    // Also after a reload: the create never landed, so the id loads nothing.
-    if (!failed() && !live.loadFailed()) {
-      setStartupHeld([]);
-      return;
-    }
-    const read = () => setStartupHeld(unconfirmedSends(id, user));
-    read();
-    onCleanup(subscribeUnconfirmedSends(id, read));
+  // A lost create's first prompt, for the views with no session to show it:
+  // a failed create, or a load failed or refused after a reload.
+  const startup = createHeldStartupSends({
+    blockId: () => props.blockId,
+    heldId,
+    userId,
+    unavailable: () => failed() || live.loadFailed() || live.accessDenied(),
   });
   // A block opened by sending a first prompt shows that prompt, and the
   // working line under it, from its very first paint. Nothing else can: the
@@ -214,9 +201,8 @@ export function AgentSessionProvider(
           pending,
           initialInput: initialInput(),
           startupError: error,
-          startupHeld,
-          dropStartupHeld: (actionId) =>
-            dropUnconfirmedSends(heldId() ?? props.blockId, [actionId]),
+          startupHeld: startup.held,
+          dropStartupHeld: startup.drop,
           session: live.session,
           bot: live.bot,
           metadata: live.metadata,

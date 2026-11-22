@@ -116,9 +116,8 @@ const { createAgentSession } = await import('./create-agent-session');
 const { forgetPendingSession, pendingSession, startPendingSession } =
   await import('./pending-session');
 const { resolveSessionId } = await import('./resolve-session-id');
-const { forgetUnconfirmedSendsInMemory, unconfirmedSends } = await import(
-  '@core/agent-session/unconfirmed-sends'
-);
+const { forgetUnconfirmedSendsInMemory, heldSendsAt, unconfirmedSends } =
+  await import('@core/agent-session/unconfirmed-sends');
 
 const issue = vi.spyOn(AgentSession.prototype, 'issue');
 const stage = vi.spyOn(PromptTrace.prototype, 'stage');
@@ -549,6 +548,93 @@ describe('pending navigation ownership', () => {
     expect(onFailure).not.toHaveBeenCalled();
     expect(pendingSession(id)?.heldId()).toBe(fallback);
     expect(unconfirmedSends(fallback, 'macro|me@macro.com')).toHaveLength(1);
+  });
+
+  it('quotes a lost first prompt when no one is signed in to hold it for', async () => {
+    harness.create.mockResolvedValue(
+      err([
+        {
+          code: 'HTTP_ERROR',
+          status: 504,
+          message: 'Agent request failed (HTTP 504).',
+        },
+      ])
+    );
+    const onFailure = vi.fn();
+    const id = startPendingSession({
+      prompt: 'Hello there',
+      onFailure,
+      userId: undefined,
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(pendingSession(id)?.error()).toContain('Your message: Hello there');
+    expect(localStorage.length).toBe(0);
+  });
+
+  it('keeps a lost create unconfirmed, not refused, when no one is signed in to own it', async () => {
+    harness.create
+      .mockResolvedValueOnce(
+        err([
+          {
+            code: 'HTTP_ERROR',
+            status: 504,
+            message: 'Agent request failed (HTTP 504).',
+          },
+        ])
+      )
+      .mockResolvedValueOnce(
+        err([
+          {
+            code: 'SESSION_ID_TAKEN',
+            status: 409,
+            message: 'this id is already taken',
+          },
+        ])
+      );
+    harness.get.mockImplementationOnce(async (sessionId: string) =>
+      ok({ id: sessionId, ownerId: 'macro|me@macro.com' })
+    );
+    const onFailure = vi.fn();
+    const id = startPendingSession({
+      prompt: 'Hello',
+      onFailure,
+      userId: undefined,
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(harness.get).toHaveBeenCalledOnce();
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(pendingSession(id)?.error()).toContain('may not have been created');
+  });
+
+  it('points a warm placeholder at the fallback id its lost prompt is held under', async () => {
+    warm.take.mockReturnValueOnce({ id: 'stale-warm', claim: 'hit' });
+    harness.create
+      .mockResolvedValueOnce(
+        err([
+          {
+            code: 'SESSION_ID_TAKEN',
+            status: 409,
+            message: 'this id is already taken',
+          },
+        ])
+      )
+      .mockResolvedValue(
+        err([
+          {
+            code: 'HTTP_ERROR',
+            status: 504,
+            message: 'Agent request failed (HTTP 504).',
+          },
+        ])
+      );
+    startPendingSession({ prompt: 'Hello', userId: 'macro|me@macro.com' });
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    const fallback = harness.create.mock.calls[1]?.[0].id;
+    expect(heldSendsAt('stale-warm', 'macro|me@macro.com')).toBe(fallback);
   });
 
   it('adopts its own lost create for a caller that passes no person', async () => {
