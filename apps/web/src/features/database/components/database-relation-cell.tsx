@@ -34,6 +34,10 @@ type DatabaseRelationCellProps = GridCellEditorOptions & {
   onOpen: (rowId: string) => void;
 };
 
+const CHIP_LIMIT = 2;
+/** An expanded field wraps its chips; past this many it still counts the rest. */
+const EXPANDED_CHIP_LIMIT = 20;
+
 /** The projection stays a set of row identities; names are presentation only. */
 export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
   const [open, setOpen] = createSignal(false);
@@ -56,8 +60,9 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
   const name = (id: string) =>
     props.source.rows().find((row) => row.id === id)?.name ??
     (props.source.loading() ? 'Loading…' : 'Unavailable record');
-  /** Chips shown in the cell; each carries an arrow to its record. A wrapping field shows them all. */
-  const shown = () => (props.wrap ? ids() : ids().slice(0, 2));
+  /** Chips shown in the cell; each carries an arrow to its record. */
+  const shown = () =>
+    ids().slice(0, props.expanded ? EXPANDED_CHIP_LIMIT : CHIP_LIMIT);
   const openable = () => shown().filter(available);
   const candidates = () =>
     props.source
@@ -224,8 +229,8 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
             <span
               class="flex min-w-0 items-center gap-1"
               classList={{
-                'overflow-hidden': !props.wrap,
-                'flex-wrap': props.wrap,
+                'overflow-hidden': !props.expanded,
+                'flex-wrap': props.expanded,
               }}
             >
               <For each={shown()}>
@@ -233,16 +238,16 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                   <span
                     class="inline-flex min-w-0 items-center gap-1 rounded border border-edge-muted/60 bg-hover/60 py-0.5 pl-1.5 text-xs text-ink"
                     classList={{
-                      'max-w-44': !props.wrap,
-                      'max-w-full': props.wrap,
+                      'max-w-44': !props.expanded,
+                      'max-w-full': props.expanded,
                     }}
                     title={name(id)}
                   >
                     <LinkIcon class="size-3 shrink-0 text-ink-muted" />
                     <span
                       classList={{
-                        truncate: !props.wrap,
-                        'min-w-0 wrap-break-word': props.wrap,
+                        truncate: !props.expanded,
+                        'min-w-0 wrap-break-word': props.expanded,
                       }}
                       data-relation-chip-name
                     >

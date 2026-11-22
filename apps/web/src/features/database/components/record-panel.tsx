@@ -205,10 +205,7 @@ function RecordFields(
       get popupMount() {
         return props.popupMount;
       },
-      // A record's related records wrap onto more lines rather than clip.
-      get wrap() {
-        return !!column().relation;
-      },
+      expanded: true,
       get initialEdit() {
         return column().id === initialEditColumnId;
       },

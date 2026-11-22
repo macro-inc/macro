@@ -750,8 +750,9 @@ so wrap a bar's title in it.
 
 The record panel has a desktop/phone regression in the same suite,
 `record.browser.e2e.ts`: every related record's chip and every property name
-shows in full. The panel passes `wrap` to relation fields, so their chips wrap
-onto more lines instead of clipping, and property names wrap under their icon.
+shows in full. The panel passes `expanded` to its fields, so a relation field
+wraps its chips (up to 20, then "+N") instead of showing two; grids and board
+cards keep two. Property names wrap under their icon.
 
 Column renames have a backend-free desktop/phone regression using the real
 schema query and mutation adapter with delayed service responses:

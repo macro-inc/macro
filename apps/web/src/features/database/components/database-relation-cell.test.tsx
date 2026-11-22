@@ -28,6 +28,7 @@ const source = {
   rows: () => [
     { id: 'acme-id', name: 'Acme' },
     { id: 'north-id', name: 'Northwind' },
+    { id: 'globex-id', name: 'Globex' },
   ],
   loading: () => false,
   error: () => undefined,
@@ -54,6 +55,7 @@ function setup(
     fail?: boolean;
     save?: (next: DatabaseCellValue) => Promise<boolean>;
     navigate?: (direction: 1 | -1) => boolean;
+    expanded?: boolean;
   } = {}
 ) {
   const [value, setValue] = createSignal<DatabaseCellValue>(
@@ -76,6 +78,7 @@ function setup(
         onWrite={write}
         onOpen={open}
         onNavigate={options.navigate}
+        expanded={options.expanded}
       />
       <button type="button">After cell</button>
     </>
@@ -359,5 +362,34 @@ describe('opening a related record from its chip', () => {
       name: 'Open Unavailable record',
     });
     expect(arrow).toHaveProperty('disabled', true);
+  });
+
+  it('shows two chips and counts the rest, unless the field is expanded', () => {
+    setup({ value: '["acme-id","north-id","globex-id"]' });
+    expect(screen.getAllByRole('button', { name: /^Open / })).toHaveLength(2);
+    expect(screen.getByText('+1')).toBeTruthy();
+    cleanup();
+
+    const navigate = vi.fn(() => true);
+    setup({
+      value: '["acme-id","north-id","globex-id"]',
+      navigate,
+      expanded: true,
+    });
+    expect(
+      screen
+        .getAllByRole('button', { name: /^Open / })
+        .map((button) => button.getAttribute('aria-label'))
+    ).toEqual(['Open Acme', 'Open Northwind', 'Open Globex']);
+    expect(screen.queryByText('+1')).toBeNull();
+    // The last chip's arrow, not the second, hands Tab to the next cell.
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Open Northwind' }), {
+      key: 'Tab',
+    });
+    expect(navigate).not.toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Open Globex' }), {
+      key: 'Tab',
+    });
+    expect(navigate).toHaveBeenCalledWith(1);
   });
 });

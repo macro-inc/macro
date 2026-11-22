@@ -60,9 +60,12 @@ for (const [name, viewport, touch] of [
       await expect
         .poll(() => clipped(page, '[data-record-field-name]'))
         .toEqual(
-          ['Tasks', 'Launch readiness (%)', 'Progress (snapshot)'].map(
-            (text) => ({ text, cut: false })
-          )
+          [
+            'Tasks',
+            'Launch readiness (%)',
+            'Progress (snapshot)',
+            'Launch readiness score (percent)',
+          ].map((text) => ({ text, cut: false }))
         );
     });
   });

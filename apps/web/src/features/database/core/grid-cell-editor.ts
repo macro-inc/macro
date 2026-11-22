@@ -8,6 +8,8 @@ export type GridCellEditorOptions = {
   popupMount?: HTMLElement;
   /** Let a board or record field display its complete text value. */
   wrap?: boolean;
+  /** Show a multi-value field's values in full, wrapping, as a record's own panel does. */
+  expanded?: boolean;
   /** Visible placeholder for an unset field. */
   emptyLabel?: string;
   initialEdit?: boolean;

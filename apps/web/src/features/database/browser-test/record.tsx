@@ -36,6 +36,12 @@ const COLUMNS: DatabaseViewColumn[] = [
   },
   { ...name, primary: false, id: 'readiness', name: 'Launch readiness (%)' },
   { ...name, primary: false, id: 'progress', name: 'Progress (snapshot)' },
+  {
+    ...name,
+    primary: false,
+    id: 'score',
+    name: 'Launch readiness score (percent)',
+  },
 ];
 const TASKS = [
   { id: 'draft', name: 'Draft landing copy' },
@@ -49,6 +55,7 @@ const ROW: DatabaseRow = {
     tasks: JSON.stringify(TASKS.map((task) => task.id)),
     readiness: '80',
     progress: '2 of 3',
+    score: '80',
   },
 };
 const tasks = {
