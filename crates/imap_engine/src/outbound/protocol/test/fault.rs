@@ -97,16 +97,14 @@ impl Proxy {
                             let Ok(command) = line(&mut client).await else {
                                 return;
                             };
-                            if command.eq_ignore_ascii_case(b"DATA\r\n") {
-                                if let Fault::RejectData(code) = fault {
-                                    client
-                                        .write_all(
-                                            format!("{code} injected refusal\r\n").as_bytes(),
-                                        )
-                                        .await
-                                        .unwrap();
-                                    return;
-                                }
+                            if command.eq_ignore_ascii_case(b"DATA\r\n")
+                                && let Fault::RejectData(code) = fault
+                            {
+                                client
+                                    .write_all(format!("{code} injected refusal\r\n").as_bytes())
+                                    .await
+                                    .unwrap();
+                                return;
                             }
                             upstream.write_all(&command).await.unwrap();
                             let (code, reply) = response(&mut upstream).await.unwrap();

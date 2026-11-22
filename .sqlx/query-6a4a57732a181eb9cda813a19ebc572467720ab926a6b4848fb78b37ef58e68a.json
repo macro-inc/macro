@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            xmin::text\n        FROM\n            imap_state_entries\n        WHERE\n            link_id = $1\n            AND kind = 'message'\n            AND key = 'm:000002'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "xmin",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6a4a57732a181eb9cda813a19ebc572467720ab926a6b4848fb78b37ef58e68a"
+}

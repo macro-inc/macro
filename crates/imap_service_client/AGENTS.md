@@ -28,3 +28,8 @@ and the service validates the credential binding before reading any bytes.
 Discovery accepts the existing validated Email identity and converts to a string
 only in the generated HTTP DTO. Preserve spelling and plus suffixes; keep server
 usernames as raw protocol values.
+
+Clients default to interactive operations. Clone with `with_operation_class` only
+at trusted worker composition; keep user and background clients separate. The
+optional `x-imap-work-class` header preserves default behavior for old clients
+and never replaces the internal key or either mailbox-generation fence.

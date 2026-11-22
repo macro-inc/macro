@@ -46,5 +46,6 @@ zeroize = { workspace = true, features = ["derive"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+macro_env_var = { path = "../macro_env_var" }
 tokio = { workspace = true, features = ["test-util"] }
 tracing-subscriber = { workspace = true, features = ["registry"] }

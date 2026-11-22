@@ -193,6 +193,7 @@ impl Client {
     pub async fn operation<'a>(
         &'a self,
         link: &'a ::uuid::Uuid,
+        x_imap_work_class: Option<&'a ::imap_engine::domain::models::OperationClass>,
         x_mailbox_binding: &'a str,
         body: &'a ::imap_engine::domain::models::Operation,
     ) -> Result<ResponseValue<::serde_json::Value>, Error<types::ErrorBody>> {
@@ -201,11 +202,14 @@ impl Client {
             self.baseurl,
             encode_path(&link.to_string()),
         );
-        let mut header_map = ::reqwest::header::HeaderMap::with_capacity(2usize);
+        let mut header_map = ::reqwest::header::HeaderMap::with_capacity(3usize);
         header_map.append(
             ::reqwest::header::HeaderName::from_static("api-version"),
             ::reqwest::header::HeaderValue::from_static(Self::api_version()),
         );
+        if let Some(value) = x_imap_work_class {
+            header_map.append("x-imap-work-class", value.to_string().try_into()?);
+        }
         header_map.append(
             "x-mailbox-binding",
             x_mailbox_binding.to_string().try_into()?,

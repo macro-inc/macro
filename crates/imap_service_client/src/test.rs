@@ -78,3 +78,33 @@ async fn discovery_serializes_the_validated_identity_without_normalization() {
     let settings = client.discover(&email.0).await.unwrap();
     assert!(settings.host_confirmation_required);
 }
+
+#[tokio::test]
+async fn background_client_clones_preserve_bindings_without_reclassifying_user_requests() {
+    let server = MockServer::start().await;
+    let binding = Binding {
+        link_id: Uuid::now_v7(),
+        sync_generation: 3,
+        grant_generation: 7,
+    };
+    for class in ["interactive", "ingestion", "import"] {
+        Mock::given(method("POST"))
+            .and(path(format!(
+                "/internal/v1/accounts/{}/operations",
+                binding.link_id
+            )))
+            .and(header("x-mailbox-binding", "3.7"))
+            .and(header("x-internal-auth-key", "internal-test-key"))
+            .and(header("x-imap-work-class", class))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+    let user = ImapServiceClient::new(server.uri(), "internal-test-key".into()).unwrap();
+    let ingestion = user.clone().with_operation_class(OperationClass::Ingestion);
+    let import = user.clone().with_operation_class(OperationClass::Import);
+    assert!(ingestion.folders(binding).await.unwrap().is_empty());
+    assert!(import.folders(binding).await.unwrap().is_empty());
+    assert!(user.folders(binding).await.unwrap().is_empty());
+}

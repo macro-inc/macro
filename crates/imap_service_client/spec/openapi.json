@@ -1202,6 +1202,15 @@
           }
         ]
       },
+      "OperationClass": {
+        "description": "Trusted caller workload, independent from mailbox authorization or rollout.",
+        "enum": [
+          "interactive",
+          "ingestion",
+          "import"
+        ],
+        "type": "string"
+      },
       "Secret": {
         "description": "Password held only for one connection or encrypted immediately.",
         "type": "string"
@@ -1561,6 +1570,15 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-imap-work-class",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/OperationClass",
+              "nullable": true
             }
           }
         ],

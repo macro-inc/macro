@@ -142,3 +142,54 @@ Passive enrollment suggestions recognize hosted custom domains through bounded,
 domain-only MX queries. This adapter has no HTTP/autoconfig client. Unknown,
 failed, over-limit or ambiguous primary MX answers retain the generic chooser;
 full address-bearing discovery remains an explicit setup action.
+
+Admission reserves independent FIFO pools for user operations (16), live ingestion
+(4), older-mail import (2) and synchronization (default 2). Worker composition
+classifies stream providers, background settings scans and maintenance jobs
+through the optional internal `x-imap-work-class` header. API settings, user
+commands, draft materialization and sends retain their interactive client.
+Authentication, ownership and both generation fences apply to every class;
+absent headers retain interactive behavior for old callers.
+
+Each account actor awaits one round before enqueuing another. Existing account
+ownership/coverage remains unchanged. `SyncConcurrency` validates 1–16 at
+construction; its typed code default stays at 2 for the existing task memory
+budget. There is no new environment setting. An owner heartbeat renews every
+60 seconds while queued or executing, and ownership is checked atomically again
+after admission, before state loading or provider IO. A lost owner skips the round.
+
+The 240-second cooperative work budget includes owner validation, state loading,
+provider IO, merging and checkpointing after admission. It derives from the
+five-minute command lease with 60 seconds reserved for fenced cleanup. Real
+Postgres tests pin the command and owner lease durations. The expensive sync slot
+is released before cleanup; release still uses the exact command lease fence.
+Admission spans record class, queue depth, elapsed wait and final outcome,
+including cancellation. Scheduler ticks emit aggregate saturation spans while
+a class has queued work and no free permits, so monitoring does not wait for the long-lived wait span
+to finish; completed waits of at least 30 seconds also warn.
+
+Worst-case new-mail delay grows with accounts per replica multiplied by observed
+round duration, divided by sync slots, plus provider/database overhead and retry
+backoff. The queue does not promise constant latency as account count grows.
+Increasing concurrency requires memory/round measurements; reducing account
+coverage is not a substitute. The stacked H3 paging change reduces round duration
+and permits durable progress for large initial imports.
+
+Transient owner-heartbeat errors leave the current round running and retry at
+the next heartbeat. Confirmed ownership loss cancels provider work cooperatively
+and drains command-lease cleanup; acquisition completes before that cancellation
+is observed so its returned lease can be released.
+
+State hydration and its command claim share one transaction, committed before
+provider IO. Loading cancellation rolls the claim back. A primary-key NOWAIT
+lock makes competing claims fail promptly, with 30-second statement and
+10-second idle-transaction deadlines. The loading semaphore reserves two of the
+production pool's ten connections for heartbeats and cleanup.
+
+The [owner-renewal plan record](../design/imap-owner-renewal-query-plans.json)
+measures the heartbeat caller against synthetic large tables, including actual
+renewal/takeover updates rather than empty matches.
+
+The [acquisition-lock plans](../design/imap-acquisition-lock-query-plans.json)
+cover existing and missing keys under fresh/stale statistics; the peer-lock
+regression separately verifies NOWAIT and rollback with real concurrent transactions.

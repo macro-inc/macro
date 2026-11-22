@@ -24,7 +24,7 @@ fn structured_and_text_dsns_match_each_recipient_and_original_message() {
         .replace("Action: failed", "Action: delayed")
         .replace("5.1.1", "4.2.2");
     let workmail = format!("Technical report:\r\n{STATUS}");
-    let zoho = format!(" Message-ID: <original@example.net>\r\n\r\nA synthetic note.");
+    let zoho = " Message-ID: <original@example.net>\r\n\r\nA synthetic note.".to_string();
     let yahoo = "<recipient@example.net>:\r\n  550 5.1.1 user unknown";
     let returned = [
         (

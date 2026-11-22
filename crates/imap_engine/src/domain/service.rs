@@ -12,13 +12,12 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
-use tracing::Instrument;
 use uuid::Uuid;
 
 const PAGE_SIZE: usize = 500;
 const MAX_ATTACHMENT: usize = 25 * 1024 * 1024;
 
-#[derive(strum::AsRefStr)]
+#[derive(Clone, Copy, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 enum AdmissionOutcome {
     Admitted,
@@ -26,6 +25,8 @@ enum AdmissionOutcome {
     Unavailable,
     #[strum(serialize = "admission_timeout")]
     Timeout,
+    #[strum(serialize = "admission_cancelled")]
+    Cancelled,
 }
 
 /// Engine orchestrator. Authorization and state transitions live here, not in HTTP handlers.
@@ -38,8 +39,14 @@ pub struct Engine {
     discovery: Option<Arc<dyn super::discovery::DiscoveryProvider>>,
     idle_policy: std::sync::Mutex<super::adaptive_idle::IdlePolicy>,
     operation_capacity: tokio::sync::Semaphore,
+    operation_waiting: std::sync::atomic::AtomicUsize,
+    ingestion_capacity: tokio::sync::Semaphore,
+    ingestion_waiting: std::sync::atomic::AtomicUsize,
+    import_capacity: tokio::sync::Semaphore,
+    import_waiting: std::sync::atomic::AtomicUsize,
     wakeups: std::sync::Mutex<BTreeMap<Uuid, (Uuid, Arc<tokio::sync::Notify>)>>,
     synchronization_capacity: tokio::sync::Semaphore,
+    synchronization_waiting: std::sync::atomic::AtomicUsize,
 }
 impl Engine {
     /// Construct with replaceable infrastructure ports.
@@ -54,12 +61,26 @@ impl Engine {
             settings: None,
             discovery: None,
             operation_capacity: tokio::sync::Semaphore::new(16),
+            operation_waiting: Default::default(),
+            ingestion_capacity: tokio::sync::Semaphore::new(4),
+            ingestion_waiting: Default::default(),
+            import_capacity: tokio::sync::Semaphore::new(2),
+            import_waiting: Default::default(),
             wakeups: Default::default(),
-            synchronization_capacity: tokio::sync::Semaphore::new(2),
+            synchronization_capacity: tokio::sync::Semaphore::new(usize::from(
+                SyncConcurrency::DEFAULT.get(),
+            )),
+            synchronization_waiting: Default::default(),
             idle_policy: std::sync::Mutex::new(super::adaptive_idle::IdlePolicy::new()),
             cipher,
             transport,
         }
+    }
+
+    /// Set the bounded sync concurrency at composition, without reducing account coverage.
+    pub fn with_sync_concurrency(mut self, concurrency: SyncConcurrency) -> Self {
+        self.synchronization_capacity = tokio::sync::Semaphore::new(usize::from(concurrency.get()));
+        self
     }
 
     /// Attach owner-scoped folder/server settings at the composition boundary.
@@ -237,57 +258,102 @@ impl Engine {
     }
     /// Current scheduler work, already filtered to active links.
     pub async fn bindings(&self, retained_links: &[Uuid]) -> Result<Vec<Binding>, Error> {
+        self.report_admission_saturation();
         self.transport.maintenance().await;
         self.repository.bindings(2000, retained_links).await
     }
 
-    /// Execute one account-scoped operation under a distributed fence.
-    #[tracing::instrument(skip_all, fields(link_id = %binding.link_id), err)]
-    pub async fn execute(&self, binding: Binding, operation: Operation) -> Result<Value, Error> {
-        // Admit before loading the account index so a reconnect wave cannot buffer thousands of mailboxes.
+    /// Execute an operation using the trusted caller's workload class.
+    pub async fn execute_in_class(
+        &self,
+        binding: Binding,
+        operation: Operation,
+        class: OperationClass,
+    ) -> Result<Value, Error> {
+        self.execute_with_owner(binding, operation, class, None)
+            .await
+    }
+
+    async fn execute_owned_sync(
+        &self,
+        binding: Binding,
+        owner: Uuid,
+        stopped: &tokio_util::sync::CancellationToken,
+    ) -> Result<(), Error> {
+        self.execute_with_owner(
+            binding,
+            Operation::Sync,
+            OperationClass::Interactive,
+            Some((owner, stopped.clone())),
+        )
+        .await
+        .map(|_| ())
+    }
+
+    #[tracing::instrument(skip_all, name = "execute", fields(link_id = %binding.link_id), err)]
+    async fn execute_with_owner(
+        &self,
+        binding: Binding,
+        operation: Operation,
+        class: OperationClass,
+        owner: Option<(Uuid, tokio_util::sync::CancellationToken)>,
+    ) -> Result<Value, Error> {
+        let synchronizing = matches!(operation, Operation::Sync);
         let submission_deadline = tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET;
-        let admission = self.operation_capacity.acquire();
-        let capacity = if matches!(operation, Operation::Submit { .. }) {
-            // A queued request has not inspected its prior durable submission,
-            // so an expired wait remains a conservative connectivity error.
-            let span = tracing::info_span!(
-                "imap.submit.admission",
-                smtp.outcome = tracing::field::Empty
-            );
-            let result = tokio::time::timeout_at(submission_deadline, admission)
-                .instrument(span.clone())
-                .await;
-            let outcome = match &result {
-                Ok(Ok(_)) => AdmissionOutcome::Admitted,
-                Ok(Err(_)) => AdmissionOutcome::Unavailable,
-                Err(_) => AdmissionOutcome::Timeout,
-            };
-            span.record("smtp.outcome", outcome.as_ref());
-            result.map_err(|_| Error::ConnectionUnavailable)?
-        } else {
-            admission.await
+        let stopped = owner
+            .as_ref()
+            .map(|(_, stopped)| stopped.clone())
+            .unwrap_or_default();
+        let capacity = tokio::select! {
+            biased;
+            _ = stopped.cancelled() => return Err(Error::Conflict),
+            capacity = self.admit_capacity(&operation, class, submission_deadline) => capacity?,
         };
-        let _capacity = capacity.map_err(|_| Error::ConnectionUnavailable)?;
-        let _synchronization_capacity = if matches!(operation, Operation::Sync) {
-            Some(
-                self.synchronization_capacity
-                    .acquire()
-                    .await
-                    .map_err(|_| Error::ConnectionUnavailable)?,
-            )
-        } else {
-            None
+        let mut account = None;
+        let work = async {
+            // A queued actor must still own the connection immediately before
+            // loading state and opening a provider session.
+            if let Some((owner, _)) = owner
+                && !self.repository.claim_owner(binding, owner).await?
+            {
+                return Err(Error::Conflict);
+            }
+            let selection = sync::selection(&operation)?;
+            // Drain acquisition before observing owner cancellation, so a command
+            // lease returned by the repository always reaches fenced cleanup.
+            account = Some(self.repository.acquire_scoped(binding, selection).await?);
+            let account = account.as_mut().ok_or(Error::ConnectionUnavailable)?;
+            if account.state.needs_reauth {
+                return Err(Error::CredentialsRejected);
+            }
+            tokio::select! {
+                biased;
+                _ = stopped.cancelled() => Err(Error::Conflict),
+                result = self.execute_leased(account, operation, submission_deadline) => result,
+            }
         };
-        let selection = sync::selection(&operation)?;
-        let mut account = self.repository.acquire_scoped(binding, selection).await?;
-        if account.state.needs_reauth {
-            self.repository.release(&account).await?;
-            return Err(Error::CredentialsRejected);
+        let result = if synchronizing {
+            match tokio::time::timeout(SYNC_ROUND_BUDGET, work).await {
+                Ok(result) => result,
+                Err(_) => {
+                    tracing::warn!(
+                        sync.deadline_exceeded = true,
+                        "IMAP synchronization work exceeded its budget"
+                    );
+                    Err(Error::ConnectionUnavailable)
+                }
+            }
+        } else {
+            work.await
+        };
+        // Release the expensive sync slot before bounded lease cleanup; queued
+        // accounts must not wait for another account's cleanup query.
+        if synchronizing {
+            drop(capacity);
         }
-        let result = self
-            .execute_leased(&mut account, operation, submission_deadline)
-            .await;
-        // Always release after a failed command. Persisting a send's Unknown marker happened before IO.
+        let Some(account) = account else {
+            return result;
+        };
         let release = self.repository.release(&account).await;
         match result {
             Ok(value) => {
@@ -296,6 +362,12 @@ impl Engine {
             }
             Err(error) => Err(error),
         }
+    }
+
+    /// Execute user work, or the actor's separately admitted synchronization.
+    pub async fn execute(&self, binding: Binding, operation: Operation) -> Result<Value, Error> {
+        self.execute_in_class(binding, operation, OperationClass::Interactive)
+            .await
     }
     async fn refresh(&self, a: &mut Account) -> Result<(), Error> {
         let c = self
@@ -695,6 +767,7 @@ fn new_draft(state: &AccountState, id: String, input: DraftInput) -> Result<Draf
 }
 
 mod actor;
+mod admission;
 mod organization;
 mod send;
 mod sync;

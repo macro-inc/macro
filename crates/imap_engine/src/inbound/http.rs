@@ -225,7 +225,8 @@ async fn disconnect(
     path = "/internal/v1/accounts/{link}/operations",
     params(
         ("link" = Uuid, Path),
-        ("x-mailbox-binding" = String, Header)
+        ("x-mailbox-binding" = String, Header),
+        ("x-imap-work-class" = Option<OperationClass>, Header)
     ),
     request_body = Operation,
     responses(
@@ -249,9 +250,20 @@ async fn operation(
     Ok(Json(
         state
             .engine
-            .execute(binding(link, &headers)?, input)
+            .execute_in_class(binding(link, &headers)?, input, operation_class(&headers)?)
             .await?,
     ))
+}
+
+fn operation_class(headers: &HeaderMap) -> Result<OperationClass, ApiError> {
+    match headers.get("x-imap-work-class") {
+        None => Ok(OperationClass::Interactive),
+        Some(value) => Ok(value
+            .to_str()
+            .map_err(|_| Error::Invalid)?
+            .parse()
+            .map_err(|_| Error::Invalid)?),
+    }
 }
 /// Source-of-truth OpenAPI document for the internal generated client.
 #[derive(OpenApi)]
@@ -277,6 +289,7 @@ async fn operation(
         Verification,
         ConnectRequest,
         Binding,
+        OperationClass,
         Operation,
         ActionRequest,
         DraftInput,

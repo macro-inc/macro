@@ -21,3 +21,9 @@ shutdown. User-facing routes live in email_service.
 - The service requires a dedicated KMS key and internal key. It has no public
   gateway route and cannot decrypt credentials owned by another link or user.
 - Stop and drain tracked scheduler work on shutdown.
+
+`SyncConcurrency::DEFAULT` is the typed code-level limit of 2. Tune it in a
+reviewed code change only after measuring round duration and memory; no new
+Doppler configuration is required. It limits active
+rounds, not IDLE actors or mailbox coverage. Queue depth/wait and saturation are
+visible in `imap.admission`; H3 paging is required to shrink long initial rounds.

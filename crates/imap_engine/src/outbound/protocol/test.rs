@@ -424,6 +424,11 @@ async fn lost_real_smtp_final_reply_is_unknown_and_a_restarted_engine_never_retr
         state: Mutex::new(AccountState::default()),
         saved_unknown: AtomicBool::new(false),
         owner_available: AtomicBool::new(true),
+        owner_claims: std::sync::atomic::AtomicU32::new(0),
+        owner_gate: std::sync::Mutex::new(None),
+        owner_errors: std::sync::atomic::AtomicU32::new(0),
+        releases: std::sync::atomic::AtomicU32::new(0),
+        acquire_gate: None,
     });
     let binding = Binding {
         link_id: uuid::Uuid::now_v7(),

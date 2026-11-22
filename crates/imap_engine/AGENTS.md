@@ -105,3 +105,24 @@ Record final SMTP attempt/outcome span fields once after settlement; expected po
 Passive provider hints use only the catalog and bounded domain-only MX lookup.
 Never run identity-bearing HTTP autoconfig for a first-visit suggestion; unknown,
 failed or ambiguous MX evidence leaves provider choice to the user.
+
+Admission has separate user (16), live ingestion (4), import (2) and sync pools.
+Worker read jobs use ingestion/import classes; API settings, user commands,
+draft materialization and sends keep the interactive client. Keep one awaited
+round per actor and FIFO sync admission; never lower account coverage to reduce
+queue length. `SyncConcurrency::DEFAULT` is a typed code-level limit of 2;
+tuning is a follow-up with no new environment setting.
+Renew ownership every 60 seconds while queued and recheck it after admission.
+Include state loading in the 240-second work budget, leaving cleanup headroom in
+the five-minute command lease. Admission spans record final wait/outcome;
+scheduler ticks also emit aggregate saturation spans before queued waits finish.
+Cancelled waiters must release their count and permit.
+
+Transient owner-heartbeat errors leave the current round running and retry at
+the next heartbeat. Confirmed ownership loss cancels provider work cooperatively
+and drains command-lease cleanup; acquisition completes before that cancellation
+is observed so its returned lease can be released.
+
+Keep command claims uncommitted through state hydration, with local statement
+and idle-transaction deadlines. Lock the account with NOWAIT so peers fail fast;
+limit simultaneous loads below the pool size to reserve heartbeat/cleanup slots.

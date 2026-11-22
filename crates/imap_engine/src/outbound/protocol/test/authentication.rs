@@ -5,7 +5,7 @@ use super::*;
 #[ignore = "requires the owned Dovecot lab and explicit IMAP_TEST_ENDPOINT_MAP"]
 async fn real_tls_authentication_refusals_allow_a_successful_retry() {
     let addresses: BTreeMap<String, String> = serde_json::from_str(
-        &std::env::var("IMAP_TEST_ENDPOINT_MAP").expect("explicit local lab endpoints"),
+        &macro_env_var::read_env("IMAP_TEST_ENDPOINT_MAP").expect("explicit local lab endpoints"),
     )
     .unwrap();
     assert!(addresses.contains_key("maillab.example.net:993"));

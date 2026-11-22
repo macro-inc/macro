@@ -203,7 +203,65 @@ async fn connection_owner_takeover_is_fenced_and_old_owner_cannot_release_succes
     repo.connect(binding, "owner", vec![2], verification)
         .await
         .unwrap();
+    // Cancellation during hydration drops the still-uncommitted claim. A peer
+    // fails fast on its row lock and can acquire immediately after rollback.
+    let (tx, staged) = repo.begin_acquisition(binding).await.unwrap();
+    assert!(matches!(repo.acquire(binding).await, Err(Error::Throttled)));
+    drop(staged);
+    drop(tx);
+    let before = sqlx::query_scalar!(r#"SELECT now() AS "now!""#)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let leased = repo.acquire(binding).await.unwrap();
+    let after = sqlx::query_scalar!(r#"SELECT now() AS "now!""#)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let lease_until = sqlx::query_scalar!(
+        r#"
+        SELECT
+            lease_until
+        FROM
+            imap_accounts
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    let budget = chrono::Duration::from_std(COMMAND_LEASE_BUDGET).unwrap();
+    assert!(lease_until >= before + budget && lease_until <= after + budget);
+    assert!(SYNC_ROUND_BUDGET < COMMAND_LEASE_BUDGET);
+    repo.release(&leased).await.unwrap();
+    let before_owner = sqlx::query_scalar!(r#"SELECT now() AS "now!""#)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert!(repo.claim_owner(binding, a).await.unwrap());
+    let owner_until = sqlx::query_scalar!(
+        r#"
+        SELECT
+            lease_until
+        FROM
+            imap_account_owners
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let now = sqlx::query_scalar!(r#"SELECT now() AS "now!""#)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(owner_until <= now + chrono::Duration::from_std(OWNER_LEASE_BUDGET).unwrap());
+    assert!(owner_until >= before_owner + chrono::Duration::from_std(OWNER_LEASE_BUDGET).unwrap());
     assert!(!repo.claim_owner(binding, b).await.unwrap());
     assert!(repo.claim_owner(binding, a).await.unwrap());
     sqlx::query!(

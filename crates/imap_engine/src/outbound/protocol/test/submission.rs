@@ -108,7 +108,7 @@ async fn real_tls_missing_sent_folder_cannot_prove_delivery() {
 #[ignore = "requires the owned Dovecot lab and explicit IMAP_TEST_ENDPOINT_MAP"]
 async fn real_sent_reconciliation_requires_one_exact_message_id_and_never_appends() {
     let addresses = serde_json::from_str(
-        &std::env::var("IMAP_TEST_ENDPOINT_MAP").expect("explicit local lab endpoints"),
+        &macro_env_var::read_env("IMAP_TEST_ENDPOINT_MAP").expect("explicit local lab endpoints"),
     )
     .unwrap();
     let ca = std::fs::read_to_string(

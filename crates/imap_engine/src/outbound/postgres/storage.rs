@@ -164,9 +164,9 @@ fn hydrate(state: &mut AccountState, rows: &[Entry]) -> Result<(), Error> {
     Ok(())
 }
 macro_rules! load {
-    ($repo:expr, $rows:expr, $query:expr) => {
+    ($connection:expr, $rows:expr, $query:expr) => {
         for r in $query
-            .fetch_all(&$repo.pool)
+            .fetch_all(&mut *$connection)
             .await
             .map_err(|_| Error::ConnectionUnavailable)?
         {
@@ -186,6 +186,7 @@ macro_rules! load {
 impl PgRepository {
     pub(super) async fn hydrate(
         &self,
+        connection: &mut sqlx::PgConnection,
         account: &mut Account,
         selection: StateSelection,
     ) -> Result<(), Error> {
@@ -194,7 +195,7 @@ impl PgRepository {
         match selection {
             StateSelection::Sync => {
                 load!(
-                    self,
+                    connection,
                     rows,
                     sqlx::query!(
                         r#"
@@ -221,7 +222,7 @@ impl PgRepository {
             }
             selection => {
                 load!(
-                    self,
+                    connection,
                     rows,
                     sqlx::query!(
                         r#"
@@ -249,7 +250,7 @@ impl PgRepository {
                 match selection {
                     StateSelection::Catalog => {}
                     StateSelection::Message(id) => {
-                        self.load_message(link, &id, &mut rows).await?;
+                        self.load_message(connection, link, &id, &mut rows).await?;
                     }
                     StateSelection::Recent(limit) => {
                         let folders = rows
@@ -261,7 +262,7 @@ impl PgRepository {
                             .map(|f| f.folder.id)
                             .collect::<Vec<_>>();
                         load!(
-                            self,
+                            connection,
                             rows,
                             sqlx::query!(
                                 r#"
@@ -296,7 +297,7 @@ impl PgRepository {
                             .map(|e| e.key.clone())
                             .collect::<Vec<_>>();
                         load!(
-                            self,
+                            connection,
                             rows,
                             sqlx::query!(
                                 r#"
@@ -322,15 +323,15 @@ impl PgRepository {
                         );
                     }
                     StateSelection::Draft { id, reply_to } => {
-                        self.load_draft(link, &id, &mut rows).await?;
+                        self.load_draft(connection, link, &id, &mut rows).await?;
                         if let Some(id) = reply_to {
-                            self.load_message(link, &id, &mut rows).await?;
+                            self.load_message(connection, link, &id, &mut rows).await?;
                         }
                     }
                     StateSelection::Upload(id) => {
                         let id = id.to_string();
                         load!(
-                            self,
+                            connection,
                             rows,
                             sqlx::query!(
                                 r#"
@@ -359,7 +360,7 @@ impl PgRepository {
                             .find(|e| e.kind == "upload")
                             .and_then(|e| e.message_id.clone())
                         {
-                            self.load_draft(link, &id, &mut rows).await?;
+                            self.load_draft(connection, link, &id, &mut rows).await?;
                         }
                     }
                     StateSelection::Changes {
@@ -369,7 +370,7 @@ impl PgRepository {
                     } => {
                         if let Some(after) = after {
                             load!(
-                                self,
+                                connection,
                                 rows,
                                 sqlx::query!(
                                     r#"
@@ -404,7 +405,7 @@ impl PgRepository {
                                 i64::try_from(sequence).map_err(|_| Error::CursorOutdated)?;
                             // Include the earliest retained journal row for cursor-expiration policy.
                             load!(
-                                self,
+                                connection,
                                 rows,
                                 sqlx::query!(
                                     r#"
@@ -462,9 +463,15 @@ impl PgRepository {
             .collect::<Result<_, Error>>()?;
         hydrate(&mut account.state, &rows)
     }
-    async fn load_message(&self, link: Uuid, id: &str, rows: &mut Vec<Entry>) -> Result<(), Error> {
+    async fn load_message(
+        &self,
+        connection: &mut sqlx::PgConnection,
+        link: Uuid,
+        id: &str,
+        rows: &mut Vec<Entry>,
+    ) -> Result<(), Error> {
         load!(
-            self,
+            connection,
             rows,
             sqlx::query!(
                 r#"
@@ -492,9 +499,15 @@ impl PgRepository {
         );
         Ok(())
     }
-    async fn load_draft(&self, link: Uuid, id: &str, rows: &mut Vec<Entry>) -> Result<(), Error> {
+    async fn load_draft(
+        &self,
+        connection: &mut sqlx::PgConnection,
+        link: Uuid,
+        id: &str,
+        rows: &mut Vec<Entry>,
+    ) -> Result<(), Error> {
         load!(
-            self,
+            connection,
             rows,
             sqlx::query!(
                 r#"
@@ -528,7 +541,7 @@ impl PgRepository {
             .and_then(|e| serde_json::from_value::<DraftState>(e.document.clone()).ok())
             .and_then(|d| d.input.reply_to);
         if let Some(reply) = reply {
-            self.load_message(link, &reply, rows).await?;
+            self.load_message(connection, link, &reply, rows).await?;
         }
         Ok(())
     }

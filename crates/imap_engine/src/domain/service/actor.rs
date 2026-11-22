@@ -78,11 +78,13 @@ impl Engine {
             if cancellation.is_cancelled() {
                 return Ok(());
             }
+            let round_span = tracing::info_span!(parent: None, "imap.account_round", link_id = %binding.link_id, retry_count = failures);
+            let round_stop = cancellation.child_token();
             let work = async {
                 if !self.repository.claim_owner(binding, owner).await? {
                     return Err(Error::Conflict);
                 }
-                self.execute(binding, Operation::Sync).await?;
+                self.execute_owned_sync(binding, owner, &round_stop).await?;
                 if !self.repository.claim_owner(binding, owner).await? {
                     return Err(Error::Conflict);
                 }
@@ -118,7 +120,7 @@ impl Engine {
                 let started = tokio::time::Instant::now();
                 let result = tokio::select! {
                     biased;
-                    _ = cancellation.cancelled() => return Ok(()),
+                    _ = round_stop.cancelled() => return Err(Error::Conflict),
                     _ = wake.notified() => Ok(()),
                     result = self.transport.wait_change(&credentials, interval) => result,
                 };
@@ -132,14 +134,12 @@ impl Engine {
                         | Error::TcpUnavailable
                         | Error::TlsUnavailable
                         | Error::ConnectionTimedOut,
-                    ) => {
-                        super::super::adaptive_idle::Outcome::Drop {
-                            quiet_ms: elapsed,
-                            age_ms: elapsed,
-                            ran_interval_ms: Some(interval * 1000),
-                            idling: true,
-                        }
-                    }
+                    ) => super::super::adaptive_idle::Outcome::Drop {
+                        quiet_ms: elapsed,
+                        age_ms: elapsed,
+                        ran_interval_ms: Some(interval * 1000),
+                        idling: true,
+                    },
                     _ => super::super::adaptive_idle::Outcome::Stable {
                         age_ms: elapsed,
                         ran_interval_ms: Some(interval * 1000),
@@ -157,12 +157,51 @@ impl Engine {
                     self.repository.save_idle_state(&host_hash, &state).await?;
                 }
                 result
-            }.instrument(tracing::info_span!(parent: None, "imap.account_round", link_id = %binding.link_id, retry_count = failures));
-            let outcome = tokio::select! {
-                biased;
-                _ = cancellation.cancelled() => return Ok(()),
-                result = work => result,
+            }
+            .instrument(round_span.clone());
+            let outcome = {
+                tokio::pin!(work);
+                // Poll renewals beside the round: a slow database heartbeat must
+                // not suspend provider progress or its deadline/lease cleanup.
+                let heartbeat = async {
+                    let mut renewal = tokio::time::interval_at(
+                        tokio::time::Instant::now() + OWNER_RENEW_INTERVAL,
+                        OWNER_RENEW_INTERVAL,
+                    );
+                    renewal.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                    loop {
+                        tokio::select! {
+                            biased;
+                            _ = round_stop.cancelled() => return,
+                            _ = renewal.tick() => {},
+                        }
+                        match self
+                            .repository
+                            .claim_owner(binding, owner)
+                            .instrument(round_span.clone())
+                            .await
+                        {
+                            Ok(true) => {}
+                            Ok(false) => {
+                                round_stop.cancel();
+                                return;
+                            }
+                            Err(error) => tracing::warn!(
+                                ?error,
+                                "IMAP owner renewal failed; retrying next heartbeat"
+                            ),
+                        }
+                    }
+                };
+                tokio::select! {
+                    biased;
+                    result = &mut work => result,
+                    _ = heartbeat => work.await,
+                }
             };
+            if cancellation.is_cancelled() {
+                return Ok(());
+            }
             match outcome {
                 Ok(()) => {
                     credential_refusals = 0;

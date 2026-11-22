@@ -15,6 +15,11 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
             state: Mutex::new(AccountState::default()),
             saved_unknown: AtomicBool::new(false),
             owner_available: AtomicBool::new(true),
+            owner_claims: std::sync::atomic::AtomicU32::new(0),
+            owner_gate: std::sync::Mutex::new(None),
+            owner_errors: std::sync::atomic::AtomicU32::new(0),
+            releases: std::sync::atomic::AtomicU32::new(0),
+            acquire_gate: None,
         });
         let transport = Arc::new(UncertainTransport {
             repository: repository.clone(),
@@ -22,6 +27,7 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
             deadline: AtomicBool::new(false),
             sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
             submission_deadline: std::sync::Mutex::new(None),
+            provider_work: None,
         });
         let engine = Arc::new(Engine::new(repository, Arc::new(TestCipher), transport));
         let app = router(ApiState {
@@ -106,6 +112,26 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
                     .status(),
                 reqwest::StatusCode::OK
             );
+            for (class, status) in [
+                (None, reqwest::StatusCode::OK),
+                (Some("interactive"), reqwest::StatusCode::OK),
+                (Some("ingestion"), reqwest::StatusCode::OK),
+                (Some("import"), reqwest::StatusCode::OK),
+                (Some("unknown"), reqwest::StatusCode::UNPROCESSABLE_ENTITY),
+            ] {
+                let link = uuid::Uuid::now_v7();
+                let mut request = client
+                    .post(format!(
+                        "http://{address}/internal/v1/accounts/{link}/operations"
+                    ))
+                    .header("x-internal-auth-key", configured)
+                    .header("x-mailbox-binding", "1.1")
+                    .json(&serde_json::json!({"operation":"message", "id":"missing"}));
+                if let Some(class) = class {
+                    request = request.header("x-imap-work-class", class);
+                }
+                assert_eq!(request.send().await.unwrap().status(), status);
+            }
         }
         stop.send(()).unwrap();
         server.await.unwrap();

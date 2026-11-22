@@ -12,6 +12,16 @@ use zeroize::ZeroizeOnDrop;
 pub const MAX_FOLDER_CATALOG: usize = 1000;
 /// Maximum ordinary physical folders scanned per account.
 pub const MAX_MONITORED_FOLDERS: usize = 200;
+/// Keep aligned with the fenced five-minute PostgreSQL command lease (pinned by DB tests).
+pub(crate) const COMMAND_LEASE_BUDGET: std::time::Duration = std::time::Duration::from_secs(300);
+/// Keep aligned with the PostgreSQL owner lease (pinned by DB tests).
+pub(crate) const OWNER_LEASE_BUDGET: std::time::Duration = std::time::Duration::from_secs(360);
+/// Renew well before owner expiry, including while queued for admission.
+pub(crate) const OWNER_RENEW_INTERVAL: std::time::Duration =
+    std::time::Duration::from_secs(OWNER_LEASE_BUDGET.as_secs() / 6);
+/// Include state loading and retain sixty seconds for fenced command-lease cleanup.
+pub(crate) const SYNC_ROUND_BUDGET: std::time::Duration =
+    COMMAND_LEASE_BUDGET.saturating_sub(std::time::Duration::from_secs(60));
 /// Shared admission-to-envelope budget; body transmission remains uncertainty-fenced.
 pub(crate) const SUBMISSION_PRE_BODY_BUDGET: std::time::Duration =
     std::time::Duration::from_secs(60);
@@ -547,6 +557,53 @@ pub struct Discovery {
     pub host_confirmation_required: bool,
     /// Provider's application-password instructions.
     pub help_url: Option<String>,
+}
+
+/// Validated code-level sync concurrency. Tune only after measuring round cost and memory.
+#[derive(Debug, Clone, Copy)]
+pub struct SyncConcurrency(u16);
+
+impl SyncConcurrency {
+    /// Conservative default for the existing task memory budget; tuning is a follow-up.
+    pub const DEFAULT: Self = Self(2);
+
+    /// Reject capacities that cannot fit the supported bounded admission range.
+    pub fn new(value: u16) -> Result<Self, Error> {
+        if !(1..=16).contains(&value) {
+            return Err(Error::Invalid);
+        }
+        Ok(Self(value))
+    }
+
+    /// Number of simultaneous expensive synchronization rounds.
+    pub fn get(self) -> u16 {
+        self.0
+    }
+}
+
+/// Trusted caller workload, independent from mailbox authorization or rollout.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    Serialize,
+    Deserialize,
+    ToSchema,
+    strum::EnumString,
+    strum::AsRefStr,
+    strum::Display,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum OperationClass {
+    /// User-initiated reads, writes and sends.
+    #[default]
+    Interactive,
+    /// Background mailbox import and change-stream consumption.
+    Ingestion,
+    /// Older-mail backfill, leaving live ingestion capacity available.
+    Import,
 }
 
 /// Typed account operation. The service validates every referenced id inside the link.

@@ -19,6 +19,7 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct ImapServiceClient {
     client: generated::Client,
+    operation_class: OperationClass,
 }
 impl ImapServiceClient {
     /// Construct once with a typed service URL and service-owned internal key.
@@ -44,7 +45,14 @@ impl ImapServiceClient {
             .map_err(|_| Error::ConnectionUnavailable)?;
         Ok(Self {
             client: generated::Client::new_with_client(base_url.trim_end_matches('/'), http),
+            operation_class: OperationClass::Interactive,
         })
+    }
+
+    /// Classify trusted background callers without changing authentication or bindings.
+    pub fn with_operation_class(mut self, class: OperationClass) -> Self {
+        self.operation_class = class;
+        self
     }
     /// Query catalog settings without accepting a password.
     #[tracing::instrument(skip_all, err)]
@@ -92,6 +100,7 @@ impl ImapServiceClient {
             self.client
                 .operation(
                     &b.link_id,
+                    Some(&self.operation_class),
                     &format!("{}.{}", b.sync_generation, b.grant_generation),
                     op,
                 )

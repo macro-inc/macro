@@ -127,6 +127,21 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "x-imap-work-class",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/OperationClass"
+                }
+              ]
+            }
           }
         ],
         "requestBody": {
@@ -1722,6 +1737,15 @@
           }
         ],
         "description": "Typed account operation. The service validates every referenced id inside the link."
+      },
+      "OperationClass": {
+        "type": "string",
+        "description": "Trusted caller workload, independent from mailbox authorization or rollout.",
+        "enum": [
+          "interactive",
+          "ingestion",
+          "import"
+        ]
       },
       "Secret": {
         "type": "string",

@@ -213,7 +213,7 @@ impl MailTransport for ProtocolTransport {
         c: &Credentials,
         known: &AccountState,
     ) -> Result<Vec<RemoteFolder>, Error> {
-        timeout(Duration::from_secs(240), async {
+        timeout(SYNC_ROUND_BUDGET, async {
             let mut session = self.imap(&c.imap).await?;
             let mut catalog = self.folders(&mut session).await?;
             let mut preferences = match (&self.settings, c.binding) {

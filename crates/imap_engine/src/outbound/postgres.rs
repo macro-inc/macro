@@ -1,4 +1,5 @@
 //! Compile-time checked, fenced persistence for the IMAP engine's own tables.
+mod acquisition;
 mod settings;
 use crate::domain::{models::*, ports::*};
 use sqlx::PgPool;
@@ -7,11 +8,22 @@ use uuid::Uuid;
 /// Postgres storage. Every lookup includes the link or owner binding.
 pub struct PgRepository {
     pool: PgPool,
+    loading_capacity: tokio::sync::Semaphore,
 }
 impl PgRepository {
     /// Use the composition root's shared pool.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        // Leave two production pool connections for ownership heartbeats and
+        // cleanup while bounded command-state loads hold their transactions.
+        let loading_slots = pool
+            .options()
+            .get_max_connections()
+            .saturating_sub(2)
+            .max(1);
+        Self {
+            pool,
+            loading_capacity: tokio::sync::Semaphore::new(loading_slots as usize),
+        }
     }
 }
 #[async_trait::async_trait]
@@ -423,93 +435,18 @@ impl Repository for PgRepository {
         b: Binding,
         selection: StateSelection,
     ) -> Result<Account, Error> {
-        let lease = Uuid::now_v7();
-        let row = sqlx::query!(
-            r#"
-            UPDATE
-                imap_accounts a
-            SET
-                lease_id = $4,
-                lease_until = now() + interval '5 minutes'
-            FROM
-                email_links l
-            WHERE
-                a.link_id = $1
-                AND a.sync_generation = $2
-                AND a.grant_generation = $3
-                AND (a.lease_until IS NULL
-                    OR a.lease_until < now())
-                AND l.id = a.link_id
-                AND l.macro_id = a.user_id
-                AND l.provider = 'IMAP'
-                AND l.is_sync_active
-                AND NOT l.needs_reauth
-                AND l.sync_generation = a.sync_generation
-                AND l.grant_generation = a.grant_generation
-            RETURNING
-                a.user_id,
-                a.credential_ciphertext,
-                a.state,
-                a.revision
-            "#,
-            b.link_id,
-            b.sync_generation,
-            b.grant_generation,
-            lease,
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
-        let r = match row {
-            Some(row) => row,
-            None => {
-                let current = sqlx::query_scalar!(
-                    r#"
-                    SELECT
-                        EXISTS (
-                            SELECT
-                                1
-                            FROM
-                                imap_accounts a
-                                JOIN email_links l ON l.id = a.link_id
-                            WHERE
-                                a.link_id = $1
-                                AND a.sync_generation = $2
-                                AND a.grant_generation = $3
-                                AND l.macro_id = a.user_id
-                                AND l.provider = 'IMAP'
-                                AND l.is_sync_active
-                                AND NOT l.needs_reauth
-                                AND l.sync_generation = a.sync_generation
-                                AND l.grant_generation = a.grant_generation) AS "current!"
-                    "#,
-                    b.link_id,
-                    b.sync_generation,
-                    b.grant_generation,
-                )
-                .fetch_one(&self.pool)
-                .await
-                .map_err(|_| Error::ConnectionUnavailable)?;
-                return Err(if current {
-                    Error::Throttled
-                } else {
-                    Error::Conflict
-                });
-            }
-        };
-        let mut account = Account {
-            checkpoint: Default::default(),
-            binding: b,
-            user_id: r.user_id,
-            ciphertext: r.credential_ciphertext,
-            state: serde_json::from_value(r.state).map_err(|_| Error::ConnectionUnavailable)?,
-            revision: r.revision,
-            lease_id: lease,
-        };
-        if let Err(error) = self.hydrate(&mut account, selection).await {
-            self.release(&account).await?;
-            return Err(error);
-        }
+        let _loading = self
+            .loading_capacity
+            .acquire()
+            .await
+            .map_err(|_| Error::ConnectionUnavailable)?;
+        // Claim and hydrate in one transaction. A loading timeout rolls back
+        // the uncommitted lease instead of stranding it for five minutes.
+        let (mut tx, mut account) = self.begin_acquisition(b).await?;
+        self.hydrate(&mut tx, &mut account, selection).await?;
+        tx.commit()
+            .await
+            .map_err(|_| Error::ConnectionUnavailable)?;
         Ok(account)
     }
     async fn save(&self, a: &mut Account) -> Result<(), Error> {

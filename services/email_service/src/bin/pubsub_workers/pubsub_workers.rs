@@ -308,6 +308,16 @@ async fn main() -> anyhow::Result<()> {
     );
     let imap_gateway =
         email_service::composition::imap_gateway(db.clone(), config.internal_api_key.as_ref())?;
+    // Only stream ingestion uses this class. Settings, commands and drafts keep
+    // the original interactive client, including their queued user work.
+    let mut imap_ingestion = imap_gateway.clone();
+    imap_ingestion.client = imap_ingestion
+        .client
+        .with_operation_class(imap_service_client::OperationClass::Ingestion);
+    let mut imap_import = imap_gateway.clone();
+    imap_import.client = imap_import
+        .client
+        .with_operation_class(imap_service_client::OperationClass::Import);
     let outlook_repository = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
         email_service::outbound::email_api::RedisMicrosoftRequestGate::new(
             redis_conn.clone(),
@@ -475,7 +485,7 @@ async fn main() -> anyhow::Result<()> {
             mailbox_repository.clone(),
             email_service::outbound::mailbox_settings::ProviderMailboxSettings {
                 db: db.clone(),
-                imap: imap_gateway.clone(),
+                imap: imap_ingestion.clone(),
                 gmail: email_api_live.clone(),
                 outlook: outlook_api.clone(),
             },
@@ -562,8 +572,8 @@ async fn main() -> anyhow::Result<()> {
     worker_tracker.spawn(email_service::mailbox_sync_worker::run(
         email::domain::mailbox::MailboxSyncService::new(
             imap_repository.clone(),
-            imap_gateway.clone(),
-            imap_gateway.clone(),
+            imap_ingestion.clone(),
+            imap_import,
             imap_repository.clone(),
         ),
         worker_cancellation_token.clone(),
@@ -573,7 +583,7 @@ async fn main() -> anyhow::Result<()> {
             imap_repository.clone(),
             email_service::outbound::mailbox_settings::ProviderMailboxSettings {
                 db: db.clone(),
-                imap: imap_gateway.clone(),
+                imap: imap_ingestion.clone(),
                 gmail: email_api_live.clone(),
                 outlook: outlook_api.clone(),
             },
@@ -603,7 +613,7 @@ async fn main() -> anyhow::Result<()> {
             imap_repository.clone(),
             email_service::outbound::mailbox_projection::MailboxEffects {
                 db: db.clone(),
-                attachments: imap_gateway.clone(),
+                attachments: imap_ingestion.clone(),
                 invitations: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
                 broker: macro_event_broker.clone(),
                 notification: notification_ingress_service.clone(),
@@ -843,7 +853,10 @@ async fn main() -> anyhow::Result<()> {
     ] {
         let db_link_manager = db.clone();
         let email_api_link_manager = email_api_live.clone();
-        let imap_gateway_link_manager = imap_gateway.clone();
+        let imap_gateway_link_manager = match lane {
+            LinkManagerLane::Interactive => imap_gateway.clone(),
+            LinkManagerLane::Maintenance => imap_ingestion.clone(),
+        };
         let auth_service_client_link_manager = auth_service_client.clone();
         let redis_client_link_manager = redis_client.clone();
         let sqs_client_link_manager = sqs_client.clone();

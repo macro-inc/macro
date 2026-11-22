@@ -425,3 +425,9 @@ errors without logging the address.
 First-visit inbox suggestions use the bounded catalog/MX-only adapter. Unknown
 providers retain the generic chooser; full address-bearing discovery runs only
 after the user explicitly opens IMAP setup.
+
+IMAP worker composition gives live and historical-import providers separate
+client classes. Background settings scans and link-maintenance jobs also use a
+background client. Preserve the original interactive gateway for API settings,
+user commands, draft materialization, attachments and sends; never classify all
+`MailboxGateway` methods as background, because API and worker contexts share it.

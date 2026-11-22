@@ -11377,6 +11377,7 @@ dependencies = [
  "hickory-resolver",
  "imap-proto",
  "lazy-regex",
+ "macro_env_var",
  "macro_service_urls",
  "macro_tower_layers",
  "macro_user_id",
