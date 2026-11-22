@@ -1,0 +1,36 @@
+apps/web/src/features/block-call/AGENTS.md
+  s_9671c7bc652ab5::t_82f1654760d7ae 17,27-28
+docs/agent-guide/calls.md
+  s_9671c7bc652ab5::t_82f1654760d7ae 34-38,219-232,247-253,424-426
+apps/web/src/features/block-call/primitives/recording-sessions.ts
+  s_9671c7bc652ab5::t_1a802f091533af 60
+apps/web/src/features/block-call/views/shared/call-recording-header-parts.tsx
+  s_9671c7bc652ab5::t_ac8e3e547a55ce 34
+  s_9671c7bc652ab5::t_92a8d57dec72df 16
+apps/web/src/features/block-call/views/CallDetailView.tsx
+  s_9671c7bc652ab5::t_92a8d57dec72df 53
+  s_9671c7bc652ab5::t_02ffa322d04c7d 72-74,87
+apps/web/src/features/block-call/views/shared/recording-download-ops.ts
+  s_9671c7bc652ab5::t_92a8d57dec72df 1-66
+apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.test.tsx
+  s_9671c7bc652ab5::t_df20ecfa4cd0a0 195-235,247-257,261-273,281-293
+  s_9671c7bc652ab5::t_7113e1642ea3bb 134,258-260,274-280
+  s_9671c7bc652ab5::t_aa45c257c55276 236-246
+  s_9671c7bc652ab5::t_c3bff378f07411 87-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7c87f4c8d42e03b2bfa3edeac7f8b4af1b726445",
+  "prompts": {},
+  "sessions": {
+    "s_9671c7bc652ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a46e4f3c-7142-45e8-9694-084925c538ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
