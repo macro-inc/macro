@@ -70,20 +70,21 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 - Hydration forwards an optional shared-core `HydrationScope`; stale pages reject before persistence without changing identity. `shell/test/hydration_scope.rs` covers the real browser ABI. Coordinator protocol 17 also carries contact snapshots/reconciliation and local people SQL without dropping hydration/person-policy scopes. Missing sync, SQL or reference support is independent of existing person search support; none may fall back to directory enumeration, unguarded contact writes or remote SQL. `contactSnapshot` captures admission before fetching; `contactReconcile` publishes ordinary committed invalidations for removals. Contact hydration must forward `HydrationScope.contactFence` unchanged.
 - An ordinary open whose database does not exist yet first carries the newest
   upgradable older storage version forward (`carry_forward` in `src/shell.rs`,
-  after the storage grant), then opens it, which upgrades it in place; it first
-  resumes a move an earlier open left unfinished. A recovery open never moves
-  anything in, and both it and an open that would reset moved files hand files
-  an unfinished move brought back to the older name first (`return_adoption`).
-  The result's `outcome` is `upgraded-existing` with `fromStorageVersion`;
+  after the storage grant), holding the older name's lock until the first open
+  ends, then opens it, which upgrades it in place; it first resumes a move an
+  earlier open left unfinished. Moved files an open would reset go back to the
+  older name (`hand_back`) only when the failed open left them at the version
+  they moved at (`TursoStorageOpenFailure::stored_storage_version`); a recovery
+  open does the same before wiping (`recover_adoption`), reading the version
+  after removing the marker. Anything at a newer version is discarded. The
+  result's `outcome` is `upgraded-existing` with `fromStorageVersion`;
   `carryForward` (`moved`, `resumed`, `older-in-use`, `unsupported`,
   `unreadable`, `failed`, `returned`, `discarded`) and
   `carryForwardStorageVersion` (absent when unknown) say what happened to the
   older file; add a new value to `CACHE_CARRY_FORWARDS` in the web app too.
-  The carry-forward never fails the open.
-  `an_older_storage_version_moves_forward_and_upgrades_in_place`,
-  `a_moved_database_that_never_opened_goes_back_or_opens_next_time` and
-  `an_older_pair_that_is_not_a_database_stays_where_it_is` in `shell/test.rs`
-  cover each path over real OPFS.
+  The carry-forward fails an open only when it cannot read whether moved files
+  are there and the open would reset them. The carry-forward tests in
+  `shell/test.rs` cover each path over real OPFS.
 - The engine is guarded by an async mutex so overlapping JS calls serialize
   instead of causing reentrancy — don't bypass it with a second entry point.
 - Compiles to an empty shell off-wasm specifically so plain `cargo test` across

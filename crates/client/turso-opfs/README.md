@@ -18,31 +18,38 @@ directly; `ConnectedOpfsSession::try_close()` exclusively owns and proves that
 transition. Turso open/connect failures poison and require worker replacement
 followed by a fresh lock acquisition and `recovery_wipe()`.
 
-`OpfsOwner::adopt_previous(previous_identity)` moves an older build's complete
-main/WAL pair to this owner's paths, so a new storage version opens the old
-database and upgrades it instead of starting empty. It first checks this owner's
-own paths, which only this owner can create while it holds their lock, and moves
-nothing if either exists. Otherwise it takes the older identity's lock only if
-that lock is free (`ifAvailable`) and holds it through both moves; a held lock
-means a context of the older build may have the files open, and nothing moves.
-A pair moves only if each file is empty or starts with its header (the SQLite
-header for main, a WAL magic number for the WAL), and not both are empty
-(`Unreadable` and `NothingToAdopt` otherwise). Main and WAL move under their
-new names together, so committed WAL frames move with them and no checkpoint is
-needed. Browsers without `FileSystemHandle.move` report `Unsupported` and move
-nothing.
+`OpfsOwner::adopt(&previous)` moves an older build's complete main/WAL pair to
+this owner's paths, so a new storage version opens the old database and upgrades
+it instead of starting empty. `previous` is a `PreviousLock` from
+`OpfsOwner::lock_previous(identity)`: that identity's owner lock, taken only if
+it is free (`ifAvailable`) and held until the caller releases it. A held lock
+means a context of the older build may have the files open, so the caller moves
+nothing; holding it through the moves and the first open keeps the older build
+from opening, resetting or recreating its paths meanwhile. Nothing moves when
+this owner's main file exists (`TargetExists`), when the previous pair is
+incomplete or both files are empty (`NothingToAdopt`), or when a non-empty file
+lacks a header Turso opens (`Unreadable`: the checks Turso's own open makes of
+the database header, the WAL magic, format and page size, and matching page
+sizes). Main and WAL move under their new names, so committed WAL frames move
+with them and no checkpoint is needed. Browsers without `FileSystemHandle.move`
+report `Unsupported` and move nothing.
 
-Before the first move the owner writes a journal beside its own files
-(`<identity>-adopting`, a reserved suffix) naming the older identity, and keeps
-it until the moved files have opened (`ConnectedOpfsSession::finish_adoption`).
-A process stopped between the two moves, or before the first open finished,
-leaves that journal behind: `resume_adoption` completes the move under the
-older identity's free lock, and `return_adoption` moves what arrived back to
-the older identity instead, for an open that would otherwise delete the files.
-A failed WAL move moves the main file back. Wiping or resetting an identity
-removes its journal with its pair. `src/browser/test/adopt.rs` covers each
-outcome, the held lock, the stop between moves, resuming and returning in a
-real DedicatedWorker.
+Before the first move the owner writes a marker beside its own files
+(`<identity>-adopting`, a reserved suffix) recording the older identity and the
+size and header of its WAL, whose random salts change when it is reset. It
+stays until the moved files have opened (`ConnectedOpfsSession::finish_adoption`).
+`read_adoption` reports a pending adoption as `Complete` or, after a stop
+between the two moves, `Split`; a marker this adapter did not write completely,
+or one without a main file beside it, is removed. `complete_adoption` brings a
+split's WAL over only under the older identity's lock and only while it still
+matches the marker (an empty one is recreated). `return_adoption` moves a
+self-contained database (empty WAL, which a close leaves) back to an older
+identity that holds no database, and `discard_adoption` makes the files this
+owner's own. A failed WAL move moves the main file back. Wiping or resetting an
+identity removes its marker with its pair. `src/browser/test/adopt.rs` covers
+each outcome, the lock, Turso-invalid headers, both stops, splits with a
+matching and a changed WAL, stale and malformed markers, and refused returns in
+a real DedicatedWorker.
 
 The crate tests physical lock contention in its real DedicatedWorker. Actual
 cross-worker termination/restart orchestration remains a WP-08 coordinator
