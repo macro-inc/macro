@@ -730,9 +730,12 @@ Only the machine's owner can host a teammate there, and only the admin who
 invited it or the owner of the machine it runs on can move it. When the
 hosting owner is removed from the team, stops being an admin, is deleted, or
 unpairs the machine, the service parks the install: it revokes its key and
-repo token and the machine stops it, at its next delivery at once, and
-otherwise within a minute, from a sweep the auth service runs every 60 seconds
-over installs on such machines. A parked agent keeps its account, seat, DMs
+repo token before anything else is delivered, and the machine stops it. That
+happens as part of the change itself: the team service parks after a member
+is removed or demoted, and the harness service asks the auth service to park
+after a machine is unpaired. A sweep the auth service runs every 60 seconds
+over installs on such machines catches whatever those miss (a failed call, a
+deleted account), and at the next delivery the service refuses and parks. A parked agent keeps its account, seat, DMs
 and repository. Members shows it stopped, saying its machine can no longer
 host it. Its new machine gets its key, DMs and shares, and any admin can
 park it by removing its host, so only its inviter, the team's owner, or the

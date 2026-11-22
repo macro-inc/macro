@@ -136,8 +136,12 @@ delivered until the old machine's keys and repository token are revoked, so a
 late revoke never voids the new machine's key. Only the agent's inviter or
 the current machine's owner may move it. A machine whose owner is no longer
 an owner or admin of the agent's team, or that was unpaired, gets nothing more
-(`issue_install` checks `host_entitled`), and authentication_service's 60 s
-sweep (`offboard_unentitled_hosts`) parks its agents: `park` waits for a
+(`issue_install` checks `host_entitled`), and its agents are parked: at once
+by `InstallOffboarding::offboard_unentitled` when the team service reports a
+removal or demotion (`teams::domain::member_access`), and by the internal
+`POST /internal/teammate_hosts/offboard` that document_storage_service calls
+after an unpair (`harnesses::domain::retired`); authentication_service's 60 s
+sweep (`offboard_unentitled_hosts`) backs both. Parking: `park` waits for a
 delivery in flight and sets `parked_at` and `revoke_pending`, then the
 credentials are revoked; `installs_on` leaves a parked install out, so its
 machine stops it. A parked agent keeps its account, seat, DMs and repository,
@@ -147,7 +151,7 @@ team's owner (`owns_team`), or the owner of the machine it was parked off once
 `host_entitled` again; never by another admin, who could otherwise park it by
 removing its host and take its key, DMs and shares. The same sweep
 retries every revoke still pending. Deleting a team first runs
-`TeamInstallRelease::release_team` (team deletion's
+`InstallOffboarding::release_team` (team deletion's
 `release_teammate_installs`): park, revoke, delete each install, nudge its
 machine; `team_agent_installs.team_id` and `harness_id` are `ON DELETE
 RESTRICT`, so nothing drops an install with live credentials. No billing (`SELF_HOSTED_TEAMMATE_PRICING` is `None`).
