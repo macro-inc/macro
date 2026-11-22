@@ -16,21 +16,24 @@ export type ChannelMessageProps = Omit<WidgetOf<'channelMessage'>, 'type'> & {
 };
 
 /**
- * The caption without its mention of the channel, which heads the card:
- * "Pricing decisions in #launch-planning" keeps "Pricing decisions". Only a
- * whole-word mention counts ("dev", not "devs"). Empty when nothing is left.
+ * The caption without its mention of the channel, which heads the card, when
+ * the mention ends or starts it: "Pricing decisions in #launch-planning"
+ * keeps "Pricing decisions". A mention mid-sentence ("What #general decided")
+ * stays, so the title still reads. Only a whole-word mention counts ("dev",
+ * not "devs"). Empty when nothing is left.
  */
 function withoutChannel(caption: string, name: string) {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const boundary = '[^\\p{L}\\p{N}_-]';
   return caption
     .replace(
       new RegExp(
-        `(^|[^\\p{L}\\p{N}_-])(?:(?:in|from|on)\\s+)?#?${escaped}(?=$|[^\\p{L}\\p{N}_-])`,
-        'giu'
+        `(^|${boundary})(?:(?:in|from|on)\\s+)?#?${escaped}\\s*$`,
+        'iu'
       ),
       '$1'
     )
-    .replace(/\s+/g, ' ')
+    .replace(new RegExp(`^\\s*#?${escaped}(?=$|${boundary})`, 'iu'), '')
     .replace(/^[\s:,–—-]+|[\s:,–—-]+$/g, '');
 }
 

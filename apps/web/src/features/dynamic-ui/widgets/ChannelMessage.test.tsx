@@ -178,4 +178,16 @@ describe('ChannelMessage', () => {
     view.getByText('launch-planning');
     view.getByText('Pricing decisions');
   });
+
+  it('keeps a view title that names the channel mid-sentence', () => {
+    channelNames = { 'channel-1': 'general' };
+    const view = render(() => (
+      <ChannelMessage
+        channelId="channel-1"
+        messageId="message-1"
+        caption="What #general decided"
+      />
+    ));
+    view.getByText('What #general decided');
+  });
 });
