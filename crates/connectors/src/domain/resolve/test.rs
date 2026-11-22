@@ -119,8 +119,17 @@ fn without_a_grant(connection: SourceConnection) -> SourceConnection {
     }
 }
 
-fn run(flag: Flag, connections: Vec<SourceConnection>) -> Resolution {
-    resolve(&user(), flag, &overlays(), &connect(), connections)
+fn run(
+    macro_connect_enabled: MacroConnectEnabledFlag,
+    connections: Vec<SourceConnection>,
+) -> Resolution {
+    resolve(
+        &user(),
+        macro_connect_enabled,
+        &overlays(),
+        &connect(),
+        connections,
+    )
 }
 
 /// The name of the connection whose handle is offered for `key`.
@@ -143,8 +152,11 @@ fn every_source(key: ConnectorKey) -> Vec<SourceConnection> {
 // The table: GitHub.
 
 #[test]
-fn github_flag_off_counts_the_account_link() {
-    let resolution = run(Flag::Off, every_source(app_key("github")));
+fn github_macro_connect_off_counts_the_account_link() {
+    let resolution = run(
+        MacroConnectEnabledFlag::Off,
+        every_source(app_key("github")),
+    );
 
     assert_eq!(resolution.mcp.status(&app_key("github")), Status::Connected);
     assert_eq!(
@@ -154,8 +166,8 @@ fn github_flag_off_counts_the_account_link() {
 }
 
 #[test]
-fn github_flag_on_counts_connect() {
-    let resolution = run(Flag::On, every_source(app_key("github")));
+fn github_macro_connect_on_counts_connect() {
+    let resolution = run(MacroConnectEnabledFlag::On, every_source(app_key("github")));
 
     assert_eq!(
         handle_name(&resolution, &app_key("github")).as_deref(),
@@ -164,9 +176,9 @@ fn github_flag_on_counts_connect() {
 }
 
 #[test]
-fn github_flag_on_with_only_the_link_is_not_connected() {
+fn github_macro_connect_on_with_only_the_link_is_not_connected() {
     let resolution = run(
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         vec![held(SourceKind::GithubLink, app_key("github"))],
     );
 
@@ -178,11 +190,11 @@ fn github_flag_on_with_only_the_link_is_not_connected() {
 }
 
 #[test]
-fn github_flag_on_connect_does_not_serve_it_counts_the_link() {
+fn github_macro_connect_on_connect_does_not_serve_it_counts_the_link() {
     let connections = every_source(app_key("github"));
     let resolution = resolve(
         &user(),
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         &overlays(),
         &ConnectSupport::default(),
         connections,
@@ -197,9 +209,9 @@ fn github_flag_on_connect_does_not_serve_it_counts_the_link() {
 // The table: an overlaid app.
 
 #[test]
-fn overlaid_app_flag_off_counts_native() {
+fn overlaid_app_macro_connect_off_counts_native() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![
             held(SourceKind::Native, server_key(STRIPE_SERVER)),
             held(SourceKind::Pipedream, app_key("stripe")),
@@ -215,9 +227,9 @@ fn overlaid_app_flag_off_counts_native() {
 }
 
 #[test]
-fn overlaid_app_flag_on_connect_serves_it_counts_connect() {
+fn overlaid_app_macro_connect_on_connect_serves_it_counts_connect() {
     let resolution = run(
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         vec![
             held(SourceKind::Native, server_key(STRIPE_SERVER)),
             held(SourceKind::Pipedream, app_key("stripe")),
@@ -233,9 +245,9 @@ fn overlaid_app_flag_on_connect_serves_it_counts_connect() {
 }
 
 #[test]
-fn overlaid_app_flag_on_connect_does_not_serve_it_counts_native() {
+fn overlaid_app_macro_connect_on_connect_does_not_serve_it_counts_native() {
     let resolution = run(
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         vec![
             held(SourceKind::Native, server_key(FIGMA_SERVER)),
             held(SourceKind::Pipedream, app_key("figma")),
@@ -251,7 +263,7 @@ fn overlaid_app_flag_on_connect_does_not_serve_it_counts_native() {
 #[test]
 fn overlaid_app_native_row_without_a_grant_needs_reauth() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![without_a_grant(held(
             SourceKind::Native,
             server_key(STRIPE_SERVER),
@@ -268,9 +280,9 @@ fn overlaid_app_native_row_without_a_grant_needs_reauth() {
 // The table: any other catalog app.
 
 #[test]
-fn catalog_app_flag_off_counts_pipedream() {
+fn catalog_app_macro_connect_off_counts_pipedream() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![
             held(SourceKind::Pipedream, app_key("linear")),
             held(SourceKind::Connect, app_key("linear")),
@@ -284,9 +296,9 @@ fn catalog_app_flag_off_counts_pipedream() {
 }
 
 #[test]
-fn catalog_app_flag_on_connect_serves_it_counts_connect() {
+fn catalog_app_macro_connect_on_connect_serves_it_counts_connect() {
     let resolution = run(
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         vec![
             held(SourceKind::Pipedream, app_key("linear")),
             held(SourceKind::Connect, app_key("linear")),
@@ -300,9 +312,9 @@ fn catalog_app_flag_on_connect_serves_it_counts_connect() {
 }
 
 #[test]
-fn catalog_app_flag_on_connect_does_not_serve_it_counts_pipedream() {
+fn catalog_app_macro_connect_on_connect_does_not_serve_it_counts_pipedream() {
     let resolution = run(
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         vec![held(SourceKind::Pipedream, app_key("asana"))],
     );
 
@@ -318,8 +330,11 @@ fn catalog_app_flag_on_connect_does_not_serve_it_counts_pipedream() {
 #[test]
 fn url_server_counts_its_own_row_whatever_the_flag() {
     let url = "https://tools.example.com/mcp";
-    for flag in [Flag::Off, Flag::On] {
-        let resolution = run(flag, vec![held(SourceKind::Native, server_key(url))]);
+    for macro_connect_enabled in [MacroConnectEnabledFlag::Off, MacroConnectEnabledFlag::On] {
+        let resolution = run(
+            macro_connect_enabled,
+            vec![held(SourceKind::Native, server_key(url))],
+        );
 
         assert_eq!(resolution.mcp.status(&server_key(url)), Status::Connected);
         assert_eq!(
@@ -333,7 +348,7 @@ fn url_server_counts_its_own_row_whatever_the_flag() {
 fn url_server_without_a_grant_is_usable() {
     let url = "https://tools.example.com/mcp";
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![without_a_grant(held(SourceKind::Native, server_key(url)))],
     );
 
@@ -346,7 +361,7 @@ fn url_server_without_a_grant_is_usable() {
 fn url_server_whose_grant_is_dead_needs_reauth() {
     let url = "https://tools.example.com/mcp";
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![unauthorized(held(SourceKind::Native, server_key(url)))],
     );
 
@@ -359,7 +374,7 @@ fn url_server_whose_grant_is_dead_needs_reauth() {
 #[test]
 fn rule1_flagged_users_pipedream_connection_to_a_connect_app_is_not_connected() {
     let resolution = run(
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         vec![held(SourceKind::Pipedream, app_key("linear"))],
     );
 
@@ -379,7 +394,7 @@ fn rule1_flagged_users_pipedream_connection_to_a_connect_app_is_not_connected() 
 #[test]
 fn rule1_flagged_users_native_connection_to_a_connect_app_is_not_connected() {
     let resolution = run(
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         vec![held(SourceKind::Native, server_key(STRIPE_SERVER))],
     );
 
@@ -397,7 +412,7 @@ fn rule1_flagged_users_native_connection_to_a_connect_app_is_not_connected() {
 #[test]
 fn rule1_unflagged_users_connect_connection_is_not_used() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![held(SourceKind::Connect, app_key("linear"))],
     );
 
@@ -412,7 +427,7 @@ fn rule1_unflagged_users_connect_connection_is_not_used() {
 #[test]
 fn rule1_pipedream_connection_to_an_overlaid_app_is_ignored() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![held(SourceKind::Pipedream, app_key("figma"))],
     );
 
@@ -429,7 +444,7 @@ fn rule1_pipedream_connection_to_an_overlaid_app_is_ignored() {
 fn rule2_disabled_connection_is_not_connected() {
     let url = "https://tools.example.com/mcp";
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![
             disabled(held(SourceKind::Pipedream, app_key("linear"))),
             disabled(held(SourceKind::Native, server_key(url))),
@@ -449,7 +464,7 @@ fn rule2_disabled_connection_is_not_connected() {
 #[test]
 fn rule2_disabled_counted_connection_does_not_fall_back_to_another_source() {
     let resolution = run(
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         vec![
             disabled(held(SourceKind::Connect, app_key("linear"))),
             held(SourceKind::Pipedream, app_key("linear")),
@@ -465,7 +480,7 @@ fn rule2_disabled_counted_connection_does_not_fall_back_to_another_source() {
 #[test]
 fn rule3_two_connections_to_one_app_give_one_answer() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![
             held(SourceKind::Pipedream, app_key("slack_v2")),
             held(SourceKind::Pipedream, app_key("slack")),
@@ -497,7 +512,7 @@ fn rule3_the_usable_connection_wins() {
         vec![usable.clone(), off.clone()],
         vec![off.clone(), usable.clone()],
     ] {
-        let resolution = run(Flag::Off, connections);
+        let resolution = run(MacroConnectEnabledFlag::Off, connections);
 
         assert_eq!(resolution.mcp.status(&app_key("slack")), Status::Connected);
         assert_eq!(
@@ -514,7 +529,7 @@ fn rule4_slack_v2_is_slack() {
     assert_eq!(app("slack_v2"), app("slack"));
 
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![held(SourceKind::Pipedream, app_key("slack_v2"))],
     );
 
@@ -529,7 +544,7 @@ fn rule4_an_overlay_under_the_alias_is_the_app() {
     )]);
     let resolution = resolve(
         &user(),
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         &overlays,
         &connect(),
         vec![held(
@@ -546,7 +561,7 @@ fn rule4_an_overlay_under_the_alias_is_the_app() {
 #[test]
 fn rule5_native_row_at_the_overlay_url_is_the_app() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![held(
             SourceKind::Native,
             server_key("https://MCP.stripe.com/"),
@@ -564,7 +579,7 @@ fn rule5_native_row_at_the_overlay_url_is_the_app() {
 fn rule5_native_row_to_a_vendor_that_is_not_overlaid_is_a_url_server() {
     let linear_server = "https://mcp.linear.app/mcp";
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![
             held(SourceKind::Native, server_key(linear_server)),
             held(SourceKind::Pipedream, app_key("linear")),
@@ -585,7 +600,7 @@ fn rule5_native_row_to_a_vendor_that_is_not_overlaid_is_a_url_server() {
 #[test]
 fn rule5_native_row_alone_does_not_connect_an_app_that_is_not_overlaid() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![held(
             SourceKind::Native,
             server_key("https://mcp.notion.com/mcp"),
@@ -602,7 +617,7 @@ fn rule5_native_row_alone_does_not_connect_an_app_that_is_not_overlaid() {
 fn rule5_native_row_on_another_path_of_the_overlay_host_is_a_url_server() {
     let other_path = "https://mcp.stripe.com/beta";
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![held(SourceKind::Native, server_key(other_path))],
     );
 
@@ -621,7 +636,7 @@ fn rule5_native_row_on_another_path_of_the_overlay_host_is_a_url_server() {
 #[test]
 fn shared_overlay_address_row_counts_for_every_app_there() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![held(SourceKind::Native, server_key(ATLASSIAN_SERVER))],
     );
 
@@ -645,7 +660,7 @@ fn shared_overlay_address_row_counts_for_every_app_there() {
 #[test]
 fn shared_overlay_address_row_counts_only_for_the_apps_native_serves() {
     let resolution = run(
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         vec![held(SourceKind::Native, server_key(ATLASSIAN_SERVER))],
     );
 
@@ -672,7 +687,7 @@ fn shared_overlay_address_row_is_ignored_when_connect_serves_every_app_there() {
     ]);
     let resolution = resolve(
         &user(),
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         &overlays(),
         &connect,
         vec![held(SourceKind::Native, server_key(ATLASSIAN_SERVER))],
@@ -686,7 +701,7 @@ fn shared_overlay_address_row_is_ignored_when_connect_serves_every_app_there() {
 #[test]
 fn rule6_pipedream_provides_an_api_for_every_app() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![held(SourceKind::Pipedream, app_key("asana"))],
     );
 
@@ -697,7 +712,7 @@ fn rule6_pipedream_provides_an_api_for_every_app() {
 #[test]
 fn rule6_connect_provides_an_api_only_where_its_catalog_lists_one() {
     let resolution = run(
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         vec![
             held(SourceKind::Connect, app_key("linear")),
             held(SourceKind::Connect, app_key("granola")),
@@ -723,7 +738,7 @@ fn rule6_native_and_the_github_link_never_provide_an_api() {
     let mut link = held(SourceKind::GithubLink, app_key("github"));
     link.api = Some(Arc::new(Undialed));
 
-    let resolution = run(Flag::Off, vec![native, link]);
+    let resolution = run(MacroConnectEnabledFlag::Off, vec![native, link]);
 
     assert_eq!(resolution.mcp.handles().count(), 2);
     assert!(resolution.api.is_empty());
@@ -735,7 +750,7 @@ fn rule6_the_api_comes_from_the_connection_that_counts() {
     let connect = held(SourceKind::Connect, app_key("linear"));
     let connect_api = connect.api.clone().unwrap();
 
-    let resolution = run(Flag::On, vec![pipedream, connect]);
+    let resolution = run(MacroConnectEnabledFlag::On, vec![pipedream, connect]);
 
     assert_eq!(resolution.api.len(), 1);
     assert!(Arc::ptr_eq(resolution.api[0].connection(), &connect_api));
@@ -744,7 +759,7 @@ fn rule6_the_api_comes_from_the_connection_that_counts() {
 #[test]
 fn rule6_flagged_user_has_no_api_for_an_app_connect_holds_as_mcp_only() {
     let resolution = run(
-        Flag::On,
+        MacroConnectEnabledFlag::On,
         vec![
             held(SourceKind::Pipedream, app_key("granola")),
             held(SourceKind::Connect, app_key("granola")),
@@ -764,7 +779,7 @@ fn rule6_flagged_user_has_no_api_for_an_app_connect_holds_as_mcp_only() {
 fn rule7_selected_apps_reach_only_those_apps() {
     let url = "https://tools.example.com/mcp";
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![
             held(SourceKind::Pipedream, app_key("linear")),
             held(SourceKind::Pipedream, app_key("asana")),
@@ -793,7 +808,7 @@ fn rule7_selected_apps_reach_only_those_apps() {
 #[test]
 fn rule7_selected_app_not_connected_is_advertised_and_asks_to_connect() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![held(SourceKind::Pipedream, app_key("linear"))],
     );
     let scoped = resolution
@@ -813,7 +828,7 @@ fn rule7_selected_app_not_connected_is_advertised_and_asks_to_connect() {
 #[test]
 fn rule7_all_apps_still_gets_a_connect_prompt_for_an_unconnected_app() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![held(SourceKind::Pipedream, app_key("linear"))],
     );
     let scoped = resolution.mcp.scoped(&Selection::All);
@@ -828,7 +843,7 @@ fn rule7_all_apps_still_gets_a_connect_prompt_for_an_unconnected_app() {
 #[test]
 fn rule7_scoping_again_only_narrows() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![
             held(SourceKind::Pipedream, app_key("linear")),
             held(SourceKind::Pipedream, app_key("asana")),
@@ -852,7 +867,7 @@ fn rule7_scoping_again_only_narrows() {
 #[test]
 fn rule8_github_link_with_a_dead_token_needs_reauth() {
     let resolution = run(
-        Flag::Off,
+        MacroConnectEnabledFlag::Off,
         vec![unauthorized(held(
             SourceKind::GithubLink,
             app_key("github"),
@@ -874,11 +889,12 @@ fn rule8_github_link_with_a_dead_token_needs_reauth() {
 
 #[test]
 fn rule9_failed_flag_read_counts_as_off() {
-    let flag = Flag::from_read(Err(rootcause::report!("flag service unreachable")));
-    assert_eq!(flag, Flag::Off);
+    let macro_connect_enabled =
+        MacroConnectEnabledFlag::from_read(Err(rootcause::report!("flag service unreachable")));
+    assert_eq!(macro_connect_enabled, MacroConnectEnabledFlag::Off);
 
     let resolution = run(
-        flag,
+        macro_connect_enabled,
         vec![
             held(SourceKind::Pipedream, app_key("linear")),
             held(SourceKind::Connect, app_key("linear")),
@@ -892,6 +908,12 @@ fn rule9_failed_flag_read_counts_as_off() {
 
 #[test]
 fn rule9_a_read_flag_is_what_it_reads() {
-    assert_eq!(Flag::from_read(Ok(true)), Flag::On);
-    assert_eq!(Flag::from_read(Ok(false)), Flag::Off);
+    assert_eq!(
+        MacroConnectEnabledFlag::from_read(Ok(true)),
+        MacroConnectEnabledFlag::On
+    );
+    assert_eq!(
+        MacroConnectEnabledFlag::from_read(Ok(false)),
+        MacroConnectEnabledFlag::Off
+    );
 }

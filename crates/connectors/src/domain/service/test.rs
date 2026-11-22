@@ -4,7 +4,7 @@
 use super::*;
 use crate::domain::models::{PermitRefused, Selection};
 use crate::fake::source::{FakeRow, FakeSource, FakeStore, SharedStore, lock};
-use crate::fake::{FakeConnection, FakeConnectors, FakeFlag, FakeOverlays};
+use crate::fake::{FakeConnection, FakeConnectors, FakeMacroConnectEnabledFlag, FakeOverlays};
 use ai_toolset::ToolSet;
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -135,7 +135,7 @@ impl World {
         Connectors::new(
             sources,
             Some(Arc::new(self.source(SourceKind::Native))),
-            FakeFlag(self.flags.clone()),
+            FakeMacroConnectEnabledFlag(self.flags.clone()),
             FakeOverlays(Self::overlays()),
         )
     }
@@ -904,7 +904,7 @@ async fn the_shared_fake_puts_each_connection_where_the_rules_count_it() {
     let fake = FakeConnectors::new()
         .with_connect_app("linear", true)
         .with_overlay("stripe", STRIPE_SERVER)
-        .with_flag_on(&other_user())
+        .with_macro_connect_enabled(&other_user())
         .with_connection(&user(), FakeConnection::app("linear"))
         .with_connection(&user(), FakeConnection::app("stripe").disabled())
         .with_connection(&other_user(), FakeConnection::app("linear"));

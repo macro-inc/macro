@@ -208,7 +208,7 @@ async fn connecting_github_answers_the_page_of_the_source_that_counts() {
     let flagged = user("flagged");
     let fake = FakeConnectors::new()
         .with_connect_app("github", false)
-        .with_flag_on(&flagged);
+        .with_macro_connect_enabled(&flagged);
     let harness = harness(&fake);
 
     let (status, linked) = harness

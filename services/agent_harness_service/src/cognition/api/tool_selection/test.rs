@@ -188,7 +188,7 @@ async fn chat_loads_the_connection_that_counts_for_the_user() {
     let flagged = MacroUserIdStr::try_from_email("flagged@example.com").unwrap();
     let connectors = FakeConnectors::new()
         .with_connect_app("linear", true)
-        .with_flag_on(&flagged)
+        .with_macro_connect_enabled(&flagged)
         .with_connection(
             &flagged,
             FakeConnection::app("linear")

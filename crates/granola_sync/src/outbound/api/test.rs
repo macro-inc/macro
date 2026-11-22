@@ -124,7 +124,7 @@ async fn without_api_access_nothing_is_called() {
     let user = connection().user_id;
     let fake = FakeConnectors::new()
         .with_connect_app("granola", false)
-        .with_flag_on(&user)
+        .with_macro_connect_enabled(&user)
         .with_connection(&user, FakeConnection::app("granola"));
     let adapter = GranolaApi(Arc::new(fake.build()));
     assert!(

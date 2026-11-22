@@ -20,7 +20,7 @@ async fn a_usable_connection_answers_with_its_name() {
     let fake = FakeConnectors::new()
         .with_overlay("sentry", "https://mcp.sentry.dev/mcp")
         .with_connect_app("asana", false)
-        .with_flag_on(&user())
+        .with_macro_connect_enabled(&user())
         .with_connection(&user(), FakeConnection::app("stripe").named("Stripe"))
         .with_connection(&user(), FakeConnection::app("sentry").named("Sentry"))
         .with_connection(&user(), FakeConnection::app("asana").named("Asana"));

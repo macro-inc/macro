@@ -255,7 +255,7 @@ async fn users_on_macro_connect_get_no_granola_sync(pool: PgPool) {
     let user = connection().user_id;
     let fake = FakeConnectors::new()
         .with_connect_app("granola", false)
-        .with_flag_on(&user)
+        .with_macro_connect_enabled(&user)
         .with_connection(&user, FakeConnection::app("granola"));
     let service = service(pool, Arc::new(fake.build()));
 

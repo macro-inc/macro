@@ -81,8 +81,11 @@ fn any_connect_support() -> impl Strategy<Value = Vec<(ConnectorId, Surfaces)>> 
     })
 }
 
-fn any_flag() -> impl Strategy<Value = Flag> {
-    prop_oneof![Just(Flag::On), Just(Flag::Off)]
+fn any_macro_connect_enabled_flag() -> impl Strategy<Value = MacroConnectEnabledFlag> {
+    prop_oneof![
+        Just(MacroConnectEnabledFlag::On),
+        Just(MacroConnectEnabledFlag::Off)
+    ]
 }
 
 fn any_selection() -> impl Strategy<Value = Selection> {
@@ -95,8 +98,12 @@ fn any_selection() -> impl Strategy<Value = Selection> {
 
 /// The source the model designates for `app`, written out independently of
 /// the resolver.
-fn designated(flag: Flag, connect: &ConnectSupport, app: &ConnectorId) -> SourceKind {
-    if flag == Flag::On && connect.surfaces(app).is_some() {
+fn designated(
+    macro_connect_enabled: MacroConnectEnabledFlag,
+    connect: &ConnectSupport,
+    app: &ConnectorId,
+) -> SourceKind {
+    if macro_connect_enabled == MacroConnectEnabledFlag::On && connect.surfaces(app).is_some() {
         SourceKind::Connect
     } else if app.as_str() == "github" {
         SourceKind::GithubLink
@@ -162,14 +169,14 @@ proptest! {
     /// same however the sources' rows are ordered.
     #[test]
     fn one_answer_per_app(
-        flag in any_flag(),
+        macro_connect_enabled in any_macro_connect_enabled_flag(),
         connect in any_connect_support(),
         (connections, shuffled) in any_connections()
             .prop_flat_map(|connections| (Just(connections.clone()), Just(connections).prop_shuffle())),
     ) {
         let connect = ConnectSupport::new(connect);
-        let resolution = resolve(&user(), flag, &overlays(), &connect, connections);
-        let reordered = resolve(&user(), flag, &overlays(), &connect, shuffled);
+        let resolution = resolve(&user(), macro_connect_enabled, &overlays(), &connect, connections);
+        let reordered = resolve(&user(), macro_connect_enabled, &overlays(), &connect, shuffled);
 
         let mut keys: Vec<_> = resolution.mcp.resolved().iter().map(|r| r.key.clone()).collect();
         let count = keys.len();
@@ -188,12 +195,12 @@ proptest! {
     /// StatusMatchesUse, and a handle (MCP or API) exists only when connected.
     #[test]
     fn status_matches_use(
-        flag in any_flag(),
+        macro_connect_enabled in any_macro_connect_enabled_flag(),
         connect in any_connect_support(),
         connections in any_connections(),
     ) {
         let connect = ConnectSupport::new(connect);
-        let resolution = resolve(&user(), flag, &overlays(), &connect, connections);
+        let resolution = resolve(&user(), macro_connect_enabled, &overlays(), &connect, connections);
 
         for resolved in resolution.mcp.resolved() {
             prop_assert_eq!(resolved.status == Status::Connected, resolved.mcp.is_some());
@@ -212,20 +219,20 @@ proptest! {
     /// the table designates, and every URL server from a native row.
     #[test]
     fn handles_come_only_from_the_designated_source(
-        flag in any_flag(),
+        macro_connect_enabled in any_macro_connect_enabled_flag(),
         connect in any_connect_support(),
         connections in any_connections(),
     ) {
         let connect = ConnectSupport::new(connect);
-        let resolution = resolve(&user(), flag, &overlays(), &connect, connections.clone());
+        let resolution = resolve(&user(), macro_connect_enabled, &overlays(), &connect, connections.clone());
 
         for handle in resolution.mcp.handles() {
             let source = mcp_input(&connections, handle).source;
             match app_of(handle.key()) {
-                Some(app) => prop_assert_eq!(source, designated(flag, &connect, app)),
+                Some(app) => prop_assert_eq!(source, designated(macro_connect_enabled, &connect, app)),
                 None => prop_assert_eq!(source, SourceKind::Native),
             }
-            if flag == Flag::Off {
+            if macro_connect_enabled == MacroConnectEnabledFlag::Off {
                 prop_assert_ne!(source, SourceKind::Connect);
             }
         }
@@ -239,7 +246,7 @@ proptest! {
         connections in any_connections(),
     ) {
         let connect = ConnectSupport::new(connect);
-        let resolution = resolve(&user(), Flag::On, &overlays(), &connect, connections.clone());
+        let resolution = resolve(&user(), MacroConnectEnabledFlag::On, &overlays(), &connect, connections.clone());
 
         for slug in APPS {
             let app = app(slug);
@@ -255,12 +262,12 @@ proptest! {
     /// DisabledIsNeverUsed: nothing usable comes from a disabled connection.
     #[test]
     fn disabled_is_never_used(
-        flag in any_flag(),
+        macro_connect_enabled in any_macro_connect_enabled_flag(),
         connect in any_connect_support(),
         connections in any_connections(),
     ) {
         let connect = ConnectSupport::new(connect);
-        let resolution = resolve(&user(), flag, &overlays(), &connect, connections.clone());
+        let resolution = resolve(&user(), macro_connect_enabled, &overlays(), &connect, connections.clone());
 
         for handle in resolution.mcp.handles() {
             prop_assert!(mcp_input(&connections, handle).enabled);
@@ -275,17 +282,17 @@ proptest! {
     /// connection's source has an API for the app, and from that connection.
     #[test]
     fn api_comes_from_the_counted_connection(
-        flag in any_flag(),
+        macro_connect_enabled in any_macro_connect_enabled_flag(),
         connect in any_connect_support(),
         connections in any_connections(),
     ) {
         let connect = ConnectSupport::new(connect);
-        let resolution = resolve(&user(), flag, &overlays(), &connect, connections.clone());
+        let resolution = resolve(&user(), macro_connect_enabled, &overlays(), &connect, connections.clone());
 
         for handle in resolution.mcp.handles() {
             let Some(app) = app_of(handle.key()) else { continue };
             let input = mcp_input(&connections, handle);
-            let source_has_api = match designated(flag, &connect, app) {
+            let source_has_api = match designated(macro_connect_enabled, &connect, app) {
                 SourceKind::Pipedream => true,
                 SourceKind::Connect => connect.surfaces(app).is_some_and(|surfaces| surfaces.api()),
                 SourceKind::Native | SourceKind::GithubLink => false,
@@ -308,13 +315,13 @@ proptest! {
     /// URL server.
     #[test]
     fn url_servers_are_never_an_app(
-        flag in any_flag(),
+        macro_connect_enabled in any_macro_connect_enabled_flag(),
         connect in any_connect_support(),
         connections in any_connections(),
     ) {
         let connect = ConnectSupport::new(connect);
         let overlays = overlays();
-        let resolution = resolve(&user(), flag, &overlays, &connect, connections.clone());
+        let resolution = resolve(&user(), macro_connect_enabled, &overlays, &connect, connections.clone());
 
         for handle in resolution.mcp.handles() {
             let input = mcp_input(&connections, handle);
@@ -332,13 +339,13 @@ proptest! {
     /// never more than its owner has.
     #[test]
     fn selection_is_a_permission(
-        flag in any_flag(),
+        macro_connect_enabled in any_macro_connect_enabled_flag(),
         connect in any_connect_support(),
         connections in any_connections(),
         selection in any_selection(),
     ) {
         let connect = ConnectSupport::new(connect);
-        let resolution = resolve(&user(), flag, &overlays(), &connect, connections);
+        let resolution = resolve(&user(), macro_connect_enabled, &overlays(), &connect, connections);
         let scoped = resolution.mcp.scoped(&selection);
 
         let owners: Vec<_> = resolution.mcp.handles().map(|handle| handle.key().clone()).collect();
@@ -360,12 +367,12 @@ proptest! {
     /// handle carries no user; it is only ever in its owner's answer.
     #[test]
     fn only_the_owners_connections(
-        flag in any_flag(),
+        macro_connect_enabled in any_macro_connect_enabled_flag(),
         connect in any_connect_support(),
         connections in any_connections(),
     ) {
         let connect = ConnectSupport::new(connect);
-        let resolution = resolve(&user(), flag, &overlays(), &connect, connections);
+        let resolution = resolve(&user(), macro_connect_enabled, &overlays(), &connect, connections);
 
         for handle in &resolution.api {
             prop_assert_eq!(handle.user(), &user());

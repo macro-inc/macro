@@ -95,7 +95,7 @@ async fn an_inventory_needs_a_connection_with_api_access() {
     let user = support::user();
     let tools_only = FakeConnectors::new()
         .with_connect_app("linear", false)
-        .with_flag_on(&user)
+        .with_macro_connect_enabled(&user)
         .with_connection(&user, FakeConnection::app("linear"));
     let connections = LinearConnections::new(Arc::new(tools_only.build()));
     assert!(matches!(

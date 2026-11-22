@@ -320,7 +320,7 @@ async fn connecting_granola_without_api_access_starts_nothing() {
     let flagged = user("flagged");
     let fake = FakeConnectors::new()
         .with_connect_app("granola", false)
-        .with_flag_on(&flagged)
+        .with_macro_connect_enabled(&flagged)
         .with_connection(&flagged, FakeConnection::app("granola"));
     let service = service(FakeRepo::default(), &fake);
 

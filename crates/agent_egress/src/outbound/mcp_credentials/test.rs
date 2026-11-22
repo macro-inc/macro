@@ -141,7 +141,7 @@ async fn a_listed_app_only_a_connection_reaches_resolves_as_not_connected() {
     let fake = connectors()
         .with_overlay("stripe", "https://mcp.stripe.com")
         .with_connect_app("granola", false)
-        .with_flag_on(&owner());
+        .with_macro_connect_enabled(&owner());
     for slug in ["stripe", "granola"] {
         let resolution = resolve(&fake, &apps(&[slug]), &app(slug))
             .await
@@ -469,7 +469,7 @@ async fn an_unconnected_pipedream_app_lists_upstream_and_calls_flow_once_connect
 async fn an_app_only_a_connection_reaches_answers_with_a_connect_prompt() {
     let fake = connectors()
         .with_connect_app("granola", false)
-        .with_flag_on(&owner());
+        .with_macro_connect_enabled(&owner());
     let (proxy, forwarded, services) = proxy_over(Selection::All, &fake);
 
     let initialize = send(

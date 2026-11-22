@@ -206,7 +206,7 @@ pub(crate) trait ApiConnection: Send + Sync {
 
 /// The Macro Connect rollout flag for a user. Read in one place only, through one
 /// cache; the resolver counts a failed read as off (rule 9).
-pub(crate) trait ConnectFlag: Send + Sync + 'static {
+pub(crate) trait MacroConnectEnabledFlagReader: Send + Sync + 'static {
     /// Whether the flag is on for `user`.
     fn read(
         &self,

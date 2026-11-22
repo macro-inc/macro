@@ -106,7 +106,7 @@ async fn without_a_usable_connection_with_api_access_there_is_no_notion() {
     // A flagged user's tools-only Connect app has no API.
     let tools_only = FakeConnectors::new()
         .with_connect_app("notion", false)
-        .with_flag_on(&user)
+        .with_macro_connect_enabled(&user)
         .with_connection(&user, FakeConnection::app("notion"));
 
     for fake in [
@@ -122,7 +122,7 @@ async fn without_a_usable_connection_with_api_access_there_is_no_notion() {
     // A flagged user's Connect app with API access reaches Notion.
     let connect = FakeConnectors::new()
         .with_connect_app("notion", true)
-        .with_flag_on(&user)
+        .with_macro_connect_enabled(&user)
         .with_connection(&user, FakeConnection::app("notion"));
     assert!(
         connections(&connect)

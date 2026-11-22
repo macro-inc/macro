@@ -9,7 +9,9 @@
 
 use crate::domain::catalog::Overlays;
 use crate::domain::models::{ApiResponse, ConnectorId, ConnectorKey, ServerUrl, Surfaces};
-use crate::domain::ports::{ConnectFlag, GrantState, OverlayCatalog, Source, SourceKind};
+use crate::domain::ports::{
+    GrantState, MacroConnectEnabledFlagReader, OverlayCatalog, Source, SourceKind,
+};
 use crate::domain::service::Connectors;
 use macro_user_id::user_id::MacroUserIdStr;
 use source::{FakeRow, FakeSource, FakeStore, SharedStore, lock};
@@ -141,13 +143,16 @@ impl FakeConnectors {
     }
 
     /// The Macro Connect rollout is on for `user`.
-    pub fn with_flag_on(mut self, user: &MacroUserIdStr<'static>) -> Self {
+    pub fn with_macro_connect_enabled(mut self, user: &MacroUserIdStr<'static>) -> Self {
         self.flags.insert(user.clone(), Ok(true));
         self
     }
 
     /// Reading the rollout flag for `user` fails.
-    pub fn with_flag_failing(mut self, user: &MacroUserIdStr<'static>) -> Self {
+    pub fn with_macro_connect_enabled_flag_failing(
+        mut self,
+        user: &MacroUserIdStr<'static>,
+    ) -> Self {
         self.flags
             .insert(user.clone(), Err("the flag service is down".to_owned()));
         self
@@ -212,7 +217,7 @@ impl FakeConnectors {
         Connectors::new(
             sources,
             Some(servers),
-            FakeFlag(self.flags.clone()),
+            FakeMacroConnectEnabledFlag(self.flags.clone()),
             FakeOverlays(overlays),
         )
     }
@@ -286,9 +291,11 @@ fn server_url(url: &str) -> ServerUrl {
 }
 
 /// The flag as set up; unset users are off.
-pub(crate) struct FakeFlag(pub(crate) HashMap<MacroUserIdStr<'static>, Result<bool, String>>);
+pub(crate) struct FakeMacroConnectEnabledFlag(
+    pub(crate) HashMap<MacroUserIdStr<'static>, Result<bool, String>>,
+);
 
-impl ConnectFlag for FakeFlag {
+impl MacroConnectEnabledFlagReader for FakeMacroConnectEnabledFlag {
     async fn read(&self, user: &MacroUserIdStr<'static>) -> Result<bool, rootcause::Report> {
         match self.0.get(user) {
             Some(Ok(on)) => Ok(*on),

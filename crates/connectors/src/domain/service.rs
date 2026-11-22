@@ -10,10 +10,10 @@ use crate::domain::models::{
     Upstream, UserMcpTools,
 };
 use crate::domain::ports::{
-    ConnectFlag, OverlayCatalog, ServerDirectory, Source, SourceConnection, SourceKind,
-    SourceRefusal,
+    MacroConnectEnabledFlagReader, OverlayCatalog, ServerDirectory, Source, SourceConnection,
+    SourceKind, SourceRefusal,
 };
-use crate::domain::resolve::{self, Flag, Resolution};
+use crate::domain::resolve::{self, MacroConnectEnabledFlag, Resolution};
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_toolset::{ConnectedServer, RemoteMcpToolSet};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -142,21 +142,21 @@ struct Inner {
     sources: Vec<Arc<dyn Source>>,
     /// Where servers added by URL are kept; `None` without the native source.
     servers: Option<Arc<dyn ServerDirectory>>,
-    flag: Box<dyn ReadFlag>,
+    macro_connect_enabled: Box<dyn ReadMacroConnectEnabledFlag>,
     overlays: Box<dyn ReadOverlays>,
 }
 
-/// [`ConnectFlag`], object-safe (`#[async_trait]`) so [`Connectors`] names no
+/// [`MacroConnectEnabledFlagReader`], object-safe (`#[async_trait]`) so [`Connectors`] names no
 /// adapter type.
 #[async_trait::async_trait]
-trait ReadFlag: Send + Sync {
+trait ReadMacroConnectEnabledFlag: Send + Sync {
     async fn read(&self, user: &MacroUserIdStr<'static>) -> Result<bool, rootcause::Report>;
 }
 
 #[async_trait::async_trait]
-impl<F: ConnectFlag> ReadFlag for F {
+impl<F: MacroConnectEnabledFlagReader> ReadMacroConnectEnabledFlag for F {
     async fn read(&self, user: &MacroUserIdStr<'static>) -> Result<bool, rootcause::Report> {
-        ConnectFlag::read(self, user).await
+        MacroConnectEnabledFlagReader::read(self, user).await
     }
 }
 
@@ -210,7 +210,7 @@ impl SourceOutage<'_> {
 
 /// Everything the rules need for one user.
 struct Snapshot {
-    flag: Flag,
+    macro_connect_enabled: MacroConnectEnabledFlag,
     overlays: Overlays,
     connect: ConnectSupport,
     connections: Vec<SourceConnection>,
@@ -220,7 +220,7 @@ impl Snapshot {
     fn resolve(&self, user: &MacroUserIdStr<'static>) -> Resolution {
         resolve::resolve(
             user,
-            self.flag,
+            self.macro_connect_enabled,
             &self.overlays,
             &self.connect,
             self.connections.clone(),
@@ -233,14 +233,14 @@ impl Connectors {
     pub(crate) fn new(
         sources: Vec<Arc<dyn Source>>,
         servers: Option<Arc<dyn ServerDirectory>>,
-        flag: impl ConnectFlag,
+        macro_connect_enabled: impl MacroConnectEnabledFlagReader,
         overlays: impl OverlayCatalog,
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 sources,
                 servers,
-                flag: Box::new(flag),
+                macro_connect_enabled: Box::new(macro_connect_enabled),
                 overlays: Box::new(overlays),
             }),
         }
@@ -260,18 +260,21 @@ impl Connectors {
         user: &MacroUserIdStr<'static>,
         outage: SourceOutage<'_>,
     ) -> Result<Snapshot> {
-        let (flag, overlays, connections) = futures::join!(
-            self.inner.flag.read(user),
+        let (macro_connect_enabled, overlays, connections) = futures::join!(
+            self.inner.macro_connect_enabled.read(user),
             self.inner.overlays.read(),
             self.held(user, outage),
         );
-        let flag = match (flag, outage) {
+        let macro_connect_enabled = match (macro_connect_enabled, outage) {
             (Err(error), SourceOutage::Candidate(_)) => return Err(error.into()),
-            (read, _) => Flag::from_read(read),
+            (read, _) => MacroConnectEnabledFlag::from_read(read),
         };
         let overlays = overlays?;
         let mut connections = connections?;
-        let connect = match self.connect_support(flag, &overlays, &connections).await {
+        let connect = match self
+            .connect_support(macro_connect_enabled, &overlays, &connections)
+            .await
+        {
             Ok(connect) => connect,
             Err(error) if outage == SourceOutage::Skip => {
                 tracing::warn!(error = ?error, "could not read Connect's catalog; answering as if the Connect rollout were off");
@@ -283,7 +286,7 @@ impl Connectors {
         };
 
         Ok(Snapshot {
-            flag,
+            macro_connect_enabled,
             overlays,
             connect,
             connections,
@@ -322,11 +325,13 @@ impl Connectors {
     /// with the flag on: off, no Connect connection counts.
     async fn connect_support(
         &self,
-        flag: Flag,
+        macro_connect_enabled: MacroConnectEnabledFlag,
         overlays: &Overlays,
         connections: &[SourceConnection],
     ) -> Result<ConnectSupport> {
-        let (Flag::On, Some(connect)) = (flag, self.source(SourceKind::Connect)) else {
+        let (MacroConnectEnabledFlag::On, Some(connect)) =
+            (macro_connect_enabled, self.source(SourceKind::Connect))
+        else {
             return Ok(ConnectSupport::default());
         };
 
@@ -360,19 +365,22 @@ impl Connectors {
         user: &MacroUserIdStr<'static>,
         app: &ConnectorId,
     ) -> Result<(&Arc<dyn Source>, ConnectorKey)> {
-        let (flag, overlays) =
-            futures::join!(self.inner.flag.read(user), self.inner.overlays.read());
-        let flag = Flag::from_read(flag);
+        let (macro_connect_enabled, overlays) = futures::join!(
+            self.inner.macro_connect_enabled.read(user),
+            self.inner.overlays.read()
+        );
+        let macro_connect_enabled = MacroConnectEnabledFlag::from_read(macro_connect_enabled);
         let overlays = overlays?;
 
         let mut connect = ConnectSupport::default();
-        if let (Flag::On, Some(source)) = (flag, self.source(SourceKind::Connect))
+        if let (MacroConnectEnabledFlag::On, Some(source)) =
+            (macro_connect_enabled, self.source(SourceKind::Connect))
             && let Some(surfaces) = source.supports(app).await?
         {
             connect = ConnectSupport::new([(app.clone(), surfaces)]);
         }
 
-        let kind = resolve::counted_source(app, flag, &overlays, &connect);
+        let kind = resolve::counted_source(app, macro_connect_enabled, &overlays, &connect);
         let source = self
             .source(kind)
             .ok_or_else(|| ConnectorsError::UnknownApp(app.clone()))?;
@@ -486,7 +494,7 @@ impl Connectors {
 
                 let counted = resolve::counted_source(
                     app,
-                    snapshot.flag,
+                    snapshot.macro_connect_enabled,
                     &snapshot.overlays,
                     &snapshot.connect,
                 );

@@ -8,7 +8,7 @@
 
 use crate::domain::catalog::Overlays;
 use crate::domain::discovery::{AppDirectory, Catalog};
-use crate::domain::policy::MacroConnectFlag;
+use crate::domain::policy::CachedMacroConnectEnabledFlag;
 use crate::domain::ports::{OverlayCatalog, ServerDirectory, Source};
 use crate::domain::service::Connectors;
 use crate::outbound::app_directory::{HostedAppDirectory, NoAppDirectory};
@@ -222,7 +222,7 @@ pub fn compose(
     let connectors = Connectors::new(
         sources,
         Some(native as Arc<dyn ServerDirectory>),
-        MacroConnectFlag::new(flags),
+        CachedMacroConnectEnabledFlag::new(flags),
         overlays.clone(),
     );
 

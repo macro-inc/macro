@@ -32,7 +32,7 @@ async fn granola_sync_is_off_for_users_on_macro_connect() {
     let flagged = user("flagged");
     let fake = FakeConnectors::new()
         .with_connect_app("granola", false)
-        .with_flag_on(&flagged)
+        .with_macro_connect_enabled(&flagged)
         .with_connection(&flagged, FakeConnection::app("granola"))
         .with_connection(&user("a"), FakeConnection::app("granola"));
     let accounts = accounts(&fake);

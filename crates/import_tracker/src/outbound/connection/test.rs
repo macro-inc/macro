@@ -115,7 +115,7 @@ async fn only_a_usable_connection_with_api_access_opens() {
         not_connected(
             FakeConnectors::new()
                 .with_connect_app("linear", false)
-                .with_flag_on(&user)
+                .with_macro_connect_enabled(&user)
                 .with_connection(&user, FakeConnection::app("linear"))
         )
         .await
@@ -133,7 +133,7 @@ async fn only_a_usable_connection_with_api_access_opens() {
     // A flagged user's Connect app with API access opens.
     let connect = FakeConnectors::new()
         .with_connect_app("linear", true)
-        .with_flag_on(&user)
+        .with_macro_connect_enabled(&user)
         .with_connection(&user, FakeConnection::app("linear"));
     let connections = Connections::new(Arc::new(connect.build()), linear(), Duration::ZERO);
     assert!(connections.open(&user).await.is_ok());

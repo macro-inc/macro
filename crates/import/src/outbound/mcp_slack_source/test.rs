@@ -641,7 +641,7 @@ async fn the_counted_slack_connection_opens_with_its_channel_tools() {
     // A user on Macro Connect reads Slack through Connect.
     let flagged = FakeConnectors::new()
         .with_connect_app("slack", true)
-        .with_flag_on(&user())
+        .with_macro_connect_enabled(&user())
         .with_connection(
             &user(),
             FakeConnection::app("slack").with_tools(&["slack-list-channels"]),

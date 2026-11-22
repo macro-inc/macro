@@ -27,12 +27,12 @@ mod test;
 
 /// The Macro Connect rollout flag, as the rules see it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Flag {
+pub(crate) enum MacroConnectEnabledFlag {
     On,
     Off,
 }
 
-impl Flag {
+impl MacroConnectEnabledFlag {
     /// The flag from a read of it. A failed read is off (rule 9): nobody is
     /// moved onto Connect by an outage.
     pub(crate) fn from_read(read: Result<bool, rootcause::Report>) -> Self {
@@ -60,7 +60,7 @@ pub(crate) struct Resolution {
 /// it is one Connect does not serve.
 pub(crate) fn resolve(
     user: &MacroUserIdStr<'static>,
-    flag: Flag,
+    macro_connect_enabled: MacroConnectEnabledFlag,
     overlays: &Overlays,
     connect: &ConnectSupport,
     connections: Vec<SourceConnection>,
@@ -72,7 +72,8 @@ pub(crate) fn resolve(
         for key in identify(&connection, overlays) {
             let counts = match &key {
                 ConnectorKey::App(app) => {
-                    connection.source == counted_source(app, flag, overlays, connect)
+                    connection.source
+                        == counted_source(app, macro_connect_enabled, overlays, connect)
                 }
                 ConnectorKey::Server(_) => connection.source == SourceKind::Native,
             };
@@ -160,11 +161,11 @@ pub(crate) fn identify(connection: &SourceConnection, overlays: &Overlays) -> Ve
 /// The one source whose connection counts for `app` (the table above).
 pub(crate) fn counted_source(
     app: &ConnectorId,
-    flag: Flag,
+    macro_connect_enabled: MacroConnectEnabledFlag,
     overlays: &Overlays,
     connect: &ConnectSupport,
 ) -> SourceKind {
-    if flag == Flag::On && connect.surfaces(app).is_some() {
+    if macro_connect_enabled == MacroConnectEnabledFlag::On && connect.surfaces(app).is_some() {
         return SourceKind::Connect;
     }
 

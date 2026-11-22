@@ -1,11 +1,11 @@
 //! The one reader of the Macro Connect rollout flag.
 //!
 //! This is the only Rust file that names the flag. Every answer goes through
-//! one per-user cache, held by the one [`MacroConnectFlag`] each process
+//! one per-user cache, held by the one [`CachedMacroConnectEnabledFlag`] each process
 //! builds in `composition`; a failed read is an error, which the resolver
 //! counts as off (rule 9).
 
-use crate::domain::ports::ConnectFlag;
+use crate::domain::ports::MacroConnectEnabledFlagReader;
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
@@ -17,13 +17,13 @@ mod test;
 
 /// The PostHog flag that puts a user on Macro Connect. The web reads the
 /// same key.
-const MACRO_CONNECT_FLAG: &str = "macro-connect";
+const MACRO_CONNECT_ENABLED_FLAG_KEY: &str = "macro-connect";
 
 /// How long one user's answer is reused: every resolution asks.
 const CACHE_TTL: Duration = Duration::from_secs(60);
 
 /// The `macro-connect` flag, read through a per-user cache.
-pub(crate) struct MacroConnectFlag<F> {
+pub(crate) struct CachedMacroConnectEnabledFlag<F> {
     /// `None` in a deployment without a flag provider: nobody is flagged.
     flags: Option<F>,
     /// Each user's last successful answer and when it was read. Failed reads
@@ -31,7 +31,7 @@ pub(crate) struct MacroConnectFlag<F> {
     cache: Mutex<HashMap<MacroUserIdStr<'static>, (bool, Instant)>>,
 }
 
-impl<F: FeatureFlags + 'static> MacroConnectFlag<F> {
+impl<F: FeatureFlags + 'static> CachedMacroConnectEnabledFlag<F> {
     /// Read the flag from `flags`, or answer off for everyone without one.
     pub(crate) fn new(flags: Option<F>) -> Self {
         Self {
@@ -57,7 +57,7 @@ impl<F: FeatureFlags + 'static> MacroConnectFlag<F> {
     }
 }
 
-impl<F: FeatureFlags + 'static> ConnectFlag for MacroConnectFlag<F> {
+impl<F: FeatureFlags + 'static> MacroConnectEnabledFlagReader for CachedMacroConnectEnabledFlag<F> {
     async fn read(&self, user: &MacroUserIdStr<'static>) -> Result<bool, rootcause::Report> {
         let Some(flags) = &self.flags else {
             return Ok(false);
@@ -66,7 +66,10 @@ impl<F: FeatureFlags + 'static> ConnectFlag for MacroConnectFlag<F> {
             return Ok(on);
         }
 
-        let on = flags.load(user).await?.is_enabled(MACRO_CONNECT_FLAG);
+        let on = flags
+            .load(user)
+            .await?
+            .is_enabled(MACRO_CONNECT_ENABLED_FLAG_KEY);
         self.remember(user, on);
 
         Ok(on)

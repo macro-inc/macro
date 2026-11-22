@@ -57,7 +57,7 @@ async fn usable_app_connections_are_connected() {
 async fn a_flagged_owners_connect_connection_is_connected() {
     let fake = FakeConnectors::new()
         .with_connect_app("linear", true)
-        .with_flag_on(&owner())
+        .with_macro_connect_enabled(&owner())
         .with_connection(&owner(), held("linear"));
 
     assert_eq!(sorted_slugs(&apps(&fake)).await, ["linear"]);
