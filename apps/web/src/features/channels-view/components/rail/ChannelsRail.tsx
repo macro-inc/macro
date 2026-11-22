@@ -69,9 +69,11 @@ import {
   type ChannelsSourceScope,
   type ChannelsSources,
   deduplicateChannels,
-  resolveReferencedChannels,
-  useChannelsByIdsQuery,
 } from '../../queries';
+import {
+  channelLookupLoad,
+  traceChannelListLoad,
+} from '../../queries/channel-list-load-trace';
 import type {
   ChannelSectionKey,
   ChannelSectionPreferences,
@@ -436,24 +438,18 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const loaded = new Set(channels().map((channel) => channel.id));
     return referencedChannelIds().filter((id) => !loaded.has(id));
   });
-  const referencedChannelsQuery = useChannelsByIdsQuery(() =>
-    sectionsEnabled() ? [] : missingChannelIds()
-  );
   const nextReferencedChannels = useCachedChannelsByIds(
     missingChannelIds,
-    sectionsEnabled
+    () => true
   );
   usePending(
     'channels.sidebar.references',
     () => sectionsEnabled() && nextReferencedChannels.isLoading()
   );
-  const referencedChannels = createMemo<ChannelEntity[]>(
-    (previous) =>
-      sectionsEnabled()
-        ? nextReferencedChannels.channels()
-        : resolveReferencedChannels(previous, referencedChannelsQuery),
-    []
+  traceChannelListLoad('references', () =>
+    channelLookupLoad(nextReferencedChannels, true)
   );
+  const referencedChannels = nextReferencedChannels.channels;
   // Only a label puts a fetched channel in the channel-section lists.
   const labelledChannels = createMemo<ChannelEntity[]>(() => {
     if (!channelTagsEnabled()) return [];

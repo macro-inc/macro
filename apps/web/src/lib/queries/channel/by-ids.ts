@@ -4,10 +4,9 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { arrayEquals } from '@core/util/compareUtils';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { type ChannelEntity, isChannelEntity } from '@entity';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { type Accessor, createEffect, createMemo, untrack } from 'solid-js';
+import { type Accessor, createMemo, untrack } from 'solid-js';
 import { useQueryAccount } from '../auth/use-query-account';
 import { queryReadyGate } from '../gate';
 import {
@@ -17,14 +16,22 @@ import {
 } from '../soup/items';
 import { registerChannelNotificationRefresh } from './register-notification-refresh';
 
-const BATCH_SIZE = 500;
+/** The most rows Soup returns in one page. */
+const SOUP_PAGE_LIMIT = 500;
+
+/**
+ * IDs one lookup request resolves. Soup returns a continuation cursor whenever
+ * a page is full, so each request asks for one row more than it has IDs: its
+ * answer is then always a short page, complete without a second request.
+ */
+export const CHANNEL_LOOKUP_BATCH_SIZE = SOUP_PAGE_LIMIT - 1;
 
 export function channelsByIdsQueryArgs(
   channelIds: readonly string[]
 ): SoupAstItemsQueryArgs {
   return {
     params: {
-      limit: Math.min(BATCH_SIZE, Math.max(1, channelIds.length)),
+      limit: channelIds.length + 1,
       sort_method: 'created_at',
     },
     body: compileToAst(
@@ -66,39 +73,32 @@ export function registerChannelListNotificationRefresh(
   }));
 }
 
-/** One Soup owner supplies local rows, missing-record fetches, and unread updates. */
-export function useChannelsByIdsQuery(
-  channelIds: Accessor<readonly string[]>,
-  options: Accessor<{ cacheFirst?: boolean }> = () => ({})
-) {
-  // Soup reads its arguments from multiple reactive computations. Compile the
-  // ID filter once per membership change, not again for every status update.
-  const args = createMemo(() => channelsByIdsQueryArgs(channelIds()));
-  const query = useSoupAstItemsQuery(args, () => ({
-    enabled: channelIds().length > 0,
-    staleTime: 30_000,
-    graphqlProjection: 'channel-list',
-    graphqlCacheFirstEntities: options().cacheFirst
-      ? channelIds().map((entityId) => ({ entityType: 'CHANNEL', entityId }))
-      : undefined,
+/**
+ * One bounded lookup: cached channels render at once and one request fetches
+ * the missing ones. The same Soup owner keeps their unread state current.
+ */
+function useChannelBatchQuery(channelIds: readonly string[]) {
+  const args = channelsByIdsQueryArgs(channelIds);
+  const entities = channelIds.map((entityId) => ({
+    entityType: 'CHANNEL' as const,
+    entityId,
   }));
+  const query = useSoupAstItemsQuery(
+    () => args,
+    () => ({
+      staleTime: 30_000,
+      graphqlProjection: 'channel-list',
+      graphqlCacheFirstEntities: entities,
+    })
+  );
   registerChannelListNotificationRefresh(query);
-  createEffect(() => {
-    if (
-      !query.isEnabled ||
-      query.isPending ||
-      query.isFetching ||
-      query.fetchError ||
-      query.error ||
-      !query.hasNextPage
-    )
-      return;
-    fireAndForget(query.fetchNextPage(), 'channels-by-id');
-  });
   return query;
 }
 
-/** Resolve an authoritative ID set without loading unrelated list pages. */
+/**
+ * Resolve an authoritative ID set without loading unrelated list pages. Each
+ * batch of IDs is one request that never paginates, however many IDs there are.
+ */
 export function useCachedChannelsByIds(
   ids: Accessor<readonly string[]>,
   enabled: Accessor<boolean>
@@ -112,12 +112,16 @@ export function useCachedChannelsByIds(
     if (!enabled() || !account()) return [];
     return untrack(() => {
       const batches = [];
-      for (let offset = 0; offset < members.length; offset += BATCH_SIZE) {
-        const batchIds = members.slice(offset, offset + BATCH_SIZE);
-        const query = useChannelsByIdsQuery(
-          () => batchIds,
-          () => ({ cacheFirst: true })
+      for (
+        let offset = 0;
+        offset < members.length;
+        offset += CHANNEL_LOOKUP_BATCH_SIZE
+      ) {
+        const batchIds = members.slice(
+          offset,
+          offset + CHANNEL_LOOKUP_BATCH_SIZE
         );
+        const query = useChannelBatchQuery(batchIds);
         // A refresh must not empty sections that already resolved their members.
         // Each batch owns its snapshot, so changed IDs or accounts start fresh.
         const channels = createMemo<ChannelEntity[]>((previous) => {
@@ -129,9 +133,7 @@ export function useCachedChannelsByIds(
           return batchIds.filter((id) => !loaded.has(id));
         };
         const error = () => query.fetchError ?? query.error;
-        const loading = () =>
-          !error() &&
-          (query.isPending || query.isFetching || query.hasNextPage);
+        const loading = () => !error() && (query.isPending || query.isFetching);
         batches.push({ query, channels, unresolved, error, loading });
       }
       return batches;
@@ -160,6 +162,17 @@ export function useCachedChannelsByIds(
       source().some(
         (batch) => batch.loading() && batch.unresolved().length > 0
       ),
+    /** A batch is reading the network. */
+    isFetching: () => source().some((batch) => batch.query.isFetching),
+    /** Every ID is resolved, known to be unavailable, or failed. */
+    isSettled: () =>
+      source().every((batch) => {
+        if (batch.error()) return true;
+        if (batch.loading()) return false;
+        return batch.unresolved().length === 0 || batch.query.hasPageData;
+      }),
+    /** Requests the lookup can make: one per batch of IDs, never more. */
+    batchCount: () => source().length,
     error: () =>
       source()
         .find((batch) => batch.error() && batch.unresolved().length)

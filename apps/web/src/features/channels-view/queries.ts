@@ -6,7 +6,6 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import { useFlow, usePending } from '@app/observability/flow';
 import { useUserId } from '@core/context/user';
-import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type ChannelEntity,
   type EntityData,
@@ -17,16 +16,9 @@ import type { QueryAccount } from '@queries/auth/account-scope';
 import { useQueryAccount } from '@queries/auth/use-query-account';
 import {
   registerChannelListNotificationRefresh,
-  useChannelsByIdsQuery,
+  useCachedChannelsByIds,
 } from '@queries/channel/by-ids';
 import { fetchAllChannels } from '@queries/channel/channels';
-
-export {
-  channelsByIdsQueryArgs,
-  useChannelsByIdsQuery,
-} from '@queries/channel/by-ids';
-
-import { queryReadyGate } from '@queries/gate';
 import {
   type SoupAstItemsQueryArgs,
   type SoupAstParams,
@@ -36,6 +28,11 @@ import { type Accessor, createEffect, createMemo, on, untrack } from 'solid-js';
 import { sortChannels } from './core/channel-sort';
 import { channelThreadsQueryArgs } from './core/channel-threads-query';
 import { channelTypesShownBy } from './core/channel-types';
+import {
+  channelLookupLoad,
+  soupListLoad,
+  traceChannelListLoad,
+} from './queries/channel-list-load-trace';
 import type {
   ChannelListSort,
   ChannelsGroup,
@@ -44,14 +41,12 @@ import type {
 } from './types';
 import { channelHasMessages, isDirectMessage, isTeamChannel } from './utils';
 
-/** Threads per page the Threads rail reads to find their channels. */
-const THREAD_CHANNELS_PAGE_SIZE = 100;
 /**
- * Pages the rail loads on its own. A few busy channels can fill the first
- * page, leaving a list too short to scroll, so it keeps paging up to this cap;
- * scrolling the rail loads the rest.
+ * Threads the Threads rail reads on its own to find their channels: one Soup
+ * page at its largest size. A few busy channels can fill a smaller page,
+ * leaving a list too short to scroll; scrolling the rail loads the rest.
  */
-const THREAD_CHANNELS_AUTO_PAGES = 5;
+export const THREAD_CHANNELS_LIMIT = 500;
 
 const CHANNELS_QUERY_PARAMS = {
   limit: 100,
@@ -174,29 +169,6 @@ export async function fetchChannelGroupIds(
   return [...new Set(members.map((channel) => channel.id))];
 }
 
-/**
- * The channels a by-id lookup has resolved.
- *
- * A settled lookup answers for every id it asked about — its data covers the
- * pages fetched so far — so it replaces the previous answer and a channel it
- * stops returning reads as unresolved. A pending or failed lookup keeps the
- * last answer instead, so a failed page does not empty the rows built from it.
- */
-export function resolveReferencedChannels(
-  previous: ChannelEntity[],
-  lookup: {
-    isEnabled: boolean;
-    isPending: boolean;
-    error: unknown;
-    data: { entities: readonly EntityData[] } | undefined;
-  }
-): ChannelEntity[] {
-  if (!lookup.isEnabled || lookup.error || !queryReadyGate(lookup))
-    return previous;
-
-  return lookup.data.entities.filter(isChannelEntity);
-}
-
 export function deduplicateChannels(
   collections: readonly (readonly ChannelEntity[])[]
 ): ChannelEntity[] {
@@ -239,31 +211,20 @@ function useThreadChannelsDataSource(
   sortMethod: Accessor<ChannelListSort>
 ): ChannelsDataSource {
   const userId = useUserId();
-  const threadsQuery = useSoupAstItemsQuery(
-    () => {
-      const args = channelThreadsQueryArgs(userId() ?? '', undefined);
-      return {
-        ...args,
-        params: { ...args.params, limit: THREAD_CHANNELS_PAGE_SIZE },
-      };
-    },
-    () => ({ enabled: enabled() && Boolean(userId()), staleTime: 30_000 })
-  );
-  // Drive the paginated query on its own until the cap, like
-  // `useChannelsByIdsQuery`, so later-page conversations appear without scroll.
-  createEffect(() => {
-    if (
-      !threadsQuery.isEnabled ||
-      threadsQuery.isLoading ||
-      threadsQuery.isFetching ||
-      threadsQuery.error ||
-      !threadsQuery.hasNextPage ||
-      (threadsQuery.data?.entities.length ?? 0) >=
-        THREAD_CHANNELS_PAGE_SIZE * THREAD_CHANNELS_AUTO_PAGES
-    )
-      return;
-    fireAndForget(threadsQuery.fetchNextPage(), 'channels-view');
+  const threadsEnabled = () => enabled() && Boolean(userId());
+  // The filter is compiled once per viewer: Soup reads its arguments from
+  // several computations.
+  const threadsArgs = createMemo(() => {
+    const args = channelThreadsQueryArgs(userId() ?? '', undefined);
+    return {
+      ...args,
+      params: { ...args.params, limit: THREAD_CHANNELS_LIMIT },
+    };
   });
+  const threadsQuery = useSoupAstItemsQuery(threadsArgs, () => ({
+    enabled: threadsEnabled(),
+    staleTime: 30_000,
+  }));
   const channelIds = createMemo<string[]>((previous) => {
     if (!threadsQuery.isEnabled || threadsQuery.isLoading) return previous;
     const ids = new Set<string>();
@@ -273,33 +234,38 @@ function useThreadChannelsDataSource(
     }
     return [...ids];
   }, []);
-  const channelsQuery = useChannelsByIdsQuery(channelIds);
+  // Channels already in the cache render at once; one bounded request per
+  // batch fetches the rest, however many channels hold threads.
+  const lookup = useCachedChannelsByIds(channelIds, threadsEnabled);
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (channelIds().length === 0) return [];
-    if (!channelsQuery.isEnabled || channelsQuery.isLoading) return previous;
-    const byId = new Map(
-      (channelsQuery.data?.entities ?? [])
-        .filter(isChannelEntity)
-        .map((channel) => [channel.id, channel])
-    );
+    const resolved = lookup.channels();
+    // A changed ID set starts a new lookup. Keep the rows on screen until it
+    // resolves a channel, from the cache or the network.
+    if (resolved.length === 0 && lookup.isLoading()) return previous;
+    const byId = new Map(resolved.map((channel) => [channel.id, channel]));
     return sortChannels(
       channelIds().flatMap((id) => byId.get(id) ?? []),
       sortMethod()
     );
   }, []);
+  const isLoading = () =>
+    items().length === 0 &&
+    ((threadsQuery.isEnabled && threadsQuery.isLoading) || lookup.isLoading());
+  usePending('channels.sidebar.threads.render', isLoading);
+  traceChannelListLoad('threads', () => soupListLoad(threadsQuery));
+  traceChannelListLoad('thread_channels', () =>
+    channelLookupLoad(lookup, threadsEnabled())
+  );
 
   return {
     items,
-    isLoading: () =>
-      items().length === 0 &&
-      ((threadsQuery.isEnabled && threadsQuery.isLoading) ||
-        (channelsQuery.isEnabled && channelsQuery.isLoading)),
+    isLoading,
     isFetching: () =>
-      (threadsQuery.isEnabled && threadsQuery.isFetching) ||
-      (channelsQuery.isEnabled && channelsQuery.isFetching),
+      (threadsQuery.isEnabled && threadsQuery.isFetching) || lookup.isLoading(),
     error: () =>
       (threadsQuery.isEnabled ? threadsQuery.error : null) ??
-      (channelsQuery.isEnabled ? channelsQuery.error : null) ??
+      lookup.error() ??
       undefined,
     hasMore: () => threadsQuery.isEnabled && threadsQuery.hasNextPage,
     isLoadingMore: () =>
