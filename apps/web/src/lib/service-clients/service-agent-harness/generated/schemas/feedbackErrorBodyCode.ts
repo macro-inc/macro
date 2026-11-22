@@ -7,6 +7,6 @@
 
 /**
  * A stable code for refusals a client handles: `subject_not_in_container`,
-`not_agent_authored`, `id_taken`.
+`not_agent_authored`, `id_taken`, `program_run`.
  */
 export type FeedbackErrorBodyCode = string | null;

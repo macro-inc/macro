@@ -2092,7 +2092,7 @@ export type ExtractInputResponse = InputSuggestions & {
 export type FeedbackErrorBody = {
     /**
      * A stable code for refusals a client handles: `subject_not_in_container`,
-     * `not_agent_authored`, `id_taken`.
+     * `not_agent_authored`, `id_taken`, `program_run`.
      */
     code?: string | null;
     /**
@@ -3232,12 +3232,12 @@ export type StartFreshAgentConversationRequest = {
 /**
  * What kind of response was rated.
  */
-export type SubjectKind = 'agent_session_turn' | 'message' | 'routine_run';
+export type SubjectKind = 'agent_session_turn' | 'message' | 'routine_run' | 'suggestion';
 
 /**
  * Where the person saw the response; the only context the client reports.
  */
-export type Surface = 'agents_view' | 'agent_block' | 'message_timeline' | 'message_thread' | 'routine_run';
+export type Surface = 'agents_view' | 'agent_block' | 'message_timeline' | 'message_thread' | 'routine_run' | 'suggestion_row' | 'suggestion_tile' | 'suggestion_draft';
 
 /**
  * Task facets match the shared search editor; assignee and creator are distinct.
@@ -4046,6 +4046,111 @@ export type AgentFeedbackRateRunResponses = {
 };
 
 export type AgentFeedbackRateRunResponse = AgentFeedbackRateRunResponses[keyof AgentFeedbackRateRunResponses];
+
+export type AgentFeedbackMySuggestionFeedbackData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Comma-separated suggestion ids, at most 100. Ids that aren't the
+         * caller's suggestions, or that they haven't rated, are absent from the
+         * answer.
+         */
+        ids: string;
+    };
+    url: '/agent-feedback/suggestions/mine';
+};
+
+export type AgentFeedbackMySuggestionFeedbackErrors = {
+    400: FeedbackErrorBody;
+    401: unknown;
+    /**
+     * Agent feedback is off for the caller
+     */
+    404: unknown;
+    503: FeedbackErrorBody;
+};
+
+export type AgentFeedbackMySuggestionFeedbackError = AgentFeedbackMySuggestionFeedbackErrors[keyof AgentFeedbackMySuggestionFeedbackErrors];
+
+export type AgentFeedbackMySuggestionFeedbackResponses = {
+    200: MyFeedbackResponse;
+};
+
+export type AgentFeedbackMySuggestionFeedbackResponse = AgentFeedbackMySuggestionFeedbackResponses[keyof AgentFeedbackMySuggestionFeedbackResponses];
+
+export type AgentFeedbackRetractSuggestionData = {
+    body?: never;
+    path: {
+        suggestion_id: string;
+    };
+    query: {
+        /**
+         * A UUIDv7 the client mints per action and sends again on retry.
+         */
+        id: string;
+        /**
+         * Where the response was seen.
+         */
+        surface: Surface;
+    };
+    url: '/agent-feedback/suggestions/{suggestion_id}';
+};
+
+export type AgentFeedbackRetractSuggestionErrors = {
+    400: FeedbackErrorBody;
+    401: unknown;
+    /**
+     * Not the caller's suggestion, or sent by a program
+     */
+    403: FeedbackErrorBody;
+    /**
+     * Agent feedback is off for the caller
+     */
+    404: unknown;
+    409: FeedbackErrorBody;
+    503: FeedbackErrorBody;
+};
+
+export type AgentFeedbackRetractSuggestionError = AgentFeedbackRetractSuggestionErrors[keyof AgentFeedbackRetractSuggestionErrors];
+
+export type AgentFeedbackRetractSuggestionResponses = {
+    204: void;
+};
+
+export type AgentFeedbackRetractSuggestionResponse = AgentFeedbackRetractSuggestionResponses[keyof AgentFeedbackRetractSuggestionResponses];
+
+export type AgentFeedbackRateSuggestionData = {
+    body: RateFeedbackBody;
+    path: {
+        suggestion_id: string;
+    };
+    query?: never;
+    url: '/agent-feedback/suggestions/{suggestion_id}';
+};
+
+export type AgentFeedbackRateSuggestionErrors = {
+    400: FeedbackErrorBody;
+    401: unknown;
+    /**
+     * Not the caller's suggestion, or sent by a program
+     */
+    403: FeedbackErrorBody;
+    /**
+     * Agent feedback is off for the caller
+     */
+    404: unknown;
+    409: FeedbackErrorBody;
+    503: FeedbackErrorBody;
+};
+
+export type AgentFeedbackRateSuggestionError = AgentFeedbackRateSuggestionErrors[keyof AgentFeedbackRateSuggestionErrors];
+
+export type AgentFeedbackRateSuggestionResponses = {
+    200: FeedbackState;
+};
+
+export type AgentFeedbackRateSuggestionResponse = AgentFeedbackRateSuggestionResponses[keyof AgentFeedbackRateSuggestionResponses];
 
 export type ChooseAgentModeData = {
     body: AgentModeChoiceRequest;

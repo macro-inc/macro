@@ -17,4 +17,7 @@ export const Surface = {
   message_timeline: 'message_timeline',
   message_thread: 'message_thread',
   routine_run: 'routine_run',
+  suggestion_row: 'suggestion_row',
+  suggestion_tile: 'suggestion_tile',
+  suggestion_draft: 'suggestion_draft',
 } as const;

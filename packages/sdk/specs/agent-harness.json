@@ -1222,6 +1222,249 @@
         ]
       }
     },
+    "/agent-feedback/suggestions/mine": {
+      "get": {
+        "tags": ["agent_feedback"],
+        "summary": "The caller's current ratings of some of their suggestions.",
+        "operationId": "agent_feedback_my_suggestion_feedback",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "description": "Comma-separated suggestion ids, at most 100. Ids that aren't the\ncaller's suggestions, or that they haven't rated, are absent from the\nanswer.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyFeedbackResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-feedback/suggestions/{suggestion_id}": {
+      "put": {
+        "tags": ["agent_feedback"],
+        "summary": "Rate one of the caller's suggestions.",
+        "operationId": "agent_feedback_rate_suggestion",
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateFeedbackBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": "Not the caller's suggestion, or sent by a program",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["agent_feedback"],
+        "summary": "Retract the caller's rating of one of their suggestions.",
+        "operationId": "agent_feedback_retract_suggestion",
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "description": "A UUIDv7 the client mints per action and sends again on retry.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "surface",
+            "in": "query",
+            "description": "Where the response was seen.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Surface"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": "Not the caller's suggestion, or sent by a program",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/agent-mode-choice": {
       "post": {
         "tags": ["agent-mode-choice"],
@@ -8037,7 +8280,7 @@
         "properties": {
           "code": {
             "type": ["string", "null"],
-            "description": "A stable code for refusals a client handles: `subject_not_in_container`,\n`not_agent_authored`, `id_taken`."
+            "description": "A stable code for refusals a client handles: `subject_not_in_container`,\n`not_agent_authored`, `id_taken`, `program_run`."
           },
           "message": {
             "type": "string",
@@ -9876,7 +10119,7 @@
       "SubjectKind": {
         "type": "string",
         "description": "What kind of response was rated.",
-        "enum": ["agent_session_turn", "message", "routine_run"]
+        "enum": ["agent_session_turn", "message", "routine_run", "suggestion"]
       },
       "Surface": {
         "type": "string",
@@ -9886,7 +10129,10 @@
           "agent_block",
           "message_timeline",
           "message_thread",
-          "routine_run"
+          "routine_run",
+          "suggestion_row",
+          "suggestion_tile",
+          "suggestion_draft"
         ]
       },
       "TaskSearchSuggestions": {

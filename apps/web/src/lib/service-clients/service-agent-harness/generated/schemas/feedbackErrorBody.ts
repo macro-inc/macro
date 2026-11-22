@@ -11,7 +11,7 @@ import type { FeedbackErrorBodyCode } from './feedbackErrorBodyCode';
  */
 export interface FeedbackErrorBody {
   /** A stable code for refusals a client handles: `subject_not_in_container`,
-`not_agent_authored`, `id_taken`. */
+`not_agent_authored`, `id_taken`, `program_run`. */
   code?: FeedbackErrorBodyCode;
   /** What went wrong. */
   message: string;

@@ -29,12 +29,15 @@ export const agentHarnessExcluded = [
   'agentFeedbackExportEvents',
   'agentFeedbackMyMessageFeedback',
   'agentFeedbackMyRunFeedback',
+  'agentFeedbackMySuggestionFeedback',
   'agentFeedbackMyTurnFeedback',
   'agentFeedbackRateMessage',
   'agentFeedbackRateRun',
+  'agentFeedbackRateSuggestion',
   'agentFeedbackRateTurn',
   'agentFeedbackRetractMessage',
   'agentFeedbackRetractRun',
+  'agentFeedbackRetractSuggestion',
   'agentFeedbackRetractTurn',
   'classify', // Command K inference is app-internal.
   'extract', // Command K inference is app-internal.

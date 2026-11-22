@@ -15,4 +15,5 @@ export const SubjectKind = {
   agent_session_turn: 'agent_session_turn',
   message: 'message',
   routine_run: 'routine_run',
+  suggestion: 'suggestion',
 } as const;
