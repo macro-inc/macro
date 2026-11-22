@@ -2898,7 +2898,7 @@ async fn calendar_ranges_report_gaps_watermarks_and_uncertain_events_across_the_
 }
 
 /// Rewrites this build's closed database for `scope` as storage `version`
-/// (11 or 12) wrote it, with `flaw`.
+/// (11, 12 or 13) wrote it, with `flaw`.
 async fn rewrite_closed_as(scope: &str, version: u32, flaw: Flaw) {
     let owner = OpfsOwner::acquire(&database_identity(scope))
         .await
@@ -2912,6 +2912,7 @@ async fn rewrite_closed_as(scope: &str, version: u32, flaw: Flaw) {
     match version {
         11 => cache_turso::migration_test_hooks::rewrite_as_storage_11(&mut storage),
         12 => cache_turso::migration_test_hooks::rewrite_as_storage_12(&mut storage),
+        13 => cache_turso::migration_test_hooks::rewrite_as_storage_13(&mut storage),
         _ => panic!("no rewrite to storage {version}"),
     }
     .expect("rewrite as an older storage version");
@@ -3286,8 +3287,8 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     // A moved database this build cannot open goes back as well, when its
     // upgrade is one step: the rejected step leaves it at the version it
     // moved at.
-    let previous = cache_database_name(SCOPE, 12);
-    older_database_at(SCOPE, 12, Flaw::UnknownTable).await;
+    let previous = cache_database_name(SCOPE, 13);
+    older_database_at(SCOPE, 13, Flaw::UnknownTable).await;
     let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
         .await
         .expect("open beside an unusable older database");
@@ -3295,7 +3296,7 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
         report,
         OpenReport {
             outcome: CacheOpenOutcome::ResetIncompatible,
-            carry_forward: Some(CarryForward::new(CarryForwardKind::Returned, 12)),
+            carry_forward: Some(CarryForward::new(CarryForwardKind::Returned, 13)),
         }
     );
     assert_eq!(queue_depth(&engine).await, "0");
@@ -3314,7 +3315,7 @@ async fn a_moved_database_that_never_opened_goes_back_or_opens_next_time() {
     remove_opfs_pair(&previous).await;
     destroy_cache(SCOPE.into()).await.expect("destroy cache");
 
-    // From storage 11 the first step has committed by the time the last is
+    // From storage 11 the earlier steps have committed by the time the last is
     // rejected: the file is no longer what the older build wrote, so it is
     // discarded, not handed back.
     older_database_with_a_queued_write(SCOPE, Flaw::UnknownTable).await;

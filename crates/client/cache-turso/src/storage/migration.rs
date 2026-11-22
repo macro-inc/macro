@@ -59,6 +59,10 @@ const STEPS: &[StorageUpgradeStep] = &[
         from: 12,
         apply: &upgrade_12_to_13,
     },
+    StorageUpgradeStep {
+        from: 13,
+        apply: &upgrade_13_to_14,
+    },
 ];
 
 const _: () = assert!(
@@ -262,6 +266,119 @@ fn upgrade_12_to_13(connection: &Db) -> Result<(), TursoStorageError> {
     Ok(())
 }
 
+/// Storage 14 stores each search text once. Storage 13 kept every column of a
+/// search document in `search_documents` and again in its covering browse
+/// index. Storage 14 moves the rows to `search_rows`, where a bucket's rows
+/// share a row id range (its slot from `search_slots`, shifted left 44 bits,
+/// plus a sequence number), so a typed search reads one range of the table and
+/// the browse index keeps only the order. The step copies every row, in the old
+/// row id order within each bucket, then drops the old table. The rows are a
+/// projection of records, so nothing else changes.
+pub(super) const UPGRADE_13_TO_14_TABLES: [&str; 2] = [
+    "CREATE TABLE search_slots (slot INTEGER PRIMARY KEY, profile INTEGER NOT NULL, bucket TEXT NOT NULL)",
+    "CREATE TABLE search_rows (slot INTEGER NOT NULL, profile INTEGER NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, PRIMARY KEY (profile, __typename, id))",
+];
+pub(super) const UPGRADE_13_TO_14_INDEX: &str =
+    "CREATE INDEX search_rows_browse_idx ON search_rows(slot, timestamp_ms DESC, __typename, id)";
+
+/// Search documents the 13 to 14 step copies together.
+const SEARCH_UPGRADE_BATCH: i64 = 512;
+
+/// The stored number of each storage 13 profile name.
+fn storage_14_profile(name: &str) -> Result<i64, TursoStorageError> {
+    match name {
+        "quick-access-v1" => Ok(1),
+        _ => Err(invariant()),
+    }
+}
+
+fn upgrade_13_to_14(connection: &Db) -> Result<(), TursoStorageError> {
+    for sql in UPGRADE_13_TO_14_TABLES {
+        driver::execute(connection, sql, Vec::new())?;
+    }
+    let mut slots = HashMap::new();
+    let mut insert_slot = driver::prepare(
+        connection,
+        "INSERT INTO search_slots (slot, profile, bucket) VALUES (?1, ?2, ?3)",
+    )?;
+    for row in driver::query(
+        connection,
+        "SELECT DISTINCT profile, bucket FROM search_documents ORDER BY profile, bucket",
+        Vec::new(),
+    )? {
+        let profile = storage_14_profile(&required_text(&row, 0)?)?;
+        let bucket = required_text(&row, 1)?;
+        let slot = i64::try_from(slots.len() + 1).map_err(|_| invariant())?;
+        // Slots run from 1 to 2^19 - 1.
+        if slot >= 1 << 19 {
+            return Err(invariant());
+        }
+        require_changed(
+            driver::execute_prepared(
+                &mut insert_slot,
+                vec![
+                    Value::from_i64(slot),
+                    Value::from_i64(profile),
+                    text(&bucket),
+                ],
+            )?,
+            1,
+        )?;
+        slots.insert((profile, bucket), (slot, slot << 44));
+    }
+    let mut rows_after = driver::prepare(
+        connection,
+        "SELECT rowid, profile, __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents WHERE rowid >= ?1 ORDER BY rowid LIMIT ?2",
+    )?;
+    let mut insert_row = driver::prepare(
+        connection,
+        "INSERT INTO search_rows (rowid, slot, profile, __typename, id, search_text, timestamp_ms, source_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+    )?;
+    // Every id is a valid row id, i64::MIN and i64::MAX included.
+    let mut from = Some(i64::MIN);
+    while let Some(start) = from {
+        let rows = driver::query_prepared(
+            &mut rows_after,
+            vec![Value::from_i64(start), Value::from_i64(SEARCH_UPGRADE_BATCH)],
+        )?;
+        let Some(last) = rows.last() else {
+            break;
+        };
+        from = required_i64(last, 0)?.checked_add(1);
+        for row in &rows {
+            let profile = storage_14_profile(&required_text(row, 1)?)?;
+            let (slot, next) = slots
+                .get_mut(&(profile, required_text(row, 4)?))
+                .ok_or_else(invariant)?;
+            let rowid = *next;
+            // A slot holds 2^44 row ids.
+            if rowid >> 44 != *slot {
+                return Err(invariant());
+            }
+            *next += 1;
+            require_changed(
+                driver::execute_prepared(
+                    &mut insert_row,
+                    vec![
+                        Value::from_i64(rowid),
+                        Value::from_i64(*slot),
+                        Value::from_i64(profile),
+                        Value::from_text(required_text(row, 2)?),
+                        Value::from_text(required_text(row, 3)?),
+                        Value::from_text(required_text(row, 5)?),
+                        Value::from_i64(required_i64(row, 6)?),
+                        Value::from_text(required_text(row, 7)?),
+                    ],
+                )?,
+                1,
+            )?;
+        }
+    }
+    driver::execute(connection, "DROP TABLE search_documents", Vec::new())?;
+    driver::execute(connection, UPGRADE_13_TO_14_INDEX, Vec::new())?;
+    Ok(())
+}
+
 /// Hooks that stop an upgrade between steps, for tests and the differential
 /// fuzzer. Not part of the production build.
 #[cfg(any(test, feature = "migration-test-hooks"))]
@@ -295,16 +412,41 @@ pub mod test_hooks {
         ];
     }
 
+    /// The inverse of the 13 to 14 step: search rows back in one table whose
+    /// covering browse index repeats them.
+    const STORAGE_13_SEARCH: [&str; 5] = [
+        "CREATE TABLE search_documents (profile TEXT NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, bucket TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, PRIMARY KEY (profile, __typename, id))",
+        "INSERT INTO search_documents (profile, __typename, id, bucket, search_text, timestamp_ms, source_hash) SELECT CASE r.profile WHEN 1 THEN 'quick-access-v1' END, r.__typename, r.id, s.bucket, r.search_text, r.timestamp_ms, r.source_hash FROM search_rows AS r JOIN search_slots AS s ON s.slot = r.slot ORDER BY r.rowid",
+        "DROP TABLE search_rows",
+        "DROP TABLE search_slots",
+        "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id, search_text, source_hash)",
+    ];
+
+    /// Rewrites a database of this build as a storage 13 build left it: the
+    /// inverse of the 13 to 14 step, so the next open runs that step alone.
+    pub fn rewrite_as_storage_13(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
+        storage.require_healthy()?;
+        let connection = storage.connection();
+        storage.latch_result(driver::write_transaction(&connection, || {
+            for sql in STORAGE_13_SEARCH.into_iter().chain([
+                "UPDATE meta SET value = '13' WHERE key = 'storage_schema_version'",
+            ]) {
+                driver::execute(&connection, sql, Vec::new())?;
+            }
+            Ok(())
+        }))
+    }
+
     /// Rewrites a database of this build as a storage 12 build left it: the
-    /// inverse of the 12 to 13 step, so the next open runs that step alone.
+    /// inverse of the 12 to 13 and 13 to 14 steps, so the next open runs them.
     pub fn rewrite_as_storage_12(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
         storage.require_healthy()?;
         let connection = storage.connection();
         storage.latch_result(driver::write_transaction(&connection, || {
-            for sql in [
+            for sql in STORAGE_13_SEARCH.into_iter().chain([
                 "DROP TABLE index_document_facts",
                 "UPDATE meta SET value = '12' WHERE key = 'storage_schema_version'",
-            ] {
+            ]) {
                 driver::execute(&connection, sql, Vec::new())?;
             }
             Ok(())
@@ -313,7 +455,7 @@ pub mod test_hooks {
 
     /// Rewrites a database of this build as the last storage 11 build left
     /// it, so a test can open it as a file an older build left behind: the
-    /// inverse of the 11 to 12 and 12 to 13 steps, plus every part of
+    /// inverse of the 11 to 12, 12 to 13 and 13 to 14 steps, plus every part of
     /// [`Storage11DerivedState`], so opening the rewrite rebuilds all three, as
     /// opening a real storage 11 file does. Page compaction then finds pages
     /// already in the newer shape, so the rewrite costs a lower bound of a real
@@ -322,13 +464,13 @@ pub mod test_hooks {
         storage.require_healthy()?;
         let connection = storage.connection();
         storage.latch_result(driver::write_transaction(&connection, || {
-            for sql in [
+            for sql in STORAGE_13_SEARCH.into_iter().chain([
                 "DROP TABLE index_document_facts",
                 "DROP INDEX records_contacts_cover_idx",
                 "DROP INDEX search_documents_browse_idx",
                 "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id)",
                 "UPDATE meta SET value = '11' WHERE key = 'storage_schema_version'",
-            ] {
+            ]) {
                 driver::execute(&connection, sql, Vec::new())?;
             }
             for part in Storage11DerivedState::ALL {

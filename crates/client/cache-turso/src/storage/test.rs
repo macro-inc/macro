@@ -17,9 +17,9 @@ mod permission_retirement;
 mod predicate_cost;
 mod projection_writes;
 mod search_bucket_cost;
-mod search_options;
 mod search_prefilter;
 mod search_projection;
+mod search_slots;
 mod search_streaming;
 mod startup;
 mod wal_checkpoint;
@@ -227,7 +227,7 @@ fn search_projection_is_write_through_and_queries_use_projection_indexes() {
 
         let columns = driver::query(
             &storage.connection(),
-            "PRAGMA table_info('search_documents')",
+            "PRAGMA table_info('search_rows')",
             Vec::new(),
         )
         .unwrap()
@@ -237,10 +237,10 @@ fn search_projection_is_write_through_and_queries_use_projection_indexes() {
         assert_eq!(
             columns,
             [
+                "slot",
                 "profile",
                 "__typename",
                 "id",
-                "bucket",
                 "search_text",
                 "timestamp_ms",
                 "source_hash",
@@ -272,64 +272,71 @@ fn search_projection_is_write_through_and_queries_use_projection_indexes() {
             .unwrap();
         assert_eq!(second[0].record_key.as_ref(), "GraphqlSoupDocument:d2");
 
-        let plan = driver::query(
-            &storage.connection(),
-            &format!("EXPLAIN QUERY PLAN {SEARCH_BROWSE}"),
-            vec![
-                text("quick-access-v1"),
-                text("document"),
-                Value::from_i64(25),
-            ],
-        )
-        .unwrap();
-        let details = plan
+        let plan_details = |sql: &str, values: Vec<Value>| {
+            driver::query(
+                &storage.connection(),
+                &format!("EXPLAIN QUERY PLAN {sql}"),
+                values,
+            )
+            .unwrap()
             .iter()
             .filter_map(|row| required_text(row, 3).ok())
             .collect::<Vec<_>>()
-            .join(" ");
+            .join(" ")
+        };
+        let details = plan_details(
+            search::BROWSE,
+            vec![Value::from_i64(1), Value::from_i64(25)],
+        );
         assert!(
-            details.contains("search_documents_browse_idx"),
+            details.contains("search_rows_browse_idx"),
             "browse query did not use projection index: {details}"
         );
+        assert!(!details.contains("TEMP B-TREE"), "{details}");
         assert!(!details.contains("records"));
 
-        let rowid_plan = driver::query(
-            &storage.connection(),
-            &format!("EXPLAIN QUERY PLAN {SEARCH_ROWID}"),
+        let rowid_details = plan_details(
+            search::ROWID,
             vec![
-                text(SearchProfile::QuickAccessV1.as_str()),
+                Value::from_i64(search::profile_code(SearchProfile::QuickAccessV1)),
                 text("GraphqlSoupDocument"),
                 text("d1"),
             ],
-        )
-        .unwrap();
-        let rowid_details = rowid_plan
-            .iter()
-            .filter_map(|row| required_text(row, 3).ok())
-            .collect::<Vec<_>>()
-            .join(" ");
+        );
         assert!(
-            rowid_details.contains("sqlite_autoindex_search_documents_1")
+            rowid_details.contains("sqlite_autoindex_search_rows_1")
                 && rowid_details.contains("profile=? AND __typename=? AND id=?"),
             "rowid lookup did not use the complete primary-key index: {rowid_details}"
         );
         assert!(
-            !rowid_details.contains("SCAN search_documents"),
+            !rowid_details.contains("SCAN search_rows"),
             "rowid lookup scanned the projection table: {rowid_details}"
         );
+        let slot = search::find_slot(
+            &storage.connection(),
+            SearchProfile::QuickAccessV1,
+            "document",
+        )
+        .unwrap()
+        .unwrap();
+        let (load, values) = search::statement(slot).unwrap();
+        let load_details = plan_details(&load, values);
+        assert!(
+            !load_details.contains("SCAN") && !load_details.contains("INDEX"),
+            "bucket load did not read a row id range: {load_details}"
+        );
 
+        // A row of another profile, in its own slot, outlives the quick
+        // access rows of the same key.
         raw_execute(
             &storage,
-            SEARCH_UPSERT,
-            vec![
-                text("future-profile"),
-                text("GraphqlSoupDocument"),
-                text("d1"),
-                text("document"),
-                text("future profile row"),
-                Value::from_i64(123),
-                text("future-profile-hash"),
-            ],
+            "INSERT INTO search_slots (slot, profile, bucket) VALUES (9, 2, 'document')",
+            Vec::new(),
+        );
+        raw_execute(
+            &storage,
+            "INSERT INTO search_rows (rowid, slot, profile, __typename, id, search_text, timestamp_ms, source_hash) VALUES (9 << 44, 9, 2, 'GraphqlSoupDocument', 'd1', 'future profile row', 123, 'future-profile-hash')",
+            Vec::new(),
         );
         storage
             .delete_batch(&[key("GraphqlSoupDocument:d2")])
@@ -349,7 +356,7 @@ fn search_projection_is_write_through_and_queries_use_projection_indexes() {
         assert_eq!(
             raw_scalar(
                 &storage,
-                "SELECT COUNT(*) FROM search_documents WHERE profile = 'future-profile' AND __typename = 'GraphqlSoupDocument' AND id = 'd1'",
+                "SELECT COUNT(*) FROM search_rows WHERE rowid = 9 << 44 AND profile = 2 AND __typename = 'GraphqlSoupDocument' AND id = 'd1'",
             ),
             1
         );
@@ -978,8 +985,9 @@ fn every_metadata_mismatch_and_missing_schema_requests_physical_reset() {
                 "queue-current-uuid-index",
                 "DROP INDEX mutation_queue_current_uuid_idx",
             ),
-            ("search-table", "DROP TABLE search_documents"),
-            ("search-index", "DROP INDEX search_documents_browse_idx"),
+            ("search-table", "DROP TABLE search_rows"),
+            ("search-slots", "DROP TABLE search_slots"),
+            ("search-index", "DROP INDEX search_rows_browse_idx"),
         ] {
             let database = TursoMemoryDatabase::new(format!("mismatch-{name}.db"));
             let storage = database.open("scope").unwrap();
@@ -1185,16 +1193,30 @@ fn every_malformed_frozen_schema_constraint_requests_reset_on_reopen() {
         (
             "search-extra-column",
             vec![
-                "DROP TABLE search_documents",
-                "CREATE TABLE search_documents (profile TEXT NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, bucket TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, extra TEXT, PRIMARY KEY (profile, __typename, id))",
-                CREATE_SCHEMA[3],
+                "DROP TABLE search_rows",
+                "CREATE TABLE search_rows (slot INTEGER NOT NULL, profile INTEGER NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, extra TEXT, PRIMARY KEY (profile, __typename, id))",
+                CREATE_SCHEMA[4],
+            ],
+        ),
+        (
+            "search-slot-extra-column",
+            vec![
+                "DROP TABLE search_slots",
+                "CREATE TABLE search_slots (slot INTEGER PRIMARY KEY, profile INTEGER NOT NULL, bucket TEXT NOT NULL, extra TEXT)",
+            ],
+        ),
+        (
+            "search-slot-key",
+            vec![
+                "DROP TABLE search_slots",
+                "CREATE TABLE search_slots (slot INTEGER NOT NULL, profile INTEGER NOT NULL, bucket TEXT NOT NULL, PRIMARY KEY (profile, bucket))",
             ],
         ),
         (
             "search-index-order",
             vec![
-                "DROP INDEX search_documents_browse_idx",
-                "CREATE INDEX search_documents_browse_idx ON search_documents(profile, timestamp_ms DESC, bucket, __typename, id)",
+                "DROP INDEX search_rows_browse_idx",
+                "CREATE INDEX search_rows_browse_idx ON search_rows(slot, __typename, timestamp_ms DESC, id)",
             ],
         ),
         (
@@ -1203,7 +1225,7 @@ fn every_malformed_frozen_schema_constraint_requests_reset_on_reopen() {
                 "DROP TABLE optimistic_layers",
                 "DROP TABLE mutation_queue",
                 "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY, query TEXT NOT NULL, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL)",
-                CREATE_SCHEMA[5],
+                CREATE_SCHEMA[6],
             ],
         ),
         (
@@ -1212,7 +1234,7 @@ fn every_malformed_frozen_schema_constraint_requests_reset_on_reopen() {
                 "DROP TABLE optimistic_layers",
                 "DROP TABLE mutation_queue",
                 "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL, FOREIGN KEY (identity) REFERENCES meta(key))",
-                CREATE_SCHEMA[5],
+                CREATE_SCHEMA[6],
             ],
         ),
         (
@@ -1221,7 +1243,7 @@ fn every_malformed_frozen_schema_constraint_requests_reset_on_reopen() {
                 "DROP TABLE optimistic_layers",
                 "DROP TABLE mutation_queue",
                 "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL)",
-                CREATE_SCHEMA[5],
+                CREATE_SCHEMA[6],
             ],
         ),
         (
@@ -1230,7 +1252,7 @@ fn every_malformed_frozen_schema_constraint_requests_reset_on_reopen() {
                 "DROP TABLE optimistic_layers",
                 "DROP TABLE mutation_queue",
                 "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 1, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL)",
-                CREATE_SCHEMA[5],
+                CREATE_SCHEMA[6],
             ],
         ),
         (

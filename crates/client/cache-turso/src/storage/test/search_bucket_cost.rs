@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn text_search_scans_only_its_bucket_through_the_covering_index() {
+fn text_search_scans_only_its_bucket_as_a_rowid_range() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("search-bucket-cost").unwrap();
         storage
@@ -36,7 +36,14 @@ fn text_search_scans_only_its_bucket_through_the_covering_index() {
                 .await
                 .unwrap();
             let query = SearchQuery::new("ndl");
-            let (sql, parameters) = search::statement(SearchProfile::QuickAccessV1, "document");
+            let slot = search::find_slot(
+                &storage.connection(),
+                SearchProfile::QuickAccessV1,
+                "document",
+            )
+            .unwrap()
+            .unwrap();
+            let (sql, parameters) = search::statement(slot).unwrap();
             let plan = driver::query(
                 &storage.connection(),
                 &format!("EXPLAIN QUERY PLAN {sql}"),
@@ -46,7 +53,7 @@ fn text_search_scans_only_its_bucket_through_the_covering_index() {
             assert!(
                 plan.iter().any(|row| required_text(row, 3)
                     .unwrap()
-                    .contains("USING COVERING INDEX search_documents_browse_idx")),
+                    .contains("SEARCH search_rows USING INTEGER PRIMARY KEY")),
                 "{plan:?}"
             );
             let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();

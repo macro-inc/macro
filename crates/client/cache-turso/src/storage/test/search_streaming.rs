@@ -5,17 +5,18 @@ fn borrowed_search_rows_reject_corrupt_shapes_before_visiting() {
     let storage = TursoStorage::open_in_memory("borrowed-row-validation").unwrap();
     let mut key_buffer = String::new();
     for sql in [
-        "SELECT 'Thing', 'id', 'document', 'text', 0",
-        "SELECT 'Thing', 'id', 'document', 'text', 0, 'hash', 'extra'",
-        "SELECT 'Thing', 'id', 'document', 'text', 'invalid', 'hash'",
-        "SELECT '', 'id', 'document', 'text', 0, 'hash'",
-        "SELECT 'Thing:bad', 'id', 'document', 'text', 0, 'hash'",
-        "SELECT 'Thing', 'id', 'document', NULL, 0, 'hash'",
+        "SELECT 'Thing', 'id', 'text', 0",
+        "SELECT 'Thing', 'id', 'text', 0, 'hash', 'extra'",
+        "SELECT 'Thing', 'id', 'text', 'invalid', 'hash'",
+        "SELECT '', 'id', 'text', 0, 'hash'",
+        "SELECT 'Thing:bad', 'id', 'text', 0, 'hash'",
+        "SELECT 'Thing', 'id', NULL, 0, 'hash'",
     ] {
         let result = driver::query_each(&storage.connection(), sql, vec![], |row| {
             search::visit_row(
                 row,
                 SearchProfile::QuickAccessV1,
+                "document",
                 &SearchQuery::new(""),
                 &mut key_buffer,
                 &mut |_| panic!("corrupt row visited"),
@@ -64,7 +65,10 @@ fn streamed_search_reset_failure_retires_storage_even_after_rows_were_visited() 
             .await
             .unwrap();
         let query = SearchQuery::new("ndl");
-        let (sql, _) = search::statement(SearchProfile::QuickAccessV1, "document");
+        let slot = search::find_slot(&storage.connection(), SearchProfile::QuickAccessV1, "document")
+            .unwrap()
+            .unwrap();
+        let (sql, _) = search::statement(slot).unwrap();
         driver::arm_reset_failure(&sql);
         let mut visited = 0;
         expect_reset_reason(

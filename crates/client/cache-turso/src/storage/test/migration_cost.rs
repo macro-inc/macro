@@ -141,7 +141,7 @@ fn upgrade_cost_on_a_retained_cache() {
         "SELECT coalesce(sum(length(value)), 0) FROM records WHERE __typename = 'GraphqlContact'",
     );
     let records = count(&connection, "SELECT count(*) FROM records");
-    let documents = count(&connection, "SELECT count(*) FROM search_documents");
+    let documents = count(&connection, "SELECT count(*) FROM search_rows");
     let queued = count(&connection, "SELECT count(*) FROM mutation_queue");
     drop(connection);
     storage.try_close().unwrap();

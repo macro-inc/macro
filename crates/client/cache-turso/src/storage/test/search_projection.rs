@@ -138,25 +138,30 @@ fn reopen_rebuilds_old_search_rows_once_without_replacing_durable_data() {
             let storage = engine.into_storage();
             raw_execute(
                 &storage,
-                "UPDATE search_documents SET search_text = 'weekly update quartz' WHERE __typename = 'GraphqlSoupEmailThread'",
+                "UPDATE search_rows SET search_text = 'weekly update quartz' WHERE __typename = 'GraphqlSoupEmailThread'",
                 vec![],
             );
             // Old engines accepted contact metadata without projecting it, and
             // incorrectly treated public profiles as directory membership.
             raw_execute(
                 &storage,
-                "DELETE FROM search_documents WHERE __typename = 'GraphqlContact'",
+                "DELETE FROM search_rows WHERE __typename = 'GraphqlContact'",
                 vec![],
             );
             raw_execute(
                 &storage,
-                "INSERT INTO search_documents (profile, bucket, __typename, id, search_text, timestamp_ms, source_hash) VALUES ('quick-access-v1', 'person', 'GraphqlUser', 'person', 'person', 0, 'legacy')",
+                "INSERT INTO search_slots (slot, profile, bucket) SELECT 99, 1, 'person' WHERE NOT EXISTS (SELECT 1 FROM search_slots WHERE profile = 1 AND bucket = 'person')",
+                vec![],
+            );
+            raw_execute(
+                &storage,
+                "INSERT INTO search_rows (rowid, slot, profile, __typename, id, search_text, timestamp_ms, source_hash) SELECT (slot << 44) + 1000000, slot, 1, 'GraphqlUser', 'person', 'person', 0, 'legacy' FROM search_slots WHERE profile = 1 AND bucket = 'person'",
                 vec![],
             );
             // Model rows written by the previous max(viewedAt, updatedAt) projection.
             raw_execute(
                 &storage,
-                "UPDATE search_documents SET timestamp_ms = 3 WHERE __typename = 'GraphqlSoupChannel'",
+                "UPDATE search_rows SET timestamp_ms = 3 WHERE __typename = 'GraphqlSoupChannel'",
                 vec![],
             );
             raw_execute(
@@ -250,7 +255,7 @@ fn projection_rebuild_rolls_back_search_rows_and_version_on_failure() {
             .unwrap();
         raw_execute(
             &storage,
-            "UPDATE search_documents SET timestamp_ms = 3",
+            "UPDATE search_rows SET timestamp_ms = 3",
             vec![],
         );
         raw_execute(

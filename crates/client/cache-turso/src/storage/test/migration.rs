@@ -312,7 +312,7 @@ fn a_file_this_scope_does_not_own_is_never_upgraded() {
 /// The frozen-schema checks run inside the last step's transaction: a chain
 /// whose result they reject leaves the file exactly as the older build wrote
 /// it, still at the older version, so the browser can hand it back. Earlier
-/// steps commit on their own, so a file two steps behind is left one step
+/// steps commit on their own, so a file two or three steps behind is left one step
 /// behind instead, which the browser discards rather than hands back.
 #[test]
 fn a_rejected_upgrade_leaves_the_older_file_untouched() {
@@ -344,7 +344,7 @@ fn a_rejected_upgrade_leaves_the_older_file_untouched() {
         let mut storage = database.open("scope").unwrap();
         populate(&mut storage).await;
         test_hooks::add_unknown_table(&mut storage).unwrap();
-        test_hooks::rewrite_as_storage_12(&mut storage).unwrap();
+        test_hooks::rewrite_as_storage_13(&mut storage).unwrap();
         let schema = schema_rows(&storage.connection());
         let rows = table_rows(&storage.connection());
         storage.try_close().unwrap();
@@ -360,7 +360,7 @@ fn a_rejected_upgrade_leaves_the_older_file_untouched() {
         let connection = Db::uncached(raw.connect().unwrap());
         assert_eq!(
             crate::storage::migration::stored_storage_version(&connection),
-            Some(12)
+            Some(13)
         );
         assert_eq!(schema_rows(&connection), schema);
         assert_eq!(table_rows(&connection), rows);
@@ -398,7 +398,7 @@ fn hook_stops_after_a_committed_step_and_the_next_open_finishes() {
 /// The tables generated changes touch, with a text or integer column each.
 const TARGETS: [(&str, &str); 5] = [
     ("records", "id"),
-    ("search_documents", "search_text"),
+    ("search_rows", "search_text"),
     ("mutation_queue", "query"),
     ("optimistic_layers", "optimistic_data_json"),
     ("meta", "value"),

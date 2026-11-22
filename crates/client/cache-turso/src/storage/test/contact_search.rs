@@ -6,12 +6,7 @@ use cache_core::value::CacheValue;
 fn contact_reads_use_both_covering_indexes_without_a_sort_or_limit() {
     let storage = TursoStorage::open_in_memory("contact-plan").unwrap();
     for query in ["", "Directory", "é%_", "nul\0term"] {
-        let (sql, values) = search::statement_with_base(
-            contact_index::LOAD,
-            SearchProfile::QuickAccessV1,
-            "person",
-            &SearchQuery::new(query),
-        );
+        let (sql, values) = search::statement_with_base(contact_index::LOAD, 1, &SearchQuery::new(query)).unwrap();
         let rows = driver::query(
             &storage.connection(),
             &format!("EXPLAIN QUERY PLAN {sql}"),
@@ -24,7 +19,7 @@ fn contact_reads_use_both_covering_indexes_without_a_sort_or_limit() {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(
-            plan.contains("COVERING INDEX search_documents_browse_idx"),
+            plan.contains("SEARCH s USING INTEGER PRIMARY KEY"),
             "{plan}"
         );
         assert!(
