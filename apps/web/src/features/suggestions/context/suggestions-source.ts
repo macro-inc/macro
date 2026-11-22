@@ -25,7 +25,12 @@ export type SuggestionsSource = {
   ): Promise<'accepted' | 'changed'>;
   /** Turn a suggestion down; a run under way is stopped. */
   dismiss(id: string): Promise<void>;
-  /** Take a dismissal back; the server allows it for a few minutes. */
+  /** Stop a running suggestion's run and keep it: it is open again once the run stops. */
+  stop(id: string): Promise<void>;
+  /**
+   * Take back a dismissal, or the person marking one done, within a few
+   * minutes of it.
+   */
   restore(id: string): Promise<void>;
   /**
    * The person looked at the feed and is leaving it: what is proposed from
@@ -78,4 +83,18 @@ export type SuggestionItemParts = {
     fallback?: JSX.Element;
     onOpen?: () => void;
   }>;
+};
+
+/** The person's routines, as the For you page links to and switches them. */
+export type RoutinesSource = {
+  /** Routine ideas Macro drafted for them; undefined until known. */
+  ideas: Accessor<number | undefined>;
+  /** Their saved routines; undefined until known. */
+  routines: Accessor<number | undefined>;
+  /** Whether a saved routine is switched on; undefined while unknown. */
+  enabled(routineId: string): boolean | undefined;
+  /** Switch a saved routine on or off; rejects when the server refuses. */
+  setEnabled(routineId: string, enabled: boolean): Promise<void>;
+  /** Open the routines page, at one routine when given. */
+  openRoutines(routineId?: string): void;
 };

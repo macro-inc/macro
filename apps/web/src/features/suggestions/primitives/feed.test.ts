@@ -4,6 +4,7 @@ import type {
   SuggestionActions,
   SuggestionsSource,
 } from '../context/suggestions-source';
+import type { ForYouList } from '../core/lists';
 import type {
   FeedCounts,
   Suggestion,
@@ -44,6 +45,9 @@ function host(suggestions: Suggestion[]) {
     suggestions,
     counts: countsOf(suggestions),
   });
+  /** The server's next answer lists `list`. */
+  const serve = (list: Suggestion[]) =>
+    setFeed({ suggestions: list, counts: countsOf(list) });
   /** The server stops listing a suggestion, as after a dismissal. */
   const drop = (id: string) =>
     setFeed((held) => {
@@ -59,6 +63,7 @@ function host(suggestions: Suggestion[]) {
     dismiss: vi.fn(async (id: string) => {
       drop(id);
     }),
+    stop: vi.fn(async (_id: string) => {}),
     restore: vi.fn(async (_id: string) => {}),
     viewed: vi.fn(),
   } satisfies SuggestionsSource;
@@ -70,7 +75,7 @@ function host(suggestions: Suggestion[]) {
     turnOnRoutine: vi.fn(async () => {}),
   } satisfies SuggestionActions;
 
-  return { source, actions };
+  return { source, actions, serve };
 }
 
 function withFeed(
@@ -87,16 +92,27 @@ function withFeed(
   });
 }
 
-function shownIds(feed: SuggestionsFeed) {
-  const view = feed.view();
+function entriesOf(feed: SuggestionsFeed, list: ForYouList = 'today') {
+  const view = feed.view(list);
 
-  return view.kind === 'suggestions'
-    ? view.entries.map((entry) => entry.suggestion.id)
-    : [];
+  return view.kind === 'rows' ? view.entries : [];
+}
+
+function shownIds(feed: SuggestionsFeed, list: ForYouList = 'today') {
+  return entriesOf(feed, list).map((entry) => entry.suggestion.id);
+}
+
+/** Today's rows, each as its id and how it reads. */
+function rowsOf(feed: SuggestionsFeed) {
+  return entriesOf(feed).map((entry) => [entry.suggestion.id, entry.state]);
+}
+
+function entryOf(feed: SuggestionsFeed, id: string) {
+  return entriesOf(feed).find((entry) => entry.suggestion.id === id);
 }
 
 describe('suggestions feed', () => {
-  it('shows the server’s order as it is', async () => {
+  it('lists what waits or runs in the server’s order, and Done apart', async () => {
     await withFeed(
       [
         composerSuggestion,
@@ -111,10 +127,127 @@ describe('suggestions feed', () => {
           'suggestion-reply',
           'suggestion-failed',
           'suggestion-running',
+        ]);
+        expect(shownIds(feed, 'toDo')).toEqual(['suggestion-reply']);
+        expect(shownIds(feed, 'suggestions')).toEqual([
+          'suggestion-composer',
+          'suggestion-failed',
+          'suggestion-running',
+        ]);
+        expect(shownIds(feed, 'done')).toEqual(['suggestion-done']);
+        expect(feed.counts()).toEqual({
+          today: 4,
+          toDo: 1,
+          suggestions: 3,
+          done: 1,
+        });
+      }
+    );
+  });
+
+  it('keeps a row marked done in place, struck, with Undo that opens it again', async () => {
+    await withFeed(
+      [composerSuggestion, reviewSuggestion, replySuggestion],
+      async (feed, { source, serve }) => {
+        source.accept.mockImplementationOnce(async () => {
+          serve([
+            composerSuggestion,
+            replySuggestion,
+            { ...reviewSuggestion, status: 'done' },
+          ]);
+          return 'accepted';
+        });
+        expect(await feed.markDone(reviewSuggestion)).toBe(true);
+
+        expect(rowsOf(feed)).toEqual([
+          ['suggestion-composer', 'open'],
+          ['suggestion-review', 'markedDone'],
+          ['suggestion-reply', 'open'],
+        ]);
+        expect(entryOf(feed, 'suggestion-review')?.canUndo).toBe(true);
+        // Only waiting rows count; Done has it already.
+        expect(feed.counts()).toMatchObject({ today: 2, done: 1 });
+
+        source.restore.mockImplementationOnce(async () => {
+          serve([composerSuggestion, reviewSuggestion, replySuggestion]);
+        });
+        await feed.undoDone(reviewSuggestion);
+        expect(source.restore).toHaveBeenCalledWith('suggestion-review');
+        expect(rowsOf(feed)[1]).toEqual(['suggestion-review', 'open']);
+      }
+    );
+  });
+
+  it('keeps a run that finished during the visit in place, and lists one done before it only in Done', async () => {
+    await withFeed(
+      [runningSuggestion, composerSuggestion, doneSuggestion],
+      async (feed, { serve }) => {
+        serve([
+          composerSuggestion,
+          { ...runningSuggestion, status: 'done' },
+          doneSuggestion,
+        ]);
+
+        expect(rowsOf(feed)).toEqual([
+          ['suggestion-running', 'finished'],
+          ['suggestion-composer', 'open'],
+        ]);
+        expect(entryOf(feed, 'suggestion-running')?.canUndo).toBe(false);
+        expect(shownIds(feed, 'done')).toEqual([
+          'suggestion-running',
           'suggestion-done',
         ]);
       }
     );
+  });
+
+  it('shows a routine suggestion whose routine was saved as on, where it was', async () => {
+    await withFeed(
+      [routineSuggestion, composerSuggestion],
+      async (feed, { source, serve }) => {
+        source.refresh.mockImplementationOnce(async () => {
+          serve([
+            composerSuggestion,
+            {
+              ...routineSuggestion,
+              status: 'done',
+              result: { entityType: 'scheduled_action', entityId: 'routine-1' },
+            },
+          ]);
+        });
+        expect(await feed.accept(routineSuggestion)).toBe(true);
+
+        expect(rowsOf(feed)).toEqual([
+          ['suggestion-routine', 'routineOn'],
+          ['suggestion-composer', 'open'],
+        ]);
+      }
+    );
+  });
+
+  it('stops a run and keeps the suggestion, which the server opens again', async () => {
+    await withFeed([runningSuggestion], async (feed, { source, serve }) => {
+      source.stop.mockImplementationOnce(async () => {
+        serve([{ ...runningSuggestion, status: 'open' }]);
+      });
+      await feed.stop(runningSuggestion);
+
+      expect(source.stop).toHaveBeenCalledWith('suggestion-running');
+      expect(source.dismiss).not.toHaveBeenCalled();
+      expect(rowsOf(feed)).toEqual([['suggestion-running', 'open']]);
+    });
+  });
+
+  it('marks the row failed when the server refuses to stop its run', async () => {
+    await withFeed([runningSuggestion], async (feed, { source }) => {
+      source.stop.mockRejectedValueOnce(new Error('refused'));
+      await feed.stop(runningSuggestion);
+
+      expect(entryOf(feed, 'suggestion-running')).toMatchObject({
+        state: 'running',
+        failed: true,
+      });
+    });
   });
 
   it('opens the composer with a composer suggestion’s prompt and accepts it', async () => {
@@ -170,9 +303,8 @@ describe('suggestions feed', () => {
     await createRoot(async (dispose) => {
       const feed = createSuggestionsFeed(deps.source, deps.actions);
       const entry = () => {
-        const view = feed.view();
-        if (view.kind !== 'suggestions')
-          throw new Error('expected suggestions');
+        const view = feed.view('today');
+        if (view.kind !== 'rows') throw new Error('expected rows');
 
         return view.entries[0];
       };
@@ -212,9 +344,8 @@ describe('suggestions feed', () => {
     await createRoot(async (dispose) => {
       const feed = createSuggestionsFeed(deps.source, deps.actions);
       const entry = () => {
-        const view = feed.view();
-        if (view.kind !== 'suggestions')
-          throw new Error('expected suggestions');
+        const view = feed.view('today');
+        if (view.kind !== 'rows') throw new Error('expected rows');
 
         return view.entries[0];
       };
@@ -282,8 +413,8 @@ describe('suggestions feed', () => {
       const feed = createSuggestionsFeed(deps.source, deps.actions);
       await feed.look(routineSuggestion);
 
-      const view = feed.view();
-      if (view.kind !== 'suggestions') throw new Error('expected a feed');
+      const view = feed.view('today');
+      if (view.kind !== 'rows') throw new Error('expected a feed');
       expect(view.entries[0]?.failed).toBe(true);
       dispose();
     });
@@ -371,20 +502,20 @@ describe('suggestions feed', () => {
     });
   });
 
-  it('sends a dismissal at once and keeps the suggestion as a row to undo', async () => {
+  it('sends a dismissal at once and keeps the suggestion where it was, to undo', async () => {
     await withFeed(
       [composerSuggestion, replySuggestion],
       async (feed, { source }) => {
         await feed.dismiss(composerSuggestion);
 
         expect(source.dismiss).toHaveBeenCalledWith('suggestion-composer');
-        const view = feed.view();
-        if (view.kind !== 'suggestions') throw new Error('expected a feed');
+        const view = feed.view('today');
+        if (view.kind !== 'rows') throw new Error('expected a feed');
         expect(
-          view.entries.map((entry) => [entry.suggestion.id, entry.dismissed])
+          view.entries.map((entry) => [entry.suggestion.id, entry.state])
         ).toEqual([
-          ['suggestion-reply', false],
-          ['suggestion-composer', true],
+          ['suggestion-composer', 'dismissed'],
+          ['suggestion-reply', 'open'],
         ]);
       }
     );
@@ -410,9 +541,12 @@ describe('suggestions feed', () => {
       await feed.dismiss(composerSuggestion);
       await feed.undoDismiss(composerSuggestion);
 
-      const view = feed.view();
-      if (view.kind !== 'suggestions') throw new Error('expected a feed');
-      expect(view.entries[0]).toMatchObject({ dismissed: true, failed: true });
+      const view = feed.view('today');
+      if (view.kind !== 'rows') throw new Error('expected a feed');
+      expect(view.entries[0]).toMatchObject({
+        state: 'dismissed',
+        failed: true,
+      });
       dispose();
     });
   });
@@ -425,9 +559,9 @@ describe('suggestions feed', () => {
       const feed = createSuggestionsFeed(deps.source, deps.actions);
       await feed.dismiss(composerSuggestion);
 
-      const view = feed.view();
-      if (view.kind !== 'suggestions') throw new Error('expected a feed');
-      expect(view.entries[0]).toMatchObject({ dismissed: false, failed: true });
+      const view = feed.view('today');
+      if (view.kind !== 'rows') throw new Error('expected a feed');
+      expect(view.entries[0]).toMatchObject({ state: 'open', failed: true });
       dispose();
     });
   });
