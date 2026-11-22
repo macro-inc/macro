@@ -1241,9 +1241,9 @@ Computer Claude sign-ins**.
 
 Behind `enable-agent-permissions` (the one flag on agent permissions and the
 JS tools programs they gate; on in local stacks, PostHog on dev and
-production, off when PostHog can't be read), each row in **Your agents** whose
-permissions the API answers (Macro, the persona under the new Macro bot id,
-and agents the viewer manages) has a **Permissions ⌄** button (accessible
+production, off when PostHog can't be read), each row in **Your agents** for
+an agent the viewer manages, and Macro's (the persona under the new Macro bot
+id) when the API answers for it, has a **Permissions ⌄** button (accessible
 name `<Agent>'s permissions`, `aria-expanded`). It expands the agent's tool
 permissions inline under the row, one row at a time; pressing it again
 collapses them. `requestAgentPermissions(agentId, focus?)` (chat cards'
@@ -1251,8 +1251,9 @@ collapses them. `requestAgentPermissions(agentId, focus?)` (chat cards'
 that row expanded, scrolled into view, and the linked tool's or action's
 accordion open. An agent's edit form shows the same component in its
 **Permissions** section between `Who can use it` and `Advanced`, saving on each
-click. The button, the section and a link are absent while the flag is off or
-the API answers 404, and on the create form; an open panel closes when the
+click. The buttons, the section and a link are absent while the flag is off
+(Macro's button and the section also on a 404, and the section on the create
+form); an open panel closes when the
 flag turns off, and a link waits until it is on.
 
 The component is a table, **Action** / **Default permission**, with one
