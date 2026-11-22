@@ -23,7 +23,8 @@ import type { AgentScreenModel } from '../views/shared/agent-screen-model';
 /**
  * The real desktop and phone screen viewers over a stand-in transport that
  * draws a white guest desktop. `?view=desktop|phone|popout`,
- * `?state=watch|drive|other|reconnect|toomany|stopped` (see `capabilities`),
+ * `?state=watch|drive|other|reconnect|toomany|stopped|asleep` (see
+ * `capabilities`),
  * `?width=<px>` for the desktop split, `?theme=dark`.
  */
 const params = new URLSearchParams(location.search);
@@ -78,6 +79,8 @@ function drawGuest(element: HTMLElement) {
 }
 
 let connects = 0;
+/** `?state=asleep`: off until Turn on, then two seconds of boot. */
+let poweredOnAt: number | undefined;
 
 /**
  * The stand-in transport. `?state=reconnect`: live, then the socket drops and
@@ -99,6 +102,19 @@ const capabilities: ScreenCapabilities = {
         });
         handlers.onEnded('error');
         throw new DOMException('refused', 'AbortError');
+      }
+      if (scenario === 'asleep') {
+        const booting =
+          poweredOnAt !== undefined && Date.now() - poweredOnAt < 2500;
+        if (poweredOnAt === undefined || booting) {
+          if (booting)
+            handlers.onError({
+              code: 'tunnelFailed',
+              message: "could not reach the computer's screen",
+            });
+          handlers.onEnded(booting ? 'error' : 'computerOff');
+          throw new DOMException('closed', 'AbortError');
+        }
       }
       if (scenario === 'reconnect' && connects > 1)
         return await new Promise<never>(() => {});
@@ -147,7 +163,17 @@ function Viewer(props: { phone: boolean }) {
     setContainerSize: setSize,
     driverName: () => session.store.server?.driver?.name ?? undefined,
     retry: () => session.retry(),
-    turnOn: () => undefined,
+    // As the route does around the power call.
+    turnOn: () =>
+      scenario === 'asleep'
+        ? () => {
+            session.turningOn();
+            setTimeout(() => {
+              poweredOnAt = Date.now();
+              session.turnedOn();
+            }, 300);
+          }
+        : undefined,
   };
   return (
     <Show when={props.phone} fallback={<AgentScreen model={model} />}>

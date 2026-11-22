@@ -182,6 +182,29 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `toomany-${theme}`);
     });
 
+    test('asleep: Turn on and no Take over; turning on says so through the boot, then live', async ({
+      page,
+    }) => {
+      await open(page, `state=asleep&width=800&theme=${theme}`);
+      await expect(page.getByText('Eve’s computer is asleep')).toBeVisible();
+      await expect(page.getByRole('button', { name: /Take over/ })).toHaveCount(
+        0
+      );
+      await shot(page, `asleep-${theme}`);
+
+      await page.getByRole('button', { name: 'Turn on' }).click();
+      await expect(page.getByText('Turning Eve’s computer on…')).toBeVisible();
+      await shot(page, `turning-on-${theme}`);
+      // The boot's unreachable screen is not a reconnect error.
+      for (let check = 0; check < 8; check++) {
+        await expect(page.getByText('Reconnecting')).toHaveCount(0);
+        await expect(page.getByText(/Couldn’t reach/)).toHaveCount(0);
+        if ((await page.getByRole('status').textContent()) === 'Live') break;
+        await page.waitForTimeout(500);
+      }
+      await expect(page.getByRole('status')).toHaveText('Live');
+    });
+
     test('after Stop watching only View screen again is offered', async ({
       page,
     }) => {
