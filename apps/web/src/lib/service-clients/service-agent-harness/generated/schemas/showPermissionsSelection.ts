@@ -11,7 +11,8 @@ import type { ToolSelection } from './toolSelection';
  * What was shown, resolved.
  */
 export interface ShowPermissionsSelection {
-  /** The groups, each with the actions shown (all five when none were named). */
+  /** The groups, each with the actions shown (every one it has operations
+for when none were named). Only actions some operation has are shown. */
   groups: GroupSelection[];
   /** The operations. */
   tools: ToolSelection[];

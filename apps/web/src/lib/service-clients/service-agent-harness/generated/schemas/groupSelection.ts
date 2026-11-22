@@ -10,7 +10,8 @@ import type { PermissionAction } from './permissionAction';
  * One group, and which of its actions.
  */
 export interface GroupSelection {
-  /** The actions to show; empty or absent shows all five. */
+  /** The actions to show; empty or absent shows every action the group has
+operations for. */
   actions?: PermissionAction[];
   /** A group id, such as `documents` or `email`. */
   group: string;

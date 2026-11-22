@@ -763,7 +763,8 @@ export type AgentToolPermissions = {
      */
     canTighten: boolean;
     /**
-     * Every catalog group with its five actions.
+     * Every catalog group with an operation, with the actions it has
+     * operations for.
      */
     groups: Array<ToolPermissionGroup>;
     /**
@@ -775,7 +776,8 @@ export type AgentToolPermissions = {
      */
     restricted: number;
     /**
-     * The saved settings.
+     * The saved settings, including any on a group's action no operation
+     * has yet (not in `groups`, applied once one does).
      */
     rules: Array<ToolPermissionRule>;
     /**
@@ -2234,7 +2236,8 @@ export type GitRefDto = {
  */
 export type GroupSelection = {
     /**
-     * The actions to show; empty or absent shows all five.
+     * The actions to show; empty or absent shows every action the group has
+     * operations for.
      */
     actions?: Array<PermissionAction>;
     /**
@@ -3288,7 +3291,8 @@ export type ShowPermissionsResult = {
  */
 export type ShowPermissionsSelection = {
     /**
-     * The groups, each with the actions shown (all five when none were named).
+     * The groups, each with the actions shown (every one it has operations
+     * for when none were named). Only actions some operation has are shown.
      */
     groups: Array<GroupSelection>;
     /**
@@ -3570,7 +3574,7 @@ export type ToolPermissionError = {
  */
 export type ToolPermissionGroup = {
     /**
-     * All five actions, in display order.
+     * The actions it has operations for, in display order.
      */
     actions: Array<ToolPermissionAction>;
     /**

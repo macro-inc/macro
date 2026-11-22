@@ -10,7 +10,7 @@ import type { ToolPermissionAction } from './toolPermissionAction';
  * One group, resolved.
  */
 export interface ToolPermissionGroup {
-  /** All five actions, in display order. */
+  /** The actions it has operations for, in display order. */
   actions: ToolPermissionAction[];
   /** The group id. */
   group: string;
