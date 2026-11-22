@@ -379,28 +379,35 @@ impl FidelityWarning {
                 title,
                 count,
             } => {
+                let (noun, verb, links) = if *count == 1 {
+                    ("reference", "was", "a named Notion link")
+                } else {
+                    ("references", "were", "named Notion links")
+                };
                 let explanation = match reason {
                     ReferenceLossReason::NotReviewed => {
-                        "were not reviewed; kept as named Notion links"
+                        format!("{verb} not reviewed; kept as {links}")
                     }
                     ReferenceLossReason::NotImported => {
-                        "were not imported as a database; kept as named Notion links"
+                        format!("{verb} not imported as a database; kept as {links}")
                     }
                     ReferenceLossReason::NoAccess => {
-                        "could not be read; kept as named Notion links"
+                        format!("could not be read; kept as {links}")
                     }
-                    ReferenceLossReason::NotFound => "were not found; kept as named Notion links",
+                    ReferenceLossReason::NotFound => {
+                        format!("{verb} not found; kept as {links}")
+                    }
                     ReferenceLossReason::Unresolved => {
-                        "could not be resolved; kept as named Notion links"
+                        format!("could not be resolved; kept as {links}")
                     }
                     ReferenceLossReason::DefaultTabAssumed => {
-                        "had no selected tab; default tab assumed"
+                        "had no selected tab; default tab assumed".into()
                     }
                     ReferenceLossReason::DefaultView => {
-                        "used the default view because the selected tab was unavailable"
+                        "used the default view because the selected tab was unavailable".into()
                     }
                 };
-                format!("{count} references to database \"{title}\" {explanation}.")
+                format!("{count} {noun} to database \"{title}\" {explanation}.")
             }
             Self::UnmappedPeople {
                 source,
@@ -421,9 +428,16 @@ impl FidelityWarning {
                 option,
                 matched_by,
                 count,
-            } => format!(
-                "{count} values of option \"{option}\" in \"{property}\" were omitted: no reserved option matched by {matched_by}. Rows containing only unmatched options show an empty cell, so views filtering on this column may hide them."
-            ),
+            } => {
+                let (noun, verb) = if *count == 1 {
+                    ("value", "was")
+                } else {
+                    ("values", "were")
+                };
+                format!(
+                    "{count} {noun} of option \"{option}\" in \"{property}\" {verb} omitted: no reserved option matched by {matched_by}. Rows containing only unmatched options show an empty cell, so views filtering on this column may hide them."
+                )
+            }
         }
     }
 }
@@ -699,3 +713,6 @@ mod warning_decode_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod test;
