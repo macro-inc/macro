@@ -81,8 +81,6 @@ fn api_router(api_context: ApiContext) -> Router {
     let onboarding_service = api_context.onboarding_service.clone();
     let authorization_state = api_context.authorization_state.clone();
 
-    let mcp_state = api_context.mcp_state.clone();
-
     let image_generation_state =
         image_generation::inbound::axum_router::ImageGenerationRouterState {
             service: std::sync::Arc::new(
@@ -180,33 +178,29 @@ fn api_router(api_context: ApiContext) -> Router {
             activity_state,
         ))
         .merge(skills::inbound::axum_router::skills_router(skill_state))
-        .merge(connectors::outbound::native::inbound::mcp_router(
-            mcp_state.clone(),
+        .merge(connectors::inbound::axum_router::connectors_router(
+            api_context.connectors_state.clone(),
         ))
-        .merge(
-            connectors::outbound::pipedream::inbound::pipedream_mcp_router(
-                api_context.pipedream_state.clone(),
-            ),
-        )
         .with_state(api_context.clone());
 
-    // Pipedream calls this one itself, so it sits outside the authenticated
-    // router and is guarded by the secret baked into the configured
-    // `webhook_uri`. If the secret is unset, the route is not mounted.
+    // Authorization servers, Macro Connect and Pipedream call these
+    // themselves, at paths registered with them, so they sit outside the
+    // authenticated router. Pipedream's webhook is guarded by the secret
+    // baked into the configured `webhook_uri`; unset, it is not mounted.
     let app = Router::new()
         .nest("/{version}", internal_router.clone())
         .merge(internal_router)
-        .merge(connectors::outbound::native::inbound::mcp_oauth_callback_router(mcp_state))
+        .merge(connectors::inbound::callbacks::callbacks_router(
+            api_context.callbacks_state.clone(),
+        ))
         .merge(granola_sync::inbound::webhook_router(
             api_context.granola_sync.clone(),
-        ))
-        // Macro Connect's consent finishes on this page; it records nothing.
-        .merge(connectors::outbound::pipedream::inbound::pipedream_connect_callback_router());
+        ));
 
     match api_context.config.pipedream_webhook_secret.value() {
-        Some(secret) => app.merge(
-            connectors::outbound::pipedream::inbound::pipedream_webhook_router(secret.to_owned()),
-        ),
+        Some(secret) => app.merge(connectors::inbound::callbacks::pipedream_webhook_router(
+            secret.to_owned(),
+        )),
         None => app,
     }
 }

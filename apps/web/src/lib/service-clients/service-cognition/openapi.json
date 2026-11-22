@@ -1102,6 +1102,485 @@
         }
       }
     },
+    "/connectors": {
+      "get": {
+        "tags": ["connectors"],
+        "summary": "Every app and server the user holds, with where they stand with it. A\nconnection that no longer counts shows as `notConnected`.",
+        "operationId": "list_connectors",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Connector"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["connectors"],
+        "summary": "Add a server by URL, enabled and not yet signed in to. A URL the user\nalready has is answered as it stands. A server at an app's address is\nthat app.",
+        "operationId": "add_connector_server",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddServerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connector"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/catalog": {
+      "get": {
+        "tags": ["connectors"],
+        "summary": "Browse or search the apps the user can connect, most popular first.",
+        "operationId": "browse_connector_catalog",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Filter apps by name; omit to browse.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The cursor from the previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1 to 50 (default 20).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/{kind}/{id}": {
+      "delete": {
+        "tags": ["connectors"],
+        "summary": "Remove a connection, revoking it where its provider can. Removing GitHub\nunlinks the account.",
+        "operationId": "remove_connector",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "`app` or `server`.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConnectorKind"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The app's slug, or the server's URL in unpadded base64url.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["connectors"],
+        "summary": "Turn a connection on or off, or rename it.",
+        "operationId": "update_connector",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "`app` or `server`.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConnectorKind"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The app's slug, or the server's URL in unpadded base64url.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConnectorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/{kind}/{id}/complete": {
+      "post": {
+        "tags": ["connectors"],
+        "summary": "Record the connection the user just finished making, once the connect\npage or dialog is done. Answers 404 until it exists, so it can be polled.\nA server added by URL finishes on its OAuth callback; this answers it as\nit stands.",
+        "operationId": "complete_connector_connect",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "`app` or `server`.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConnectorKind"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The app's slug, or the server's URL in unpadded base64url.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connector"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not connected yet; poll again while the connect page is open",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/{kind}/{id}/connect": {
+      "post": {
+        "tags": ["connectors"],
+        "summary": "Begin connecting an app, or signing in to a server added by URL. Answers\nthe step the user takes next.",
+        "operationId": "start_connector_connect",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "`app` or `server`.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConnectorKind"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The app's slug, or the server's URL in unpadded base64url.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectStep"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/database-query": {
       "post": {
         "tags": ["database_query"],
@@ -1785,213 +2264,16 @@
         }
       }
     },
-    "/mcp/servers": {
-      "get": {
-        "tags": ["mcp"],
-        "summary": "List all MCP servers configured for the authenticated user.",
-        "operationId": "list_mcp_servers",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ServerResponse"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": ["mcp"],
-        "summary": "Update an existing MCP server's name or enabled status.",
-        "operationId": "update_mcp_server",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateServerRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ServerResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": ["mcp"],
-        "summary": "Add a new MCP server for the authenticated user. A URL the user already\nhas is returned as stored, keeping its credentials.",
-        "operationId": "add_mcp_server",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddServerRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ServerResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": ["mcp"],
-        "summary": "Delete an MCP server by URL.",
-        "operationId": "delete_mcp_server",
-        "parameters": [
-          {
-            "name": "url",
-            "in": "query",
-            "description": "The server URL to delete.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": ""
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/mcp/servers/auth/callback": {
       "get": {
-        "tags": ["mcp"],
-        "summary": "OAuth callback endpoint — receives code and state, or an error, from the\nauthorization server.",
-        "operationId": "mcp_auth_callback",
+        "tags": ["connectors"],
+        "summary": "Finish signing in to a server by URL: the authorization server redirects\nthe browser here with a code or an error.",
+        "operationId": "connector_oauth_callback",
         "parameters": [
           {
             "name": "code",
             "in": "query",
-            "description": "Authorization code from the OAuth provider. Present on success.",
+            "description": "The authorization code, on success.",
             "required": false,
             "schema": {
               "type": "string"
@@ -2000,7 +2282,7 @@
           {
             "name": "state",
             "in": "query",
-            "description": "CSRF state parameter.",
+            "description": "The one-time state the flow started with.",
             "required": false,
             "schema": {
               "type": "string"
@@ -2009,7 +2291,7 @@
           {
             "name": "error",
             "in": "query",
-            "description": "OAuth error code from the provider, e.g. `access_denied`. Present on failure.",
+            "description": "The provider's error code, e.g. `access_denied`, on failure.",
             "required": false,
             "schema": {
               "type": "string"
@@ -2018,7 +2300,7 @@
           {
             "name": "error_description",
             "in": "query",
-            "description": "Human-readable error description from the provider.",
+            "description": "The provider's description of the error.",
             "required": false,
             "schema": {
               "type": "string"
@@ -2027,10 +2309,10 @@
         ],
         "responses": {
           "200": {
-            "description": "OAuth flow completed successfully"
+            "description": "Signed in"
           },
           "400": {
-            "description": "Provider rejected authorization, or the callback was malformed",
+            "description": "The provider refused, or the redirect was malformed",
             "content": {
               "application/json": {
                 "schema": {
@@ -2054,61 +2336,12 @@
     },
     "/mcp/servers/auth/client-metadata": {
       "get": {
-        "tags": ["mcp"],
-        "summary": "Return Macro's public OAuth Client ID Metadata Document.",
-        "operationId": "mcp_oauth_client_metadata",
+        "tags": ["connectors"],
+        "summary": "Macro's public OAuth Client ID Metadata Document.",
+        "operationId": "connector_oauth_client_metadata",
         "responses": {
           "200": {
-            "description": "Macro OAuth client metadata document"
-          }
-        }
-      }
-    },
-    "/mcp/servers/auth/start": {
-      "post": {
-        "tags": ["mcp"],
-        "summary": "Start the OAuth authorization flow for an MCP server.",
-        "operationId": "start_mcp_auth",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StartAuthRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StartAuthResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Macro's OAuth client metadata document"
           }
         }
       }
@@ -2436,566 +2669,6 @@
           },
           "500": {
             "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/catalog": {
-      "get": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Browse or search the catalog of connectable apps.",
-        "description": "Results come from Pipedream's app directory, most popular first.",
-        "operationId": "browse_pipedream_mcp_catalog",
-        "parameters": [
-          {
-            "name": "search",
-            "in": "query",
-            "description": "Search query to filter apps by name. Omit to browse.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque pagination cursor from a previous response.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Page size (default 20, max 50).",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "minimum": 0
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipedreamCatalogResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/complete": {
-      "post": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Register a connected account reported by the Pipedream Connect UI.",
-        "description": "Verifies with Pipedream that the account exists and was connected for\nthe authenticated user before persisting anything. An overlaid app is\nrefused with 409: it connects through its own MCP server instead.",
-        "operationId": "complete_pipedream_mcp_connection",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PipedreamCompleteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/connect/complete": {
-      "post": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Record an app the user connected through Macro Connect.",
-        "description": "Answers 404 until Connect lists an active connection for this user and\napp, so the frontend can poll it while the consent window is open.",
-        "operationId": "complete_pipedream_mcp_connect",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PipedreamConnectCompleteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/connections": {
-      "get": {
-        "tags": ["pipedream-mcp"],
-        "summary": "List the MCP apps connected by the authenticated user.",
-        "operationId": "list_pipedream_mcp_connections",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/PipedreamConnectionResponse"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Rename or enable/disable a connected app.",
-        "operationId": "update_pipedream_mcp_connection",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PipedreamUpdateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Disconnect an app, revoking its Pipedream account.",
-        "operationId": "delete_pipedream_mcp_connection",
-        "parameters": [
-          {
-            "name": "app_slug",
-            "in": "query",
-            "description": "The app slug to disconnect.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": ""
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/overlays": {
-      "get": {
-        "tags": ["pipedream-mcp"],
-        "summary": "List the catalog apps that connect through their own MCP server.",
-        "description": "Clients connect these with the native MCP OAuth flow against\n`server_url`; Pipedream refuses to complete a connection for them.",
-        "operationId": "list_pipedream_mcp_overlays",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/PipedreamOverlayResponse"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/recover": {
-      "post": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Register an account a Connect flow created but the Connect UI never\nreported.",
-        "description": "Called after the Connect UI closes without a success event. Answers 404\nwhen Pipedream has no new account for this user and app.\nAn overlaid app is refused with 409, as in [`complete_connection`].",
-        "operationId": "recover_pipedream_mcp_connection",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PipedreamRecoverRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/token": {
-      "post": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Start a connect flow for the authenticated user.",
-        "description": "By default, a short-lived Pipedream Connect token: the frontend opens\nPipedream's hosted Connect UI with it, and the user picks (or is\ndeep-linked into) an app and authorizes it there. When the body names an\napp Macro Connect serves and the `macro-connect` rollout is on for the\nuser, a Connect URL instead.",
-        "operationId": "create_pipedream_mcp_token",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PipedreamTokenRequest"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipedreamTokenResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
           }
         }
       }
@@ -3623,16 +3296,16 @@
       },
       "AddServerRequest": {
         "type": "object",
-        "description": "Request body for adding a new MCP server.",
-        "required": ["url", "server_name"],
+        "description": "Adding a server by URL.",
+        "required": ["url", "name"],
         "properties": {
-          "server_name": {
+          "name": {
             "type": "string",
-            "description": "Human-readable name for the server."
+            "description": "Its display name; its tools are listed under it."
           },
           "url": {
             "type": "string",
-            "description": "The MCP server's streamable HTTP URL."
+            "description": "The server's streamable HTTP URL."
           }
         }
       },
@@ -3905,6 +3578,58 @@
         "properties": {
           "result": {
             "description": "The tool execution result."
+          }
+        }
+      },
+      "CatalogApp": {
+        "type": "object",
+        "description": "One connectable app.",
+        "required": ["key", "slug", "name", "categories"],
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The directory's categories for it."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "One line on what connecting it enables."
+          },
+          "iconUrl": {
+            "type": ["string", "null"],
+            "description": "Its icon."
+          },
+          "key": {
+            "type": "string",
+            "description": "Its connector key, `app/{slug}`."
+          },
+          "name": {
+            "type": "string",
+            "description": "The display name."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Its canonical slug."
+          }
+        }
+      },
+      "CatalogPage": {
+        "type": "object",
+        "description": "A page of the catalog, most popular first.",
+        "required": ["apps"],
+        "properties": {
+          "apps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogApp"
+            },
+            "description": "The apps, in display order."
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "The cursor for the next page; absent on the last."
           }
         }
       },
@@ -4363,6 +4088,49 @@
           }
         }
       },
+      "ConnectStep": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Open this page in a popup or browser tab. When it closes, call\n`POST /connectors/{kind}/{id}/complete`; it answers 404 until the\nconnection exists, so it can be polled while the page is open.",
+            "required": ["url", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["openUrl"]
+              },
+              "url": {
+                "type": "string",
+                "description": "The page."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Open the embedded connect dialog with this short-lived token. When it\nreports success, call `POST /connectors/{kind}/{id}/complete`.",
+            "required": ["token", "expires_at", "link", "type"],
+            "properties": {
+              "expires_at": {
+                "type": "string",
+                "description": "RFC 3339 expiry of the token."
+              },
+              "link": {
+                "type": "string",
+                "description": "A page that opens the same flow in a browser tab."
+              },
+              "token": {
+                "type": "string",
+                "description": "The token the dialog opens with."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["embeddedDialog"]
+              }
+            }
+          }
+        ],
+        "description": "What the user must do next to connect. It never says whose flow it is."
+      },
       "ConnectedServer": {
         "type": "object",
         "description": "One of the user's MCP server connections, as the setup page sees it.",
@@ -4381,6 +4149,99 @@
             "description": "The server URL."
           }
         }
+      },
+      "Connector": {
+        "type": "object",
+        "description": "One app or server and where the user stands with it. It never says\nwhich provider holds the connection.",
+        "required": [
+          "key",
+          "target",
+          "name",
+          "status",
+          "connectable",
+          "mcp",
+          "api",
+          "importAvailable"
+        ],
+        "properties": {
+          "api": {
+            "type": "boolean",
+            "description": "Whether its connection provides the app's REST API."
+          },
+          "connectable": {
+            "type": "boolean",
+            "description": "Whether the user can connect it from here."
+          },
+          "importAvailable": {
+            "type": "boolean",
+            "description": "Whether Macro can import from it through its connection."
+          },
+          "key": {
+            "type": "string",
+            "description": "The stable key, also its path under `/connectors/`."
+          },
+          "mcp": {
+            "type": "boolean",
+            "description": "Whether its connection provides MCP tools."
+          },
+          "name": {
+            "type": "string",
+            "description": "The display name."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConnectorStatus",
+            "description": "Where the user stands with it."
+          },
+          "target": {
+            "$ref": "#/components/schemas/ConnectorTarget",
+            "description": "What the key names."
+          }
+        }
+      },
+      "ConnectorKind": {
+        "type": "string",
+        "description": "Which kind of connector a key names.",
+        "enum": ["app", "server"]
+      },
+      "ConnectorStatus": {
+        "type": "string",
+        "description": "Where a user stands with an app or server.",
+        "enum": ["connected", "disabled", "needsReauth", "notConnected"]
+      },
+      "ConnectorTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A catalog app.",
+            "required": ["slug", "type"],
+            "properties": {
+              "slug": {
+                "type": "string",
+                "description": "Its canonical slug."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["app"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A server added by URL.",
+            "required": ["url", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["server"]
+              },
+              "url": {
+                "type": "string",
+                "description": "Its normalized URL."
+              }
+            }
+          }
+        ],
+        "description": "What a key names, for display."
       },
       "ConversationRecord": {
         "type": "object",
@@ -6417,198 +6278,6 @@
           }
         }
       },
-      "PipedreamCatalogEntryResponse": {
-        "type": "object",
-        "description": "One connectable app in the catalog.",
-        "required": ["app_slug", "display_name"],
-        "properties": {
-          "app_slug": {
-            "type": "string",
-            "description": "Pipedream app name slug — pass this to the connect flow."
-          },
-          "categories": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Categories assigned by Pipedream."
-          },
-          "description": {
-            "type": ["string", "null"],
-            "description": "One-line description of the app."
-          },
-          "display_name": {
-            "type": "string",
-            "description": "Human-readable name to display."
-          },
-          "icon_url": {
-            "type": ["string", "null"],
-            "description": "URL of the app's icon, when available."
-          }
-        }
-      },
-      "PipedreamCatalogResponse": {
-        "type": "object",
-        "description": "A page of the connector catalog.",
-        "required": ["servers"],
-        "properties": {
-          "next_cursor": {
-            "type": ["string", "null"],
-            "description": "Cursor for the next page. Absent on the last page."
-          },
-          "servers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PipedreamCatalogEntryResponse"
-            },
-            "description": "Catalog entries in display order (most popular first)."
-          }
-        }
-      },
-      "PipedreamCompleteRequest": {
-        "type": "object",
-        "description": "Request body for completing a Pipedream connect flow.",
-        "required": ["account_id"],
-        "properties": {
-          "account_id": {
-            "type": "string",
-            "description": "The connected-account ID reported by the Connect UI on success."
-          },
-          "server_name": {
-            "type": ["string", "null"],
-            "description": "Optional display name for the connector. Defaults to the app's name\nfor new connections; existing connections keep their name."
-          }
-        }
-      },
-      "PipedreamConnectCompleteRequest": {
-        "type": "object",
-        "description": "Request body for recording a finished Macro Connect flow.",
-        "required": ["app_slug"],
-        "properties": {
-          "app_slug": {
-            "type": "string",
-            "description": "The app that was connected, by Pipedream slug."
-          },
-          "server_name": {
-            "type": ["string", "null"],
-            "description": "Optional display name for the connector, as for completion."
-          }
-        }
-      },
-      "PipedreamConnectionResponse": {
-        "type": "object",
-        "description": "A connected MCP app as returned by the API.",
-        "required": ["app_slug", "server_name", "enabled", "provider"],
-        "properties": {
-          "app_slug": {
-            "type": "string",
-            "description": "Pipedream app name slug, e.g. `linear`."
-          },
-          "enabled": {
-            "type": "boolean",
-            "description": "Whether the connector is enabled for tool use."
-          },
-          "provider": {
-            "$ref": "#/components/schemas/PipedreamProviderResponse",
-            "description": "The backend holding the grant."
-          },
-          "server_name": {
-            "type": "string",
-            "description": "Human-readable display name."
-          }
-        }
-      },
-      "PipedreamOverlayResponse": {
-        "type": "object",
-        "description": "A catalog app that connects through its own MCP server instead of\nPipedream.",
-        "required": ["app_slug", "server_url"],
-        "properties": {
-          "app_slug": {
-            "type": "string",
-            "description": "Pipedream app name slug, as it appears in the catalog."
-          },
-          "server_url": {
-            "type": "string",
-            "description": "The MCP server to authorize with the native MCP OAuth flow."
-          }
-        }
-      },
-      "PipedreamProviderResponse": {
-        "type": "string",
-        "description": "Which backend a connection or connect flow uses.",
-        "enum": ["pipedream", "connect"]
-      },
-      "PipedreamRecoverRequest": {
-        "type": "object",
-        "description": "Request body for recovering a connect flow whose result the Connect UI\nnever reported.",
-        "required": ["app_slug"],
-        "properties": {
-          "app_slug": {
-            "type": "string",
-            "description": "The Pipedream app the flow was connecting, by name slug."
-          },
-          "server_name": {
-            "type": ["string", "null"],
-            "description": "Optional display name for the connector, as for completion."
-          }
-        }
-      },
-      "PipedreamTokenRequest": {
-        "type": "object",
-        "description": "Request body for starting a connect flow.",
-        "properties": {
-          "app_slug": {
-            "type": ["string", "null"],
-            "description": "The app to connect, by Pipedream slug. With it, an app Macro Connect\nserves can answer with a Connect URL instead of a Pipedream token."
-          }
-        }
-      },
-      "PipedreamTokenResponse": {
-        "type": "object",
-        "description": "Response from starting a connect flow: a Pipedream Connect token, or for\n`provider = connect` a Macro Connect URL.",
-        "required": ["provider"],
-        "properties": {
-          "connect_link_url": {
-            "type": ["string", "null"],
-            "description": "Shareable link that opens the same connect flow in a browser tab.\nPipedream only."
-          },
-          "connect_url": {
-            "type": ["string", "null"],
-            "description": "URL to open in a popup or browser tab for Macro Connect's consent\nflow; once it finishes, call `/pipedream/mcp/connect/complete`.\nConnect only."
-          },
-          "expires_at": {
-            "type": ["string", "null"],
-            "description": "RFC 3339 expiry of the token. Pipedream only."
-          },
-          "provider": {
-            "$ref": "#/components/schemas/PipedreamProviderResponse",
-            "description": "The backend this flow connects through."
-          },
-          "token": {
-            "type": ["string", "null"],
-            "description": "Short-lived token to open the Pipedream Connect UI with. Pipedream only."
-          }
-        }
-      },
-      "PipedreamUpdateRequest": {
-        "type": "object",
-        "description": "Request body for updating a connected app.",
-        "required": ["app_slug"],
-        "properties": {
-          "app_slug": {
-            "type": "string",
-            "description": "The app slug to update."
-          },
-          "enabled": {
-            "type": ["boolean", "null"],
-            "description": "Enable or disable the connector."
-          },
-          "server_name": {
-            "type": ["string", "null"],
-            "description": "New display name for the connector."
-          }
-        }
-      },
       "Price": {
         "type": "object",
         "description": "Rates applied to an invocation and its resolved dollar cost.",
@@ -6821,29 +6490,6 @@
           "stream_id": {
             "type": "string",
             "description": "The stream ID that will receive the response chunks (same as message_id)"
-          }
-        }
-      },
-      "ServerResponse": {
-        "type": "object",
-        "description": "An MCP server record as returned by the API.",
-        "required": ["url", "server_name", "enabled", "authenticated"],
-        "properties": {
-          "authenticated": {
-            "type": "boolean",
-            "description": "Whether the server has valid stored credentials."
-          },
-          "enabled": {
-            "type": "boolean",
-            "description": "Whether the server is enabled for tool use."
-          },
-          "server_name": {
-            "type": "string",
-            "description": "Human-readable server name."
-          },
-          "url": {
-            "type": "string",
-            "description": "The MCP server URL."
           }
         }
       },
@@ -7081,32 +6727,6 @@
           "name": {
             "type": "string",
             "description": "Display name or Slack handle."
-          }
-        }
-      },
-      "StartAuthRequest": {
-        "type": "object",
-        "description": "Request body for starting an OAuth authorization flow.",
-        "required": ["server_url", "server_name"],
-        "properties": {
-          "server_name": {
-            "type": "string",
-            "description": "Human-readable name for the server."
-          },
-          "server_url": {
-            "type": "string",
-            "description": "The MCP server URL to authorize against."
-          }
-        }
-      },
-      "StartAuthResponse": {
-        "type": "object",
-        "description": "Response from starting an OAuth authorization flow.",
-        "required": ["authorization_url"],
-        "properties": {
-          "authorization_url": {
-            "type": "string",
-            "description": "The OAuth authorization URL to redirect the user to."
           }
         }
       },
@@ -7698,6 +7318,20 @@
           }
         }
       },
+      "UpdateConnectorRequest": {
+        "type": "object",
+        "description": "Changing a connection. Each field present is applied.",
+        "properties": {
+          "enabled": {
+            "type": ["boolean", "null"],
+            "description": "Turn it on or off."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "A new display name."
+          }
+        }
+      },
       "UpdateExplicitMemoryRequest": {
         "type": "object",
         "description": "One explicit memory edit at the revision it was based on.",
@@ -7717,25 +7351,6 @@
       "UpdateOperation": {
         "type": "string",
         "enum": ["add", "remove", "replace"]
-      },
-      "UpdateServerRequest": {
-        "type": "object",
-        "description": "Request body for updating an MCP server.",
-        "required": ["url"],
-        "properties": {
-          "enabled": {
-            "type": ["boolean", "null"],
-            "description": "Enable or disable the server."
-          },
-          "server_name": {
-            "type": ["string", "null"],
-            "description": "New name for the server."
-          },
-          "url": {
-            "type": "string",
-            "description": "The server URL to update."
-          }
-        }
       },
       "UpdateSharePermissionRequestV2": {
         "type": "object",

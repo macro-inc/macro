@@ -9,9 +9,9 @@
 use agent_session::domain::model::AgentSessionId;
 use ai_toolset::actor::ToolActor;
 use async_trait::async_trait;
-use connectors::outbound::native::inbound::toolset::{ConnectMcpServer, ConnectMcpServerResponse};
-use connectors::outbound::pipedream::domain::service::discovery::DiscoveryRequest;
-use connectors::outbound::pipedream::inbound::toolset::DiscoverConnectorsResponse;
+use connectors::inbound::toolset::DiscoverConnectorsResponse;
+use connectors::inbound::toolset::DiscoveryRequest;
+use connectors::inbound::toolset::{ConnectMcpServer, ConnectMcpServerResponse};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};

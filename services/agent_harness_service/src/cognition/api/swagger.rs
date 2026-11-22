@@ -18,15 +18,11 @@ use crate::cognition::model::{
     stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
 };
 use ai_usage::inbound::axum_router::{self as ai_usage_api};
-use connectors::outbound::native::inbound::axum_router::{
-    self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
-    UpdateServerRequest,
-};
-use connectors::outbound::pipedream::inbound::axum_router::{
-    self as pipedream_api, PipedreamCatalogEntryResponse, PipedreamCatalogResponse,
-    PipedreamCompleteRequest, PipedreamConnectCompleteRequest, PipedreamConnectionResponse,
-    PipedreamOverlayResponse, PipedreamProviderResponse, PipedreamRecoverRequest,
-    PipedreamTokenRequest, PipedreamTokenResponse, PipedreamUpdateRequest,
+use connectors::inbound::axum_router::{self as connectors_api};
+use connectors::inbound::callbacks::{self as connectors_callbacks};
+use connectors::inbound::dto::{
+    AddServerRequest, CatalogAppResponse, CatalogPageResponse, ConnectStepResponse, ConnectorKind,
+    ConnectorResponse, ConnectorStatus, ConnectorTarget, UpdateConnectorRequest,
 };
 use image_generation::inbound::axum_router::{self as image_generation_api};
 use import::inbound::axum_router::{self as import_api, RunImportRequest};
@@ -123,22 +119,15 @@ use utoipa::OpenApi;
             onboarding_api::dismiss_prompt_handler,
             ai_usage_api::get_usage_handler,
             ai_usage_api::set_pricing_handler,
-            mcp_api::list_servers,
-            mcp_api::add_server,
-            mcp_api::update_server,
-            mcp_api::delete_server,
-            mcp_api::start_auth,
-            mcp_api::client_metadata,
-            mcp_api::auth_callback,
-            pipedream_api::list_connections,
-            pipedream_api::update_connection,
-            pipedream_api::delete_connection,
-            pipedream_api::create_connect_token,
-            pipedream_api::complete_connection,
-            pipedream_api::recover_connection,
-            pipedream_api::complete_connect,
-            pipedream_api::browse_catalog_handler,
-            pipedream_api::list_overlays
+            connectors_api::list_connectors,
+            connectors_api::add_server,
+            connectors_api::browse_catalog,
+            connectors_api::start_connect,
+            connectors_api::complete_connect,
+            connectors_api::update_connector,
+            connectors_api::remove_connector,
+            connectors_callbacks::oauth_callback,
+            connectors_callbacks::client_metadata
         ),
         components(
             schemas(
@@ -299,25 +288,16 @@ use utoipa::OpenApi;
                 ai_usage::inbound::models::Price,
                 ai_usage::AiFeature,
 
-                // MCP
-                ServerResponse,
+                // Connectors
+                ConnectorResponse,
+                ConnectorTarget,
+                ConnectorStatus,
+                ConnectorKind,
+                ConnectStepResponse,
                 AddServerRequest,
-                UpdateServerRequest,
-                StartAuthRequest,
-                StartAuthResponse,
-
-                // Pipedream MCP connectors
-                PipedreamConnectionResponse,
-                PipedreamUpdateRequest,
-                PipedreamTokenRequest,
-                PipedreamTokenResponse,
-                PipedreamProviderResponse,
-                PipedreamConnectCompleteRequest,
-                PipedreamCompleteRequest,
-                PipedreamRecoverRequest,
-                PipedreamCatalogResponse,
-                PipedreamCatalogEntryResponse,
-                PipedreamOverlayResponse,
+                UpdateConnectorRequest,
+                CatalogPageResponse,
+                CatalogAppResponse,
                 model_error_response::ErrorResponse,
             ),
         ),
