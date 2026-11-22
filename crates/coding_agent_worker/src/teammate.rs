@@ -43,7 +43,7 @@ use engine::{
     volume_name,
 };
 use host::{Platform, can_host, host_report};
-use store::{Lifecycle, Store, StoredInstall};
+use store::{Lifecycle, StopCause, Store, StoredInstall};
 use supervisor::{STOP_GRACE, Supervision, supervise, terminal_failure};
 use teammate_lifecycle::supervisor::{ExitEvent, Phase};
 
@@ -212,6 +212,11 @@ impl TeammateRequest {
 /// refused: its own key is revoked with them, so it can't sync anyway.
 pub const CREDENTIALS_REFUSED_GRACE: Duration = Duration::from_secs(10);
 
+/// How long the credentials must stay refused (a second refusal this long
+/// after the first, none accepted between) before the teammates stop: one
+/// refusal can be a passing auth or proxy failure.
+pub const REFUSAL_PERSISTS: Duration = Duration::from_secs(10);
+
 /// The teammates this macrod hosts. Requests are handled one at a time, in
 /// order; dropping it stops supervising (the containers keep running).
 pub struct Teammates<EngineImpl: Engine> {
@@ -240,6 +245,7 @@ enum Work {
     Request(TeammateRequest),
     Resume,
     CredentialsRefused,
+    CredentialsAccepted,
 }
 
 impl<EngineImpl: Engine> Teammates<EngineImpl> {
@@ -461,6 +467,12 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
         let _ = self.requests.send(Work::CredentialsRefused);
     }
 
+    /// The service accepted this machine's harness credentials (a runtime
+    /// dial went through): run again what a refusal stopped.
+    pub fn credentials_accepted(&self) {
+        let _ = self.requests.send(Work::CredentialsAccepted);
+    }
+
     /// State changes from now on.
     pub fn subscribe(&self) -> broadcast::Receiver<Status> {
         self.shared.statuses.subscribe()
@@ -552,12 +564,29 @@ async fn manage<EngineImpl: Engine>(
 ) {
     // Dropped with the manager: dropping [`Teammates`] stops supervising.
     let mut supervisors: HashMap<TeammateInstallId, AbortOnDropHandle<()>> = HashMap::new();
+    // The first refusal since the credentials were last accepted.
+    let mut refused_since: Option<tokio::time::Instant> = None;
     while let Some(work) = queue.recv().await {
         match work {
             Work::Resume => resume(&shared, &mut supervisors),
             Work::CredentialsRefused => {
-                let span = tracing::info_span!("teammate.credentials_refused");
-                stop_all(&shared, &mut supervisors).instrument(span).await;
+                let now = tokio::time::Instant::now();
+                let first = *refused_since.get_or_insert(now);
+                let persists = now.duration_since(first) >= REFUSAL_PERSISTS;
+                let span = tracing::info_span!("teammate.credentials_refused", persists);
+                if persists {
+                    stop_all(&shared, &mut supervisors).instrument(span).await;
+                } else {
+                    span.in_scope(|| {
+                        tracing::warn!("the service refused this machine's credentials; stopping its teammates if it still does in {REFUSAL_PERSISTS:?}");
+                    });
+                }
+            }
+            Work::CredentialsAccepted => {
+                refused_since = None;
+                let span = tracing::info_span!("teammate.credentials_accepted");
+                let _entered = span.enter();
+                start_refused(&shared, &mut supervisors);
             }
             Work::Request(TeammateRequest::Run {
                 install,
@@ -664,6 +693,7 @@ async fn run<EngineImpl: Engine>(
     let kept = shared.store.read(&id).ok().flatten();
     let lifecycle = Lifecycle {
         update: None,
+        stopped_for: None,
         ..kept.map(|kept| kept.lifecycle).unwrap_or_default()
     };
     let stored = StoredInstall {
@@ -715,6 +745,7 @@ async fn stop<EngineImpl: Engine>(
             requested: true,
         };
         kept.lifecycle.policy.exited(stop, chrono::Utc::now());
+        kept.lifecycle.stopped_for = None;
         if let Err(error) = shared.store.save_lifecycle(&kept.install, &kept.lifecycle) {
             tracing::warn!(error = ?error, "could not keep the teammate's stop");
         }
@@ -776,6 +807,7 @@ async fn stop_all<EngineImpl: Engine>(
             requested: true,
         };
         kept.lifecycle.policy.exited(stop, chrono::Utc::now());
+        kept.lifecycle.stopped_for = Some(StopCause::CredentialsRefused);
         if let Err(error) = shared.store.save_lifecycle(&kept.install, &kept.lifecycle) {
             tracing::warn!(error = ?error, "could not keep the teammate's stop");
         }
@@ -789,6 +821,40 @@ async fn stop_all<EngineImpl: Engine>(
             }
         }
         shared.report(&kept.install, TeammateRunState::Stopped);
+    }
+}
+
+/// Run again each kept install macrod stopped because its credentials
+/// were refused, as its delivery came (the service stops any it no longer
+/// wants here).
+fn start_refused<EngineImpl: Engine>(
+    shared: &Arc<Shared<EngineImpl>>,
+    supervisors: &mut HashMap<TeammateInstallId, AbortOnDropHandle<()>>,
+) {
+    if !shared.usable_host() {
+        return;
+    }
+    for mut stored in shared.store.installs() {
+        let id = stored.install.install_id.clone();
+        if supervisors.contains_key(&id)
+            || stored.lifecycle.stopped_for != Some(StopCause::CredentialsRefused)
+        {
+            continue;
+        }
+        stored.lifecycle.stopped_for = None;
+        if let Err(error) = shared
+            .store
+            .save_lifecycle(&stored.install, &stored.lifecycle)
+        {
+            tracing::warn!(error = ?error, "could not keep the teammate's lifecycle");
+            continue;
+        }
+        tracing::info!(
+            install_id = id.as_str(),
+            "running a teammate stopped for refused credentials again"
+        );
+        let handle = spawn_supervisor(shared, stored, false);
+        supervisors.insert(id, handle);
     }
 }
 

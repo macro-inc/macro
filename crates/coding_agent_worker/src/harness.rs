@@ -68,6 +68,18 @@ pub fn credentials_refused(teammates: Option<&std::sync::Arc<HostTeammates>>) {
     match **teammates {}
 }
 
+/// The service accepted this machine's harness credentials: run again the
+/// teammates a refusal stopped.
+pub fn credentials_accepted(teammates: Option<&std::sync::Arc<HostTeammates>>) {
+    let Some(teammates) = teammates else {
+        return;
+    };
+    #[cfg(unix)]
+    teammates.credentials_accepted();
+    #[cfg(not(unix))]
+    match **teammates {}
+}
+
 /// The teammates to serve on one connection, with the engine check made
 /// before its dial.
 pub type TeammateHosting = (Arc<HostTeammates>, TeammateHostReport);

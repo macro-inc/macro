@@ -53,6 +53,14 @@ pub struct CredentialsRefused {
     what: &'static str,
 }
 
+impl CredentialsRefused {
+    /// Whether the credentials themselves were refused (401: invalid,
+    /// expired or revoked), not a claim or scope they carried (403).
+    pub fn revoked(&self) -> bool {
+        self.status == reqwest::StatusCode::UNAUTHORIZED
+    }
+}
+
 /// Map the harness's current team grants onto its webhook workspace scope.
 pub fn stream_scope(harness: &Harness) -> WebhookScope {
     if harness.shared_team_ids.is_empty() {

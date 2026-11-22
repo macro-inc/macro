@@ -2062,7 +2062,41 @@ async fn a_stop_whose_deletion_failed_is_not_started_by_a_restarted_macrod() {
     assert_eq!(fixture.engine.runs(), 1);
 }
 
-#[tokio::test]
+/// Refuse the credentials twice, the persistence apart, as an unpaired
+/// machine's checks do.
+async fn refuse_for_good(teammates: &Teammates<FakeEngine>) {
+    teammates.credentials_refused();
+    tokio::time::sleep(super::REFUSAL_PERSISTS).await;
+    teammates.credentials_refused();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_refusal_that_doesnt_persist_stops_nothing() {
+    // A blip: refused, refused again too soon, then accepted.
+    let mut fixture = fixture().await;
+    fixture.teammates.handle(run_request(1));
+    next_states(&mut fixture.statuses, 3).await;
+
+    fixture.teammates.credentials_refused();
+    tokio::time::sleep(super::REFUSAL_PERSISTS / 2).await;
+    fixture.teammates.credentials_refused();
+    fixture.teammates.credentials_accepted();
+    tokio::time::sleep(super::REFUSAL_PERSISTS).await;
+    // Accepted in between: the next refusal starts the wait over.
+    fixture.teammates.credentials_refused();
+    tokio::time::sleep(super::REFUSAL_PERSISTS / 2).await;
+
+    assert!(fixture.statuses.try_recv().is_err());
+    assert!(
+        !fixture
+            .engine
+            .calls()
+            .iter()
+            .any(|call| matches!(call, Call::Stop(..)))
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn refused_harness_credentials_stop_every_teammate_and_keep_its_data() {
     // The machine was unpaired: its agents' keys are revoked, so they stop
     // now rather than at the service's next (never coming) stop.
@@ -2071,7 +2105,7 @@ async fn refused_harness_credentials_stop_every_teammate_and_keep_its_data() {
     next_states(&mut fixture.statuses, 3).await;
     let before = fixture.engine.calls().len();
 
-    fixture.teammates.credentials_refused();
+    refuse_for_good(&fixture.teammates).await;
 
     assert_eq!(
         next_states(&mut fixture.statuses, 1).await,
@@ -2113,6 +2147,89 @@ async fn refused_harness_credentials_stop_every_teammate_and_keep_its_data() {
         next_states(&mut statuses, 1).await,
         [TeammateRunState::Stopped]
     );
+    assert_eq!(fixture.engine.runs(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn refused_then_accepted_credentials_run_the_agents_again() {
+    // A passing refusal (an auth blip): the next accepted dial brings back
+    // what it stopped. The service still stops any it no longer wants.
+    let mut fixture = fixture().await;
+    fixture.teammates.handle(run_request(1));
+    next_states(&mut fixture.statuses, 3).await;
+    refuse_for_good(&fixture.teammates).await;
+    assert_eq!(
+        next_states(&mut fixture.statuses, 1).await,
+        [TeammateRunState::Stopped]
+    );
+
+    fixture.teammates.credentials_accepted();
+
+    assert_eq!(
+        next_states(&mut fixture.statuses, 3).await,
+        [
+            TeammateRunState::Downloading,
+            TeammateRunState::Starting,
+            TeammateRunState::Running
+        ]
+    );
+    assert_eq!(fixture.engine.runs(), 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn agents_stopped_for_refused_credentials_come_back_after_a_restart_once_accepted() {
+    let mut fixture = fixture().await;
+    fixture.teammates.handle(run_request(1));
+    next_states(&mut fixture.statuses, 3).await;
+    refuse_for_good(&fixture.teammates).await;
+    next_states(&mut fixture.statuses, 1).await;
+
+    let restarted_macrod = Teammates::new(
+        fixture.engine.clone(),
+        fixture.store.clone(),
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    );
+    let mut statuses = restarted_macrod.subscribe();
+    restarted_macrod.detect().await;
+    // Down until a dial is accepted: an unpaired machine never gets one.
+    assert_eq!(
+        next_states(&mut statuses, 1).await,
+        [TeammateRunState::Stopped]
+    );
+    assert_eq!(fixture.engine.runs(), 1);
+
+    restarted_macrod.credentials_accepted();
+
+    assert_eq!(
+        next_states(&mut statuses, 3).await,
+        [
+            TeammateRunState::Downloading,
+            TeammateRunState::Starting,
+            TeammateRunState::Running
+        ]
+    );
+    assert_eq!(fixture.engine.runs(), 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_operator_stop_is_never_resumed_by_accepted_credentials() {
+    let mut fixture = fixture().await;
+    fixture.teammates.handle(run_request(1));
+    next_states(&mut fixture.statuses, 3).await;
+    // Kept after the stop (its volumes couldn't be removed).
+    fixture.engine.state().volume_removal_fails = true;
+    fixture.teammates.handle(stop_request(1));
+    assert_eq!(
+        next_states(&mut fixture.statuses, 1).await,
+        [TeammateRunState::Stopped]
+    );
+
+    fixture.teammates.credentials_accepted();
+    tokio::time::sleep(Duration::from_secs(60)).await;
+
+    assert!(fixture.statuses.try_recv().is_err());
     assert_eq!(fixture.engine.runs(), 1);
 }
 

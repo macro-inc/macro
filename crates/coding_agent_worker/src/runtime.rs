@@ -157,6 +157,7 @@ async fn serve(
         match dialed {
             Ok(Ok(channel)) => {
                 connected.send_replace(true);
+                harness::credentials_accepted(teammates.as_ref());
                 tracing::info!(adopted = adopted.is_some(), "harness bridge starting");
                 let started = Instant::now();
                 match harness::bridge(
@@ -280,14 +281,15 @@ fn worth_redialing(error: &tungstenite::Error) -> bool {
         || status == tungstenite::http::StatusCode::TOO_MANY_REQUESTS
 }
 
-/// Whether the gateway refused the harness's credentials.
-fn credentials_refused(error: &tungstenite::Error) -> bool {
-    let tungstenite::Error::Http(response) = error else {
-        return false;
-    };
+/// Whether the gateway refused the harness's credentials: a 401, which it
+/// answers for an invalid, expired or revoked harness token. Its 403 is
+/// for an acting-user or scope claim the dial doesn't make, so one is from
+/// something in between, not the credentials.
+pub(crate) fn credentials_refused(error: &tungstenite::Error) -> bool {
     matches!(
-        response.status(),
-        tungstenite::http::StatusCode::UNAUTHORIZED | tungstenite::http::StatusCode::FORBIDDEN
+        error,
+        tungstenite::Error::Http(response)
+            if response.status() == tungstenite::http::StatusCode::UNAUTHORIZED
     )
 }
 

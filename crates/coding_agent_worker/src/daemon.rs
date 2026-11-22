@@ -220,7 +220,7 @@ impl Daemon {
                     ServeOutcome::Ended { error, lasted } => {
                         if error
                             .downcast_current_context::<crate::outbound::stream::CredentialsRefused>()
-                            .is_some()
+                            .is_some_and(crate::outbound::stream::CredentialsRefused::revoked)
                         {
                             crate::harness::credentials_refused(teammates.as_ref());
                         }

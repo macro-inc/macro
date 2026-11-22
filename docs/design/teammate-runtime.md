@@ -415,11 +415,18 @@ addresses, as it gives a local Macro computer. Production never sets it.
   running is adopted, never recreated. A container that is gone, or exited
   while macrod was down, is started again.
 - **Unpaired or removed machine.** When the service refuses macrod's
-  harness credentials (the runtime dial, or the bound-agent check every 10
-  seconds, answers 401 or 403), macrod stops every teammate it runs and its
-  holder at once, with 10 seconds' grace (the agent's key went with the
-  machine's), keeps the volumes and the kept install for a later move or
-  stop, and reports `stopped`. A restarted macrod doesn't start them again.
+  harness credentials (a 401 from the runtime dial or from the bound-agent
+  check the trigger stream makes every 10 seconds and at each reopen; a 403
+  is a claim's, not the credentials'), and still refuses them at least 10
+  seconds later with none accepted between, macrod stops every teammate it
+  runs and its holder, with 10 seconds' grace (the agent's key went with
+  the machine's). It keeps the volumes and the kept install, records why,
+  and reports `stopped`. From the unpair that takes up to about 40 seconds:
+  up to 10 to notice, a second refusal 10 to 20 later (the stream's reopen
+  backoff), then the grace. The next accepted runtime dial, in this macrod
+  or a restarted one, runs them again (the service stops any it no longer
+  wants there); an unpaired machine is never accepted, so its agents stay
+  down. A stop the service asked for is never undone.
 - **Crash loop.** Failed exits (not 0, not 75) restart with a backoff from
   2 to 60 seconds, for as long as they keep failing; macrod never gives up
   on a generation by itself. `crashLoop` is only the reason an image update

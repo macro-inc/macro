@@ -116,9 +116,11 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   never an open start; a host with no default route is `failed:
   egressBlocked`; both are parked after five tries and retried up to 10
   minutes apart (`supervisor.rs`); a holder exit is a crash; adoption reads
-  the policy back (and isn't checked for routes). Refused harness credentials
-  (runtime dial or stream 401/403) stop every teammate and its holder, keeping
-  volumes and the kept install (`Teammates::credentials_refused`). `[teammates] engine` (`auto` probes, falling through to the next
+  the policy back (and isn't checked for routes). Harness credentials refused twice at least
+  `REFUSAL_PERSISTS` (10 s) apart (runtime dial or stream 401) stop every teammate and its holder, keeping
+  volumes and the kept install, stopped for `credentialsRefused`
+  (`Teammates::credentials_refused`); the next accepted dial runs those
+  again (`credentials_accepted`). `[teammates] engine` (`auto` probes, falling through to the next
   engine) and `[[teammates.allow]]` are in `config.rs`. `[macro]
   teammate_network` (local stack only) makes the holder join the stack's
   network and allows just the service host:port pairs in the agent's

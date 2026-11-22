@@ -46,6 +46,19 @@ pub struct Lifecycle {
     /// This delivery's image update, once its image was fetched.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update: Option<ImageUpdate<TeammateImage>>,
+    /// Why macrod stopped it by itself; none for a stop the service asked
+    /// for, which nothing undoes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stopped_for: Option<StopCause>,
+}
+
+/// Why macrod stopped an install without being asked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StopCause {
+    /// The service refused the machine's harness credentials: run again
+    /// on the next accepted dial (an unpaired machine never gets one).
+    CredentialsRefused,
 }
 
 /// The install store of one harness.

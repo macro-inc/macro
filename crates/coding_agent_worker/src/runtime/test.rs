@@ -138,6 +138,12 @@ fn retry_policy_distinguishes_temporary_refusals_from_invalid_credentials() {
                 .unwrap(),
         ));
         assert_eq!(worth_redialing(&error), retry, "HTTP {status}");
+        // Only a 401 is the credentials: the gateway's 403 is a claim's.
+        assert_eq!(
+            super::credentials_refused(&error),
+            status == 401,
+            "HTTP {status}"
+        );
     }
     assert!(worth_redialing(&tungstenite::Error::ConnectionClosed));
     assert!(worth_redialing(&tungstenite::Error::Io(
