@@ -141,26 +141,54 @@ async function cacheOpened(host: CacheHost): Promise<boolean> {
   return host.isReady?.() ?? true;
 }
 
+/** Sessions whose rows are read again once the opening cache engine opens. */
+const awaitingCacheOpen = new Set<string>();
+let reread: Promise<void> | undefined;
+
 /**
  * Read the rows again once the cache engine has opened. A row read while it
  * opens is written only when it opens (or not at all, while a replaced engine
  * is awaited), in line with the writes of lists that loaded meanwhile from
  * responses fetched before the change; until the next write, such a list can
  * show the old row (a rename seconds after page load). The second read lands
- * after them. It runs after its pass, so a slow open never holds later passes,
- * and gives up if the engine has not opened in {@link CACHE_OPEN_WAIT_MS}.
+ * after them.
+ *
+ * It runs beside the queue, so a slow open never holds later passes: one
+ * reread collects every session changed while the engine opens, waits for it
+ * once (giving up after {@link CACHE_OPEN_WAIT_MS}), then for the pass in
+ * flight, and queues the sessions again if a read fails.
  */
 function rereadSessionRowsWhenCacheOpens(
   parent: Span,
   host: CacheHost,
   sessions: string[]
-): Promise<void> {
-  return parent.span('agent_session.row_reread', async (span) => {
-    span.setAttr('agent_session.count', sessions.length);
-    const ready = await cacheOpened(host);
-    span.setAttr('graphql_cache.ready', ready);
-    if (ready) await readSessionRows(span, sessions);
+): void {
+  for (const session of sessions) awaitingCacheOpen.add(session);
+  if (reread) return;
+  reread = parent.span('agent_session.row_reread', async (span) => {
+    try {
+      const ready = await cacheOpened(host);
+      span.setAttr('graphql_cache.ready', ready);
+      if (ready) await pending;
+      const rows = [...awaitingCacheOpen];
+      awaitingCacheOpen.clear();
+      span.setAttr('agent_session.count', rows.length);
+      if (!ready) return;
+      try {
+        await readSessionRows(span, rows);
+      } catch (error) {
+        span.error(error);
+        for (const session of rows)
+          fireAndForget(
+            refreshAgentSessionLists(session),
+            'agent-session-lists'
+          );
+      }
+    } finally {
+      reread = undefined;
+    }
   });
+  fireAndForget(reread, 'agent-session-row-reread');
 }
 
 /**
@@ -184,10 +212,7 @@ function refreshBatch(sessions: string[], attempt: number): Promise<void> {
       );
       await readSessionRows(span, sessions);
       if (opening && host)
-        fireAndForget(
-          rereadSessionRowsWhenCacheOpens(span, host, sessions),
-          'agent-session-row-reread'
-        );
+        rereadSessionRowsWhenCacheOpens(span, host, sessions);
     } catch (error) {
       span.error(error);
       throw error;

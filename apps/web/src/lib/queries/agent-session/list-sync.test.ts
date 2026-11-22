@@ -215,6 +215,7 @@ it('reads the rows again once a still-opening cache engine opens', async () => {
 });
 
 it('does not hold later passes while the cache engine opens', async () => {
+  vi.useFakeTimers();
   mocks.host.mockReturnValue({
     isReady: () => false,
     whenReady: () => new Promise<void>(() => {}),
@@ -224,6 +225,52 @@ it('does not hold later passes while the cache engine opens', async () => {
   expect(mocks.rest.mock.calls.map(([ids]) => ids)).toEqual([
     ['first'],
     ['second'],
+  ]);
+  // Let the waiting reread give up, so it does not outlive this test.
+  await vi.advanceTimersByTimeAsync(CACHE_OPEN_WAIT_MS);
+});
+
+function openingHost() {
+  let open = () => {};
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  let ready = false;
+  mocks.host.mockReturnValue({ isReady: () => ready, whenReady: () => opened });
+  return () => {
+    ready = true;
+    open();
+  };
+}
+
+it('reads every session changed while the engine opens in one reread', async () => {
+  const open = openingHost();
+  await refreshAgentSessionLists('first');
+  await refreshAgentSessionLists('second');
+  open();
+  await vi.waitFor(() => expect(mocks.row).toHaveBeenCalledTimes(4));
+  for (let tick = 0; tick < 10; tick++) await Promise.resolve();
+  expect(mocks.row).toHaveBeenCalledTimes(4);
+  const rereads = mocks.spans.filter(
+    ({ name }) => name === 'agent_session.row_reread'
+  );
+  expect(rereads).toEqual([
+    expect.objectContaining({
+      attrs: expect.objectContaining({ 'agent_session.count': 2 }),
+    }),
+  ]);
+});
+
+it('queues the sessions again when the reread fails', async () => {
+  const open = openingHost();
+  await refreshAgentSessionLists('first');
+  mocks.row.mockRejectedValueOnce(new Error('primary unavailable'));
+  open();
+  // The failed reread queues a pass, which reads the row once more.
+  await vi.waitFor(() => expect(mocks.row).toHaveBeenCalledTimes(3));
+  expect(mocks.rest.mock.calls.map(([ids]) => ids)).toEqual([
+    ['first'],
+    ['first'],
   ]);
 });
 
