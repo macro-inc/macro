@@ -91,6 +91,13 @@ where
     /// server redirected back with, and store the grant. The OAuth callback
     /// route calls this.
     #[tracing::instrument(skip_all, err)]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the inbound OAuth callback route calls this in the next step; remove this then"
+        )
+    )]
     pub(crate) async fn complete_authorization(
         &self,
         code: &str,

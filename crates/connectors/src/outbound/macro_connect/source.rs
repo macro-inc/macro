@@ -75,13 +75,6 @@ pub(crate) struct ConnectSource {
 
 impl ConnectSource {
     /// A source over `vendor` and the Connect rows of `repo`.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "composition.rs builds the sources in the next step; remove this then"
-        )
-    )]
     pub(crate) fn new(
         vendor: Arc<dyn ConnectVendor>,
         repo: HostedRepo,

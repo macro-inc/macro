@@ -23,13 +23,6 @@ pub(crate) struct PgOverlayCatalog {
 
 impl PgOverlayCatalog {
     /// The overlay table in `pool`.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "composition.rs builds the sources in the next step; remove this then"
-        )
-    )]
     pub(crate) fn new(pool: PgPool) -> Self {
         Self {
             pool,

@@ -79,13 +79,6 @@ pub(crate) struct HostedRepo {
 
 impl HostedRepo {
     /// The rows of `provider`.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "composition.rs builds the sources in the next step; remove this then"
-        )
-    )]
     pub(crate) fn new(pool: PgPool, provider: Provider) -> Self {
         Self { pool, provider }
     }

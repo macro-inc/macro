@@ -33,6 +33,10 @@ and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
   reader of the `macro-connect` flag (one per-user cache; a failed read is
   off). Tool loading answers without a source whose store is down; listing
   and API lookups fail instead.
+- `src/composition.rs`: `build(config, pool, redis, auth_service)`, the only
+  place the sources, the overlay catalog and the flag reader are constructed.
+  Call it once per process; the flag, overlay and Connect catalog caches live
+  in what it returns.
 - `src/fake.rs` (feature `test-fakes`): `FakeConnectors`, the real services
   over in-memory sources, for consumers' tests. Use it instead of a
   hand-written fake store.

@@ -161,13 +161,6 @@ pub(crate) struct PipedreamSource {
 
 impl PipedreamSource {
     /// A source over `vendor` and the Pipedream rows of `repo`.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "composition.rs builds the sources in the next step; remove this then"
-        )
-    )]
     pub(crate) fn new(
         vendor: Arc<dyn PipedreamVendor>,
         repo: HostedRepo,

@@ -18,6 +18,7 @@ use mcp_toolset::RemoteMcpToolSet;
 use std::collections::HashSet;
 use std::pin::Pin;
 
+pub mod composition;
 pub mod domain;
 #[cfg(any(test, feature = "test-fakes"))]
 pub mod fake;

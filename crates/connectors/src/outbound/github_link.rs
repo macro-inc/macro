@@ -27,13 +27,6 @@ use rootcause::compat::IntoRootcause as _;
 use std::sync::Arc;
 use url::Url;
 
-#[cfg_attr(
-    test,
-    expect(
-        dead_code,
-        reason = "composition.rs constructs it in the next step; remove this then"
-    )
-)]
 pub(crate) mod auth_service;
 
 #[cfg(test)]
