@@ -1,7 +1,12 @@
+import {
+  SoupBackfillDocument,
+  SoupMailBackfillDocument,
+} from '@service-storage/graphql/generated/graphql';
 import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
 import fc from 'fast-check';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { match } from 'ts-pattern';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_SOUP_BACKFILL_LANES,
   loadSoupBackfillCheckpoint,
@@ -9,6 +14,7 @@ import {
   type SoupBackfillParams,
 } from './backfill';
 import { soupBackfillCheckpointKey } from './backfill-contract';
+import { installBrowserLocks } from './browser-locks.test-helpers';
 
 vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
 vi.mock('../contacts/top-up', () => ({ useContactTopUp: () => {} }));
@@ -30,7 +36,7 @@ type FetchPage = NonNullable<SoupBackfillParams['fetchPage']>;
 type Input = Parameters<FetchPage>[0];
 
 /** How a newer build differs from the shipped lanes in one lane. */
-type LaneChange = 'same' | 'filter' | 'version' | 'recency';
+type LaneChange = 'same' | 'filter' | 'operation' | 'version' | 'recency';
 
 const LANE_COUNT = DEFAULT_SOUP_BACKFILL_LANES.length;
 
@@ -38,25 +44,34 @@ function changeLane(
   lane: SoupBackfillParams,
   change: LaneChange
 ): SoupBackfillParams {
-  switch (change) {
-    case 'same':
-      return lane;
-    case 'filter':
-      return {
-        ...lane,
-        input: {
-          ...lane.input,
-          filters: {
-            ...lane.input.filters,
-            teamFilter: { literal: { id: 'newer-build' } },
-          } as SoupBackfillParams['input']['filters'],
-        },
-      };
-    case 'version':
-      return { ...lane, contractVersion: (lane.contractVersion ?? 0) + 1 };
-    case 'recency':
-      return { ...lane, emailRecency: [{ signal: false, days: 7 }] };
-  }
+  return match(change)
+    .with('same', () => lane)
+    .with('filter', () => ({
+      ...lane,
+      input: {
+        ...lane.input,
+        filters: {
+          ...lane.input.filters,
+          teamFilter: { literal: { id: 'newer-build' } },
+        } as SoupBackfillParams['input']['filters'],
+      },
+    }))
+    .with('operation', () => ({
+      ...lane,
+      operation:
+        lane.operation === SoupBackfillDocument
+          ? SoupMailBackfillDocument
+          : SoupBackfillDocument,
+    }))
+    .with('version', () => ({
+      ...lane,
+      contractVersion: (lane.contractVersion ?? 0) + 1,
+    }))
+    .with('recency', () => ({
+      ...lane,
+      emailRecency: [{ signal: false, days: 7 }],
+    }))
+    .exhaustive();
 }
 
 type Action =
@@ -100,21 +115,38 @@ const actionArb: fc.Arbitrary<Action> = fc.oneof(
   }
 );
 
+/** Runs that resumed a cursor the other build saved, by lane and direction:
+ * `forward` is the newer build resuming the shipped one, `back` the reverse. */
+type Resumes = Map<`${number}:${'forward' | 'back'}`, number>;
+
+/** What the model last saw saved under one checkpoint key. */
+type Saved = {
+  generation: number;
+  cursor: string | null;
+  completed: boolean;
+  build: 0 | 1;
+  saves: number;
+};
+
 /**
  * Two builds against one cache: the shipped lanes, and a newer build with some
  * lanes changed. The server answers what a lane asks for, not its contract
  * hash: each changed lane has pages of its own, and a cursor names the lane
- * request that issued it, so a key that lets one request resume or trust
- * another's progress is caught even when the contract misses the change.
- * After every action, each saved checkpoint at the current storage generation
- * must vouch only for pages that generation holds, as a freshly built cache's
- * would.
+ * request that issued it. The model keeps its own record of every save, so it
+ * knows what each run must send without asking the code under test:
+ * - a run's first request resumes the cursor last saved under its key in the
+ *   current storage generation, or starts a fresh pass when there is none, the
+ *   pass completed, or the lane restarts every run;
+ * - no run saves over a save made after its own request, as an older cursor
+ *   written over newer progress would;
+ * - every saved checkpoint at the current generation vouches only for pages
+ *   that generation holds, as a freshly built cache's would.
  */
 async function replay(
   changes: readonly LaneChange[],
   pageCounts: readonly number[],
   actions: readonly Action[],
-  stats: { crossBuildResumes: number }
+  resumes: Resumes
 ) {
   localStorage.clear();
   let generation = 0;
@@ -137,40 +169,49 @@ async function replay(
   const pagesOf = (build: 0 | 1, laneIndex: number) =>
     pageCounts[laneIndex] +
     (build === 1 && changes[laneIndex] !== 'same' ? 1 : 0);
-  const lastSaver = new Map<string, 0 | 1>();
+  const saved = new Map<string, Saved>();
   const host = { currentStorageGeneration: async () => `g${generation}` };
 
   const runLane = async (
     build: 0 | 1,
     laneIndex: number,
     budget: number,
-    { resetOnFetch = false, checkResume = true } = {}
+    { resetOnFetch = false } = {}
   ) => {
     const lane = builds[build][laneIndex];
     const request = requestOf(build, laneIndex);
     const key = soupBackfillCheckpointKey('user-1', lane);
-    const before = loadSoupBackfillCheckpoint('user-1', lane);
-    // Two runners started together each resume whatever the other saved
-    // last, so only a runner alone must resume the cursor seen before it.
-    const expectResume =
-      checkResume &&
-      before.storageGeneration === `g${generation}` &&
-      before.nextCursor !== null &&
-      lane.restartOnRun !== true;
     let fetched = 0;
     let interrupted = false;
+    let savesAtRequest = 0;
     const fetchPage: FetchPage = async (input: Input) => {
+      const continuation = 'continuation' in input ? input.continuation : null;
+      const last = saved.get(key);
+      savesAtRequest = last?.saves ?? 0;
+      if (fetched === 0) {
+        const expected =
+          last &&
+          last.generation === generation &&
+          !last.completed &&
+          lane.restartOnRun !== true
+            ? last.cursor
+            : null;
+        const sent = continuation?.cursor ?? null;
+        if (sent !== expected) {
+          violations.push(
+            `${key} sent ${sent ?? 'a fresh pass'} where ${expected ?? 'a fresh pass'} was due`
+          );
+        } else if (sent !== null && last && last.build !== build) {
+          const direction = build === 1 ? 'forward' : 'back';
+          resumes.set(
+            `${laneIndex}:${direction}`,
+            (resumes.get(`${laneIndex}:${direction}`) ?? 0) + 1
+          );
+        }
+      }
       if (fetched === budget) {
         interrupted = true;
         throw new Error('the run ends here');
-      }
-      const continuation = 'continuation' in input ? input.continuation : null;
-      if (fetched === 0 && expectResume) {
-        if (continuation?.cursor !== before.nextCursor) {
-          violations.push(`${key} restarted instead of resuming`);
-        } else if (lastSaver.get(key) !== build) {
-          stats.crossBuildResumes += 1;
-        }
       }
       fetched += 1;
       let page = 0;
@@ -203,7 +244,21 @@ async function replay(
           createFetchPage: undefined,
           pageDelayMs: 0,
         },
-        { onCheckpoint: () => lastSaver.set(key, build) }
+        {
+          onCheckpoint: (checkpoint) => {
+            const saves = saved.get(key)?.saves ?? 0;
+            if (saves !== savesAtRequest) {
+              violations.push(`${key} saved over newer progress`);
+            }
+            saved.set(key, {
+              generation: Number(checkpoint.storageGeneration?.slice(1)),
+              cursor: checkpoint.nextCursor,
+              completed: checkpoint.completed,
+              build,
+              saves: saves + 1,
+            });
+          },
+        }
       )
     );
     if (Exit.isFailure(exit) && !interrupted) {
@@ -216,6 +271,7 @@ async function replay(
       const build = buildIndex as 0 | 1;
       lanes.forEach((lane, laneIndex) => {
         const checkpoint = loadSoupBackfillCheckpoint('user-1', lane);
+        // A run restarts an older generation's checkpoint (checked above).
         if (checkpoint.storageGeneration !== `g${generation}`) return;
         const request = requestOf(build, laneIndex);
         const held = hydrated.get(generation) ?? new Set<string>();
@@ -240,24 +296,24 @@ async function replay(
   };
 
   for (const action of actions) {
-    switch (action.kind) {
-      case 'run':
-        await runLane(action.build, action.lane, action.pages);
-        break;
-      case 'concurrent':
+    await match(action)
+      .with({ kind: 'run' }, ({ build, lane, pages }) =>
+        runLane(build, lane, pages)
+      )
+      .with({ kind: 'concurrent' }, async ({ lane, pages }) => {
         await Promise.all([
-          runLane(0, action.lane, action.pages[0], { checkResume: false }),
-          runLane(1, action.lane, action.pages[1], { checkResume: false }),
+          runLane(0, lane, pages[0]),
+          runLane(1, lane, pages[1]),
         ]);
-        break;
-      case 'reset':
+      })
+      .with({ kind: 'reset' }, async () => {
         generation += 1;
         hydrated.set(generation, new Set());
-        break;
-      case 'reset-during-fetch':
-        await runLane(action.build, action.lane, 9, { resetOnFetch: true });
-        break;
-    }
+      })
+      .with({ kind: 'reset-during-fetch' }, ({ build, lane }) =>
+        runLane(build, lane, 9, { resetOnFetch: true })
+      )
+      .exhaustive();
     check();
   }
   // Finishing every lane of the newer build leaves the cache holding what a
@@ -274,22 +330,74 @@ async function replay(
         violations.push(`${request} finished without page ${page}`);
       }
     }
-    expect(loadSoupBackfillCheckpoint('user-1', lane).completed).toBe(true);
+    if (!loadSoupBackfillCheckpoint('user-1', lane).completed) {
+      violations.push(`${request} did not finish`);
+    }
   });
   expect(violations).toEqual([]);
 }
 
+const totalResumes = (resumes: Resumes, direction: 'forward' | 'back') =>
+  [...resumes]
+    .filter(([key]) => key.endsWith(`:${direction}`))
+    .reduce((sum, [, count]) => sum + count, 0);
+
 describe('soup backfill across builds', () => {
+  let restoreLocks = () => {};
   beforeEach(() => {
     localStorage.clear();
+    restoreLocks = installBrowserLocks();
+  });
+  afterEach(() => {
+    restoreLocks();
   });
 
-  it('never resumes another contract, resumes unchanged lanes across builds, and finishes as a fresh build', async () => {
-    const stats = { crossBuildResumes: 0 };
+  it.each(
+    DEFAULT_SOUP_BACKFILL_LANES.map((lane, index) => [lane.checkpointId, index])
+  )(
+    'resumes %s across builds both ways while another lane differs',
+    async (_id, index) => {
+      const changes = DEFAULT_SOUP_BACKFILL_LANES.map(
+        (_lane, other): LaneChange =>
+          other === (index + 1) % LANE_COUNT ? 'filter' : 'same'
+      );
+      const pageCounts = DEFAULT_SOUP_BACKFILL_LANES.map(() => 3);
+      const resumesEveryRun =
+        DEFAULT_SOUP_BACKFILL_LANES[index].restartOnRun !== true;
+      for (const [first, second] of [
+        [0, 1],
+        [1, 0],
+      ] as const) {
+        const resumes: Resumes = new Map();
+        await replay(
+          changes,
+          pageCounts,
+          [
+            { kind: 'run', build: first, lane: index, pages: 1 },
+            { kind: 'run', build: second, lane: index, pages: 1 },
+          ],
+          resumes
+        );
+        const direction = second === 1 ? 'forward' : 'back';
+        expect((resumes.get(`${index}:${direction}`) ?? 0) > 0).toBe(
+          resumesEveryRun
+        );
+      }
+    }
+  );
+
+  it('never resumes another contract, never saves over newer progress, and finishes as a fresh build', async () => {
+    const resumes: Resumes = new Map();
     await fc.assert(
       fc.asyncProperty(
         fc.array(
-          fc.constantFrom<LaneChange>('same', 'filter', 'version', 'recency'),
+          fc.constantFrom<LaneChange>(
+            'same',
+            'filter',
+            'operation',
+            'version',
+            'recency'
+          ),
           { minLength: LANE_COUNT, maxLength: LANE_COUNT }
         ),
         fc.array(fc.integer({ min: 1, max: 4 }), {
@@ -298,10 +406,11 @@ describe('soup backfill across builds', () => {
         }),
         fc.array(actionArb, { minLength: 1, maxLength: 30 }),
         (changes, pageCounts, actions) =>
-          replay(changes, pageCounts, actions, stats)
+          replay(changes, pageCounts, actions, resumes)
       ),
       { numRuns: 300 }
     );
-    expect(stats.crossBuildResumes).toBeGreaterThan(0);
+    expect(totalResumes(resumes, 'forward')).toBeGreaterThan(0);
+    expect(totalResumes(resumes, 'back')).toBeGreaterThan(0);
   });
 });
