@@ -1,0 +1,58 @@
+apps/web/src/features/block-call/AGENTS.md
+  s_9671c7bc652ab5::t_82f1654760d7ae 17,27-28
+docs/agent-guide/calls.md
+  s_9671c7bc652ab5::t_82f1654760d7ae 34-38,219-223,229-234,249-255,426-428
+  s_9671c7bc652ab5::t_ff141b42ad4f77 224-228
+apps/web/src/features/block-call/primitives/recording-sessions.ts
+  s_9671c7bc652ab5::t_1a802f091533af 65
+  s_e5a79789de1c42::t_a2888ea3ca9010 13-15,17-18,21,26-32,53-54,56,112-114
+apps/web/src/features/block-call/views/shared/call-recording-header-parts.tsx
+  s_9671c7bc652ab5::t_ac8e3e547a55ce 34
+  s_9671c7bc652ab5::t_92a8d57dec72df 16
+apps/web/src/features/block-call/views/CallDetailView.tsx
+  s_9671c7bc652ab5::t_92a8d57dec72df 53
+  s_9671c7bc652ab5::t_02ffa322d04c7d 72-74,87
+apps/web/src/features/block-call/views/shared/recording-download-ops.ts
+  s_9671c7bc652ab5::t_92a8d57dec72df 1-23,25-28,33-69
+  s_9671c7bc652ab5::t_e0d0d345987cc0 24,29-32
+apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.test.tsx
+  s_9671c7bc652ab5::t_df20ecfa4cd0a0 195-235,247-257,261-263,270-276,293-295,303-315
+  s_9671c7bc652ab5::t_7113e1642ea3bb 134,258-260,296-302
+  s_9671c7bc652ab5::t_aa45c257c55276 236-246
+  s_9671c7bc652ab5::t_c3bff378f07411 87-89
+  s_9671c7bc652ab5::t_dc8a172012c6f2 264-269,277-292
+apps/web/src/features/block-call/primitives/recording-sessions.test.ts
+  s_9671c7bc652ab5::t_916ed0b26abd15 123-132
+apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.tsx
+  s_9671c7bc652ab5::t_458a8a8b4f5789 102-113,134,136-152,236-241,358,488
+apps/web/src/features/block-call/component/CallRecording/CallRecordingVideo.tsx
+  s_9671c7bc652ab5::t_9323c2b011db30 15,17
+apps/web/src/features/block-call/primitives/recording-video.ts
+  s_9671c7bc652ab5::t_9756e163a10df4 24,26,119-121,124-125,183-186,194-195
+apps/web/src/lib/i18n/locales/en/calls.ts
+  s_9671c7bc652ab5::t_a1d8cdf9a1d8ac 156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "be0ae6d8fbb67f3b66c9a9017b4f0b6d5b7f1d7b",
+  "prompts": {},
+  "sessions": {
+    "s_9671c7bc652ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a46e4f3c-7142-45e8-9694-084925c538ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e5a79789de1c42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01a5ff28-bc3d-44d6-a84c-d414f11373fe",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
