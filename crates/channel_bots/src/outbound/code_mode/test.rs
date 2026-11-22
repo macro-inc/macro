@@ -38,6 +38,9 @@ fn replies_get_the_code_tools_and_only_the_direct_tools_code_mode_keeps() {
     }
     // SDK-covered tools and the Anthropic sandbox are gone; the rest stay.
     for dropped in [
+        "ImportFromNotion",
+        "ImportFromLinear",
+        "ImportFromJira",
         "ReadContent",
         "ReadMemory",
         "UpdateMemory",
@@ -99,6 +102,9 @@ fn a_hidden_native_tool_is_refused_not_dispatched() {
     assert_eq!(tools.route("ExecuteCode"), Route::Code);
     assert_eq!(tools.route("SelfKnowledge"), Route::Direct);
     for hidden in [
+        "ImportFromNotion",
+        "ImportFromLinear",
+        "ImportFromJira",
         "ReadContent",
         "ReadMemory",
         "UpdateMemory",
@@ -115,4 +121,29 @@ fn a_hidden_native_tool_is_refused_not_dispatched() {
             .contains("ReadContent is not available here")
     );
     assert!(refusal.description.contains("ExecuteCode"));
+}
+
+/// Direct calls never carry the program's signed restriction, so their
+/// complete set must stay read-only, including tools without SDK equivalents.
+#[test]
+fn mention_native_tools_only_offer_discovery_and_knowledge_reads() {
+    let mention = ai_tools::tools_for_channel_bot_code_mode();
+    let names: std::collections::BTreeSet<_> =
+        mention.toolset.tools.keys().map(String::as_str).collect();
+    assert_eq!(
+        names,
+        std::collections::BTreeSet::from(["SelfKnowledge", "SearchTools", "LoadTools"])
+    );
+}
+
+#[test]
+fn owner_sessions_keep_their_import_planners() {
+    for session in [
+        ai_tools::tools_for(ai_tools::AiHost::AgentSession),
+        ai_tools::tools_for_agent_code_mode(),
+    ] {
+        for name in ["ImportFromNotion", "ImportFromLinear", "ImportFromJira"] {
+            assert!(session.toolset.tools.contains_key(name), "{name} missing");
+        }
+    }
 }
