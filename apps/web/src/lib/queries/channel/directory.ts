@@ -832,6 +832,7 @@ export async function refreshChannelDirectory(
   // sign-in reads every directory again itself, and the write's soup
   // updates reach it. Counting it would only walk the network again.
   if (writer && !sameQueryAccount(writer, account())) return;
+  const admitted = writer ?? account();
   // Pages read from now on hold the write; only older ones need it laid in.
   const started = Date.now();
   const ownWrites = readOwnWrites(
@@ -857,7 +858,10 @@ export async function refreshChannelDirectory(
   await client.invalidateQueries(filters);
   if (firstReads.length > 0) {
     await Promise.allSettled(firstReads);
-    await client.invalidateQueries(filters);
+    // A sign-in that replaced this one while its first reads were out reads
+    // its own directory: walking it again for this write is waste.
+    if (!admitted || sameQueryAccount(admitted, account()))
+      await client.invalidateQueries(filters);
   }
   const held = await ownWrites;
   if (!held) return;

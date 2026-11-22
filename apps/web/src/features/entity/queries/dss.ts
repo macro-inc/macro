@@ -16,6 +16,7 @@ import { throwOnErr } from '@core/util/result';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
 import {
   currentQueryAccount,
+  isCurrentQueryAccount,
   type QueryAccount,
 } from '@queries/auth/account-scope';
 import { callKeys } from '@queries/call/keys';
@@ -65,17 +66,20 @@ function invalidateDeletedDssItems(
   );
   if (channelIds.length > 0) {
     const deleted = new Set(channelIds);
-    queryClient.invalidateQueries({
-      queryKey: channelKeys._def,
-      // The deleted channels' own reads, and the REST lists that hold them.
-      // The directory refresh below reads the directory again itself, and
-      // Quick Access rereads its cached channels when the cache drops them:
-      // both are account-wide reads one deletion should not repeat.
-      predicate: ({ queryKey }) =>
-        partialMatchKey(queryKey, channelKeys.listChannels._def) ||
-        partialMatchKey(queryKey, channelKeys.activity._def) ||
-        (typeof queryKey[2] === 'string' && deleted.has(queryKey[2])),
-    });
+    // A deletion settling after another sign-in leaves that sign-in's
+    // channel reads alone: it reads everything again itself.
+    if (!writer || isCurrentQueryAccount(writer))
+      queryClient.invalidateQueries({
+        queryKey: channelKeys._def,
+        // The deleted channels' own reads, and the REST lists that hold them.
+        // The directory refresh below reads the directory again itself, and
+        // Quick Access rereads its cached channels when the cache drops them:
+        // both are account-wide reads one deletion should not repeat.
+        predicate: ({ queryKey }) =>
+          partialMatchKey(queryKey, channelKeys.listChannels._def) ||
+          partialMatchKey(queryKey, channelKeys.activity._def) ||
+          (typeof queryKey[2] === 'string' && deleted.has(queryKey[2])),
+      });
     // The channel directory rereads its pages, or waits for the soup update:
     // the deleted channels come out at once, with no read of each.
     fireAndForget(

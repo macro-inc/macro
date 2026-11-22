@@ -884,6 +884,10 @@ describe('channel deletion', () => {
       id: 'macro|other@example.com',
       authenticated: true,
     });
+    const otherList = channelKeys.listChannels(
+      'macro|other@example.com'
+    ).queryKey;
+    client.setQueryData(otherList, {});
     deleting.resolve();
     await deleted;
 
@@ -891,5 +895,7 @@ describe('channel deletion', () => {
       removed: ['gone'],
       writer: expect.objectContaining({ userId: 'macro|viewer@example.com' }),
     });
+    // The new sign-in's channel reads are its own.
+    expect(client.getQueryState(otherList)?.isInvalidated).toBe(false);
   });
 });

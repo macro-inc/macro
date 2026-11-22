@@ -3652,6 +3652,33 @@ describe('refreshChannelDirectory', () => {
       false
     );
   });
+
+  it('does not read again for a sign-in that replaced the writer meanwhile', async () => {
+    const network = fakeNetwork([channelRecord('a')], { holdPages: true });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    disposers.push(() => queryClient.clear());
+    const options = channelDirectoryPagesQueryOptions(
+      VIEWER,
+      () => network.client
+    );
+    const observer = new QueryObserver(queryClient, options);
+    disposers.push(observer.subscribe(() => undefined));
+    await vi.waitFor(() => expect(network.inputs).toHaveLength(1));
+
+    let account = ACCOUNT;
+    const refreshed = refreshChannelDirectory([], {
+      client: queryClient,
+      account: () => account,
+    });
+    account = { userId: VIEWER, session: 2 };
+    network.release();
+    await refreshed;
+
+    // Only the walk that was already out.
+    expect(network.inputs).toHaveLength(1);
+  });
 });
 
 const ACCOUNT = { userId: VIEWER, session: 1 };
