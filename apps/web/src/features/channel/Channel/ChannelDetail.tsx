@@ -189,7 +189,12 @@ export function ChannelDetailTabs(props: {
   );
 }
 
-export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
+export function ChannelDetailActions(
+  props: ChannelDetailHeaderProps & {
+    /** The top bar's: the agent's status chip yields before the title. */
+    collapser?: PriorityCollapser;
+  }
+) {
   const channel = useChannel(props.channelId);
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
@@ -201,7 +206,10 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
     <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
       <Show when={channelType() === ChannelType.direct_message}>
         <DebugSuspense name="ChannelDetail.agent-status">
-          <TeamAgentDmStatusChip channelId={props.channelId} />
+          <TeamAgentDmStatusChip
+            channelId={props.channelId}
+            collapser={props.collapser}
+          />
         </DebugSuspense>
       </Show>
       <Show when={activeTab() !== 'call'}>
@@ -321,6 +329,7 @@ function DesktopChannelDetailTopBar(
         <ChannelDetailActions
           channelId={props.channelId}
           fallbackName={props.fallbackName}
+          collapser={collapse.collapser}
         />
       </DebugSuspense>
     </ViewShell.TopBar>
