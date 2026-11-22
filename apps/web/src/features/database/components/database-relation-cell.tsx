@@ -37,7 +37,10 @@ type DatabaseRelationCellProps = GridCellEditorOptions & {
 const CHIP_LIMIT = 2;
 /** An expanded field wraps its chips; past this many it still counts the rest. */
 const EXPANDED_CHIP_LIMIT = 20;
-/** A phone shows this many of an expanded field's chips until asked for the rest. */
+/**
+ * A narrow record panel (its `record-fields` container under 24rem, as on a
+ * phone) shows this many expanded chips until asked for the rest.
+ */
 const PHONE_CHIP_LIMIT = 5;
 
 /** The projection stays a set of row identities; names are presentation only. */
@@ -68,8 +71,8 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
     showingAll()
       ? ids()
       : ids().slice(0, props.expanded ? EXPANDED_CHIP_LIMIT : CHIP_LIMIT);
-  /** Expanded chips a phone keeps behind "+N more". */
-  const phoneHidden = () =>
+  /** Expanded chips a narrow record panel keeps behind "+N more". */
+  const narrowHidden = () =>
     props.expanded && !showingAll()
       ? Math.max(0, ids().length - PHONE_CHIP_LIMIT)
       : 0;
@@ -250,8 +253,8 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                     classList={{
                       'max-w-44': !props.expanded,
                       'max-w-full': props.expanded,
-                      'mobile:hidden':
-                        phoneHidden() > 0 && index() >= PHONE_CHIP_LIMIT,
+                      '@max-[24rem]/record-fields:hidden':
+                        narrowHidden() > 0 && index() >= PHONE_CHIP_LIMIT,
                     }}
                     title={name(id)}
                   >
@@ -297,12 +300,14 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
               <Show when={ids().length > shown().length}>
                 <span
                   class="shrink-0 text-xs text-ink-muted"
-                  classList={{ 'mobile:hidden': phoneHidden() > 0 }}
+                  classList={{
+                    '@max-[24rem]/record-fields:hidden': narrowHidden() > 0,
+                  }}
                 >
                   +{ids().length - shown().length}
                 </span>
               </Show>
-              <Show when={phoneHidden()}>
+              <Show when={narrowHidden()}>
                 {(hidden) => (
                   <button
                     type="button"
@@ -311,7 +316,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                       variant: 'ghost',
                       size: 'xs',
                       class:
-                        'pointer-events-auto hidden basis-full justify-start mobile:inline-flex',
+                        'pointer-events-auto hidden basis-full justify-start @max-[24rem]/record-fields:inline-flex',
                     })}
                     onClick={() => setShowingAll(true)}
                   >
