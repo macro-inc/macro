@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO agent_permission_rule\n            (policy_id, kind, target, state, updated_by, via_agent, restriction_only)\n        SELECT $1, kind, target, state, $5, $6, $7\n        FROM UNNEST($2::text[], $3::text[], $4::text[]) AS change (kind, target, state)\n        ON CONFLICT (policy_id, kind, target) DO UPDATE\n        SET state = EXCLUDED.state,\n            updated_by = EXCLUDED.updated_by,\n            via_agent = EXCLUDED.via_agent,\n            restriction_only = EXCLUDED.restriction_only,\n            updated_at = now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "Text",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ce0787d61503b4fb0384ab89004253ba4eeb82eaf1b81227a595bf8148cfecb1"
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM agent_tool_permission WHERE bot_id = $1",
+  "query": "DELETE FROM agent_permission_rule WHERE policy_id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "ee67841194dbd676956e9a873597c35008c1b58d81255698171025cad844270c"
+  "hash": "839a46d910082e734ea1b0124e9b7e5a777137c0b28e47bf01962461b436661b"
 }

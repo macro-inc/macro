@@ -47,7 +47,7 @@ fn catalog() -> Arc<Catalog> {
     })
 }
 
-/// Where the fake store keeps rules.
+/// Whose rules a test reads from the fake store.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Key {
     Agent(BotId),
@@ -62,15 +62,24 @@ fn key(owner: &PolicyOwner) -> Key {
     }
 }
 
+/// Where the fake store keeps rules: under a policy's id, or a session's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Slot {
+    Policy(PolicyId),
+    Session(AgentSessionId),
+}
+
 #[derive(Default)]
 struct FakeStore {
-    rules: Mutex<HashMap<Key, Vec<Rule>>>,
+    /// Each owner's policy id, made on first use.
+    policies: Mutex<HashMap<Key, PolicyId>>,
+    rules: Mutex<HashMap<Slot, Vec<Rule>>>,
 }
 
 impl FakeStore {
-    fn save(&self, key: Key, changes: &[Change], set_by: SetBy) {
+    fn save(&self, slot: Slot, changes: &[Change], set_by: SetBy) {
         let mut rules = self.rules.lock().unwrap();
-        let current = rules.entry(key).or_default();
+        let current = rules.entry(slot).or_default();
         for change in changes {
             current.retain(|rule| rule.target != change.target);
             if let Some(state) = change.state {
@@ -85,35 +94,67 @@ impl FakeStore {
         }
     }
 
-    fn read(&self, key: &Key) -> Vec<Rule> {
+    fn slot(&self, key: &Key) -> Option<Slot> {
+        match key {
+            Key::Session(session) => Some(Slot::Session(*session)),
+            Key::Agent(_) | Key::Persona(..) => self
+                .policies
+                .lock()
+                .unwrap()
+                .get(key)
+                .copied()
+                .map(Slot::Policy),
+        }
+    }
+
+    fn read_slot(&self, slot: Slot) -> Vec<Rule> {
         self.rules
             .lock()
             .unwrap()
-            .get(key)
+            .get(&slot)
             .cloned()
             .unwrap_or_default()
+    }
+
+    fn read(&self, key: &Key) -> Vec<Rule> {
+        self.slot(key)
+            .map(|slot| self.read_slot(slot))
+            .unwrap_or_default()
+    }
+
+    fn policy(&self, key: &Key) -> Option<PolicyId> {
+        self.policies.lock().unwrap().get(key).copied()
     }
 }
 
 impl PermissionStore for Arc<FakeStore> {
     type Err = Infallible;
 
-    async fn rules(&self, owner: &PolicyOwner) -> Result<Vec<Rule>, Infallible> {
-        Ok(self.read(&key(owner)))
+    async fn ensure_policy(&self, owner: &PolicyOwner) -> Result<PolicyId, Infallible> {
+        Ok(*self
+            .policies
+            .lock()
+            .unwrap()
+            .entry(key(owner))
+            .or_insert_with(PolicyId::generate))
+    }
+
+    async fn rules(&self, policy: PolicyId) -> Result<Vec<Rule>, Infallible> {
+        Ok(self.read_slot(Slot::Policy(policy)))
     }
 
     async fn session_rules(&self, session: AgentSessionId) -> Result<Vec<Rule>, Infallible> {
-        Ok(self.read(&Key::Session(session)))
+        Ok(self.read_slot(Slot::Session(session)))
     }
 
     async fn rules_with_session(
         &self,
-        owner: &PolicyOwner,
+        policy: PolicyId,
         session: AgentSessionId,
     ) -> Result<(Vec<Rule>, Vec<Rule>), Infallible> {
         let rules = self.rules.lock().unwrap();
-        let read = |key: &Key| rules.get(key).cloned().unwrap_or_default();
-        Ok((read(&key(owner)), read(&Key::Session(session))))
+        let read = |slot: Slot| rules.get(&slot).cloned().unwrap_or_default();
+        Ok((read(Slot::Policy(policy)), read(Slot::Session(session))))
     }
 
     async fn write<Plan>(
@@ -124,24 +165,26 @@ impl PermissionStore for Arc<FakeStore> {
     where
         Plan: FnOnce(&[Rule], &[Rule]) -> Result<Vec<Change>, PermissionError> + Send,
     {
-        let saved = self.read(&key(write.owner));
+        let saved = self.read_slot(Slot::Policy(write.policy));
         let overlay = write
             .session
-            .map(|session| self.read(&Key::Session(session)))
+            .map(|session| self.read_slot(Slot::Session(session)))
             .unwrap_or_default();
         let changes = match plan(&saved, &overlay) {
             Ok(changes) => changes,
             Err(refused) => return Ok(Err(refused)),
         };
         match write.to {
-            WriteTo::Saved => self.save(key(write.owner), &changes, write.set_by),
-            WriteTo::Session(session) => self.save(Key::Session(session), &changes, SetBy::Agent),
+            WriteTo::Saved => self.save(Slot::Policy(write.policy), &changes, write.set_by),
+            WriteTo::Session(session) => {
+                self.save(Slot::Session(session), &changes, SetBy::Agent);
+            }
         }
         Ok(Ok(()))
     }
 
-    async fn reset(&self, owner: &PolicyOwner) -> Result<(), Infallible> {
-        self.rules.lock().unwrap().remove(&key(owner));
+    async fn reset(&self, policy: PolicyId) -> Result<(), Infallible> {
+        self.rules.lock().unwrap().remove(&Slot::Policy(policy));
         Ok(())
     }
 }
@@ -878,4 +921,88 @@ async fn self_restriction_is_always_allowed_and_cannot_be_set() {
         )
         .await;
     assert!(matches!(set, Err(PermissionError::UnknownTarget(_))));
+}
+
+/// Every read, write, reset and gate of one policy uses one id, the view
+/// reports it, and each owner (each person, for a persona) has its own.
+#[tokio::test]
+async fn a_policy_keeps_one_id_through_reads_writes_and_the_gate() {
+    let fixture = fixture();
+    let set = fixture
+        .service
+        .set(&person(OWNER), BotId::TEST_A, never_send())
+        .await
+        .unwrap();
+    let viewed = fixture
+        .service
+        .view_agent(&person(OWNER), BotId::TEST_A)
+        .await
+        .unwrap();
+    let reset = fixture
+        .service
+        .reset(&person(OWNER), BotId::TEST_A)
+        .await
+        .unwrap();
+    fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+
+    let id = fixture.store.policy(&Key::Agent(BotId::TEST_A)).unwrap();
+    assert_eq!(
+        (set.policy_id, viewed.policy_id, reset.policy_id),
+        (id, id, id)
+    );
+    assert_eq!(fixture.store.policies.lock().unwrap().len(), 1);
+
+    let mine = fixture
+        .service
+        .view_agent(&person(OWNER), MACRO_NEW_BOT_ID)
+        .await
+        .unwrap();
+    let theirs = fixture
+        .service
+        .view_agent(&person(TEAMMATE), MACRO_NEW_BOT_ID)
+        .await
+        .unwrap();
+    assert_ne!(mine.policy_id, id);
+    assert_ne!(mine.policy_id, theirs.policy_id);
+}
+
+/// A refused request creates no policy.
+#[tokio::test]
+async fn a_refused_request_creates_no_policy() {
+    let fixture = fixture();
+    for agent in [BotId::TEST_A, BotId::TEST_B] {
+        assert!(
+            fixture
+                .service
+                .view_agent(&person(TEAMMATE), agent)
+                .await
+                .is_err()
+        );
+        assert!(
+            fixture
+                .service
+                .set(&person(TEAMMATE), agent, never_send())
+                .await
+                .is_err()
+        );
+        assert!(
+            fixture
+                .service
+                .tighten(&person(TEAMMATE), agent, never_send())
+                .await
+                .is_err()
+        );
+        assert!(
+            fixture
+                .service
+                .reset(&person(TEAMMATE), agent)
+                .await
+                .is_err()
+        );
+    }
+    assert!(fixture.store.policies.lock().unwrap().is_empty());
 }

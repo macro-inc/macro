@@ -21,7 +21,7 @@ use chrono::Utc;
 
 use super::model::{
     Catalog, CatalogEntry, Change, LoosenedOperation, Origin, PermissionState, PermissionsView,
-    PolicyKind, Rule, SetBy, Target, ToolPermissionAction, ToolPermissionCatalog,
+    PolicyId, PolicyKind, Rule, SetBy, Target, ToolPermissionAction, ToolPermissionCatalog,
     ToolPermissionCatalogAction, ToolPermissionCatalogGroup, ToolPermissionGroup,
     ToolPermissionOverride,
 };
@@ -156,6 +156,7 @@ pub struct ViewAccess {
 pub fn view(
     catalog: &Catalog,
     agent_id: BotId,
+    policy_id: PolicyId,
     kind: PolicyKind,
     access: ViewAccess,
     saved: Vec<Rule>,
@@ -217,6 +218,7 @@ pub fn view(
 
     PermissionsView {
         agent_id,
+        policy_id,
         kind,
         can_edit: access.can_edit,
         can_tighten: access.can_tighten,
