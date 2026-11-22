@@ -76,8 +76,8 @@ re-encodes them.
 
 Only the immediately prior cache format version is migratable
 (`MIGRATABLE_CACHE_FORMAT_VERSIONS`). A file at an older storage schema version
-is first upgraded by its registered steps (Storage upgrades, below), and resets
-when none are registered. Opening a migratable format drops records, search
+is first upgraded when a chain of steps from its version is registered (Storage
+upgrades, below), and resets otherwise. Opening a migratable format drops records, search
 projections, index facts, and calendar ranges — all refetchable — and keeps
 queued mutations, optimistic layers, and their projections, then rewrites the
 namespace in the same transaction. An interrupted migration therefore retries on
@@ -99,8 +99,9 @@ checks every reopen runs, so the current version is committed only for a file
 with exactly the tables and indexes a fresh file has; a chain that would produce
 anything else rolls back to the version before its last step. The open then
 runs the queue checks as every reopen does. Records, queued mutations,
-optimistic layers and the storage generation stay, so nothing is refetched and
-no queued write is lost. A file whose `meta` names another scope, or a cache
+optimistic layers and the storage generation stay, so the upgrade refetches
+nothing and loses no queued write; a format migration that runs after it (above)
+still drops the refetchable rows. A file whose `meta` names another scope, or a cache
 format this build cannot carry forward, resets before any step runs, so it
 stays as the older build wrote it. A version with no chain, a newer version, or
 a failing step resets as before. Bumping the version without registering a step

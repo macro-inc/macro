@@ -84,7 +84,7 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   open unsure (an unreadable adoption state or version, a split needing the
   busy older lock, a failed connect, a WAL with frames) fails the open and
   keeps the files for the coordinator's next recovery, which discards them
-  unopened once `RECOVERY_ATTEMPTS` (3) were counted; when the marker does not
+  unopened once more than `RECOVERY_ATTEMPTS` (3) were counted (the fourth); when the marker does not
   read, their version is unknown. An attempt that cannot be counted decides as
   any other, and only where it would keep the files discards them once
   `UNCOUNTED_RECOVERY_MS` (10 minutes) passed since the adoption began (by the

@@ -166,9 +166,14 @@ pub const UNVERSIONED_STORAGE_VERSIONS: (u32, u32, u32) = (3, 3, 11);
 /// files and owner locks instead of resetting each other's database while tabs
 /// of both stay open after a deploy. Builds with matching versions share one
 /// database: only a healthy, graceful close and reopen preserves its files.
-/// Metadata is still validated on open, and a mismatch or an abrupt/uncertain
-/// owner loss physically resets both files, discarding every row, including
-/// queued mutations and optimistic layers.
+/// A build whose own file does not exist yet first carries forward the newest
+/// upgradable older storage version's file (`cache-wasm`'s `carry_forward`).
+/// Metadata is still validated on open: a file moved here at an older storage
+/// version is upgraded by its registered steps, and any other mismatch or an
+/// abrupt/uncertain owner loss physically resets both files, discarding every
+/// row, including queued mutations and optimistic layers. Before that reset, a
+/// recovery decides moved files whose first open never succeeded: it returns or
+/// discards them, or fails the open and keeps them while it cannot tell which.
 pub fn cache_database_name(scope: &str, storage_schema_version: u32) -> String {
     let unversioned = legacy_cache_database_name(scope);
     if (
