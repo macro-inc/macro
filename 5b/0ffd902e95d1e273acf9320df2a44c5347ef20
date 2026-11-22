@@ -1,0 +1,25 @@
+apps/web/src/features/block-call/queries/recording-download.test.ts
+  s_9671c7bc652ab5::t_c16f27e9b16907 56-90
+apps/web/src/features/block-call/views/shared/call-recording-header-parts.tsx
+  s_9671c7bc652ab5::t_3da938713bdf9a 37
+apps/web/src/features/block-call/queries/recording-download.ts
+  s_9671c7bc652ab5::t_3da938713bdf9a 7-10,14-15,17-20,23-25,27-28
+apps/web/src/lib/queries/call/meetings.ts
+  s_9671c7bc652ab5::t_85671abbf43cb4 189,191-193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5b0ffd902e95d1e273acf9320df2a44c5347ef20",
+  "prompts": {},
+  "sessions": {
+    "s_9671c7bc652ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a46e4f3c-7142-45e8-9694-084925c538ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
