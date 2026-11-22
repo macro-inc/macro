@@ -112,6 +112,52 @@ async fn refuses_signed_request_before_dispatch(claims: SignedClaims, method: &s
             "{method} {path}, secondary={secondary}: a restricted credential must start no downstream work"
         );
     }
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(method)
+                .uri(path)
+                .header("authorization", format!("Bearer {unscoped}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        (response.status(), dispatched.load(Ordering::SeqCst)),
+        (StatusCode::OK, 1),
+        "the unscoped control must reach the same handler"
+    );
+}
+
+#[tokio::test]
+async fn mention_refuses_other_session_reviews_views_and_lifecycle_changes() {
+    // A mention has no owning session. Session B is another session the
+    // account could otherwise change; none of its writes belongs to a reply.
+    for (method, path) in [
+        (
+            "POST",
+            "/agent-sessions/00000000-0000-0000-0000-00000000000b/reviews",
+        ),
+        (
+            "POST",
+            "/agent-sessions/00000000-0000-0000-0000-00000000000b/views",
+        ),
+        (
+            "PUT",
+            "/agent-sessions/00000000-0000-0000-0000-00000000000b/name",
+        ),
+        (
+            "PUT",
+            "/agent-sessions/00000000-0000-0000-0000-00000000000b/archived",
+        ),
+        (
+            "DELETE",
+            "/agent-sessions/00000000-0000-0000-0000-00000000000b",
+        ),
+    ] {
+        refuses_before_dispatch(method, path).await;
+    }
 }
 
 #[tokio::test]
