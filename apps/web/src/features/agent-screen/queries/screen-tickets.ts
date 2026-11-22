@@ -32,6 +32,7 @@ export async function requestScreenTicket(
       .with('FORBIDDEN', () => 'forbidden')
       .with('ROLLOUT_DISABLED', () => 'rolloutDisabled')
       .with('NOT_FOUND', () => 'notFound')
+      .with('TOO_MANY_TICKETS', () => 'rateLimited')
       .with('TOO_MANY_SCREENS', () => 'tooManyScreens')
       .otherwise(() => 'failed');
     return err(failure);

@@ -3,6 +3,8 @@ import {
   afterConnectFailed,
   afterSessionEnded,
   MAX_RECONNECT_ATTEMPTS,
+  QUICK_RETRIES,
+  TICKET_RATE_WINDOW_MS,
 } from './screen-status';
 
 describe('afterSessionEnded', () => {
@@ -59,24 +61,39 @@ describe('afterConnectFailed', () => {
 });
 
 describe('a connection that was live a moment ago', () => {
-  const recent = { recentlyLive: true };
+  const recent = (quickUsed: number) => ({ recentlyLive: true, quickUsed });
 
-  it('retries at most 2 s apart, and does not give up after the usual six', () => {
-    expect(afterSessionEnded('connectionLost', 0, recent)).toMatchObject({
+  it('retries at most 2 s apart for its first ten, past the usual six', () => {
+    expect(afterSessionEnded('connectionLost', 0, recent(0))).toEqual({
       kind: 'retry',
+      status: { kind: 'reconnecting', attempt: 1 },
       delayMs: 500,
+      quick: true,
     });
-    expect(afterConnectFailed('failed', 2, recent)).toMatchObject({
-      kind: 'retry',
+    expect(afterConnectFailed('failed', 2, recent(2))).toMatchObject({
       delayMs: 2000,
+      quick: true,
     });
-    expect(afterConnectFailed('failed', 5, recent)).toMatchObject({
-      kind: 'retry',
+    expect(afterConnectFailed('failed', 8, recent(8))).toMatchObject({
       delayMs: 2000,
+      quick: true,
     });
-    expect(
-      afterConnectFailed('failed', MAX_RECONNECT_ATTEMPTS + 3, recent)
-    ).toMatchObject({ kind: 'retry', delayMs: 2000 });
+  });
+
+  it('then backs off from 4 s, as the cold backoff would after 2 s, and gives up after it', () => {
+    const after = (attempt: number) =>
+      afterConnectFailed('failed', attempt, recent(QUICK_RETRIES));
+    expect(after(QUICK_RETRIES)).toEqual({
+      kind: 'retry',
+      status: { kind: 'reconnecting', attempt: QUICK_RETRIES + 1 },
+      delayMs: 4000,
+    });
+    expect(after(QUICK_RETRIES + 1)).toMatchObject({ delayMs: 8000 });
+    expect(after(QUICK_RETRIES + 2)).toMatchObject({ delayMs: 10_000 });
+    expect(after(QUICK_RETRIES + 3)).toEqual({
+      kind: 'show',
+      status: { kind: 'ended', reason: 'failed' },
+    });
   });
 });
 
@@ -89,9 +106,30 @@ describe('too many screens', () => {
     expect(
       afterSessionEnded('error', 0, {
         recentlyLive: true,
+        quickUsed: 0,
         lastError: 'tooManySockets',
       })
     ).toEqual(ended);
     expect(afterConnectFailed('tooManyScreens', 0)).toEqual(ended);
+  });
+});
+
+describe('the ticket rate limit', () => {
+  it('waits out the window once, then leaves it to the person', () => {
+    expect(afterConnectFailed('rateLimited', 3)).toEqual({
+      kind: 'retry',
+      status: { kind: 'reconnecting', attempt: 3, rateLimited: true },
+      delayMs: TICKET_RATE_WINDOW_MS,
+    });
+    expect(
+      afterConnectFailed('rateLimited', 3, {
+        recentlyLive: false,
+        quickUsed: 0,
+        afterRateLimit: true,
+      })
+    ).toEqual({
+      kind: 'show',
+      status: { kind: 'ended', reason: 'rateLimited' },
+    });
   });
 });

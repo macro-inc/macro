@@ -1310,7 +1310,7 @@ describe('createScreenSession', () => {
     });
   });
 
-  it('recovers a blip quickly: after a steady connection drops, retries at most 2 s apart and past the usual cap', async () => {
+  it('recovers a blip quickly: after a steady connection drops, ten retries at most 2 s apart, then the usual backoff', async () => {
     const tickets: number[] = [];
     let failing = false;
     const connections: FakeConnection[] = [];
@@ -1342,23 +1342,99 @@ describe('createScreenSession', () => {
       });
       session.attach(document.createElement('div'));
       await settle();
-      // Live a while, then the tunnel dies for about 12 seconds.
+      // Live a while, then the tunnel stays down.
       await vi.advanceTimersByTimeAsync(20_000);
       failing = true;
       const droppedAt = Date.now();
       connections[0].handlers.onEnded('error');
-      await vi.advanceTimersByTimeAsync(12_000);
-      failing = false;
-      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(120_000);
 
-      expect(session.store.status).toEqual({ kind: 'live' });
       const waits = tickets
         .slice(1)
         .map((at, index) => at - (index === 0 ? droppedAt : tickets[index]));
-      expect(waits.slice(0, 3)).toEqual([500, 1000, 2000]);
-      // Never the 4, 8 and 10 s of the cold backoff, and not given up after six.
-      expect(Math.max(...waits)).toBe(2000);
-      expect(waits.length).toBeGreaterThan(6);
+      expect(waits).toEqual([
+        // Quick: ten tickets, within the harness's per-person budget.
+        500, 1000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000,
+        // Then the usual backoff carries on from 4 s rather than ending.
+        4000, 8000, 10_000,
+      ]);
+      expect(session.store.status).toEqual({ kind: 'ended', reason: 'failed' });
+      dispose();
+    });
+  });
+
+  it('a blip that ends within the quick retries is live again in seconds', async () => {
+    let failing = false;
+    const connections: FakeConnection[] = [];
+    const real = fakeTransport(connections);
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t', expiresAt: '' }),
+      transport: () => ({
+        kind: 'vnc',
+        connect: async (element, ticket, handlers, signal) => {
+          if (failing) throw new Error('the tunnel is down');
+          return real.connect(element, ticket, handlers, signal);
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => false,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      await vi.advanceTimersByTimeAsync(20_000);
+      failing = true;
+      connections[0].handlers.onEnded('error');
+      await vi.advanceTimersByTimeAsync(12_000);
+      failing = false;
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(session.store.status).toEqual({ kind: 'live' });
+      dispose();
+    });
+  });
+
+  it('waits out the ticket rate limit once, saying so, then leaves it to the person', async () => {
+    let issued = 0;
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () => {
+        issued += 1;
+        return err('rateLimited' as const);
+      },
+      transport: () => fakeTransport([]),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      expect(session.store.status).toEqual({
+        kind: 'reconnecting',
+        attempt: 0,
+        rateLimited: true,
+      });
+      await vi.advanceTimersByTimeAsync(59_000);
+      expect(issued).toBe(1);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(issued).toBe(2);
+      expect(session.store.status).toEqual({
+        kind: 'ended',
+        reason: 'rateLimited',
+      });
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(issued).toBe(2);
       dispose();
     });
   });

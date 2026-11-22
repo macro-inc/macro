@@ -32,11 +32,16 @@ Each appears only when the harness list gives the viewer access other than
   Reconnecting, Asleep (Turn on, for managers) or Ended.
 - Reconnecting keeps the dropped connection's last picture, greyed out, until
   the new one is live, and says "Showing the last picture" only when there is
-  one. After a connection that was steady drops, retries stay at most 2 s
-  apart, and are not capped, for a minute.
-- A computer with as many screens open as it allows ends the view with "Too
+  one. After a connection that was steady drops, its first ten retries come
+  at most 2 s apart (within a minute), then the usual backoff resumes at 4 s
+  and gives up with **Try again** after three more.
+- A computer with as many screens open as it allows (`tooManySockets` on the
+  socket, or a 429 ticket with `too_many_screens`) ends the view with "Too
   many screens are open for this computer" and **Try again**; it is not
   retried on its own.
+- The ticket rate limit (a 429 with `too_many_tickets`, or with no code)
+  shows "Reconnecting is paused for a minute", retries once after the
+  minute, and if still limited ends with **Try again**.
 - Once the view has ended (stopped, refused, gone) only the overlay's own
   action shows: no Take over.
 - Members watch only: Take over is disabled with a lock and "Only owners and

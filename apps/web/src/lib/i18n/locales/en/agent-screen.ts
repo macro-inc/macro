@@ -59,6 +59,9 @@ export default {
   reconnectingHint:
     'Showing the last picture. {{name}} keeps working meanwhile.',
   reconnectingHintNoPicture: '{{name}} keeps working meanwhile.',
+  rateLimitedTitle: 'Reconnecting is paused for a minute',
+  rateLimitedHint:
+    'Too many tries in a short time. {{name}} keeps working meanwhile.',
   asleepTitle: '{{name}}’s computer is asleep',
   asleepHint: 'Turning it on takes about 20 seconds.',
   turnOn: 'Turn on',
@@ -73,6 +76,8 @@ export default {
   endedFailedTitle: 'Couldn’t connect to the screen',
   endedTooManyScreensTitle: 'Too many screens are open for this computer',
   endedTooManyScreensHint: 'Close one of them, then try again.',
+  endedRateLimitedTitle: 'Couldn’t reconnect: too many tries',
+  endedRateLimitedHint: 'Wait a minute, then try again.',
   viewAgain: 'View screen again',
   tryAgain: 'Try again',
 

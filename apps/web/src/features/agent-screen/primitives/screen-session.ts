@@ -33,9 +33,9 @@ import type {
 const FLAPPING_MS = 10_000;
 
 /**
- * For this long after a steady connection drops, retries stay quick and
- * uncapped (`RetryContext.recentlyLive`): a blip in the tunnel recovers in
- * seconds rather than waiting out the backoff.
+ * For this long after a steady connection drops, its first `QUICK_RETRIES`
+ * come at most 2 s apart (`RetryContext.recentlyLive`): a blip in the tunnel
+ * recovers in seconds rather than waiting out the backoff.
  */
 const RECENTLY_LIVE_WINDOW_MS = 60_000;
 
@@ -90,7 +90,8 @@ type SessionStore = {
   /**
    * The stage still shows the last connection's picture (greyed out while
    * not live). False until a connection went live, and once the stage is
-   * cleared (a manual retry, a final end).
+   * cleared by a connect that keeps nothing (the first, a manual retry). A
+   * final end leaves it under its overlay.
    */
   lastPicture: boolean;
 };
@@ -132,11 +133,16 @@ export function createScreenSession(options: ScreenSessionOptions) {
   let liveSince: number | undefined;
   /** When the last steady (not flapping) connection dropped. */
   let steadyDroppedAt: number | undefined;
+  /** Quick retries used since that drop (`QUICK_RETRIES` at most). */
+  let quickUsed = 0;
   const retryContext = (lastError?: ScreenErrorCode): RetryContext => ({
     recentlyLive:
       steadyDroppedAt !== undefined &&
       Date.now() - steadyDroppedAt < RECENTLY_LIVE_WINDOW_MS,
+    quickUsed,
     lastError,
+    afterRateLimit:
+      store.status.kind === 'reconnecting' && store.status.rateLimited === true,
   });
   /** Set by a pop-out: the lease goes with the view that replaces this one. */
   let leaseCarriedAway = false;
@@ -244,6 +250,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
       record('computer.screen.status', { status: step.status.kind });
       return;
     }
+    if (step.quick) quickUsed += 1;
     clearTimeout(retryTimer);
     retryTimer = setTimeout(
       () => fireAndForget(connect(attempt), 'agent-screen.reconnect'),
@@ -388,7 +395,10 @@ export function createScreenSession(options: ScreenSessionOptions) {
             // quickly for a while; one that keeps dropping right after going
             // live counts on.
             if (connected && flapping()) connected = false;
-            if (connected) steadyDroppedAt = Date.now();
+            if (connected) {
+              steadyDroppedAt = Date.now();
+              quickUsed = 0;
+            }
             // `idle` waits for the tab to be shown only when it went unseen.
             // Shown all along, the heartbeat didn't get through (a blocked
             // page): a failure like any other, retried with backoff and a cap

@@ -58,11 +58,17 @@ export function ScreenOverlay(props: {
       <Match when={props.status.kind === 'reconnecting'}>
         <Message
           busy
-          title={t('agentScreen.reconnectingTitle')}
+          title={
+            props.status.kind === 'reconnecting' && props.status.rateLimited
+              ? t('agentScreen.rateLimitedTitle')
+              : t('agentScreen.reconnectingTitle')
+          }
           hint={
-            props.lastPicture
-              ? t('agentScreen.reconnectingHint', name())
-              : t('agentScreen.reconnectingHintNoPicture', name())
+            props.status.kind === 'reconnecting' && props.status.rateLimited
+              ? t('agentScreen.rateLimitedHint', name())
+              : props.lastPicture
+                ? t('agentScreen.reconnectingHint', name())
+                : t('agentScreen.reconnectingHintNoPicture', name())
           }
         />
       </Match>
@@ -129,13 +135,16 @@ export function ScreenOverlay(props: {
                 accessRevoked: t('agentScreen.endedRevokedTitle'),
                 notFound: t('agentScreen.endedNotFoundTitle'),
                 tooManyScreens: t('agentScreen.endedTooManyScreensTitle'),
+                rateLimited: t('agentScreen.endedRateLimitedTitle'),
                 failed: t('agentScreen.endedFailedTitle'),
               }[ended().reason]
             }
             hint={
               ended().reason === 'tooManyScreens'
                 ? t('agentScreen.endedTooManyScreensHint')
-                : undefined
+                : ended().reason === 'rateLimited'
+                  ? t('agentScreen.endedRateLimitedHint')
+                  : undefined
             }
           >
             <Show
@@ -144,6 +153,7 @@ export function ScreenOverlay(props: {
                 ended().reason === 'idle' ||
                 ended().reason === 'accessRevoked' ||
                 ended().reason === 'tooManyScreens' ||
+                ended().reason === 'rateLimited' ||
                 ended().reason === 'failed'
               }
             >
@@ -153,7 +163,8 @@ export function ScreenOverlay(props: {
                 onClick={() => props.onRetry()}
               >
                 {ended().reason === 'failed' ||
-                ended().reason === 'tooManyScreens'
+                ended().reason === 'tooManyScreens' ||
+                ended().reason === 'rateLimited'
                   ? t('agentScreen.tryAgain')
                   : t('agentScreen.viewAgain')}
               </Button>

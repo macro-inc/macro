@@ -14,7 +14,12 @@ import type {
 export type ScreenStatus =
   | { kind: 'connecting' }
   | { kind: 'live' }
-  | { kind: 'reconnecting'; attempt: number }
+  | {
+      kind: 'reconnecting';
+      attempt: number;
+      /** Waiting out the ticket rate limit (`TICKET_RATE_WINDOW_MS`). */
+      rateLimited?: true;
+    }
   /** The server is waking the hibernated computer; frames follow. */
   | { kind: 'waking' }
   /** The computer is asleep, off or unreachable; Turn on may help. */
@@ -30,6 +35,8 @@ export type ScreenStatus =
         | 'notFound'
         /** The computer has as many screens open as it allows; not retried. */
         | 'tooManyScreens'
+        /** Still rate limited after waiting out the window once. */
+        | 'rateLimited'
         | 'failed';
     };
 
@@ -53,12 +60,21 @@ export type TicketFailure =
   | 'forbidden'
   | 'rolloutDisabled'
   | 'notFound'
+  /** This person minted too many tickets lately (the ticket rate limit). */
+  | 'rateLimited'
+  /** The computer's screens are all in use, said at ticket time. */
   | 'tooManyScreens'
   | 'failed';
 
 export type NextStep =
   | { kind: 'show'; status: ScreenStatus }
-  | { kind: 'retry'; status: ScreenStatus; delayMs: number };
+  | {
+      kind: 'retry';
+      status: ScreenStatus;
+      delayMs: number;
+      /** One of the quick retries after a steady connection dropped. */
+      quick?: true;
+    };
 
 /** Attempts after a drop before the viewer gives up and offers a manual retry. */
 export const MAX_RECONNECT_ATTEMPTS = 6;
@@ -71,28 +87,57 @@ const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 10_000];
  */
 export const RECENTLY_LIVE_MAX_DELAY_MS = 2000;
 
+/**
+ * Quick retries one drop may use. Each mints a ticket, and the harness allows
+ * a person 30 a minute across their tabs: ten leave room for the rest.
+ */
+export const QUICK_RETRIES = 10;
+
+/** The harness's ticket rate-limit window, waited out once before retrying. */
+export const TICKET_RATE_WINDOW_MS = 60_000;
+
 /** What the session knows about the connection that just failed. */
 export type RetryContext = {
-  /**
-   * A connection was live until a moment ago: retry quickly, without the
-   * attempt cap, while the session's window for that lasts.
-   */
+  /** A steady connection was live until a moment ago: retry quickly. */
   recentlyLive: boolean;
+  /** Quick retries this drop has used (`QUICK_RETRIES` at most). */
+  quickUsed: number;
   /** The server's last error on the failed socket. */
   lastError?: ScreenErrorCode;
+  /** The attempt that just failed was the retry after a rate limit. */
+  afterRateLimit?: boolean;
 };
 
-const NO_CONTEXT: RetryContext = { recentlyLive: false };
+const NO_CONTEXT: RetryContext = { recentlyLive: false, quickUsed: 0 };
 
+/**
+ * `attempt` counts every retry of this drop. The first `QUICK_RETRIES` after a
+ * steady connection dropped come at most 2 s apart; then, or for any other
+ * failure, the usual backoff runs, continuing past the delays the quick
+ * retries already covered, and gives up after `MAX_RECONNECT_ATTEMPTS` of its
+ * own.
+ */
 function retryOrFail(attempt: number, context: RetryContext): NextStep {
-  if (attempt > MAX_RECONNECT_ATTEMPTS && !context.recentlyLive) {
+  if (context.recentlyLive && context.quickUsed < QUICK_RETRIES) {
+    const backoff =
+      RECONNECT_DELAYS_MS[Math.min(attempt, RECONNECT_DELAYS_MS.length) - 1];
+    return {
+      kind: 'retry',
+      status: { kind: 'reconnecting', attempt },
+      delayMs: Math.min(backoff, RECENTLY_LIVE_MAX_DELAY_MS),
+      quick: true,
+    };
+  }
+  // After quick retries the backoff resumes where they left off (at 4 s).
+  const covered = context.quickUsed > 0 ? 3 : 0;
+  const slow = attempt - context.quickUsed;
+  if (slow + covered > MAX_RECONNECT_ATTEMPTS) {
     return { kind: 'show', status: { kind: 'ended', reason: 'failed' } };
   }
-  const backoff =
-    RECONNECT_DELAYS_MS[Math.min(attempt, RECONNECT_DELAYS_MS.length) - 1];
-  const delayMs = context.recentlyLive
-    ? Math.min(backoff, RECENTLY_LIVE_MAX_DELAY_MS)
-    : backoff;
+  const delayMs =
+    RECONNECT_DELAYS_MS[
+      Math.min(slow + covered, RECONNECT_DELAYS_MS.length) - 1
+    ];
   return { kind: 'retry', status: { kind: 'reconnecting', attempt }, delayMs };
 }
 
@@ -141,26 +186,41 @@ export function afterConnectFailed(
   attempt: number,
   context: RetryContext = NO_CONTEXT
 ): NextStep {
-  return match(failure)
-    .returnType<NextStep>()
-    .with('forbidden', () => ({
-      kind: 'show',
-      status: { kind: 'denied', reason: 'cannotWatch' },
-    }))
-    .with('rolloutDisabled', () => ({
-      kind: 'show',
-      status: { kind: 'denied', reason: 'rolloutDisabled' },
-    }))
-    .with('notFound', () => ({
-      kind: 'show',
-      status: { kind: 'ended', reason: 'notFound' },
-    }))
-    .with('tooManyScreens', () => ({
-      kind: 'show',
-      status: { kind: 'ended', reason: 'tooManyScreens' },
-    }))
-    .with('failed', () => retryOrFail(attempt + 1, context))
-    .exhaustive();
+  return (
+    match(failure)
+      .returnType<NextStep>()
+      .with('forbidden', () => ({
+        kind: 'show',
+        status: { kind: 'denied', reason: 'cannotWatch' },
+      }))
+      .with('rolloutDisabled', () => ({
+        kind: 'show',
+        status: { kind: 'denied', reason: 'rolloutDisabled' },
+      }))
+      .with('notFound', () => ({
+        kind: 'show',
+        status: { kind: 'ended', reason: 'notFound' },
+      }))
+      .with('tooManyScreens', () => ({
+        kind: 'show',
+        status: { kind: 'ended', reason: 'tooManyScreens' },
+      }))
+      // Wait out the window once; still limited after it, the person decides.
+      .with('rateLimited', () =>
+        context.afterRateLimit
+          ? {
+              kind: 'show',
+              status: { kind: 'ended', reason: 'rateLimited' },
+            }
+          : {
+              kind: 'retry',
+              status: { kind: 'reconnecting', attempt, rateLimited: true },
+              delayMs: TICKET_RATE_WINDOW_MS,
+            }
+      )
+      .with('failed', () => retryOrFail(attempt + 1, context))
+      .exhaustive()
+  );
 }
 
 /** Whether the picture is current enough to act on. */
