@@ -436,15 +436,20 @@ export function makeChannelChange(
   change: UnqueuedChange,
   deps: ChannelWriteDeps = {}
 ): Promise<Message> {
-  return match(change)
-    .with({ kind: 'edit' }, (edit) => editChannelMessage(host, edit, deps))
-    .with({ kind: 'delete' }, (deletion) =>
-      deleteChannelMessage(host, deletion, deps)
-    )
-    .with({ kind: 'react' }, (reaction) =>
-      reactToChannelMessage(host, reaction, deps)
-    )
-    .exhaustive();
+  return (
+    match(change)
+      .with({ kind: 'edit' }, (edit) => editChannelMessage(host, edit, deps))
+      .with({ kind: 'delete' }, (deletion) =>
+        deleteChannelMessage(host, deletion, deps)
+      )
+      .with({ kind: 'react' }, (reaction) =>
+        reactToChannelMessage(host, reaction, deps)
+      )
+      // Noted by a build that knows a kind this one does not: not made again.
+      .exhaustive(() =>
+        Promise.reject(new Error('unknown kind of left-behind change'))
+      )
+  );
 }
 
 /**

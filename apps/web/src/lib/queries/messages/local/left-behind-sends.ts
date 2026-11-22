@@ -130,7 +130,10 @@ export async function changeLeftBehindOverRest(
           reaction.nonce
         )
       )
-      .exhaustive();
+      // Noted by a build that knows a kind this one does not: left noted.
+      .exhaustive(() =>
+        Promise.reject(new Error('unknown kind of left-behind change'))
+      );
   } catch (error) {
     if (!REFUSALS.some((code) => thrownResultErrorHasCode(error, code)))
       throw error;
