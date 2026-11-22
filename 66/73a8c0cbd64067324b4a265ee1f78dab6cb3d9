@@ -1,0 +1,30 @@
+crates/agent_session/src/domain/routines/service.rs
+  s_a37ce135bddc8b::t_32863e1f6c36ef 102-106,109,112,115
+services/agent_harness_service/src/routine_sessions.rs
+  s_a37ce135bddc8b::t_32863e1f6c36ef 94,98-99,112-132
+  s_a37ce135bddc8b::t_42e0421010259a 13,133-136
+crates/agent_session/src/domain/routines/service/test.rs
+  s_a37ce135bddc8b::t_32863e1f6c36ef 189,192-197
+services/agent_harness_service/src/routine_sessions/test.rs
+  s_a37ce135bddc8b::t_c5fb0a94547d95 122
+  s_a37ce135bddc8b::t_c5c4e47114ca5e 99-121
+  s_a37ce135bddc8b::t_f517259916b336 24
+crates/agent_session/src/domain/routines.rs
+  s_a37ce135bddc8b::t_32863e1f6c36ef 68,70-73,76-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6673a8c0cbd64067324b4a265ee1f78dab6cb3d9",
+  "prompts": {},
+  "sessions": {
+    "s_a37ce135bddc8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "93833ac7-7fb8-4d30-be2e-a077fdc24000",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
