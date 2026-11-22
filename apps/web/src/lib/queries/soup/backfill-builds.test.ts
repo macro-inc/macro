@@ -172,7 +172,7 @@ const actionArb: fc.Arbitrary<Action> = fc.oneof(
 type Direction = 'forward' | 'back';
 
 /** Runs that resumed a cursor the other build saved, by lane and direction:
- * `forward` is the newer build resuming the shipped one, `back` the reverse. */
+ * `forward` is the newer build resuming the older one, `back` the reverse. */
 type Resumes = Map<`${number}:${Direction}`, number>;
 
 /** A record's versions on the server, each with the time it was written. */
@@ -314,8 +314,9 @@ const parseTime = (iso: string | null) =>
   iso === null ? Number.NEGATIVE_INFINITY : Date.parse(iso);
 
 /**
- * Two builds against one cache: the shipped lanes, and a newer build with some
- * lanes changed. The server answers what a lane asks for, not its contract
+ * Two builds against one cache: an older build, either the shipped lanes or a
+ * later build with one lane changed, and a newer build with more changed. The
+ * server answers what a lane asks for, not its contract
  * hash. Each lane request has records of its own, one per page, in id order;
  * a record changes when the model updates it, and a request filtered by
  * `updatedAt` returns only records changed since. A cursor names the request
@@ -337,26 +338,38 @@ async function replay(
   changes: readonly LaneChange[],
   pageCounts: readonly number[],
   actions: readonly Action[],
-  resumes: Resumes
+  resumes: Resumes,
+  /** A lane both builds changed alike, so the older build is not the shipped
+   * one either and the lane they share is under neither's v19 key. */
+  base: number | null = null
 ) {
   localStorage.clear();
   vi.setSystemTime(START);
   const tick = () => vi.setSystemTime(Date.now() + TICK_MS);
   let generation = 0;
   const violations: string[] = [];
+  const older: readonly SoupBackfillParams[] = DEFAULT_SOUP_BACKFILL_LANES.map(
+    (lane, index) =>
+      index === base
+        ? { ...lane, contractVersion: (lane.contractVersion ?? 0) + 10 }
+        : lane
+  );
   const builds = [
-    DEFAULT_SOUP_BACKFILL_LANES as readonly SoupBackfillParams[],
-    DEFAULT_SOUP_BACKFILL_LANES.map((lane, index) =>
-      changeLane(lane, changes[index])
-    ),
+    older,
+    older.map((lane, index) => changeLane(lane, changes[index])),
   ] as const;
   /** What the server sees a lane ask for. */
-  const requestOf = (build: Build, laneIndex: number) => {
-    const id = DEFAULT_SOUP_BACKFILL_LANES[laneIndex].checkpointId;
-    return build === 1 && changes[laneIndex] !== 'same'
-      ? `${id}:${changes[laneIndex]}`
-      : id;
-  };
+  const requestOf = (build: Build, laneIndex: number) =>
+    [
+      DEFAULT_SOUP_BACKFILL_LANES[laneIndex].checkpointId,
+      ...(laneIndex === base ? ['base'] : []),
+      ...(build === 1 && changes[laneIndex] !== 'same'
+        ? [changes[laneIndex]]
+        : []),
+    ].join(':');
+  // Only the shipped lanes can be a build from before checkpoint locks.
+  const isPreLock = (build: Build, preLock: boolean) =>
+    build === 0 && base === null && preLock;
   // A changed lane has one more record than the shipped one.
   const pagesOf = (build: Build, laneIndex: number) =>
     pageCounts[laneIndex] +
@@ -557,8 +570,11 @@ async function replay(
       createFetchPage: undefined,
       pageDelayMs: 0,
     };
-    const onCheckpoint = () => {
+    /** The run's own last page save; another tab may write after it. */
+    const last: { saved: SoupBackfillCheckpoint | null } = { saved: null };
+    const onCheckpoint = (checkpoint: SoupBackfillCheckpoint) => {
       pageWriter.set(key, build);
+      last.saved = checkpoint;
     };
     const locks = Object.getOwnPropertyDescriptor(navigator, 'locks');
     // A tab from before checkpoint locks runs every lane unlocked.
@@ -597,8 +613,7 @@ async function replay(
     }
     if (exit === undefined) return;
     if (Exit.isSuccess(exit)) {
-      const saved = read(key);
-      if (saved?.storageGeneration !== `g${generation}` || !saved.completed) {
+      if (last.saved?.completed !== true) {
         violations.push(`${key} succeeded without completing`);
       }
     } else if (!ended && !close.signal.aborted) {
@@ -645,7 +660,7 @@ async function replay(
         runLane(build, lane, pages, {
           end,
           update,
-          preLock: build === 0 && preLock,
+          preLock: isPreLock(build, preLock),
         })
       )
       .with(
@@ -659,14 +674,14 @@ async function replay(
           await Promise.all([
             runLane(first, lane, pages[first], {
               end: ends[first],
-              preLock: first === 0 && preLock,
+              preLock: isPreLock(first, preLock),
               onFetched: (count) => {
                 if (count === closeSecondAfter) closeIfAsked();
               },
             }).finally(closeIfAsked),
             runLane(second, lane, pages[second], {
               end: ends[second],
-              preLock: second === 0 && preLock,
+              preLock: isPreLock(second, preLock),
               close: closeSecond,
             }),
           ]);
@@ -780,8 +795,9 @@ describe('soup backfill across builds', () => {
           maxLength: LANE_COUNT,
         }),
         fc.array(actionArb, { minLength: 1, maxLength: 30 }),
-        (changes, pageCounts, actions) =>
-          replay(changes, pageCounts, actions, resumes)
+        fc.option(laneArb, { nil: null, freq: 2 }),
+        (changes, pageCounts, actions, base) =>
+          replay(changes, pageCounts, actions, resumes, base)
       ),
       { numRuns: 300 }
     );
