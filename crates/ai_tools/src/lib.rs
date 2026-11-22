@@ -228,8 +228,8 @@ pub enum AiHost {
     AgentSession,
     /// The channel-mention bot: no composer, so `SendEmail` is omitted and
     /// replies contain text only (no `DisplayResults`). It runs code mode
-    /// ([`tools_for_channel_bot_code_mode`]), which drops `CreateCalendarEvent`
-    /// for the SDK's `calendar.createConfirmed`.
+    /// ([`tools_for_channel_bot_code_mode`]); the signed ChannelMention scope
+    /// permits only explicit workspace reads, and the host delivers the reply.
     ChannelBot,
     /// The MCP server: like [`AiHost::ChannelBot`] for user tools — MCP
     /// clients apply their own confirmation policy from tool annotations —

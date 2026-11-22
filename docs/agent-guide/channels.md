@@ -744,19 +744,23 @@ Cursor post a mention of session-backed Macro in the same thread. Check that the
 first mention opens Cursor and the return mention continues Macro's existing
 session. Repeat with revoked channel access and confirm no new work starts.
 
-Classic `@Macro` replies run workspace actions through code mode on the agent
-harness. The channel shows a thinking placeholder followed by the final answer
-and links; execution steps are not rendered. Verify a mention that creates a
-test document and confirm it exists under the mentioning account. Programs use
-a signed NoSend credential: they cannot post messages, send or schedule email,
-create or change calendar events, manage bookings or their links/settings,
-obtain booking manage tokens, change sharing, fetch/search the web, call
-connected apps, or write routines, sessions, memories, skills or agent settings.
-The service still posts the final reply. Bot-authored posts cannot start a
-classic Macro program through explicit or inferred triggers. Human triggers
-remain available. Requests for unavailable actions should explain the limitation
-without performing them. This applies on desktop and mobile and requires the
-real harness executor for an end-to-end check.
+Classic `@Macro` replies use read-only code mode on the agent harness. The
+channel shows a thinking placeholder followed by the final answer and links;
+execution steps are not rendered. Verify a mention that searches for and reads
+a test document under the mentioning account, then ask it to create a task and
+confirm that no task or delegated agent session is created. Programs use a signed
+ChannelMention credential with an explicit read allowlist and no program writes.
+They cannot create or edit documents or tasks, assign bots, send or schedule
+messages or email, mutate calendar events or bookings, change sharing or
+configuration, mint permission/upload tokens, start sessions or routines, query
+memory, fetch/search the web, or call connected apps. The host supplies context
+and posts the final reply outside this credential. Bot-authored posts cannot
+start a classic Macro program through explicit or inferred triggers. Human
+triggers remain available. Requests for unavailable actions should explain the
+limitation without performing them, including after an approving follow-up.
+This applies on desktop and mobile and requires the real harness executor and
+egress forwarder for an end-to-end check. Background NoSend suggestion runs are
+a separate scope and retain ordinary own-document edits.
 
 When the backend is configured with AI usage enforcement, a rejected classic
 `@Macro` request gets a thread reply explaining the allowance failure (for example,
@@ -896,7 +900,7 @@ bottom of the area carries the other decisions, refusal first: `Dismiss · Open 
 for a tool draft, `Decline · Submit · Open in session` (or `Open` for a URL) for a question.
 Only the session's owner can act; other viewers see the question read-only and the header
 names who is being waited on. Once answered, the area shows the agent's passage again.
-A prompt the agent read out of a channel or document thread opens no review card at all:
+For session-backed agents, a prompt read out of a channel or document thread opens no review card at all:
 the reply writes the whole email or calendar event into the thread and asks whether to go
 ahead, and a reply in that same thread approving it ("yes, send it" / "go ahead") is the
 confirmation - the agent then sends or creates directly (`SendConfirmedEmail` and
@@ -904,6 +908,8 @@ confirmation - the agent then sends or creates directly (`SendConfirmedEmail` an
 `EmailMessage.forwardConfirmed`, `EmailDraft.send` and `macro.calendar.createConfirmed`),
 with no session visit needed. Being asked to send or
 schedule something only produces the draft; nothing goes out before that approving reply.
+Classic `@Macro` replies remain read-only even after an approving follow-up; the
+confirmation behavior above belongs to session-backed agents, not classic replies.
 Images made with `GenerateImage` are saved to static file service. The bot embeds
 the returned URL as a Markdown image in its channel reply; generated images have
 no document mention or filename card.
