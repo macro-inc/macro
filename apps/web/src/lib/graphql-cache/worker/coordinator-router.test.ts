@@ -873,6 +873,107 @@ describe('CoordinatorRouter', () => {
     ]);
   });
 
+  /** Ends an open that reached storage without a report from its engine,
+   * then fails every recovery before storage once the first one reached it
+   * only if `firstRecoveryReachesStorage`. */
+  const endOpenUnreported = async (
+    ending: 'watchdog' | 'fatal error',
+    firstRecoveryReachesStorage: boolean
+  ) => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      activationTimeoutMs: 10,
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a');
+    const opening = new FakePort();
+    await attach(router, tab, 'tab-a', 1, opening);
+    for (const kind of ['engine-assets-ready', 'owner-lock-acquired'] as const)
+      opening.receive({ ...version, kind, tabId: 'tab-a', ownerEpoch: 1 });
+    if (ending === 'watchdog') {
+      await vi.advanceTimersByTimeAsync(11);
+      expect(messagesOfKind(tab, 'terminate-engine')).toContainEqual(
+        expect.objectContaining({
+          ownerEpoch: 1,
+          reason: 'engine database opening watchdog timed out',
+        })
+      );
+    } else {
+      opening.receive({
+        ...version,
+        kind: 'engine-fatal',
+        tabId: 'tab-a',
+        ownerEpoch: 1,
+        reason: 'cache engine worker crashed',
+        fatalCode: 'runtime-failure',
+      });
+    }
+    for (let epoch = 2; epoch <= 1 + RECOVERY_RETRIES; epoch += 1) {
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(router.snapshot()?.state).toMatchObject({
+        kind: 'activating',
+        ownerEpoch: epoch,
+        databaseAction: 'wipe-before-open',
+      });
+      const engine = new FakePort();
+      await attach(router, tab, 'tab-a', epoch, engine);
+      const reachesStorage = epoch === 2 && firstRecoveryReachesStorage;
+      if (reachesStorage) {
+        for (const kind of [
+          'engine-assets-ready',
+          'owner-lock-acquired',
+        ] as const)
+          engine.receive({ ...version, kind, tabId: 'tab-a', ownerEpoch: 2 });
+      }
+      engine.receive({
+        ...version,
+        kind: 'activation-failed',
+        tabId: 'tab-a',
+        ownerEpoch: epoch,
+        reason: reachesStorage
+          ? 'OPFS recovery open failed'
+          : 'Wasm asset download failed',
+        failureCode: 'recovery-open-failed',
+        movedFilesKept: false,
+      });
+    }
+    await vi.advanceTimersByTimeAsync(1_000);
+    return { router, tab };
+  };
+
+  it.each(['watchdog', 'fatal error'] as const)(
+    'keeps the scope when a %s ended an open before it reported',
+    async (ending) => {
+      // The open may have kept files an upgrade moved here and never said
+      // so; recoveries that fail before storage cannot check, so giving the
+      // scope up could strand them.
+      const { router, tab } = await endOpenUnreported(ending, false);
+      expect(router.snapshot()?.state).toEqual({
+        kind: 'waiting-for-tab',
+        nextDatabaseAction: 'wipe-before-open',
+      });
+      expect(messagesOfKind(tab, 'terminal-error')).toEqual([]);
+      expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([
+        expect.objectContaining({
+          reason: expect.stringContaining('an interrupted open may have kept'),
+        }),
+      ]);
+    }
+  );
+
+  it('gives the scope up once a recovery that reached storage kept nothing', async () => {
+    // That recovery read the adoption itself and reported nothing kept, so
+    // the earlier open's silence no longer matters.
+    const { router, tab } = await endOpenUnreported('watchdog', true);
+    expect(router.snapshot()?.state).toEqual({
+      kind: 'failed',
+      reason: expect.stringContaining('cache recovery failed after 5 attempts'),
+    });
+    expect(messagesOfKind(tab, 'terminal-error')).toHaveLength(1);
+  });
+
   it('registers only after independent liveness-lock contention succeeds', async () => {
     let releaseVerification: ((held: boolean) => void) | undefined;
     const verification = new Promise<boolean>((resolve) => {
