@@ -25,9 +25,8 @@ use turso_core::{
 /// the text `value`, in every table declaring that column, everywhere above too;
 /// `attribute` also leaves out the facts of that attribute in a decoded facts
 /// blob (not in one compared as bytes). Each name in `json_facts` is dropped
-/// from stored text holding JSON as [`without_json_facts`] says, as optimistic
-/// layers keep the projections they apply; with any name given, such text is
-/// compared re-serialized.
+/// from optimistic layers' stored projections as [`without_json_facts`] says;
+/// with any name given, layer text is compared re-serialized.
 pub fn tables(
     path: &Path,
     decoded: bool,
@@ -344,14 +343,19 @@ fn select(
     )?;
     let mut clause = String::new();
     for (column, value) in ignore {
-        if !declared.contains(column) {
+        // Column names match as SQLite matches them, ignoring ASCII case.
+        if !declared
+            .iter()
+            .any(|declared| declared.eq_ignore_ascii_case(column))
+        {
             continue;
         }
         let column = quoted(column, '"');
         let word = if clause.is_empty() { "WHERE" } else { "AND" };
-        // Text only: `=` would apply the column's affinity, so `07` would match 7.
+        // Text only, byte for byte: `=` would apply the column's affinity (so
+        // `07` would match 7) and its collation.
         clause.push_str(&format!(
-            " {word} NOT (typeof({column}) = 'text' AND {column} = {})",
+            " {word} NOT (typeof({column}) = 'text' AND {column} = {} COLLATE BINARY)",
             quoted(value, '\'')
         ));
     }
@@ -360,8 +364,8 @@ fn select(
         .map_err(|error| format!("{table}: {error}"))
 }
 
-/// `value` rendered, with the facts in `names` dropped from JSON text as
-/// [`without_json_facts`] does.
+/// `value` rendered, with the facts in `names` dropped from an optimistic
+/// layer's text as [`without_json_facts`] does.
 fn render_text(value: &Value, names: &[String]) -> String {
     match value {
         Value::Text(text) if !names.is_empty() => {
@@ -371,52 +375,49 @@ fn render_text(value: &Value, names: &[String]) -> String {
     }
 }
 
-/// Text holding JSON (after any prefix, as `@macro-cache/optimistic-source:`
-/// has), written again without each `{"attribute":NAME,"value":N}` array
-/// element and without NAME in an `affected_attributes` list that keeps
-/// another attribute: an empty list means every attribute, so a list of NAME
-/// alone stays. Other text is returned as it is.
-fn without_json_facts(text: &str, names: &[String]) -> String {
-    let Some(start) = text.find(['{', '[']) else {
-        return text.to_owned();
-    };
-    let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&text[start..]) else {
-        return text.to_owned();
-    };
-    drop_facts(&mut json, names);
-    format!("{}{json}", &text[..start])
-}
+/// The prefix of an optimistic layer's stored source (`cache-core`'s `queue.rs`).
+const OPTIMISTIC_SOURCE: &str = "@macro-cache/optimistic-source:";
 
-fn drop_facts(json: &mut serde_json::Value, names: &[String]) {
+/// An optimistic layer's source, written again with its `projectionMutations`
+/// lacking each `{"attribute":NAME,"value":N}` of a `Patch`'s `sorts`, and NAME
+/// in an `Unknown`'s `affected_attributes` that names another attribute (an
+/// empty list means every attribute, so a list of NAME alone stays). Any other
+/// text is returned as it is.
+fn without_json_facts(text: &str, names: &[String]) -> String {
+    let Some(source) = text.strip_prefix(OPTIMISTIC_SOURCE) else {
+        return text.to_owned();
+    };
+    let Ok(mut json) = serde_json::from_str::<serde_json::Value>(source) else {
+        return text.to_owned();
+    };
     let named = |value: &serde_json::Value| {
         value
             .as_str()
             .is_some_and(|text| names.iter().any(|name| name == text))
     };
-    match json {
-        serde_json::Value::Array(items) => {
-            items.retain(|item| {
-                !matches!(item, serde_json::Value::Object(fact)
-                    if fact.len() == 2
-                        && fact.get("attribute").is_some_and(named)
-                        && fact.get("value").is_some_and(serde_json::Value::is_number))
+    let mutations = json
+        .get_mut("projectionMutations")
+        .and_then(serde_json::Value::as_array_mut);
+    for mutation in mutations.into_iter().flatten() {
+        if let Some(sorts) = mutation
+            .pointer_mut("/Patch/sorts")
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            sorts.retain(|fact| {
+                !(fact.as_object().is_some_and(|fact| fact.len() == 2)
+                    && fact.get("attribute").is_some_and(named)
+                    && fact.get("value").is_some_and(serde_json::Value::is_number))
             });
-            items.iter_mut().for_each(|item| drop_facts(item, names));
         }
-        serde_json::Value::Object(fields) => {
-            for (key, value) in fields.iter_mut() {
-                match value {
-                    serde_json::Value::Array(attributes) if key == "affected_attributes" => {
-                        if attributes.iter().any(|attribute| !named(attribute)) {
-                            attributes.retain(|attribute| !named(attribute));
-                        }
-                    }
-                    other => drop_facts(other, names),
-                }
-            }
+        if let Some(attributes) = mutation
+            .pointer_mut("/Unknown/affected_attributes")
+            .and_then(serde_json::Value::as_array_mut)
+            && attributes.iter().any(|attribute| !named(attribute))
+        {
+            attributes.retain(|attribute| !named(attribute));
         }
-        _ => {}
     }
+    format!("{OPTIMISTIC_SOURCE}{json}")
 }
 
 fn quoted(name: &str, quote: char) -> String {

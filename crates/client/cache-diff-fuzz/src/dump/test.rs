@@ -59,43 +59,63 @@ fn ignored_rows_only_in_tables_declaring_the_column() {
 fn ignored_rows_match_text_only() {
     let out = dump(
         "CREATE TABLE facts (document_id INTEGER, value NUMERIC);
-         INSERT INTO facts VALUES (1, 7), (2, NULL);",
-        &[("value", "07"), ("value", "NULL")],
+         INSERT INTO facts VALUES (1, 7), (2, NULL);
+         CREATE TABLE named (Attribute TEXT COLLATE NOCASE);
+         INSERT INTO named VALUES ('tag'), ('TAG');",
+        &[("value", "07"), ("value", "NULL"), ("attribute", "tag")],
         &[],
     );
     assert_eq!(out["facts"].len(), 2);
+    assert_eq!(out["named"], vec![r#"["t:TAG"]"#]);
 }
 
 #[test]
-fn json_facts_dropped_from_layers_only_where_named() {
-    let layer = r#"p:[{"Patch":{"sorts":[{"attribute":"view","value":1},{"attribute":"keep","value":2}]}},{"Unknown":{"affected_attributes":["inbox","view"]}},{"Unknown":{"affected_attributes":["view"]}},{"vars":{"tags":["view","keep"]}}]"#;
+fn json_facts_dropped_from_layer_projections_only() {
     let names = ["view".to_owned()];
-    assert_eq!(
-        without_json_facts(layer, &names),
-        r#"p:[{"Patch":{"sorts":[{"attribute":"keep","value":2}]}},{"Unknown":{"affected_attributes":["inbox"]}},{"Unknown":{"affected_attributes":["view"]}},{"vars":{"tags":["view","keep"]}}]"#
-    );
-    // Not JSON after the prefix: left as it is.
-    assert_eq!(without_json_facts("p:[view", &names), "p:[view");
-    // Escapes and spacing decode first.
+    let layer = |mutations: &str, data: &str| {
+        format!(
+            r#"@macro-cache/optimistic-source:{{"mutationData":{data},"projectionMutations":{mutations}}}"#
+        )
+    };
+    let data = r#"{"facets":[{"attribute":"view","value":4}],"tags":["view"]}"#;
     assert_eq!(
         without_json_facts(
-            r#"[ {"attribute":"view","value":{"x":1}} , {"attribute":"view","value":3} ,2]"#,
+            &layer(
+                r#"[{"Patch":{"sorts":[{"attribute":"view","value":1},{"attribute":"keep","value":2}]}},{"Unknown":{"affected_attributes":["inbox","view"]}},{"Unknown":{"affected_attributes":["view"]}}]"#,
+                data
+            ),
             &names
         ),
-        r#"[{"attribute":"view","value":{"x":1}},2]"#
+        layer(
+            r#"[{"Patch":{"sorts":[{"attribute":"keep","value":2}]}},{"Unknown":{"affected_attributes":["inbox"]}},{"Unknown":{"affected_attributes":["view"]}}]"#,
+            data
+        )
     );
+    // Other text, JSON or not, stays as it is.
+    for text in [
+        "chapter [1, 2]",
+        r#"[ {"attribute":"view","value":1} ]"#,
+        "@macro-cache/optimistic-source:[view",
+    ] {
+        assert_eq!(without_json_facts(text, &names), text);
+    }
 }
 
 #[test]
 fn json_facts_leave_blobs_alone() {
+    let source = r#"@macro-cache/optimistic-source:{"projectionMutations":[{"Patch":{"sorts":[{"attribute":"view","value":1}]}}]}"#;
     let out = dump(
-        r#"CREATE TABLE layers (id INTEGER, source TEXT, bytes BLOB);
-           INSERT INTO layers VALUES (1, '[{"attribute":"view","value":1}]', CAST('[{"attribute":"view","value":1}]' AS BLOB));"#,
+        &format!(
+            "CREATE TABLE layers (id INTEGER, source TEXT, bytes BLOB);
+             INSERT INTO layers VALUES (1, '{source}', CAST('{source}' AS BLOB));"
+        ),
         &[],
         &["view"],
     );
+    let row: Vec<String> = serde_json::from_str(&out["layers"][0]).unwrap();
     assert_eq!(
-        out["layers"],
-        vec![r#"["Numeric(Integer(1))","t:[]","b:[{\"attribute\":\"view\",\"value\":1}]"]"#]
+        row[1],
+        r#"t:@macro-cache/optimistic-source:{"projectionMutations":[{"Patch":{"sorts":[]}}]}"#
     );
+    assert_eq!(row[2], format!("b:{source}"));
 }

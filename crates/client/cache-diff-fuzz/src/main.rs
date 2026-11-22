@@ -72,10 +72,8 @@ struct Args {
     /// its `meta` entry (`key=NAME`).
     #[arg(long, value_name = "COLUMN=VALUE", value_parser = ignore_rows)]
     ignore_rows: Vec<(String, String)>,
-    /// Drop `{"attribute":NAME,"value":N}` facts, and NAME from non-empty
-    /// `affected_attributes` lists, in stored JSON text (repeatable; see
-    /// `dump::tables`): optimistic layers keep the projections they apply, so a
-    /// new derived sort fact shows there too.
+    /// Drop the sort fact NAME from the projections optimistic layers store
+    /// (repeatable; see `dump::tables`): a new derived sort fact shows there too.
     #[arg(long, value_name = "NAME")]
     ignore_json_fact: Vec<String>,
     /// Compare responses without their `sourceHash` (an upgrade to a build that

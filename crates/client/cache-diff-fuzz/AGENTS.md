@@ -79,9 +79,9 @@ purpose (it says what).
   `attribute=NAME`, `key=NAME`) to both sides: every table declaring that column leaves
   out the rows holding that text (and `--decoded-facts` the blob facts of that attribute).
   Optimistic layers keep the projections they apply as JSON text, so add
-  `--ignore-json-fact NAME` too: it drops `{"attribute":NAME,"value":N}` array elements, and
-  NAME from an `affected_attributes` list that names another attribute (an empty list
-  means every attribute), and compares JSON text re-serialized. In a `CHAIN_*` run comparing a migrated file with a
+  `--ignore-json-fact NAME` too: in each layer's `projectionMutations` it drops NAME from a
+  `Patch`'s `sorts`, and from an `Unknown`'s `affected_attributes` that names another
+  attribute (an empty list means every attribute); layer text is then compared re-serialized. In a `CHAIN_*` run comparing a migrated file with a
   fresh one, segment 0 is old against new and differs by design; compare the last
   segments' traces, which end with a hash per table (`runs/RUN/upgrade/SEED/{a,b}1`, kept
   for each differing seed; rerun the segment with `--full` for the rows).
