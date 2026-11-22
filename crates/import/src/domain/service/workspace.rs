@@ -2,9 +2,9 @@
 //! writing; leases, adoption, reviews, reporting and notifications are shared.
 
 use agent_session::domain::model::AgentSessionId;
+use connectors::ConnectorSelect;
 use import_notion::domain::{model::ImportScope, ports::NotionConnections};
 use macro_user_id::user_id::MacroUserIdStr;
-use connectors::ConnectorSelect;
 use std::time::Duration;
 use uuid::Uuid;
 

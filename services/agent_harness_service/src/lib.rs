@@ -141,6 +141,13 @@ use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
 use coding_agent::PgCodingAgentSource;
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
+use connectors::outbound::native::domain::models::AesKey;
+use connectors::outbound::native::outbound::NativeServerStore;
+use connectors::outbound::native::outbound::pg_server_repo::PgServerRepo;
+use connectors::outbound::pipedream::outbound::api::{PipedreamClient, PipedreamConfig};
+use connectors::outbound::pipedream::outbound::connect::ConnectAdapter;
+use connectors::outbound::pipedream::outbound::dispatch::ConnectorBackends;
+use connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo;
 use containers::{InMemRuntime, RoutedContainers};
 use cursor_api_key::cipher::{AwsKmsCiphertexts, KmsCursorApiKeyCipher};
 use cursor_cloud_agents::api::cursor_api_base_url;
@@ -174,17 +181,10 @@ use macro_service_urls::{
     AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
     StaticFilePublicUrl, StaticFileServiceUrl,
 };
-use mcp_client::domain::models::AesKey;
-use mcp_client::outbound::NativeServerStore;
-use mcp_client::outbound::pg_server_repo::PgServerRepo;
 use model_providers::{
     CursorModels, InMemoryModels, MacrodModels, PgKnownModels, VisibleHarnessAccess,
 };
 use permission_policy::PgPermissionPolicySource;
-use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
-use pipedream_mcp::outbound::connect::ConnectAdapter;
-use pipedream_mcp::outbound::dispatch::ConnectorBackends;
-use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
@@ -581,8 +581,11 @@ pub async fn run() -> anyhow::Result<()> {
     // Session egress reaches only public addresses, except on a local stack
     // whose MCP and preview services sit on the compose network.
     let mcp_address_policy =
-        mcp_client::outbound::guarded_http::AddressPolicy::for_environment(config.environment);
-    let mcp_http = mcp_client::outbound::guarded_http::McpHttp::new(mcp_address_policy)?;
+        connectors::outbound::native::outbound::guarded_http::AddressPolicy::for_environment(
+            config.environment,
+        );
+    let mcp_http =
+        connectors::outbound::native::outbound::guarded_http::McpHttp::new(mcp_address_policy)?;
 
     // Every session's MCP servers: Macro's own under the reserved `macro`
     // slug, the owner's custom servers by URL key, then the owner's Pipedream

@@ -1,6 +1,6 @@
 use super::*;
-use mcp_client::domain::models::McpServerRecord;
-use pipedream_mcp::domain::models::{McpServer, PipedreamConnection};
+use crate::outbound::native::domain::models::McpServerRecord;
+use crate::outbound::pipedream::domain::models::{McpServer, PipedreamConnection};
 use std::sync::Mutex;
 
 mod combined_tools;
@@ -99,7 +99,7 @@ fn connections(slugs: &[&str]) -> Vec<PipedreamConnection> {
             server_name: "Slack".to_string(),
             account_id: format!("apn_{slug}"),
             enabled: true,
-            provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
+            provider: crate::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
         })
         .collect()
 }
@@ -372,7 +372,7 @@ impl McpConnection for HttpConnection {
 
     async fn connect(&self, _: &PipedreamConnection) -> anyhow::Result<McpServer> {
         use rmcp::ServiceExt;
-        Ok(mcp_client::domain::models::client_info()
+        Ok(crate::outbound::native::domain::models::client_info()
             .serve(rmcp::transport::StreamableHttpClientTransport::from_uri(
                 self.0.clone(),
             ))
@@ -401,7 +401,8 @@ async fn mixed_stack_discovers_and_dispatches_both_and_deduplicates_names() {
                     server_name: hosted_name.into(),
                     account_id: "test".into(),
                     enabled: true,
-                    provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
+                    provider:
+                        crate::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
                 }],
                 native_records: vec![McpServerRecord {
                     user_id: user(),
@@ -446,5 +447,6 @@ async fn mixed_stack_discovers_and_dispatches_both_and_deduplicates_names() {
 }
 
 fn local_http() -> McpHttp {
-    McpHttp::new(mcp_client::outbound::guarded_http::AddressPolicy::AnyAddress).unwrap()
+    McpHttp::new(crate::outbound::native::outbound::guarded_http::AddressPolicy::AnyAddress)
+        .unwrap()
 }

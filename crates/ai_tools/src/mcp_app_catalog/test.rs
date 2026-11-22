@@ -1,5 +1,5 @@
 use super::*;
-use pipedream_mcp::domain::models::ConnectorOverlay;
+use connectors::outbound::pipedream::domain::models::ConnectorOverlay;
 
 /// Overlays held in memory; `None` stands for a table that cannot be read.
 struct Overlays(Option<Vec<&'static str>>);

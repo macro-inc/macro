@@ -15,7 +15,7 @@ hmac.workspace = true
 http.workspace = true
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
-pipedream_mcp = { path = "../pipedream_mcp" }
+connectors = { path = "../connectors" }
 rootcause.workspace = true
 serde.workspace = true
 serde_json.workspace = true

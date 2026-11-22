@@ -1,10 +1,12 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use connectors::outbound::pipedream::domain::models::PipedreamConnection;
+use connectors::outbound::pipedream::domain::ports::{
+    ConnectedAppProxy, ConnectionStore, ProxyResponse,
+};
 use http::{HeaderMap, Method, StatusCode};
 use macro_user_id::user_id::MacroUserIdStr;
-use pipedream_mcp::domain::models::PipedreamConnection;
-use pipedream_mcp::domain::ports::{ConnectedAppProxy, ConnectionStore, ProxyResponse};
 use tokio::time::Instant;
 
 use super::PipedreamNotionConnections;
@@ -95,7 +97,7 @@ async fn a_connected_user_reaches_notion_through_the_proxy_with_one_pacer_per_ac
         server_name: "Notion".into(),
         account_id: "apn_notion".into(),
         enabled: true,
-        provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
+        provider: connectors::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
     })));
     let proxy = Arc::new(RecordingProxy::default());
     let connections = PipedreamNotionConnections::new(store, Some(proxy.clone()));
@@ -144,7 +146,7 @@ async fn no_connection_a_disabled_one_or_no_proxy_means_no_notion() {
         server_name: "Notion".into(),
         account_id: "apn_notion".into(),
         enabled: false,
-        provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
+        provider: connectors::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
     };
     let enabled = PipedreamConnection {
         enabled: true,

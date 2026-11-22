@@ -9,11 +9,11 @@
 use agent_session::domain::model::AgentSessionId;
 use ai_toolset::actor::ToolActor;
 use async_trait::async_trait;
+use connectors::outbound::native::inbound::toolset::{ConnectMcpServer, ConnectMcpServerResponse};
+use connectors::outbound::pipedream::domain::service::discovery::DiscoveryRequest;
+use connectors::outbound::pipedream::inbound::toolset::DiscoverConnectorsResponse;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::inbound::toolset::{ConnectMcpServer, ConnectMcpServerResponse};
-use pipedream_mcp::domain::service::discovery::DiscoveryRequest;
-use pipedream_mcp::inbound::toolset::DiscoverConnectorsResponse;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;

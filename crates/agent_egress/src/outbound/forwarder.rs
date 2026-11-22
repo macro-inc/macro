@@ -5,8 +5,8 @@
 //! credential, so there is nothing left to decide and nothing here should look
 //! like a decision.
 
+use connectors::outbound::native::outbound::guarded_http::{self, AddressPolicy};
 use http_body_util::{BodyDataStream, BodyExt};
-use mcp_client::outbound::guarded_http::{self, AddressPolicy};
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{BoxError, ProxyRequest, ProxyResponse};

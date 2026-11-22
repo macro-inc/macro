@@ -12,7 +12,7 @@ indexmap = { workspace = true, features = ["serde"] }
 lazy-regex = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 models_databases = { path = "../models_databases" }
-pipedream_mcp = { path = "../pipedream_mcp" }
+connectors = { path = "../connectors" }
 rand = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

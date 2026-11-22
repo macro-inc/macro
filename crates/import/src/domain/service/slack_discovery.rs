@@ -10,8 +10,8 @@ use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, SlackSourceError, SlackWorkspaceSession,
     SlackWorkspaceSource,
 };
-use macro_user_id::user_id::MacroUserIdStr;
 use connectors::ConnectorSelect;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tokio::time::{Instant, timeout_at};

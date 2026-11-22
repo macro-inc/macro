@@ -5,13 +5,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use connectors::outbound::pipedream::domain::ports::{ConnectedAppProxy, ConnectionStore};
 use http::Method;
 use import_tracker::domain::model::{
     Comment, Cycle, Group, GroupKind, Inventory, Issue, ObjectId, TrackerConnections, TrackerError,
 };
 use import_tracker::outbound::pipedream::{Connections, Session};
 use macro_user_id::user_id::MacroUserIdStr;
-use pipedream_mcp::domain::ports::{ConnectedAppProxy, ConnectionStore};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 

@@ -3,10 +3,10 @@
 
 use super::models::{ConnectedServer, DismissedPrompts, OnboardingRow, OnboardingState, PromptId};
 use super::ports::{OnboardingError, OnboardingRepo, Result};
+use connectors::outbound::native::domain::ports::McpServerStore;
 use generic_email_domains::is_generic_email_domain;
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::ports::McpServerStore;
 use std::sync::Arc;
 
 #[cfg(test)]

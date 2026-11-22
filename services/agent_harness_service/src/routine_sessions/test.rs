@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pipedream_mcp::domain::models::{ConnectApp, ConnectorOverlay};
+use connectors::outbound::pipedream::domain::models::{ConnectApp, ConnectorOverlay};
 
 use super::*;
 

@@ -1,8 +1,8 @@
 use super::*;
 use crate::domain::model::{McpDestination, McpResolution};
 use bot_id::BotId;
+use connectors::outbound::pipedream::outbound::api::McpUpstreamCall;
 use http::header::{HeaderMap, HeaderValue};
-use pipedream_mcp::outbound::api::McpUpstreamCall;
 use std::sync::Mutex;
 use url::Url;
 
@@ -17,7 +17,7 @@ fn connection(app_slug: &str, enabled: bool) -> PipedreamConnection {
         server_name: format!("{app_slug} display name"),
         account_id: format!("apn_{app_slug}"),
         enabled,
-        provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
+        provider: connectors::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
     }
 }
 

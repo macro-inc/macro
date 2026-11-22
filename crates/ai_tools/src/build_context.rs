@@ -227,7 +227,7 @@ pub async fn build_tool_service_context_from_env(
     enforcement: ai_usage::AiUsageEnforcement,
     pricing: ai_billing::AiPricing,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
-    linked_github: Option<Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>>,
+    linked_github: Option<Arc<dyn connectors::outbound::native::domain::ports::LinkedGithubTokens>>,
     sender_provider: impl email::domain::senders::EmailSenderProvider,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
@@ -645,26 +645,32 @@ pub async fn build_tool_service_context_from_env(
                 .await
                 .context("failed to load MCP credentials encryption key")?;
             let mcp_encryption_key =
-                mcp_client::domain::models::AesKey::try_from(mcp_credentials_key.as_ref())
-                    .context("invalid MCP credentials encryption key")?;
-            Some(Arc::new(mcp_client::outbound::NativeServerStore::new(
-                mcp_client::outbound::pg_server_repo::PgServerRepo::new(
-                    pool.clone(),
-                    mcp_encryption_key,
+                connectors::outbound::native::domain::models::AesKey::try_from(
+                    mcp_credentials_key.as_ref(),
+                )
+                .context("invalid MCP credentials encryption key")?;
+            Some(Arc::new(
+                connectors::outbound::native::outbound::NativeServerStore::new(
+                    connectors::outbound::native::outbound::pg_server_repo::PgServerRepo::new(
+                        pool.clone(),
+                        mcp_encryption_key,
+                    ),
+                    linked_github,
                 ),
-                linked_github,
-            )))
+            ))
         }
         None => None,
     };
     let import_tool_context = if let Some(native_servers) = &native_servers {
         let pipedream_connections = Arc::new(
-            pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
+            connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo::new(
+                pool.clone(),
+            ),
         );
         let mcp_selector = Arc::new(connectors::McpToolSelector::new(
             native_servers.clone(),
-            mcp_client::outbound::guarded_http::McpHttp::new(
-                mcp_client::outbound::guarded_http::AddressPolicy::for_environment(environment),
+            connectors::outbound::native::outbound::guarded_http::McpHttp::new(
+                connectors::outbound::native::outbound::guarded_http::AddressPolicy::for_environment(environment),
             )?,
             pipedream_connections.clone(),
             Arc::new(pipedream_client.clone()),
@@ -728,7 +734,9 @@ pub async fn build_tool_service_context_from_env(
     };
     let mcp_server_tool_context = match &native_servers {
         Some(native_servers) => crate::tool_context::ToolMcpServerToolContext::wired(
-            mcp_client::domain::service::ServerDirectory::new(native_servers.clone()),
+            connectors::outbound::native::domain::service::ServerDirectory::new(
+                native_servers.clone(),
+            ),
         ),
         None => crate::tool_context::ToolMcpServerToolContext::unwired(),
     };

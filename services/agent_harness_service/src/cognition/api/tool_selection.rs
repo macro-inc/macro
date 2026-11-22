@@ -1,7 +1,7 @@
 use crate::cognition::model::stream::ToolSet;
 use ai_tools::{AiToolSet, ToolMcpSelector, ToolServiceContext};
-use macro_user_id::user_id::MacroUserIdStr;
 use connectors::ConnectorSelect;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::{Arc, LazyLock};
 
 #[cfg(test)]

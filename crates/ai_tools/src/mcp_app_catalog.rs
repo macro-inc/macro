@@ -6,16 +6,16 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use bots::domain::ports::{BotError, McpAppCatalog};
-use macro_env::Environment;
-use macro_env_var::maybe_env_var;
-use pipedream_mcp::domain::ports::{ConnectRollout, ConnectorOverlays};
-use pipedream_mcp::outbound::api::{
+use connectors::outbound::pipedream::domain::ports::{ConnectRollout, ConnectorOverlays};
+use connectors::outbound::pipedream::outbound::api::{
     DEFAULT_API_URL, DEFAULT_MCP_URL, PipedreamClient, PipedreamConfig,
 };
-use pipedream_mcp::outbound::connect::{ConnectAdapter, ConnectConfig};
+use connectors::outbound::pipedream::outbound::connect::{ConnectAdapter, ConnectConfig};
+use macro_env::Environment;
+use macro_env_var::maybe_env_var;
 
-use pipedream_mcp::outbound::dispatch::ConnectorBackends;
-use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
+use connectors::outbound::pipedream::outbound::dispatch::ConnectorBackends;
+use connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo;
 use std::collections::HashMap;
 use std::sync::Mutex;
 

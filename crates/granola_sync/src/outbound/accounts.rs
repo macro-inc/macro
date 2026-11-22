@@ -3,11 +3,11 @@ use crate::domain::{
     ports::{Accounts, Result},
 };
 use async_trait::async_trait;
-use macro_user_id::user_id::MacroUserIdStr;
-use pipedream_mcp::domain::{
+use connectors::outbound::pipedream::domain::{
     models::{ConnectionProvider, PipedreamConnection},
     ports::{AppConnections, ConnectionStore},
 };
+use macro_user_id::user_id::MacroUserIdStr;
 
 /// Uses the Pipedream domain ports rather than reaching into its storage.
 pub struct ConnectedAccounts<S>(pub S);

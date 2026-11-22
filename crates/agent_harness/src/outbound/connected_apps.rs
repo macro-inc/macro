@@ -3,9 +3,11 @@
 
 use std::sync::Arc;
 
+use connectors::outbound::pipedream::domain::models::ConnectionProvider;
+use connectors::outbound::pipedream::domain::ports::{
+    ConnectionStore, ConnectorOverlays, OverlayConnections,
+};
 use macro_user_id::user_id::MacroUserIdStr;
-use pipedream_mcp::domain::models::ConnectionProvider;
-use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays, OverlayConnections};
 
 use crate::domain::app_connections::ConnectedApps;
 

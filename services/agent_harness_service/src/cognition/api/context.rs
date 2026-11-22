@@ -96,11 +96,11 @@ pub type DcsUsageService =
     ai_usage::domain::service::UsageServiceImpl<ai_usage::outbound::PgUsageRepo>;
 
 /// Concrete MCP router state for DCS.
-pub type DcsMcpRouterState = mcp_client::inbound::McpRouterState<
-    mcp_client::outbound::NativeServerStore,
-    mcp_client::outbound::oauth::OAuthService<
-        mcp_client::outbound::NativeServerStore,
-        mcp_client::outbound::redis_state_store::RedisOAuthStateStore,
+pub type DcsMcpRouterState = connectors::outbound::native::inbound::McpRouterState<
+    connectors::outbound::native::outbound::NativeServerStore,
+    connectors::outbound::native::outbound::oauth::OAuthService<
+        connectors::outbound::native::outbound::NativeServerStore,
+        connectors::outbound::native::outbound::redis_state_store::RedisOAuthStateStore,
     >,
     DcsAuthorizationService,
 >;
@@ -113,15 +113,15 @@ pub type DcsImportService = ai_tools::ToolImportService;
 /// store.
 pub type DcsOnboardingService = onboarding::domain::service::OnboardingServiceImpl<
     onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo,
-    mcp_client::outbound::NativeServerStore,
+    connectors::outbound::native::outbound::NativeServerStore,
 >;
 
 /// Concrete Pipedream MCP router state for DCS: the Postgres connection
 /// store plus the connector backends (None when not configured — endpoints
 /// answer 501).
-pub type DcsPipedreamRouterState = pipedream_mcp::inbound::PipedreamRouterState<
-    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-    pipedream_mcp::outbound::dispatch::ConnectorBackends,
+pub type DcsPipedreamRouterState = connectors::outbound::pipedream::inbound::PipedreamRouterState<
+    connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo,
+    connectors::outbound::pipedream::outbound::dispatch::ConnectorBackends,
     DcsAuthorizationService,
 >;
 

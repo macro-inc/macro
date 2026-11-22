@@ -22,11 +22,11 @@ through `call::domain::imports`.
 ## Scope
 
 - Owns: webhook lifecycle, delivery verification and deduplication, Granola note mapping.
-- Not here: call storage and reads → `crates/call`; Pipedream accounts → `crates/pipedream_mcp`.
+- Not here: call storage and reads → `crates/call`; Pipedream accounts → `crates/connectors` (`outbound::pipedream`).
 
 ## Boundaries
 
-- Depends on: `call` import port, `pipedream_mcp` `ConnectedAppProxy` / `ConnectionStore` / `AppConnections`.
+- Depends on: `call` import port, `connectors::outbound::pipedream` `ConnectedAppProxy` / `ConnectionStore` / `AppConnections`.
 - Used by: `services/agent_harness_service` (composition root, worker, webhook route).
 
 ## Checks

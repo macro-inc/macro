@@ -1,11 +1,11 @@
 //! Overlaid catalog apps, answered from the native MCP stack.
 
+use crate::outbound::native::domain::models::McpServerRecord;
+use crate::outbound::native::domain::ports::McpServerStore;
+use crate::outbound::pipedream::domain::models::ConnectorOverlay;
+use crate::outbound::pipedream::domain::ports::OverlayConnections;
 use crate::selection::same_endpoint;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::models::McpServerRecord;
-use mcp_client::domain::ports::McpServerStore;
-use pipedream_mcp::domain::models::ConnectorOverlay;
-use pipedream_mcp::domain::ports::OverlayConnections;
 use std::sync::Arc;
 
 #[cfg(test)]

@@ -11,10 +11,10 @@
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
+use connectors::ConnectorSelect;
 use futures::FutureExt;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
-use connectors::ConnectorSelect;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;

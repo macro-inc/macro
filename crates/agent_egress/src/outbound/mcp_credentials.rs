@@ -9,15 +9,15 @@
 //! it picks the user. The sandbox never does; the user id is stamped from the
 //! session's grant.
 //!
-//! Both halves come from `pipedream_mcp`'s own ports - the same rows the chat
+//! Both halves come from `connectors::outbound::pipedream`'s own ports - the same rows the chat
 //! tool path reads, the same client that dials Pipedream for it - so an app
 //! connected in Macro is an app the sandbox can reach, with nothing to keep
 //! in sync.
 
+use connectors::outbound::pipedream::domain::models::PipedreamConnection;
+use connectors::outbound::pipedream::domain::ports::ConnectionStore;
+use connectors::outbound::pipedream::outbound::api::McpUpstream;
 use macro_user_id::user_id::MacroUserIdStr;
-use pipedream_mcp::domain::models::PipedreamConnection;
-use pipedream_mcp::domain::ports::ConnectionStore;
-use pipedream_mcp::outbound::api::McpUpstream;
 use std::sync::Arc;
 
 use crate::domain::error::EgressError;
@@ -115,7 +115,7 @@ where
                     server_name: slug.as_str().to_owned(),
                     account_id: String::new(),
                     enabled: false,
-                    provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
+                    provider: connectors::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
                 },
                 false,
             ),

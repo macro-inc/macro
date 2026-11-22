@@ -81,9 +81,7 @@ macro_event_broker = { path = "../macro_event_broker" }
 messages = { path = "../messages", features = ["ai_tools", "broker", "delivery"] }
 macro_queues = { path = "../macro_queues" }
 macro_user_id = { path = "../macro_user_id" }
-mcp_client = { path = "../mcp_client" }
 connectors = { path = "../connectors" }
-pipedream_mcp = { path = "../pipedream_mcp" }
 url = { workspace = true }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }

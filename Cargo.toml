@@ -149,7 +149,6 @@ members = [
   "crates/natural_time",
   "crates/notification_inbox",
   "crates/notification_state",
-  "crates/pipedream_mcp",
   "crates/granola_sync",
   "crates/onboarding",
   "crates/outlook_emulator",

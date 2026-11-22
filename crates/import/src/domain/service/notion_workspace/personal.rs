@@ -7,9 +7,9 @@ use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, ImportVisibility, NotionPlanRepo,
     NotionRunRepo, Result, SlackWorkspaceSource, WorkspaceWriter, WrittenObjects,
 };
+use connectors::ConnectorSelect;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
-use connectors::ConnectorSelect;
 use uuid::Uuid;
 
 // Separate roles retain the existing ledger kind so older readers can parse them.

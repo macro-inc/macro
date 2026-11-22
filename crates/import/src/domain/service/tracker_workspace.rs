@@ -1,11 +1,11 @@
 //! Issue tracker planning and writes. The shared workspace engine owns jobs,
 //! leases, approval, cancellation, adoption and session notifications.
 
+use connectors::ConnectorSelect;
 use futures::StreamExt;
 use import_notion::domain::ports::NotionConnections;
 use import_tracker::domain::model::{Group, Inventory, Issue, TrackerError};
 use macro_user_id::user_id::MacroUserIdStr;
-use connectors::ConnectorSelect;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tracing::Instrument;

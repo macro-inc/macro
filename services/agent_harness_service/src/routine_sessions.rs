@@ -10,11 +10,13 @@ use agent_session::domain::service::AgentSessionService;
 use agent_session::inbound::routine_sessions::{RoutineSessionsState, routine_sessions_router};
 use axum::Router;
 use bots::domain::models::AgentMcpServer;
+use connectors::outbound::pipedream::domain::models::{ConnectionProvider, PipedreamConnection};
+use connectors::outbound::pipedream::domain::ports::{
+    ConnectionStore, ConnectorOverlays, MacroConnect,
+};
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use pipedream_mcp::domain::models::{ConnectionProvider, PipedreamConnection};
-use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays, MacroConnect};
 use scheduled_action::domain::ports::DraftApps;
 use tracing::Instrument as _;
 

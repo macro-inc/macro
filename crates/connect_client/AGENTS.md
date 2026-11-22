@@ -15,7 +15,7 @@ Connect only through this crate.
 ## Scope
 
 - Owns: nothing. The source of truth is macro-inc/macro-connect.
-- Not here: how Macro uses Connect → `pipedream_mcp` (`outbound/connect.rs`).
+- Not here: how Macro uses Connect → `connectors` (`src/outbound/pipedream/outbound/connect.rs`).
 
 ## Gotchas
 
@@ -29,7 +29,7 @@ Connect only through this crate.
 ## Boundaries
 
 - Depends on: `macro_tower_layers` (trace injection).
-- Used by: `pipedream_mcp`.
+- Used by: `connectors`.
 
 ## Checks
 

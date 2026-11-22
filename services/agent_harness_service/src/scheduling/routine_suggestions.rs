@@ -28,8 +28,8 @@ pub struct HarnessSuggestionSources<Connections, Connect, Teams, Crm> {
 impl<Connections, Connect, Teams, Crm> SuggestionSources
     for HarnessSuggestionSources<Connections, Connect, Teams, Crm>
 where
-    Connections: pipedream_mcp::domain::ports::ConnectionStore,
-    Connect: pipedream_mcp::domain::ports::MacroConnect,
+    Connections: connectors::outbound::pipedream::domain::ports::ConnectionStore,
+    Connect: connectors::outbound::pipedream::domain::ports::MacroConnect,
     Teams: AccessRepository,
     Crm: CrmMemberAccess + 'static,
 {

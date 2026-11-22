@@ -94,8 +94,9 @@ async fn provider_ids_cannot_change_the_request_path() {
 }
 
 struct FakeProxy {
-    responses:
-        std::sync::Mutex<std::collections::VecDeque<pipedream_mcp::domain::ports::ProxyResponse>>,
+    responses: std::sync::Mutex<
+        std::collections::VecDeque<connectors::outbound::pipedream::domain::ports::ProxyResponse>,
+    >,
     urls: std::sync::Mutex<Vec<String>>,
 }
 impl FakeProxy {
@@ -104,13 +105,13 @@ impl FakeProxy {
             responses: std::sync::Mutex::new(
                 responses
                     .into_iter()
-                    .map(
-                        |(status, body)| pipedream_mcp::domain::ports::ProxyResponse {
+                    .map(|(status, body)| {
+                        connectors::outbound::pipedream::domain::ports::ProxyResponse {
                             status: http::StatusCode::from_u16(status).unwrap(),
                             headers: http::HeaderMap::new(),
                             body: body.to_string(),
-                        },
-                    )
+                        }
+                    })
                     .collect(),
             ),
             urls: Default::default(),
@@ -125,7 +126,7 @@ impl ConnectedAppProxy for FakeProxy {
         url: &str,
         _headers: &http::HeaderMap,
         _body: Option<&Value>,
-    ) -> anyhow::Result<pipedream_mcp::domain::ports::ProxyResponse> {
+    ) -> anyhow::Result<connectors::outbound::pipedream::domain::ports::ProxyResponse> {
         assert_eq!(connection.app_slug, "granola");
         assert_eq!(connection.account_id, "apn_account");
         self.urls.lock().unwrap().push(url.into());

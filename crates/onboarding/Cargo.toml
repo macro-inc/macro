@@ -14,7 +14,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
   "axum",
 ] }
 macro_user_id = { path = "../macro_user_id" }
-mcp_client = { path = "../mcp_client" }
+connectors = { path = "../connectors" }
 serde = { workspace = true }
 sqlx = { workspace = true }
 strum = { workspace = true }

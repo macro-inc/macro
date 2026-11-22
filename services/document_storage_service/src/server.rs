@@ -1690,7 +1690,7 @@ async fn run_server() -> anyhow::Result<()> {
         config.ai_pricing(),
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
         Some(Arc::new(
-            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+            connectors::outbound::native::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
                 authentication_service_client::AuthServiceClient::new(
                     config
                         .authentication_service_secret_key

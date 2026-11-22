@@ -6,7 +6,7 @@
 //! provider-safe mangled names (`mcp__<server>__<tool>`), and route a call by
 //! that name back to the right peer with the tool's real name. This crate is
 //! that shared piece, and nothing else - it does not know how a session was
-//! opened. `pipedream_mcp` connects through Pipedream's remote server and the
+//! opened. `connectors::outbound::pipedream` connects through Pipedream's remote server and the
 //! in-process agent runtime dials the servers it was handed over ACP; both
 //! end here.
 

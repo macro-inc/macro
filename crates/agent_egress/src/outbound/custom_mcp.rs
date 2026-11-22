@@ -2,21 +2,21 @@
 //!
 //! A custom server is one the owner added by URL under Agents → Connections,
 //! with Macro's own OAuth client holding the grant - the native stack in
-//! `mcp_client`, as opposed to the Pipedream one. The rows carry the owner's
+//! `connectors::outbound::native`, as opposed to the Pipedream one. The rows carry the owner's
 //! encrypted tokens, which is exactly why this traffic must flow through the
 //! proxy: the token is the owner's, the sandbox must never hold it, and
 //! somebody has to refresh it when it expires.
 //!
-//! Both halves come from `mcp_client`'s own port and service - the same rows
+//! Both halves come from `connectors::outbound::native`'s own port and service - the same rows
 //! the chat tool path reads, the same refresh-and-persist the in-process
 //! connector runs - so a server connected in Macro is a server the sandbox
 //! can reach, with nothing to keep in sync.
 
+use connectors::outbound::native::domain::models::McpServerRecord;
+use connectors::outbound::native::domain::ports::McpServerStore;
+use connectors::outbound::native::domain::service::{ServerAccess, server_access};
+use connectors::outbound::native::outbound::guarded_http::McpHttp;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::models::McpServerRecord;
-use mcp_client::domain::ports::McpServerStore;
-use mcp_client::domain::service::{ServerAccess, server_access};
-use mcp_client::outbound::guarded_http::McpHttp;
 use std::sync::Arc;
 use url::Url;
 

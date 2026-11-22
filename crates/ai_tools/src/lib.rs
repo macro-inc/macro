@@ -39,6 +39,7 @@ use calendar_scheduling::inbound::toolset::{
 use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use cognition::inbound::toolset::cognition_toolset;
+use connectors::outbound::native::inbound::toolset::mcp_server_toolset;
 use crm::inbound::toolset::{crm_toolset, pipelines::pipeline_toolset};
 use databases::inbound::toolset::{databases_read_only_toolset, databases_toolset};
 use databases_sql::toolset::{QueryDatabase, databases_sql_toolset};
@@ -48,7 +49,6 @@ use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
 use favorites::inbound::toolset::favorites_toolset;
 use import::inbound::toolset::import_toolset;
 use initiative::inbound::toolset::initiative_toolset;
-use mcp_client::inbound::toolset::mcp_server_toolset;
 use messages::inbound::toolset::message_toolset;
 use notification::inbound::ai_tool::{item_notification_preference_toolset, notification_toolset};
 use projects::inbound::toolset::project_toolset;
@@ -316,7 +316,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession => {
             toolset.add_subtoolset::<ToolMcpServerToolContext>(mcp_server_toolset::<
-                mcp_client::outbound::NativeServerStore,
+                connectors::outbound::native::outbound::NativeServerStore,
             >())
         }
         AiHost::ChannelBot | AiHost::Mcp => toolset,
@@ -346,7 +346,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     // the permitted connector list before the next turn after authorization.
     let toolset = match host {
         AiHost::AgentSession => toolset.add_tool::<
-            pipedream_mcp::inbound::toolset::DiscoverConnectors,
+            connectors::outbound::pipedream::inbound::toolset::DiscoverConnectors,
             ToolConnectorToolContext,
         >(),
         AiHost::Chat | AiHost::ChannelBot | AiHost::Mcp => toolset,

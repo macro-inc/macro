@@ -6,8 +6,10 @@ use crate::domain::{
 use async_trait::async_trait;
 use call::domain::{imports::ImportedCall, records::*};
 use chrono::{DateTime, Utc};
+use connectors::outbound::pipedream::domain::{
+    models::PipedreamConnection, ports::ConnectedAppProxy,
+};
 use http::{HeaderMap, Method};
-use pipedream_mcp::domain::{models::PipedreamConnection, ports::ConnectedAppProxy};
 use rootcause::prelude::IntoRootcause;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -42,7 +44,8 @@ impl<P: ConnectedAppProxy> GranolaApi<P> {
             server_name: "Granola".into(),
             account_id: connection.account_id.clone(),
             enabled: true,
-            provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
+            provider:
+                connectors::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
         };
         let response = self
             .0

@@ -1,19 +1,19 @@
 use super::*;
 use agent_session::domain::model::AgentMcpServer;
-use mcp_client::domain::models::McpServerRecord;
+use connectors::outbound::native::domain::models::McpServerRecord;
 
 fn slug(name: &str) -> McpServerSlug {
     McpServerSlug::parse(name).expect("a valid app slug")
 }
 
-struct FixedConnections(Vec<pipedream_mcp::domain::models::PipedreamConnection>);
+struct FixedConnections(Vec<connectors::outbound::pipedream::domain::models::PipedreamConnection>);
 
 impl ConnectionStore for FixedConnections {
     type Err = std::convert::Infallible;
 
     async fn save(
         &self,
-        _record: &pipedream_mcp::domain::models::PipedreamConnection,
+        _record: &connectors::outbound::pipedream::domain::models::PipedreamConnection,
     ) -> Result<(), Self::Err> {
         unreachable!("provisioning never writes")
     }
@@ -22,7 +22,10 @@ impl ConnectionStore for FixedConnections {
         &self,
         _user_id: &MacroUserIdStr<'static>,
         _app_slug: &str,
-    ) -> Result<Option<pipedream_mcp::domain::models::PipedreamConnection>, Self::Err> {
+    ) -> Result<
+        Option<connectors::outbound::pipedream::domain::models::PipedreamConnection>,
+        Self::Err,
+    > {
         unreachable!("provisioning lists, never loads one")
     }
 
@@ -37,7 +40,8 @@ impl ConnectionStore for FixedConnections {
     async fn list(
         &self,
         _user_id: &MacroUserIdStr<'static>,
-    ) -> Result<Vec<pipedream_mcp::domain::models::PipedreamConnection>, Self::Err> {
+    ) -> Result<Vec<connectors::outbound::pipedream::domain::models::PipedreamConnection>, Self::Err>
+    {
         Ok(self.0.clone())
     }
 }
@@ -46,17 +50,21 @@ impl ConnectionStore for FixedConnections {
 impl ConnectorOverlays for FixedConnections {
     async fn overlays(
         &self,
-    ) -> anyhow::Result<Vec<pipedream_mcp::domain::models::ConnectorOverlay>> {
-        Ok(vec![pipedream_mcp::domain::models::ConnectorOverlay {
-            app_slug: "sentry".to_owned(),
-            server_url: "https://mcp.sentry.dev/mcp".to_owned(),
-        }])
+    ) -> anyhow::Result<Vec<connectors::outbound::pipedream::domain::models::ConnectorOverlay>>
+    {
+        Ok(vec![
+            connectors::outbound::pipedream::domain::models::ConnectorOverlay {
+                app_slug: "sentry".to_owned(),
+                server_url: "https://mcp.sentry.dev/mcp".to_owned(),
+            },
+        ])
     }
 
     async fn overlay(
         &self,
         _app_slug: &str,
-    ) -> anyhow::Result<Option<pipedream_mcp::domain::models::ConnectorOverlay>> {
+    ) -> anyhow::Result<Option<connectors::outbound::pipedream::domain::models::ConnectorOverlay>>
+    {
         unreachable!("provisioning lists overlays once")
     }
 }
@@ -104,14 +112,17 @@ fn custom_server(url: &str, name: &str, enabled: bool) -> McpServerRecord {
     }
 }
 
-fn connection(app_slug: &str, enabled: bool) -> pipedream_mcp::domain::models::PipedreamConnection {
-    pipedream_mcp::domain::models::PipedreamConnection {
+fn connection(
+    app_slug: &str,
+    enabled: bool,
+) -> connectors::outbound::pipedream::domain::models::PipedreamConnection {
+    connectors::outbound::pipedream::domain::models::PipedreamConnection {
         user_id: MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
         app_slug: app_slug.to_owned(),
         server_name: app_slug.to_owned(),
         account_id: format!("apn_{app_slug}"),
         enabled,
-        provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
+        provider: connectors::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
     }
 }
 

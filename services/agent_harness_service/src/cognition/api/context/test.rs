@@ -605,10 +605,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         Arc::new(all_tools.prompt.to_string());
 
     let (import_service, onboarding_service, mcp_selector) = {
-        let mcp_key =
-            mcp_client::domain::models::AesKey::try_from(vec![0u8; 32]).expect("valid test key");
-        let mcp_repo = mcp_client::outbound::NativeServerStore::new(
-            mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key),
+        let mcp_key = connectors::outbound::native::domain::models::AesKey::try_from(vec![0u8; 32])
+            .expect("valid test key");
+        let mcp_repo = connectors::outbound::native::outbound::NativeServerStore::new(
+            connectors::outbound::native::outbound::pg_server_repo::PgServerRepo::new(
+                pool.clone(),
+                mcp_key,
+            ),
             None,
         );
         let creator = ai_tools::ToolEntityCreator {
@@ -631,7 +634,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             document_service: document_tool_context.service.clone(),
         };
         let pipedream_connections = Arc::new(
-            pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
+            connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo::new(
+                pool.clone(),
+            ),
         );
         let mcp_selector: Arc<ai_tools::ToolMcpSelector> =
             Arc::new(connectors::McpToolSelector::new(
@@ -801,8 +806,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             },
         },
         granola_sync: None,
-        pipedream_state: pipedream_mcp::inbound::PipedreamRouterState::new(
-            pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
+        pipedream_state: connectors::outbound::pipedream::inbound::PipedreamRouterState::new(
+            connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo::new(
+                pool.clone(),
+            ),
             None,
             authorization_state.clone(),
         ),
@@ -810,26 +817,31 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         mcp_state: {
             let redis_client =
                 Arc::new(redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"));
-            let mcp_key = mcp_client::domain::models::AesKey::try_from(vec![0u8; 32])
-                .expect("valid test key");
-            let mcp_repo = mcp_client::outbound::NativeServerStore::new(
-                mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key),
+            let mcp_key =
+                connectors::outbound::native::domain::models::AesKey::try_from(vec![0u8; 32])
+                    .expect("valid test key");
+            let mcp_repo = connectors::outbound::native::outbound::NativeServerStore::new(
+                connectors::outbound::native::outbound::pg_server_repo::PgServerRepo::new(
+                    pool.clone(),
+                    mcp_key,
+                ),
                 None,
             );
             let mcp_state_store =
-                mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client);
-            let client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(
-                "http://localhost/mcp/servers/auth/client-metadata".to_string(),
-                "http://localhost/mcp/servers/auth/callback".to_string(),
-            );
-            let mcp_oauth = mcp_client::outbound::oauth::OAuthService::new(
+                connectors::outbound::native::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client);
+            let client_metadata =
+                connectors::outbound::native::domain::models::OAuthClientMetadata::new(
+                    "http://localhost/mcp/servers/auth/client-metadata".to_string(),
+                    "http://localhost/mcp/servers/auth/callback".to_string(),
+                );
+            let mcp_oauth = connectors::outbound::native::outbound::oauth::OAuthService::new(
                 mcp_repo.clone(),
                 mcp_state_store,
                 client_metadata.clone(),
                 local_mcp_http(),
-                mcp_client::domain::provider_registry::PreRegisteredProviders::empty(),
+                connectors::outbound::native::domain::provider_registry::PreRegisteredProviders::empty(),
             );
-            mcp_client::inbound::McpRouterState::new(
+            connectors::outbound::native::inbound::McpRouterState::new(
                 mcp_repo,
                 mcp_oauth,
                 authorization_state,
@@ -843,9 +855,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     Arc::new(api_context)
 }
 
-fn local_mcp_http() -> mcp_client::outbound::guarded_http::McpHttp {
-    mcp_client::outbound::guarded_http::McpHttp::new(
-        mcp_client::outbound::guarded_http::AddressPolicy::AnyAddress,
+fn local_mcp_http() -> connectors::outbound::native::outbound::guarded_http::McpHttp {
+    connectors::outbound::native::outbound::guarded_http::McpHttp::new(
+        connectors::outbound::native::outbound::guarded_http::AddressPolicy::AnyAddress,
     )
     .unwrap()
 }

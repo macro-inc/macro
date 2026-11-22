@@ -3,12 +3,12 @@
 
 use std::collections::HashMap;
 
+use connectors::ConnectorSelect;
 use import_notion::domain::inventory::full_markdown;
 use import_notion::domain::macro_cells::PeopleMap;
 use import_notion::domain::model::NotionId;
 use import_notion::domain::ports::{NotionApi, NotionConnections};
 use macro_user_id::user_id::MacroUserIdStr;
-use connectors::ConnectorSelect;
 use uuid::Uuid;
 
 use super::super::ImportServiceImpl;

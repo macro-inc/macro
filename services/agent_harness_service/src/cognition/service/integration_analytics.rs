@@ -7,8 +7,8 @@
 #[cfg(test)]
 mod test;
 
+use connectors::outbound::native::domain::models::McpServerRecord;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::models::McpServerRecord;
 use serde::Serialize;
 use sqlx::PgPool;
 

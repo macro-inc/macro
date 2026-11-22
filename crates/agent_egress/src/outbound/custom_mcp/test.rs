@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::model::{McpServerSlug, UpstreamCredential};
 use bot_id::BotId;
-use mcp_client::domain::models::StoredCredentials;
+use connectors::outbound::native::domain::models::StoredCredentials;
 use rmcp::transport::auth::OAuthTokenResponse;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -269,9 +269,9 @@ async fn every_other_destination_delegates_to_the_inner_resolver() {
     );
 }
 
-fn local_http() -> mcp_client::outbound::guarded_http::McpHttp {
-    mcp_client::outbound::guarded_http::McpHttp::new(
-        mcp_client::outbound::guarded_http::AddressPolicy::AnyAddress,
+fn local_http() -> connectors::outbound::native::outbound::guarded_http::McpHttp {
+    connectors::outbound::native::outbound::guarded_http::McpHttp::new(
+        connectors::outbound::native::outbound::guarded_http::AddressPolicy::AnyAddress,
     )
     .unwrap()
 }

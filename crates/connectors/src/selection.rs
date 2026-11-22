@@ -1,7 +1,7 @@
 //! Provider identity and selection policy. Display names are editable and never identities.
 use super::ConnectorRef;
-use mcp_client::domain::models::McpServerRecord;
-use pipedream_mcp::domain::models::PipedreamConnection;
+use crate::outbound::native::domain::models::McpServerRecord;
+use crate::outbound::pipedream::domain::models::PipedreamConnection;
 use std::collections::HashSet;
 
 // Keep provider endpoints aligned with the web native connection presets.

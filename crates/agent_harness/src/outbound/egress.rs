@@ -13,9 +13,9 @@
 use agent_egress::domain::model::{
     CustomMcpServerKey, CustomMcpServerListing, McpServerSlug, SessionToken,
 };
+use connectors::outbound::native::domain::ports::McpServerStore;
+use connectors::outbound::pipedream::domain::ports::{ConnectionStore, ConnectorOverlays};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::ports::McpServerStore;
-use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays};
 use std::sync::Arc;
 
 use crate::domain::error::{HarnessError, Result};

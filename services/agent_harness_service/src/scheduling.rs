@@ -555,7 +555,9 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
     search: search_service_client::SearchServiceClient,
-    routine_connect: Option<Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>,
+    routine_connect: Option<
+        Arc<connectors::outbound::pipedream::outbound::dispatch::ConnectorBackends>,
+    >,
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
@@ -860,7 +862,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         // counted as saving and every run count them.
         .with_apps(Arc::new(
             crate::routine_sessions::PipedreamConnectedApps::new(
-                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
+                connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
                 routine_connect.clone(),
             ),
         ))
@@ -926,7 +928,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 EmailServiceUrl::new()?.to_string(),
             )),
             apps: crate::routine_sessions::PipedreamConnectedApps::new(
-                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
+                connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
                 routine_connect,
             ),
             teams: entity_access::outbound::PgAccessRepository::new(db.clone()),

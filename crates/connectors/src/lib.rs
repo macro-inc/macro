@@ -4,19 +4,21 @@
 //! Enabled native connections take precedence for known providers. Other
 //! enabled Pipedream apps remain available, with one connection per provider.
 
+use crate::outbound::native::domain::ports::McpServerStore;
+use crate::outbound::native::domain::service::McpToolSet;
+use crate::outbound::native::outbound::guarded_http::McpHttp;
+use crate::outbound::pipedream::domain::ports::{ConnectionStore, McpConnection};
+use crate::outbound::pipedream::domain::service::PipedreamToolSet;
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolInfo, ToolResult,
     ToolSet, ToolSetError,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::ports::McpServerStore;
-use mcp_client::domain::service::McpToolSet;
-use mcp_client::outbound::guarded_http::McpHttp;
-use pipedream_mcp::domain::ports::{ConnectionStore, McpConnection};
-use pipedream_mcp::domain::service::PipedreamToolSet;
 use std::collections::HashSet;
 use std::pin::Pin;
 
+/// The adapters for each source of connections.
+pub mod outbound;
 mod overlay;
 mod selection;
 pub use overlay::{NativeOverlayConnections, overlay_connection};
@@ -249,7 +251,7 @@ where
     async fn pipedream_connections(
         &self,
         user: &MacroUserIdStr<'static>,
-    ) -> Vec<pipedream_mcp::domain::models::PipedreamConnection> {
+    ) -> Vec<crate::outbound::pipedream::domain::models::PipedreamConnection> {
         if !self.pipedream_connection.is_configured() {
             return Vec::new();
         }

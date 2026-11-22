@@ -103,7 +103,7 @@ pub async fn build(
     db: sqlx::PgPool,
     event_broker_tracker: TaskTracker,
     import_jobs: ai_tools::ImportJobs,
-    mcp_http: mcp_client::outbound::guarded_http::McpHttp,
+    mcp_http: connectors::outbound::native::outbound::guarded_http::McpHttp,
 ) -> anyhow::Result<CognitionRuntime> {
     let public_url = macro_service_urls::CognitionPublicUrl::new()?;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -594,15 +594,15 @@ pub async fn build(
     // The import pipeline: staged/imported external items, Slack discovery,
     // and the Notion page import job. Built before the tool service context
     // so the chat toolset gets a wired import context.
-    let mcp_encryption_key = mcp_client::domain::models::AesKey::try_from(
+    let mcp_encryption_key = connectors::outbound::native::domain::models::AesKey::try_from(
         config.mcp_credentials_key_secret_name.as_ref(),
     )
     .context("invalid MCP credentials encryption key")?;
     let granola_signing_key = *mcp_encryption_key.as_bytes();
-    let mcp_server_repo = mcp_client::outbound::NativeServerStore::new(
-        mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key),
+    let mcp_server_repo = connectors::outbound::native::outbound::NativeServerStore::new(
+        connectors::outbound::native::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key),
         Some(Arc::new(
-            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+            connectors::outbound::native::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
                 (*auth_service_client).clone(),
             ),
         )),
@@ -613,7 +613,9 @@ pub async fn build(
     // endpoints answer 501 and its toolsets come up empty. Connect-flow
     // webhooks need both URI and secret; a half-set pair is ignored so we
     // never mint a callback we cannot serve.
-    let pipedream_client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>> = match (
+    let pipedream_client: Option<
+        Arc<connectors::outbound::pipedream::outbound::api::PipedreamClient>,
+    > = match (
         config.pipedream_client_id.value(),
         config.pipedream_client_secret.value(),
         config.pipedream_project_id.value(),
@@ -632,8 +634,8 @@ pub async fn build(
                     None
                 }
             };
-            let client = pipedream_mcp::outbound::api::PipedreamClient::new(
-                pipedream_mcp::outbound::api::PipedreamConfig {
+            let client = connectors::outbound::pipedream::outbound::api::PipedreamClient::new(
+                connectors::outbound::pipedream::outbound::api::PipedreamConfig {
                     client_id: client_id.to_owned(),
                     client_secret: client_secret.to_owned(),
                     project_id: project_id.to_owned(),
@@ -648,12 +650,12 @@ pub async fn build(
                     api_url: config
                         .pipedream_api_url
                         .value()
-                        .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_API_URL)
+                        .unwrap_or(connectors::outbound::pipedream::outbound::api::DEFAULT_API_URL)
                         .to_owned(),
                     mcp_url: config
                         .pipedream_mcp_url
                         .value()
-                        .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_MCP_URL)
+                        .unwrap_or(connectors::outbound::pipedream::outbound::api::DEFAULT_MCP_URL)
                         .to_owned(),
                     allowed_origins: match config.pipedream_allowed_origins.value() {
                         Some(origins) => origins
@@ -692,7 +694,7 @@ pub async fn build(
         config.environment,
     )?;
     let connectors: ai_tools::ToolPipedreamConnection = pipedream_client.as_ref().map(|client| {
-        let backends = pipedream_mcp::outbound::dispatch::ConnectorBackends::new(
+        let backends = connectors::outbound::pipedream::outbound::dispatch::ConnectorBackends::new(
             client.clone(),
             connect_adapter.clone(),
         );
@@ -702,7 +704,9 @@ pub async fn build(
         })
     });
     let pipedream_repo =
-        pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone());
+        connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo::new(
+            db.clone(),
+        );
     let granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>> =
         pipedream_client.as_ref().map(|client| {
             Arc::new(granola_sync::domain::service::Service {
@@ -929,7 +933,9 @@ pub async fn build(
             import_service.clone(),
         ),
         mcp_server_tool_context: ai_tools::ToolMcpServerToolContext::wired(
-            mcp_client::domain::service::ServerDirectory::new(Arc::new(mcp_server_repo.clone())),
+            connectors::outbound::native::domain::service::ServerDirectory::new(Arc::new(
+                mcp_server_repo.clone(),
+            )),
         ),
         chat_tool_context,
         channel_tool_context,
@@ -1003,15 +1009,19 @@ pub async fn build(
     tracing::info!("initialized onboarding service");
 
     let mcp_client_public_url = &public_url;
-    let mcp_client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(
-        format!("{mcp_client_public_url}/mcp/servers/auth/client-metadata"),
-        format!("{mcp_client_public_url}/mcp/servers/auth/callback"),
-    );
+    let mcp_client_metadata =
+        connectors::outbound::native::domain::models::OAuthClientMetadata::new(
+            format!("{mcp_client_public_url}/mcp/servers/auth/client-metadata"),
+            format!("{mcp_client_public_url}/mcp/servers/auth/callback"),
+        );
     let mcp_oauth_state_store =
-        mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client.clone());
+        connectors::outbound::native::outbound::redis_state_store::RedisOAuthStateStore::new(
+            redis_client.clone(),
+        );
     let mcp_pre_registered =
-        mcp_client::domain::provider_registry::PreRegisteredProviders::from_env()?;
-    let mcp_oauth = mcp_client::outbound::oauth::OAuthService::new(
+        connectors::outbound::native::domain::provider_registry::PreRegisteredProviders::from_env(
+        )?;
+    let mcp_oauth = connectors::outbound::native::outbound::oauth::OAuthService::new(
         mcp_server_repo.clone(),
         mcp_oauth_state_store,
         mcp_client_metadata.clone(),
@@ -1021,28 +1031,32 @@ pub async fn build(
     // Record connector connects and disconnects for product analytics.
     let integration_analytics = IntegrationAnalytics::from_config(&config, &db);
     let analytics_for_auth_hook = integration_analytics.clone();
-    let mcp_auth_hook: mcp_client::inbound::axum_router::McpAuthCompletedHook =
-        Arc::new(move |record: mcp_client::domain::models::McpServerRecord| {
-            analytics_for_auth_hook.record(
-                record.user_id,
-                IntegrationChange::Connected,
-                IntegrationEvent::mcp_server(&record.url),
-            );
-            Box::pin(async {})
-        });
-    let analytics_for_mcp_removed_hook = integration_analytics.clone();
-    let mcp_removed_hook: mcp_client::inbound::axum_router::McpServerRemovedHook =
-        Arc::new(move |record: mcp_client::domain::models::McpServerRecord| {
-            if let Some(event) = IntegrationEvent::removed_mcp_server(&record) {
-                analytics_for_mcp_removed_hook.record(
+    let mcp_auth_hook: connectors::outbound::native::inbound::axum_router::McpAuthCompletedHook =
+        Arc::new(
+            move |record: connectors::outbound::native::domain::models::McpServerRecord| {
+                analytics_for_auth_hook.record(
                     record.user_id,
-                    IntegrationChange::Disconnected,
-                    event,
+                    IntegrationChange::Connected,
+                    IntegrationEvent::mcp_server(&record.url),
                 );
-            }
-            Box::pin(async {})
-        });
-    let mcp_state = mcp_client::inbound::McpRouterState::new(
+                Box::pin(async {})
+            },
+        );
+    let analytics_for_mcp_removed_hook = integration_analytics.clone();
+    let mcp_removed_hook: connectors::outbound::native::inbound::axum_router::McpServerRemovedHook =
+        Arc::new(
+            move |record: connectors::outbound::native::domain::models::McpServerRecord| {
+                if let Some(event) = IntegrationEvent::removed_mcp_server(&record) {
+                    analytics_for_mcp_removed_hook.record(
+                        record.user_id,
+                        IntegrationChange::Disconnected,
+                        event,
+                    );
+                }
+                Box::pin(async {})
+            },
+        );
+    let mcp_state = connectors::outbound::native::inbound::McpRouterState::new(
         mcp_server_repo,
         mcp_oauth,
         authorization_state.clone(),
@@ -1052,9 +1066,9 @@ pub async fn build(
     .with_server_removed_hook(mcp_removed_hook);
 
     let analytics_for_pipedream_hook = integration_analytics.clone();
-    let pipedream_auth_hook: pipedream_mcp::inbound::axum_router::PipedreamAuthCompletedHook =
+    let pipedream_auth_hook: connectors::outbound::pipedream::inbound::axum_router::PipedreamAuthCompletedHook =
         Arc::new(
-            move |connection: pipedream_mcp::domain::models::PipedreamConnection| {
+            move |connection: connectors::outbound::pipedream::domain::models::PipedreamConnection| {
                 analytics_for_pipedream_hook.record(
                     connection.user_id,
                     IntegrationChange::Connected,
@@ -1063,9 +1077,9 @@ pub async fn build(
                 Box::pin(async {})
             },
         );
-    let pipedream_disconnected_hook: pipedream_mcp::inbound::axum_router::PipedreamDisconnectedHook =
+    let pipedream_disconnected_hook: connectors::outbound::pipedream::inbound::axum_router::PipedreamDisconnectedHook =
         Arc::new(
-            move |connection: pipedream_mcp::domain::models::PipedreamConnection| {
+            move |connection: connectors::outbound::pipedream::domain::models::PipedreamConnection| {
                 integration_analytics.record(
                     connection.user_id,
                     IntegrationChange::Disconnected,
@@ -1074,7 +1088,7 @@ pub async fn build(
                 Box::pin(async {})
             },
         );
-    let pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
+    let pipedream_state = connectors::outbound::pipedream::inbound::PipedreamRouterState::new(
         pipedream_repo,
         connectors,
         authorization_state.clone(),

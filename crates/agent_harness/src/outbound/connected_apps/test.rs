@@ -1,5 +1,5 @@
 use super::*;
-use pipedream_mcp::domain::models::{ConnectorOverlay, PipedreamConnection};
+use connectors::outbound::pipedream::domain::models::{ConnectorOverlay, PipedreamConnection};
 
 /// One user's Pipedream rows, with `sentry` overlaid.
 struct Connections(Vec<PipedreamConnection>);
@@ -61,14 +61,14 @@ fn pipedream(app_slug: &str, enabled: bool) -> PipedreamConnection {
         server_name: format!("{app_slug} (Pipedream)"),
         account_id: "apn_1".into(),
         enabled,
-        provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
+        provider: connectors::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
     }
 }
 
 #[tokio::test]
 async fn a_connect_grant_outranks_an_overlay() {
     let connect = |enabled| PipedreamConnection {
-        provider: pipedream_mcp::domain::models::ConnectionProvider::Connect,
+        provider: connectors::outbound::pipedream::domain::models::ConnectionProvider::Connect,
         server_name: "Sentry (Connect)".into(),
         ..pipedream("sentry", enabled)
     };

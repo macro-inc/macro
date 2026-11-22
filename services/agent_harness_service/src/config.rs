@@ -291,10 +291,14 @@ pub struct Config {
     #[macro_config_default(default_pipedream_environment())]
     pub pipedream_environment: String,
     /// Base URL of the Pipedream API.
-    #[macro_config_default(String::from(pipedream_mcp::outbound::api::DEFAULT_API_URL))]
+    #[macro_config_default(String::from(
+        connectors::outbound::pipedream::outbound::api::DEFAULT_API_URL
+    ))]
     pub pipedream_api_url: String,
     /// URL of Pipedream's remote MCP server.
-    #[macro_config_default(String::from(pipedream_mcp::outbound::api::DEFAULT_MCP_URL))]
+    #[macro_config_default(String::from(
+        connectors::outbound::pipedream::outbound::api::DEFAULT_MCP_URL
+    ))]
     pub pipedream_mcp_url: String,
     /// RSA key Macro API tokens are signed with.
     pub macro_api_token_private_secret_key: LocalOrRemoteSecret<MacroApiTokenPrivateSecretKey>,
@@ -391,9 +395,11 @@ impl Config {
     /// separate authorization.
     pub fn linked_github_tokens(
         &self,
-    ) -> anyhow::Result<std::sync::Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>> {
+    ) -> anyhow::Result<
+        std::sync::Arc<dyn connectors::outbound::native::domain::ports::LinkedGithubTokens>,
+    > {
         Ok(std::sync::Arc::new(
-            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+            connectors::outbound::native::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
                 self.auth_service_client()?,
             ),
         ))

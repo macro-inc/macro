@@ -4,10 +4,10 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError, Weak};
 
+use connectors::outbound::pipedream::domain::models::PipedreamConnection;
+use connectors::outbound::pipedream::domain::ports::{ConnectedAppProxy, ConnectionStore};
 use http::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use macro_user_id::user_id::MacroUserIdStr;
-use pipedream_mcp::domain::models::PipedreamConnection;
-use pipedream_mcp::domain::ports::{ConnectedAppProxy, ConnectionStore};
 use rootcause::compat::IntoRootcause;
 
 use super::rest::{

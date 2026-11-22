@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::OnboardingStatus;
-use mcp_client::domain::models::{McpServerRecord, StoredCredentials};
+use connectors::outbound::native::domain::models::{McpServerRecord, StoredCredentials};
 use std::sync::Mutex;
 
 fn user() -> MacroUserIdStr<'static> {

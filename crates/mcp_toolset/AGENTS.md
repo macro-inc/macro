@@ -20,13 +20,13 @@ names, and routes calls back to the right server.
 - Owns: tool listing, provider-safe name mangling, and call routing for any
   already-connected MCP server session.
 - Not here: opening/authenticating MCP sessions — Pipedream's connection flow
-  lives in `pipedream_mcp`; in-process ACP session wiring lives in `agent_inmem`.
+  lives in `connectors`; in-process ACP session wiring lives in `agent_inmem`.
 
 ## Boundaries
 
 - Depends on: `ai_toolset`, `rmcp` (client feature), `genai_telemetry`
   (trace context in `_meta`).
-- Used by: `agent_inmem`, `pipedream_mcp`.
+- Used by: `agent_inmem`, `connectors`.
 
 ## Recipes
 

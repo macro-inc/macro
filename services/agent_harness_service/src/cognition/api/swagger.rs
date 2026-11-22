@@ -18,22 +18,22 @@ use crate::cognition::model::{
     stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
 };
 use ai_usage::inbound::axum_router::{self as ai_usage_api};
-use image_generation::inbound::axum_router::{self as image_generation_api};
-use import::inbound::axum_router::{self as import_api, RunImportRequest};
-use mcp_client::inbound::axum_router::{
+use connectors::outbound::native::inbound::axum_router::{
     self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
     UpdateServerRequest,
 };
-use memory::inbound::axum_router::{
-    self as memory_api, MemoryErrorBody, MemoryResponse, UpdateExplicitMemoryRequest,
-};
-use onboarding::inbound::axum_router::{self as onboarding_api, CompleteOnboardingRequest};
-use pipedream_mcp::inbound::axum_router::{
+use connectors::outbound::pipedream::inbound::axum_router::{
     self as pipedream_api, PipedreamCatalogEntryResponse, PipedreamCatalogResponse,
     PipedreamCompleteRequest, PipedreamConnectCompleteRequest, PipedreamConnectionResponse,
     PipedreamOverlayResponse, PipedreamProviderResponse, PipedreamRecoverRequest,
     PipedreamTokenRequest, PipedreamTokenResponse, PipedreamUpdateRequest,
 };
+use image_generation::inbound::axum_router::{self as image_generation_api};
+use import::inbound::axum_router::{self as import_api, RunImportRequest};
+use memory::inbound::axum_router::{
+    self as memory_api, MemoryErrorBody, MemoryResponse, UpdateExplicitMemoryRequest,
+};
+use onboarding::inbound::axum_router::{self as onboarding_api, CompleteOnboardingRequest};
 
 use crate::cognition::api::preview::get_batch_preview::{
     GetBatchPreviewRequest, GetBatchPreviewResponse,

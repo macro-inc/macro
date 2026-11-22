@@ -8,7 +8,7 @@ publish = false
 async-trait = { workspace = true }
 http = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
-pipedream_mcp = { path = "../pipedream_mcp" }
+connectors = { path = "../connectors" }
 rootcause = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

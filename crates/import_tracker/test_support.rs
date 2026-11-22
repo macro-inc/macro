@@ -1,7 +1,9 @@
+use connectors::outbound::pipedream::domain::models::PipedreamConnection;
+use connectors::outbound::pipedream::domain::ports::{
+    ConnectedAppProxy, ConnectionStore, ProxyResponse,
+};
 use http::{HeaderMap, Method, StatusCode};
 use macro_user_id::user_id::MacroUserIdStr;
-use pipedream_mcp::domain::models::PipedreamConnection;
-use pipedream_mcp::domain::ports::{ConnectedAppProxy, ConnectionStore, ProxyResponse};
 use serde_json::Value;
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -20,7 +22,8 @@ impl ConnectionStore for Store {
             server_name: slug.into(),
             account_id: "apn_test".into(),
             enabled: true,
-            provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
+            provider:
+                connectors::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
         }))
     }
     async fn save(&self, _: &PipedreamConnection) -> Result<(), Self::Err> {

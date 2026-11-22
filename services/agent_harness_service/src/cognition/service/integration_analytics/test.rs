@@ -29,7 +29,7 @@ fn unparseable_mcp_server_urls_are_recorded_as_unknown() {
 }
 
 fn mcp_server_record(
-    credentials: Option<mcp_client::domain::models::StoredCredentials>,
+    credentials: Option<connectors::outbound::native::domain::models::StoredCredentials>,
 ) -> McpServerRecord {
     McpServerRecord {
         user_id: MacroUserIdStr::parse_from_str("macro|user-1@example.com").unwrap(),
@@ -42,7 +42,7 @@ fn mcp_server_record(
 
 #[test]
 fn removing_an_authenticated_mcp_server_is_a_disconnect() {
-    let credentials = mcp_client::domain::models::StoredCredentials::new(
+    let credentials = connectors::outbound::native::domain::models::StoredCredentials::new(
         "client".to_owned(),
         None,
         Vec::new(),
