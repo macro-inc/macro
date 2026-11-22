@@ -588,6 +588,10 @@ pub enum AdoptOutcome {
     Unreadable,
     /// This browser cannot move OPFS entries; nothing moved.
     Unsupported,
+    /// The previous identity has a marker of its own: an adoption into it
+    /// whose first open has not succeeded. Its build has yet to decide those
+    /// files, which may still go back further, so nothing moved.
+    PreviousAdopting,
 }
 
 /// An adoption into an owner's paths whose first open has not succeeded yet.
@@ -879,6 +883,13 @@ async fn adopt_pair(
         .is_some()
     {
         return Ok(AdoptOutcome::TargetExists);
+    }
+    // Moving such a pair would leave its marker behind: once the files sit
+    // elsewhere, the previous identity's build removes a marker without a
+    // main file, and a pair that came back would no longer say where it
+    // came from or which version it was moved at.
+    if existing_file(&root, &marker_path(&from)).await?.is_some() {
+        return Ok(AdoptOutcome::PreviousAdopting);
     }
     let [Some(main), Some(wal)] = present_files(&root, &from).await? else {
         return Ok(AdoptOutcome::NothingToAdopt);

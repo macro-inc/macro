@@ -72,7 +72,9 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   upgradable older storage version forward (`carry_forward` in `src/shell.rs`,
   after the storage grant), holding the older name's lock until the first open
   ends, then opens it, which upgrades it in place; it first resumes a move an
-  earlier open left unfinished. Moved files an open would reset go back to the
+  earlier open left unfinished. An older name with an unfinished adoption of
+  its own stays with its build (`older-in-use`), so moved files are always at
+  the version of the name they came from. Moved files an open would reset go back to the
   older name (`hand_back`) only when the failed open left them at the version
   they moved at (`TursoStorageOpenFailure::stored_storage_version`); at a newer
   version they are discarded. A recovery open decides the same before wiping

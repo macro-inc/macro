@@ -380,6 +380,34 @@ async fn the_previous_lock_keeps_the_older_build_out_until_released() {
 }
 
 #[wasm_bindgen_test]
+async fn a_pair_whose_own_adoption_is_unfinished_stays_until_it_finishes() {
+    // The t12 pair came from a t10 name and its first open never succeeded;
+    // a t13 build finds it as its newest older pair.
+    let nonce = js_sys::Date::now() as u64;
+    let oldest = format!("adopt-chained-{nonce}:t10");
+    let (old, new) = identities("chained");
+    write_pair(&oldest, 4).await;
+    clean_pair(&old).await;
+    clean_pair(&new).await;
+    assert_eq!(adopt_into(&oldest, &old).await, AdoptOutcome::Adopted);
+    assert!(marker_exists(&old).await);
+
+    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::PreviousAdopting);
+    assert_eq!(present(&new).await, [false, false]);
+    assert!(!marker_exists(&new).await);
+    assert!(marker_exists(&old).await);
+
+    // Once its own first open succeeds, the pair moves on as any other.
+    assert_eq!(open_and_finish(&old).await, 4);
+    assert!(!marker_exists(&old).await);
+    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
+    assert_eq!(open_and_finish(&new).await, 4);
+    clean_pair(&oldest).await;
+    clean_pair(&old).await;
+    clean_pair(&new).await;
+}
+
+#[wasm_bindgen_test]
 async fn adopting_never_overwrites_or_moves_an_incomplete_pair() {
     // This owner's main file already exists.
     let (old, new) = identities("target");

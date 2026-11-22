@@ -112,9 +112,12 @@ older name's owner lock if it is free (`OpfsOwner::lock_previous`), moves its
 main and WAL to this build's name (`OpfsOwner::adopt`), and opens them, which
 runs the steps. It holds that lock until the first open ends, so no tab of the
 older build can open, reset or recreate its name meanwhile. A tab of the older
-build already holding the lock, a browser without OPFS moves, a pair whose
-headers Turso would not open, or a failed move leaves the old file where it is
-and starts empty, as every version change did before. The open result reports
+build already holding the lock, an older name with an unfinished adoption of its
+own (a marker beside it, below, which that build decides first: `older-in-use`),
+a browser without OPFS moves, a pair whose headers Turso would not open, or a
+failed move leaves the old file where it is and starts empty, as every version
+change did before. So moved files always come from a name whose files are at
+its own version, and a hand-back can compare against that. The open result reports
 `upgraded-existing` with `fromStorageVersion`, and `carryForward` says what
 happened to the older database; `graphql_cache.schema_init` records both. The
 coordinator protocol carries an upgrade as `opened-existing`, since storage

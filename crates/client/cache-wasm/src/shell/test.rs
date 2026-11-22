@@ -3972,6 +3972,50 @@ async fn a_recovery_stopped_after_reading_the_version_still_hands_the_files_back
     destroy_cache(SCOPE.into()).await.expect("destroy cache");
 }
 
+/// An older pair beside a marker of its own came from an even older name and
+/// never finished its first open there; a later storage bump finds it so.
+/// Its build decides those files first, so they stay, and this build starts
+/// empty, reporting the older build in use.
+#[wasm_bindgen_test(async)]
+async fn an_older_pair_still_finishing_its_own_adoption_stays_with_its_build() {
+    const SCOPE: &str = "cache-wasm-chained-adoption";
+    let own = database_identity(SCOPE);
+    let older = cache_database_name(SCOPE, 11);
+    let older_marker = format!("{older}-adopting");
+    let generation = older_database_with_a_queued_write(SCOPE, Flaw::None).await;
+    write_opfs_file(&older_marker, "an adoption into the older name").await;
+
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("open without the older pair");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::OpenedNew,
+            carry_forward: Some(CarryForward::new(CarryForwardKind::OlderInUse, 11)),
+        }
+    );
+    assert_eq!(queue_depth(&engine).await, "0");
+    resolved(engine.close()).await;
+    assert!(opfs_file_exists(&older).await);
+    assert!(opfs_file_exists(&older_marker).await);
+
+    // Once that build has finished with them, they move on with their queue.
+    remove_opfs_file(&older_marker).await;
+    remove_opfs_pair(&own).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("carry the older database forward");
+    assert_eq!(
+        report.carry_forward,
+        Some(CarryForward::new(CarryForwardKind::Moved, 11))
+    );
+    assert_eq!(queue_depth(&engine).await, "1");
+    assert_eq!(test_generation(&engine).await, generation);
+    resolved(engine.close()).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
 #[wasm_bindgen_test(async)]
 async fn moved_files_whose_version_is_unreadable_are_kept_until_the_limit() {
     const SCOPE: &str = "cache-wasm-recovery-unversioned";

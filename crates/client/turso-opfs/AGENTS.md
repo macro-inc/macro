@@ -54,8 +54,9 @@ contract and the multi-target verification commands.
 - Local tests prove physical lock contention but not real cross-worker
   termination — don't read passing tests here as proof of that.
 - `adopt` is the only way files move between identities: main and WAL together,
-  under the older identity's `PreviousLock`, never onto an existing main file,
-  with a marker recording the older WAL until the moved files open. Keep the
+  under the older identity's `PreviousLock`, never onto an existing main file
+  nor from an identity with a marker of its own (`PreviousAdopting`), with a
+  marker recording the older WAL until the moved files open. Keep the
   lock until the first open ends. `complete_adoption` moves a split's WAL only
   while it matches the marker, and one with frames only under the older lock;
   `return_adoption` moves back only a self-contained database onto an identity

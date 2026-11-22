@@ -161,7 +161,9 @@ enum CarryForwardKind {
     /// An earlier open moved it, or began to, and its first open here never
     /// finished; this open completed the move and opened it.
     Resumed,
-    /// A context of the older build holds it, so this build started empty.
+    /// A context of the older build holds it, or its own adoption from an
+    /// even older build has not finished, so it stayed with that build and
+    /// this build started empty.
     OlderInUse,
     /// This browser cannot move OPFS files, so this build started empty.
     Unsupported,
@@ -1158,6 +1160,8 @@ async fn carry_forward(scope: &str, owner: &mut OpfsOwner) -> Carried {
             }
             Ok(AdoptOutcome::Unsupported) => CarryForwardKind::Unsupported,
             Ok(AdoptOutcome::Unreadable) => CarryForwardKind::Unreadable,
+            // That build decides those files first; its tabs send the queue.
+            Ok(AdoptOutcome::PreviousAdopting) => CarryForwardKind::OlderInUse,
             // A move that failed between its two renames, and could not put
             // the main file back, leaves a split adoption to complete.
             Err(_) => match owner.read_adoption().await {
