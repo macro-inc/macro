@@ -323,6 +323,13 @@ pub(crate) fn error(error: models::Error) -> EmailApiError {
             reason: SendRejectionReason::ConnectionUnavailable,
             message: "SMTP connection unavailable; no message was submitted".into(),
         },
+        models::Error::AccountBusy => EmailApiError::RateLimited {
+            retry_after: Some(std::time::Duration::from_secs(5)),
+            origin: RateLimitOrigin::Local,
+        },
+        models::Error::MessageTooLarge => EmailApiError::Permanent {
+            message: "message exceeds the supported 25 MiB content limit".into(),
+        },
         models::Error::Throttled => EmailApiError::RateLimited {
             retry_after: Some(std::time::Duration::from_secs(60)),
             origin: RateLimitOrigin::Provider { concurrency: false },

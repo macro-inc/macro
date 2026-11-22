@@ -159,7 +159,15 @@ impl CredentialCipher for TestCipher {
         })
     }
 }
+pub(crate) struct OrganizationWorkControl {
+    pub(crate) writes: std::sync::atomic::AtomicU32,
+    pub(crate) seen: AtomicBool,
+    pub(crate) busy_after_write: AtomicBool,
+}
+
 pub(crate) struct ProviderWorkControl {
+    pub(crate) failures: BTreeMap<u32, Error>,
+    pub(crate) organization: Option<Arc<OrganizationWorkControl>>,
     pub(crate) source: Option<Vec<u8>>,
     pub(crate) started: tokio::sync::mpsc::UnboundedSender<Uuid>,
     pub(crate) released: tokio::sync::Semaphore,
@@ -197,8 +205,37 @@ impl MailTransport for UncertainTransport {
         _: &Credentials,
         _: &str,
         _: u32,
-        _: u32,
+        uid: u32,
     ) -> Result<Option<RemoteMessage>, Error> {
+        if let Some(control) = &self.provider_work
+            && let Some(organization) = &control.organization
+        {
+            if organization.writes.load(Ordering::SeqCst) > 0
+                && organization.busy_after_write.swap(false, Ordering::SeqCst)
+            {
+                return Err(Error::AccountBusy);
+            }
+            let state = self.repository.state.lock().unwrap();
+            let Some(message) = state.messages.values().next() else {
+                return Ok(None);
+            };
+            return Ok(Some(RemoteMessage {
+                gmail_labels: None,
+                uid,
+                flags: if organization.seen.load(Ordering::SeqCst) {
+                    vec!["\\Seen".into()]
+                } else {
+                    Vec::new()
+                },
+                mime: Arc::from(STANDARD.decode(&message.mime_base64).unwrap()),
+                size: message.size,
+                received_at: message.received_at,
+                modseq: None,
+                gmail_message_id: None,
+                native_message_id: None,
+                native_thread_id: None,
+            }));
+        }
         Ok(None)
     }
     async fn disconnect(&self, _: Binding) -> Result<(), Error> {
@@ -209,10 +246,13 @@ impl MailTransport for UncertainTransport {
         credentials: &Credentials,
         _: &str,
         _: u32,
-        _: u32,
+        uid: u32,
     ) -> Result<Vec<u8>, Error> {
         if let Some(control) = &self.provider_work {
             control.wait(credentials).await?;
+            if let Some(error) = control.failures.get(&uid) {
+                return Err(*error);
+            }
             if let Some(source) = &control.source {
                 return Ok(source.clone());
             }
@@ -246,6 +286,12 @@ impl MailTransport for UncertainTransport {
         _: u32,
         _: RemoteAction,
     ) -> Result<RemoteWriteReceipt, Error> {
+        if let Some(control) = &self.provider_work
+            && let Some(organization) = &control.organization
+        {
+            organization.writes.fetch_add(1, Ordering::SeqCst);
+            organization.seen.store(true, Ordering::SeqCst);
+        }
         Ok(RemoteWriteReceipt::default())
     }
     async fn submit(

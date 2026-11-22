@@ -83,14 +83,15 @@ impl IntoResponse for ConnectionError {
             ImapConnectionError::Provider(Error::CredentialsUnavailable) => {
                 (StatusCode::SERVICE_UNAVAILABLE, "credentials_unavailable")
             }
-            ImapConnectionError::Provider(Error::Throttled) => {
+            ImapConnectionError::Provider(Error::Throttled | Error::AccountBusy) => {
                 (StatusCode::TOO_MANY_REQUESTS, "throttled")
             }
             ImapConnectionError::Provider(
                 Error::CursorOutdated
                 | Error::ConnectionUnavailable
                 | Error::SendRejected
-                | Error::SendUnavailable,
+                | Error::SendUnavailable
+                | Error::MessageTooLarge,
             ) => (StatusCode::BAD_GATEWAY, "connection_unavailable"),
             ImapConnectionError::Provider(Error::DnsUnavailable) => {
                 (StatusCode::BAD_GATEWAY, "dns_unavailable")

@@ -33,3 +33,7 @@ Clients default to interactive operations. Clone with `with_operation_class` onl
 at trusted worker composition; keep user and background clients separate. The
 optional `x-imap-work-class` header preserves default behavior for old clients
 and never replaces the internal key or either mailbox-generation fence.
+
+Keep AccountBusy (429, local admission) distinct from MessageTooLarge (413,
+unsupported content). Generated contracts reuse the engine's validated domain
+types; regenerate the spec/client after changing those codes or status responses.

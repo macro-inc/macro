@@ -250,6 +250,9 @@ impl Client {
             410u16 => Err(Error::ErrorResponse(
                 ResponseValue::from_response(response).await?,
             )),
+            413u16 => Err(Error::ErrorResponse(
+                ResponseValue::from_response(response).await?,
+            )),
             422u16 => Err(Error::ErrorResponse(
                 ResponseValue::from_response(response).await?,
             )),

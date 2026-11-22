@@ -136,9 +136,16 @@ it. Draft reads remain leased because they may reconcile an uncertain send.
 
 Limit pooled command sessions to three per endpoint/login per replica; keep
 socket reuse generation-fenced and retain the permit through publication/drop.
-Return throttling promptly at saturation. Retry a read once after one second
-outside global admission and without a DB snapshot; never queue account waiters
-while retaining user slots. Scan, IDLE setup and leased Sent reconciliation use
+Return AccountBusy promptly at saturation. Retry eligible reads and pre-write
+Apply operations once after one second outside global admission and without a
+DB snapshot; never queue account waiters while retaining user slots. Scan, IDLE setup and leased Sent reconciliation use
 independent sessions. The quota is not distributed and excludes those owner/Sent
 sockets. Give read transactions local statement/idle deadlines and gate post-IO
 validation with other loads.
+
+Retry only typed AccountBusy once outside global admission. Apply may expose
+that signal only before its first provider write; map busy follow-up work to
+reconciliation/unavailability so it cannot replay the mutation. Never retry
+Submit through this mechanism. Keep MessageTooLarge distinct (HTTP413), reject
+known oversized sources before fetching, and defer busy/oversized RecentInbox
+items individually rather than restarting the batch or returning partial MIME.

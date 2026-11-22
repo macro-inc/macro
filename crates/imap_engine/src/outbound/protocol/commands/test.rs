@@ -2,7 +2,7 @@
 use super::*;
 use std::sync::{
     Arc,
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -14,6 +14,7 @@ struct Peer {
     idles: tokio::sync::mpsc::UnboundedReceiver<()>,
     release: Arc<tokio::sync::Semaphore>,
     maximum: Arc<AtomicUsize>,
+    stores: Arc<AtomicUsize>,
     server: tokio::task::JoinHandle<()>,
 }
 
@@ -28,6 +29,9 @@ async fn peer() -> Peer {
     let active = Arc::new(AtomicUsize::new(0));
     let maximum = Arc::new(AtomicUsize::new(0));
     let peak = maximum.clone();
+    let seen = Arc::new(AtomicBool::new(false));
+    let stores = Arc::new(AtomicUsize::new(0));
+    let stored = stores.clone();
     let gate = release.clone();
     let server = tokio::spawn(async move {
         let mut peers = tokio::task::JoinSet::new();
@@ -41,6 +45,8 @@ async fn peer() -> Peer {
             let gate = gate.clone();
             let fetching = fetching.clone();
             let idling = idling.clone();
+            let seen = seen.clone();
+            let stored = stored.clone();
             peers.spawn(async move {
                 let mut socket = tokio_rustls::TlsAcceptor::from(tls).accept(socket).await.unwrap();
                 socket.write_all(b"* OK synthetic IMAP\r\n").await.unwrap();
@@ -69,11 +75,21 @@ async fn peer() -> Peer {
                         socket.get_mut().write_all(b"* CAPABILITY IMAP4rev1 IDLE\r\n").await.unwrap();
                     } else if command.starts_with("SELECT") {
                         socket.get_mut().write_all(b"* FLAGS (\\Seen)\r\n* 1 EXISTS\r\n* OK [UIDVALIDITY 1] synthetic\r\n").await.unwrap();
+                    } else if command.starts_with("UID STORE") {
+                        stored.fetch_add(1, Ordering::SeqCst);
+                        seen.store(true, Ordering::SeqCst);
                     } else if command.starts_with("UID FETCH") {
-                        let _ = fetching.send(());
-                        gate.acquire().await.unwrap().forget();
-                        let body = b"Message-ID: <synthetic@example.net>\r\n\r\nTest body\r\n";
-                        socket.get_mut().write_all(format!("* 1 FETCH (UID 1 RFC822.SIZE {} BODY[] {{{}}}\r\n",body.len(),body.len()).as_bytes()).await.unwrap();
+                        let header_only = command.contains("HEADER");
+                        let body: &[u8] = if header_only {
+                            b"Message-ID: <synthetic@example.net>\r\nSubject: Synthetic\r\n\r\n"
+                        } else {
+                            let _ = fetching.send(());
+                            gate.acquire().await.unwrap().forget();
+                            b"Message-ID: <synthetic@example.net>\r\n\r\nTest body\r\n"
+                        };
+                        let section = if header_only { "HEADER" } else { "" };
+                        let flags = if seen.load(Ordering::SeqCst) { "\\Seen" } else { "" };
+                        socket.get_mut().write_all(format!("* 1 FETCH (UID 1 FLAGS ({flags}) RFC822.SIZE {} BODY[{section}] {{{}}}\r\n", body.len(), body.len()).as_bytes()).await.unwrap();
                         socket.get_mut().write_all(body).await.unwrap();
                         socket.get_mut().write_all(b")\r\n").await.unwrap();
                     }
@@ -118,6 +134,7 @@ async fn peer() -> Peer {
         idles,
         release,
         maximum,
+        stores,
         server,
     }
 }
@@ -154,7 +171,7 @@ async fn concurrent_body_reads_keep_three_command_sessions_and_leave_sync_indepe
     shared_mailbox.binding.as_mut().unwrap().link_id = uuid::Uuid::now_v7();
     assert!(matches!(
         transport.source(&shared_mailbox, "INBOX", 1, 1).await,
-        Err(Error::Throttled)
+        Err(Error::AccountBusy)
     ));
     // The account actor's independent sync socket does not wait on read slots.
     let sync = transport.imap(&credentials.imap).await.unwrap();
@@ -168,7 +185,7 @@ async fn concurrent_body_reads_keep_three_command_sessions_and_leave_sync_indepe
                 assert!(body.ends_with(b"Test body\r\n"));
                 accepted += 1;
             }
-            Err(Error::Throttled) => throttled += 1,
+            Err(Error::AccountBusy) => throttled += 1,
             Err(error) => panic!("unexpected read outcome: {error}"),
         }
     }
@@ -339,7 +356,7 @@ async fn one_stalled_mailbox_cannot_fill_global_interactive_slots_with_waiters()
     for _ in 0..13 {
         assert!(matches!(
             reads.join_next().await.unwrap().unwrap(),
-            Err(Error::Throttled)
+            Err(Error::AccountBusy)
         ));
     }
     release.add_permits(3);
@@ -448,6 +465,68 @@ async fn a_fourth_user_read_retries_after_capacity_returns_without_holding_a_glo
     }
     let message: Message = serde_json::from_value(fourth.await.unwrap()).unwrap();
     assert!(message.source_complete);
+    server.abort();
+    let _ = server.await;
+}
+
+#[tokio::test]
+async fn marking_read_after_opening_a_thread_retries_before_any_provider_write() {
+    let Peer {
+        transport,
+        mut fetches,
+        release,
+        stores,
+        server,
+        ..
+    } = peer().await;
+    let engine = indexed_engine(transport);
+    let binding = Binding {
+        link_id: uuid::Uuid::now_v7(),
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    let mut reads = tokio::task::JoinSet::new();
+    for _ in 0..3 {
+        let engine = engine.clone();
+        reads.spawn(async move {
+            engine
+                .execute(binding, Operation::Message { id: "m:one".into() })
+                .await
+        });
+    }
+    for _ in 0..3 {
+        fetches.recv().await.unwrap();
+    }
+    let mut marking = Box::pin(engine.execute(
+        binding,
+        Operation::Apply {
+            id: "m:one".into(),
+            request: ActionRequest {
+                action: serde_json::json!({"action":"set_read","value":true}),
+                expected_version: None,
+            },
+        },
+    ));
+    assert!(
+        futures::poll!(marking.as_mut()).is_pending(),
+        "a busy pre-write lookup must get a bounded retry"
+    );
+    assert_eq!(stores.load(Ordering::SeqCst), 0);
+    release.add_permits(3);
+    while let Some(result) = reads.join_next().await {
+        assert!(result.unwrap().is_ok());
+    }
+    let receipt: WriteReceipt = serde_json::from_value(marking.await.unwrap()).unwrap();
+    assert_eq!(receipt.id, "m:one");
+    assert_eq!(stores.load(Ordering::SeqCst), 1);
+    let message: Message = serde_json::from_value(
+        engine
+            .execute(binding, Operation::Organization { id: "m:one".into() })
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(message.flags.iter().any(|flag| flag == "\\Seen"));
     server.abort();
     let _ = server.await;
 }

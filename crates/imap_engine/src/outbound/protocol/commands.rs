@@ -72,7 +72,9 @@ impl ProtocolTransport {
                 capacity
             }
         };
-        let permit = capacity.try_acquire_owned().map_err(|_| Error::Throttled)?;
+        let permit = capacity
+            .try_acquire_owned()
+            .map_err(|_| Error::AccountBusy)?;
         Ok((permit, key))
     }
     pub(super) async fn command_session(&self, c: &Credentials) -> Result<Command, Error> {

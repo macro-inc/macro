@@ -12,6 +12,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
+use tracing::Instrument;
 use uuid::Uuid;
 
 const PAGE_SIZE: usize = 500;
@@ -264,14 +265,16 @@ impl Engine {
     }
 
     /// Execute an operation using the trusted caller's workload class.
-    #[tracing::instrument(skip_all, fields(read.retry_count = tracing::field::Empty), err)]
+    #[tracing::instrument(skip_all, fields(operation.busy_retry_count = tracing::field::Empty), err)]
     pub async fn execute_in_class(
         &self,
         binding: Binding,
         operation: Operation,
         class: OperationClass,
     ) -> Result<Value, Error> {
-        if operation.access() == OperationAccess::Command {
+        let retryable = operation.access() == OperationAccess::Read
+            || matches!(&operation, Operation::Apply { .. });
+        if !retryable {
             return self
                 .execute_with_owner(binding, operation, class, None)
                 .await;
@@ -279,17 +282,19 @@ impl Engine {
         let result = self
             .execute_with_owner(binding, operation.clone(), class, None)
             .await;
-        if matches!(&result, Err(Error::Throttled)) {
+        if matches!(&result, Err(Error::AccountBusy)) {
             // The first attempt has dropped its global slot and DB snapshot.
             // Give a short burst one retry without holding either resource.
+            // Apply only propagates AccountBusy before its first provider write;
+            // Submit and all other command operations are excluded.
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             let result = self
                 .execute_with_owner(binding, operation, class, None)
                 .await;
-            tracing::Span::current().record("read.retry_count", 1i64);
+            tracing::Span::current().record("operation.busy_retry_count", 1i64);
             result
         } else {
-            tracing::Span::current().record("read.retry_count", 0i64);
+            tracing::Span::current().record("operation.busy_retry_count", 0i64);
             result
         }
     }
@@ -418,6 +423,9 @@ impl Engine {
             return Ok(None);
         };
         if !message.source_complete {
+            if message.size > MAX_MESSAGE_SOURCE_BYTES {
+                return Err(Error::MessageTooLarge);
+            }
             let location = a
                 .state
                 .locations
@@ -443,6 +451,11 @@ impl Engine {
                     location.uid,
                 )
                 .await?;
+            if source.len()
+                > usize::try_from(MAX_MESSAGE_SOURCE_BYTES).map_err(|_| Error::Invalid)?
+            {
+                return Err(Error::MessageTooLarge);
+            }
             message.classification = Some(super::bounce::classify(&source));
             message.mime_base64 = STANDARD.encode(source);
             message.source_complete = true;
@@ -516,12 +529,25 @@ impl Engine {
                     .into_iter()
                     .map(|m| m.id.clone())
                     .collect::<Vec<_>>();
+                let span = tracing::info_span!(
+                    "imap.recent_inbox",
+                    read.deferred_count = tracing::field::Empty,
+                    read.oversized_count = tracing::field::Empty
+                );
+                let mut deferred = 0i64;
+                let mut oversized = 0i64;
                 let mut messages = Vec::new();
                 for id in ids {
-                    if let Some(message) = self.read_message(a, &id).await? {
-                        messages.push(message);
+                    match self.read_message(a, &id).instrument(span.clone()).await {
+                        Ok(Some(message)) => messages.push(message),
+                        Ok(None) => {}
+                        Err(Error::AccountBusy) => deferred += 1,
+                        Err(Error::MessageTooLarge) => oversized += 1,
+                        Err(error) => return Err(error),
                     }
                 }
+                span.record("read.deferred_count", deferred);
+                span.record("read.oversized_count", oversized);
                 value(messages)
             }
             Operation::Attachment { id, part } => {

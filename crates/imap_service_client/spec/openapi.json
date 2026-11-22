@@ -509,7 +509,9 @@
           "connection_timed_out",
           "send_rejected",
           "send_unavailable",
-          "throttled"
+          "throttled",
+          "account_busy",
+          "message_too_large"
         ],
         "type": "string"
       },
@@ -1642,6 +1644,16 @@
             "description": ""
           },
           "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": ""
+          },
+          "413": {
             "content": {
               "application/json": {
                 "schema": {

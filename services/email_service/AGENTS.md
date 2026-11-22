@@ -431,3 +431,9 @@ client classes. Background settings scans and link-maintenance jobs also use a
 background client. Preserve the original interactive gateway for API settings,
 user commands, draft materialization, attachments and sends; never classify all
 `MailboxGateway` methods as background, because API and worker contexts share it.
+
+The IMAP gateway preserves AccountBusy as a local rate-limit refusal with the
+engine's five-second retry hint. MessageTooLarge is permanent. Neither changes
+credential health or proves a send outcome; generic connectivity remains
+uncertain. Recent inbox sources contain complete MIME only; the engine defers
+individual busy or oversized items instead of returning partial bodies.

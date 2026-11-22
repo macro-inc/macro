@@ -156,6 +156,8 @@ async fn scoped_reads_share_a_snapshot_and_cannot_mutate_or_outlive_access(pool:
     });
     let (started, mut observed) = tokio::sync::mpsc::unbounded_channel();
     let control = Arc::new(ProviderWorkControl {
+        failures: std::collections::BTreeMap::new(),
+        organization: None,
         source: Some(b"Message-ID: <synthetic@example.net>\r\n\r\nTest body".to_vec()),
         started,
         released: tokio::sync::Semaphore::new(0),

@@ -12,6 +12,8 @@ use zeroize::ZeroizeOnDrop;
 pub const MAX_FOLDER_CATALOG: usize = 1000;
 /// Maximum ordinary physical folders scanned per account.
 pub const MAX_MONITORED_FOLDERS: usize = 200;
+/// Largest supported full RFC822 source, matching the existing transport limit.
+pub(crate) const MAX_MESSAGE_SOURCE_BYTES: u32 = 25 * 1024 * 1024;
 /// Keep aligned with the fenced five-minute PostgreSQL command lease (pinned by DB tests).
 pub(crate) const COMMAND_LEASE_BUDGET: std::time::Duration = std::time::Duration::from_secs(300);
 /// Keep aligned with the PostgreSQL owner lease (pinned by DB tests).
@@ -370,6 +372,12 @@ pub enum Error {
     /// Resource or attempt limit reached.
     #[error("throttled")]
     Throttled,
+    /// The account command quota refused admission before this provider call.
+    #[error("account busy")]
+    AccountBusy,
+    /// The full message source exceeds the supported content limit.
+    #[error("message too large")]
+    MessageTooLarge,
 }
 
 /// A message's current location. Never look up a UID without the account and folder.

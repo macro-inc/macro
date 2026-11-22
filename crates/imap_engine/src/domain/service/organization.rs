@@ -83,137 +83,152 @@ impl Engine {
                 remote,
             )
             .await?;
-        if current.gmail_labels.is_some() && !physical_move {
-            let facts = self
-                .transport
-                .message(
-                    &credentials,
-                    &source.path,
-                    location.uid_validity,
-                    location.uid,
-                )
-                .await?
-                .ok_or(Error::ConnectionUnavailable)?;
-            sync::gmail_projection(&mut a.state, &id, &facts, &location)?;
-            let version = a.state.messages.get(&id).map(|m| m.version.clone());
-            a.state.notification_pending = true;
-            self.repository.save(a).await?;
-            self.notify(a).await?;
-            return value(WriteReceipt { id, version });
-        }
-        let mut message = previous;
-        let mut observed_version = None;
-        if let Some(destination) = destination {
-            if destination.folder.id != source.folder.id && current.gmail_labels.is_none() {
-                push_change(&mut a.state, &source.folder.id, &id, true)?;
-            }
-            message.folder_id = destination.folder.id.clone();
-            message.is_sent |= destination.folder.role == FolderRole::Sent;
-            if let Some((epoch, uid)) = receipt
-                .destination_uid
-                .filter(|(epoch, _)| *epoch == destination.uid_validity)
-            {
-                if current.gmail_labels.is_some()
-                    && let Some(label) = destination
-                        .virtual_label
-                        .as_deref()
-                        .filter(|l| !matches!(*l, "\\All" | "\\Trash" | "\\Spam"))
-                {
-                    self.transport
-                        .apply(
-                            &credentials,
-                            &destination.path,
-                            epoch,
-                            uid,
-                            RemoteAction::GmailLabels {
-                                add: vec![label.to_owned()],
-                                remove: if label != "\\Inbox" {
-                                    vec!["\\Inbox".into()]
-                                } else {
-                                    Vec::new()
-                                },
-                            },
-                        )
-                        .await?;
-                }
+        // Once a provider write has succeeded, no busy follow-up may cause a
+        // replay of the whole action. It must settle through reconciliation.
+        let result = async {
+            if current.gmail_labels.is_some() && !physical_move {
                 let facts = self
                     .transport
-                    .message(&credentials, &destination.path, epoch, uid)
+                    .message(
+                        &credentials,
+                        &source.path,
+                        location.uid_validity,
+                        location.uid,
+                    )
                     .await?
                     .ok_or(Error::ConnectionUnavailable)?;
-                apply_facts(&mut message, &facts)?;
-                a.state
-                    .locations
-                    .retain(|l| !(l.message_id == id && l.folder_id == source.folder.id));
-                a.state.locations.push(Location {
-                    folder_id: destination.folder.id.clone(),
-                    uid_validity: epoch,
-                    uid,
-                    message_id: id.clone(),
-                    fingerprint: location.fingerprint.clone(),
-                });
-                if facts.gmail_labels.is_some() {
-                    a.state.messages.insert(id.clone(), message);
-                    let physical = Location {
+                sync::gmail_projection(&mut a.state, &id, &facts, &location)?;
+                let version = a.state.messages.get(&id).map(|m| m.version.clone());
+                a.state.notification_pending = true;
+                self.repository.save(a).await?;
+                self.notify(a).await?;
+                return value(WriteReceipt { id, version });
+            }
+            let mut message = previous;
+            let mut observed_version = None;
+            if let Some(destination) = destination {
+                if destination.folder.id != source.folder.id && current.gmail_labels.is_none() {
+                    push_change(&mut a.state, &source.folder.id, &id, true)?;
+                }
+                message.folder_id = destination.folder.id.clone();
+                message.is_sent |= destination.folder.role == FolderRole::Sent;
+                if let Some((epoch, uid)) = receipt
+                    .destination_uid
+                    .filter(|(epoch, _)| *epoch == destination.uid_validity)
+                {
+                    if current.gmail_labels.is_some()
+                        && let Some(label) = destination
+                            .virtual_label
+                            .as_deref()
+                            .filter(|l| !matches!(*l, "\\All" | "\\Trash" | "\\Spam"))
+                    {
+                        self.transport
+                            .apply(
+                                &credentials,
+                                &destination.path,
+                                epoch,
+                                uid,
+                                RemoteAction::GmailLabels {
+                                    add: vec![label.to_owned()],
+                                    remove: if label != "\\Inbox" {
+                                        vec!["\\Inbox".into()]
+                                    } else {
+                                        Vec::new()
+                                    },
+                                },
+                            )
+                            .await?;
+                    }
+                    let facts = self
+                        .transport
+                        .message(&credentials, &destination.path, epoch, uid)
+                        .await?
+                        .ok_or(Error::ConnectionUnavailable)?;
+                    apply_facts(&mut message, &facts)?;
+                    a.state
+                        .locations
+                        .retain(|l| !(l.message_id == id && l.folder_id == source.folder.id));
+                    a.state.locations.push(Location {
                         folder_id: destination.folder.id.clone(),
                         uid_validity: epoch,
                         uid,
                         message_id: id.clone(),
                         fingerprint: location.fingerprint.clone(),
-                    };
-                    sync::gmail_projection(&mut a.state, &id, &facts, &physical)?;
-                    let version = a.state.messages.get(&id).map(|m| m.version.clone());
-                    a.state.notification_pending = true;
-                    self.repository.save(a).await?;
-                    self.notify(a).await?;
-                    return value(WriteReceipt { id, version });
-                }
-                observed_version = Some(message.version.clone());
-            } else {
-                // Preserve the old locator as move-identity evidence for the next sync. UID zero is
-                // an explicit unreadable destination membership, never sent to the remote server.
-                if !a
-                    .state
-                    .locations
-                    .iter()
-                    .any(|l| l.message_id == id && l.folder_id == destination.folder.id)
-                {
-                    a.state.locations.push(Location {
-                        folder_id: destination.folder.id.clone(),
-                        uid_validity: destination.uid_validity,
-                        uid: 0,
-                        message_id: id.clone(),
-                        fingerprint: location.fingerprint.clone(),
                     });
+                    if facts.gmail_labels.is_some() {
+                        a.state.messages.insert(id.clone(), message);
+                        let physical = Location {
+                            folder_id: destination.folder.id.clone(),
+                            uid_validity: epoch,
+                            uid,
+                            message_id: id.clone(),
+                            fingerprint: location.fingerprint.clone(),
+                        };
+                        sync::gmail_projection(&mut a.state, &id, &facts, &physical)?;
+                        let version = a.state.messages.get(&id).map(|m| m.version.clone());
+                        a.state.notification_pending = true;
+                        self.repository.save(a).await?;
+                        self.notify(a).await?;
+                        return value(WriteReceipt { id, version });
+                    }
+                    observed_version = Some(message.version.clone());
+                } else {
+                    // Preserve the old locator as move-identity evidence for the next sync. UID zero is
+                    // an explicit unreadable destination membership, never sent to the remote server.
+                    if !a
+                        .state
+                        .locations
+                        .iter()
+                        .any(|l| l.message_id == id && l.folder_id == destination.folder.id)
+                    {
+                        a.state.locations.push(Location {
+                            folder_id: destination.folder.id.clone(),
+                            uid_validity: destination.uid_validity,
+                            uid: 0,
+                            message_id: id.clone(),
+                            fingerprint: location.fingerprint.clone(),
+                        });
+                    }
+                    if current.gmail_labels.is_some() && destination.folder.id != source.folder.id {
+                        push_change(&mut a.state, &source.folder.id, &id, true)?;
+                    }
+                    message.version = format!("pending:{}", Uuid::now_v7());
                 }
-                if current.gmail_labels.is_some() && destination.folder.id != source.folder.id {
-                    push_change(&mut a.state, &source.folder.id, &id, true)?;
-                }
-                message.version = format!("pending:{}", Uuid::now_v7());
+                push_change(&mut a.state, &destination.folder.id, &id, false)?;
+            } else {
+                let facts = self
+                    .transport
+                    .message(
+                        &credentials,
+                        &source.path,
+                        location.uid_validity,
+                        location.uid,
+                    )
+                    .await?
+                    .ok_or(Error::ConnectionUnavailable)?;
+                apply_facts(&mut message, &facts)?;
+                observed_version = Some(message.version.clone());
+                push_change(&mut a.state, &source.folder.id, &id, false)?;
             }
-            push_change(&mut a.state, &destination.folder.id, &id, false)?;
-        } else {
-            let facts = self
-                .transport
-                .message(
-                    &credentials,
-                    &source.path,
-                    location.uid_validity,
-                    location.uid,
-                )
-                .await?
-                .ok_or(Error::ConnectionUnavailable)?;
-            apply_facts(&mut message, &facts)?;
-            observed_version = Some(message.version.clone());
-            push_change(&mut a.state, &source.folder.id, &id, false)?;
+            a.state.messages.insert(id.clone(), message);
+            a.state.notification_pending = true;
+            self.repository.save(a).await?;
+            self.notify(a).await?;
+            value(WriteReceipt {
+                id,
+                version: observed_version,
+            })
         }
-        a.state.messages.insert(id.clone(), message);
-        a.state.notification_pending = true;
-        self.repository.save(a).await?;
-        self.notify(a).await?;
-        value(WriteReceipt {
-            id,
-            version: observed_version,
+        .await;
+        result.map_err(|error| match error {
+            Error::AccountBusy => {
+                tracing::warn!(
+                    mail.stage = "organization-after-write",
+                    "Mailbox busy after a provider write; reconciliation required"
+                );
+                Error::ConnectionUnavailable
+            }
+            error => error,
         })
     }
 }

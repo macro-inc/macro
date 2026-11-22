@@ -216,9 +216,10 @@ measures the indexed binding/owner lookup for both snapshot and post-IO validati
 Per endpoint/login and replica, at most three pooled command sessions may be
 in flight, shared across links and reconnect generations. Reusable sockets stay
 link/generation-fenced; another scope's idle sockets are closed before a new
-dial. Global idle retention remains 64 sockets. Saturation returns typed
-throttling promptly. A read retries once after one second with its global slot
-and snapshot already released; it then surfaces throttling if still busy.
+dial. Global idle retention remains 64 sockets. Saturation returns AccountBusy
+promptly. Eligible reads and pre-write Apply operations retry once after one
+second with their global slot and snapshot already released; continued contention
+then surfaces as a local busy failure.
 This keeps a slow account's waiters from occupying user slots for other accounts.
 
 Sync scan, IDLE setup and Sent reconciliation use independent fresh sessions;
@@ -228,3 +229,19 @@ totals grow across replicas, and independent owner/Sent work adds sockets;
 owner leases bound actor sockets only. Read snapshots use local 30-second
 statement and 10-second idle deadlines; post-IO validation shares the loading
 gate. Operation access classification is exhaustive.
+
+### Busy admission and deterministic content limits
+
+Only AccountBusy permits the bounded one-second retry outside global admission.
+Other throttles and unsupported content never enter that retry. Apply can retry
+only before its first provider mutation; any busy follow-up after that point
+returns unavailability for reconciliation, without replaying the action. Submit
+is excluded. The private edge returns 429 with Retry-After for AccountBusy; the
+email gateway preserves it as a local refusal without provider cooldown.
+
+MessageTooLarge is a separate permanent content failure (private HTTP413),
+matching the existing 25 MiB full-source limit. Known oversized sources are
+rejected from indexed RFC822.SIZE before any download; actual response length
+is checked too. RecentInbox handles busy and oversized messages independently,
+keeps successful complete bodies, and records deferred/oversized counts. It does
+not refetch the entire batch or pass header-only MIME off as complete content.

@@ -1,79 +1,114 @@
+use super::fakes::OrganizationWorkControl;
 use super::*;
+
+struct ReadFixture {
+    engine: Engine,
+    repository: Arc<MemoryRepository>,
+    control: Arc<ProviderWorkControl>,
+    observed: tokio::sync::mpsc::UnboundedReceiver<Uuid>,
+    binding: Binding,
+    message_id: String,
+}
+fn read_fixture(
+    source: Vec<u8>,
+    failures: BTreeMap<u32, Error>,
+    organization: Option<Arc<OrganizationWorkControl>>,
+) -> ReadFixture {
+    let mut state = AccountState::default();
+    merge_snapshot(
+        &mut state,
+        vec![RemoteFolder {
+            virtual_label: None,
+            uid_next: Some(2),
+            phantom: None,
+            detected_role: None,
+            monitored: true,
+            folder: Folder {
+                sync_enabled: true,
+                id: "inbox".into(),
+                parent_id: None,
+                name: "INBOX".into(),
+                role: FolderRole::Inbox,
+                has_children: false,
+                total_items: Some(1),
+            },
+            path: "INBOX".into(),
+            uid_validity: 1,
+            highest_modseq: None,
+            sync_tier: SyncTier::Full,
+            messages: vec![RemoteMessage {
+                gmail_labels: None,
+                uid: 1,
+                flags: Vec::new(),
+                mime: Arc::from(b"Message-ID: <ingestion@example.net>\r\n\r\n".as_slice()),
+                size: 64,
+                received_at: Utc::now(),
+                modseq: None,
+                gmail_message_id: None,
+                native_message_id: None,
+                native_thread_id: None,
+            }],
+        }],
+    )
+    .unwrap();
+    let message_id = state.messages.keys().next().unwrap().clone();
+    let repository = Arc::new(MemoryRepository {
+        state: std::sync::Mutex::new(state),
+        saved_unknown: AtomicBool::new(false),
+        owner_available: AtomicBool::new(true),
+        owner_claims: std::sync::atomic::AtomicU32::new(0),
+        owner_gate: std::sync::Mutex::new(None),
+        owner_errors: std::sync::atomic::AtomicU32::new(0),
+        releases: std::sync::atomic::AtomicU32::new(0),
+        acquire_gate: None,
+    });
+    let (started, observed) = tokio::sync::mpsc::unbounded_channel();
+    let control = Arc::new(ProviderWorkControl {
+        failures,
+        organization,
+        source: Some(source),
+        started,
+        released: tokio::sync::Semaphore::new(0),
+    });
+    let transport = Arc::new(UncertainTransport {
+        repository: repository.clone(),
+        submissions: std::sync::atomic::AtomicU32::new(0),
+        deadline: AtomicBool::new(false),
+        sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
+        submission_deadline: std::sync::Mutex::new(None),
+        provider_work: Some(control.clone()),
+    });
+    let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport);
+    let binding = Binding {
+        link_id: Uuid::now_v7(),
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    ReadFixture {
+        engine,
+        repository,
+        control,
+        observed,
+        binding,
+        message_id,
+    }
+}
 
 #[tokio::test]
 async fn remote_message_results_recheck_access_after_io() {
     for (lost_owner, needs_reauth) in [(false, false), (true, false), (false, true)] {
-        let mut state = AccountState::default();
-        merge_snapshot(
-            &mut state,
-            vec![RemoteFolder {
-                virtual_label: None,
-                uid_next: Some(2),
-                phantom: None,
-                detected_role: None,
-                monitored: true,
-                folder: Folder {
-                    sync_enabled: true,
-                    id: "inbox".into(),
-                    parent_id: None,
-                    name: "INBOX".into(),
-                    role: FolderRole::Inbox,
-                    has_children: false,
-                    total_items: Some(1),
-                },
-                path: "INBOX".into(),
-                uid_validity: 1,
-                highest_modseq: None,
-                sync_tier: SyncTier::Full,
-                messages: vec![RemoteMessage {
-                    gmail_labels: None,
-                    uid: 1,
-                    flags: Vec::new(),
-                    mime: Arc::from(b"Message-ID: <ingestion@example.net>\r\n\r\n".as_slice()),
-                    size: 64,
-                    received_at: Utc::now(),
-                    modseq: None,
-                    gmail_message_id: None,
-                    native_message_id: None,
-                    native_thread_id: None,
-                }],
-            }],
-        )
-        .unwrap();
-        let message_id = state.messages.keys().next().unwrap().clone();
-        let repository = Arc::new(MemoryRepository {
-            state: std::sync::Mutex::new(state),
-            saved_unknown: AtomicBool::new(false),
-            owner_available: AtomicBool::new(true),
-            owner_claims: std::sync::atomic::AtomicU32::new(0),
-            owner_gate: std::sync::Mutex::new(None),
-            owner_errors: std::sync::atomic::AtomicU32::new(0),
-            releases: std::sync::atomic::AtomicU32::new(0),
-            acquire_gate: None,
-        });
-        let (started, mut observed) = tokio::sync::mpsc::unbounded_channel();
-        let control = Arc::new(ProviderWorkControl {
-            source: Some(
-                b"Message-ID: <ingestion@example.net>\r\nSubject: Synthetic\r\n\r\nTest body"
-                    .to_vec(),
-            ),
-            started,
-            released: tokio::sync::Semaphore::new(0),
-        });
-        let transport = Arc::new(UncertainTransport {
-            repository: repository.clone(),
-            submissions: std::sync::atomic::AtomicU32::new(0),
-            deadline: AtomicBool::new(false),
-            sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
-            submission_deadline: std::sync::Mutex::new(None),
-            provider_work: Some(control.clone()),
-        });
-        let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport);
-        let binding = Binding {
-            link_id: Uuid::now_v7(),
-            sync_generation: 1,
-            grant_generation: 1,
-        };
+        let ReadFixture {
+            engine,
+            repository,
+            control,
+            mut observed,
+            binding,
+            message_id,
+        } = read_fixture(
+            b"Message-ID: <ingestion@example.net>\r\nSubject: Synthetic\r\n\r\nTest body".to_vec(),
+            BTreeMap::new(),
+            None,
+        );
         let mut reading = Box::pin(engine.execute(binding, Operation::Message { id: message_id }));
         assert!(futures::poll!(reading.as_mut()).is_pending());
         assert_eq!(observed.try_recv().unwrap(), binding.link_id);
@@ -98,4 +133,135 @@ async fn remote_message_results_recheck_access_after_io() {
         }
         assert_eq!(repository.releases.load(Ordering::Relaxed), 0);
     }
+}
+
+#[tokio::test]
+async fn oversized_sources_are_not_fetched_or_retried_when_the_size_is_known() {
+    let ReadFixture {
+        engine,
+        repository,
+        control,
+        mut observed,
+        binding,
+        message_id,
+    } = read_fixture(vec![b'x'; 26 * 1024 * 1024], BTreeMap::new(), None);
+    repository
+        .state
+        .lock()
+        .unwrap()
+        .messages
+        .get_mut(&message_id)
+        .unwrap()
+        .size = 26 * 1024 * 1024;
+    control.released.add_permits(2);
+    let result = engine
+        .execute(binding, Operation::Message { id: message_id })
+        .await;
+    assert!(matches!(result, Err(Error::MessageTooLarge)));
+    assert!(
+        observed.try_recv().is_err(),
+        "known oversized content must not be downloaded"
+    );
+}
+
+#[tokio::test]
+async fn recent_inbox_defers_one_busy_body_without_restarting_the_batch() {
+    let ReadFixture {
+        engine,
+        repository,
+        control,
+        mut observed,
+        binding,
+        message_id,
+    } = read_fixture(
+        b"Message-ID: <synthetic@example.net>\r\n\r\nTest body".to_vec(),
+        BTreeMap::from([(2, Error::AccountBusy)]),
+        None,
+    );
+    {
+        let mut state = repository.state.lock().unwrap();
+        let original = state.messages.get(&message_id).unwrap().clone();
+        let location = state.locations.first().unwrap().clone();
+        for uid in [2, 3] {
+            let id = format!("m:{uid}");
+            state.messages.insert(
+                id.clone(),
+                Message {
+                    id: id.clone(),
+                    received_at: original.received_at - Duration::seconds(i64::from(uid)),
+                    ..original.clone()
+                },
+            );
+            state.locations.push(Location {
+                uid,
+                message_id: id,
+                ..location.clone()
+            });
+        }
+    }
+    control.released.add_permits(8);
+    let messages: Vec<Message> = serde_json::from_value(
+        engine
+            .execute(binding, Operation::RecentInbox { limit: 3 })
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        messages
+            .iter()
+            .map(|message| message.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![message_id.as_str(), "m:3"]
+    );
+    assert!(messages.iter().all(|message| message.source_complete));
+    assert_eq!(std::iter::from_fn(|| observed.try_recv().ok()).count(), 3);
+}
+
+#[tokio::test]
+async fn a_busy_followup_after_a_provider_write_never_replays_the_action() {
+    let organization = Arc::new(OrganizationWorkControl {
+        writes: std::sync::atomic::AtomicU32::new(0),
+        seen: AtomicBool::new(false),
+        busy_after_write: AtomicBool::new(true),
+    });
+    let ReadFixture {
+        engine,
+        binding,
+        message_id,
+        ..
+    } = read_fixture(Vec::new(), BTreeMap::new(), Some(organization.clone()));
+    let result = engine
+        .execute(
+            binding,
+            Operation::Apply {
+                id: message_id,
+                request: ActionRequest {
+                    action: serde_json::json!({"action":"set_read","value":true}),
+                    expected_version: None,
+                },
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(Error::ConnectionUnavailable)));
+    assert_eq!(organization.writes.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn an_underreported_oversized_source_is_fetched_once_and_never_retried() {
+    let ReadFixture {
+        engine,
+        control,
+        mut observed,
+        binding,
+        message_id,
+        ..
+    } = read_fixture(vec![b'x'; 26 * 1024 * 1024], BTreeMap::new(), None);
+    control.released.add_permits(2);
+    let result = engine
+        .execute(binding, Operation::Message { id: message_id })
+        .await;
+    assert!(matches!(result, Err(Error::MessageTooLarge)));
+    assert_eq!(observed.try_recv().unwrap(), binding.link_id);
+    assert!(observed.try_recv().is_err());
 }

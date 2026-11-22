@@ -213,6 +213,16 @@
               }
             }
           },
+          "413": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "422": {
             "description": "",
             "content": {
@@ -1024,7 +1034,9 @@
           "connection_timed_out",
           "send_rejected",
           "send_unavailable",
-          "throttled"
+          "throttled",
+          "account_busy",
+          "message_too_large"
         ]
       },
       "ErrorBody": {

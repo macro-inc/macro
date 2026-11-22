@@ -137,3 +137,24 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
         server.await.unwrap();
     }
 }
+
+#[tokio::test]
+async fn busy_admission_and_content_limits_have_distinct_http_contracts() {
+    let busy = ApiError(Error::AccountBusy).into_response();
+    assert_eq!(busy.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(busy.headers().get("retry-after").unwrap(), "5");
+    let body: serde_json::Value =
+        serde_json::from_slice(&axum::body::to_bytes(busy.into_body(), 1024).await.unwrap())
+            .unwrap();
+    assert_eq!(body["code"], "account_busy");
+    let oversized = ApiError(Error::MessageTooLarge).into_response();
+    assert_eq!(oversized.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert!(oversized.headers().get("retry-after").is_none());
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(oversized.into_body(), 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(body["code"], "message_too_large");
+}

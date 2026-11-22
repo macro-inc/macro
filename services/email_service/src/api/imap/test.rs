@@ -5,6 +5,17 @@ use imap_service_client::Error;
 async fn verification_errors_preserve_closed_categories_and_accurate_statuses() {
     for (error, status, code) in [
         (
+            Error::AccountBusy,
+            StatusCode::TOO_MANY_REQUESTS,
+            "throttled",
+        ),
+        // Operation-only size failures do not become an authentication rejection.
+        (
+            Error::MessageTooLarge,
+            StatusCode::BAD_GATEWAY,
+            "connection_unavailable",
+        ),
+        (
             Error::CredentialsRejected,
             StatusCode::UNPROCESSABLE_ENTITY,
             "credentials_rejected",

@@ -105,13 +105,14 @@ impl IntoResponse for ApiError {
             | Error::SendUnavailable
             | Error::ConnectionTimedOut => StatusCode::SERVICE_UNAVAILABLE,
             Error::SendRejected => StatusCode::UNPROCESSABLE_ENTITY,
-            Error::Throttled => StatusCode::TOO_MANY_REQUESTS,
+            Error::Throttled | Error::AccountBusy => StatusCode::TOO_MANY_REQUESTS,
+            Error::MessageTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         };
         let mut response = (
             status,
             Json(serde_json::json!({
                 "code": self.0,
-                "retryAfterSeconds": if self.0 == Error::Throttled {
+                "retryAfterSeconds": if matches!(self.0, Error::Throttled | Error::AccountBusy) {
                     Some(5)
                 } else {
                     None
@@ -119,7 +120,7 @@ impl IntoResponse for ApiError {
             })),
         )
             .into_response();
-        if self.0 == Error::Throttled {
+        if matches!(self.0, Error::Throttled | Error::AccountBusy) {
             response
                 .headers_mut()
                 .insert("retry-after", axum::http::HeaderValue::from_static("5"));
@@ -236,6 +237,7 @@ async fn disconnect(
         (status = 404, body = ErrorBody),
         (status = 409, body = ErrorBody),
         (status = 410, body = ErrorBody),
+        (status = 413, body = ErrorBody),
         (status = 422, body = ErrorBody),
         (status = 429, body = ErrorBody),
         (status = 503, body = ErrorBody)

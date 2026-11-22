@@ -580,8 +580,10 @@ impl MailTransport for ProtocolTransport {
                 .and_then(|m| m.body())
                 .ok_or(Error::NotFound)?
                 .to_vec();
-            if bytes.len() > 25 * 1024 * 1024 {
-                return Err(Error::Throttled);
+            if bytes.len()
+                > usize::try_from(MAX_MESSAGE_SOURCE_BYTES).map_err(|_| Error::Invalid)?
+            {
+                return Err(Error::MessageTooLarge);
             }
             self.return_command(c, session).await;
             Ok(bytes)
