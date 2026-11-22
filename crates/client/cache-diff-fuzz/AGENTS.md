@@ -101,6 +101,14 @@ disk after a reopen must come out the same.
   An open the hook did not stop is used as the engine's open. Stats count
   `migration.interrupted` (only opens that had that step to run are interrupted, so count
   them before trusting a clean run).
+- Abandoned reads: add `--abandon-reads SHARE` to both sides. A side whose host has
+  `EngineHandle::abandonable` sends that share of reads, filters, searches and keyed reads
+  with a request id, abandons some while they queue on the held engine, and before writes
+  and hydrates sends and abandons re-reads of operations the case registered; the other
+  side runs every read (`src/exec/abandon.rs`). Abandoned answers are masked, an abandoned
+  read that answered fails the seed, and operations left registered broadly drop out of
+  `affectedOps`, where b must report every one a reported (`<seed>.broad`). Put the side
+  without abandons as SIDE_A.
 - Rerun one seed: `bin/SIDE --seed N --schema static_assets/schema.graphql --assets
   crates/client/cache-diff-fuzz/assets --out D --work D/w --full`. Use
   `--emit-case` and `--case FILE` to save a case and rerun it. A seed's case
