@@ -141,8 +141,9 @@ type NetworkEmailTimes = ReadonlyMap<
 >;
 
 /** Cursors a list keeps captured times for beyond its loaded pages: a
- * continuation reports before it is mounted, and a refreshed chain's old
- * cursors stay until their replacements are. */
+ * replacement page reports before it is mounted. The captures are the
+ * server's own values for the list, so they outlive a cache engine
+ * replacement too, until the list's next network read. */
 const SPARE_EMAIL_TIME_PAGES = 8;
 
 /** Owns network pages, live cache records, Mail cursors, and fallback selection.
@@ -269,6 +270,9 @@ export function createSoupLiveQuery(
   // own latest response, so refreshing one page leaves the others' alone.
   const [networkEmailTimes, setNetworkEmailTimes] =
     createSignal<NetworkEmailTimes>(new Map());
+  // Set once the query exists: urql can replay a result while the query's
+  // first observer subscribes, before `query` is assigned.
+  let loadedCursors = (): readonly (string | null)[] => [];
   const recordNetworkEmailTimes = (
     key: string,
     cursor: string | null,
@@ -278,10 +282,16 @@ export function createSoupLiveQuery(
       const pages = new Map(known.get(key));
       pages.delete(cursor);
       pages.set(cursor, pageEmailUpdatedAt(page));
-      const loaded = new Set(untrack(() => query.data?.pageParams) ?? []);
+      // Keep every loaded cursor's capture and the newest few others.
+      const loaded = new Set(untrack(loadedCursors));
+      let spare = [...pages.keys()].filter(
+        (old) => old !== cursor && !loaded.has(old)
+      ).length;
       for (const old of pages.keys()) {
-        if (pages.size <= loaded.size + SPARE_EMAIL_TIME_PAGES) break;
-        if (old !== cursor && !loaded.has(old)) pages.delete(old);
+        if (spare <= SPARE_EMAIL_TIME_PAGES) break;
+        if (old === cursor || loaded.has(old)) continue;
+        pages.delete(old);
+        spare -= 1;
       }
       // This input's result is the one on screen now (baselineInputKey); an
       // earlier input's times stay only until its successor answers.
@@ -380,7 +390,6 @@ export function createSoupLiveQuery(
       setBaselineGeneration(undefined);
       setUnpersistedPages(new Map());
       setLocalMailCurrent(false);
-      setNetworkEmailTimes(new Map());
     };
     const observeCurrentRevision = async () => {
       const observedGeneration = cacheGeneration;
@@ -576,6 +585,7 @@ export function createSoupLiveQuery(
       select: selectPages,
     };
   });
+  loadedCursors = () => query.data?.pageParams ?? [];
 
   /** The updatedAt NOTIFIED_AT pages' own network responses gave each email
    * thread on the loaded pages, by record key, which the thread's shared
