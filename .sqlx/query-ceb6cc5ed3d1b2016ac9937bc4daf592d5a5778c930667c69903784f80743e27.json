@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_links SET provider = 'GMAIL' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ceb6cc5ed3d1b2016ac9937bc4daf592d5a5778c930667c69903784f80743e27"
+}

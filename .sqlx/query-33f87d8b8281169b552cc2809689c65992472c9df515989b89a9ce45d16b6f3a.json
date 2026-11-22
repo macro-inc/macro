@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id,\n                macro_id,\n                provider::text AS provider,\n                sync_generation\n            FROM\n                email_links\n            WHERE\n                lower(email_address) = lower($1)\n            LIMIT 1\n            FOR UPDATE\n            ",
+  "query": "\n            SELECT\n                id,\n                macro_id,\n                provider::text AS provider,\n                sync_generation\n            FROM\n                email_links\n            WHERE\n                lower(email_address) = lower($1)\n            ORDER BY created_at, id\n            LIMIT 1\n            FOR UPDATE\n            ",
   "describe": {
     "columns": [
       {
@@ -36,5 +36,5 @@
       false
     ]
   },
-  "hash": "9db92b0675a1d98add20f065ba5c5a25a9eca7ebbb92652af36f65b63bf51468"
+  "hash": "33f87d8b8281169b552cc2809689c65992472c9df515989b89a9ce45d16b6f3a"
 }

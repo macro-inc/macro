@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_reconciliation_provider_backfill\n        SET lease_until = clock_timestamp() - interval '1 second'\n        WHERE name = 'v1' AND lease_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b1e7a297affca48f8e440b5fa007c71f8984c65aec9268824d4cf7e45a150da9"
+}

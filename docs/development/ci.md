@@ -32,9 +32,10 @@ workflow run email_e2e.yml --ref <branch>` (`-f known_bugs=true` adds the
 known bugs). The [suite's README](../../apps/web/tests/email-e2e/README.md)
 has the trigger table and the other commands.
 
-The Rust suite includes real-server IMAP journeys. Its non-search jobs start
+The Rust suite includes real-server IMAP journeys. Its scenarios job starts
 `docker/imap-lab/start.sh` for Dovecot, SMTP capture and a disposable local KMS
-key; Gmail and Outlook continue to use their provider emulators. The IMAP
+key; the search and known-bug jobs do not start that lab. Gmail and Outlook
+continue to use their provider emulators. The IMAP
 browser journeys run in `email_e2e_full_stack.yml`, which prepares the lab TLS
 fixtures and starts the stack with `docker/imap-lab/browser-profile`.
 `IMAP_LAB_REQUIRED=true` makes missing desktop or phone IMAP evidence fail that

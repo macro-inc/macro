@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            email_links\n        SET\n            provider = 'IMAP',\n            sync_generation = 2\n        WHERE\n            id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ada5f21c1b7450bd294135bdbaec41deec76ac4bf45e9b1b0a1831eb807be36d"
+}

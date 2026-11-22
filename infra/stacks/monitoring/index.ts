@@ -22,6 +22,7 @@ import { agentSessionsDashboard } from './monitors/agent-sessions';
 import './monitors/ai-editing';
 import './monitors/ai-providers';
 import './monitors/calls';
+import './monitors/email-provider-repair';
 import './monitors/computer-capacity';
 import './monitors/computers';
 import './monitors/firecracker';

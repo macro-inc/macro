@@ -74,45 +74,7 @@ where
         name: &str,
     ) -> Result<Vec<CategoryMessage>, EmailApiError> {
         if mailbox.provider == UserProvider::Imap {
-            use email::domain::mailbox::MailboxGateway;
-            let folders = match self.imap.folders(mailbox.key).await? {
-                MailFolderCatalog::Folders(folders) => folders,
-                MailFolderCatalog::NoMailbox { .. } => return Err(EmailApiError::NotFound),
-            };
-            let mut result = Vec::new();
-            for folder in &folders {
-                let mut position = None;
-                loop {
-                    let page = self
-                        .imap
-                        .changes(
-                            mailbox.key,
-                            &folder.id,
-                            position.as_ref(),
-                            RoundStart::Unordered,
-                        )
-                        .await?;
-                    for id in page.changed {
-                        if let Some(message) = self.imap.message(mailbox.key, &id, &folders).await?
-                            && message.tags.iter().any(|tag| tag == name)
-                        {
-                            result.push(CategoryMessage {
-                                id,
-                                categories: message.tags,
-                                version: message.version,
-                            });
-                            if result.len() >= 100 {
-                                return Ok(result);
-                            }
-                        }
-                    }
-                    match page.position {
-                        StreamPosition::Continue(next) => position = Some(next),
-                        StreamPosition::Checkpoint(_) => break,
-                    }
-                }
-            }
-            return Ok(result);
+            return imap_category_messages(&self.imap, mailbox.key, name).await;
         }
         self.outlook.category_messages(access(mailbox), name).await
     }
@@ -188,3 +150,51 @@ where
         }
     }
 }
+
+async fn imap_category_messages(
+    gateway: &super::email_api::imap::ImapMailboxGateway,
+    mailbox: email::domain::mailbox::MailboxKey,
+    name: &str,
+) -> Result<Vec<CategoryMessage>, EmailApiError> {
+    use email::domain::mailbox::{MailboxGateway, commands::MailboxCommandGateway};
+    let folders = match gateway.folders(mailbox).await? {
+        MailFolderCatalog::Folders(folders) => folders,
+        MailFolderCatalog::NoMailbox { .. } => return Err(EmailApiError::NotFound),
+    };
+    let mut result = Vec::new();
+    for folder in &folders {
+        let mut position = None;
+        loop {
+            let page = gateway
+                .changes(
+                    mailbox,
+                    &folder.id,
+                    position.as_ref(),
+                    RoundStart::Unordered,
+                )
+                .await?;
+            for id in page.changed {
+                if let Some(message) = gateway.organization(mailbox, &id, &folders).await?
+                    && message.tags.iter().any(|tag| tag == name)
+                {
+                    result.push(CategoryMessage {
+                        id,
+                        categories: message.tags,
+                        version: message.version,
+                    });
+                    if result.len() >= 100 {
+                        return Ok(result);
+                    }
+                }
+            }
+            match page.position {
+                StreamPosition::Continue(next) => position = Some(next),
+                StreamPosition::Checkpoint(_) => break,
+            }
+        }
+    }
+    Ok(result)
+}
+
+#[cfg(test)]
+mod test;

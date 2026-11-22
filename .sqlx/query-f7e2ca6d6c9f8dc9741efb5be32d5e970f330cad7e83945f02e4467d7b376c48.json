@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)\n        VALUES ($1, 'macro|repair@example.com', $2, 'repair@example.com', $3::text::email_user_provider_enum)\n        ON CONFLICT (id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f7e2ca6d6c9f8dc9741efb5be32d5e970f330cad7e83945f02e4467d7b376c48"
+}

@@ -1,5 +1,13 @@
 SET LOCAL lock_timeout = '5s';
 
+-- Acquire child locks before the parent, in the same order on every deploy.
+-- Do not hold the parent lock while waiting for either child table's DDL lock.
+LOCK TABLE
+    public.email_message_reconciliation,
+    public.email_sync_streams,
+    public.email_links
+IN ACCESS EXCLUSIVE MODE;
+
 ALTER TABLE public.email_links
     ADD CONSTRAINT email_links_id_provider_queue_key
     UNIQUE USING INDEX email_links_id_provider_queue_key;

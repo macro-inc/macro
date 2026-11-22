@@ -857,3 +857,11 @@ content is a client limit, never an infrastructure outage or automatic retry.
 IMAP notifications project optional mailbox health and retry time under the existing active-link and two-generation fence. Emit LinkChanged only on a health edge; sync limits never imply rejected credentials.
 
 An IMAP credentials_unreadable issue requires reconnect but is not a provider password rejection. Project needs_reauth under the same active-binding fence without stamping last_sync_error_at; emit the existing reauthorization event and preserve the separate reason.
+
+`domain/mailbox/provider_repair.rs` owns automatic rollout maintenance for legacy
+reconciliation provider metadata: bounded committed pages, a durable lease/cursor
+and completion marker, and background validation with hourly retry backoff. Its
+repository port owns no SQL or runtime configuration. Keep old writers correct
+through the provider trigger until the asynchronous FK validation completes.
+
+Follow the [validation cap and recovery contract](../../docs/runbooks/email-provider-repair.md#validation-failures-and-the-constraint-cap).

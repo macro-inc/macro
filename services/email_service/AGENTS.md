@@ -142,6 +142,13 @@ the gateway `/email` prefix.
 
 - `cargo test -p email_service` (`SQLX_OFFLINE` unset; the `label_write_sim`
   tests also need Redis, at `REDIS_URI` or `redis://127.0.0.1:6379`).
+- The ignored provider-repair scale test `ten_million_legacy_rows_are_repaired_in_bounded_committed_pages`
+  runs with `cargo test -p email_service ten_million_legacy_rows --lib -- --ignored --nocapture`.
+  It requires an owned scratch PostgreSQL server and creates its own SQLx test
+  database; allow its storage and runtime. Run `resumes_ten_million_repaired_rows_after_validation_backoff`
+  separately with `DATABASE_URL` set to the preserved `_sqlx_test_*` fixture on
+  loopback. Never point either test at shared or hosted databases; set the URL
+  inside the devshell command.
 - `just check` from this directory runs `cargo check` with `SQLX_OFFLINE=true`.
   Run root `just check` as well for the shared code-rule and privacy checks.
   Changes to the boundary rules also run their
@@ -446,3 +453,15 @@ mailbox health classifications separate.
 The inbox catalog exposes mailbox_issue independently of needs_reauth. Oversized sync is visible as sync health; do not map it to a rejected password.
 
 Successful verified IMAP reconnect clears the old projected mailbox issue and retry deadline while advancing the same link generations. Preserve CredentialsUnreadable as saved-credential unavailability, never AuthRequired or definite SendUnavailable.
+
+`outbound/mailbox_provider_repair.rs` implements the email domain's automatic
+legacy reconciliation repair. The pubsub composition gives it a separate
+one-connection pool per replica until completion, with bounded keyset pages,
+pacing and durable fenced progress. Validation runs only after scan completion,
+off request paths; failures back off and alert without failing a deploy. No
+operator step is required. See [the runbook](../../docs/runbooks/email-provider-repair.md).
+
+IMAP category deletion lists Organization metadata (flags and keywords), never
+full MIME bodies. An oversized message must not prevent removing its keyword.
+
+Follow the [validation cap and recovery contract](../../docs/runbooks/email-provider-repair.md#validation-failures-and-the-constraint-cap).

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.relname, c.relfilenode::bigint AS \"node!\"\n        FROM pg_class c\n        JOIN pg_namespace n ON n.oid = c.relnamespace\n        WHERE n.nspname = 'public'\n            AND c.relname IN ('email_sync_streams', 'email_message_reconciliation')\n        ORDER BY c.relname\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "relname",
+        "type_info": "Name"
+      },
+      {
+        "ordinal": 1,
+        "name": "node!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "cb21301cda3e7f91a409b4d4c9cd2b4a63eca184965434f675307f684fc5145b"
+}

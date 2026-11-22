@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            phase,\n            link_after,\n            pending_links,\n            current_link,\n            generation_after,\n            provider_id_after,\n            scan_completed_at,\n            batches,\n            link_rows_scanned,\n            message_rows_scanned,\n            rows_repaired,\n            validation_failures,\n            constraint_failures\n        FROM email_reconciliation_provider_backfill\n        WHERE name = 'v1'\n            AND lease_id = $1\n            AND lease_until > clock_timestamp()\n        FOR UPDATE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "phase",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_after",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "pending_links",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 3,
+        "name": "current_link",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "generation_after",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "provider_id_after",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "scan_completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "batches",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "link_rows_scanned",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "message_rows_scanned",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "rows_repaired",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "validation_failures",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "constraint_failures",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "aef309ded7e5fda66edd10096e7a7adf52e1a23a1799358eb3a32960931dc70e"
+}

@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                batches,\n                link_rows_scanned,\n                message_rows_scanned,\n                rows_repaired,\n                validation_failures,\n                constraint_failures\n            FROM email_reconciliation_provider_backfill\n            WHERE name = 'v1'\n                AND phase = 'complete'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "batches",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_rows_scanned",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "message_rows_scanned",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "rows_repaired",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "validation_failures",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "constraint_failures",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d00f051f3876dedee4a472cbf7dc3f9317579fda64501a11796a3db4f48cf521"
+}

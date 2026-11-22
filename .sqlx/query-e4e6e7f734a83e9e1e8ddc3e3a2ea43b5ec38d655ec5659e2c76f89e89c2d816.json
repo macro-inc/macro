@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT validation_failures, constraint_failures, completed_at,\n            available_at > clock_timestamp() + interval '59 minutes' AS \"delayed!\"\n        FROM email_reconciliation_provider_backfill\n        WHERE name = 'v1'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "validation_failures",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "constraint_failures",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "delayed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "e4e6e7f734a83e9e1e8ddc3e3a2ea43b5ec38d655ec5659e2c76f89e89c2d816"
+}

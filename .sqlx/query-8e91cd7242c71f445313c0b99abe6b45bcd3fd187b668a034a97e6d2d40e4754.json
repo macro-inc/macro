@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_message_reconciliation (link_id, generation, provider_id, is_import, provider)\n        SELECT $1, 1, 'legacy-' || lpad(n::text, 8, '0'), false, 'OUTLOOK'\n        FROM generate_series($2::bigint, $3::bigint) n\n        ON CONFLICT (link_id, generation, provider_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8e91cd7242c71f445313c0b99abe6b45bcd3fd187b668a034a97e6d2d40e4754"
+}

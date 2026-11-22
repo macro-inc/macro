@@ -306,7 +306,9 @@ suite. `src/features/calendar/browser-test` mounts the calendar over scripted
 
 The full-stack onboarding tests use unique synthetic addresses in the local Gmail
 and Outlook emulators’ native domains to exercise the direct provider buttons.
-An unknown domain uses the IMAP suggestion when that rollout is enabled.
+A recognized catalog or unambiguous MX hint can offer IMAP when its rollout is
+enabled. Unknown or reserved lab domains use the chooser’s manual Other email
+(IMAP / SMTP) path; the lab does not override product routing.
 
 ### IMAP and SMTP
 

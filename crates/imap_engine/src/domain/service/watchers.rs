@@ -1,4 +1,5 @@
-//! One explicitly requested extra-folder watcher; primary plus command plus watcher never exceeds three IMAP sockets.
+//! One explicitly requested extra-folder watcher. Account socket bounds, including
+//! command reads and actor maintenance, are documented in the architecture guide.
 use super::*;
 use std::time::Duration;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};

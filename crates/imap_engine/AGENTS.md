@@ -126,8 +126,9 @@ is observed so its returned lease can be released.
 Keep command claims uncommitted through state hydration, with local statement
 and idle-transaction deadlines. Use FOR NO KEY UPDATE NOWAIT so peers fail fast
 without blocking first-owner foreign-key checks. Full sync idle time follows the
-round budget; small read snapshots keep a short idle limit. Leave two pool slots
-for shared non-loading queries, without claiming dedicated heartbeat capacity.
+round budget; small read snapshots keep a short idle limit. Reserve the listener's
+one connection before admitting loads (pool max minus three), leaving two shared
+non-loading slots without claiming dedicated heartbeat capacity.
 
 Read Changes, Message, Organization, Attachment, Folders and RecentInbox through
 read_scoped without a command lease. Keep scalar state and selected rows in one
@@ -185,3 +186,9 @@ classification counter and fleet-guard error; never log credentials/key/context.
 Confirm qualified failures across thirty seconds before parking with the separate
 mailbox issue. Re-admit parked pending notifications after restart and deliver
 before credential/provider work; completed parking remains excluded.
+
+A very large first import can exceed the account snapshot bounds and never finish
+until the owner excludes large folders. Keep the last complete index and expose
+the typed size issue with durable backoff. `enable-imap-connections` defaults off;
+resumable paging and incremental scans belong to stacked follow-up
+`mac-imap-smtp.23`, not this initial bounded-snapshot implementation.

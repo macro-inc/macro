@@ -367,6 +367,7 @@ impl ImapConnectionRepository for PgImapConnections {
                 email_links
             WHERE
                 lower(email_address) = lower($1)
+            ORDER BY created_at, id
             LIMIT 1
             FOR UPDATE
             "#,
@@ -638,6 +639,12 @@ impl ImapConnectionEnrollment for ImapEnrollment {
         flags
             .load(actor)
             .await
+            .inspect_err(|_| {
+                tracing::warn!(
+                    feature_flag = models_email::service::link::IMAP_CONNECTIONS_FLAG,
+                    "IMAP enrollment flag unavailable; new connections remain disabled"
+                );
+            })
             .map(|snapshot| snapshot.is_enabled(models_email::service::link::IMAP_CONNECTIONS_FLAG))
             .unwrap_or(false)
     }

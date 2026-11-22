@@ -15,6 +15,8 @@ pub mod mailbox_drafts;
 pub mod mailbox_init;
 /// Durable email projections to search, notifications, contacts and storage.
 pub mod mailbox_projection;
+/// Bounded automatic repair of legacy reconciliation provider metadata.
+pub mod mailbox_provider_repair;
 /// Persistence and provider adapters for scheduled-delivery claims.
 pub mod scheduled_delivery;
 

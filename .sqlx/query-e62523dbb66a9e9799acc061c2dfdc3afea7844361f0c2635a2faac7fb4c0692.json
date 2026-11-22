@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            email_links\n        SET\n            provider = 'IMAP'\n        WHERE\n            id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e62523dbb66a9e9799acc061c2dfdc3afea7844361f0c2635a2faac7fb4c0692"
+}

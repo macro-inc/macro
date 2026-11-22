@@ -2144,3 +2144,8 @@ server retry behavior for responses they do not handle.
 
 Account mailbox issues render independently of the generic sync-badge flag and
 never imply a rejected app password. Size failures keep the last complete index.
+
+The reserved IMAP browser-lab domain intentionally receives no passive MX offer.
+Drive its normal manual provider chooser, open Server settings through the
+Collapsible trigger, and choose settings via the shared listbox roles. Do not
+add product routing exceptions for test identities.

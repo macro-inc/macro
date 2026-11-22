@@ -268,3 +268,15 @@ concurrent build is interrupted, inspect `pg_index.indisvalid` and remove only
 that invalid index before retrying its migration.
 
 email_links.mailbox_issue and mailbox_retry_at are nullable additive sync-health projections. Keep it separate from needs_reauth and permit old binaries to ignore it.
+
+Provider rollout gives work tables a constant Outlook default without a heap
+rewrite. Streams were Outlook-only; both FKs validate asynchronously. Reconciliation may
+contain Gmail cleanup and validates asynchronously after the automatic repair.
+`email_reconciliation_provider_backfill` is a singleton rollout journal with a
+leased bounded cursor and completion marker, retained for audit. Its cursor IDs
+have no foreign keys: deleted parents are skipped without erasing progress.
+Keep the provider trigger active for old writers throughout repair and rollback.
+
+The provider-repair journal's additive `constraint_failures` counter is distinct
+from transient validation history. Only a verified FK violation advances it;
+never infer permanent corruption from lock, timeout or transaction contention.

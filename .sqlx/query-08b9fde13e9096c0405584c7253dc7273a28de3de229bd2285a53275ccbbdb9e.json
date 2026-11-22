@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE public.email_reconciliation_provider_backfill\n        SET\n            constraint_failures = 0,\n            available_at = clock_timestamp(),\n            updated_at = clock_timestamp()\n        WHERE name = 'v1'\n            AND phase = 'validating'\n            AND constraint_failures >= 8\n            AND lease_id IS NULL\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "08b9fde13e9096c0405584c7253dc7273a28de3de229bd2285a53275ccbbdb9e"
+}

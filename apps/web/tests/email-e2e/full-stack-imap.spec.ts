@@ -28,17 +28,29 @@ test.describe.configure({ mode: 'default', timeout: 180_000 });
 
 async function fillLabCredentials(dialog: Locator, email: string) {
   await expect(dialog.getByLabel('Email address')).toHaveValue(email);
-  const details = dialog.locator('details');
-  await expect(details).toBeAttached();
-  if ((await details.getAttribute('open')) === null)
-    await details.locator('summary').click();
+  const details = dialog.getByRole('button', {
+    name: 'Server settings',
+    exact: true,
+  });
+  if ((await details.getAttribute('aria-expanded')) !== 'true')
+    await details.click();
   for (const name of ['Incoming mail (IMAP)', 'Outgoing mail (SMTP)']) {
     const server = dialog.getByRole('group', { name });
     await server.getByLabel('Server name').fill('maillab.example.net');
     await expect(server.getByLabel('Username')).toHaveValue(email);
   }
-  await dialog.getByLabel(/I trust/).check();
+  const trust = dialog.getByRole('checkbox', { name: /I trust/ });
+  if (!(await trust.isChecked())) await dialog.getByText(/^I trust/).click();
+  await expect(trust).toBeChecked();
   await dialog.getByLabel('Password or app password').fill('pass');
+}
+
+async function chooseSetting(dialog: Locator, label: RegExp, value: string) {
+  const trigger = dialog.getByRole('button', { name: label });
+  await trigger.press('ArrowDown');
+  await dialog.getByRole('option', { name: value, exact: true }).click();
+  await expect(dialog.page().getByRole('listbox')).toHaveCount(0);
+  await expect(trigger).toHaveText(value);
 }
 
 async function submitConnection(page: Page, dialog: Locator, mobile: boolean) {
@@ -107,12 +119,25 @@ for (const mobile of [false, true]) {
           );
           await page.goto(`${front.origin}/app/mail`);
           await expect(
-            page.getByText(`Connect ${email}`, { exact: true })
+            page.getByText('Connect your email', { exact: true })
           ).toBeVisible();
           await page
             .getByRole('button', { name: 'Connect email', exact: true })
             .click();
+          // Reserved lab domains intentionally have no passive MX suggestion.
+          // Exercise the ordinary manual path instead of changing product DNS policy.
+          await page
+            .getByRole('dialog')
+            .getByRole('button', {
+              name: 'Other email (IMAP / SMTP)',
+              exact: true,
+            })
+            .click();
           const dialog = page.getByRole('dialog');
+          await expect(dialog.getByLabel('Email address')).toHaveValue(email);
+          await dialog
+            .getByRole('button', { name: 'Find settings', exact: true })
+            .click();
           await fillLabCredentials(dialog, email);
           const response = await submitConnection(page, dialog, mobile);
           const { linkId } = (await response.json()) as { linkId: string };
@@ -206,26 +231,43 @@ for (const mobile of [false, true]) {
             configured.getByText('maillab.example.net:465', { exact: false })
           ).toBeVisible();
           await expect(configured.getByText(/IDLE.*UIDPLUS/)).toBeVisible();
-          await configured.getByLabel('Role for Archive').selectOption('other');
-          await configured.getByLabel('Sync Junk', { exact: true }).uncheck();
-          await configured
-            .getByLabel('Watch for new mail alongside Inbox')
-            .selectOption({ label: 'Sent' });
+          await chooseSetting(configured, /^Role for Archive\b/, 'Other');
+          await expect(configured).toBeVisible();
+          if (
+            await configured
+              .getByRole('checkbox', { name: 'Sync Junk', exact: true })
+              .isChecked()
+          )
+            await configured
+              .getByRole('checkbox', { name: 'Sync Junk', exact: true })
+              .locator('..')
+              .getByText('Sync folder', { exact: true })
+              .click();
+          await expect(
+            configured.getByRole('checkbox', { name: 'Sync Junk', exact: true })
+          ).not.toBeChecked();
+          await chooseSetting(
+            configured,
+            /^Watch for new mail alongside Inbox\b/,
+            'Sent'
+          );
           await configured
             .getByRole('button', { name: 'Save settings' })
             .click();
           await expect(configured).toHaveCount(0);
           await openSettings.click();
-          await expect(configured.getByLabel('Role for Archive')).toHaveValue(
-            'other'
-          );
           await expect(
-            configured.getByLabel('Sync Junk', { exact: true })
+            configured.getByRole('button', {
+              name: /^Role for Archive\b/,
+            })
+          ).toHaveText('Other');
+          await expect(
+            configured.getByRole('checkbox', { name: 'Sync Junk', exact: true })
           ).not.toBeChecked();
           await expect(
-            configured
-              .getByLabel('Watch for new mail alongside Inbox')
-              .locator('option:checked')
+            configured.getByRole('button', {
+              name: /^Watch for new mail alongside Inbox\b/,
+            })
           ).toHaveText('Sent');
 
           await configured

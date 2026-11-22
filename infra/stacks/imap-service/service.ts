@@ -72,8 +72,8 @@ export class ImapService extends pulumi.ComponentResource {
     );
 
     // A key of its own: the Cursor, Codex, and Microsoft keys protect other
-    // secrets with other readers. Only this task role may generate or unwrap
-    // account data keys; DSS gets nothing.
+    // secrets with other readers. Only this task role may encrypt or decrypt
+    // saved mailbox credentials; DSS gets nothing.
     const accountRootArn = pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentityOutput().accountId}:root`;
     const kmsKey = new aws.kms.Key(
       `${BASE_NAME}-credential-key`,

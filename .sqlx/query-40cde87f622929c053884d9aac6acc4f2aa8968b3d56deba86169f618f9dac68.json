@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_reconciliation_provider_backfill\n            SET\n                available_at = clock_timestamp() + make_interval(secs => $2),\n                validation_failures = validation_failures + CASE\n                    WHEN phase = 'validating' AND $3 IN ('transient_failure', 'constraint_violation') THEN 1\n                    ELSE 0\n                END,\n                constraint_failures = CASE\n                    WHEN phase = 'validating' AND $3 = 'constraint_violation'\n                        THEN LEAST(constraint_failures + 1, $4)\n                    ELSE constraint_failures\n                END,\n                lease_id = NULL,\n                lease_until = NULL,\n                updated_at = clock_timestamp()\n            WHERE name = 'v1'\n                AND lease_id = $1\n                AND lease_until > clock_timestamp()\n            RETURNING\n                batches,\n                link_rows_scanned,\n                message_rows_scanned,\n                rows_repaired,\n                validation_failures,\n                constraint_failures\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "batches",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_rows_scanned",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "message_rows_scanned",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "rows_repaired",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "validation_failures",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "constraint_failures",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "40cde87f622929c053884d9aac6acc4f2aa8968b3d56deba86169f618f9dac68"
+}

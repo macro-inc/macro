@@ -14,12 +14,12 @@ pub struct PgRepository {
 impl PgRepository {
     /// Use the composition root's shared pool.
     pub fn new(pool: PgPool) -> Self {
-        // Leave two production pool connections for non-loading queries,
-        // including heartbeats and cleanup; these are shared, not reserved.
+        // PgListener holds one connection for the process lifetime. Leave two
+        // more for shared non-loading work, including heartbeats and cleanup.
         let loading_slots = pool
             .options()
             .get_max_connections()
-            .saturating_sub(2)
+            .saturating_sub(3)
             .max(1);
         Self {
             pool,

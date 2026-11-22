@@ -463,3 +463,12 @@ merging this code.
 ## IMAP saved credential recovery
 
 `monitors/imap-credentials.ts` declares two span counters, a dashboard and two non-paging monitors: five verified damage classifications in ten minutes, or any five-percent fleet-guard activation. Counts are classification attempts, not distinct accounts. The engine guard itself uses distinct accounts. Only env is a metric dimension; credentials, mailbox ids, key ARNs and contexts never appear. These resources are new and are not deployed by this PR. See [recovery and triage](../../../docs/architecture/imap-engine.md#saved-credential-recovery).
+
+## Email provider repair
+
+`monitors/email-provider-repair.ts` declares three span counters, a dashboard
+and three non-paging monitors for deferred validation, verified stream-provider
+mismatches and hourly capped-state heartbeats. Counters measure classifications,
+not distinct corrupt rows. Dimensions are env only; mailbox identifiers and
+message data are excluded. These resources are code only and require a separately
+approved deployment. Follow the [repair and recovery runbook](../../../docs/runbooks/email-provider-repair.md).

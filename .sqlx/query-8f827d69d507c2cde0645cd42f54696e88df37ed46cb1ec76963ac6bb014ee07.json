@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT count(*) AS \"count!\"\n        FROM email_message_reconciliation q\n        JOIN email_links l ON l.id = q.link_id\n        WHERE q.provider IS DISTINCT FROM l.provider\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8f827d69d507c2cde0645cd42f54696e88df37ed46cb1ec76963ac6bb014ee07"
+}

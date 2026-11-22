@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id)\n            SELECT id, $1, 1, 'mail_folder', id::text\n            FROM unnest($2::uuid[]) AS id\n            ON CONFLICT (id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7d5da846c3a550d5d8c6823846c232f730430af6d879d8147b70d06fa5eadf68"
+}

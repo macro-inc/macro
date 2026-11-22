@@ -125,6 +125,27 @@ async fn main() -> anyhow::Result<()> {
     let worker_tracker = TaskTracker::new();
     let event_broker_tracker = TaskTracker::new();
 
+    // One extra connection per replica only while rollout repair is pending.
+    // It never borrows normal sync/request capacity and closes on completion.
+    let provider_repair_pool = PgPoolOptions::new()
+        .min_connections(0)
+        .max_connections(1)
+        .acquire_timeout(std::time::Duration::from_secs(3))
+        .connect_lazy(&config.macro_db_url)
+        .context("invalid provider repair database configuration")?;
+    let provider_repair = email_service::outbound::mailbox_provider_repair::PgProviderRepair(
+        provider_repair_pool.clone(),
+    );
+    let provider_repair_stopped = worker_cancellation_token.clone();
+    worker_tracker.spawn(async move {
+        email_service::mailbox_provider_repair_worker::run(
+            provider_repair,
+            provider_repair_stopped,
+        )
+        .await;
+        provider_repair_pool.close().await;
+    });
+
     worker_tracker.spawn(email_service::backfill_outbox::run(
         db.clone(),
         sqs_client.clone(),
@@ -309,7 +330,7 @@ async fn main() -> anyhow::Result<()> {
     let imap_gateway =
         email_service::composition::imap_gateway(db.clone(), config.internal_api_key.as_ref())?;
     // Only stream ingestion uses this class. Settings, commands and drafts keep
-    // the original interactive client, including their queued user work.
+    // their explicit background clients; user-triggered work stays interactive.
     let mut imap_ingestion = imap_gateway.clone();
     imap_ingestion.client = imap_ingestion
         .client

@@ -1,7 +1,41 @@
 mod credential_health;
 mod reads;
+mod restart;
 use super::*;
 use chrono::{Duration, Utc};
+
+#[sqlx::test(migrations = false)]
+async fn saturated_loaders_leave_two_connections_after_the_configuration_listener(pool: PgPool) {
+    let dedicated = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(10)
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    let mut listener = sqlx::postgres::PgListener::connect_with(&dedicated)
+        .await
+        .unwrap();
+    listener.listen("imap_pool_reserve_test").await.unwrap();
+    let repository = PgRepository::new(dedicated.clone());
+    let mut loaders = Vec::new();
+    for _ in 0..repository.loading_capacity.available_permits() {
+        loaders.push((
+            repository.loading_capacity.acquire().await.unwrap(),
+            dedicated.acquire().await.unwrap(),
+        ));
+    }
+    let spares = tokio::time::timeout(std::time::Duration::from_secs(1), async {
+        let heartbeat = dedicated.acquire().await.unwrap();
+        let cleanup = dedicated.acquire().await.unwrap();
+        (heartbeat, cleanup)
+    })
+    .await
+    .expect("a live listener and saturated loaders must leave heartbeat and cleanup capacity");
+    drop(spares);
+    drop(loaders);
+    drop(listener);
+    drop(repository);
+    dedicated.close().await;
+}
 
 async fn schema(pool: &PgPool) {
     sqlx::raw_sql(include_str!("test_schema.sql"))

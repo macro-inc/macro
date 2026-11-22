@@ -99,7 +99,9 @@ out of these spans.
 - Established synchronization and authorized sends, moves and deletes run
   independently of PostHog. Ownership, active/reauth state, generations,
   leases and explicit pause/disconnect/delete controls remain authoritative.
-- `INTERNAL_AUTH_KEY` authenticates private engine HTTP calls.
+- `INTERNAL_AUTH_KEY` authenticates private engine HTTP calls. Bootstrap it to
+  the same value as email_service's `EmailInternalApiKey`: the shared key
+  authenticates both host-to-engine calls and engine-to-host callbacks.
 - `IMAP_CREDENTIAL_KMS_KEY_ID` selects the dedicated credential key.
 - `IMAP_TEST_ENDPOINT_MAP` and `IMAP_TEST_TRUST_ROOT_PEM` support local verified
   TLS fixtures and are rejected outside `Environment::Local`.
@@ -175,6 +177,13 @@ Increasing concurrency requires memory/round measurements; reducing account
 coverage is not a substitute. The stacked H3 paging change reduces round duration
 and permits durable progress for large initial imports.
 
+Graceful shutdown cancels provider work, drains command cleanup and releases
+the owner lease before a replacement starts. A crash cannot perform that cleanup:
+its command and owner fences remain until their five- and six-minute expiries.
+A failed watcher drain also retains ownership until expiry to avoid overlapping
+sockets. The real-Postgres restart regression cancels a stalled round and proves
+a replacement reaches provider work without waiting for lease expiry.
+
 Transient owner-heartbeat errors leave the current round running and retry at
 the next heartbeat. Confirmed ownership loss cancels provider work cooperatively
 and drains command-lease cleanup; acquisition completes before that cancellation
@@ -185,8 +194,9 @@ provider IO. Loading cancellation rolls the claim back. A primary-key NOWAIT
 non-key lock makes competing claims fail promptly without blocking first-owner
 foreign-key checks. Statements have a 30-second deadline; full sync hydration's
 idle backstop follows its 240-second admitted work budget, including CPU work.
-The loading semaphore leaves two of the production pool's ten connections for
-all non-loading queries, including heartbeats and cleanup; they are shared.
+The loading semaphore admits seven simultaneous loads from the production
+pool's ten connections: the configuration listener holds one, and two remain
+shared by heartbeats, saves and cleanup. Those two are not dedicated reservations.
 
 The [owner-renewal plan record](../design/imap-owner-renewal-query-plans.json)
 measures the heartbeat caller against synthetic large tables, including actual
@@ -296,7 +306,11 @@ The visible issue is "Mailbox too large to sync yet"; new Inbox mail also waits
 when another monitored folder exceeds the bound. Gmail All Mail supplies derived
 feeds and is subject to the same limit. Gmail is offered its API integration
 first, while app-password access remains a user choice. The 250,000-UID cap is
-pending confirmation; this does not claim large-mailbox paging is complete.
+pending confirmation. A first import can therefore fail to finish for a very
+large mailbox even though its credentials are valid. The user-scoped
+`enable-imap-connections` flag defaults off; resumable paging, minimal header
+fields, incremental forward scans and folder parking are tracked in the stacked
+follow-up `mac-imap-smtp.23`. This PR does not implement that core sync rewrite.
 
 Size failures persist a growing retry deadline: one, two, four, eight, sixteen,
 then twenty-four hours (capped there). Repeated sync wakeups, restarts and other
@@ -364,3 +378,30 @@ changes before recommending reconnect; never replay user credentials.
 The changed reconnect-health and scheduler queries have measured plans on
 110,000 synthetic links/accounts and 22,000 live owners:
 [credential-health query plans](../design/imap-credential-health-query-plans.json).
+
+## Legacy mailbox-work provider repair
+
+The provider column uses a constant Outlook default, without rewriting the
+existing work tables. Pre-existing sync streams were Outlook-only. Reconciliation can contain older
+Gmail cleanup work; both composite foreign keys remain NOT VALID until automatic
+maintenance finishes, keeping full-table validation outside the deploy path. The provider trigger keeps both old and new writers
+correct throughout, and claims still check the authoritative link provider.
+
+The pubsub worker runs one leased repair with durable parent and child keyset
+cursors. Each transaction scans at most 1,000 parent or message keys, filters
+only after selecting that page, and commits its repair with the cursor under
+the same fence. Non-Outlook parents drive child scans through the existing
+link-leading primary key. A dedicated pool adds at most one connection per
+pubsub replica while repair is pending; it closes on completion. Pages have
+10-second statement and idle limits, a one-second lock limit and 250 ms pacing.
+
+Only a persisted scan-complete marker admits background FK validation. Its
+two 60-second statement budgets never block deployment; failures remain visible
+and retry with exponential backoff capped at one hour. Validation takes SHARE
+UPDATE EXCLUSIVE, allowing ordinary reads and writes while conflicting with
+DDL and autovacuum on that table. Three non-paging monitors are code only.
+Reconciliation FK validation completes asynchronously after deploy; normal
+deployment requires no operator action. A capped corruption incident needs
+the explicitly approved recovery described in the runbook. See the [repair runbook](../runbooks/email-provider-repair.md).
+
+Follow the [validation cap and recovery contract](../runbooks/email-provider-repair.md#validation-failures-and-the-constraint-cap).

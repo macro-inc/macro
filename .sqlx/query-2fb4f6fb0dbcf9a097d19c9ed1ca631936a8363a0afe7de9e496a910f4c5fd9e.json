@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            ALTER TABLE email_sync_streams\n            VALIDATE CONSTRAINT email_sync_streams_link_provider_fkey\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2fb4f6fb0dbcf9a097d19c9ed1ca631936a8363a0afe7de9e496a910f4c5fd9e"
+}
