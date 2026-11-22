@@ -38,6 +38,8 @@ function Message(props: {
 export function ScreenOverlay(props: {
   status: ScreenStatus;
   agentName: string;
+  /** The stage still shows the last picture (`SessionStore.lastPicture`). */
+  lastPicture: boolean;
   /** Present when this viewer may turn the computer on. */
   onTurnOn?: () => void;
   onRetry: () => void;
@@ -57,7 +59,11 @@ export function ScreenOverlay(props: {
         <Message
           busy
           title={t('agentScreen.reconnectingTitle')}
-          hint={t('agentScreen.reconnectingHint', name())}
+          hint={
+            props.lastPicture
+              ? t('agentScreen.reconnectingHint', name())
+              : t('agentScreen.reconnectingHintNoPicture', name())
+          }
         />
       </Match>
       <Match when={props.status.kind === 'waking'}>
@@ -122,8 +128,14 @@ export function ScreenOverlay(props: {
                 idle: t('agentScreen.endedIdleTitle'),
                 accessRevoked: t('agentScreen.endedRevokedTitle'),
                 notFound: t('agentScreen.endedNotFoundTitle'),
+                tooManyScreens: t('agentScreen.endedTooManyScreensTitle'),
                 failed: t('agentScreen.endedFailedTitle'),
               }[ended().reason]
+            }
+            hint={
+              ended().reason === 'tooManyScreens'
+                ? t('agentScreen.endedTooManyScreensHint')
+                : undefined
             }
           >
             <Show
@@ -131,6 +143,7 @@ export function ScreenOverlay(props: {
                 ended().reason === 'stopped' ||
                 ended().reason === 'idle' ||
                 ended().reason === 'accessRevoked' ||
+                ended().reason === 'tooManyScreens' ||
                 ended().reason === 'failed'
               }
             >
@@ -139,9 +152,10 @@ export function ScreenOverlay(props: {
                 variant="secondary"
                 onClick={() => props.onRetry()}
               >
-                {ended().reason !== 'failed'
-                  ? t('agentScreen.viewAgain')
-                  : t('agentScreen.tryAgain')}
+                {ended().reason === 'failed' ||
+                ended().reason === 'tooManyScreens'
+                  ? t('agentScreen.tryAgain')
+                  : t('agentScreen.viewAgain')}
               </Button>
             </Show>
           </Message>

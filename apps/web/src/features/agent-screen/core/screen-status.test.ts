@@ -57,3 +57,41 @@ describe('afterConnectFailed', () => {
     });
   });
 });
+
+describe('a connection that was live a moment ago', () => {
+  const recent = { recentlyLive: true };
+
+  it('retries at most 2 s apart, and does not give up after the usual six', () => {
+    expect(afterSessionEnded('connectionLost', 0, recent)).toMatchObject({
+      kind: 'retry',
+      delayMs: 500,
+    });
+    expect(afterConnectFailed('failed', 2, recent)).toMatchObject({
+      kind: 'retry',
+      delayMs: 2000,
+    });
+    expect(afterConnectFailed('failed', 5, recent)).toMatchObject({
+      kind: 'retry',
+      delayMs: 2000,
+    });
+    expect(
+      afterConnectFailed('failed', MAX_RECONNECT_ATTEMPTS + 3, recent)
+    ).toMatchObject({ kind: 'retry', delayMs: 2000 });
+  });
+});
+
+describe('too many screens', () => {
+  it('ends without a retry, from the socket or from the ticket', () => {
+    const ended = {
+      kind: 'show',
+      status: { kind: 'ended', reason: 'tooManyScreens' },
+    };
+    expect(
+      afterSessionEnded('error', 0, {
+        recentlyLive: true,
+        lastError: 'tooManySockets',
+      })
+    ).toEqual(ended);
+    expect(afterConnectFailed('tooManyScreens', 0)).toEqual(ended);
+  });
+});

@@ -114,7 +114,7 @@ const providerProbeError: ErrorResponseHandler<
   return statusError(response.status);
 };
 
-type ScreenTicketErrorCode = 'ROLLOUT_DISABLED';
+type ScreenTicketErrorCode = 'ROLLOUT_DISABLED' | 'TOO_MANY_SCREENS';
 
 /** The `code` the harness puts on a refused screen ticket, if any. */
 async function screenTicketBodyCode(
@@ -141,6 +141,13 @@ const screenTicketError: ErrorResponseHandler<ScreenTicketErrorCode> = async (
     return {
       code: 'ROLLOUT_DISABLED',
       message: 'Computers are not enabled for this account',
+    };
+  }
+  // Too many tickets or screens open for this computer at once.
+  if (response.status === 429) {
+    return {
+      code: 'TOO_MANY_SCREENS',
+      message: 'Too many screens are open for this computer',
     };
   }
   return statusError(response.status);

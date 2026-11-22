@@ -15,10 +15,12 @@ import {
   afterSessionEnded,
   type ControlLost,
   type NextStep,
+  type RetryContext,
   type ScreenStatus,
 } from '../core/screen-status';
 import type {
   ScreenError,
+  ScreenErrorCode,
   ScreenFrameSize,
   ScreenInputEvent,
   ScreenRect,
@@ -29,6 +31,16 @@ import type {
 
 /** A connection that drops sooner than this after going live is flapping. */
 const FLAPPING_MS = 10_000;
+
+/**
+ * For this long after a steady connection drops, retries stay quick and
+ * uncapped (`RetryContext.recentlyLive`): a blip in the tunnel recovers in
+ * seconds rather than waiting out the backoff.
+ */
+const RECENTLY_LIVE_WINDOW_MS = 60_000;
+
+/** Marks the previous connection's frame, kept on screen until the next is live. */
+const LAST_PICTURE_ATTRIBUTE = 'data-screen-last-picture';
 
 export type ScreenSessionOptions = {
   harnessId: string;
@@ -75,6 +87,12 @@ type SessionStore = {
    * paused, so it took the computer back (`agentNotPausable` mid-drive).
    */
   lapseReason: 'agentNotPausable' | undefined;
+  /**
+   * The stage still shows the last connection's picture (greyed out while
+   * not live). False until a connection went live, and once the stage is
+   * cleared (a manual retry, a final end).
+   */
+  lastPicture: boolean;
 };
 
 /**
@@ -95,6 +113,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     notice: undefined,
     controlLost: options.continueDriving ? 'drop' : undefined,
     lapseReason: undefined,
+    lastPicture: false,
   });
 
   let element: HTMLElement | undefined;
@@ -111,6 +130,14 @@ export function createScreenSession(options: ScreenSessionOptions) {
   let pendingConnect: AbortController | undefined;
   /** When the current connection went live, to tell a flapping one apart. */
   let liveSince: number | undefined;
+  /** When the last steady (not flapping) connection dropped. */
+  let steadyDroppedAt: number | undefined;
+  const retryContext = (lastError?: ScreenErrorCode): RetryContext => ({
+    recentlyLive:
+      steadyDroppedAt !== undefined &&
+      Date.now() - steadyDroppedAt < RECENTLY_LIVE_WINDOW_MS,
+    lastError,
+  });
   /** Set by a pop-out: the lease goes with the view that replaces this one. */
   let leaseCarriedAway = false;
   /** Stop already handed back; closing must not do it twice. */
@@ -156,12 +183,37 @@ export function createScreenSession(options: ScreenSessionOptions) {
     span.end();
   };
 
-  const teardown = () => {
+  /**
+   * Ends the current connection and clears the stage. `keepPicture` (a
+   * reconnect) leaves a dropped connection's frame on top of the next one's
+   * until that one is live, so "Showing the last picture" holds.
+   */
+  const teardown = (keepPicture = false) => {
     pendingConnect?.abort();
     pendingConnect = undefined;
     session?.close();
     session = undefined;
-    element?.replaceChildren();
+    if (!element) return;
+    if (!keepPicture || !store.lastPicture) {
+      element.replaceChildren();
+      setStore('lastPicture', false);
+      return;
+    }
+    for (const child of Array.from(element.children)) {
+      if (!(child instanceof HTMLElement)) continue;
+      if (child.hasAttribute(LAST_PICTURE_ATTRIBUTE)) continue;
+      child.setAttribute(LAST_PICTURE_ATTRIBUTE, '');
+      child.style.position = 'absolute';
+      child.style.inset = '0';
+    }
+  };
+
+  /** The new connection is live: the kept picture gives way to it. */
+  const dropLastPicture = () => {
+    for (const kept of Array.from(
+      element?.querySelectorAll(`[${LAST_PICTURE_ATTRIBUTE}]`) ?? []
+    ))
+      kept.remove();
   };
 
   /**
@@ -204,7 +256,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     const current = ++generation;
     const target = element;
     forgetServer();
-    teardown();
+    teardown(store.status.kind === 'reconnecting');
     // A new connection can be left (and handed back) again.
     handedBackOnLeaving = false;
     const abandon = new AbortController();
@@ -243,7 +295,10 @@ export function createScreenSession(options: ScreenSessionOptions) {
       connectSpan.setAttr('screen.ticket_failure', ticket.error);
       connectSpan.end();
       endConnectionSpan(`ticket_${ticket.error}`);
-      apply(afterConnectFailed(ticket.error, attempt), attempt + 1);
+      apply(
+        afterConnectFailed(ticket.error, attempt, retryContext()),
+        attempt + 1
+      );
       return;
     }
 
@@ -251,6 +306,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
     // The server ended this attempt itself (computer off, access revoked):
     // that end is what the viewer shows, not the connect's later rejection.
     let endedByServer = false;
+    // The server's last error on this socket, read when it ends.
+    let lastError: ScreenErrorCode | undefined;
     try {
       const transport = options.capabilities.transport(transportKind);
       const opened = await transport.connect(
@@ -297,6 +354,9 @@ export function createScreenSession(options: ScreenSessionOptions) {
           onError: (error) => {
             if (current !== generation) return;
             record('computer.screen.error', { code: error.code });
+            lastError = error.code;
+            // Its own end state, with Try again (see `afterSessionEnded`).
+            if (error.code === 'tooManySockets') return;
             // An error answering the take-back of a dropped drive ends the
             // resume: the lease stays where it is, and the view offers the
             // ordinary Take over here instead of holding the keyboard.
@@ -324,9 +384,11 @@ export function createScreenSession(options: ScreenSessionOptions) {
             record('computer.screen.ended', { reason });
             endConnectionSpan(reason);
             session = undefined;
-            // A session that stayed live a while starts its retries afresh; one
-            // that keeps dropping right after going live counts on.
+            // A session that stayed live a while starts its retries afresh,
+            // quickly for a while; one that keeps dropping right after going
+            // live counts on.
             if (connected && flapping()) connected = false;
+            if (connected) steadyDroppedAt = Date.now();
             // `idle` waits for the tab to be shown only when it went unseen.
             // Shown all along, the heartbeat didn't get through (a blocked
             // page): a failure like any other, retried with backoff and a cap
@@ -335,7 +397,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
               hiddenSinceOpen || document.visibilityState !== 'visible';
             const step = afterSessionEnded(
               reason === 'idle' && !unseen ? 'error' : reason,
-              connected ? 0 : attempt
+              connected ? 0 : attempt,
+              retryContext(lastError)
             );
             // One update: nothing (the keyboard, the controls) may see the
             // in-between of "ended" before "reconnecting".
@@ -357,15 +420,23 @@ export function createScreenSession(options: ScreenSessionOptions) {
       connected = true;
       liveSince = Date.now();
       hiddenSinceOpen = document.visibilityState !== 'visible';
+      dropLastPicture();
       batch(() => {
-        setStore({ status: { kind: 'live' }, notice: undefined });
+        setStore({
+          status: { kind: 'live' },
+          notice: undefined,
+          lastPicture: true,
+        });
         resumeDriving();
       });
     } catch (error) {
       connectSpan.error(error);
       if (current !== generation || endedByServer) return;
       endConnectionSpan('connect_failed');
-      apply(afterConnectFailed('failed', attempt), attempt + 1);
+      apply(
+        afterConnectFailed('failed', attempt, retryContext(lastError)),
+        attempt + 1
+      );
     } finally {
       connectSpan.end();
     }

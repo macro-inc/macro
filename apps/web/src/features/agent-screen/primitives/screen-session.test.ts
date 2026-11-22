@@ -1309,4 +1309,222 @@ describe('createScreenSession', () => {
       dispose();
     });
   });
+
+  it('recovers a blip quickly: after a steady connection drops, retries at most 2 s apart and past the usual cap', async () => {
+    const tickets: number[] = [];
+    let failing = false;
+    const connections: FakeConnection[] = [];
+    const real = fakeTransport(connections);
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () => {
+        tickets.push(Date.now());
+        return ok({
+          socketUrl: 'wss://screen.test/ws?ticket=t',
+          expiresAt: '',
+        });
+      },
+      transport: () => ({
+        kind: 'vnc',
+        connect: async (element, ticket, handlers, signal) => {
+          if (failing) throw new Error('the tunnel is down');
+          return real.connect(element, ticket, handlers, signal);
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => false,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      // Live a while, then the tunnel dies for about 12 seconds.
+      await vi.advanceTimersByTimeAsync(20_000);
+      failing = true;
+      const droppedAt = Date.now();
+      connections[0].handlers.onEnded('error');
+      await vi.advanceTimersByTimeAsync(12_000);
+      failing = false;
+      await vi.advanceTimersByTimeAsync(2_000);
+
+      expect(session.store.status).toEqual({ kind: 'live' });
+      const waits = tickets
+        .slice(1)
+        .map((at, index) => at - (index === 0 ? droppedAt : tickets[index]));
+      expect(waits.slice(0, 3)).toEqual([500, 1000, 2000]);
+      // Never the 4, 8 and 10 s of the cold backoff, and not given up after six.
+      expect(Math.max(...waits)).toBe(2000);
+      expect(waits.length).toBeGreaterThan(6);
+      dispose();
+    });
+  });
+
+  it('keeps the last picture on the stage while it reconnects, until the new connection is live', async () => {
+    const connections: FakeConnection[] = [];
+    let release = () => {};
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t', expiresAt: '' }),
+      transport: () => ({
+        kind: 'vnc',
+        connect: async (element, _ticket, handlers) => {
+          const picture = document.createElement('canvas');
+          picture.dataset.connection = String(connections.length + 1);
+          element.append(picture);
+          const connection: FakeConnection = {
+            handlers,
+            sent: [],
+            controls: [],
+          };
+          connections.push(connection);
+          if (connections.length > 1)
+            await new Promise<void>((resolve) => {
+              release = resolve;
+            });
+          return {
+            sendInput: () => {},
+            takeOver: () => {},
+            handBack: () => {},
+            stop: () => {},
+            close: () => picture.remove(),
+          };
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => false,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      const stage = document.createElement('div');
+      // Nothing shown yet, so nothing to keep.
+      expect(session.store.lastPicture).toBe(false);
+      session.attach(stage);
+      await settle();
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(session.store.lastPicture).toBe(true);
+
+      // The socket drops: the picture stays, the next connection mounts under it.
+      connections[0].handlers.onEnded('connectionLost');
+      await vi.advanceTimersByTimeAsync(500);
+      expect(session.store.status.kind).toBe('reconnecting');
+      expect(session.store.lastPicture).toBe(true);
+      const pictures = () =>
+        [...stage.children].map((child) => ({
+          connection: (child as HTMLElement).dataset.connection,
+          kept: child.hasAttribute('data-screen-last-picture'),
+        }));
+      expect(pictures()).toEqual([
+        { connection: '1', kept: true },
+        { connection: '2', kept: false },
+      ]);
+
+      // Live again: the kept picture gives way.
+      release();
+      await settle();
+      expect(session.store.status).toEqual({ kind: 'live' });
+      expect(pictures()).toEqual([{ connection: '2', kept: false }]);
+      dispose();
+    });
+  });
+
+  it('shows too many screens as its own end, without retrying or a last picture, and Try again connects', async () => {
+    let issued = 0;
+    let refuse = true;
+    const connections: FakeConnection[] = [];
+    const real = fakeTransport(connections);
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () => {
+        issued += 1;
+        return ok({
+          socketUrl: 'wss://screen.test/ws?ticket=t',
+          expiresAt: '',
+        });
+      },
+      transport: () => ({
+        kind: 'vnc',
+        // As the harness does: the error, the end, then the socket closes
+        // before the handshake.
+        connect: async (element, ticket, handlers, signal) => {
+          if (!refuse) return real.connect(element, ticket, handlers, signal);
+          handlers.onError({
+            code: 'tooManySockets',
+            message: 'too many screens are open on this computer',
+          });
+          handlers.onEnded('error');
+          throw new DOMException(
+            'The screen connection was abandoned',
+            'AbortError'
+          );
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(session.store.status).toEqual({
+        kind: 'ended',
+        reason: 'tooManyScreens',
+      });
+      expect(session.store.notice).toBeUndefined();
+      expect(session.store.lastPicture).toBe(false);
+      expect(issued).toBe(1);
+
+      refuse = false;
+      session.retry();
+      await settle();
+      expect(session.store.status).toEqual({ kind: 'live' });
+      expect(issued).toBe(2);
+      dispose();
+    });
+  });
+
+  it('shows too many screens, without retrying, when the ticket itself is refused for it', async () => {
+    let issued = 0;
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () => {
+        issued += 1;
+        return err('tooManyScreens' as const);
+      },
+      transport: () => fakeTransport([]),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(session.store.status).toEqual({
+        kind: 'ended',
+        reason: 'tooManyScreens',
+      });
+      expect(issued).toBe(1);
+      dispose();
+    });
+  });
 });

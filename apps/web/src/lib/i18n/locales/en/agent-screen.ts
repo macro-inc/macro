@@ -58,6 +58,7 @@ export default {
     '{{name}}’s computer was asleep. The desktop appears when it’s up.',
   reconnectingHint:
     'Showing the last picture. {{name}} keeps working meanwhile.',
+  reconnectingHintNoPicture: '{{name}} keeps working meanwhile.',
   asleepTitle: '{{name}}’s computer is asleep',
   asleepHint: 'Turning it on takes about 20 seconds.',
   turnOn: 'Turn on',
@@ -70,6 +71,8 @@ export default {
   endedRevokedTitle: 'You no longer have access to this screen',
   endedNotFoundTitle: 'This computer no longer exists',
   endedFailedTitle: 'Couldn’t connect to the screen',
+  endedTooManyScreensTitle: 'Too many screens are open for this computer',
+  endedTooManyScreensHint: 'Close one of them, then try again.',
   viewAgain: 'View screen again',
   tryAgain: 'Try again',
 

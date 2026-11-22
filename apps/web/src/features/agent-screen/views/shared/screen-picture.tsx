@@ -78,6 +78,7 @@ export function ScreenPicture(props: {
     >
       <ScreenOverlay
         status={session.store.status}
+        lastPicture={session.store.lastPicture}
         agentName={props.model.agentName()}
         onTurnOn={props.model.turnOn()}
         onRetry={() => props.model.retry()}

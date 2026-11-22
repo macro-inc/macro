@@ -102,6 +102,18 @@ async function copyRegion(
   return createImageBitmap(target);
 }
 
+/** A copy of the picture at its native size, or nothing before the first. */
+function stillOf(source: HTMLCanvasElement | null): HTMLCanvasElement | null {
+  if (!source || source.width === 0 || source.height === 0) return null;
+  const still = document.createElement('canvas');
+  still.width = source.width;
+  still.height = source.height;
+  still.style.display = 'block';
+  still.setAttribute('data-last-picture', '');
+  still.getContext('2d')?.drawImage(source, 0, 0);
+  return still;
+}
+
 function start(port: MessagePort) {
   const screen = document.getElementById('screen');
   if (!screen) return;
@@ -151,8 +163,12 @@ function start(port: MessagePort) {
     if (message.type === 'received') {
       channel.receive(message.data);
     } else if (message.type === 'close') {
+      // noVNC takes its canvas away on disconnect: keep a still of the last
+      // picture in its place, which a reconnect shows until it is live.
+      const still = stillOf(canvas());
       rfb.disconnect();
       channel.close();
+      if (still) screen.append(still);
     } else if (message.type === 'snapshot') {
       // Always answer, or the loupe waits for the timeout.
       const bitmap = await copyRegion(canvas(), message).catch(() => null);

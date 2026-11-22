@@ -3,6 +3,7 @@ import type {
   ScreenClientEndReason,
   ScreenDriver,
   ScreenEndReason,
+  ScreenErrorCode,
 } from '../transports/types';
 
 /**
@@ -27,6 +28,8 @@ export type ScreenStatus =
         | 'idle'
         | 'accessRevoked'
         | 'notFound'
+        /** The computer has as many screens open as it allows; not retried. */
+        | 'tooManyScreens'
         | 'failed';
     };
 
@@ -50,6 +53,7 @@ export type TicketFailure =
   | 'forbidden'
   | 'rolloutDisabled'
   | 'notFound'
+  | 'tooManyScreens'
   | 'failed';
 
 export type NextStep =
@@ -61,20 +65,50 @@ export const MAX_RECONNECT_ATTEMPTS = 6;
 
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 10_000];
 
-function retryOrFail(attempt: number): NextStep {
-  if (attempt > MAX_RECONNECT_ATTEMPTS) {
+/**
+ * The longest wait between retries for a connection that was live a moment
+ * ago (`RetryContext.recentlyLive`): a blip should come back in seconds.
+ */
+export const RECENTLY_LIVE_MAX_DELAY_MS = 2000;
+
+/** What the session knows about the connection that just failed. */
+export type RetryContext = {
+  /**
+   * A connection was live until a moment ago: retry quickly, without the
+   * attempt cap, while the session's window for that lasts.
+   */
+  recentlyLive: boolean;
+  /** The server's last error on the failed socket. */
+  lastError?: ScreenErrorCode;
+};
+
+const NO_CONTEXT: RetryContext = { recentlyLive: false };
+
+function retryOrFail(attempt: number, context: RetryContext): NextStep {
+  if (attempt > MAX_RECONNECT_ATTEMPTS && !context.recentlyLive) {
     return { kind: 'show', status: { kind: 'ended', reason: 'failed' } };
   }
-  const delayMs =
+  const backoff =
     RECONNECT_DELAYS_MS[Math.min(attempt, RECONNECT_DELAYS_MS.length) - 1];
+  const delayMs = context.recentlyLive
+    ? Math.min(backoff, RECENTLY_LIVE_MAX_DELAY_MS)
+    : backoff;
   return { kind: 'retry', status: { kind: 'reconnecting', attempt }, delayMs };
 }
 
 /** After a live or connecting session ends. `attempt` counts the retries so far. */
 export function afterSessionEnded(
   reason: ScreenEndReason | ScreenClientEndReason,
-  attempt: number
+  attempt: number,
+  context: RetryContext = NO_CONTEXT
 ): NextStep {
+  // Refused for being one screen too many: another try now fails the same.
+  if (context.lastError === 'tooManySockets' && reason !== 'stopped') {
+    return {
+      kind: 'show',
+      status: { kind: 'ended', reason: 'tooManyScreens' },
+    };
+  }
   return (
     match(reason)
       .returnType<NextStep>()
@@ -95,7 +129,7 @@ export function afterSessionEnded(
       .with('computerOff', () => ({ kind: 'show', status: { kind: 'asleep' } }))
       // A restarting harness or a dropped socket: a new ticket usually works.
       .with('shutdown', 'connectionLost', 'error', () =>
-        retryOrFail(attempt + 1)
+        retryOrFail(attempt + 1, context)
       )
       .exhaustive()
   );
@@ -104,7 +138,8 @@ export function afterSessionEnded(
 /** After minting a ticket (or opening its socket) failed. */
 export function afterConnectFailed(
   failure: TicketFailure,
-  attempt: number
+  attempt: number,
+  context: RetryContext = NO_CONTEXT
 ): NextStep {
   return match(failure)
     .returnType<NextStep>()
@@ -120,7 +155,11 @@ export function afterConnectFailed(
       kind: 'show',
       status: { kind: 'ended', reason: 'notFound' },
     }))
-    .with('failed', () => retryOrFail(attempt + 1))
+    .with('tooManyScreens', () => ({
+      kind: 'show',
+      status: { kind: 'ended', reason: 'tooManyScreens' },
+    }))
+    .with('failed', () => retryOrFail(attempt + 1, context))
     .exhaustive();
 }
 
