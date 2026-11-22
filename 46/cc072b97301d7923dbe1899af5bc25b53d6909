@@ -1,0 +1,43 @@
+crates/agent_egress/src/outbound/macro_mcp.rs
+  s_b432790e4300d8::t_e2b78770d792b8 186-197
+crates/agent_egress/src/domain/service/test/sign_in.rs
+  s_b432790e4300d8::t_1b42bc7d8c0eb7 1-185
+crates/agent_egress/src/outbound/mcp_credentials.rs
+  s_b432790e4300d8::t_d7bea10f274203 196-233
+crates/agent_egress/src/domain/service/actor.rs
+  s_b432790e4300d8::t_6db6a12b1187ba 105,107,116-189,192,248,251,353,355
+  s_b432790e4300d8::t_49d0422e07a698 190-191
+  s_b432790e4300d8::t_db86ca208f6c15 246-247
+  s_b432790e4300d8::t_9c05efa81453dd 249-250
+  s_b432790e4300d8::t_ed08fe61717307 252-254
+  s_b432790e4300d8::t_c5f19c7357b974 351-352
+  s_b432790e4300d8::t_a76810de5a55c6 354
+  s_b432790e4300d8::t_c3c4b8255b417c 356-357
+crates/agent_egress/src/domain/ports.rs
+  s_b432790e4300d8::t_47bbcf48f28c23 71-80
+crates/agent_egress/src/domain/service/test.rs
+  s_b432790e4300d8::t_6328e0b96acaf6 908
+crates/agent_egress/AGENTS.md
+  s_b432790e4300d8::t_5f3014adafd7f3 130-131
+  s_b432790e4300d8::t_0433c3e5d8110e 62-70
+crates/agent_egress/src/outbound/macro_mcp/test.rs
+  s_b432790e4300d8::t_17bdbffc3668f4 87-94
+crates/agent_egress/src/domain/model.rs
+  s_b432790e4300d8::t_c6b5d26595685e 444-446,449,453-457
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "46cc072b97301d7923dbe1899af5bc25b53d6909",
+  "prompts": {},
+  "sessions": {
+    "s_b432790e4300d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e77bbeeb-9f45-42db-b1b6-6d26e624e8c8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
