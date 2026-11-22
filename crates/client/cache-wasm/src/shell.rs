@@ -743,16 +743,20 @@ struct OpenedStorage {
 enum Pending {
     /// No adoption marker sits beside this build's files.
     None,
-    /// The files came from `identity`, written at storage `from_version`.
-    /// `previous` holds that identity's lock when it was free, which keeps the
-    /// older build away from its paths until this open ends.
-    Moved {
-        identity: String,
-        from_version: u32,
-        previous: Option<PreviousLock>,
-    },
-    /// Whether a marker sits there could not be read.
+    /// The files moved here and have not opened yet.
+    Moved(MovedFiles),
+    /// Whether a marker sits there, or where the moved files are, could not be
+    /// read, so the files are not opened at all.
     Unknown,
+}
+
+/// Files an adoption brought from `identity`, written at storage
+/// `from_version`. `previous` holds that identity's lock when it was free,
+/// which keeps the older build away from its paths until this open ends.
+struct MovedFiles {
+    identity: String,
+    from_version: u32,
+    previous: Option<PreviousLock>,
 }
 
 /// Releases `lock`, if any. Best effort: a lock that fails to release is let go
@@ -772,21 +776,30 @@ async fn open_storage(
     owner: OpfsOwner,
     pending: Pending,
 ) -> Result<OpenedStorage, JsValue> {
+    let moved = match pending {
+        Pending::None => None,
+        Pending::Moved(moved) => Some(moved),
+        Pending::Unknown => {
+            // Files that may have just moved here could hold the only copy of
+            // the older build's queue, and opening half of a pair can only
+            // reset it: keep them for a later open to resolve.
+            owner.release().await.map_err(err_js)?;
+            return Err(err_js("cache storage adoption state is unreadable"));
+        }
+    };
     let mut returned = None;
     let (owner, reset_outcome) = match open_owner(owner).await? {
         OpenResult::Ready(session) => {
             let connected = session.connect().map_err(err_js)?;
             match TursoStorage::from_opfs_session_with_outcome(connected, scope) {
                 Ok((storage, outcome)) => {
-                    if !matches!(pending, Pending::None) {
+                    if let Some(moved) = moved {
                         // Best effort: a marker left behind makes the next
                         // open report a resumed move once, and a later
                         // failing open compare the stored version, which
                         // this open advanced, before handing anything back.
                         let _ = storage.finish_adoption().await;
-                    }
-                    if let Pending::Moved { previous, .. } = pending {
-                        release_previous(previous).await;
+                        release_previous(moved.previous).await;
                     }
                     return Ok(OpenedStorage {
                         storage,
@@ -806,24 +819,16 @@ async fn open_storage(
                             .physical_reset_reason()
                             .expect("reset-required error has a reset reason"),
                     );
-                    let owner = match pending {
-                        Pending::None => failure
+                    let owner = match moved {
+                        None => failure
                             .reset()
                             .await
                             .map_err(|failure| storage_err_js(failure.error()))?,
-                        Pending::Unknown => {
-                            // Files that may have just moved here could hold
-                            // the only copy of the older build's queue: keep
-                            // them for a recovery open to hand back.
-                            let owner = failure.preserve().map_err(err_js)?;
-                            owner.release().await.map_err(err_js)?;
-                            return Err(err_js("cache storage adoption state is unreadable"));
-                        }
-                        Pending::Moved {
+                        Some(MovedFiles {
                             identity,
                             from_version,
                             previous,
-                        } => {
+                        }) => {
                             let stored = failure.stored_storage_version();
                             // The close checkpoints, so a returned file is
                             // self-contained.
@@ -852,11 +857,11 @@ async fn open_storage(
             }
         }
         OpenResult::ResetRequired(session) => {
-            if let Pending::Moved {
+            if let Some(MovedFiles {
                 from_version,
                 previous,
                 ..
-            } = pending
+            }) = moved
             {
                 returned = Some(CarryForward::new(CarryForwardKind::Discarded, from_version));
                 release_previous(previous).await;
@@ -1038,11 +1043,11 @@ async fn carry_forward(scope: &str, owner: &mut OpfsOwner) -> Carried {
             Ok(AdoptOutcome::Adopted) => {
                 return Carried {
                     report: Some(CarryForward::new(CarryForwardKind::Moved, from_version)),
-                    pending: Pending::Moved {
+                    pending: Pending::Moved(MovedFiles {
                         identity,
                         from_version,
                         previous: Some(previous),
-                    },
+                    }),
                 };
             }
             Ok(AdoptOutcome::NothingToAdopt) => {
@@ -1122,11 +1127,11 @@ async fn complete(
     }
     Carried {
         report: Some(CarryForward::new(CarryForwardKind::Resumed, from_version)),
-        pending: Pending::Moved {
+        pending: Pending::Moved(MovedFiles {
             identity: adoption.previous_identity,
             from_version,
             previous,
-        },
+        }),
     }
 }
 

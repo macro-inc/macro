@@ -3121,6 +3121,17 @@ async fn web_lock_free(lock: &str) -> bool {
     .expect("lock probe is boolean")
 }
 
+async fn create_opfs_directory(name: &str) {
+    run_js(
+        "return (async () => {
+          const root = await navigator.storage.getDirectory();
+          await root.getDirectoryHandle(name, { create: true });
+        })()",
+        name,
+    )
+    .await;
+}
+
 /// Renames one OPFS file.
 async fn rename_opfs_file(from: &str, to: &str) {
     run_js(
@@ -3257,11 +3268,11 @@ async fn the_older_build_stays_out_while_moved_files_first_open() {
     );
     assert!(matches!(
         carried.pending,
-        Pending::Moved {
+        Pending::Moved(MovedFiles {
             from_version: 11,
             previous: Some(_),
             ..
-        }
+        })
     ));
     // Until the moved files have opened here, no context of the older build
     // can take its identity, so it cannot open, reset or recreate it.
@@ -3433,6 +3444,50 @@ async fn a_move_stopped_between_its_renames_completes_on_the_next_open() {
     assert_eq!(
         report.carry_forward,
         Some(CarryForward::new(CarryForwardKind::Moved, 11))
+    );
+    assert_eq!(queue_depth(&engine).await, "1");
+    assert_eq!(test_generation(&engine).await, generation);
+    resolved(engine.close()).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
+#[wasm_bindgen_test(async)]
+async fn an_unreadable_adoption_keeps_the_moved_files_and_fails_the_open() {
+    const SCOPE: &str = "cache-wasm-carry-unknown";
+    let own = database_identity(SCOPE);
+    let older = cache_database_name(SCOPE, 11);
+    let marker = format!("{own}-adopting");
+    let held = format!("{own}-held");
+    // A move stopped between its renames, then a marker that cannot be read:
+    // a directory where it belongs fails the read as an OPFS error would.
+    let generation = older_database_with_a_queued_write(SCOPE, false).await;
+    move_without_opening(SCOPE).await;
+    rename_opfs_file(&format!("{own}-wal"), &format!("{older}-wal")).await;
+    rename_opfs_file(&marker, &held).await;
+    create_opfs_directory(&marker).await;
+    // Opening the main file alone could only reset it.
+    assert!(
+        open_cache_inner(SCOPE.into(), None, false, None, false)
+            .await
+            .is_err()
+    );
+    assert!(opfs_file_exists(&own).await);
+    assert!(!opfs_file_exists(&format!("{own}-wal")).await);
+    assert!(opfs_file_exists(&format!("{older}-wal")).await);
+    // Once the marker reads again, the move completes with nothing lost.
+    remove_opfs_file(&marker).await;
+    rename_opfs_file(&held, &marker).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("open once the marker reads");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::UpgradedExisting {
+                from_storage_version: 11
+            },
+            carry_forward: Some(CarryForward::new(CarryForwardKind::Resumed, 11)),
+        }
     );
     assert_eq!(queue_depth(&engine).await, "1");
     assert_eq!(test_generation(&engine).await, generation);
