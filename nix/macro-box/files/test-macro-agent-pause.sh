@@ -34,7 +34,10 @@ cat >"$work/systemd-run" <<'EOF'
 # Records what the dead-man timer would run; fails while told to.
 [ -e "$FAKE/cannot-arm" ] && exit 1
 for arg in "$@"; do
-  case "$arg" in --unit=*) printf '%s' "${arg#--unit=}" >"$FAKE/armed-unit" ;; esac
+  case "$arg" in
+    --unit=*) printf '%s' "${arg#--unit=}" >"$FAKE/armed-unit" ;;
+    --timer-property=*) printf '%s' "${arg#--timer-property=}" >"$FAKE/armed-timer-property" ;;
+  esac
 done
 printf '%s\n' "${@: -3:2}" | tr '\n' ' ' >"$FAKE/armed"
 EOF
@@ -73,6 +76,8 @@ frozen() { cat "$work/fake/FreezerState"; }
 
 reset
 expect "a freeze freezes the agent" "$(ask freeze aa)" frozen
+expect "the dead-man timer fires on time, not up to a minute late" \
+  "$(cat "$work/fake/armed-timer-property")" AccuracySec=1s
 expect "and arms the dead-man timer for its drive" "$(cat "$work/fake/armed")" "autothaw aa "
 expect "a thaw of that drive thaws it" "$(ask thaw aa)" running
 expect "the agent runs again" "$(frozen)" running
