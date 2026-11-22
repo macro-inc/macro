@@ -1062,3 +1062,44 @@ async fn a_write_that_loses_the_connection_records_why(pool: PgPool) {
     assert_eq!(runs[0].status, RunStatus::Failed);
     assert_eq!(runs[0].error_kind, Some(RunErrorKind::AccessLost));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn import_state_leaves_out_failures_older_than_a_week(pool: PgPool) {
+    use crate::domain::service::ImportService;
+    let owner = user("old-failures");
+    let repo = PgImportRepo::new(pool.clone());
+    for source in [ImportSource::Notion, ImportSource::Linear] {
+        repo.start_run(&owner, source, &[]).await.unwrap();
+        repo.transition_run(
+            &owner,
+            source,
+            &[RunStatus::Running],
+            RunStatus::Failed,
+            Some("failed"),
+        )
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "UPDATE import_run SET updated_at = NOW() - interval '8 days' WHERE user_id = $1 AND source = 'notion'",
+        owner.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let service = service(
+        &pool,
+        Writer::default(),
+        tokio_util::sync::CancellationToken::new(),
+        TaskTracker::new(),
+    );
+
+    let state = service.state(owner.clone()).await.unwrap();
+
+    let sources: Vec<_> = state.runs.iter().map(|run| run.source).collect();
+    assert_eq!(
+        sources,
+        vec![ImportSource::Linear],
+        "the week-old failure is gone"
+    );
+}

@@ -987,6 +987,20 @@ pub struct ImportRun {
     pub review_session_id: Option<Uuid>,
 }
 
+impl ImportRun {
+    /// Whether the run failed, or finished with objects it could not import:
+    /// the outcomes a user should see until they dismiss them.
+    pub fn ended_badly(&self) -> bool {
+        match self.status {
+            RunStatus::Failed => true,
+            RunStatus::Completed => self.error.is_some(),
+            RunStatus::Running | RunStatus::Ready | RunStatus::Importing | RunStatus::Dismissed => {
+                false
+            }
+        }
+    }
+}
+
 /// What a planning run has found in the source so far.
 #[derive(
     Debug,
@@ -1059,8 +1073,10 @@ pub struct NotionImportReport {
     /// `dismissed` when cancelled. Absent before the first run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<RunStatus>,
-    /// Why the run failed, when it did.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Why the run failed, when it did, as the importer wrote it. Never
+    /// serialized: it can carry provider detail, so the agent, the SDK and
+    /// the web read `error_kind` instead.
+    #[serde(skip)]
     pub error: Option<String>,
     /// The kind of failure, when the run failed and it was recorded. Show
     /// the user copy for this, not `error`.

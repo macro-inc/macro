@@ -1631,6 +1631,22 @@ async fn the_first_review_holds_a_plan_whatever_rows_an_older_review_left(pool: 
         ),
         "{elsewhere:?}"
     );
+
+    // Dismissing the first review lets go of the plan; the next one takes it.
+    repo.release_review(&actor, ImportSource::Notion, first)
+        .await
+        .unwrap();
+    assert_eq!(repo.list_runs(&actor).await.unwrap()[0].review_id, None);
+    repo.attach_review(&actor, ImportSource::Notion, second, session)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.list_runs(&actor).await.unwrap()[0].review_id,
+        Some(second)
+    );
+    repo.start_reviewed_write(&actor, ImportSource::Notion, second)
+        .await
+        .unwrap();
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

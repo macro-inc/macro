@@ -263,6 +263,15 @@ pub trait ReviewActions: Send + Sync + 'static {
     ) -> Result<bool, CodeModeError> {
         Ok(true)
     }
+    /// `record` was dismissed: let go of anything it holds for the session
+    /// `owner` (who presented it). Default: nothing.
+    async fn released(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _record: &ReviewRecord,
+    ) -> Result<(), CodeModeError> {
+        Ok(())
+    }
     /// Whether a new `record` can be presented to `owner`, checked before it
     /// is saved so a refused review leaves no record that a later read would
     /// try to present again. A kind whose review depends on other work (an
@@ -739,6 +748,18 @@ impl ReviewService {
         });
         let event = NotificationEvent::ReviewDecided(review_outcome(&record));
         self.save(&mut record, Some(event)).await?;
+        if !submit {
+            // A dismissed review lets go of what it held (an import's plan),
+            // so the next review can present it. Best effort: the decision
+            // is saved either way.
+            let released = match self.owner(record.session_id).await {
+                Ok(owner) => self.actions.released(&owner, &record).await,
+                Err(error) => Err(error),
+            };
+            if let Err(error) = released {
+                tracing::warn!(error = ?error, "could not release a dismissed review");
+            }
+        }
         let response = record.clone();
         let service = self.clone();
         let actor = actor.clone();
@@ -867,6 +888,14 @@ pub fn review_outcome(record: &ReviewRecord) -> ReviewOutcome {
         .all(|item| item.status == ItemStatus::Dismissed)
     {
         DecisionOutcome::Dismissed
+    } else if !items.is_empty()
+        && items
+            .iter()
+            .all(|item| item.status == ItemStatus::Pending && item.error.is_some())
+    {
+        // Every approved action was refused before it started; the review
+        // is open again, unchanged.
+        DecisionOutcome::Refused
     } else if items
         .iter()
         .all(|item| matches!(item.status, ItemStatus::Completed | ItemStatus::Submitting))

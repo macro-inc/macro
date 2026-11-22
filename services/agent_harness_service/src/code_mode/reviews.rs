@@ -118,6 +118,19 @@ where
             .await?;
         Ok(report.review_id == Some(record.id.0) && report.status == Some(RunStatus::Ready))
     }
+    async fn released(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        record: &ReviewRecord,
+    ) -> Result<(), CodeModeError> {
+        if record.kind() != ReviewKind::Import {
+            return Ok(());
+        }
+        self.import_service()?
+            .release_workspace_review(owner, import_source(record)?, record.id.0)
+            .await
+            .map_err(|error| CodeModeError::Storage(rootcause::report!(error).into()))
+    }
     async fn presentable(
         &self,
         owner: &MacroUserIdStr<'static>,

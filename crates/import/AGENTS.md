@@ -32,16 +32,22 @@ failed, being written, finished, cancelled or missing
 (`ImportError::RunNotReviewable`, a typed `UnreviewableRun` carrying the kind, never the raw error), so a failed plan never shows as an empty
 review. The first review presenting a plan, while it is planned or once it is
 ready, holds it (`import_run.review_id`); any other is refused
-(`PresentedElsewhere`). Writing starts only through
+(`PresentedElsewhere`) until the holder is dismissed (`release_review` frees
+the run and its staged rows). Writing starts only through
 `start_reviewed_write`: one statement moves the run from `ready` to
 `importing` while that review holds it (or, for plans presented before the
 run recorded reviews, its staged rows do), and otherwise refuses typed
-(`StillPlanning`, `PresentedElsewhere`, failed, finished). `SETTLED` only
+(`StillPlanning`, `PresentedElsewhere`, `NothingLeft`, failed, finished)
+before anything about the plan changes; the owner's sharing choices are
+written only once it has started. `SETTLED` only
 says which runs a new plan may replace. A failed plan or write records its
 `RunErrorKind` (`import_run.error_kind`, from `failure_kind`; `Interrupted`
 when a run is given up on); the report and runs carry it, and the agent's
 messages (`RunErrorKind::explain`, `UnreviewableRun::describe`) and the web
-copy are written from the kind, never from `error`.
+copy are written from the kind, never from `error`, which the report never
+serializes. A stored kind this build does not know reads as `Internal`.
+`/import/state` leaves out failed runs, and runs that finished with failures,
+once a week has passed since they last changed.
 Planning stages the whole tree as soon as the inventory is read,
 each row without a `decision` yet, then writes each decision-model batch's
 verdicts onto its rows as it lands (`update_plan_rows`); the report counts

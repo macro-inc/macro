@@ -263,18 +263,24 @@ where
             .filter_map(|row| write::WriteItem::from_entity(&row).map(|item| (row, item)))
             .collect();
         if planned.is_empty() {
-            return Err(ImportError::NotReady(
-                "This plan has nothing left to import.",
-            ));
+            return Err(crate::domain::ports::UnreviewableRun::NothingLeft.into());
         }
-        // The owner's sharing changes are recorded on the rows first, so a
-        // resumed write shares exactly what they approved.
+        let team_id = self.repo.user_team_id(user).await?;
+        // Only the ready plan this review presents is written: a failed,
+        // replaced or still-planning plan is refused here, whoever approved,
+        // before anything about it changes.
+        self.repo
+            .start_reviewed_write(user, self.workspace_source, review_id)
+            .await?;
+        // The owner's sharing changes are recorded on the rows before the
+        // write starts, so a resumed write shares exactly what they approved.
         let items: Vec<write::WriteItem> = planned.iter().map(|(_, item)| item.clone()).collect();
         let (to_share, to_keep) =
             sharing::sharing_changes(&items, &choices.shared, &choices.personal);
-        self.repo
-            .set_plan_sharing(user, &to_share, &to_keep)
-            .await?;
+        if let Err(error) = self.repo.set_plan_sharing(user, &to_share, &to_keep).await {
+            self.reopen_plan(user).await;
+            return Err(error);
+        }
         for (_, item) in &mut planned {
             if to_share.contains(&item.import_id) {
                 item.shared = true;
@@ -282,12 +288,6 @@ where
                 item.shared = false;
             }
         }
-        let team_id = self.repo.user_team_id(user).await?;
-        // Only the ready plan this review presents is written: a failed,
-        // replaced or still-planning plan is refused here, whoever approved.
-        self.repo
-            .start_reviewed_write(user, self.workspace_source, review_id)
-            .await?;
         self.hold_new_run(user, RunStatus::Importing, &NotionJob::Write { review_id })
             .await?;
 
@@ -358,6 +358,24 @@ where
     W: SlackWorkspaceSource,
     N: NotionConnections,
 {
+    /// Put a run the fence just started back to `ready` when the write
+    /// could not get going, so the same review can approve it again.
+    pub(super) async fn reopen_plan(&self, user: &MacroUserIdStr<'static>) {
+        if let Err(error) = self
+            .repo
+            .transition_run(
+                user,
+                self.workspace_source,
+                &[RunStatus::Importing],
+                RunStatus::Ready,
+                None,
+            )
+            .await
+        {
+            tracing::warn!(error = ?error, "could not reopen the import plan");
+        }
+    }
+
     /// Hold the run that just moved to `status` and record its job, so it
     /// survives this process; fails the run when that is not possible.
     pub(super) async fn hold_new_run(

@@ -130,6 +130,16 @@ struct ImportRunDbRow {
     review_session_id: Option<Uuid>,
 }
 
+/// A stored error kind; one this build does not know (written by a newer
+/// one) reads as `Internal`, so a list or report still loads.
+pub(super) fn decode_error_kind(kind: Option<String>) -> Option<RunErrorKind> {
+    let kind = kind?;
+    Some(RunErrorKind::from_str(&kind).unwrap_or_else(|_| {
+        tracing::warn!(kind, "unknown import run error kind");
+        RunErrorKind::Internal
+    }))
+}
+
 impl TryFrom<ImportRunDbRow> for ImportRun {
     type Error = ImportError;
 
@@ -149,13 +159,7 @@ impl TryFrom<ImportRunDbRow> for ImportRun {
             source,
             status,
             error: row.error,
-            error_kind: row
-                .error_kind
-                .map(|kind| {
-                    RunErrorKind::from_str(&kind)
-                        .map_err(|_| anyhow::anyhow!("unknown run error kind: {kind}"))
-                })
-                .transpose()?,
+            error_kind: decode_error_kind(row.error_kind),
             updated_at: row.updated_at,
             scanned,
             review_id: row.review_id,
@@ -664,7 +668,7 @@ impl ImportRepo for PgImportRepo {
             UPDATE import_run
             SET status = 'failed',
                 error = 'discovery was interrupted — try again',
-                error_kind = NULL,
+                error_kind = 'interrupted',
                 updated_at = NOW()
             WHERE user_id = $1 AND status IN ('running', 'importing') AND source NOT IN ('notion', 'linear', 'jira')
               AND updated_at < NOW() - ($2::double precision * interval '1 second')

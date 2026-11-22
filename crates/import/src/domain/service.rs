@@ -79,6 +79,10 @@ const IMPORT_HEARTBEAT: Duration = Duration::from_secs(30);
 /// never reaps a live batch.
 const STALE_IMPORT_AFTER: Duration = Duration::from_secs(IMPORT_HEARTBEAT.as_secs() * 6);
 
+/// How long a failed run (or one that finished with failures) stays in the
+/// import state, so the imports tray never greets a user with old failures.
+const FAILED_RUNS_LISTED_FOR: chrono::TimeDelta = chrono::TimeDelta::days(7);
+
 /// Turn cap for a Notion import session: fetch + finalize per page, plus
 /// slack for retries.
 fn notion_import_max_turns(pages: usize) -> usize {
@@ -916,7 +920,14 @@ where
         }
 
         self.reap_stale_runs(&user).await;
-        let runs = self.repo.list_runs(&user).await?;
+        let since = chrono::Utc::now() - FAILED_RUNS_LISTED_FOR;
+        let runs = self
+            .repo
+            .list_runs(&user)
+            .await?
+            .into_iter()
+            .filter(|run| !(run.ended_badly() && run.updated_at < since))
+            .collect();
         let entities = self.repo.list(&user, None, None).await?;
         Ok(ImportState { runs, entities })
     }

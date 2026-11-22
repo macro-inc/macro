@@ -198,6 +198,9 @@ pub enum DecisionOutcome {
     Dismissed,
     /// The batch contains mixed or unconfirmed results.
     Partial,
+    /// Every approved action was refused before it started (an import whose
+    /// plan was no longer ready); the review is open again, unchanged.
+    Refused,
 }
 
 /// Surface of a review decision.

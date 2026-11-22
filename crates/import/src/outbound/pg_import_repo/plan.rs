@@ -7,10 +7,8 @@ use agent_session::domain::model::AgentSessionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use super::{ImportEntityDbRow, PgImportRepo, run_status_strings};
-use crate::domain::models::{
-    ImportEntity, ImportSource, RunErrorKind, RunStatus, ScanCounts, TeamClaim,
-};
+use super::{ImportEntityDbRow, PgImportRepo, decode_error_kind, run_status_strings};
+use crate::domain::models::{ImportEntity, ImportSource, RunStatus, ScanCounts, TeamClaim};
 use crate::domain::ports::{NotionPlanRepo, PlanRow, Result, UnreviewableRun};
 use std::str::FromStr;
 
@@ -252,13 +250,7 @@ impl NotionPlanRepo for PgImportRepo {
         .ok_or(UnreviewableRun::Missing)?;
         let status = RunStatus::from_str(&run.status)
             .map_err(|_| anyhow::anyhow!("unknown run status: {}", run.status))?;
-        let error_kind = run
-            .error_kind
-            .map(|kind| {
-                RunErrorKind::from_str(&kind)
-                    .map_err(|_| anyhow::anyhow!("unknown run error kind: {kind}"))
-            })
-            .transpose()?;
+        let error_kind = decode_error_kind(run.error_kind);
         if let Some(refusal) = UnreviewableRun::of(status, error_kind) {
             return Err(refusal.into());
         }
@@ -296,6 +288,45 @@ impl NotionPlanRepo for PgImportRepo {
         .await?;
         transaction.commit().await?;
         Ok(result.rows_affected())
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn release_review(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review_id: Uuid,
+    ) -> Result<()> {
+        let mut transaction = self.pool.begin().await?;
+        // The run first, in the same order as attaching, so the two never
+        // deadlock.
+        sqlx::query!(
+            r#"
+            UPDATE import_run
+            SET review_id = NULL, review_session_id = NULL
+            WHERE user_id = $1 AND source = $2 AND review_id = $3
+              AND status IN ('running', 'ready')
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+            review_id,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query!(
+            r#"
+            UPDATE import_entity
+            SET review_id = NULL, updated_at = NOW()
+            WHERE review_id = $3 AND user_id = $1 AND source = $2 AND status = 'staged'
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+            review_id,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(())
     }
 
     #[tracing::instrument(skip(self, user), err)]
@@ -338,13 +369,7 @@ impl NotionPlanRepo for PgImportRepo {
         .ok_or(UnreviewableRun::Missing)?;
         let status = RunStatus::from_str(&run.status)
             .map_err(|_| anyhow::anyhow!("unknown run status: {}", run.status))?;
-        let error_kind = run
-            .error_kind
-            .map(|kind| {
-                RunErrorKind::from_str(&kind)
-                    .map_err(|_| anyhow::anyhow!("unknown run error kind: {kind}"))
-            })
-            .transpose()?;
+        let error_kind = decode_error_kind(run.error_kind);
         let refusal = match status {
             RunStatus::Running => UnreviewableRun::StillPlanning,
             RunStatus::Ready => UnreviewableRun::PresentedElsewhere,

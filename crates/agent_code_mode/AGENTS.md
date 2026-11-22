@@ -137,7 +137,10 @@ review's acting account. Every Submit, from the card or the chat, waits for
 `ReviewActions::approvable` (default: always), the hook a kind uses to refuse
 until it is ready, and is refused with `CodeModeError::NotApprovable` (400, shown on the card
 like a draft problem). A write its fence refuses after the submit puts the
-item back to pending with the reason, never `unknown`. Creating a
+item back to pending with the reason, never `unknown`, and settles the review
+with the typed `refused` outcome: the review is open again, unchanged.
+Dismissing a review calls `ReviewActions::released`, so an import review
+lets go of the plan it held. Creating a
 review first asks `ReviewActions::presentable` (default: always), so a review
 that cannot be presented (an import whose plan failed) is refused and never
 saved. A saved, unpresented review is presented again on every read, unless

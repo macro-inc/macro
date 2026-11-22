@@ -44,6 +44,14 @@ pub trait WorkspaceImporter: NotionWorkspaceImporter {
         review: Uuid,
         session: AgentSessionId,
     ) -> impl Future<Output = Result<u64>> + Send;
+    /// Let go of a review the owner dismissed: the plan it held is free for
+    /// the next review to present. Nothing else changes.
+    fn release_workspace_review(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
     /// Start writing precisely the review the owner approved.
     fn start_workspace_write(
         &self,
@@ -143,6 +151,15 @@ where
         self.scoped(source)
             .attach_notion_review(user, review, session)
             .await
+    }
+    async fn release_workspace_review(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review: Uuid,
+    ) -> Result<()> {
+        workspace_source(source)?;
+        self.repo.release_review(user, source, review).await
     }
     async fn start_workspace_write(
         &self,

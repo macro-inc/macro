@@ -105,6 +105,9 @@ pub enum UnreviewableRun {
     /// Another review presents this plan; only that review can approve it.
     #[error("another review presents this import plan; approve that one instead")]
     PresentedElsewhere,
+    /// The review's plan has no rows left to write.
+    #[error("this import plan has nothing left to import")]
+    NothingLeft,
 }
 
 impl UnreviewableRun {
@@ -121,7 +124,8 @@ impl UnreviewableRun {
             | Self::Completed
             | Self::Dismissed
             | Self::StillPlanning
-            | Self::PresentedElsewhere => self.to_string(),
+            | Self::PresentedElsewhere
+            | Self::NothingLeft => self.to_string(),
         }
     }
 
@@ -1060,6 +1064,16 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
         review_id: Uuid,
         session_id: AgentSessionId,
     ) -> impl Future<Output = Result<u64>> + Send;
+
+    /// Release `review_id`'s hold on the plan (`import_run.review_id`) and
+    /// untie the staged rows it holds, so the next review can present the
+    /// plan. Rows already being written and finished runs keep it.
+    fn release_review(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review_id: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Start writing the plan `review_id` presents: move the run from
     /// `ready` to `importing` in one statement, only while that review holds

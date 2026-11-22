@@ -134,6 +134,8 @@ struct Actions {
     fail_import: AtomicBool,
     /// The import's write fence refuses the approved plan.
     refuse_import: AtomicBool,
+    /// Reviews let go of when dismissed.
+    released: Mutex<Vec<ReviewId>>,
     /// Why a new review cannot be presented, when it cannot.
     refuse_presentation: Mutex<Option<String>>,
     /// Why a saved review can never be presented, found while presenting it.
@@ -165,6 +167,15 @@ impl ReviewActions for Actions {
     ) -> Result<bool, CodeModeError> {
         assert_eq!(account_holder, &record.acting_user);
         Ok(self.approvable.load(Ordering::SeqCst))
+    }
+    async fn released(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        record: &ReviewRecord,
+    ) -> Result<(), CodeModeError> {
+        assert_eq!(owner, &self.owner);
+        self.released.lock().unwrap().push(record.id);
+        Ok(())
     }
     async fn presentable(
         &self,
@@ -281,6 +292,7 @@ impl Fixture {
             approvable: AtomicBool::new(true),
             fail_import: AtomicBool::new(false),
             refuse_import: AtomicBool::new(false),
+            released: Mutex::new(Vec::new()),
             refuse_presentation: Mutex::new(None),
             unpresentable: Mutex::new(None),
         });
@@ -1556,6 +1568,15 @@ async fn an_import_the_fence_refuses_goes_back_to_pending_with_why() {
     let settled = f.settled(row.id).await;
     let state = &settled.items.states()[0];
     assert_eq!(state.status, ReviewItemStatus::Pending, "nothing started");
+    {
+        let events = f.store.2.lock().unwrap();
+        let last = events.last().expect("a settlement");
+        assert!(
+            matches!(&last.notification.event, NotificationEvent::ReviewSettled(ReviewSettlement::Actions(outcome)) if outcome.outcome == DecisionOutcome::Refused),
+            "{:?}",
+            last.notification.event
+        );
+    }
     assert_eq!(
         state.error.as_deref(),
         Some("The import was not started: the import plan failed.")
@@ -1581,4 +1602,31 @@ async fn an_import_the_fence_refuses_goes_back_to_pending_with_why() {
         ReviewItemStatus::Completed
     );
     assert_eq!(approved.items.states()[0].error, None);
+}
+
+#[tokio::test]
+async fn dismissing_a_review_lets_go_of_what_it_held() {
+    let f = Fixture::new();
+    let row = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await
+        .unwrap();
+    f.service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            ReviewDecision::Dismiss {
+                revision: row.revision,
+                items: vec![],
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(*f.actions.released.lock().unwrap(), vec![row.id]);
 }

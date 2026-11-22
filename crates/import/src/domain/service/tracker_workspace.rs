@@ -168,17 +168,7 @@ where
             .filter(|row| row.review_id == Some(review) && row.user_id == user.as_ref())
             .collect();
         if planned.is_empty() {
-            return Err(ImportError::NotReady(
-                "This plan has nothing left to import.",
-            ));
-        }
-        // A source's current run and exact review must both match. A stale
-        // card can never approve the replacement plan.
-        let report = self.current_report(user).await?;
-        if report.review_id != Some(review) || report.status != Some(RunStatus::Ready) {
-            return Err(ImportError::NotReady(
-                "This import plan is not ready for this review.",
-            ));
+            return Err(crate::domain::ports::UnreviewableRun::NothingLeft.into());
         }
         let mut shared = Vec::new();
         let mut personal = Vec::new();
@@ -192,10 +182,15 @@ where
                 }
             }
         }
-        self.repo.set_plan_sharing(user, &shared, &personal).await?;
+        // The fence first: a stale card never approves the replacement plan,
+        // and a refused write changes nothing about it.
         self.repo
             .start_reviewed_write(user, self.workspace_source, review)
             .await?;
+        if let Err(error) = self.repo.set_plan_sharing(user, &shared, &personal).await {
+            self.reopen_plan(user).await;
+            return Err(error);
+        }
         self.hold_new_run(
             user,
             RunStatus::Importing,

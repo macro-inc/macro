@@ -170,3 +170,24 @@ fn a_plan_that_failed_before_kinds_were_recorded_says_so_plainly() {
             .starts_with("The Notion import failed: something went wrong on Macro's side."),
     );
 }
+
+#[test]
+fn a_failed_plan_never_hands_the_agent_the_providers_text() {
+    let report = NotionImportReport {
+        status: Some(RunStatus::Failed),
+        error: Some("Notion could not complete the request: provider-secret-body".into()),
+        error_kind: Some(RunErrorKind::Unreachable),
+        ..NotionImportReport::default()
+    };
+    let response = ImportFromNotionResponse {
+        message: message(NotionImportAction::Status, &report),
+        report,
+    };
+
+    let payload = serde_json::to_string(&response).unwrap();
+    assert!(!payload.contains("provider-secret-body"), "{payload}");
+    assert!(
+        payload.contains("\"errorKind\":\"unreachable\""),
+        "{payload}"
+    );
+}

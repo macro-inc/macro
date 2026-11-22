@@ -336,6 +336,14 @@ impl WorkspaceImporter for FakeImportService {
     ) -> Result<u64> {
         unreachable!()
     }
+    async fn release_workspace_review(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Uuid,
+    ) -> Result<()> {
+        unreachable!()
+    }
     async fn start_workspace_write(
         &self,
         _: &MacroUserIdStr<'static>,

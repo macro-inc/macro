@@ -63,6 +63,15 @@ impl NotionPlanRepo for Recorder {
         unreachable!("recording a scan never attaches a review")
     }
 
+    async fn release_review(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Uuid,
+    ) -> Result<()> {
+        unreachable!("recording a scan never releases a review")
+    }
+
     async fn start_reviewed_write(
         &self,
         _: &MacroUserIdStr<'static>,
