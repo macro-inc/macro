@@ -31,5 +31,6 @@ export default {
   },
   completed: 'Imported',
   failed: 'Import failed',
+  failedBecause: 'Import failed: {{reason}}',
   cancelled: 'Import cancelled',
 };

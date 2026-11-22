@@ -17,7 +17,8 @@ export type ImportJobPhase =
   | { kind: 'importing'; done: number; total: number }
   | { kind: 'importingChannels'; channels: number }
   | { kind: 'completed' }
-  | { kind: 'failed' }
+  /** `reason` is the server's explanation, when it gave one. */
+  | { kind: 'failed'; reason: string | null }
   | { kind: 'cancelled' };
 
 /** How long a run that stopped moving stays in the tray. */
@@ -118,7 +119,7 @@ export function importJobPhase(
       return { kind: 'importing', done, total: done + remaining };
     })
     .with('completed', () => ({ kind: 'completed' }))
-    .with('failed', () => ({ kind: 'failed' }))
+    .with('failed', () => ({ kind: 'failed', reason: run.error ?? null }))
     .with('dismissed', () => ({ kind: 'cancelled' }))
     .exhaustive();
 }

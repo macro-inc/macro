@@ -53,7 +53,11 @@ function phaseLabel(source: ImportSource, phase: ImportJobPhase): string {
       t('importJobs.importingChannels', { count: channels })
     )
     .with({ kind: 'completed' }, () => t('importJobs.completed'))
-    .with({ kind: 'failed' }, () => t('importJobs.failed'))
+    .with({ kind: 'failed' }, ({ reason }) =>
+      reason
+        ? t('importJobs.failedBecause', { reason })
+        : t('importJobs.failed')
+    )
     .with({ kind: 'cancelled' }, () => t('importJobs.cancelled'))
     .exhaustive();
 }
