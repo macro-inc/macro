@@ -104,7 +104,10 @@ export function MobileModelSelector() {
       </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label={t('agentControls.modelSelector')}>
+        <MobileDrawer.Content
+          opaque
+          aria-label={t('agentControls.modelSelector')}
+        >
           <MobileDrawer.Handle />
           <Show when={page() !== 'list'}>
             <div class="relative flex h-12 items-center px-3">
