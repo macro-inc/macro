@@ -10,8 +10,8 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::domain::models::{
-    AgentNotice, DriveEnd, Driver, EndReason, Lease, NoticeName, PendingNotice, RedeemedTicket,
-    Release, ScreenGrant, SessionId, TakeOver,
+    AgentNotice, DriveEnd, DriveId, Driver, EndReason, Lease, NoticeName, OwedThaw, PendingNotice,
+    RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver,
 };
 use crate::domain::ports::{ScreenRepo, TicketHash};
 
@@ -258,6 +258,12 @@ impl ScreenRepo for PgScreenRepo {
             SELECT lease.computer_id
             FROM computer_screen_driver_leases lease
             WHERE lease.computer_id = ANY($1) AND lease.expires_at > now()
+            UNION
+            SELECT drive.computer_id
+            FROM computer_screen_drives drive
+            WHERE drive.computer_id = ANY($1)
+              AND drive.ended_at > now() - interval '1 day'
+              AND drive.thawed_at IS NULL
             "#,
             &ids,
             fresh_seconds,
@@ -648,26 +654,40 @@ impl ScreenRepo for PgScreenRepo {
     }
 
     #[tracing::instrument(skip_all, err)]
-    async fn released_within(&self, within: Duration) -> Result<Vec<ComputerId>, PgScreenError> {
-        let computers = sqlx::query_scalar!(
+    async fn owed_thaws(&self) -> Result<Vec<OwedThaw>, PgScreenError> {
+        let rows = sqlx::query!(
             r#"
-            SELECT DISTINCT drive.computer_id AS "computer_id!"
-            FROM computer_screen_drives drive
-            WHERE drive.ended_at > now() - make_interval(secs => $1)
-              AND NOT EXISTS (
-                  SELECT 1 FROM computer_screen_driver_leases lease
-                  WHERE lease.computer_id = drive.computer_id
-              )
+            SELECT id, computer_id, started_at
+            FROM computer_screen_drives
+            WHERE ended_at IS NOT NULL AND thawed_at IS NULL
+            ORDER BY ended_at
             LIMIT 500
-            "#,
-            ttl_seconds(within),
+            "#
         )
         .fetch_all(&self.pool)
         .await?;
-        Ok(computers
+        Ok(rows
             .into_iter()
-            .map(ComputerId::new_from_uuid)
+            .map(|row| {
+                let computer_id = ComputerId::new_from_uuid(row.computer_id);
+                OwedThaw {
+                    row: row.id,
+                    computer_id,
+                    drive: DriveId::of(computer_id, row.started_at),
+                }
+            })
             .collect())
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn mark_thawed(&self, row: Uuid) -> Result<(), PgScreenError> {
+        sqlx::query!(
+            "UPDATE computer_screen_drives SET thawed_at = now() WHERE id = $1 AND thawed_at IS NULL",
+            row,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     #[tracing::instrument(skip_all, fields(notices = ids.len()), err)]

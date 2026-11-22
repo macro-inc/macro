@@ -192,8 +192,9 @@ let
     AmbientCapabilities = "";
     ProtectSystem = "strict";
     ProtectHome = "tmpfs";
-    # macro's group may open it, and the agent runs in that group too.
-    InaccessiblePaths = [ "-${pauseSocket}" ];
+    # macro's group may enter it, and the agent runs in that group too; the
+    # directory outlives the socket, so a recreated socket stays hidden.
+    InaccessiblePaths = [ "-${pauseState}" ];
     BindPaths = [ home ];
     ReadWritePaths = [ desktopRuntime ];
     PrivateTmp = true;
@@ -306,43 +307,25 @@ let
     set-default-sink agent
   '';
   # Freezes or thaws the agent's unit for a person's take-over of its
-  # screen: one verb per connection to pauseSocket, which only macro's group
-  # may open (the harness, over the fleet's exec) and the sandbox hides. A
-  # restart asked for while frozen waits for the thaw.
-  pauseSocket = "/run/macro-agent-pause.sock";
+  # screen (files/macro-agent-pause): one request per connection to
+  # pauseSocket, in a directory only root and macro's group may enter, which
+  # the sandbox hides whole (the agent is in macro's group too). Each freeze
+  # arms a dead-man timer the harness keeps re-arming; a restart asked for
+  # while frozen waits for the thaw.
   pauseState = "/run/macro-agent-pause";
+  pauseSocket = "${pauseState}/sock";
   systemctl = lib.getExe' config.systemd.package "systemctl";
-  pauseAgent = pkgs.writeShellScript "macro-agent-pause" ''
-    unit=macro-agent.service
-    state() { ${systemctl} show -P "$1" "$unit" 2>/dev/null; }
-    IFS= read -r -t 5 verb || exit 0
-    mkdir -p ${pauseState}
-    case "$verb" in
-      freeze)
-        touch ${pauseState}/paused
-        case "$(state ActiveState)" in
-          active | activating | reloading) ;;
-          *) echo idle; exit 0 ;;
-        esac
-        ${systemctl} freeze "$unit" >/dev/null 2>&1 || true
-        if [ "$(state FreezerState)" = frozen ]; then echo frozen; else echo failed; fi
-        ;;
-      thaw)
-        rm -f ${pauseState}/paused
-        ${systemctl} thaw "$unit" >/dev/null 2>&1 || true
-        if [ "$(state FreezerState)" = frozen ]; then echo failed; exit 0; fi
-        if [ -e ${pauseState}/restart ]; then
-          rm -f ${pauseState}/restart
-          ${systemctl} restart --no-block "$unit"
-        fi
-        echo running
-        ;;
-      *) echo refused ;;
-    esac
-  '';
+  pauseAgent = pkgs.writeShellApplication {
+    name = "macro-agent-pause";
+    runtimeInputs = [
+      config.systemd.package
+      pkgs.coreutils
+      pkgs.util-linux
+    ];
+    text = builtins.readFile ./files/macro-agent-pause;
+  };
   restartAgent = pkgs.writeShellScript "macro-agent-restart" ''
     if [ -e ${pauseState}/paused ]; then
-      mkdir -p ${pauseState}
       touch ${pauseState}/restart
       exit 0
     fi
@@ -404,6 +387,11 @@ in
         user = "macro";
         group = "macro";
         mode = "0700";
+      };
+      ${pauseState}.d = {
+        user = "root";
+        group = "macro";
+        mode = "0750";
       };
       ${desktopRuntime}.d = {
         user = "macro";
@@ -493,7 +481,7 @@ in
     systemd.services."macro-agent-pause@" = {
       description = "Freeze or thaw the agent teammate";
       serviceConfig = {
-        ExecStart = pauseAgent;
+        ExecStart = lib.getExe pauseAgent;
         StandardInput = "socket";
         StandardOutput = "socket";
         StandardError = "journal";

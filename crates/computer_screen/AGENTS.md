@@ -47,15 +47,19 @@ agent's brain waiting while a person drives.
   (`ScreenService::lease`, `hold_agent`, `take_over`) releases it, which
   records the hand-back notice and tells the guest; `ScreenService::reap`,
   every `REAP_EVERY` on each replica, releases lapsed leases nobody read and
-  thaws again the agents of computers a drive ended on within
-  `THAW_CHECKED_FOR`, in case the process that released them died first.
-- A take-over freezes the agent (`DriverSignal::driving`) before it counts:
-  when that fails, the lease is released as `Release::Refused` (no hand-back
-  notice, and the take-over notice goes) and the caller gets
-  `ScreenError::AgentNotPausable`. A frozen agent takes no step at all; the
-  hold on its brain requests stays, for a computer whose agent restarted
-  mid-drive. A release thaws it, off the caller's path; a thaw never undoes
-  a newer freeze.
+  retries every ended drive whose thaw the guest hasn't confirmed
+  (`computer_screen_drives.thawed_at`), however long ago, skipping
+  computers that aren't running. An owed thaw keeps its computer in use.
+- A take-over freezes the agent for its drive (`DriverSignal::driving`,
+  fenced by `DriveId`) before it counts: when that fails, a new drive is
+  released as `Release::Refused` (no hand-back notice, and the take-over
+  notice goes), the same driver's moved drive ends as a hand-back, and the
+  caller gets `ScreenError::AgentNotPausable`. A frozen agent takes no step
+  at all; the hold on its brain requests stays, for a computer whose agent
+  restarted mid-drive. Each renewal keeps it frozen (`renewed`); the guest
+  thaws it on its own when no renewal comes. A release thaws it for that
+  drive, off the caller's path; the guest fences thaws by drive, so a late
+  one never undoes a newer freeze.
 - Notices (`computer.screen.takeOver`/`handBack`) name the driver by name
   only and go to the agent's main loop alone (the gateway decides which
   requests those are). `claim_notices` claims them for one request for

@@ -1,34 +1,40 @@
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Mutex;
 
 use chrono::Utc;
 use computer_screen::domain::models::{Driver, SessionId};
+use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
-use tokio::sync::Notify;
 
 use super::*;
-use crate::computers::screen::tunnel::{GuestProgram, TunnelError};
+use crate::computers::screen::tunnel::{GuestProgram, TunnelError, Woken};
 
 const COMPUTER: ComputerId = ComputerId::new_from_uuid(uuid::Uuid::from_u128(0xC0));
 
-/// A guest whose pause helper answers `freeze` and `thaw` as told, and
-/// records the verbs it was asked; a freeze can be held until released.
+/// A guest whose pause helper answers each verb as told, and records the
+/// `verb drive` requests it got.
 struct FakeHelper {
-    freeze_answer: &'static str,
+    answers: Mutex<HashMap<&'static str, &'static str>>,
     asked: Mutex<Vec<String>>,
-    /// Told when a freeze starts; the freeze then waits for `hold_freeze`.
-    freeze_started: Arc<Notify>,
-    hold_freeze: Option<Arc<Notify>>,
 }
 
 impl FakeHelper {
-    fn answering(freeze_answer: &'static str) -> Self {
+    /// Freezes answer `freeze`, everything else what the helper says when it
+    /// works.
+    fn answering(freeze: &'static str) -> Self {
         Self {
-            freeze_answer,
+            answers: Mutex::new(HashMap::from([
+                ("freeze", freeze),
+                ("keep", "frozen"),
+                ("thaw", "running"),
+            ])),
             asked: Mutex::new(Vec::new()),
-            freeze_started: Arc::new(Notify::new()),
-            hold_freeze: None,
         }
+    }
+
+    fn answer(&self, verb: &'static str, answer: &'static str) {
+        self.answers.lock().unwrap().insert(verb, answer);
     }
 
     fn asked(&self) -> Vec<String> {
@@ -45,16 +51,14 @@ impl GuestExec for FakeHelper {
         Box::pin(async move {
             let answer = if argv.get(2) == Some(&PAUSE_SCRIPT) {
                 let verb = argv.get(4).copied().unwrap_or_default();
-                self.asked.lock().unwrap().push(verb.to_owned());
-                if verb == "freeze" {
-                    self.freeze_started.notify_one();
-                    if let Some(hold) = &self.hold_freeze {
-                        hold.notified().await;
-                    }
-                    self.freeze_answer
-                } else {
-                    "running"
-                }
+                let drive = argv.get(5).copied().unwrap_or_default();
+                self.asked.lock().unwrap().push(format!("{verb} {drive}"));
+                self.answers
+                    .lock()
+                    .unwrap()
+                    .get(verb)
+                    .copied()
+                    .unwrap_or("refused")
             } else {
                 ""
             };
@@ -64,6 +68,26 @@ impl GuestExec for FakeHelper {
                 exit: Box::pin(async { Ok(0) }),
             })
         })
+    }
+}
+
+/// Whether the computer runs, as set.
+struct Power(Mutex<ComputerPower>);
+
+impl ScreenWaker for Power {
+    fn wake(
+        &self,
+        _harness: HarnessId,
+    ) -> Pin<Box<dyn Future<Output = Result<Woken, TunnelError>> + Send + '_>> {
+        Box::pin(async { Ok(Woken::Up) })
+    }
+
+    fn power(
+        &self,
+        _computer: ComputerId,
+    ) -> Pin<Box<dyn Future<Output = Result<ComputerPower, TunnelError>> + Send + '_>> {
+        let power = *self.0.lock().unwrap();
+        Box::pin(async move { Ok(power) })
     }
 }
 
@@ -81,18 +105,29 @@ fn lease() -> Lease {
     }
 }
 
-/// The guest files over `helper`, with the shutdown that stops their
-/// driver-file worker.
-fn files(helper: &Arc<FakeHelper>, tasks: &TaskTracker) -> (GuestFiles, CancellationToken) {
-    let exec: Arc<dyn GuestExec> = helper.clone();
+/// The guest files over `helper` on a computer whose power `power` says,
+/// with the shutdown that stops their worker.
+fn files(
+    helper: &Arc<FakeHelper>,
+    power: &Arc<Power>,
+    tasks: &TaskTracker,
+) -> (GuestFiles, CancellationToken) {
     let shutdown = CancellationToken::new();
+    let guest = Guest {
+        exec: helper.clone(),
+        power: power.clone(),
+    };
     (
-        GuestFiles::new(Some(exec), tasks, shutdown.clone()),
+        GuestFiles::new(Some(guest), tasks, shutdown.clone()),
         shutdown,
     )
 }
 
-/// Wait for every thaw `tasks` started, once the worker is told to stop.
+fn running() -> Arc<Power> {
+    Arc::new(Power(Mutex::new(ComputerPower::Running)))
+}
+
+/// Wait for every task `tasks` started, once the worker is told to stop.
 async fn settle(tasks: &TaskTracker, shutdown: &CancellationToken) {
     shutdown.cancel();
     tasks.close();
@@ -100,22 +135,29 @@ async fn settle(tasks: &TaskTracker, shutdown: &CancellationToken) {
 }
 
 #[tokio::test]
-async fn a_take_over_waits_for_the_agent_to_freeze() {
+async fn a_take_over_freezes_the_agent_for_its_drive() {
     let helper = Arc::new(FakeHelper::answering("frozen"));
     let tasks = TaskTracker::new();
+    let lease = lease();
 
-    assert_eq!(files(&helper, &tasks).0.driving(&lease()).await, Ok(()));
-    assert_eq!(helper.asked(), ["freeze"]);
+    let (files, _) = files(&helper, &running(), &tasks);
+
+    assert_eq!(files.driving(&lease).await, Ok(()));
+    assert_eq!(
+        helper.asked(),
+        [format!("freeze {}", lease.drive_id().as_str())]
+    );
 }
 
 #[tokio::test]
 async fn an_agent_that_cannot_be_frozen_refuses_the_take_over() {
-    for answer in ["failed", "running", "something else"] {
+    for answer in ["failed", "running", "superseded", "something else"] {
         let helper = Arc::new(FakeHelper::answering(answer));
         let tasks = TaskTracker::new();
+        let (files, _) = files(&helper, &running(), &tasks);
 
         assert_eq!(
-            files(&helper, &tasks).0.driving(&lease()).await,
+            files.driving(&lease()).await,
             Err(AgentNotPaused),
             "{answer}"
         );
@@ -126,56 +168,93 @@ async fn an_agent_that_cannot_be_frozen_refuses_the_take_over() {
 async fn a_computer_without_a_running_agent_has_nothing_to_freeze() {
     let helper = Arc::new(FakeHelper::answering("idle"));
     let tasks = TaskTracker::new();
+    let (files, _) = files(&helper, &running(), &tasks);
 
-    assert_eq!(files(&helper, &tasks).0.driving(&lease()).await, Ok(()));
+    assert_eq!(files.driving(&lease()).await, Ok(()));
 }
 
 #[tokio::test]
-async fn a_hand_back_thaws_the_agent() {
+async fn a_renewal_keeps_the_drive_frozen_in_the_guest() {
     let helper = Arc::new(FakeHelper::answering("frozen"));
     let tasks = TaskTracker::new();
-    let (files, shutdown) = files(&helper, &tasks);
-    files.driving(&lease()).await.unwrap();
+    let (files, shutdown) = files(&helper, &running(), &tasks);
+    let lease = lease();
+    files.driving(&lease).await.unwrap();
 
-    files.released(COMPUTER).await;
+    files.renewed(&lease).await;
     settle(&tasks, &shutdown).await;
 
-    assert_eq!(helper.asked(), ["freeze", "thaw"]);
+    let drive = lease.drive_id();
+    assert_eq!(
+        helper.asked(),
+        [
+            format!("freeze {}", drive.as_str()),
+            format!("keep {}", drive.as_str())
+        ]
+    );
 }
 
 #[tokio::test]
-async fn a_thaw_overtaken_by_a_new_take_over_leaves_the_agent_frozen() {
+async fn a_hand_back_thaws_the_agent_for_its_drive() {
     let helper = Arc::new(FakeHelper::answering("frozen"));
     let tasks = TaskTracker::new();
-    let (files, shutdown) = files(&helper, &tasks);
+    let (files, shutdown) = files(&helper, &running(), &tasks);
+    let lease = lease();
+    files.driving(&lease).await.unwrap();
 
-    // The hand-back's thaw is queued; a take-over freezes before it runs.
-    files.released(COMPUTER).await;
-    files.driving(&lease()).await.unwrap();
+    files.released(COMPUTER, lease.drive_id()).await;
     settle(&tasks, &shutdown).await;
 
-    assert_eq!(helper.asked(), ["freeze"]);
+    let drive = lease.drive_id();
+    assert_eq!(
+        helper.asked(),
+        [
+            format!("freeze {}", drive.as_str()),
+            format!("thaw {}", drive.as_str())
+        ]
+    );
 }
 
 #[tokio::test]
-async fn a_hand_back_during_a_freeze_thaws_after_it() {
-    let hold = Arc::new(Notify::new());
-    let helper = Arc::new(FakeHelper {
-        hold_freeze: Some(Arc::clone(&hold)),
-        ..FakeHelper::answering("frozen")
-    });
+async fn a_thaw_a_newer_drive_superseded_is_done() {
+    let helper = Arc::new(FakeHelper::answering("frozen"));
+    helper.answer("thaw", "superseded");
     let tasks = TaskTracker::new();
-    let (files, shutdown) = files(&helper, &tasks);
+    let (files, _) = files(&helper, &running(), &tasks);
 
-    let freezing = tokio::spawn({
-        let files = files.clone();
-        async move { files.driving(&lease()).await }
-    });
-    helper.freeze_started.notified().await;
-    files.released(COMPUTER).await;
-    hold.notify_one();
-    freezing.await.unwrap().unwrap();
-    settle(&tasks, &shutdown).await;
+    assert_eq!(
+        files.thaw(COMPUTER, &lease().drive_id()).await,
+        Ok(Thawed::Superseded)
+    );
+}
 
-    assert_eq!(helper.asked(), ["freeze", "thaw"]);
+#[tokio::test]
+async fn a_sleeping_computer_is_never_execd_into_and_its_thaw_stays_owed() {
+    let helper = Arc::new(FakeHelper::answering("frozen"));
+    let tasks = TaskTracker::new();
+    let power = Arc::new(Power(Mutex::new(ComputerPower::NotRunning)));
+    let (files, _) = files(&helper, &power, &tasks);
+    let drive = lease().drive_id();
+
+    assert_eq!(
+        files.thaw(COMPUTER, &drive).await,
+        Err(ThawFailed::NotRunning)
+    );
+    assert!(helper.asked().is_empty());
+
+    *power.0.lock().unwrap() = ComputerPower::Running;
+    assert_eq!(files.thaw(COMPUTER, &drive).await, Ok(Thawed::Running));
+}
+
+#[tokio::test]
+async fn a_thaw_the_guest_refuses_is_a_failure() {
+    let helper = Arc::new(FakeHelper::answering("frozen"));
+    helper.answer("thaw", "failed");
+    let tasks = TaskTracker::new();
+    let (files, _) = files(&helper, &running(), &tasks);
+
+    assert_eq!(
+        files.thaw(COMPUTER, &lease().drive_id()).await,
+        Err(ThawFailed::Failed)
+    );
 }

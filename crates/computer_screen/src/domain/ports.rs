@@ -10,8 +10,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    Access, AgentNotPaused, EndReason, Lease, Mode, PendingNotice, Person, RedeemedTicket, Release,
-    ScreenGrant, SessionId, TakeOver,
+    Access, AgentNotPaused, DriveId, EndReason, Lease, Mode, OwedThaw, PendingNotice, Person,
+    RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver, ThawFailed, Thawed,
 };
 
 /// The SHA-256 of a ticket secret: all storage ever sees of it.
@@ -138,12 +138,12 @@ pub trait ScreenRepo: Send + Sync + 'static {
     /// Computers whose lease lapsed, at most a few hundred.
     fn lapsed_leases(&self) -> impl Future<Output = Result<Vec<ComputerId>, Self::Err>> + Send;
 
-    /// Computers a drive ended on within `within` that nobody drives now:
-    /// their agent should be running.
-    fn released_within(
-        &self,
-        within: Duration,
-    ) -> impl Future<Output = Result<Vec<ComputerId>, Self::Err>> + Send;
+    /// Ended drives whose agent no thaw has been confirmed for, oldest first,
+    /// at most a few hundred.
+    fn owed_thaws(&self) -> impl Future<Output = Result<Vec<OwedThaw>, Self::Err>> + Send;
+
+    /// The guest answered a thaw for this drive.
+    fn mark_thawed(&self, row: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Forget notices that reached the agent.
     fn delete_notices(&self, ids: &[Uuid]) -> impl Future<Output = Result<(), Self::Err>> + Send;
@@ -193,14 +193,25 @@ pub trait People: Send + Sync + 'static {
 /// effort and quick: a computer that can't be reached is logged, never an
 /// error, and the caller never waits on the guest.
 pub trait DriverSignal: Send + Sync + 'static {
-    /// A person drives `computer` now: the agent on it is frozen before
-    /// this returns, or [`AgentNotPaused`] says it couldn't be. A computer
-    /// with no agent running has nothing to freeze.
+    /// A person drives `lease`'s computer now: the agent on it is frozen
+    /// for that drive before this returns, or [`AgentNotPaused`] says it
+    /// couldn't be. A computer with no agent running has nothing to freeze.
+    /// The guest thaws it on its own unless [`Self::renewed`] keeps it.
     fn driving(&self, lease: &Lease) -> impl Future<Output = Result<(), AgentNotPaused>> + Send;
 
-    /// Nobody drives `computer` any more: the agent is thawed, retried off
-    /// the caller's path. Repeating it is harmless.
-    fn released(&self, computer: ComputerId) -> impl Future<Output = ()> + Send;
+    /// The drive goes on: keep the agent frozen (off the caller's path).
+    fn renewed(&self, lease: &Lease) -> impl Future<Output = ()> + Send;
+
+    /// `drive` ended: thaw the agent, off the caller's path. A thaw for a
+    /// drive a newer one superseded leaves the newer freeze alone.
+    fn released(&self, computer: ComputerId, drive: DriveId) -> impl Future<Output = ()> + Send;
+
+    /// Thaw the agent for `drive` now, and say how it came out.
+    fn thaw(
+        &self,
+        computer: ComputerId,
+        drive: &DriveId,
+    ) -> impl Future<Output = Result<Thawed, ThawFailed>> + Send;
 }
 
 /// Which computers' leases changed, on every replica.

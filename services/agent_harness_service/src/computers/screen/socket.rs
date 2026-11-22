@@ -95,6 +95,9 @@ pub enum ErrorCode {
     /// The agent couldn't be paused on this computer, so this take-over
     /// was refused; a later one may work.
     AgentNotPausable,
+    /// Whether this viewer may still drive couldn't be checked, so this
+    /// take-over was refused; a later one may work.
+    TakeOverUnavailable,
 }
 
 /// Who drives, as viewers see it: a name, never their user id (an email).
@@ -539,7 +542,7 @@ impl Connection {
         send(
             sender,
             &ServerMessage::State {
-                lease_id: lease.map(Lease::drive_id),
+                lease_id: lease.map(|lease| lease.drive_id().as_str().to_owned()),
                 driver: lease.map(|lease| ShownDriver {
                     name: lease.driver.name.as_deref(),
                     is_you: lease.driver.user_id.as_ref() == self.grant.user_id.as_ref(),
@@ -720,12 +723,25 @@ impl Connection {
                         continue;
                     };
                     // Taking over is when a demoted admin must not slip
-                    // through before the next periodic recheck.
-                    if matches!(message, ClientMessage::TakeOver)
-                        && (self.deps.reauthorize)().await == Some(false)
-                    {
-                        return Ending::plain(EndReason::AccessRevoked);
-                    }
+                    // through before the next periodic recheck; a check that
+                    // couldn't be made refuses the take-over, not the socket.
+                    let message = if matches!(message, ClientMessage::TakeOver) {
+                        match (self.deps.reauthorize)().await {
+                            Some(true) => Some(message),
+                            Some(false) => return Ending::plain(EndReason::AccessRevoked),
+                            None => {
+                                if Self::error(sender, ErrorCode::TakeOverUnavailable, "Couldn't check that you may take over; try again.").await.is_err() {
+                                    return Ending::plain(EndReason::Stopped);
+                                }
+                                None
+                            }
+                        }
+                    } else {
+                        Some(message)
+                    };
+                    let Some(message) = message else {
+                        continue;
+                    };
                     let driving_now = driving.borrow().now();
                     let sent = match message {
                         ClientMessage::Stop => return Ending::plain(EndReason::Stopped),

@@ -4,15 +4,18 @@
 //! (`state/harness-id`). The agent can read both but they decide nothing:
 //! the hold on its brain is enforced here, and the agent is frozen while a
 //! person drives: [`GuestFiles`] asks the guest's root-owned pause helper
-//! (`nix/macro-box/_agent.nix`) to freeze its unit before a take-over
-//! starts, and to thaw it after. The driver file never names the person:
-//! who drives reaches the agent by name, in its runtime notices.
+//! (`nix/macro-box/files/macro-agent-pause`) to freeze its unit for a drive
+//! before the take-over starts, keeps it frozen on each renewal (the guest
+//! thaws it on its own otherwise), and thaws it for that drive after; the
+//! guest fences every request by drive, so a late thaw never undoes a newer
+//! freeze. The driver file never names the person: who drives reaches the
+//! agent by name, in its runtime notices.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use computer_screen::domain::models::{AgentNotPaused, Lease};
+use computer_screen::domain::models::{AgentNotPaused, DriveId, Lease, ThawFailed, Thawed};
 use computer_screen::domain::ports::DriverSignal;
 use futures::StreamExt as _;
 use harness_id::HarnessId;
@@ -23,7 +26,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::Instrument as _;
 
-use super::tunnel::GuestExec;
+use super::tunnel::{ComputerPower, GuestExec, ScreenWaker, TunnelError};
 
 /// The agent's state directory, under its home.
 const STATE_DIRECTORY: &str = "agent/state";
@@ -44,10 +47,10 @@ const CONCURRENT_WRITES: usize = 8;
 /// not an agent's) is left alone.
 const WRITE_SCRIPT: &str = r#"dir=$(dirname "$1"); [ -d "$dir" ] || exit 0; [ "$(cat "$1" 2>/dev/null)" = "$2" ] && exit 0; printf '%s\n' "$2" > "$1.tmp" && mv -f "$1.tmp" "$1""#;
 const REMOVE_SCRIPT: &str = r#"rm -f "$1""#;
-/// Ask the pause helper to `$1` (freeze or thaw) the agent. A computer
-/// with no helper says `idle` when it isn't an agent's (nothing to pause),
-/// and `failed` when it is (an image from before the helper).
-const PAUSE_SCRIPT: &str = r#"sock=/run/macro-agent-pause.sock; if [ -S "$sock" ]; then printf '%s\n' "$1" | socat -t 25 - "UNIX-CONNECT:$sock"; elif [ -d "$2" ]; then echo failed; else echo idle; fi"#;
+/// Ask the pause helper to `$1` (freeze, keep or thaw) the agent for drive
+/// `$2`. A computer with no helper says `idle` when it isn't an agent's
+/// (nothing to pause), and `failed` when it is (an image from before it).
+const PAUSE_SCRIPT: &str = r#"sock=/run/macro-agent-pause/sock; if [ -S "$sock" ]; then printf '%s %s\n' "$1" "$2" | socat -t 25 - "UNIX-CONNECT:$sock"; elif [ -d "$3" ]; then echo failed; else echo idle; fi"#;
 /// How long a freeze or thaw may take: systemd freezes a cgroup within a
 /// few seconds.
 const PAUSE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -63,21 +66,6 @@ const MAX_ANSWER_BYTES: u64 = 64;
 struct PendingChanges {
     latest: Mutex<HashMap<ComputerId, DriverChange>>,
     arrived: tokio::sync::Notify,
-}
-
-/// What the agent on a computer should be.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Wanted {
-    Frozen,
-    Running,
-}
-
-/// One computer's pause: what it should be, and the lock its freezes and
-/// thaws take one at a time, so a late thaw never undoes a newer freeze.
-#[derive(Debug)]
-struct Pause {
-    wanted: Mutex<Wanted>,
-    turn: tokio::sync::Mutex<()>,
 }
 
 fn path(file: &str) -> String {
@@ -97,29 +85,31 @@ enum DriverChange {
 #[derive(Clone)]
 pub struct GuestFiles {
     changes: Option<Arc<PendingChanges>>,
-    exec: Option<Arc<dyn GuestExec>>,
-    pauses: Arc<Mutex<HashMap<ComputerId, Arc<Pause>>>>,
+    guest: Option<Guest>,
     tasks: TaskTracker,
 }
 
+/// How the harness reaches computers' guests, and whether they run.
+#[derive(Clone)]
+pub struct Guest {
+    /// The fleet's exec, as `macro`.
+    pub exec: Arc<dyn GuestExec>,
+    /// Whether a computer runs: a sleeping one is never exec'd into.
+    pub power: Arc<dyn ScreenWaker>,
+}
+
 impl GuestFiles {
-    /// Write through `exec`, on a worker tracked by `tasks` that stops with
-    /// `shutdown`; without a fleet nothing is written.
-    pub fn new(
-        exec: Option<Arc<dyn GuestExec>>,
-        tasks: &TaskTracker,
-        shutdown: CancellationToken,
-    ) -> Self {
-        let pauses = Arc::default();
-        let Some(exec) = exec else {
+    /// Reach guests through `guest`, on a worker tracked by `tasks` that
+    /// stops with `shutdown`; without a fleet nothing is written or frozen.
+    pub fn new(guest: Option<Guest>, tasks: &TaskTracker, shutdown: CancellationToken) -> Self {
+        let Some(guest) = guest else {
             return Self {
                 changes: None,
-                exec: None,
-                pauses,
+                guest: None,
                 tasks: tasks.clone(),
             };
         };
-        let writer = Arc::clone(&exec);
+        let writer = Arc::clone(&guest.exec);
         let changes = Arc::new(PendingChanges::default());
         let pending = Arc::clone(&changes);
         tasks.spawn(async move {
@@ -144,23 +134,9 @@ impl GuestFiles {
         });
         Self {
             changes: Some(changes),
-            exec: Some(exec),
-            pauses,
+            guest: Some(guest),
             tasks: tasks.clone(),
         }
-    }
-
-    fn pause(&self, computer: ComputerId) -> Arc<Pause> {
-        let mut pauses = self
-            .pauses
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        Arc::clone(pauses.entry(computer).or_insert_with(|| {
-            Arc::new(Pause {
-                wanted: Mutex::new(Wanted::Running),
-                turn: tokio::sync::Mutex::new(()),
-            })
-        }))
     }
 
     fn queue(&self, change: DriverChange) {
@@ -261,12 +237,21 @@ enum PauseAnswer {
     Running,
     /// No agent runs there, so nothing was frozen.
     Idle,
+    /// A newer drive froze the agent since; this one is done.
+    Superseded,
+    /// The computer isn't running.
+    Asleep,
     /// It couldn't, or said something else.
     Failed,
 }
 
-/// Ask `computer`'s pause helper to `verb` the agent.
-async fn ask_pause(exec: &dyn GuestExec, computer: ComputerId, verb: &str) -> PauseAnswer {
+/// Ask `computer`'s pause helper to `verb` the agent for `drive`.
+async fn ask_pause(
+    exec: &dyn GuestExec,
+    computer: ComputerId,
+    verb: &str,
+    drive: &DriveId,
+) -> PauseAnswer {
     let state = path("");
     let argv = [
         "sh",
@@ -274,13 +259,15 @@ async fn ask_pause(exec: &dyn GuestExec, computer: ComputerId, verb: &str) -> Pa
         PAUSE_SCRIPT,
         "sh",
         verb,
+        drive.as_str(),
         state.trim_end_matches('/'),
     ];
     let asked = tokio::time::timeout(PAUSE_TIMEOUT, async {
-        let mut process = exec
-            .exec(computer, &argv)
-            .await
-            .map_err(|error| error.to_string())?;
+        let mut process = match exec.exec(computer, &argv).await {
+            Ok(process) => process,
+            Err(TunnelError::ComputerOff) => return Ok(None),
+            Err(error) => return Err(error.to_string()),
+        };
         drop(process.stdin);
         let mut answer = String::new();
         (&mut process.stdout)
@@ -290,17 +277,19 @@ async fn ask_pause(exec: &dyn GuestExec, computer: ComputerId, verb: &str) -> Pa
             .map_err(|error| error.to_string())?;
         drop(process.stdout);
         let code = process.exit.await?;
-        Ok::<_, String>((code, answer))
+        Ok::<_, String>(Some((code, answer)))
     })
     .await;
     let answer = match asked {
-        Ok(Ok((0, answer))) => match answer.trim() {
+        Ok(Ok(None)) => PauseAnswer::Asleep,
+        Ok(Ok(Some((0, answer)))) => match answer.trim() {
             "frozen" => PauseAnswer::Frozen,
             "running" => PauseAnswer::Running,
             "idle" => PauseAnswer::Idle,
+            "superseded" => PauseAnswer::Superseded,
             _ => PauseAnswer::Failed,
         },
-        Ok(Ok((code, _))) => {
+        Ok(Ok(Some((code, _)))) => {
             tracing::warn!(code, "the agent's pause helper failed");
             PauseAnswer::Failed
         }
@@ -317,71 +306,96 @@ async fn ask_pause(exec: &dyn GuestExec, computer: ComputerId, verb: &str) -> Pa
     answer
 }
 
-/// Thaw `computer`'s agent while it should run, a few times if it must.
-async fn thaw(exec: Arc<dyn GuestExec>, computer: ComputerId, pause: Arc<Pause>) {
-    for attempt in 0..THAW_ATTEMPTS {
-        if attempt > 0 {
-            tokio::time::sleep(THAW_RETRY_AFTER).await;
+impl Guest {
+    /// Thaw `computer`'s agent for `drive`, unless the computer sleeps.
+    async fn thaw(&self, computer: ComputerId, drive: &DriveId) -> Result<Thawed, ThawFailed> {
+        match self.power.power(computer).await {
+            Ok(ComputerPower::Running) => {}
+            Ok(ComputerPower::NotRunning) => return Err(ThawFailed::NotRunning),
+            Err(error) => {
+                tracing::warn!(error = %error, "could not tell whether the computer runs");
+                return Err(ThawFailed::Failed);
+            }
         }
-        let _turn = pause.turn.lock().await;
-        if *pause
-            .wanted
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            != Wanted::Running
-        {
-            return;
-        }
-        let span = tracing::info_span!("computer.screen.thaw", computer.id = %computer, screen.attempt = attempt, screen.pause = tracing::field::Empty);
-        let answer = ask_pause(exec.as_ref(), computer, "thaw")
+        let span = tracing::info_span!("computer.screen.thaw", computer.id = %computer, screen.pause = tracing::field::Empty);
+        match ask_pause(self.exec.as_ref(), computer, "thaw", drive)
             .instrument(span)
-            .await;
-        if matches!(answer, PauseAnswer::Running | PauseAnswer::Idle) {
-            return;
+            .await
+        {
+            PauseAnswer::Running | PauseAnswer::Idle => Ok(Thawed::Running),
+            PauseAnswer::Superseded => Ok(Thawed::Superseded),
+            PauseAnswer::Asleep => Err(ThawFailed::NotRunning),
+            PauseAnswer::Frozen | PauseAnswer::Failed => Err(ThawFailed::Failed),
         }
     }
-    tracing::warn!(computer.id = %computer, "the agent stayed frozen after a hand-back");
 }
 
 impl DriverSignal for GuestFiles {
     async fn driving(&self, lease: &Lease) -> Result<(), AgentNotPaused> {
         let computer = lease.computer_id;
-        let Some(exec) = &self.exec else {
+        let Some(guest) = &self.guest else {
             return Ok(());
         };
-        let pause = self.pause(computer);
-        *pause
-            .wanted
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Wanted::Frozen;
-        let answer = {
-            let _turn = pause.turn.lock().await;
-            let span = tracing::info_span!("computer.screen.freeze", computer.id = %computer, screen.pause = tracing::field::Empty);
-            ask_pause(exec.as_ref(), computer, "freeze")
-                .instrument(span)
-                .await
-        };
-        match answer {
+        let span = tracing::info_span!("computer.screen.freeze", computer.id = %computer, screen.pause = tracing::field::Empty);
+        match ask_pause(guest.exec.as_ref(), computer, "freeze", &lease.drive_id())
+            .instrument(span)
+            .await
+        {
             PauseAnswer::Frozen | PauseAnswer::Idle => {
                 self.queue(DriverChange::Driving(computer));
                 Ok(())
             }
-            PauseAnswer::Running | PauseAnswer::Failed => Err(AgentNotPaused),
+            PauseAnswer::Running
+            | PauseAnswer::Superseded
+            | PauseAnswer::Asleep
+            | PauseAnswer::Failed => Err(AgentNotPaused),
         }
     }
 
-    async fn released(&self, computer: ComputerId) {
-        let Some(exec) = &self.exec else {
+    async fn renewed(&self, lease: &Lease) {
+        let Some(guest) = &self.guest else {
             return;
         };
-        let pause = self.pause(computer);
-        *pause
-            .wanted
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Wanted::Running;
-        self.tasks
-            .spawn(thaw(Arc::clone(exec), computer, pause).in_current_span());
+        let (exec, computer, drive) =
+            (Arc::clone(&guest.exec), lease.computer_id, lease.drive_id());
+        let span = tracing::info_span!("computer.screen.keep_frozen", computer.id = %computer, screen.pause = tracing::field::Empty);
+        self.tasks.spawn(
+            async move {
+                ask_pause(exec.as_ref(), computer, "keep", &drive).await;
+            }
+            .instrument(span),
+        );
+    }
+
+    async fn released(&self, computer: ComputerId, drive: DriveId) {
+        let Some(guest) = self.guest.clone() else {
+            return;
+        };
+        // Tried a few times here; `ScreenService::reap` retries until the
+        // guest answers, and the guest's own timer thaws it regardless.
+        self.tasks.spawn(
+            async move {
+                for attempt in 0..THAW_ATTEMPTS {
+                    if attempt > 0 {
+                        tokio::time::sleep(THAW_RETRY_AFTER).await;
+                    }
+                    match guest.thaw(computer, &drive).await {
+                        Ok(_) | Err(ThawFailed::NotRunning) => return,
+                        Err(ThawFailed::Failed) => {}
+                    }
+                }
+                tracing::warn!(computer.id = %computer, "the agent is still frozen after a hand-back; reaping retries");
+            }
+            .in_current_span(),
+        );
         self.queue(DriverChange::Released(computer));
+    }
+
+    async fn thaw(&self, computer: ComputerId, drive: &DriveId) -> Result<Thawed, ThawFailed> {
+        match &self.guest {
+            Some(guest) => guest.thaw(computer, drive).await,
+            None => Ok(Thawed::Running),
+        }
     }
 }
 

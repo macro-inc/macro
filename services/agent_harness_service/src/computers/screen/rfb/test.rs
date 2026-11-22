@@ -325,27 +325,56 @@ fn the_server_side_frames_bytes_however_they_are_split() {
     assert_eq!(passed, expected);
 }
 
+/// noVNC's SetPixelFormat: 32 bits per pixel, depth 24, true colour.
+const PIXEL_FORMAT_32: [u8; 20] = [
+    0, 0, 0, 0, 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0,
+];
+
 #[test]
-fn pixels_follow_the_format_the_viewer_sets() {
+fn only_32_bit_true_colour_pixels_are_spoken() {
+    let mut gate = RfbGate::new();
+    gate.filter(HANDSHAKE, false).unwrap();
+    assert_eq!(
+        gate.filter(&PIXEL_FORMAT_32, false).unwrap().forward,
+        PIXEL_FORMAT_32
+    );
+
+    let mut eight_bits = PIXEL_FORMAT_32;
+    eight_bits[4] = 8;
+    assert_eq!(gate.filter(&eight_bits, false), Err(GateError::PixelFormat));
+
+    let mut gate = RfbGate::new();
+    gate.filter(HANDSHAKE, false).unwrap();
+    let mut colour_map = PIXEL_FORMAT_32;
+    colour_map[7] = 0;
+    assert_eq!(gate.filter(&colour_map, false), Err(GateError::PixelFormat));
+}
+
+/// A watcher who changes the pixel format under a frame already on its way
+/// would have the server side frame that frame at the wrong size and pass
+/// what follows it, the clipboard included: the change ends the connection
+/// before any of that frame passes the filter.
+#[test]
+fn a_mid_stream_pixel_format_change_ends_the_connection() {
     let mut gate = RfbGate::new();
     let mut server = gate.server_filter();
     gate.filter(HANDSHAKE, false).unwrap();
-    // The ServerInit says 32 bits per pixel; the viewer then asks for 8.
-    assert_eq!(
-        server.filter(&server_greeting(), false).unwrap(),
-        server_greeting()
-    );
-    let set_pixel_format = [0u8, 0, 0, 0, 8, 8, 0, 1, 0, 7, 0, 7, 0, 3, 0, 3, 6, 0, 0, 0];
-    gate.filter(&set_pixel_format, false).unwrap();
+    gate.filter(&PIXEL_FORMAT_32, false).unwrap();
+    server.filter(&server_greeting(), false).unwrap();
+    gate.filter(&FRAMEBUFFER_UPDATE_REQUEST, false).unwrap();
 
-    // A 2x2 Raw rectangle is now 4 bytes, so the clipboard after it is
-    // still found and dropped.
-    let mut update = vec![0u8, 0, 0, 1];
-    update.extend(rectangle(2, 2, 0));
-    update.extend([9u8; 4]);
-    let mut stream = update.clone();
-    stream.extend(cut_text(b"x"));
-    assert_eq!(server.filter(&stream, false).unwrap(), update);
+    let mut eight_bits = PIXEL_FORMAT_32;
+    eight_bits[4] = 8;
+    assert_eq!(gate.filter(&eight_bits, false), Err(GateError::PixelFormat));
+}
+
+#[test]
+fn a_server_that_isnt_32_bit_is_not_framed() {
+    let mut server = RfbGate::new().server_filter();
+    let mut greeting = server_greeting();
+    // ServerInit's bits per pixel, after version, security and result.
+    greeting[12 + 2 + 4 + 4] = 16;
+    assert_eq!(server.filter(&greeting, false), Err(GateError::PixelFormat));
 }
 
 #[test]
