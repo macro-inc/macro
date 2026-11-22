@@ -159,6 +159,39 @@ async fn rpc_host(
     (status, serde_json::from_slice(&bytes).unwrap_or_default())
 }
 
+/// A `server/discover` handshake, as a 2026-07-28 client opens with.
+async fn discover(app: Router, token: &str) -> serde_json::Value {
+    let version = rmcp::model::ProtocolVersion::V_2026_07_28.to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/mcp/internal")
+                .header("host", "localhost")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .header("accept", "application/json, text/event-stream")
+                .header("mcp-protocol-version", &version)
+                .header("mcp-method", "server/discover")
+                .body(Body::from(
+                    serde_json::json!({
+                        "jsonrpc": "2.0", "id": 1, "method": "server/discover",
+                        "params": {"_meta": {
+                            "io.modelcontextprotocol/protocolVersion": version,
+                            "io.modelcontextprotocol/clientInfo": {"name": "test", "version": "1"},
+                            "io.modelcontextprotocol/clientCapabilities": {},
+                        }},
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+    serde_json::from_slice(&bytes).unwrap_or_default()
+}
+
 #[tokio::test]
 async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
     for harness in ["cursor", "claude-code", "macrod"] {
@@ -541,6 +574,13 @@ async fn execute_code_offers_and_accepts_js_tools_only_with_permissions() {
             js_tools
         );
         assert_eq!(instructions.contains("TypeScript main module"), !js_tools);
+        // So do the 2026-07-28 lifecycle's, which skip `initialize`.
+        let discovered = discover(app.clone(), "secret").await;
+        let instructions = discovered["result"]["instructions"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{discovered}"));
+        assert_eq!(instructions.contains(DIALECT_CODE_TOOLS), js_tools);
+        assert_eq!(instructions.contains(TYPESCRIPT_CODE_TOOLS), !js_tools);
         let (status, listed) = rpc(
             app.clone(),
             Some("secret"),

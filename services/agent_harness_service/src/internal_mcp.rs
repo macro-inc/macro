@@ -112,6 +112,25 @@ pub(super) struct InternalTools {
 }
 
 impl InternalTools {
+    /// The server's instructions for the caller's session: [`get_info`]'s,
+    /// with the code tools described as the session's current kind defines
+    /// them. Both handshakes (`initialize`, `discover`) answer with these.
+    ///
+    /// [`get_info`]: ServerHandler::get_info
+    async fn caller_instructions(&self, extensions: &rmcp::model::Extensions) -> Option<String> {
+        let instructions = self.get_info().instructions;
+        let grant = extensions
+            .get::<axum::http::request::Parts>()
+            .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())
+            .map(|AuthenticatedSession(grant)| grant);
+        match grant {
+            Some(grant) if self.code_mode_kind(grant).await == Some(CodeModeKind::Dialect) => {
+                instructions.map(|text| text.replace(TYPESCRIPT_CODE_TOOLS, DIALECT_CODE_TOOLS))
+            }
+            _ => instructions,
+        }
+    }
+
     /// The code-mode kind of `session`'s current turn, resolved once for the
     /// turn by code mode; `None` without code mode or a person owner.
     async fn code_mode_kind(
@@ -175,18 +194,26 @@ impl ServerHandler for InternalTools {
             context.peer.set_peer_info(request);
         }
         let mut info = self.get_info();
-        let grant = context
-            .extensions
-            .get::<axum::http::request::Parts>()
-            .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())
-            .map(|AuthenticatedSession(grant)| grant);
-        if let Some(grant) = grant
-            && self.code_mode_kind(grant).await == Some(CodeModeKind::Dialect)
-            && let Some(instructions) = info.instructions.as_mut()
-        {
-            *instructions = instructions.replace(TYPESCRIPT_CODE_TOOLS, DIALECT_CODE_TOOLS);
-        }
+        info.instructions = self.caller_instructions(&context.extensions).await;
         Ok(info)
+    }
+
+    /// The 2026-07-28 lifecycle's handshake, which clients send instead of
+    /// `initialize`. rmcp's default answers it from `get_info`, which always
+    /// describes TypeScript code mode.
+    async fn discover(
+        &self,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::DiscoverResult, rmcp::ErrorData> {
+        let mut info = self.get_info();
+        info.instructions = self.caller_instructions(&context.extensions).await;
+        let mut result = rmcp::model::DiscoverResult::from_server_info(
+            self.supported_protocol_versions().into_owned(),
+            info,
+        );
+        // The instructions depend on whose session is asking.
+        result.cache_scope = rmcp::model::CacheScope::Private;
+        Ok(result)
     }
 
     async fn list_tools(

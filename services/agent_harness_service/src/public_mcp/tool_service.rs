@@ -160,7 +160,21 @@ impl<Context> AuthenticatedToolService<Context> {
         };
         // A session that can't be read is treated as gated: its call carries
         // an agent session's provenance, so it gets no ungated TypeScript.
-        kinds.session_kind(session).await != Some(CodeModeKind::TypeScript)
+        let span = tracing::info_span!(
+            "public_mcp.code_mode_kind",
+            agent_session_id = %session,
+            kind = tracing::field::Empty,
+        );
+        let kind = kinds.session_kind(session).instrument(span.clone()).await;
+        span.record(
+            "kind",
+            match kind {
+                Some(CodeModeKind::TypeScript) => "type_script",
+                Some(CodeModeKind::Dialect) => "dialect",
+                None => "unread",
+            },
+        );
+        kind != Some(CodeModeKind::TypeScript)
     }
 
     /// Tools listed for a mode. Code mode lists only its own tools
