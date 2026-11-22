@@ -59,6 +59,12 @@ export function DesktopModelSelector(props: {
     if (!value) setLockedPlacement(undefined);
     changeOpen(value);
   };
+  // Back returns to the menu, whose search takes focus again so the keyboard
+  // keeps working once the in-place page that had it unmounts.
+  const goBack = () => {
+    back();
+    requestAnimationFrame(() => search?.focus());
+  };
   const openInPlace = (next: Exclude<ModelSelectorPage, 'list'>) => {
     setLockedPlacement(openedSide());
     setPage(next);
@@ -548,7 +554,7 @@ export function DesktopModelSelector(props: {
             onKeyDown={(event) => {
               if (event.key === 'ArrowLeft') {
                 event.preventDefault();
-                back();
+                goBack();
               }
             }}
           >
@@ -557,7 +563,7 @@ export function DesktopModelSelector(props: {
                 variant="ghost"
                 size="icon-sm"
                 aria-label={t('agentControls.back')}
-                onClick={back}
+                onClick={goBack}
               >
                 <ArrowLeft class="size-4" />
               </Button>
