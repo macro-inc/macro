@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { CacheHost } from '@graphql-cache/host/types';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import {
@@ -124,7 +125,28 @@ async function refetchLists(span: Span, sessions: string[]): Promise<void> {
 }
 
 /**
- * One pass over a batch: the REST list refetch, then the primary row reads.
+ * Read the rows again once the cache engine has opened. A row read while it
+ * opens is written only when it opens, in line with the writes of lists that
+ * loaded meanwhile from responses fetched before the change; until the next
+ * write, such a list can show the old row (a rename seconds after page load).
+ * The second read lands after them.
+ */
+function rereadSessionRowsWhenCacheOpens(
+  parent: Span,
+  host: CacheHost,
+  sessions: string[]
+): Promise<void> {
+  return parent.span('agent_session.row_reread', async (span) => {
+    span.setAttr('agent_session.count', sessions.length);
+    await host.whenReady?.();
+    span.setAttr('graphql_cache.ready', host.isReady?.() ?? true);
+    await readSessionRows(span, sessions);
+  });
+}
+
+/**
+ * One pass over a batch: the REST list refetch, then the primary row reads,
+ * read again if the cache engine was still opening.
  * The phases start from the pass's span, not the ambient context, which does
  * not survive an `await`.
  */
@@ -133,11 +155,16 @@ function refreshBatch(sessions: string[], attempt: number): Promise<void> {
     span.setAttr('agent_session.ids', sessions.join(','));
     span.setAttr('agent_session.count', sessions.length);
     span.setAttr('agent_session.lists_refresh.attempt', attempt);
+    const host = getGraphqlCacheHost();
+    const opening = host?.isReady?.() === false;
+    span.setAttr('agent_session.lists_refresh.cache_opening', opening);
     try {
       await span.span('agent_session.lists_refetch', (refetch) =>
         refetchLists(refetch, sessions)
       );
       await readSessionRows(span, sessions);
+      if (opening && host)
+        await rereadSessionRowsWhenCacheOpens(span, host, sessions);
     } catch (error) {
       span.error(error);
       throw error;

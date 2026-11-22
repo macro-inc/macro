@@ -275,6 +275,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let telemetryRelayStarted = false;
   let telemetryFinished = false;
   let initializationStartedAt = 0;
+  let readyWaiters: (() => void)[] = [];
   let storageHealthTimer: ReturnType<typeof setInterval> | undefined;
   const setIntervalFn =
     options.setInterval ?? globalThis.setInterval.bind(globalThis);
@@ -842,6 +843,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     { uncertain = false, preserveDatabase = false } = {}
   ): void {
     state = 'failed';
+    releaseReadyWaiters();
     readAvailability.resume();
     initialization = undefined;
     initializationError = error;
@@ -1027,6 +1029,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       // every already-admitted RPC has a response or its existing read timer.
       // Mutations deliberately have no arbitrary disposal timeout.
       state = 'disposing';
+      releaseReadyWaiters();
       disposalMode = 'graceful';
       clearSubscribers();
       // Keep pagehide armed through coordinator retirement so navigation can
@@ -1036,6 +1039,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
 
     state = 'disposing';
+    releaseReadyWaiters();
     clearSubscribers();
     if (preserveDatabase) {
       disposalMode = 'navigation';
@@ -1301,6 +1305,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
   }
 
+  /** Settles every whenReady() caller: the engine opened or never will. */
+  function releaseReadyWaiters(): void {
+    const waiters = readyWaiters;
+    readyWaiters = [];
+    for (const resolve of waiters) resolve();
+  }
+
   function startStorageHealthSampling(): void {
     fireAndForget(observeStorageHealth(), 'graphql-cache-host');
     storageHealthTimer ??= setIntervalFn(() => {
@@ -1366,6 +1377,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         state = 'ready';
         initialization = undefined;
         coordinatorRestarts = 0;
+        releaseReadyWaiters();
         if (suspended) {
           // A surviving coordinator need not send engine-replaced to a late
           // joiner. Resets while frozen are unknowable, so conservatively
@@ -1482,6 +1494,17 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   return {
     clientId,
+    isReady: () => state === 'ready',
+    whenReady() {
+      if (
+        state === 'ready' ||
+        state === 'failed' ||
+        state === 'disposing' ||
+        state === 'disposed'
+      )
+        return Promise.resolve();
+      return new Promise<void>((resolve) => readyWaiters.push(resolve));
+    },
     authority: {
       current: currentAuthority,
       snapshot: authorityObserver.snapshot,
