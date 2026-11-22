@@ -1,0 +1,19 @@
+crates/connectors/Cargo.toml
+  s_8620e367135a73::t_9ad410548556ab 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c1c8175ffcb1c44ac991d1c2b8634d72e9ce88ea",
+  "prompts": {},
+  "sessions": {
+    "s_8620e367135a73": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15e08697-488b-4482-984c-9df6826b2c36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
