@@ -15,7 +15,7 @@ import {
   readDismissedRuns,
   writeDismissedRuns,
 } from './dismissed-runs';
-import { ImportJobsTrayView } from './views/import-jobs-tray';
+import { ImportJobsRailView } from './views/import-jobs-tray';
 
 // Product names, not translated.
 const SOURCE_NAMES: Record<WorkspaceSource, string> = {
@@ -72,16 +72,16 @@ function useProductionContext(): ImportJobsContext {
 }
 
 /**
- * Background imports in the desktop corner, beside upload progress. Mounted
- * only while signed in to the app shell, where sessions can be opened.
+ * Background imports as a button in the rail's footer. Mounted only while
+ * signed in to the app shell, where sessions can be opened.
  */
-export function ImportJobsTray(): JSX.Element {
+export function ImportJobsRailButton(): JSX.Element {
   const authenticated = useIsAuthenticated();
 
   return (
     <Show when={authenticated() && globalSplitManager()}>
       <ImportJobsProvider context={useProductionContext()}>
-        <ImportJobsTrayView />
+        <ImportJobsRailView />
       </ImportJobsProvider>
     </Show>
   );

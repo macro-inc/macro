@@ -663,6 +663,10 @@ Above Settings, the question-mark **Help** button opens a menu: **Message
 support** opens your support channel (hidden when you have none), **Book a call**
 opens the booking page, and **Email** starts an email to support.
 
+While an import runs or waits to be dismissed, an imports button (`1 import`)
+sits above the mobile app link and Help; it opens the
+[import tray](setup-cards.md#import-tray) list beside the rail.
+
 The rail highlights the workspace shown by the **active split**, not every app
 named in the multi-split URL. Nested details keep their owning workspace selected
 (for example, a thread under Email or a document under Home). Selection changes

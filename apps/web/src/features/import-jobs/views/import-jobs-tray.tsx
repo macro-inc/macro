@@ -4,7 +4,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
-import { ImportJobsTray as ImportJobsTrayCard } from '../components/import-jobs-tray';
+import { ImportJobsRailButton } from '../components/import-jobs-tray';
 import { useImportJobs } from '../context/import-jobs-context';
 import { type ImportJob, isWorkspaceSource } from '../core/import-job';
 import { createImportJobs } from '../primitives/import-jobs';
@@ -12,18 +12,20 @@ import { createImportJobs } from '../primitives/import-jobs';
 // Product names, not translated.
 const SOURCE_NAMES = { notion: 'Notion', linear: 'Linear', jira: 'Jira' };
 
-/** The tray over the provided import sources, opening jobs through the host. */
-export function ImportJobsTrayView() {
+/** The rail's imports button over the provided sources, opening jobs through the host. */
+export function ImportJobsRailView() {
   const context = useImportJobs();
   const imports = createImportJobs({
     runs: context.createRuns(),
     createReport: context.createReport,
     dismissals: context.createDismissals(),
   });
-  const [expanded, setExpanded] = createSignal(true);
+  const [listOpen, setListOpen] = createSignal(false);
 
   function open(job: ImportJob) {
-    if (job.sessionId) context.openSession(job.sessionId);
+    if (!job.sessionId) return;
+    setListOpen(false);
+    context.openSession(job.sessionId);
   }
 
   async function reconnect(job: ImportJob) {
@@ -52,10 +54,10 @@ export function ImportJobsTrayView() {
   }
 
   return (
-    <ImportJobsTrayCard
+    <ImportJobsRailButton
       jobs={imports.jobs()}
-      expanded={expanded()}
-      onExpandedChange={setExpanded}
+      open={listOpen() && imports.jobs().length > 0}
+      onOpenChange={setListOpen}
       onOpen={open}
       onDismiss={(job) => imports.dismiss(job.key)}
       onReconnect={(job) => fireAndForget(reconnect(job), 'import-jobs')}

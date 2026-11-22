@@ -4,10 +4,11 @@ import IconNotion from '@icon/import/notion.svg';
 import IconLinear from '@icon/mcp-linear.svg';
 import IconSlack from '@icon/slack-color.svg';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
-import CaretUp from '@icon/system/regular/caret-up.svg';
+import TrayArrowDown from '@icon/system/regular/tray-arrow-down.svg';
 import X from '@icon/system/regular/x.svg';
+import { Popover } from '@kobalte/core/popover';
 import type { ImportSource, RunErrorKind } from '@service-cognition/import';
-import { Button, cn, Item, ProgressRing, Surface } from '@ui';
+import { Button, cn, Item, ProgressRing } from '@ui';
 import { type Component, Index, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
@@ -200,69 +201,81 @@ function ImportJobRow(props: {
 }
 
 /**
- * Background imports as a pill in the corner that opens into one row per
- * job. Moving jobs show their progress; settled ones can be dismissed.
+ * Background imports as a rail button beside Help and Settings, opening
+ * into one row per job, so nothing floats over the page. The button shows a
+ * ring while a job moves and a dot when one failed.
  */
-export function ImportJobsTray(props: {
+export function ImportJobsRailButton(props: {
   jobs: readonly ImportJob[];
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onOpen: (job: ImportJob) => void;
   onDismiss: (job: ImportJob) => void;
   onReconnect: (job: ImportJob) => void;
 }) {
+  const moving = () => props.jobs.some((job) => !job.dismissable);
+  const failed = () => props.jobs.some((job) => job.phase.kind === 'failed');
+  const label = () => t('importJobs.summary', { count: props.jobs.length });
   return (
     <Show when={props.jobs.length > 0}>
-      <section
-        aria-label={t('importJobs.trayLabel')}
-        class="pointer-events-auto flex flex-col items-end gap-2"
+      <Popover
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+        placement="right-end"
+        gutter={8}
       >
-        <Show when={props.expanded}>
-          <Surface
-            hideBorder
-            role="list"
-            class="flex w-full flex-col rounded-2xl glass bg-toast p-1"
-          >
-            <Index each={props.jobs}>
-              {(job) => (
-                <ImportJobRow
-                  job={job()}
-                  onOpen={props.onOpen}
-                  onDismiss={props.onDismiss}
-                  onReconnect={props.onReconnect}
-                />
-              )}
-            </Index>
-          </Surface>
-        </Show>
-        <Surface
-          hideBorder
-          class="flex size-auto items-center rounded-full glass bg-toast p-0.5"
+        <Popover.Trigger
+          as={Button}
+          variant="ghost"
+          size="icon-md"
+          class={cn(
+            'size-10 cursor-default rounded-xl',
+            props.open && 'bg-hover text-ink'
+          )}
+          aria-label={label()}
+          aria-description={
+            failed() ? t('importJobs.somethingFailed') : undefined
+          }
+          tooltip={{ content: label(), placement: 'right' }}
+          draggable={false}
+          data-sidebar-next-item="imports"
         >
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-expanded={props.expanded}
-            aria-label={
-              props.expanded
-                ? t('importJobs.hideImports')
-                : t('importJobs.showImports')
-            }
-            onClick={() => props.onExpandedChange(!props.expanded)}
-          >
-            <Show when={props.jobs.some((job) => !job.dismissable)}>
-              <ProgressRing fraction={overallFraction(props.jobs)} />
+          <span class="pointer-events-none relative flex size-6 items-center justify-center">
+            <Show
+              when={moving()}
+              fallback={<TrayArrowDown class="size-5" aria-hidden="true" />}
+            >
+              <ProgressRing size="md" fraction={overallFraction(props.jobs)} />
             </Show>
-            <span>{t('importJobs.summary', { count: props.jobs.length })}</span>
-            <CaretUp
-              class={cn(
-                'size-4 shrink-0 motion-safe:transition-transform',
-                props.expanded && 'rotate-180'
-              )}
-            />
-          </Button>
-        </Surface>
-      </section>
+            <Show when={failed()}>
+              <span
+                aria-hidden="true"
+                data-testid="imports-failed-dot"
+                class="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-failure"
+              />
+            </Show>
+          </span>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            aria-label={t('importJobs.trayLabel')}
+            class="menu-surface z-modal w-[340px] max-w-[calc(100vw-5rem)] p-1 outline-none animate-menu-open"
+          >
+            <div role="list">
+              <Index each={props.jobs}>
+                {(job) => (
+                  <ImportJobRow
+                    job={job()}
+                    onOpen={props.onOpen}
+                    onDismiss={props.onDismiss}
+                    onReconnect={props.onReconnect}
+                  />
+                )}
+              </Index>
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover>
     </Show>
   );
 }

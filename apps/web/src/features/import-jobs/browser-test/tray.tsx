@@ -6,9 +6,9 @@ import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import type { ImportJobsContext } from '../context/contracts';
 import { ImportJobsProvider } from '../context/import-jobs-context';
-import { ImportJobsTrayView } from '../views/import-jobs-tray';
+import { ImportJobsRailView } from '../views/import-jobs-tray';
 
-// The real tray over in-memory runs and reports. The buttons move a Notion
+// The real rail button over in-memory runs and reports. The buttons move a Notion
 // import through planning, writing and done, and fail a Jira one.
 const [runs, setRuns] = createSignal<readonly ImportRun[]>([]);
 const [notionReport, setNotionReport] = createSignal<NotionImportReport>();
@@ -120,8 +120,9 @@ function Fixture() {
           {opened()}
         </output>
       </main>
-      <div class="fixed bottom-5 right-5 flex w-[380px] flex-col items-stretch pointer-events-none">
-        <ImportJobsTrayView />
+      {/* Stands in for the rail's footer. */}
+      <div class="fixed bottom-4 left-2 flex w-12 flex-col items-center">
+        <ImportJobsRailView />
       </div>
     </ImportJobsProvider>
   );

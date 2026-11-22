@@ -1,24 +1,12 @@
 import { BackgroundWorkIndicator } from '@core/component/BackgroundWork/BackgroundWorkIndicator';
 import { UploadProgressIndicator } from '@core/component/UploadProgress/UploadProgressIndicator';
 import { isMobile } from '@core/mobile/isMobile';
-import { lazyNamed } from '@core/util/lazyNamed';
 import { Toast } from '@kobalte/core/toast';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui/utils/classname';
-import {
-  createSignal,
-  ErrorBoundary,
-  type JSX,
-  Show,
-  Suspense,
-} from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { createMobileToastSwipe } from './create-mobile-toast-swipe';
-
-const ImportJobsTray = lazyNamed(
-  () => import('@app/features/import-jobs/import-jobs'),
-  'ImportJobsTray'
-);
 
 /**
  * A column centered above the mobile dock, `lift` higher than its usual spot,
@@ -90,12 +78,6 @@ export function ToastRegion() {
           <Toast.List class="macro-toast-list" data-stack />
         </Toast.Region>
         <Show when={!isMobile()}>
-          {/* A tray that fails to load leaves toasts and uploads alone. */}
-          <ErrorBoundary fallback={null}>
-            <Suspense>
-              <ImportJobsTray />
-            </Suspense>
-          </ErrorBoundary>
           <UploadProgressIndicator />
           <BackgroundWorkIndicator align="end" />
         </Show>

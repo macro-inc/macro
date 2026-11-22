@@ -9,12 +9,13 @@ import { useEmail, useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { lazyNamed } from '@core/util/lazyNamed';
 import DeviceMobileDownloadIcon from '@icon/device-mobile-download.svg';
 import GearFillIcon from '@icon/system/fill/gear-fill.svg';
 import GearIcon from '@icon/system/regular/gear.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { Button, cn, pressHandlers } from '@ui';
-import { createMemo, Show } from 'solid-js';
+import { createMemo, ErrorBoundary, Show, Suspense } from 'solid-js';
 import { useAppUpdate } from './app-update';
 import { HelpMenu } from './help-menu';
 import { NavGlyph } from './nav-glyph';
@@ -26,6 +27,11 @@ import { UpdateButton } from './update-button';
  */
 const AVATAR_CUTOUT =
   'size-6 [mask-image:radial-gradient(circle_at_22px_22px,transparent_10px,black_10.5px)]';
+
+const ImportJobsRailButton = lazyNamed(
+  () => import('@app/features/import-jobs/import-jobs'),
+  'ImportJobsRailButton'
+);
 
 const SETTINGS_CONTENT = { type: 'component', id: 'settings' } as const;
 
@@ -81,7 +87,8 @@ const MobileAppButton = () => {
 };
 
 /**
- * The rail's bottom actions: a ready app update, the mobile app link, help,
+ * The rail's bottom actions: a ready app update, background imports, the
+ * mobile app link, help,
  * then Settings, opened like any other rail view. The gear carries the account
  * photo as a badge, so people with several accounts can tell which one they
  * are in.
@@ -126,6 +133,12 @@ export const FooterActions = (props: {
           </Show>
         )}
       </Show>
+      {/* Imports that fail to load leave the rest of the rail alone. */}
+      <ErrorBoundary fallback={null}>
+        <Suspense>
+          <ImportJobsRailButton />
+        </Suspense>
+      </ErrorBoundary>
       <MobileAppButton />
       <HelpMenu />
       <SidebarOpenInSplitMenu

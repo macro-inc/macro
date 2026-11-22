@@ -8,7 +8,7 @@ import {
 } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ImportJob } from '../core/import-job';
-import { ImportJobsTray } from './import-jobs-tray';
+import { ImportJobsRailButton } from './import-jobs-tray';
 
 afterEach(cleanup);
 
@@ -17,10 +17,10 @@ function tray(
   handlers: { onOpen?: () => void; onReconnect?: () => void } = {}
 ) {
   render(() => (
-    <ImportJobsTray
+    <ImportJobsRailButton
       jobs={jobs}
-      expanded
-      onExpandedChange={vi.fn()}
+      open
+      onOpenChange={vi.fn()}
       onOpen={handlers.onOpen ?? vi.fn()}
       onDismiss={vi.fn()}
       onReconnect={handlers.onReconnect ?? vi.fn()}
@@ -29,6 +29,27 @@ function tray(
 }
 
 describe('import jobs tray', () => {
+  it('rings the rail button while an import moves, with no failure dot', () => {
+    tray([
+      {
+        key: 'notion:running:1',
+        source: 'notion',
+        phase: { kind: 'importing', done: 1, total: 4 },
+        sessionId: 'session',
+        dismissable: false,
+      },
+    ]);
+    const button = screen.getByRole('button', { name: '1 import' });
+    expect(button.querySelector('svg circle')).toBeTruthy();
+    expect(button.getAttribute('aria-description')).toBeNull();
+    expect(within(button).queryByTestId('imports-failed-dot')).toBeNull();
+  });
+
+  it('shows nothing in the rail when there are no imports', () => {
+    tray([]);
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
   it('says why an import failed, with no progress ring', () => {
     tray([
       {
@@ -42,12 +63,11 @@ describe('import jobs tray', () => {
     const row = screen.getByRole('listitem', { name: 'Notion' });
     expect(within(row).getByText('Failed: couldn’t use Notion')).toBeTruthy();
     expect(within(row).queryByRole('progressbar')).toBeNull();
-    // Nothing is moving, so the pill has no ring either.
-    expect(
-      screen
-        .getByRole('button', { name: 'Hide imports' })
-        .querySelector('svg circle')
-    ).toBeNull();
+    // Nothing is moving, so the rail button has no ring, but a failure dot.
+    const button = screen.getByRole('button', { name: '1 import' });
+    expect(button.querySelector('svg circle')).toBeNull();
+    expect(button.getAttribute('aria-description')).toBe('An import failed');
+    expect(within(button).getByTestId('imports-failed-dot')).toBeTruthy();
     expect(
       within(row).getByRole('button', { name: 'Dismiss the Notion import' })
     ).toBeTruthy();

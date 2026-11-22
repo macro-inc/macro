@@ -61,9 +61,12 @@ handoff paths without a backend.
 ### Import tray
 
 On desktop, signed in, every Notion, Linear, Jira and Slack import run also
-shows in the bottom-right corner, above upload progress (`src/features/import-jobs`,
-mounted in `ToastRegion`). A pill (`2 imports`, with an overall progress ring
-while something is moving) toggles the list (**Hide imports** / **Show imports**); each row names the
+shows behind a button in the rail's footer, above the mobile app link and
+Help (`src/features/import-jobs`, mounted in `FooterActions`), so nothing
+floats over the page. The button is named `2 imports`; it shows a progress
+ring while something is moving and a red dot (described as `An import
+failed`) when a run failed. Pressing it opens the list beside the rail;
+pressing outside, Escape or opening a session closes it. Each row names the
 source and its phase: `Scanning 120 pages` (Linear and Jira: `Reading N
 issues`, Slack: `Finding channels`), `Deciding on N items`, `Waiting for your
 approval`, `Importing 31 of 124` with a percentage, then `Imported`, `Import
@@ -77,8 +80,8 @@ run leaves after about five seconds; a failed one stays until **Dismiss the
 <Source> import** or a week; a partly failed one stays until dismissed; a
 plan waiting for approval stays for an hour after its last change.
 Dismissals are kept per user on the device, and dismissing a failed review in
-the thread dismisses its run's tray entry too. Phones
-never show the tray. It reads `/import/state` (polling only while something
+the thread dismisses its run's entry too. Phones
+never show it. It reads `/import/state` (polling only while something
 is running, otherwise on `import_updated` pushes) and each listed workspace
 run's `/import/workspaces/{source}` report. `src/features/import-jobs/browser-test/`
 covers scanning, writing, done, failure, collapse and dismissal without a
