@@ -1,0 +1,58 @@
+apps/web/src/features/agent-feedback/core/subject.ts
+  h_659b58cf3b37bf 16-19,29-30,32-36,40-41,71-74,87,97
+apps/web/src/features/agent-feedback/primitives/create-response-feedback.test.ts
+  h_659b58cf3b37bf 62,82,84,87-111
+apps/web/src/features/agent-feedback/primitives/create-response-feedback.ts
+  h_659b58cf3b37bf 6,78-81
+apps/web/src/features/agent-feedback/queries/client.test.ts
+  h_659b58cf3b37bf 4,141-245
+apps/web/src/features/agent-feedback/queries/client.ts
+  h_659b58cf3b37bf 2-13,17,21,33-60,83-87,90,94-99,101-103,105-107,109,113-117,119-121,123-126,128-134,143-146,156,167-169,175-179,185,189,195,224-299,302-303,307,314
+apps/web/src/features/agent-feedback/views/response-feedback-scope.tsx
+  h_659b58cf3b37bf 28-42,52-54
+apps/web/src/features/block-agent/component/PromptFooter.tsx
+  h_659b58cf3b37bf 96-99,103
+apps/web/src/features/block-agent/component/ReplyFooter.test.tsx
+  h_659b58cf3b37bf 1-94
+apps/web/src/features/external-chat/views/external-chat-view.test.tsx
+  h_659b58cf3b37bf 41-45
+apps/web/src/features/suggestions/AGENTS.md
+  h_659b58cf3b37bf 136-142
+apps/web/src/features/suggestions/components/draft-origin-bar.tsx
+  h_659b58cf3b37bf 13-14,35
+apps/web/src/features/suggestions/components/priority-row.tsx
+  h_659b58cf3b37bf 2,4,9-18,20-24,73-77
+apps/web/src/features/suggestions/components/suggestion-row.tsx
+  h_659b58cf3b37bf 11-18,32-33,55-59,201,509-514,518-520,529-532,549-553
+apps/web/src/features/suggestions/core/suggestion.test.ts
+  h_659b58cf3b37bf 43
+apps/web/src/features/suggestions/core/suggestion.ts
+  h_659b58cf3b37bf 115-116,137
+apps/web/src/features/suggestions/draft-origin.tsx
+  h_659b58cf3b37bf 8,38-46
+apps/web/src/features/suggestions/home-priorities.tsx
+  h_659b58cf3b37bf 13,84-89
+apps/web/src/features/suggestions/route-views.tsx
+  h_659b58cf3b37bf 17,50-55
+apps/web/src/features/suggestions/suggestion-feedback.test.tsx
+  h_659b58cf3b37bf 1-189
+apps/web/src/features/suggestions/suggestion-feedback.tsx
+  h_659b58cf3b37bf 1-2,5-6,8-20
+apps/web/src/features/suggestions/views/for-you-view.tsx
+  h_659b58cf3b37bf 139-140,179-186,188-244
+apps/web/src/features/suggestions/views/home-priorities-view.tsx
+  h_659b58cf3b37bf 4,18-19,52
+docs/agent-guide/ai-chat.md
+  h_659b58cf3b37bf 1753-1756
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4704f51af83970ffa22abd531a144ec5c23c9098",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
