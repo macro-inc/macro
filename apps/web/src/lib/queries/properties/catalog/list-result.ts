@@ -51,18 +51,16 @@ export function createListedAt() {
 const OFFLINE_AT_FAILURE = new WeakMap<CombinedError, boolean>();
 
 /**
- * A read that failed because the app is offline, over a list it already has.
- * TanStack paused such reads and kept their success; the cache answers them
- * with a network error, which readers would show as a failure. Offline is
- * the app's network status (`onlineManager`, the native network path on iOS
- * and Android). A failure with an HTTP status came from a server, so it is
- * a refusal, never a pause.
+ * A read that failed because the app is offline. TanStack paused such reads:
+ * one over a list it already had stayed successful, and a first read stayed
+ * pending (with its placeholder, where it had one) until the app came back
+ * online. The cache answers them with a network error, which readers would
+ * show as a failure. Offline is the app's network status (`onlineManager`,
+ * the native network path on iOS and Android). A failure with an HTTP status
+ * came from a server, so it is a refusal, never a pause.
  */
-export function isOfflineFailure(
-  error: CombinedError | null,
-  hasData: boolean
-): boolean {
-  if (!error || !hasData) return false;
+export function isOfflineFailure(error: CombinedError | null): boolean {
+  if (!error) return false;
   let offline = OFFLINE_AT_FAILURE.get(error);
   if (offline === undefined) {
     const status = (error.response as { status?: unknown } | undefined)?.status;
@@ -76,21 +74,36 @@ export function isOfflineFailure(
   return offline;
 }
 
-/** A query result that reports an offline failure over its data as success. */
+const PAUSED_OVER_DATA: Partial<Record<string | symbol, () => unknown>> = {
+  error: () => null,
+  isError: () => false,
+  isSuccess: () => true,
+  status: () => 'success',
+};
+const PAUSED_FIRST_READ: Partial<Record<string | symbol, () => unknown>> = {
+  error: () => null,
+  isError: () => false,
+  isSuccess: () => false,
+  isPending: () => true,
+  isLoading: () => false,
+  isFetching: () => false,
+  status: () => 'pending',
+};
+
+/**
+ * A query result that reports an offline failure as a paused read: a success
+ * over the data it has, or still pending when it has none.
+ */
 export function offlineAsSuccess<D, V extends AnyVariables, Q>(
   query: UrqlQueryResult<D, V, Q>
 ): UrqlQueryResult<D, V, Q> {
-  const paused = () => isOfflineFailure(query.error, query.data !== undefined);
-  const overrides: Partial<Record<string | symbol, () => unknown>> = {
-    error: () => null,
-    isError: () => false,
-    isSuccess: () => true,
-    status: () => 'success',
-  };
   return new Proxy(query, {
     get(target, key) {
+      if (!isOfflineFailure(query.error)) return Reflect.get(target, key);
+      const overrides =
+        query.data === undefined ? PAUSED_FIRST_READ : PAUSED_OVER_DATA;
       const override = overrides[key];
-      return override && paused() ? override() : Reflect.get(target, key);
+      return override ? override() : Reflect.get(target, key);
     },
   });
 }
