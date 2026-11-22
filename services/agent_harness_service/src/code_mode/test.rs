@@ -1001,15 +1001,31 @@ async fn a_mention_uses_the_forwarder_even_when_the_egress_flag_is_off(pool: sql
     );
     assert_eq!(rollout.egress(&owner).await, Egress::Direct);
     let mention = uuid::Uuid::from_u128(907);
+    let mut endpoints = SdkEndpoints::default();
+    endpoints
+        .hosts
+        .insert("unfurl".into(), "https://unfurl.example.test".into());
+    endpoints
+        .hosts
+        .insert("storage".into(), "https://storage.example.test".into());
     let credentials = MentionRunCredentials {
         egress: rollout,
         signer: MacroApiTokenSigner::new(pool, "fixture", PRIVATE),
-        endpoints: SdkEndpoints::default(),
+        endpoints,
     }
     .issue(&owner, mention)
     .await
     .unwrap();
     assert_eq!(credentials.egress, Egress::Proxied);
+    assert!(!credentials.endpoints.hosts.contains_key("unfurl"));
+    assert_eq!(
+        credentials
+            .endpoints
+            .hosts
+            .get("storage")
+            .map(String::as_str),
+        Some("https://storage.example.test")
+    );
     assert_eq!(credentials.session_id, None);
     let JwtToken::MacroApiToken(token) = handler(
         &JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
