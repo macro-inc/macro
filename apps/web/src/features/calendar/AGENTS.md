@@ -116,27 +116,31 @@ host lives in `../block-calendar/`.
   uses the workspace navigation context. Keep grid paging and scroll timing in
   `CalendarPagerContext.tsx`.
 - Compose the desktop date-navigation/tabs/search row above the 22px month title
-  and creation actions; the touch header uses the shell menu toggle, month/Today
-  island, and Search only. Keep its loading skeleton aligned. The desktop month
+  and creation actions; the touch header uses separate shell menu, month,
+  Today, and circular Search islands. Keep its loading skeleton aligned. The desktop month
   picker uses 304px width and 64×40px choices.
 - Wrap the desktop content card in `Layer offset={1}` and use `bg-surface`, with
   12px gaps and clipped rounded corners; keep Agenda headers opaque at the same
   depth. Keep navigation outside and the opening hour label inside the viewport.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
-- Keep the phone Month overlay's device switch in `../calendar-view/calendar-month.tsx`; reuse each FullCalendar page's bounded six-week occurrence source, honor hidden weekends, and anchor focus requests to visible phone rows.
+- Keep the phone Month switch in `../calendar-view/calendar-month.tsx`; render Bars through `views/mobile/month-bars.tsx` over a Sunday-start, five/six-week range, shared span lanes and overflow counts. Keep the old PhoneMonth unwired. Open the picked day's sheet without leaving Month; only its title changes to Day. Preserve the bounded source and visible-row focus path.
 - Host phone navigation through the shell's `NavigationSheet`, as Email does;
-  `views/mobile/calendar-sidebar.tsx` contains views, account calendars, booking
-  links, and a fixed `MobileDrawer.Section` Settings footer. Keep desktop sidebar
-  sections unchanged. `/calendar/settings` is an authenticated full page over
-  existing display, account, availability, countdown, and team-sharing owners.
+  `views/mobile/calendar-sidebar.tsx` keeps Email's fixed title header above views,
+  account calendars, booking links, and a fixed `MobileDrawer.Section` Settings footer.
+  Keep desktop sidebar sections unchanged. `/calendar/settings` is an authenticated
+  native view over existing setting owners; retain its `view-` route id and component
+  registry entry so the split-content bridge and shell metadata both resolve it.
 - Keep phone grid layout tokens in `calendar-phone-grid.css`; hours sit outside
   the timed card, with day headers and all-day lanes above it. The active grid
   supplies a stationary gutter through `create-mobile-grid-axis.ts`; synchronize
   its vertical scroll, and reveal the shared 32px fade only past the opening offset.
-  Keep grid-line rules unchanged. `timeGridThreeDay` advances by three days.
+  Keep timed-card grid lines below the all-day row, leave headers/gutters transparent,
+  and do not shade weekends in any view. Keep midnight and the current-time gutter
+  label aligned with the card lines. `timeGridThreeDay` advances by three days.
 - Keep Agenda on the navigation context, with five fourteen-day windows clipped
   to supported occurrence bounds; never pass Agenda to a FullCalendar API.
+- Keep Agenda rows open-only; RSVP controls belong in event details and Needs Reply, not Agenda rows.
 - Keep the visible Agenda day anchored through late data and window rotation;
   resolve its logical date again when query projection replaces or merges rows.
   `create-agenda-paging.ts` owns resize observation, and each explicit date request

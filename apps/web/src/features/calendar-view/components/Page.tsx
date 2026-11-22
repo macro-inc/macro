@@ -55,7 +55,6 @@ import {
   createCalendarOccurrenceQueryRange,
 } from '@queries/calendar/occurrences';
 import { Button } from '@ui';
-import { addDays } from 'date-fns';
 import {
   type Accessor,
   createDeferred,
@@ -74,6 +73,7 @@ import {
   useCalendarFocus,
 } from '../calendar-focus-target';
 import { CalendarMonth } from '../calendar-month';
+import { phoneMonthRange } from '../core/phone-month-layout';
 import { CalendarLoadingSkeleton } from './CalendarLoadingSkeleton';
 
 interface CalendarScrollTarget {
@@ -346,14 +346,18 @@ export function Page(props: {
   };
 
   const handleDatesSet = ({ end, start, view }: DatesSetArg) => {
-    // The phone card shows six weeks using the configured first weekday.
+    // The phone Bars face is Sunday-first regardless of the desktop week preference.
     const phoneMonth = isMobile() && view.type === 'dayGridMonth';
-    const requestedEnd = phoneMonth ? addDays(start, 42) : end;
+    const monthRange = phoneMonth
+      ? phoneMonthRange(view.currentStart)
+      : undefined;
+    const requestedStart = monthRange?.start ?? start;
+    const requestedEnd = monthRange?.end ?? end;
     const clipped = phoneMonth
-      ? clipCalendarDisplayRange(start, requestedEnd)
+      ? clipCalendarDisplayRange(requestedStart, requestedEnd)
       : undefined;
     const nextRange = createCalendarOccurrenceQueryRange(
-      clipped?.start ?? start,
+      clipped?.start ?? requestedStart,
       clipped?.end ?? requestedEnd
     );
     const currentRange = range();

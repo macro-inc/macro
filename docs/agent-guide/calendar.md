@@ -28,15 +28,20 @@ inside. Pinning a left panel preserves the gap. In Day and Week, the opening
 7am label remains fully readable below the all-day lane. Phone content extends
 behind floating creation and dock controls, with scroll clearance for the last row.
 Phone time-grid headers show short weekday labels above their dates. Hour labels
-sit in a stationary 46px gutter outside the rounded timed card; day headers and
-all-day lanes stay above it. Hours scroll vertically with the active grid while
-its columns and day headers swipe horizontally. The shared 32px top fade appears
-only past the opening scroll position. Grid lines remain unchanged. Phone Month
-weekday letters sit above its six-week card, which shows
-up to three event-color dots per day, a separate picked-day highlight and Today
-marker, and the picked day's event list below. Week-start and hidden-weekend
-preferences apply to this card. Event links focus its visible row, not a hidden
-grid chip. Dates outside the supported occurrence range are disabled.
+sit in a stationary 46px transparent gutter outside the rounded timed card; transparent
+day headers and all-day lanes stay above it. Grid lines start below the all-day row,
+and no view shades weekends. Hours scroll vertically with the active grid while
+its columns and day headers swipe horizontally. Midnight remains fully visible at
+scroll zero. The current-time line crosses the card with an accent time in its gutter.
+The shared 32px top fade appears only past the opening scroll position. Bottom
+clearance is limited to the floating New row and a small gap.
+Phone Month uses a Sunday-start five/six-week Bars grid. Weekday letters sit above
+the card; today has an accent circle, other-month dates are tertiary, and their
+bars are half-opacity. Shared week lanes keep multi-day bars continuous, and +N
+counts events that do not fit. Titles cut at whole-word boundaries. Hiding weekends
+widens the five remaining columns. Tapping a date opens its event sheet without
+leaving Month; the title opens Day and + creates on that date. Event links open the
+same visible event rows. Dates outside the supported occurrence range are disabled.
 Desktop event creation and editing use one 384px composer, not a second split.
 Anchored, pinned, and agent-draft placements have separate view components over
 shared fields and setup; pinning retains the field tree. The registered legacy
@@ -54,7 +59,7 @@ navigation starts collapsed. A drop there opens the left panel; an outside drop
 or Escape restores navigation. Pinned cards follow both axes when lifted. Floating
 cards cap their height to the available calendar/viewport space; fixed headers
 and footers frame the scrolling body. Agenda day headers are opaque at the card's
-layer depth, and both the Going? label and RSVP choices sit on solid surfaces with accent-selected replies.
+layer depth. Agenda rows only open event details; RSVP remains in event details and Needs Reply.
 Agenda day groups have a 24px gap. Adjacent confirmed empty days, including across
 loaded windows, share a date-range row with one quiet No events line; Today stays
 separate. Navigating to a date inside an empty range anchors that range header.
@@ -178,10 +183,9 @@ focus Go to date; enter a local date and press Enter to navigate. Escape closes
 the picker and restores focus. Touch retains its existing drawer until the
 phone-view redesign.
 
-Today uses a filled accent date marker. Month rows reserve a six-pixel gap below
-the date, fit 18px event rows to the available height, and expose overflowing
-events through `+N more`; that opens the whole day's events in a menu-surface
-popover.
+Today uses a filled accent date marker. Desktop Month rows reserve a six-pixel gap
+below the date, fit 18px event rows, and expose `+N more` in a menu-surface popover.
+Phone Month uses 14px bars on 16px lanes and opens the day's event sheet from the cell.
 
 If a permission change retires a successful create response, retain the server identity.
 When that identity cannot be read yet, close and refresh the calendar without
@@ -529,10 +533,10 @@ immediately. Loading, empty, and error/retry states are distinct.
 A failed background refresh keeps the last loaded invitations visible alongside
 an error and Retry, including invitations from later search windows. An initial
 failure or an uncached account/date range shows no retained invitations.
-The phone header has three islands: the shell's menu toggle, Month/Today, and
-Search. There is no large title beneath them. The menu opens the same shell
-`NavigationSheet` used by Email. Its views are Agenda, Day, 3 days, Week, and
-Month; choosing one closes the drawer. Calendars are grouped by account, with
+The phone header has four separate islands: the shell's menu toggle, month and
+caret, Today, and circular Search. There is no large title beneath them. The menu
+opens the same shell `NavigationSheet` used by Email, with Calendar in the fixed
+header and Agenda, Day, 3 days, Week, and Month below; a choice closes the drawer. Calendars are grouped by account, with
 colored visibility checkboxes; hold a calendar for its color and **Show only this
 calendar**. Booking links lists enabled links, copy actions, New, Copy availability,
 and Manage booking links. Mini-month, New event, upcoming events, routines,
@@ -542,7 +546,9 @@ scroll edges use the shared fades. Settings opens `/app/calendar/settings`, with
 Back and title islands and Display, Accounts, Availability, and Preferences groups.
 It reuses the existing preference stores and mutations; desktop settings remain
 unchanged. Busy calendars is a page within Settings and Back returns to the main
-Settings page. On desktop, inline Calendar previews retain their host's chrome.
+Settings page. Back from Settings returns to the previous Calendar period. Its
+native `view-calendar-settings` route also supports direct links without treating
+settings as a calendar period. On desktop, inline previews retain their host's chrome.
 
 With `enable-calendar-team-sharing` enabled, **Settings → Calendar** also has
 **Team sharing**: one `Share with teammates` row whose select offers
