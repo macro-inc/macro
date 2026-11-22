@@ -1,8 +1,9 @@
-use super::absolute_resource_metadata_url;
+use super::{absolute_resource_metadata_url, answers_channel_mention};
 use axum::{
     body::Body,
     http::{Request, header::HOST},
 };
+use macro_auth::{macro_api_token::MacroApiToken, middleware::decode_jwt::JwtToken};
 
 fn request_with_host(host: &str, proto: Option<&str>) -> Request<Body> {
     let mut builder = Request::builder()
@@ -42,6 +43,33 @@ fn resource_metadata_defaults_to_http_without_forwarded_proto() {
     );
 }
 
+fn api_token(channel_mention_id: Option<uuid::Uuid>) -> JwtToken {
+    JwtToken::MacroApiToken(MacroApiToken {
+        channel_mention_channel_id: None,
+        exp: 0,
+        iss: "macro".into(),
+        fusion_user_id: "fusion".into(),
+        macro_user_id: "macro|mentioner@example.com".into(),
+        macro_organization_id: None,
+        agent_id: Some(uuid::Uuid::from_u128(9)),
+        agent_via: None,
+        agent_correlation_id: None,
+        agent_session_id: None,
+        routine_id: None,
+        channel_mention_id,
+        agent_scope: None,
+    })
+}
+
+#[test]
+fn a_channel_mention_programs_token_is_refused() {
+    assert!(answers_channel_mention(&api_token(Some(
+        uuid::Uuid::from_u128(1)
+    ))));
+    // Every other API token is admitted as before.
+    assert!(!answers_channel_mention(&api_token(None)));
+}
+
 const PRIVATE: &str = include_str!(
     "../../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.private.pem"
 );
@@ -52,6 +80,7 @@ const PUBLIC: &str = include_str!(
 fn agent_token(scope: Option<&str>) -> String {
     macro_auth::macro_api_token::encode_macro_api_token(
         macro_auth::macro_api_token::EncodeMacroApiTokenArgs {
+            channel_mention_channel_id: None,
             fusionauth_id: "fixture".into(),
             macro_user_id: "macro|owner@example.com".into(),
             organization_id: None,
@@ -63,6 +92,7 @@ fn agent_token(scope: Option<&str>) -> String {
             agent_correlation_id: Some(uuid::Uuid::from_u128(1)),
             agent_session_id: None,
             routine_id: None,
+            channel_mention_id: None,
             agent_scope: scope.map(str::to_owned),
         },
     )

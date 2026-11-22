@@ -1990,6 +1990,7 @@ impl<
         sync_version_id: Option<model::sync_service::SyncServiceVersionID>,
     ) -> Result<DocumentResponse, DocumentError> {
         use model::document::response::DocumentResponseMetadata;
+        super::skill_access::ensure_skill_write(document_context.sub_type)?;
 
         if document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
             return Err(DocumentError::NameTooLong {
@@ -2017,6 +2018,10 @@ impl<
                 .await
                 .map_err(|e| DocumentError::Internal(e.into()))?
         };
+
+        // Recheck the authoritative metadata before creating any copy, including
+        // callers whose earlier context predates a subtype change.
+        super::skill_access::ensure_skill_write(original_metadata.sub_type)?;
 
         let owner = principal.owner();
 

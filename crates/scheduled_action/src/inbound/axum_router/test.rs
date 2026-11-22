@@ -1188,6 +1188,48 @@ async fn reading_a_routine_answers_like_its_history() {
     }
 }
 
+#[tokio::test]
+async fn a_channel_mention_program_creates_changes_and_runs_no_routine() {
+    let app = axum::Router::new()
+        .route(
+            "/delegated",
+            axum::routing::get(|| async { StatusCode::OK }).post(|| async { StatusCode::OK }),
+        )
+        .layer(axum::middleware::from_fn(refuse_channel_mention_writes));
+    let call = |method: &str| {
+        Request::builder()
+            .method(method)
+            .uri("/delegated")
+            .body(Body::empty())
+            .unwrap()
+    };
+    let mention = agent_correlation::context::Attribution {
+        channel_mention_id: Some(macro_uuid::Uuid::from_u128(1)),
+        ..Default::default()
+    };
+    let (write, read) = agent_correlation::context::scope_attribution(mention, async {
+        (
+            app.clone().oneshot(call("POST")).await.unwrap(),
+            app.clone().oneshot(call("GET")).await.unwrap(),
+        )
+    })
+    .await;
+    assert_eq!(write.status(), StatusCode::FORBIDDEN);
+    let refusal = axum::body::to_bytes(write.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        refusal,
+        agent_correlation::context::DELEGATION_REFUSAL.as_bytes()
+    );
+    assert_eq!(read.status(), StatusCode::OK);
+    // Without a mention, writes go through as before.
+    assert_eq!(
+        app.oneshot(call("POST")).await.unwrap().status(),
+        StatusCode::OK
+    );
+}
+
 /// Only a person makes a routine write as them: the route takes the owner's
 /// credential signed for an agent or a routine's run, the code-execution
 /// mark, a bot or an internal caller for a program's, and refuses it.
@@ -1253,4 +1295,27 @@ async fn a_program_cannot_create_a_routine_that_writes_as_its_owner() {
     // The person gets past it, to the checks a code step needs.
     let (status, body) = request(&app, "POST", "/scheduled-actions", "owner", owner_identity).await;
     assert_ne!(body, json!(refusal), "{status}");
+}
+
+#[tokio::test]
+async fn a_channel_mention_program_can_check_a_routine_without_saving_it() {
+    let app = router_with(service(false), FakeEntityAccessService::owner_only());
+    let mention = agent_correlation::context::Attribution {
+        channel_mention_id: Some(macro_uuid::Uuid::from_u128(1)),
+        ..Default::default()
+    };
+    let (status, _) = agent_correlation::context::scope_attribution(mention, async {
+        request(
+            &app,
+            "POST",
+            "/scheduled-actions/check",
+            "owner",
+            json!({"routine": cron_action()}),
+        )
+        .await
+    })
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, saved) = request(&app, "GET", "/scheduled-actions", "owner", Value::Null).await;
+    assert_eq!(saved, json!([]));
 }

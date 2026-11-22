@@ -15,15 +15,25 @@ pub struct Attribution {
     pub correlation_id: Option<Uuid>,
     /// Routine whose run the work acts for, from a signed token claim.
     pub routine_id: Option<Uuid>,
+    /// Original message from a verified mention credential; restriction only.
+    pub channel_mention_id: Option<Uuid>,
+    /// Verified origin channel; absent for legacy or non-channel mentions.
+    pub channel_mention_channel_id: Option<Uuid>,
     /// The validated invocation's agent session.
     pub session_id: Option<Uuid>,
     /// The scope stored with the validated invocation, else the one the
     /// credential signs. Set without a session when the credential signs a
     /// scope but carries no correlation.
     pub scope: Option<SessionScope>,
+    /// A verified token signs a scope, including unknown scope names.
+    pub signed_scope: bool,
     /// Display verb the SDK sent with a validated correlation. Display only;
     /// it is dropped whenever there is no correlation.
     pub verb: Option<AgentVerb>,
+    /// Some scope the request is held to caps document tokens, though
+    /// `scope` names another: a request carrying several scoped tokens keeps
+    /// every one's cap.
+    pub caps_document_tokens: bool,
 }
 
 tokio::task_local! {
@@ -50,9 +60,34 @@ pub fn current_session() -> Option<Uuid> {
 
 /// The scope the current request is held to: the one stored with its
 /// invocation, else the one its credential signs. It may be set when
-/// `current_session` is not.
+/// `current_session` is not. Verified mention attribution always adds the
+/// ChannelMention restriction, including older contexts with no signed scope.
 pub fn current_scope() -> Option<SessionScope> {
-    attribution().scope
+    let accepted = attribution();
+    if accepted.channel_mention_id.is_some() {
+        Some(SessionScope::ChannelMention)
+    } else {
+        accepted.scope
+    }
+}
+
+/// Whether this request is restricted by a stored or signed scope, including
+/// unknown signed scopes whose read-only fallback has no `SessionScope` value.
+pub fn is_scoped() -> bool {
+    attribution().signed_scope || current_scope().is_some()
+}
+
+/// Whether this request may put an agent to work
+/// ([`SessionScope::may_assign_agents`]): an unscoped one may.
+pub fn may_assign_agents() -> bool {
+    current_scope().is_none_or(SessionScope::may_assign_agents)
+}
+
+/// Whether a document or surface token minted for this request grants at
+/// most view access ([`SessionScope::caps_document_tokens_to_view`]).
+pub fn caps_document_tokens_to_view() -> bool {
+    attribution().caps_document_tokens
+        || current_scope().is_some_and(SessionScope::caps_document_tokens_to_view)
 }
 
 /// A request that changes who an item is shared with, refused to the scope
@@ -69,7 +104,7 @@ impl SharingRefused {
 /// Whether the current request may change who can see an item: false under
 /// a scope that may not share.
 pub fn may_share() -> bool {
-    current_scope().is_none_or(SessionScope::allows_sharing)
+    current_channel_mention().is_none() && current_scope().is_none_or(SessionScope::allows_sharing)
 }
 
 /// Refuses a change to who can see an item (`changes_sharing`) when the
@@ -86,6 +121,7 @@ pub fn refuse_sharing(changes_sharing: bool) -> Result<(), SharingRefused> {
     tracing::warn!(
         scope = current_scope().map(SessionScope::as_str),
         agent_session_id = ?current_session(),
+        channel_mention_id = ?current_channel_mention(),
         "refused a change to who can see an item"
     );
     Err(SharingRefused)
@@ -107,6 +143,29 @@ pub fn current_verb() -> Option<AgentVerb> {
 /// The routine whose run the current request acts for, if any.
 pub fn current_routine() -> Option<Uuid> {
     attribution().routine_id
+}
+
+/// The channel mention whose bot program the current request comes from, if any.
+pub fn current_channel_mention() -> Option<Uuid> {
+    attribution().channel_mention_id
+}
+
+/// The trusted origin channel of the current mention, when known.
+pub fn current_mention_channel() -> Option<Uuid> {
+    attribution().channel_mention_channel_id
+}
+
+/// Why a channel-mention bot's program may not create, change or run a
+/// routine or an agent session: their runs get credentials without the
+/// mention, and with it the program's email refusal.
+pub const DELEGATION_REFUSAL: &str = "Routines and agent sessions cannot be created, changed or run from a channel or document mention. Memories, skills and other saved instructions cannot be written here either. Tell the user to set this up from Macro instead.";
+
+/// Whether the current request may not delegate work to a routine or an
+/// agent session: true for a channel-mention bot's program. Routers that
+/// create, change or run either refuse its writes with
+/// [`DELEGATION_REFUSAL`].
+pub fn refuses_delegation() -> bool {
+    current_channel_mention().is_some()
 }
 
 /// Run work with the correlation accepted at its boundary. `None` clears any

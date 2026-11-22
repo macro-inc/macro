@@ -1,0 +1,157 @@
+use super::*;
+
+/// Programs never reach it: these tests stop before any program runs.
+struct NeverRuns;
+
+#[async_trait]
+impl MentionCodeMode for NeverRuns {
+    async fn execute(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &MentionContext,
+        _: ExecuteRequest,
+        _: CancellationToken,
+    ) -> Result<UserExecutionReceipt, CodeModeError> {
+        panic!("no program should run in this test");
+    }
+}
+
+fn mention() -> BotMention {
+    BotMention {
+        channel_id: None,
+        message_id: uuid::Uuid::from_u128(1),
+        root_id: uuid::Uuid::from_u128(2),
+    }
+}
+
+#[test]
+fn replies_get_the_code_tools_and_only_the_direct_tools_code_mode_keeps() {
+    let tools = ChannelBotTools::new(Arc::new(NeverRuns));
+    let names: Vec<String> = tools
+        .for_mention(&mention(), None)
+        .request_schemas()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|schema| schema.name)
+        .collect();
+    for code in ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"] {
+        assert!(names.iter().any(|name| name == code), "{code} missing");
+    }
+    // SDK-covered tools and the Anthropic sandbox are gone; the rest stay.
+    for dropped in [
+        "ImportFromNotion",
+        "ImportFromLinear",
+        "ImportFromJira",
+        "ReadContent",
+        "ReadMemory",
+        "UpdateMemory",
+        "RenderCanvas",
+        "BashCodeExecution",
+        "TextEditorCodeExecution",
+    ] {
+        assert!(!names.iter().any(|name| name == dropped), "{dropped} kept");
+    }
+    assert!(names.iter().any(|name| name == "SelfKnowledge"));
+    assert!(tools.system_prompt().contains("Code Mode"));
+    // Replies cannot present views, so the bot is never told to.
+    assert!(
+        !tools
+            .system_prompt()
+            .contains("present them with `execution.views.present`")
+    );
+    // A routine's token carries no channel mention, so replies are never told
+    // to schedule one to check back later. The signed scope also prevents
+    // creating routines a later unrestricted run could execute.
+    assert!(!tools.system_prompt().contains("To check back later"));
+}
+
+#[test]
+fn replies_are_told_never_to_show_how_the_bot_works() {
+    // The channel shows only the reply text, so the prompt is what keeps code,
+    // the SDK and tool names out of it.
+    let prompt = ChannelBotTools::new(Arc::new(NeverRuns))
+        .system_prompt()
+        .to_owned();
+    assert!(prompt.contains(
+        "never mention code, programs, scripts, the SDK, requests, `ExecuteCode` or other \
+         tool names, and never show the code you ran"
+    ));
+}
+
+fn code_mode_tools() -> CodeModeTools {
+    CodeModeTools {
+        attribution: agent_correlation::context::Attribution {
+            channel_mention_id: Some(mention().message_id),
+            channel_mention_channel_id: mention().channel_id,
+            scope: Some(agent_correlation::scope::SessionScope::ChannelMention),
+            ..Default::default()
+        },
+        direct: ai_tools::tools_for_channel_bot_code_mode().toolset,
+        code: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
+        context: UserCodeModeToolContext {
+            service: Arc::new(MentionPrograms {
+                executions: Arc::new(NeverRuns),
+                mention: MentionContext {
+                    channel_id: None,
+                    message_id: uuid::Uuid::from_u128(1),
+                    root_id: uuid::Uuid::from_u128(2),
+                },
+            }),
+            cognition: None,
+            caller: ToolCaller::Agent(bot_id::MACRO_AI_BOT_ID),
+            session: None,
+        },
+    }
+}
+
+#[test]
+fn a_hidden_native_tool_is_refused_not_dispatched() {
+    let tools = code_mode_tools();
+    assert_eq!(tools.route("ExecuteCode"), Route::Code);
+    assert_eq!(tools.route("SelfKnowledge"), Route::Direct);
+    for hidden in [
+        "ImportFromNotion",
+        "ImportFromLinear",
+        "ImportFromJira",
+        "ReadContent",
+        "ReadMemory",
+        "UpdateMemory",
+        "SendChannelMessage",
+        "BashCodeExecution",
+        "NoSuchTool",
+    ] {
+        assert_eq!(tools.route(hidden), Route::Refused, "{hidden}");
+    }
+    let refusal = hidden_tool_refusal("ReadContent");
+    assert!(
+        refusal
+            .description
+            .contains("ReadContent is not available here")
+    );
+    assert!(refusal.description.contains("ExecuteCode"));
+}
+
+/// In-process calls bypass the program token validator, so their complete
+/// set must stay read-only, including tools without SDK equivalents.
+#[test]
+fn mention_native_tools_only_offer_discovery_and_knowledge_reads() {
+    let mention = ai_tools::tools_for_channel_bot_code_mode();
+    let names: std::collections::BTreeSet<_> =
+        mention.toolset.tools.keys().map(String::as_str).collect();
+    assert_eq!(
+        names,
+        std::collections::BTreeSet::from(["SelfKnowledge", "SearchTools", "LoadTools"])
+    );
+}
+
+#[test]
+fn owner_sessions_keep_their_import_planners() {
+    for session in [
+        ai_tools::tools_for(ai_tools::AiHost::AgentSession),
+        ai_tools::tools_for_agent_code_mode(),
+    ] {
+        for name in ["ImportFromNotion", "ImportFromLinear", "ImportFromJira"] {
+            assert!(session.toolset.tools.contains_key(name), "{name} missing");
+        }
+    }
+}

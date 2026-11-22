@@ -157,7 +157,8 @@ async fn main() -> Result<()> {
         PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(pgpool.clone())),
     )));
 
-    let correlation = agent_correlation::inbound::CorrelationState::new(pgpool.clone(), jwt_args);
+    let correlation = agent_correlation::inbound::CorrelationState::new(pgpool.clone(), jwt_args)
+        .serving(&["connection"]);
     let app = router(AppState {
         context,
         config: Arc::clone(&config),

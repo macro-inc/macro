@@ -255,7 +255,7 @@ pub(crate) enum ProviderAgent<
     OpenAiResponses(Agent<TracedModel<openai::responses_api::ResponsesCompletionModel<H>>>),
     /// A test-only agent over an arbitrary completion model (e.g. a scripted
     /// fake), type-erased so arbitrary model types do not enter this enum.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     Test(Box<dyn DynStreamAgent>),
 }
 
@@ -348,7 +348,7 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAge
                 )
                 .await
             }
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-utils"))]
             ProviderAgent::Test(agent) => {
                 agent
                     .run_stream_dyn(
@@ -948,7 +948,7 @@ fn chunk_kind<R>(content: &StreamedAssistantContent<R>) -> Option<&'static str> 
 /// Test-only type erasure so [`ProviderAgent`] can hold an arbitrary
 /// [`Agent<M>`] (e.g. a scripted fake model) without adding a model type parameter.
 /// Mirrors the production arms: it just drives [`drive_stream`].
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utils"))]
 pub(crate) trait DynStreamAgent: Send + Sync {
     #[allow(clippy::too_many_arguments)]
     fn run_stream_dyn<'a>(
@@ -967,7 +967,7 @@ pub(crate) trait DynStreamAgent: Send + Sync {
     >;
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utils"))]
 impl<M> DynStreamAgent for Agent<M>
 where
     M: CompletionModel + 'static,
@@ -1005,7 +1005,7 @@ where
 }
 
 /// A routed agent over a test transport runs exactly as production's does.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utils"))]
 impl<H> DynStreamAgent for ProviderAgent<H>
 where
     H: HttpClientExt + Clone + Default + std::fmt::Debug + Send + Sync + 'static,
@@ -1038,7 +1038,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utils"))]
 impl ProviderAgent {
     /// Build a test-only [`ProviderAgent`] backed by `model` (a fake completion
     /// model), wired through the same [`build_agent`] used in production.

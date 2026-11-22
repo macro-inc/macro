@@ -33,10 +33,11 @@ pub trait AuthorizationPolicy: sealed::Sealed + Send + Sync + 'static {
     fn acting_entity(output: &Self::Output) -> Self::ActingEntity<'_>;
 }
 
-/// Like [`UserOrInternal`], but refuses an account manager's credential and a
-/// scoped agent run's. For endpoints that create credentials, change who can
-/// sign in, delete the account, or change its managers: a manager must not be
-/// able to outlast its own revocation, and a run must not leave its scope.
+/// Like [`UserOrInternal`], but refuses an account manager's credential, a
+/// scoped agent run's, and any request from a channel-mention bot's program.
+/// For endpoints that create credentials, change who can sign in, delete the
+/// account, or change its managers: a manager must not be able to outlast its
+/// own revocation, and a run must not leave its scope or shed its restrictions.
 pub struct AccountHolderOrInternal;
 
 /// Admits directly authenticated users and internal services acting for a user.
@@ -292,6 +293,12 @@ impl AuthorizationPolicy for AccountHolderOrInternal {
                 CredentialOrigin::AccountManager(_) | CredentialOrigin::ScopedMacroApiJwt
             )
         {
+            return Err(forbidden());
+        }
+        // A channel-mention bot's program must not mint a credential that
+        // sheds its signed mention (and with it the email refusal).
+        // Bot credentials remain allowed: bot tokens have no inbox and cannot send email.
+        if agent_correlation::context::current_channel_mention().is_some() {
             return Err(forbidden());
         }
 

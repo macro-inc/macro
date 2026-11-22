@@ -1,6 +1,7 @@
-use crate::api::context::{AuthorizationService, EntityAccessService};
+use crate::api::context::{ApiContext, AuthorizationService, EntityAccessService};
 use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
+use documents_hex::domain::{models::DocumentError, restore::restore_document};
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 #[allow(unused_imports)]
 use futures::stream::TryStreamExt;
@@ -11,7 +12,6 @@ use model::response::{
 };
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
 use serde::Deserialize;
-use sqlx::PgPool;
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -34,28 +34,47 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user, document_context, _access), fields(user_id=?user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip_all, fields(document_id = %document_id))]
 pub async fn handler(
-    _access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService, AuthorizationService>,
-    State(db): State<PgPool>,
-    user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService, AuthorizationService>,
+    State(state): State<ApiContext>,
+    _user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {
     tracing::info!("revert_delete document");
 
-    if let Err(e) = macro_db_client::document::revert_delete::revert_delete_document(
-        &db,
-        &document_id,
-        document_context.project_id.as_deref(),
+    let result = restore_document(
+        access.entity_access_receipt,
+        &document_context.0,
+        move |id, project| async move {
+            macro_db_client::document::revert_delete::revert_delete_document(
+                &state.db,
+                &id,
+                project.as_deref(),
+            )
+            .await
+        },
     )
-    .await
-    {
-        tracing::error!(error=?e, document_id=?document_id, "unable to revert document");
+    .await;
+    if let Err(error) = result {
+        let status = if matches!(
+            &error,
+            DocumentError::Forbidden(_) | DocumentError::Unauthorized
+        ) {
+            StatusCode::FORBIDDEN
+        } else {
+            StatusCode::INTERNAL_SERVER_ERROR
+        };
+        if status == StatusCode::FORBIDDEN {
+            tracing::warn!(?error, "document restoration refused");
+        } else {
+            tracing::error!(?error, "unable to revert document");
+        }
         return GenericResponse::builder()
             .message("unable to revert document")
             .is_error(true)
-            .send(StatusCode::INTERNAL_SERVER_ERROR);
+            .send(status);
     }
 
     let response_data = GenericSuccessResponse { success: true };

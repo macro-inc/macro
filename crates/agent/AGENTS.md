@@ -61,6 +61,11 @@ and usage metering.
 - Add a stream part / tool-call shape change: `src/stream.rs` → `src/convert.rs`
   (rig message conversion) → `src/accumulator.rs` (accumulation across chunks).
 
+## Composed host tests
+
+Enable `test-utils` and configure `AgentLoop::with_test_model` to exercise a host's
+real session and tool dispatch with a scripted completion model and no provider.
+
 ## Checks
 
 - `cargo test -p agent` (`SQLX_OFFLINE` unset).

@@ -7,13 +7,19 @@ use messages::domain::{
     events::MessagePostedMetadata, models::MessageParent, service::MessageWrite,
 };
 
-use super::models::{BotInvocation, MarkedPassage, TranscriptMessage};
+use super::models::{BotInvocation, BotMention, MarkedPassage, TranscriptMessage};
 
 /// Produces an assistant response for a posted message.
 #[async_trait]
 pub trait AgentResponder: Send + Sync {
-    /// Run the agent on behalf of `user_id` with `prompt`, returning the reply.
-    async fn respond(&self, user_id: &str, prompt: String) -> anyhow::Result<String>;
+    /// Run the agent on behalf of `user_id` with `prompt` to answer
+    /// `mention`, returning the reply.
+    async fn respond(
+        &self,
+        user_id: &str,
+        mention: BotMention,
+        prompt: String,
+    ) -> anyhow::Result<String>;
 }
 
 /// Resolves the time zone a user's schedule lives in.

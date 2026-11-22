@@ -107,6 +107,7 @@ impl CodeModeService {
         cancel: CancellationToken,
     ) -> Result<(ExecutionReceipt, Option<MacroUserIdStr<'static>>), CodeModeError> {
         let mut record = ExecutionRecord {
+            credential_correlation_id: None,
             execution_id: execution,
             acting_as: Some(identity.acting_as),
             turn_id: Some(identity.turn),
@@ -152,7 +153,7 @@ impl CodeModeService {
         if !active_turn(&self.0, &identity).await || cancel.is_cancelled() {
             record.status = ExecutionStatus::Cancelled;
             record.error = Some("Execution cancelled before authorization.".into());
-            self.0.store.save(identity.session, &record).await?;
+            self.save_cancelled(identity.session, &record).await;
             return Ok((receipt(&record), None));
         }
         let executor = self.0.executor.as_ref().ok_or(CodeModeError::Unavailable)?;
@@ -167,6 +168,7 @@ impl CodeModeService {
             return Ok((receipt(&record), None));
         }
         let IssuedRun {
+            correlation_id,
             environment,
             acting_user,
         } = match self
@@ -183,11 +185,28 @@ impl CodeModeService {
                 return Err(error);
             }
         };
+        record.credential_correlation_id = Some(correlation_id);
         if !active_turn(&self.0, &identity).await || cancel.is_cancelled() {
             record.status = ExecutionStatus::Cancelled;
             record.error = Some("Execution cancelled before starting.".into());
-            self.0.store.save(identity.session, &record).await?;
+            self.save_cancelled(identity.session, &record).await;
             return Ok((receipt(&record), None));
+        }
+        // Admission of connected-app calls must see this exact issued credential
+        // before the runner can make its first request. A failed save starts nothing.
+        let saved = tokio::select! {
+            biased;
+            () = cancel.cancelled() => None,
+            saved = self.0.store.save(identity.session, &record) => Some(saved),
+        };
+        match saved {
+            Some(result) => result?,
+            None => {
+                record.status = ExecutionStatus::Cancelled;
+                record.error = Some("Execution cancelled before starting.".into());
+                self.save_cancelled(identity.session, &record).await;
+                return Ok((receipt(&record), None));
+            }
         }
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let execution =
@@ -247,6 +266,21 @@ impl CodeModeService {
         record.error = error;
         self.0.store.save(identity.session, &record).await?;
         Ok((receipt(&record), Some(acting_user)))
+    }
+
+    // Cancellation must finish even if the journal is unavailable. No program
+    // starts on these paths, so a stale Running row cannot spend this credential.
+    async fn save_cancelled(&self, session: AgentSessionId, record: &ExecutionRecord) {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            self.0.store.save(session, record),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => tracing::warn!(%error, "could not save cancelled execution"),
+            Err(_) => tracing::warn!("cancelled execution save timed out"),
+        }
     }
 }
 

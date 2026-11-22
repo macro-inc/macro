@@ -105,3 +105,143 @@ async fn signed_document_grant_retains_invocation_attribution() {
         None
     );
 }
+
+/// Under a scope that caps document tokens (a background job), every token
+/// grants view access only; elsewhere it keeps the requested level.
+#[tokio::test]
+async fn a_capped_scope_mints_only_view_tokens() {
+    let principal = CreationPrincipal::User(user());
+    let level = || {
+        let token = encode_principal_permission_token(
+            &principal,
+            "doc-1".into(),
+            AccessLevel::Edit,
+            SECRET,
+        )
+        .expect("token should encode");
+        let claims = decode_permission_token(&token, SECRET).expect("token should decode");
+        (claims.access_level, claims.agent_scope)
+    };
+    assert_eq!(level(), (AccessLevel::Edit, None));
+    for (scope, expected) in [
+        (
+            agent_correlation::scope::SessionScope::Job,
+            (AccessLevel::View, Some("job".to_owned())),
+        ),
+        (
+            agent_correlation::scope::SessionScope::NoSend,
+            (AccessLevel::Edit, Some("no_send".to_owned())),
+        ),
+    ] {
+        let minted = agent_correlation::context::scope_attribution(
+            agent_correlation::context::Attribution {
+                scope: Some(scope),
+                ..Default::default()
+            },
+            async { level() },
+        )
+        .await;
+        assert_eq!(minted, expected, "{scope:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_mention_document_grant_is_view_only_and_retains_the_signed_restriction() {
+    use agent_correlation::{
+        context::{Attribution, scope_attribution},
+        scope::SessionScope,
+    };
+    let mention = Uuid::from_u128(903);
+    let token = scope_attribution(
+        Attribution {
+            channel_mention_id: Some(mention),
+            scope: SessionScope::parse("channel_mention"),
+            signed_scope: true,
+            ..Attribution::default()
+        },
+        async {
+            encode_principal_permission_token(
+                &CreationPrincipal::User(user()),
+                "skill-fixture".into(),
+                AccessLevel::Edit,
+                SECRET,
+            )
+            .unwrap()
+        },
+    )
+    .await;
+    let claims = decode_permission_token(&token, SECRET).unwrap();
+    assert_eq!(
+        claims.access_level,
+        AccessLevel::View,
+        "a mention must never obtain a writable worker/sync grant"
+    );
+    let wire: serde_json::Value = macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+    assert_eq!(wire["agent_scope"], "channel_mention");
+    assert_eq!(wire["channel_mention_id"], mention.to_string());
+}
+
+#[tokio::test]
+async fn no_send_background_document_grants_keep_edit_access() {
+    use agent_correlation::{
+        context::{Attribution, scope_attribution},
+        scope::SessionScope,
+    };
+    let token = scope_attribution(
+        Attribution {
+            scope: Some(SessionScope::NoSend),
+            signed_scope: true,
+            ..Attribution::default()
+        },
+        async {
+            encode_principal_permission_token(
+                &CreationPrincipal::User(user()),
+                "normal-fixture".into(),
+                AccessLevel::Edit,
+                SECRET,
+            )
+            .unwrap()
+        },
+    )
+    .await;
+    assert_eq!(
+        decode_permission_token(&token, SECRET)
+            .unwrap()
+            .access_level,
+        AccessLevel::Edit
+    );
+}
+
+#[tokio::test]
+async fn a_legacy_mention_document_grant_is_read_only_without_a_new_scope() {
+    use agent_correlation::{
+        context::{Attribution, scope_attribution},
+        scope::SessionScope,
+    };
+    for scope in [None, Some(SessionScope::NoSend)] {
+        let token = scope_attribution(
+            Attribution {
+                channel_mention_id: Some(Uuid::from_u128(909)),
+                scope,
+                ..Attribution::default()
+            },
+            async {
+                encode_principal_permission_token(
+                    &CreationPrincipal::User(user()),
+                    "skill-fixture".into(),
+                    AccessLevel::Edit,
+                    SECRET,
+                )
+                .unwrap()
+            },
+        )
+        .await;
+        assert_eq!(
+            decode_permission_token(&token, SECRET)
+                .unwrap()
+                .access_level,
+            AccessLevel::View,
+            "legacy mention scope {scope:?} must not mint a writable grant"
+        );
+    }
+}

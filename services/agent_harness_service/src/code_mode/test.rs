@@ -1,3 +1,6 @@
+mod channel_bot;
+mod channel_mention_egress;
+
 use super::*;
 use agent_session::domain::model::AgentSessionId;
 use agent_session::testing::test_agent_session;
@@ -219,6 +222,15 @@ fn concrete(path: &str) -> String {
 fn the_dry_run_scope_is_every_sdk_read_and_no_write() {
     let scope = SessionScope::DryRun;
     for (key, operation) in code_execution::domain::operations() {
+        // Unfurl fetches what its caller names from Macro's servers: no
+        // scoped run is given its host (`run_endpoints`).
+        if key.starts_with("unfurl.") {
+            continue;
+        }
+        // A GET that writes is refused to every scope.
+        if agent_correlation::scope::is_get_write(&operation.method, &concrete(&operation.path)) {
+            continue;
+        }
         assert_eq!(
             scope.allows(&operation.method, &concrete(&operation.path)),
             !operation.write,
@@ -246,6 +258,14 @@ fn the_generation_scope_matches_the_sdk_catalog() {
     ];
     let scope = SessionScope::Generation;
     for (key, operation) in code_execution::domain::operations() {
+        // No scoped run is given unfurl's host (`run_endpoints`).
+        if key.starts_with("unfurl.") {
+            continue;
+        }
+        // A GET that writes is refused to every scope.
+        if agent_correlation::scope::is_get_write(&operation.method, &concrete(&operation.path)) {
+            continue;
+        }
         let allowed = scope.allows(&operation.method, &concrete(&operation.path));
         if !operation.write {
             assert!(
@@ -273,13 +293,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
     // Send-looking writes that reach nobody else.
     let reviewed = [
         "auth.generateEmailLink",
-        "auth.deleteTeamInviteLink",
-        "auth.deleteTeamInviteHandler",
-        "auth.rejectInvitation",
-        "auth.revokeGtmInviteLink",
-        "auth.redeemGtmInviteLink",
-        "auth.joinTeamByInviteLink",
-        "auth.toggleTeamNonAdminInvites",
         "auth.postProfilePictures",
         // Its route refuses a scoped session tools.
         "cognition.sendChatMessage",
@@ -324,9 +337,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "storage.renameChannelLabel",
         "storage.setChannelLabel",
         "storage.cancelChannelAccessRequest",
-        "storage.deleteWebhook",
         "storage.deleteDatabaseWebhook",
-        "storage.patchWebhook",
         "storage.externalChatRead",
         "storage.externalChatUpload",
         "storage.externalChatRemove",
@@ -403,7 +414,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "agent-harness.unregisterAgentSessionWork",
         // The person's own preferences.
         "agent-harness.putAgentAutoArchivePreferences",
-        "agent-harness.putAgentCodingPreferences",
         "agent-harness.putAgentSandboxSize",
         // Rejecting a pending tool call runs nothing; running or rewriting
         // one is refused.
@@ -413,10 +423,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         // Unauthenticated: a credential adds nothing.
         "storage.claimHarnessPairing",
         "storage.createHarnessPairing",
-        // Document tokens for the editing worker, whose routes edit
-        // documents, which a run that sends nothing may do.
-        "storage.getDocumentPermissionsToken",
-        "storage.validateDocumentPermissionsToken",
     ];
     let looks_like_a_send = |key: &str, path: &str| {
         let text = format!("{key} {path}").to_lowercase();
@@ -538,6 +544,10 @@ enum ScopeEnforcement {
     /// The service accepts no Macro API token, so the credential grants
     /// nothing there.
     NoMacroCredential,
+    /// The service takes no credential and fetches what its caller names
+    /// from Macro's servers: a scoped run gets no host for it and goes
+    /// through the egress proxy (`run_endpoints`).
+    RefusedToScopedRuns,
 }
 
 /// Decided per host when it is added.
@@ -559,12 +569,10 @@ fn enforcement(host: SdkHost) -> ScopeEnforcement {
         SdkHost::StaticFiles | SdkHost::StaticContent => ScopeEnforcement::SignedScope,
         // CloudFront serves document content only to URLs the storage service
         // signs; the editing worker accepts only document tokens the storage
-        // service mints with a POST a generation session can't make, and its
-        // routes edit documents, which a run that sends nothing may do;
-        // unfurl previews public links for any caller.
-        SdkHost::DocumentContent | SdkHost::EditingWorker | SdkHost::Unfurl => {
-            ScopeEnforcement::NoMacroCredential
-        }
+        // service mints with a POST no scoped session can make.
+        SdkHost::DocumentContent | SdkHost::EditingWorker => ScopeEnforcement::NoMacroCredential,
+        // Unfurl previews any link for any caller.
+        SdkHost::Unfurl => ScopeEnforcement::RefusedToScopedRuns,
     }
 }
 
@@ -604,7 +612,7 @@ fn every_sdk_host_holds_a_scoped_credential_to_its_scope() {
                     ),
                     "{environment} {name} ({url}) serves under a prefix the scope doesn't strip"
                 ),
-                ScopeEnforcement::NoMacroCredential => {}
+                ScopeEnforcement::NoMacroCredential | ScopeEnforcement::RefusedToScopedRuns => {}
             }
         }
     }
@@ -706,6 +714,10 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             name,
             "session run {scope:?}"
         );
+        // No egress flags (the owner's flag is off): these scopes have no
+        // allowlist, so they follow the flag until it rolls out.
+        let proxied = code_execution::domain::Egress::Direct;
+        assert_eq!(run.environment.egress, proxied, "session run {scope:?}");
         let run = UserRunCredentials {
             egress: EgressRollout::new(None),
             signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
@@ -721,6 +733,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         .await
         .unwrap();
         assert_eq!(signed(&run.token).as_deref(), name, "MCP run {scope:?}");
+        assert_eq!(run.egress, proxied, "MCP run {scope:?}");
     }
 }
 
@@ -737,10 +750,29 @@ async fn the_egress_flag_fails_closed_to_direct() {
         flags.set(user.clone(), result);
         EgressRollout::new(Some(flags))
     };
-    let flag =
-        |on: bool| FlagSnapshot::new([(EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(on))]);
-    assert_eq!(flags(Ok(flag(true))).egress(&user).await, Egress::Proxied);
-    assert_eq!(flags(Ok(flag(false))).egress(&user).await, Egress::Direct);
+    let flags_on = |proxy: bool, enforce: bool| {
+        FlagSnapshot::new([
+            (EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(proxy)),
+            (EGRESS_ENFORCE_FLAG.to_owned(), FlagValue::Boolean(enforce)),
+        ])
+    };
+    assert_eq!(
+        flags(Ok(flags_on(true, false))).egress(&user).await,
+        Egress::Proxied
+    );
+    assert_eq!(
+        flags(Ok(flags_on(true, true))).egress(&user).await,
+        Egress::Enforced
+    );
+    // Enforcing needs the forwarder: alone it changes nothing.
+    assert_eq!(
+        flags(Ok(flags_on(false, true))).egress(&user).await,
+        Egress::Direct
+    );
+    assert_eq!(
+        flags(Ok(flags_on(false, false))).egress(&user).await,
+        Egress::Direct
+    );
     assert_eq!(
         flags(Err("PostHog is down".into())).egress(&user).await,
         Egress::Direct
@@ -748,6 +780,58 @@ async fn the_egress_flag_fails_closed_to_direct() {
     assert_eq!(
         EgressRollout::<FakeFeatureFlags>::new(None)
             .egress(&user)
+            .await,
+        Egress::Direct
+    );
+}
+
+/// A run whose scope holds it to an allowlist enforces whatever the flags
+/// say, even with no flag client, so a scoped run can't reach an
+/// anonymous route that goes outward; any other run follows the flags.
+#[tokio::test]
+async fn an_enforced_scope_enforces_with_the_flags_off() {
+    use code_execution::domain::Egress;
+    use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
+    let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let off = FlagSnapshot::new([
+        (EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(false)),
+        (EGRESS_ENFORCE_FLAG.to_owned(), FlagValue::Boolean(false)),
+    ]);
+    let proxy_only = FlagSnapshot::new([
+        (EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(true)),
+        (EGRESS_ENFORCE_FLAG.to_owned(), FlagValue::Boolean(false)),
+    ]);
+    let rollout = |snapshot: Result<FlagSnapshot, String>| {
+        let mut flags = FakeFeatureFlags::default();
+        flags.set(user.clone(), snapshot);
+        EgressRollout::new(Some(flags))
+    };
+    for snapshot in [Ok(off.clone()), Ok(proxy_only.clone()), Err("down".into())] {
+        assert_eq!(
+            rollout(snapshot)
+                .egress_for(&user, Some(SessionScope::Job))
+                .await,
+            Egress::Enforced
+        );
+    }
+    assert_eq!(
+        EgressRollout::<FakeFeatureFlags>::new(None)
+            .egress_for(&user, Some(SessionScope::Job))
+            .await,
+        Egress::Enforced
+    );
+    // Not an allowlist scope: the flags decide, as before.
+    assert_eq!(
+        rollout(Ok(proxy_only)).egress_for(&user, None).await,
+        Egress::Proxied
+    );
+    assert_eq!(
+        rollout(Ok(off)).egress_for(&user, None).await,
+        Egress::Direct
+    );
+    assert_eq!(
+        EgressRollout::<FakeFeatureFlags>::new(None)
+            .egress_for(&user, None)
             .await,
         Egress::Direct
     );
@@ -861,6 +945,33 @@ async fn the_egress_flag_is_read_once_per_user_for_a_while() {
     assert_eq!(loads.load(Ordering::SeqCst), 4);
 }
 
+/// The egress cache drops expired users at most once a minute as it fills,
+/// and never holds more than its bound.
+#[tokio::test(start_paused = true)]
+async fn the_egress_cache_sweeps_expired_users_and_stays_bounded() {
+    use code_execution::domain::Egress;
+    use feature_flags::outbound::fake::FakeFeatureFlags;
+    let rollout = EgressRollout::new(Some(FakeFeatureFlags::default()));
+    for index in 0..3 {
+        let id = format!("macro|user{index}@example.com");
+        let user = MacroUserIdStr::parse_from_str(&id).unwrap();
+        rollout.egress(&user).await;
+    }
+    assert_eq!(rollout.cached.lock().unwrap().entries.len(), 3);
+    // Past their life, the next read drops them.
+    tokio::time::advance(std::time::Duration::from_secs(61)).await;
+    let late = MacroUserIdStr::parse_from_str("macro|late@example.com").unwrap();
+    assert_eq!(rollout.egress(&late).await, Egress::Direct);
+    assert_eq!(rollout.cached.lock().unwrap().entries.len(), 1);
+    // However many users read it, it holds at most its bound.
+    for index in 0..=EGRESS_FLAG_USERS {
+        let id = format!("macro|many{index}@example.com");
+        let user = MacroUserIdStr::parse_from_str(&id).unwrap();
+        rollout.egress(&user).await;
+    }
+    assert!(rollout.cached.lock().unwrap().entries.len() <= EGRESS_FLAG_USERS);
+}
+
 /// Answers every run with success, so a check is all that stands between a
 /// program and success.
 struct Accepts;
@@ -965,4 +1076,27 @@ async fn suggestions_brief_programs_type_check() {
         );
     }
     service.shutdown().await;
+}
+
+/// A scoped run gets no unfurl host, so neither `--allow-net` nor an egress
+/// forwarder has an address for it; an unscoped run keeps it.
+#[test]
+fn a_scoped_run_gets_no_unfurl_host() {
+    let endpoints = SdkEndpoints {
+        hosts: BTreeMap::from([
+            (
+                "unfurl".to_owned(),
+                "https://gateway.example/unfurl".to_owned(),
+            ),
+            (
+                "storage".to_owned(),
+                "https://gateway.example/dss".to_owned(),
+            ),
+        ]),
+        web_app_url: "https://app.example".to_owned(),
+    };
+    let scoped = run_endpoints(&endpoints, true);
+    assert_eq!(scoped.hosts.keys().collect::<Vec<_>>(), ["storage"]);
+    let unscoped = run_endpoints(&endpoints, false);
+    assert_eq!(unscoped.hosts.len(), 2);
 }

@@ -124,7 +124,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 email_api_client = { path = "../email_api_client", features = ["outbound-outlook"] }
 macro_service_urls = { path = "../macro_service_urls" }
 outlook_emulator = { path = "../outlook_emulator" }

@@ -1,0 +1,64 @@
+# ChannelMention reads, under the verified mentioner's existing access.
+# Only these operations are allowed; paths are exact OpenAPI templates.
+# POST entries below are batch reads, not writes.
+# Channel/message reads additionally require the signed origin channel.
+# Email, AI chats, contacts, calendar, run history, unified search and document
+# enumeration are unavailable. Known-id/slug reads are not reference-bound.
+
+[auth]
+GET /permissions/me
+GET /user/language
+GET /user/me
+GET /user/name
+POST /user/get_names
+
+[cognition]
+GET /citations/{id}
+GET /skills
+GET /skills/{id}
+
+[properties]
+GET /properties/definitions
+GET /properties/definitions/{definition_id}
+GET /properties/definitions/{definition_id}/options
+GET /properties/entities/{entity_type}/{entity_id}
+GET /properties/tags
+POST /properties/entities/bulk
+
+[scheduled-action]
+GET /scheduled-actions
+GET /scheduled-actions/{id}
+
+[static-files]
+GET /api/file/metadata/{file_id}
+GET /file/{file_id}
+
+[storage]
+GET /channels/{channel_id}
+GET /channels/{channel_id}/attachments
+GET /channels/{channel_id}/bots
+GET /channels/{channel_id}/participants
+GET /documents/slug/{slug}
+GET /documents/{document_id}
+GET /documents/{document_id}/design
+GET /documents/{document_id}/github_prs
+GET /documents/{document_id}/illustrator
+GET /documents/{document_id}/markdown
+GET /documents/{document_id}/photoshop
+GET /documents/{document_id}/presentation
+GET /documents/{document_id}/processing
+GET /documents/{document_id}/short_id
+GET /documents/{document_id}/skill_description
+GET /documents/{document_id}/text-content
+GET /documents/{document_id}/word
+GET /documents/{document_id}/{document_version_id}
+GET /messages/{parent_type}/{parent_id}
+GET /messages/{parent_type}/{parent_id}/items/{id}
+GET /messages/{parent_type}/{parent_id}/legacy/{legacy_id}
+GET /messages/{parent_type}/{parent_id}/threads/{id}
+GET /messages/{parent_type}/{parent_id}/timeline
+GET /projects
+GET /projects/{id}
+GET /projects/{id}/content
+POST /documents/preview
+POST /projects/preview

@@ -463,6 +463,7 @@ const MACRO_API_PUBLIC_KEY: &str = include_str!(
 fn agent_credential(scope: Option<&str>) -> String {
     macro_auth::macro_api_token::encode_macro_api_token(
         macro_auth::macro_api_token::EncodeMacroApiTokenArgs {
+            channel_mention_channel_id: None,
             fusionauth_id: "fixture".into(),
             macro_user_id: TEST_USER_ID.into(),
             organization_id: None,
@@ -474,6 +475,7 @@ fn agent_credential(scope: Option<&str>) -> String {
             agent_correlation_id: Some(uuid::Uuid::from_u128(1)),
             agent_session_id: None,
             routine_id: None,
+            channel_mention_id: None,
             agent_scope: scope.map(str::to_owned),
         },
     )

@@ -75,6 +75,7 @@ fn router() -> Router {
 
 fn token(agent: Option<Uuid>, routine: Option<Uuid>) -> String {
     encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_channel_id: None,
         fusionauth_id: "fixture".into(),
         macro_user_id: "macro|owner@example.com".into(),
         organization_id: None,
@@ -86,6 +87,7 @@ fn token(agent: Option<Uuid>, routine: Option<Uuid>) -> String {
         agent_correlation_id: None,
         agent_session_id: None,
         routine_id: routine,
+        channel_mention_id: None,
         agent_scope: None,
     })
     .unwrap()

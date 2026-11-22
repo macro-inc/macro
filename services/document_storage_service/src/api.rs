@@ -56,7 +56,8 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let correlation = agent_correlation::inbound::CorrelationState::new(
         state.db.clone(),
         state.jwt_validation_args.clone(),
-    );
+    )
+    .serving(&["storage", "properties", "search"]);
     let app = api_router(state.clone())
         .layer(axum::middleware::from_fn_with_state(
             correlation,

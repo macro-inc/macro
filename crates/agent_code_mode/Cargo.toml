@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", features = ["utoipa"] }
 chrono = { workspace = true }
 cognition = { path = "../cognition" }
@@ -24,12 +25,14 @@ futures = { workspace = true }
 import = { path = "../import" }
 lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
 macro_uuid = { path = "../macro_uuid" }
 nom = { workspace = true }
 nutype = { workspace = true }
 pipedream_mcp = { path = "../pipedream_mcp" }
+reqwest = { workspace = true }
 rootcause = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
@@ -50,12 +53,16 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+agent_correlation = { path = "../agent_correlation", features = ["http"] }
+macro_auth = { path = "../macro_auth", features = ["testing"] }
+tower = { workspace = true, features = ["util"] }
 tempfile = { workspace = true }
 jev = { path = "../jev", features = ["outbound"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 agent_session = { path = "../agent_session", default-features = false, features = ["test-utils", "outbound"] }
 entity_access = { path = "../entity_access", features = ["outbound"] }
+wiremock = { workspace = true }
 
 [package.metadata.cargo-shear]
 # Named only in `#[sqlx::test(migrator = "...")]` strings.

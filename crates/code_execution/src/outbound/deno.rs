@@ -265,14 +265,31 @@ impl DenoRunner {
         // A proxied run reaches only its forwarder, which reaches the hosts.
         let egress = match job.environment.egress {
             Egress::Direct => None,
-            Egress::Proxied => Some(
+            mode @ (Egress::Proxied | Egress::Enforced) => Some(
                 egress::RunEgress::start(
                     self.egress.clone(),
                     &job.environment.endpoints.hosts,
                     &job.environment.trace_headers,
+                    egress::RunPolicy {
+                        enforce: mode == Egress::Enforced,
+                        dry_run: job
+                            .environment
+                            .unattended
+                            .as_ref()
+                            .is_some_and(|unattended| unattended.dry_run),
+                        scoped: job.environment.scoped,
+                    },
                 )
                 .await
-                .map_err(internal)?,
+                .map_err(|error| {
+                    // Fails closed: a proxied run never goes direct.
+                    tracing::error!(
+                        ?error,
+                        outcome = "forwarder_unavailable",
+                        "a proxied run's egress forwarder could not start"
+                    );
+                    forwarder_unavailable()
+                })?,
             ),
         };
         // The program keeps the real hosts, which its links need; its fetch
@@ -491,6 +508,14 @@ const BACKGROUND_NICENESS: i32 = 10;
 async fn reap(child: &mut Child) -> Option<std::process::ExitStatus> {
     let _ = child.start_kill();
     child.wait().await.ok()
+}
+
+/// A proxied run whose forwarder can't start: it fails, never going direct.
+fn forwarder_unavailable() -> ExecutionFailure {
+    ExecutionFailure::new(
+        FailureCode::Egress,
+        "The run's network proxy could not start, so the program didn't run.",
+    )
 }
 
 fn internal(_error: impl std::fmt::Display) -> ExecutionFailure {

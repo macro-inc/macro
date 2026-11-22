@@ -183,9 +183,9 @@ async fn unavailable_history_cannot_be_replaced_by_an_unverified_event_transcrip
 }
 
 #[tokio::test]
-async fn attributed_bots_require_an_explicit_other_bot_mention_and_current_access() {
+async fn audit_attributed_bots_cannot_trigger_classic_macro() {
     for (source, mention, revoked, expected) in [
-        (bot_id::CURSOR_BOT_ID, true, false, true),
+        (bot_id::CURSOR_BOT_ID, true, false, false),
         (bot_id::MACRO_AI_BOT_ID, true, false, false),
         (bot_id::CURSOR_BOT_ID, false, false, false),
         (bot_id::CURSOR_BOT_ID, true, true, false),
@@ -227,7 +227,7 @@ async fn agents_handing_a_thread_back_and_forth_stop_at_the_hop_limit() {
         reply.triggered_by = Some(user().to_string());
         reply.mentions = vec![SimpleMention {
             entity_type: "bot".into(),
-            entity_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
+            entity_id: bot_id::CURSOR_BOT_ID.into_storage_id().to_string(),
         }];
         reply
     };
@@ -235,18 +235,18 @@ async fn agents_handing_a_thread_back_and_forth_stop_at_the_hop_limit() {
         (messages::domain::agent_hops::MAX_AGENT_HOPS, true),
         (messages::domain::agent_hops::MAX_AGENT_HOPS + 1, false),
     ] {
-        // Cursor posts hop `hop`; Macro and Cursor alternate before it.
+        // Macro posts hop `hop`; Macro and Cursor alternate before it.
         let mut replies: Vec<_> = (1..hop)
             .map(|n| {
                 let bot = if (hop - n) % 2 == 0 {
-                    bot_id::CURSOR_BOT_ID
-                } else {
                     bot_id::MACRO_AI_BOT_ID
+                } else {
+                    bot_id::CURSOR_BOT_ID
                 };
                 by(1 + n as u128, bot)
             })
             .collect();
-        let trigger = by(10_000, bot_id::CURSOR_BOT_ID);
+        let trigger = by(10_000, bot_id::MACRO_AI_BOT_ID);
         replies.push(trigger.clone());
         let mut api = MockMessageServiceApi::new();
         configure_reads(
@@ -268,7 +268,7 @@ async fn agents_handing_a_thread_back_and_forth_stop_at_the_hop_limit() {
 }
 
 #[tokio::test]
-async fn an_agents_follow_up_is_inferred_for_macro_and_labelled_by_its_name() {
+async fn an_agents_follow_up_cannot_infer_a_classic_macro_program() {
     let root = message(1, None, "question");
     let mut answer = message(2, Some(root.id), "previous answer");
     answer.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
@@ -292,17 +292,8 @@ async fn an_agents_follow_up_is_inferred_for_macro_and_labelled_by_its_name() {
         classifier.clone(),
     );
 
-    assert_eq!(
-        detector.detect(&event(&trigger)).await,
-        vec![BotInvocation {
-            bot_id: bot_id::MACRO_AI_BOT_ID,
-            trigger: BotTrigger::Inferred,
-        }]
-    );
-    let calls = classifier.calls.lock().unwrap();
-    let judged = calls[0].last().unwrap();
-    assert_eq!(judged.sender, "Cursor");
-    assert!(!judged.from_agent);
+    assert!(detector.detect(&event(&trigger)).await.is_empty());
+    assert!(classifier.calls.lock().unwrap().is_empty());
 }
 
 /// A comment an agent posted through an MCP client, sent as Macro AI's bot.

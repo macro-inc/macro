@@ -278,6 +278,7 @@ where
             put(put_agent_session_sandbox_size_handler::<R, Access, Auth>),
         )
         .with_state(state)
+        .layer(axum::middleware::from_fn(refuse_channel_mention_writes))
 }
 
 /// Account lifecycle endpoint: never grants cleanup authority to a user or harness token.
@@ -1887,6 +1888,28 @@ where
             post(warm_agent_session_handler::<Opener, Bots, Requests, Controls, Auth>),
         )
         .with_state(state)
+        .layer(axum::middleware::from_fn(refuse_channel_mention_writes))
+}
+
+/// Refuses a channel-mention bot's program any write here: a session it
+/// started or prompted would run with credentials that do not carry the
+/// mention, and so without its email refusal. Reads stay open.
+async fn refuse_channel_mention_writes(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    if !request.method().is_safe() && agent_correlation::context::refuses_delegation() {
+        tracing::warn!(
+            channel_mention_id = ?agent_correlation::context::current_channel_mention(),
+            "refused a channel-mention program's agent-session write"
+        );
+        return (
+            StatusCode::FORBIDDEN,
+            agent_correlation::context::DELEGATION_REFUSAL,
+        )
+            .into_response();
+    }
+    next.run(request).await
 }
 
 /// Request body for `POST /agent-sessions`.

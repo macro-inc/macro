@@ -68,7 +68,9 @@ pub fn calendar_replacement_router<
         )
         .route(
             "/replacements/{operation_id}/confirm",
-            post(confirm_calendar_replacement::<S, Auth>),
+            post(confirm_calendar_replacement::<S, Auth>).layer(axum::middleware::from_fn(
+                super::mention::refuse_notifications,
+            )),
         )
         .with_state(state)
 }

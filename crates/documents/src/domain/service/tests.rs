@@ -2124,7 +2124,7 @@ async fn test_edit_document_project_change_moves_project_access() {
 }
 
 #[tokio::test]
-async fn copy_document_best_effort_bumps_inherited_project_and_publishes_event() {
+async fn no_send_can_copy_an_ordinary_document_and_publish_its_event() {
     let mut repo = make_mock_repo();
     let original_metadata = make_test_metadata();
     let original_for_lookup = original_metadata.clone();
@@ -2166,17 +2166,23 @@ async fn copy_document_best_effort_bumps_inherited_project_and_publishes_event()
     document_context.file_type = Some("txt".to_string());
     document_context.sub_type = None;
 
-    service
-        .copy_document(
+    agent_correlation::context::scope_attribution(
+        agent_correlation::context::Attribution {
+            scope: Some(agent_correlation::scope::SessionScope::NoSend),
+            signed_scope: true,
+            ..Default::default()
+        },
+        service.copy_document(
             authenticated_receipt("doc-1"),
             document_context,
             &CreationPrincipal::User(test_user()),
             "copied doc".to_string(),
             None,
             None,
-        )
-        .await
-        .unwrap();
+        ),
+    )
+    .await
+    .unwrap();
 
     let published = event_broker.published();
     let published = published.lock().unwrap();
@@ -4097,4 +4103,33 @@ async fn appearance_records_team_and_channel_bot_attribution() {
             .await
             .unwrap();
     }
+}
+
+#[tokio::test]
+async fn no_send_cannot_copy_a_skill_before_any_repository_operation() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_document_metadata().times(0);
+    let service = make_test_service(repo);
+    let mut document = task_document_context("doc-1");
+    document.sub_type = Some(DocumentSubType::Skill);
+    let result = agent_correlation::context::scope_attribution(
+        agent_correlation::context::Attribution {
+            scope: Some(agent_correlation::scope::SessionScope::NoSend),
+            signed_scope: true,
+            ..Default::default()
+        },
+        service.copy_document(
+            authenticated_receipt("doc-1"),
+            document,
+            &CreationPrincipal::User(test_user()),
+            "Copy".into(),
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert!(
+        matches!(result, Err(DocumentError::Forbidden(_))),
+        "copying saved instructions must be refused: {result:?}"
+    );
 }

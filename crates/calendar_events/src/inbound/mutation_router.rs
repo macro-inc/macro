@@ -95,8 +95,6 @@ where
     T: Send + Sync + 'static,
 {
     Router::new()
-        .route("/calendars", get(list_calendars::<S, L, Auth>))
-        .route("/events", post(create_calendar_event::<S, L, Auth>))
         .route(
             "/events/{event_id}",
             patch(update_calendar_event::<S, L, Auth>).delete(delete_calendar_event::<S, L, Auth>),
@@ -110,12 +108,20 @@ where
             post(invite_calendar_event_guests::<S, L, Auth>),
         )
         .route(
-            "/events/{event_id}/copy",
-            post(copy_calendar_event::<S, L, Auth>),
-        )
-        .route(
             "/join-requests/{request_id}",
             put(respond_to_join_request::<S, L, Auth>),
+        )
+        // Existing-event writes can email guests even without an attendee
+        // change (updates, cancellations and RSVPs). Accepting a join request
+        // also sends an invitation. Guestless creates and snapshot copies do not.
+        .route_layer(axum::middleware::from_fn(
+            super::mention::refuse_notifications,
+        ))
+        .route("/calendars", get(list_calendars::<S, L, Auth>))
+        .route("/events", post(create_calendar_event::<S, L, Auth>))
+        .route(
+            "/events/{event_id}/copy",
+            post(copy_calendar_event::<S, L, Auth>),
         )
         .with_state(state)
 }

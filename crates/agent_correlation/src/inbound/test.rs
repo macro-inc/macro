@@ -46,6 +46,8 @@ fn mint(
     scope: Option<&str>,
 ) -> String {
     encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_channel_id: None,
+        channel_mention_id: None,
         fusionauth_id: "fixture".into(),
         macro_user_id: "macro|owner@example.com".into(),
         organization_id: None,
@@ -70,6 +72,7 @@ async fn optional_claim_is_validated_before_a_handler_can_use_it() {
     let state = CorrelationState {
         jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         repository: repository.clone(),
+        specs: None,
     };
     for bearer in [None, Some(token(None, None))] {
         let mut request = Request::builder()
@@ -141,6 +144,7 @@ async fn propagate_scopes_the_signed_routine_beside_the_correlation() {
     let state = CorrelationState {
         jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         repository: repository.clone(),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -209,6 +213,7 @@ async fn a_scoped_session_is_refused_outside_its_scope() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let ran = Arc::new(AtomicUsize::new(0));
     let handler = {
@@ -265,6 +270,7 @@ async fn a_scoped_session_is_refused_outside_its_scope() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let refused = AgentCorrelationExtractor::from_request_parts(&mut parts, &state).await;
     assert_eq!(
@@ -286,6 +292,7 @@ async fn a_signed_scope_is_refused_outside_it_without_a_lookup() {
     let state = CorrelationState {
         jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         repository: repository.clone(),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -342,6 +349,7 @@ async fn a_handler_reads_the_signed_scope_when_none_is_stored() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -436,6 +444,21 @@ async fn a_service_without_a_database_enforces_the_signed_scope() {
             false,
             StatusCode::OK,
         ),
+        // A background job's credential makes only its listed requests,
+        // here too: neither this delete nor this read is on its lists (it
+        // reads files at `/file/{id}`), so both are refused.
+        (
+            Some(scoped(Some("job"))),
+            "DELETE",
+            false,
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            Some(scoped(Some("job"))),
+            "GET",
+            false,
+            StatusCode::FORBIDDEN,
+        ),
         (Some(scoped(None)), "DELETE", false, StatusCode::OK),
         (
             Some("not a token".to_owned()),
@@ -493,6 +516,8 @@ async fn a_scoped_token_in_the_cookie_scopes_the_request_whatever_else_it_carrie
         None,
     );
     let someone_else = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_channel_id: None,
+        channel_mention_id: None,
         fusionauth_id: "fixture".into(),
         macro_user_id: "macro|someone@example.com".into(),
         organization_id: None,
@@ -620,6 +645,7 @@ async fn propagate_refuses_tokens_of_different_users() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let handled = Arc::new(AtomicUsize::new(0));
     let app = axum::Router::new()
@@ -636,6 +662,8 @@ async fn propagate_refuses_tokens_of_different_users() {
         .layer(axum::middleware::from_fn_with_state(state, propagate));
     let owner = token(None, None);
     let someone_else = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_channel_id: None,
+        channel_mention_id: None,
         fusionauth_id: "fixture".into(),
         macro_user_id: "macro|someone@example.com".into(),
         organization_id: None,
@@ -713,6 +741,7 @@ async fn a_refused_sharing_change_is_answered_as_a_refusal() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -778,6 +807,7 @@ async fn ordinary_agents_reach_policy_put_while_restricted_agents_do_not() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -815,3 +845,288 @@ async fn ordinary_agents_reach_policy_put_while_restricted_agents_do_not() {
         );
     }
 }
+
+/// A signed-scope-only service a job reads declares its specs: there a
+/// job's listed read counts; without them it fails closed.
+#[tokio::test]
+async fn a_signed_scope_service_holds_a_job_to_its_own_specs() {
+    use tower::ServiceExt;
+
+    let job = mint(
+        Some(Uuid::from_u128(1)),
+        Some(Uuid::from_u128(3)),
+        None,
+        Some("job"),
+    );
+    let file = || {
+        Request::builder()
+            .method("GET")
+            .uri("/file/0192f1a0-0000-7000-8000-000000000001")
+            .header("authorization", format!("Bearer {job}"))
+            .body(axum::body::Body::empty())
+            .unwrap()
+    };
+    let route = || {
+        axum::Router::new().route(
+            "/file/{id}",
+            axum::routing::get(|| async { StatusCode::OK }),
+        )
+    };
+    let serving = route().layer(axum::middleware::from_fn_with_state(
+        SignedScopeState {
+            jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+            specs: &["static-files"],
+        },
+        enforce_signed_scope_serving,
+    ));
+    assert_eq!(
+        serving.oneshot(file()).await.unwrap().status(),
+        StatusCode::OK
+    );
+    let unbound = route().layer(axum::middleware::from_fn_with_state(
+        JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        enforce_signed_scope,
+    ));
+    assert_eq!(
+        unbound.oneshot(file()).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+}
+
+/// A job's credential through the real `propagate` layer on an axum router
+/// serving its routes: its own session's view and a listed read reach their
+/// handlers; another session's view, a request with no stored correlation,
+/// a GET that writes, a document token and an assignment are refused before
+/// any handler runs.
+#[tokio::test]
+async fn a_job_credential_through_propagate_reaches_only_its_lists() {
+    use tower::ServiceExt;
+    struct Jobs;
+    #[async_trait]
+    impl CorrelationRepository for Jobs {
+        async fn create(
+            &self,
+            _: Uuid,
+            _: Uuid,
+            _: Option<crate::scope::SessionScope>,
+        ) -> Result<Uuid, CorrelationError> {
+            unreachable!()
+        }
+        async fn find(&self, id: Uuid) -> Result<Option<Correlation>, CorrelationError> {
+            let scope = match id.as_u128() {
+                0x10b => crate::scope::SessionScope::Job,
+                0x50 => crate::scope::SessionScope::NoSend,
+                _ => return Ok(None),
+            };
+            Ok(Some(Correlation {
+                session_id: Uuid::from_u128(0xa),
+                agent_id: Uuid::from_u128(3),
+                scope: Some(scope),
+            }))
+        }
+    }
+    let reached = Arc::new(AtomicUsize::new(0));
+    let handler = {
+        let reached = reached.clone();
+        move || {
+            let reached = reached.clone();
+            async move {
+                reached.fetch_add(1, Ordering::SeqCst);
+                StatusCode::OK
+            }
+        }
+    };
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Jobs),
+        specs: None,
+    }
+    .serving(&[
+        "agent-harness",
+        "cognition",
+        "auth",
+        "storage",
+        "properties",
+    ]);
+    let app = axum::Router::new()
+        .route(
+            "/agent-sessions/{session}/views",
+            axum::routing::post(handler.clone()),
+        )
+        .route(
+            "/agent-sessions/{session}",
+            axum::routing::get(handler.clone()),
+        )
+        .route("/memory", axum::routing::get(handler.clone()))
+        .route("/memory/explicit", axum::routing::patch(handler.clone()))
+        .route(
+            "/agent-sessions/{session}/name",
+            axum::routing::put(handler.clone()),
+        )
+        .route("/team/join/{invite}", axum::routing::get(handler.clone()))
+        .route(
+            "/documents/permissions_token/{document}",
+            axum::routing::post(handler.clone()),
+        )
+        .route(
+            "/properties/entities/{kind}/{entity}/{property}",
+            axum::routing::put(handler.clone()),
+        )
+        .layer(axum::middleware::from_fn_with_state(state, propagate));
+    let own = Uuid::from_u128(0xa);
+    let other = Uuid::from_u128(0xb);
+    let id = "0192f1a0-0000-7000-8000-000000000001";
+    let job = mint(
+        Some(Uuid::from_u128(0x10b)),
+        Some(Uuid::from_u128(3)),
+        None,
+        Some("job"),
+    );
+    let uncorrelated = mint(None, None, None, Some("job"));
+    let no_send = mint(
+        Some(Uuid::from_u128(0x50)),
+        Some(Uuid::from_u128(3)),
+        None,
+        Some("no_send"),
+    );
+    let cases = [
+        (
+            &job,
+            "POST",
+            format!("/agent-sessions/{own}/views"),
+            StatusCode::OK,
+        ),
+        (
+            &job,
+            "GET",
+            format!("/agent-sessions/{other}"),
+            StatusCode::OK,
+        ),
+        (
+            &job,
+            "POST",
+            format!("/agent-sessions/{other}/views"),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            &uncorrelated,
+            "POST",
+            format!("/agent-sessions/{own}/views"),
+            StatusCode::FORBIDDEN,
+        ),
+        (&job, "GET", "/memory".to_owned(), StatusCode::FORBIDDEN),
+        (
+            &job,
+            "GET",
+            format!("/team/join/{id}"),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            &job,
+            "POST",
+            format!("/documents/permissions_token/{id}"),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            &job,
+            "PUT",
+            format!("/properties/entities/task/{id}/{id}"),
+            StatusCode::FORBIDDEN,
+        ),
+        // A run that sends nothing plants nothing a later turn reads.
+        (
+            &no_send,
+            "PATCH",
+            "/memory/explicit".to_owned(),
+            StatusCode::FORBIDDEN,
+        ),
+        // A run that sends nothing renames its own session, not another.
+        (
+            &no_send,
+            "PUT",
+            format!("/agent-sessions/{own}/name"),
+            StatusCode::OK,
+        ),
+        (
+            &no_send,
+            "PUT",
+            format!("/agent-sessions/{other}/name"),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            &no_send,
+            "POST",
+            format!("/agent-sessions/{other}/views"),
+            StatusCode::FORBIDDEN,
+        ),
+    ];
+    for (bearer, method, path, expected) in cases {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(&path)
+                    .header("authorization", format!("Bearer {bearer}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{method} {path}");
+    }
+    assert_eq!(
+        reached.load(Ordering::SeqCst),
+        3,
+        "only the three allowed requests ran"
+    );
+}
+
+/// A request holding a dry-run token and a job's keeps the job's document
+/// token cap, though the dry run is the narrower scope it is named by.
+#[tokio::test]
+async fn every_accepted_scope_keeps_its_document_token_cap() {
+    use tower::ServiceExt;
+    let repository = Arc::new(Repository {
+        calls: AtomicUsize::new(0),
+    });
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository,
+        specs: None,
+    }
+    .serving(&["agent-harness"]);
+    let app = axum::Router::new()
+        .route(
+            "/agent-sessions/{session}",
+            axum::routing::get(|| async {
+                let seen = (
+                    crate::context::current_scope(),
+                    crate::context::caps_document_tokens_to_view(),
+                );
+                if seen == (Some(crate::scope::SessionScope::DryRun), true) {
+                    StatusCode::OK
+                } else {
+                    StatusCode::IM_A_TEAPOT
+                }
+            }),
+        )
+        .layer(axum::middleware::from_fn_with_state(state, propagate));
+    let dry_run = mint(None, None, None, Some("dry_run"));
+    let job = mint(None, None, None, Some("job"));
+    let cookie_name = macro_auth::credential::access_token_cookie_name();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/agent-sessions/0192f1a0-0000-7000-8000-000000000001")
+                .header("authorization", format!("Bearer {dry_run}"))
+                .header("cookie", format!("{cookie_name}={job}"))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+mod mention;

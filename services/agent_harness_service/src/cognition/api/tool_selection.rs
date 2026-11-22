@@ -20,12 +20,15 @@ static DATABASE_TOOL_USE_PROMPT: LazyLock<String> = LazyLock::new(|| {
     )
 });
 
-/// Whether the request's session is a scoped hidden one (a generation, a run
-/// that sends nothing, or a routine dry run) asking for tools. Its chats and completions take
-/// none: tools run here with the person's full access, past the scope its
-/// credential carries.
+/// Whether the request asks for tools from a scoped hidden session (a
+/// generation, a run that sends nothing, or a routine dry run) or from a
+/// channel-mention bot's program. Their chats and completions take none: tools
+/// run here with the person's full access, past the scope or the email refusal
+/// their credential carries.
 pub(crate) fn tools_refused_to_current_session(selection: &ToolSet) -> bool {
-    agent_correlation::context::current_scope().is_some() && !matches!(selection, ToolSet::None)
+    let restricted = agent_correlation::context::current_scope().is_some()
+        || agent_correlation::context::current_channel_mention().is_some();
+    restricted && !matches!(selection, ToolSet::None)
 }
 
 /// The system prompt that describes the tools `selection` grants.

@@ -104,11 +104,14 @@ pub async fn handler(
 
     let macro_api_token =
         macro_auth::macro_api_token::encode_macro_api_token(EncodeMacroApiTokenArgs {
+            channel_mention_channel_id: agent_correlation::context::current_mention_channel(),
             agent_correlation_id: None,
             agent_session_id: None,
             // Programs are refused above, so these claims are empty here; they
             // are still copied so a relaxed refusal could never shed them.
             routine_id: agent_correlation::context::current_routine(),
+            // Likewise a channel-mention program cannot shed its email refusal.
+            channel_mention_id: agent_correlation::context::current_channel_mention(),
             // No scope to keep: `AccountHolderOrInternal` refuses this route
             // to every credential that signs one (`ScopedMacroApiJwt`).
             agent_scope: None,

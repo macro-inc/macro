@@ -327,14 +327,24 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
         let environment = RunEnvironment {
             token,
             trace_headers: crate::code_mode::trace_headers(),
-            endpoints: self.endpoints.clone(),
+            // A dry run's credential signs the dry-run scope.
+            endpoints: crate::code_mode::run_endpoints(&self.endpoints, run.dry_run),
             session_id: None,
             execution_id: None,
             unattended: Some(Unattended {
                 arguments,
                 dry_run: run.dry_run,
             }),
-            egress: self.egress.egress(owner).await,
+            egress: self
+                .egress
+                .egress_for(
+                    owner,
+                    run.dry_run
+                        .then_some(agent_correlation::scope::SessionScope::DryRun),
+                )
+                .await,
+            // A routine dry run is also restricted by unattended.dry_run.
+            scoped: run.dry_run,
         };
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let started = Instant::now();

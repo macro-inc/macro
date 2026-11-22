@@ -32,6 +32,7 @@ google = ["dep:macro_service_urls", "dep:reqwest", "dep:urlencoding"]
 # that are not the calendar write authority.
 mutation-client = ["dep:reqwest"]
 inbound = [
+  "dep:agent_correlation",
   "dep:axum",
   "dep:macro_authorization",
   "dep:models_pagination",
@@ -44,6 +45,7 @@ postgres = ["dep:sqlx", "dep:tokio"]
 schema = ["dep:utoipa"]
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation", optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }

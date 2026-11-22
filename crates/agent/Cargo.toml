@@ -5,6 +5,8 @@ publish = false
 version = "0.1.0"
 
 [features]
+# Scripted completion models for tests composed by downstream hosts.
+test-utils = ["rig-core/test-utils", "rig-agent/test-utils"]
 debug-messages = []
 
 [dependencies]

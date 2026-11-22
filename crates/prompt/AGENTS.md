@@ -39,6 +39,14 @@ AI system prompts: one module per prompt section, each exporting a
   `ai_tools` inlines it from the generated catalog, and routed turns load it
   per entity. Only cross-cutting rules live in this crate. `code_mode.rs` is
   only the general code-mode section.
+  Its `REPLY_PROMPT` shares the general rules while keeping classic channel-bot
+  results in the reply and limiting ChannelMention programs to explicitly allowed
+  workspace reads. Channel/message reads are limited to the signed origin channel
+  and its threads; non-channel mentions use host-provided message context.
+  Email, other private chats, unified search, contacts, calendar, routine run
+  history and document enumeration are unavailable; known-id reads remain.
+  It overrides general write guidance, excludes memory reads,
+  web requests and connected apps, and leaves reply delivery to the trusted host.
 
 ## Tool contracts
 

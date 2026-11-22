@@ -136,6 +136,8 @@ threads, pins, recents, notifications, folders, activity.
 - Provision required `POSTHOG_API_KEY` before startup; the flag client
   evaluates `enable-programmatic-calls` per caller for the explicit call start,
   join, and leave routes; failures disable those routes.
+- Channel-mention replies run code mode; their programs run on the agent
+  harness through `HarnessUserExecutions` with the internal key.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 

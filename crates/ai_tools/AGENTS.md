@@ -117,3 +117,8 @@ Reviewed Linear/Jira imports also register read-only tracker connections in ever
 host. `src/import_trackers.rs` creates stable-id tasks via ordinary markdown and
 projects via `InitiativeServiceImpl::create_imported`, with Macro AI attribution;
 project, parent and label writes pass through the owning property services.
+
+- ChannelBot code mode keeps an exact native read-tool allowlist: SearchTools,
+  LoadTools, SelfKnowledge and ReadToolResult when present. Import planners,
+  ListCompanies and ReadActivity are unavailable there; ordinary sessions keep
+  their import planners. The mention responder carries scope attribution too.

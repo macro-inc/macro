@@ -48,21 +48,23 @@ impl IntoResponse for ConfirmedActionError {
     }
 }
 
-/// Decode a confirmed tool's arguments and run it as the caller. The tool
-/// itself refuses a blank confirmation.
+fn decode_confirmed<T: DeserializeOwned>(body: &[u8]) -> Result<T, ConfirmedActionError> {
+    serde_json::from_slice(body).map_err(|error| ConfirmedActionError {
+        status: StatusCode::BAD_REQUEST,
+        message: format!("Invalid arguments: {error}"),
+    })
+}
+
+/// Run the parsed confirmed tool as the caller. The tool refuses a blank confirmation.
 async fn run_confirmed<Tool, Context>(
     context: Context,
     user: &MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
-    body: &[u8],
+    tool: Tool,
 ) -> Result<Json<Tool::Output>, ConfirmedActionError>
 where
-    Tool: AsyncTool<Context> + DeserializeOwned,
+    Tool: AsyncTool<Context>,
     Context: Send + Sync + 'static,
 {
-    let tool: Tool = serde_json::from_slice(body).map_err(|error| ConfirmedActionError {
-        status: StatusCode::BAD_REQUEST,
-        message: format!("Invalid arguments: {error}"),
-    })?;
     tool.call(
         ServiceContext(context),
         RequestContext::new(user.authorization.user.macro_user_id.clone()),
@@ -92,10 +94,18 @@ pub async fn send_confirmed_email(
     user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     body: Bytes,
 ) -> Result<Json<SendEmailResponse>, ConfirmedActionError> {
+    // A channel-mention bot's program never sends: its direct tools could
+    // not, and its quoted approval is one it wrote itself.
+    if email::is_channel_mention_run() {
+        return Err(ConfirmedActionError {
+            status: StatusCode::FORBIDDEN,
+            message: email::CHANNEL_MENTION_SEND_REFUSAL.to_owned(),
+        });
+    }
     run_confirmed::<SendConfirmedEmail, _>(
         state.tool_service_context.email_tool_context.clone(),
         &user,
-        &body,
+        decode_confirmed(&body)?,
     )
     .await
 }
@@ -114,10 +124,22 @@ pub async fn create_confirmed_calendar_event(
     user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     body: Bytes,
 ) -> Result<Json<ToolCalendarEvent>, ConfirmedActionError> {
+    // Guests get invitations by email, which a channel-mention bot's program
+    // never sends; an event with no guests is still created.
+    let tool: CreateConfirmedCalendarEvent = decode_confirmed(&body)?;
+    if email::is_channel_mention_run() && !tool.event.attendees.is_empty() {
+        return Err(ConfirmedActionError {
+            status: StatusCode::FORBIDDEN,
+            message: CHANNEL_MENTION_INVITE_REFUSAL.to_owned(),
+        });
+    }
     run_confirmed::<CreateConfirmedCalendarEvent, _>(
         state.tool_service_context.calendar_tool_context.clone(),
         &user,
-        &body,
+        tool,
     )
     .await
 }
+
+/// Why a channel-mention program's event with guests is not created.
+pub(crate) const CHANNEL_MENTION_INVITE_REFUSAL: &str = "An event with guests cannot be created from a channel or document mention, because its invitations are email. Create it without guests, or write the event out in your reply and tell the user to invite people from Macro.";

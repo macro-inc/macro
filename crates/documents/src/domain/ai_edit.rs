@@ -63,6 +63,16 @@ pub(super) fn ensure_markdown<Level: RequiredPermission>(
     Ok(())
 }
 
+/// Skills become instructions for later unrestricted runs. Restricted runs
+/// may edit ordinary Markdown, but cannot replace those instructions.
+pub(super) fn ensure_markdown_edit(
+    access: &EntityAccessReceipt<EditAccessLevel>,
+    document: &DocumentBasic,
+) -> Result<(), DocumentError> {
+    ensure_markdown(access, document)?;
+    super::skill_access::ensure_skill_write(document.sub_type)
+}
+
 /// Mint the worker token at `access_level` and the cursor name for a receipt:
 /// the caller's user and bot, as `EditDocument` attributes its edits.
 pub(super) fn worker_token<Level: RequiredPermission>(
@@ -99,7 +109,7 @@ pub async fn edit_with_instructions<Worker: EditingWorkerService>(
     instructions: &str,
     fast: bool,
 ) -> Result<DocumentAiEdited, DocumentAiEditError> {
-    ensure_markdown(&access, document)?;
+    ensure_markdown_edit(&access, document)?;
     if instructions.trim().is_empty() {
         return Err(DocumentError::BadRequest("instructions are empty".to_string()).into());
     }

@@ -1991,3 +1991,45 @@ fn an_agents_program_is_not_a_user_principal() {
         ControlPrincipal::Program
     ));
 }
+
+#[tokio::test]
+async fn a_channel_mention_program_starts_and_prompts_no_agent_session() {
+    let app = axum::Router::new()
+        .route(
+            "/delegated",
+            axum::routing::get(|| async { StatusCode::OK }).post(|| async { StatusCode::OK }),
+        )
+        .layer(axum::middleware::from_fn(refuse_channel_mention_writes));
+    let call = |method: &str| {
+        Request::builder()
+            .method(method)
+            .uri("/delegated")
+            .body(Body::empty())
+            .unwrap()
+    };
+    let mention = agent_correlation::context::Attribution {
+        channel_mention_id: Some(uuid::Uuid::from_u128(1)),
+        ..Default::default()
+    };
+    let (write, read) = agent_correlation::context::scope_attribution(mention, async {
+        (
+            app.clone().oneshot(call("POST")).await.unwrap(),
+            app.clone().oneshot(call("GET")).await.unwrap(),
+        )
+    })
+    .await;
+    assert_eq!(write.status(), StatusCode::FORBIDDEN);
+    let refusal = axum::body::to_bytes(write.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        refusal,
+        agent_correlation::context::DELEGATION_REFUSAL.as_bytes()
+    );
+    assert_eq!(read.status(), StatusCode::OK);
+    // Without a mention, writes go through as before.
+    assert_eq!(
+        app.oneshot(call("POST")).await.unwrap().status(),
+        StatusCode::OK
+    );
+}

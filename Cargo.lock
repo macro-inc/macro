@@ -338,6 +338,7 @@ dependencies = [
 name = "agent_code_mode"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "agent_runtime_protocol",
  "agent_session",
  "ai_toolset",
@@ -357,14 +358,17 @@ dependencies = [
  "import",
  "jev",
  "lazy-regex",
+ "macro_auth",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mcp_client",
  "nom 8.0.0",
  "nutype",
  "pipedream_mcp",
+ "reqwest 0.13.4",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -379,10 +383,12 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "urlencoding",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -688,6 +694,7 @@ dependencies = [
  "bots",
  "calendar_events",
  "call",
+ "channel_bots",
  "channels",
  "chat",
  "chrono",
@@ -794,6 +801,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "reqwest 0.13.4",
+ "rig-core",
  "rmcp",
  "roles_and_permissions",
  "rootcause",
@@ -982,6 +990,7 @@ dependencies = [
  "activity",
  "agent",
  "agent-client-protocol",
+ "agent_correlation",
  "agent_fold",
  "agent_runtime_protocol",
  "ai_billing",
@@ -1071,6 +1080,7 @@ name = "agent_trigger"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "agent_correlation",
  "agent_session",
  "ai_billing",
  "ai_usage",
@@ -4015,6 +4025,7 @@ dependencies = [
 name = "calendar_events"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4066,6 +4077,7 @@ dependencies = [
 name = "calendar_scheduling"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4086,6 +4098,7 @@ dependencies = [
  "teams",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
@@ -4392,6 +4405,8 @@ name = "channel_bots"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "agent_code_mode",
+ "agent_correlation",
  "ai_billing",
  "ai_tools",
  "ai_toolset",
@@ -4403,6 +4418,8 @@ dependencies = [
  "channel_sender",
  "chrono",
  "chrono-tz",
+ "code_execution",
+ "cognition",
  "entity_access",
  "futures",
  "lexical_client",
@@ -4413,6 +4430,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -4752,6 +4770,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "strum 0.27.2",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -4933,6 +4952,7 @@ dependencies = [
 name = "collab_surface"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "axum",
  "chrono",
  "entity_access",
@@ -6849,6 +6869,7 @@ dependencies = [
  "account_manager",
  "activity",
  "agent_changes",
+ "agent_code_mode",
  "agent_correlation",
  "agent_session",
  "agent_session_realtime",
@@ -12884,6 +12905,7 @@ dependencies = [
 name = "macro_authorization"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "axum",
  "bot_id",
  "bot_token",
@@ -13522,6 +13544,7 @@ name = "memory"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "agent_correlation",
  "ai_billing",
  "ai_toolset",
  "ai_usage",
@@ -16717,6 +16740,7 @@ name = "properties"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -21172,6 +21196,8 @@ dependencies = [
 name = "task_templates"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
+ "bot_id",
  "chrono",
  "macro_uuid",
  "models_properties",

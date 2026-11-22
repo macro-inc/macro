@@ -244,12 +244,35 @@ where
             "/scheduled-actions/{id}/unusable-items",
             get(list_unusable_items::<S, Svc, Auth>),
         )
+        .route("/scheduled-actions/catalog", get(catalog::<S, Svc, Auth>))
+        .layer(axum::middleware::from_fn(refuse_channel_mention_writes))
+        // A program check validates input without saving or delegating work.
         .route(
             "/scheduled-actions/check",
             post(check_action::<S, Svc, Auth>),
         )
-        .route("/scheduled-actions/catalog", get(catalog::<S, Svc, Auth>))
         .with_state(state)
+}
+
+/// Refuses a channel-mention bot's program any write here: work it delegated
+/// would run with credentials that do not carry the mention, and so without
+/// its email refusal. Reads and the separately mounted program check stay open.
+pub(crate) async fn refuse_channel_mention_writes(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    if !request.method().is_safe() && agent_correlation::context::refuses_delegation() {
+        tracing::warn!(
+            channel_mention_id = ?agent_correlation::context::current_channel_mention(),
+            "refused a channel-mention program's delegation write"
+        );
+        return (
+            axum::http::StatusCode::FORBIDDEN,
+            agent_correlation::context::DELEGATION_REFUSAL,
+        )
+            .into_response();
+    }
+    next.run(request).await
 }
 
 async fn delete_user_actions<S, Svc, Auth>(

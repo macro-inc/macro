@@ -586,7 +586,8 @@ The AI's `CreateCalendarEvent` composer (chat, agent sessions, channel review ca
 offers the same selector; `Macro call` there maps to
 the tool's `addMacroCall`, and the call is created when the tool executes, before the
 event is written, so the single invitation already carries the link. The MCP server
-and channel bot accept `addMacroCall` directly. `addMacroCall` and `addGoogleMeet`
+accepts `addMacroCall` directly; the channel bot creates events through
+`calendar.createConfirmed`. `addMacroCall` and `addGoogleMeet`
 are mutually exclusive, and out-of-office entries accept neither.
 An existing event switches to a Macro call without being recreated:
 `UpdateCalendarEvent`'s `addMacroCall` and the SDK's `event.update({ macroCall: true })`
@@ -1632,3 +1633,17 @@ Calendar's New menus explain Event, Call, and Booking link with icons and muted 
 
 On touch, Calendar workspace controls float within the calendar pane, beside the
 sidebar, with an explicit safe-area top gutter. They do not cover the sidebar title.
+
+## Classic mention restrictions
+
+Classic Macro replies in channels and document discussions may create an event
+without guests. They cannot invite guests afterward, change or cancel existing
+events, RSVP, accept join requests, or confirm event replacements: these paths
+can email participants. Verify that a guestless confirmed create followed by
+`inviteGuests` returns 403 on the invitation and sends nothing. The same
+restriction applies to attendee patches, ordinary event patches, deletes and
+RSVPs. Host booking cancellation, rescheduling and approval are also refused,
+and mention programs can't obtain booking manage tokens. Ordinary host reads
+and booking insights stay available, as do calendar reads and adding a
+shared-event snapshot. Public booker cancellation and rescheduling keep their
+existing token authorization.

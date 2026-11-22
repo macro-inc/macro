@@ -186,6 +186,11 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
   the session repo, Redis budgets and
   the gateway `ui_command` send.
+  Channel-mention bots in document storage run their code-mode programs on
+  their own executor budget here, through `agent_code_mode`'s internal
+  `/internal/code-mode/user-executions` route. It is mounted only when Deno is
+  configured; a host without `DENO_BINARY` is unsupported for channel-mention
+  replies (startup warns, and their programs answer "not configured").
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service; a scoped
   session's code is refused it, and its turn calls no remote MCP tool
@@ -216,9 +221,16 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `POST /cognition/calendar/events/create-confirmed`
   (`CreateConfirmedCalendarEvent`, `calendar.createConfirmed`): the only
   immediate send or create open to an agent's program besides a review.
-  A scoped hidden session's chat messages and structured completions take
-  no tools (`tool_selection::tools_refused_to_current_session`): tools run
-  with the person's full access, past the scope its credential carries.
+  A channel-mention program is refused the send and any event with guests
+  (their invitations are email), checked on the same typed arguments the tool
+  executes; an event without guests is created. Calendar mutation routes also
+  refuse mention programs' existing-event updates, cancellations, RSVPs, guest
+  invitations, join-request answers and replacement confirmations.
+  Composed classic-mention responder tests live in `src/code_mode/test/channel_bot.rs`.
+  A scoped hidden session's or a channel-mention program's chat messages and
+  structured completions take no tools
+  (`tool_selection::tools_refused_to_current_session`): tools run with the
+  person's full access, past the scope or email refusal its credential carries.
 - `crates/web_search` owns `POST /web/search` and `/web/fetch` (mounted in
   `src/cognition/api.rs`, rate limited per user through cognition's Redis) and the
   `WebSearch`/`WebFetch` tools; `TAVILY_API_KEY` comes from Doppler `shared_ai`.
@@ -264,9 +276,18 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Code runs (session, public MCP and routine steps) reach the SDK hosts
   through the runner's loopback forwarder for users with the PostHog flag
   `enable-code-execution-egress-proxy` (`code_mode::EgressRollout`); with no
-  flag client, the flag off or the flags unreadable, they go directly. The
+  flag client, the flag off or the flags unreadable, they go directly. A
+  run under a default-deny scope (`job` or `channel_mention`)
+  always goes through an enforcing forwarder, whatever either flag
+  (`EgressRollout::egress_for`); a forwarder that can't start fails it
+  (`FailureCode::Egress`). Every scoped run (a scoped session or public-MCP
+  run, a routine dry run) gets no unfurl host (`run_endpoints`). The
   answer is cached per user for 60 s (10 s after a failed read), so a run
-  doesn't wait on PostHog (span `code_execution.egress_flag`, `cache`).
+  doesn't wait on PostHog (span `code_execution.egress_flag`, `cache`). The
+  forwarder refuses what it would refuse only where
+  `enable-code-execution-egress-enforce` is on too (fail-closed off); a run
+  whose scope is held to an allowlist (`SessionScope::enforces_egress`)
+  always enforces, flags or no flags (`EgressRollout::egress_for`).
   Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access (`mint_for_routine`):
@@ -372,6 +393,10 @@ produce events, independently of public session control.
 
 - `RenderCanvas` promotes only its explicit top-level `modelMedia` contract to at most two bounded native PNG blocks; pixels are removed from text and structured JSON, nested scene media is never promoted, and this adapter never fetches image URLs.
 
+- `src/code_mode/test/channel_mention_egress.rs`: actual mention issuance with
+  the egress flag off, plus a pinned-Deno unfurl refusal regression against a
+  local gateway stand-in. The Deno CI lane explicitly selects this module.
+
 ## Checks
 
 - `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Add
@@ -382,8 +407,10 @@ produce events, independently of public session control.
   `GITHUB_TOKEN` in the environment or a local `.env`.
 
 Code-mode credentials sign the session bot for SDK attribution and the selected
-user for API authorization; owner approval is required only for cross-account
-access. Lifecycle, runtime provider connections, billing, and memory stay owner-scoped.
+user for API authorization. The issuer returns its fresh correlation to the
+execution service to journal before the runner starts; connected-app requests
+must match that execution and its verified session and carry no scope.
+Owner approval is required only for cross-account access. Lifecycle, runtime provider connections, billing, and memory stay owner-scoped.
 
 ## Configuration and lifecycle
 

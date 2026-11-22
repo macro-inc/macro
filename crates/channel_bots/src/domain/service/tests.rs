@@ -13,7 +13,12 @@ struct Responder {
 
 #[async_trait]
 impl AgentResponder for Responder {
-    async fn respond(&self, user_id: &str, prompt: String) -> anyhow::Result<String> {
+    async fn respond(
+        &self,
+        user_id: &str,
+        _mention: crate::domain::models::BotMention,
+        prompt: String,
+    ) -> anyhow::Result<String> {
         assert_eq!(user_id, user().as_ref());
         self.prompts.lock().unwrap().push(prompt);
         if let Some(access) = &self.revoke {

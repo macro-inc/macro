@@ -248,3 +248,32 @@ async fn project_values_must_name_one_project() {
         ));
     }
 }
+
+/// No scoped request assigns an agent (or anyone but its own user): the
+/// agent's session would run with the person's full access.
+#[tokio::test]
+async fn a_scoped_request_assigns_no_agent() {
+    let agent = agent_reference();
+    let assign =
+        || refuse_assigning_others([agent.entity_id.as_str()], Some("macro|owner@example.com"));
+    assert!(assign().is_ok(), "an unscoped request may");
+    for scope in [
+        agent_correlation::scope::SessionScope::NoSend,
+        agent_correlation::scope::SessionScope::Job,
+        agent_correlation::scope::SessionScope::ChannelMention,
+        agent_correlation::scope::SessionScope::Generation,
+    ] {
+        let refused = agent_correlation::context::scope_attribution(
+            agent_correlation::context::Attribution {
+                scope: Some(scope),
+                ..Default::default()
+            },
+            async { assign() },
+        )
+        .await;
+        assert!(
+            matches!(refused, Err(PropertiesErr::PermissionDenied)),
+            "{scope:?}"
+        );
+    }
+}

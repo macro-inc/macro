@@ -92,6 +92,10 @@ as `agent_scope` so services with no database enforce it too; `mint_for`
 signs none of these claims. `mint_for_routine` signs the routine whose run the
 token acts for (and optionally an agent; `None` writes as the owner, and a
 scope, `dry_run` for a routine's dry run).
+`mint_for_channel_mention` signs the channel message a bot's program answers
+and the trusted origin channel (`channel_mention_channel_id`), with
+`agent_scope = channel_mention`; services enforce that scope while retaining the
+mention claim for attribution and the existing mention-specific refusals.
 
 ## Telemetry
 

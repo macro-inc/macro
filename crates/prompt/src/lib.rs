@@ -75,6 +75,12 @@ pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROM
     .compose(&user_tools::CODE_MODE_SESSION_PROMPT)
     .compose(&skills::PROMPT);
 
+/// Channel-mention bot instructions in code mode: [`DIRECT_TOOL_USE_PROMPT`]
+/// with the reply-only [`code_mode`] section.
+pub static CODE_MODE_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
+    .compose(&code_mode::REPLY_PROMPT)
+    .compose(&skills::PROMPT);
+
 /// Database question instructions for hosts that only discover and read data.
 pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
     BASE_PROMPT.compose(&databases::READ_ONLY_PROMPT);

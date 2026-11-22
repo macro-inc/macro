@@ -72,6 +72,8 @@ url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+agent_correlation = { path = "../agent_correlation", features = ["http"] }
+macro_auth = { path = "../macro_auth", features = ["testing"] }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 futures = { workspace = true }

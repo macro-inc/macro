@@ -67,6 +67,11 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 
 ## Gotchas
 
+- Refuse signed channel-mention programs on notification-producing mutation routes
+  (`inbound::mention`): existing-event updates, deletes, RSVPs, guest invitations,
+  join-request answers and replacement confirmations. Guestless confirmed creates,
+  reads and snapshot copies remain available; protect new notification paths too.
+
 - `CalendarEvent` is the stable Macro entity; external calendars and email
   invitations are sources feeding it, and recurrence instances are queryable
   occurrence projections, not separate events — don't model them as new entities.

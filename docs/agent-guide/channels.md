@@ -694,27 +694,30 @@ message; ordinary Markdown blockquotes remain presentation-only and do not count
 The composer always keeps an editable empty line after a block reference, including after
 the user deletes that line, so clicking below the reference can restore the text caret.
 
-The mention menu offers a single `@Macro`, which opens an agent session. The classic
-in-channel bot, which the menu no longer offers, answers in the thread. Its tool calls execute immediately — there is
-no composer or pending-confirmation card in a channel, so asking it to create a calendar
-event without attendees creates the event right away (unlike an agent session, where
-creation waits for the session owner to review it). For an event with attendees the bot is prompted to
-ask for confirmation in the thread first, since Google sends the invitations the moment the
-event is created — no invitation goes out from the initial request. It cannot draft or send
-email at all. A bot or agent reply posted for a person shares, as that person, the linked items
+The mention menu offers a single `@Macro`, which opens an agent session. It
+filters out the classic bot. API/SDK messages can still name the classic bot
+with its canonical bot mention; older clients or integrations posting as a user
+can use that same path. A human follow-up in an existing classic-bot thread can
+also request an inferred classic reply. Plain typed `@Macro` text alone is not
+an explicit mention. The classic bot answers in the thread using the read-only
+policy below: it cannot create calendar events, send email or change sharing,
+including after a confirmation.
+
+Session-backed agents and other bots may create items while answering. A reply
+posted for a person shares, as that person, the linked items
 (chips, attachments, or forms presented as cards in the reply's steps) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
 the thread before the reply, or, for a bot message that starts its own thread (a poll card
 posted top-level), their latest message in the channel. Forms and databases an agent creates
 through code mode (its SDK token) are attributed to its bot like native tool creations. Activity arrives asynchronously, so missing rows are re-checked
 after 5 and 30 seconds. Existing items it links, plain URLs, and bot posts with no person
-behind them share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
-share an existing item. Private and confidential calendar events stay unshared, and a
-calendar event can only be shared by someone who holds it on their own calendar.
-The bot's prompt carries the current date and time in the mentioning user's
-own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
-"EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
-bot asks before scheduling a specific clock time. Within the rollout, `@Macro` — plus
+behind them share nothing. Sharing an existing item is a separate agent action;
+classic Macro replies do not change sharing. Private and confidential calendar
+events stay unshared, and a calendar event can only be shared by someone who
+holds it on their own calendar. The classic bot's prompt carries the current
+date and time in the mentioning user's primary-calendar time zone, or UTC
+without a connected calendar, for interpreting read requests; it does not permit
+calendar writes. Within the rollout, `@Macro` — plus
 `@cursor` / `@codex` when available — opens
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
@@ -743,6 +746,34 @@ To verify, ask session-backed `@Macro` to post a mention of `@cursor`, then have
 Cursor post a mention of session-backed Macro in the same thread. Check that the
 first mention opens Cursor and the return mention continues Macro's existing
 session. Repeat with revoked channel access and confirm no new work starts.
+
+Classic `@Macro` replies use read-only code mode on the agent harness. The
+channel shows a thinking placeholder followed by the final answer and links;
+execution steps are not rendered. Verify a mention that reads a supplied
+test document under the mentioning account, then ask it to create a task and
+confirm that no task or delegated agent session is created. Programs use a signed
+ChannelMention credential with an explicit read allowlist and no program writes.
+Channel/message reads are restricted to the original channel and its threads;
+legacy credentials without a signed channel cannot read channels or messages.
+A DM is a channel parent and retains its own thread reads. Non-channel
+comments (documents/tasks, initiatives, CRM or calls) use the host-provided
+conversation context and cannot fetch message history through the API.
+Email, other private-chat reads, unified search, contacts, calendar data,
+routine run history and document enumeration are unavailable under this
+default policy. Authenticated document reads by known id or slug remain;
+the ids are not cryptographically bound to conversation references. The native reply tools only discover tools, load them,
+read self-knowledge or retrieve tool results; import planners are unavailable.
+They cannot create or edit documents or tasks, assign bots, send or schedule
+messages or email, mutate calendar events or bookings, change sharing or
+configuration, mint permission/upload tokens, start sessions or routines, query
+memory, fetch/search the web, or call connected apps. The host supplies context
+and posts the final reply outside this credential. Bot-authored posts cannot
+start a classic Macro program through explicit or inferred triggers. Human
+triggers remain available. Requests for unavailable actions should explain the
+limitation without performing them, including after an approving follow-up.
+This applies on desktop and mobile and requires the real harness executor and
+egress forwarder for an end-to-end check. Background NoSend suggestion runs are
+a separate scope and retain ordinary own-document edits.
 
 When the backend is configured with AI usage enforcement, a rejected classic
 `@Macro` request gets a thread reply explaining the allowance failure (for example,
@@ -882,7 +913,7 @@ bottom of the area carries the other decisions, refusal first: `Dismiss · Open 
 for a tool draft, `Decline · Submit · Open in session` (or `Open` for a URL) for a question.
 Only the session's owner can act; other viewers see the question read-only and the header
 names who is being waited on. Once answered, the area shows the agent's passage again.
-A prompt the agent read out of a channel or document thread opens no review card at all:
+For session-backed agents, a prompt read out of a channel or document thread opens no review card at all:
 the reply writes the whole email or calendar event into the thread and asks whether to go
 ahead, and a reply in that same thread approving it ("yes, send it" / "go ahead") is the
 confirmation - the agent then sends or creates directly (`SendConfirmedEmail` and
@@ -890,6 +921,8 @@ confirmation - the agent then sends or creates directly (`SendConfirmedEmail` an
 `EmailMessage.forwardConfirmed`, `EmailDraft.send` and `macro.calendar.createConfirmed`),
 with no session visit needed. Being asked to send or
 schedule something only produces the draft; nothing goes out before that approving reply.
+Classic `@Macro` replies remain read-only even after an approving follow-up; the
+confirmation behavior above belongs to session-backed agents, not classic replies.
 Images made with `GenerateImage` are saved to static file service. The bot embeds
 the returned URL as a Markdown image in its channel reply; generated images have
 no document mention or filename card.

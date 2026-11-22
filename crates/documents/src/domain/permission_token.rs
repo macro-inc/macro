@@ -26,6 +26,13 @@ pub(crate) struct PermissionTokenClaims {
     iss: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) actor: Option<String>,
+    /// The scope the token was minted under, so a holder can tell its grant
+    /// was narrowed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) agent_scope: Option<String>,
+    /// Original verified mention attribution, retained in the signed grant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) channel_mention_id: Option<uuid::Uuid>,
 }
 
 /// Sign a document permission token for the given user and document.
@@ -41,6 +48,14 @@ pub fn encode_permission_token(
         .transpose()
         .map_err(|e| DocumentError::Internal(anyhow::anyhow!("invalid user id: {e}")))?;
 
+    let mention = agent_correlation::context::current_channel_mention();
+    let scope = agent_correlation::context::current_scope();
+    let access_level = if agent_correlation::context::caps_document_tokens_to_view() {
+        AccessLevel::View
+    } else {
+        access_level
+    };
+
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -55,6 +70,8 @@ pub fn encode_permission_token(
             exp: now + TOKEN_TTL_SECS,
             iss: ISSUER.to_string(),
             actor,
+            agent_scope: scope.map(|scope| scope.as_str().to_owned()),
+            channel_mention_id: mention,
         },
         jwt_secret,
     )?)

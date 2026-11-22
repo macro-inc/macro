@@ -285,14 +285,34 @@ impl MacroApiTokenSigner {
         correlation: Option<SignedCorrelation>,
     ) -> Result<String, EgressError> {
         let claims = SignedClaims {
+            channel_mention_channel_id: None,
             agent_id,
             agent_via,
             agent_session_id,
             agent_correlation_id: correlation.map(|correlation| correlation.id),
             agent_scope: correlation.and_then(|correlation| correlation.scope),
             routine_id: None,
+            channel_mention_id: None,
         };
         self.sign(owner, lifetime_seconds, claims).await
+    }
+
+    /// Mint a credential for one program answering a channel mention: the
+    /// mentioning user's access, attributed to `agent_id`, signed with the
+    /// mention and trusted origin channel, with the ChannelMention allowlist
+    /// enforced independently of the program.
+    #[tracing::instrument(skip_all, err, fields(%agent_id, %channel_mention_id, ?channel_mention_channel_id))]
+    pub async fn mint_for_channel_mention(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        lifetime_seconds: usize,
+        agent_id: macro_uuid::Uuid,
+        channel_mention_id: uuid::Uuid,
+        channel_mention_channel_id: Option<uuid::Uuid>,
+    ) -> Result<String, EgressError> {
+        let claims =
+            SignedClaims::channel_mention(agent_id, channel_mention_id, channel_mention_channel_id);
+        self.sign(user, lifetime_seconds, claims).await
     }
 
     /// Mint an owner credential for one run of `routine_id`, signed with that
@@ -319,14 +339,6 @@ impl MacroApiTokenSigner {
         lifetime_seconds: usize,
         claims: SignedClaims,
     ) -> Result<String, EgressError> {
-        let SignedClaims {
-            agent_id,
-            agent_via,
-            agent_session_id,
-            agent_correlation_id,
-            agent_scope,
-            routine_id,
-        } = claims;
         if !(1..=MINTED_TOKEN_LIFETIME_SECONDS).contains(&lifetime_seconds) {
             return Err(EgressError::Internal(rootcause::report!(
                 "invalid token lifetime"
@@ -359,10 +371,40 @@ impl MacroApiTokenSigner {
             ))
         })?;
 
+        self.encode(
+            lifetime_seconds,
+            claims,
+            fusion_root_id.to_string(),
+            macro_user_id,
+            organization_id,
+        )
+    }
+
+    // Kept separate from identity lookup so the exact signing path can be
+    // exercised without a database.
+    fn encode(
+        &self,
+        lifetime_seconds: usize,
+        claims: SignedClaims,
+        fusionauth_id: String,
+        macro_user_id: String,
+        organization_id: Option<i32>,
+    ) -> Result<String, EgressError> {
+        let SignedClaims {
+            agent_id,
+            agent_via,
+            agent_session_id,
+            agent_correlation_id,
+            agent_scope,
+            routine_id,
+            channel_mention_id,
+            channel_mention_channel_id,
+        } = claims;
         encode_macro_api_token(EncodeMacroApiTokenArgs {
+            channel_mention_channel_id,
             agent_correlation_id,
             agent_session_id,
-            fusionauth_id: fusion_root_id.to_string(),
+            fusionauth_id,
             macro_user_id,
             organization_id,
             issuer: self.issuer.clone(),
@@ -371,6 +413,7 @@ impl MacroApiTokenSigner {
             agent_id,
             agent_via,
             routine_id,
+            channel_mention_id,
             agent_scope: agent_scope.map(|scope| scope.as_str().to_owned()),
         })
         .map_err(|error| {
@@ -400,9 +443,28 @@ struct SignedClaims {
     agent_correlation_id: Option<uuid::Uuid>,
     agent_scope: Option<agent_correlation::scope::SessionScope>,
     routine_id: Option<macro_uuid::Uuid>,
+    channel_mention_id: Option<uuid::Uuid>,
+    channel_mention_channel_id: Option<uuid::Uuid>,
 }
 
 impl SignedClaims {
+    fn channel_mention(
+        agent_id: macro_uuid::Uuid,
+        channel_mention_id: uuid::Uuid,
+        channel_mention_channel_id: Option<uuid::Uuid>,
+    ) -> Self {
+        Self {
+            agent_id: Some(agent_id),
+            agent_via: None,
+            agent_session_id: None,
+            agent_correlation_id: None,
+            agent_scope: Some(agent_correlation::scope::SessionScope::ChannelMention),
+            routine_id: None,
+            channel_mention_id: Some(channel_mention_id),
+            channel_mention_channel_id,
+        }
+    }
+
     /// What a routine run's token signs: its routine, its agent if any, and
     /// its scope if narrower.
     fn routine(
@@ -417,6 +479,8 @@ impl SignedClaims {
             agent_correlation_id: None,
             agent_scope: scope,
             routine_id: Some(routine_id),
+            channel_mention_id: None,
+            channel_mention_channel_id: None,
         }
     }
 }

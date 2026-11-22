@@ -582,6 +582,8 @@ async fn complete(
     let mut parts = state.engine.run_turn(TurnRequest {
         purpose: TurnPurpose::Summary,
         delivery: state.delivery,
+        // A summary reads no memory.
+        memory_reader: memory::domain::MemoryReader::Program,
         session_id: state.session_id,
         awaiting: Arc::new(AwaitingUser::default()),
         owner: state.owner.clone(),

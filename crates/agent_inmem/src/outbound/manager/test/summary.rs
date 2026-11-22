@@ -133,6 +133,7 @@ async fn a_restarted_manager_reads_a_summary_in_place_of_the_turns_it_covered() 
         .expect("the session row should create");
     let on_model = |acp_session_id| SessionFacts {
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        memory_reader: memory::domain::MemoryReader::Person,
         model: MODEL.to_owned(),
         acp_session_id,
         ..facts(id)

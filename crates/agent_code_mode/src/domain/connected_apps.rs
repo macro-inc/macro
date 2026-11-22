@@ -18,6 +18,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
 
+use super::execution_access::{
+    Refusal, check_binding, credential_for_session, record_backend_error,
+};
 use super::{CodeModeError, ExecutionId, ExecutionStatus, ExecutionStore, ExecutionTurns};
 
 #[cfg(test)]
@@ -201,7 +204,10 @@ impl ConnectedAppService {
     /// Admit only a running execution of the session's current turn, so a
     /// finished program, a replayed one or another turn cannot spend it, and
     /// only a caller holding the account that execution was approved to act
-    /// as: its credential names that account, and nobody else's may spend it.
+    /// as. The verified correlation and session must match the credential
+    /// recorded before this execution started; scoped credentials are never
+    /// admitted, even when their scope name is unknown.
+    #[tracing::instrument(skip_all, fields(code_execution_id = %execution, agent_session_id = tracing::field::Empty, refusal = tracing::field::Empty, error = tracing::field::Empty, otel.status_code = tracing::field::Empty))]
     async fn admit(
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
@@ -210,24 +216,39 @@ impl ConnectedAppService {
     ) -> Result<ConnectedAppUse, CodeModeError> {
         let session =
             super::reviews::session_id(access.entity().entity_type, &access.entity().entity_id)?;
+        tracing::Span::current().record("agent_session_id", tracing::field::display(session));
+        let correlation = credential_for_session(session)?;
         if access.acting_user_id() != Some(caller) {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::WrongAccount.error());
         }
-        let record = self.store.get(session, execution).await?;
-        let active = self.turns.active(session).await?;
+        let record = self
+            .store
+            .get(session, execution)
+            .await
+            .inspect_err(record_backend_error)?;
+        check_binding(&record, correlation)?;
+        let active = self
+            .turns
+            .active(session)
+            .await
+            .inspect_err(record_backend_error)?;
         let (Some(acting_as), Some(turn)) = (record.acting_as, record.turn_id) else {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::NotRunning.error());
         };
         if record.status != ExecutionStatus::Running || active != Some(turn) {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::NotRunning.error());
         }
 
-        let accounts = self.tools.accounts(session).await?;
+        let accounts = self
+            .tools
+            .accounts(session)
+            .await
+            .inspect_err(record_backend_error)?;
         let user = acting_as
             .resolve(&accounts.owner, accounts.requester.as_ref())
-            .map_err(|_| CodeModeError::Forbidden)?;
+            .map_err(|_| Refusal::WrongAccount.error())?;
         if user != caller {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::WrongAccount.error());
         }
         Ok(ConnectedAppUse {
             session,

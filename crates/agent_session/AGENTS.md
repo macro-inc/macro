@@ -184,6 +184,10 @@ skips the turn before any model call; unset or unreadable, summaries run.
 
 ## Gotchas
 
+- The create and control routers refuse a channel-mention bot's program every
+  write (`refuse_channel_mention_writes`): a session it started or prompted
+  would mint credentials without the mention, and so without its email
+  refusal. Reads stay open.
 - Persist `AcpReady` through the fenced session log before opening or restoring
   a session on an already-initialized shared runtime; MCP and model-gateway
   credentials remain revoked while the durable status is disconnected.

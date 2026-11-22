@@ -367,3 +367,45 @@ async fn every_documented_example_type_checks() {
     assert_eq!(examples, 9);
     service.shutdown().await;
 }
+
+/// A lost receipt must reach the model as an uncertain outcome, not an unavailable runner.
+#[tokio::test]
+async fn a_user_tool_reports_that_an_unconfirmed_program_may_have_run() {
+    use ai_toolset::ToolSet;
+
+    struct LostReceipt;
+    #[async_trait]
+    impl UserCodeMode for LostReceipt {
+        async fn execute(
+            &self,
+            _: &MacroUserIdStr<'static>,
+            _: &ai_toolset::ToolCaller,
+            _: Option<uuid::Uuid>,
+            _: ExecuteRequest,
+            _: CancellationToken,
+        ) -> Result<UserExecutionReceipt, CodeModeError> {
+            Err(CodeModeError::Unconfirmed)
+        }
+    }
+    let error = user_toolset()
+        .try_tool_call(
+            UserCodeModeToolContext {
+                service: Arc::new(LostReceipt),
+                cognition: None,
+                caller: ai_toolset::ToolCaller::Agent(bot_id::MACRO_AI_BOT_ID),
+                session: None,
+            },
+            RequestContext::new(user()),
+            "ExecuteCode",
+            &serde_json::json!({"source": "export async function main() { return {data: 1}; }"}),
+        )
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert!(error.description.contains("may have run"));
+    assert!(
+        error
+            .description
+            .contains("check what it was meant to change before running it again")
+    );
+}

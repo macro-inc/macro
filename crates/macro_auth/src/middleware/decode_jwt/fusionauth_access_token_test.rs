@@ -92,6 +92,7 @@ fn tokens_not_issued_by_fusionauth_for_this_application_are_rejected() {
     );
     let other_payload = other_user.split('.').nth(1).unwrap();
     let macro_api_token = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        channel_mention_channel_id: None,
         agent_correlation_id: None,
         agent_session_id: None,
         fusionauth_id: "fusion-user".into(),
@@ -103,6 +104,7 @@ fn tokens_not_issued_by_fusionauth_for_this_application_are_rejected() {
         agent_id: None,
         agent_via: None,
         routine_id: None,
+        channel_mention_id: None,
         agent_scope: None,
     })
     .unwrap();
