@@ -12,6 +12,8 @@ word docs, Illustrator/Photoshop files).
   Cargo features gate each module.
 - `src/domain/service.rs` + `src/domain/ports.rs`: orchestration and the ports
   adapters implement.
+- `src/domain/restore.rs`: owner-receipt restoration before a lazy persistence
+  operation; the legacy HTTP adapter keeps its existing restoration transaction.
 - `src/domain/service/lifecycle.rs`: `DocumentLifecycleReads` supplies physical
   existence/trash facts to trusted imports through the owning repository port.
   Missing rows are false; read failures propagate. No viewer or content access.

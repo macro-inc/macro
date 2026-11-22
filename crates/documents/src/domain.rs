@@ -44,6 +44,9 @@ pub mod notion_markdown;
 #[cfg(feature = "axum")]
 pub mod permission_token;
 pub mod response;
+/// Restore a deleted document through its owner receipt and persistence operation.
+#[cfg(feature = "ports")]
+pub mod restore;
 /// A skill's one-line routing description.
 pub mod skill_description;
 /// Comment threads anchored to quoted text, for the tool and HTTP callers.

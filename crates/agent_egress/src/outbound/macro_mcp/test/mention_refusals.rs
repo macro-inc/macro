@@ -116,14 +116,14 @@ async fn refuses_signed_request_before_dispatch(claims: SignedClaims, method: &s
 
 #[tokio::test]
 async fn mention_refuses_direct_bot_assignee_before_any_handler_runs() {
-    refuses_before_dispatch("PUT", "/properties/entities/document/00000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000002").await;
+    refuses_before_dispatch("PUT", "/properties/entities/DOCUMENT/00000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000002").await;
 }
 
 #[tokio::test]
 async fn mention_refuses_bulk_bot_assignees_before_any_handler_runs() {
     refuses_before_dispatch(
         "POST",
-        "/properties/entities/document/00000000-0000-0000-0000-000000000001/options/bulk",
+        "/properties/entities/DOCUMENT/00000000-0000-0000-0000-000000000001/options/bulk",
     )
     .await;
     refuses_before_dispatch("POST", "/properties/options/bulk").await;
@@ -131,12 +131,12 @@ async fn mention_refuses_bulk_bot_assignees_before_any_handler_runs() {
 
 #[tokio::test]
 async fn mention_refuses_bot_assignee_option_before_any_handler_runs() {
-    refuses_before_dispatch("POST", "/properties/entities/document/00000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000002/options/00000000-0000-0000-0000-000000000003").await;
+    refuses_before_dispatch("POST", "/properties/entities/DOCUMENT/00000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000002/options/00000000-0000-0000-0000-000000000003").await;
 }
 
 #[tokio::test]
 async fn mention_refuses_project_inherited_bot_assignees_before_any_handler_runs() {
-    refuses_before_dispatch("PUT", "/properties/entities/project/00000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000002").await;
+    refuses_before_dispatch("PUT", "/properties/entities/PROJECT/00000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000002").await;
 }
 
 #[tokio::test]
