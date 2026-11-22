@@ -11551,6 +11551,17 @@
             "type": "string",
             "description": "What the agent is responsible for."
           },
+          "movingTo": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HarnessId",
+                "description": "The owner's machine the agent is moving to while its status is\n`moving` (the old machine, `harness_id`, saves its memory and stops\nit). Absent otherwise."
+              }
+            ]
+          },
           "name": {
             "type": "string",
             "description": "Display name."
@@ -11635,6 +11646,7 @@
         "enum": [
           "provisioning",
           "downloading",
+          "moving",
           "starting",
           "running",
           "paused",

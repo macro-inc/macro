@@ -131,7 +131,9 @@ first marks the row's `checkpoint`; the old machine stops the agent (its last
 push), then `finish_checkpoint` (internal `.../{install}/checkpointed`, or at
 once when the machine is offline, or after `CHECKPOINT_TIMEOUT`) makes a new
 install id and generation on the target, or revokes and removes the agent
-with its install last. A finished move sets `revoke_pending`: nothing is
+with its install last. While a move's checkpoint is open the agent lists as
+`moving` with `movingTo` set to the target (`harnessId` is still the old
+machine, which only saves its memory). A finished move sets `revoke_pending`: nothing is
 delivered until the old machine's keys and repository token are revoked. A
 revoke runs under `begin_revoke`, which locks the row and rechecks
 `revoke_pending` (`SELECT … AND revoke_pending FOR UPDATE`) and clears it in

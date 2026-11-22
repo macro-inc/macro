@@ -353,6 +353,7 @@ export * from './teamAgentErrorBodyResource';
 export * from './teamAgentErrorBodySize';
 export * from './teamAgentHarnessId';
 export * from './teamAgentInstallProblem';
+export * from './teamAgentMovingTo';
 export * from './teamAgentStatus';
 export * from './teamAgents';
 export * from './teamAutoJoinDomain';

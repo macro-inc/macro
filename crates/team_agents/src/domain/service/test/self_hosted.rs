@@ -295,8 +295,15 @@ async fn a_move_stops_the_old_machine_first_and_mints_nothing_until_it_stopped()
         .unwrap();
 
     // The old machine is told; nothing is revoked or minted yet, and
-    // nothing is delivered while it checkpoints.
+    // nothing is delivered while it checkpoints. The agent is listed as
+    // moving to the new machine, still on the old one.
     assert_eq!(moving.harness_id, Some(LAPTOP));
+    assert_eq!(moving.moving_to, Some(DESKTOP));
+    assert_eq!(moving.status, TeamAgentStatus::Moving);
+    let listed_moving = listed(&service, &agent).await;
+    assert_eq!(listed_moving.status, TeamAgentStatus::Moving);
+    assert_eq!(listed_moving.harness_id, Some(LAPTOP));
+    assert_eq!(listed_moving.moving_to, Some(DESKTOP));
     assert_eq!(
         journal.entries()[before..],
         [
@@ -322,6 +329,7 @@ async fn a_move_stops_the_old_machine_first_and_mints_nothing_until_it_stopped()
         .unwrap()
         .unwrap();
     assert_eq!(moved.harness_id, DESKTOP);
+    assert_eq!(listed(&service, &agent).await.moving_to, None);
     assert_ne!(moved.install_id, old.install_id);
     assert_eq!(moved.generation, 2);
     assert_eq!(

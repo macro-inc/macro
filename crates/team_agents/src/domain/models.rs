@@ -35,6 +35,9 @@ pub enum TeamAgentStatus {
     Provisioning,
     /// Its own machine is fetching the teammate runtime image.
     Downloading,
+    /// Moving between its owner's machines: the old one saves its memory
+    /// and stops it, then it starts on `moving_to`.
+    Moving,
     /// Its computer is up, and the agent hasn't reported itself online yet.
     Starting,
     /// Its computer is up, and the agent has reported itself online.
@@ -84,6 +87,11 @@ pub struct TeamAgent {
     /// otherwise, and for an agent on a Macro computer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub install_problem: Option<InstallProblem>,
+    /// The owner's machine the agent is moving to while its status is
+    /// `moving` (the old machine, `harness_id`, saves its memory and stops
+    /// it). Absent otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub moving_to: Option<HarnessId>,
     /// When the agent was invited.
     pub created_at: DateTime<Utc>,
 }

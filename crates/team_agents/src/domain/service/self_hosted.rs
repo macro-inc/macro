@@ -138,6 +138,7 @@ where
             harness_id: Some(harness),
             status: TeamAgentStatus::Provisioning,
             install_problem: None,
+            moving_to: None,
             created_at: chrono::Utc::now(),
         })
     }
@@ -148,7 +149,7 @@ where
         install: &TeammateInstallRecord,
     ) -> TeamAgent {
         let status = match install.checkpoint {
-            Some((Checkpoint::Moving { .. }, _)) => TeamAgentStatus::Provisioning,
+            Some((Checkpoint::Moving { .. }, _)) => TeamAgentStatus::Moving,
             Some((Checkpoint::Removing, _)) => TeamAgentStatus::Paused,
             None if install.parked() => TeamAgentStatus::Paused,
             None => {
@@ -166,6 +167,10 @@ where
             harness_id: Some(install.harness_id),
             status,
             install_problem: install_problem(install),
+            moving_to: match install.checkpoint {
+                Some((Checkpoint::Moving { to }, _)) => Some(to),
+                _ => None,
+            },
             created_at: record.created_at,
         }
     }

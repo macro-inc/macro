@@ -2680,6 +2680,7 @@ export type TeamAgent = {
      * What the agent is responsible for.
      */
     jobDescription: string;
+    movingTo?: null | HarnessId;
     /**
      * Display name.
      */
@@ -2720,7 +2721,7 @@ export type TeamAgentErrorBody = {
 /**
  * Where an agent teammate is, from its computer.
  */
-export type TeamAgentStatus = 'provisioning' | 'downloading' | 'starting' | 'running' | 'paused' | 'unhealthy' | 'failed' | 'released';
+export type TeamAgentStatus = 'provisioning' | 'downloading' | 'moving' | 'starting' | 'running' | 'paused' | 'unhealthy' | 'failed' | 'released';
 
 /**
  * A team's agents.

@@ -608,6 +608,7 @@ where
             harness_id: None,
             status,
             install_problem: None,
+            moving_to: None,
             created_at: record.created_at,
         })
     }
@@ -717,6 +718,7 @@ where
             harness_id: None,
             status: TeamAgentStatus::Provisioning,
             install_problem: None,
+            moving_to: None,
             created_at: chrono::Utc::now(),
         })
     }
