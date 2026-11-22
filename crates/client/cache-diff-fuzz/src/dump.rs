@@ -23,11 +23,14 @@ use turso_core::{
 ///
 /// Each `(column, value)` in `ignore` leaves out the rows whose `column` holds
 /// `value` as text, in every table that has that column, everywhere above too.
+/// Each name in `json_facts` drops every fact `{"attribute":NAME,"value":N}`
+/// from stored text, as optimistic layers keep the index documents they project.
 pub fn tables(
     path: &Path,
     decoded: bool,
     facts: bool,
     ignore: &[(String, String)],
+    json_facts: &[String],
 ) -> Result<BTreeMap<String, Vec<String>>, String> {
     let io: Arc<dyn IO> = Arc::new(PlatformIO::new().map_err(|error| error.to_string())?);
     let path = path.to_str().ok_or("path is not UTF-8")?;
@@ -49,7 +52,11 @@ pub fn tables(
         let mut table = Vec::new();
         // A JSON array, so no value can run into the next one.
         rows(&mut select(&connection, ignore, &name, "*")?, |values| {
-            table.push(row_text(values.iter().map(render)));
+            table.push(row_text(
+                values
+                    .iter()
+                    .map(|value| without_json_facts(render(value), json_facts)),
+            ));
         })?;
         out.insert(name, table);
     }
@@ -322,6 +329,30 @@ fn select(
     connection
         .prepare(format!("SELECT {columns} FROM {name}{clause}"))
         .map_err(|error| format!("{table}: {error}"))
+}
+
+/// Drops each `{"attribute":NAME,"value":N}` object, and a comma beside it, for
+/// each name in `names`.
+fn without_json_facts(mut text: String, names: &[String]) -> String {
+    for name in names {
+        let needle = format!(
+            "{{\"attribute\":{},\"value\":",
+            serde_json::Value::from(name.as_str())
+        );
+        while let Some(start) = text.find(&needle) {
+            let Some(length) = text[start..].find('}') else {
+                break;
+            };
+            let (mut from, mut to) = (start, start + length + 1);
+            if text[..from].ends_with(',') {
+                from -= 1;
+            } else if text[to..].starts_with(',') {
+                to += 1;
+            }
+            text.replace_range(from..to, "");
+        }
+    }
+    text
 }
 
 fn quoted(name: &str, quote: char) -> String {

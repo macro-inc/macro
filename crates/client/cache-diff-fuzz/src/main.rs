@@ -72,6 +72,11 @@ struct Args {
     /// (`key=NAME`).
     #[arg(long, value_name = "COLUMN=VALUE", value_parser = ignore_rows)]
     ignore_rows: Vec<(String, String)>,
+    /// Drop every `{"attribute":NAME,"value":N}` fact from stored text
+    /// (repeatable; see `dump::tables`): optimistic layers keep the index
+    /// documents they project, so a new derived sort fact shows there too.
+    #[arg(long, value_name = "NAME")]
+    ignore_json_fact: Vec<String>,
     /// Compare responses without their `sourceHash` (an upgrade to a build that
     /// hashes records differently rehashes unchanged ones).
     #[arg(long)]
@@ -263,6 +268,7 @@ fn run(
         args.decoded_records,
         args.decoded_facts,
         &args.ignore_rows,
+        &args.ignore_json_fact,
     )
     .map_err(|error| rootcause::report!("{error}"))?;
     for (table, rows) in tables {
