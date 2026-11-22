@@ -55,6 +55,11 @@ export function ToastRegion() {
   const [desktopStack, setDesktopStack] = createSignal<HTMLDivElement>();
   const desktopLift = createToastLift(desktopStack);
   const mobileLift = createToastLift(mobileTransientStack);
+  const [mobilePromptStack, setMobilePromptStack] =
+    createSignal<HTMLDivElement>();
+  // With no transient toast below it, a prompt sits low enough to reach a
+  // composer on its own, so its stack is measured too.
+  const mobilePromptLift = createToastLift(mobilePromptStack);
 
   return (
     <Portal>
@@ -141,8 +146,9 @@ export function ToastRegion() {
         }}
       >
         <MobileToastStack
+          ref={setMobilePromptStack}
           class="z-mobile-prompt-region"
-          lift={`${mobileTransientSize.height ?? 0}px + 1.25rem + ${mobileLift()}px`}
+          lift={`${mobileTransientSize.height ?? 0}px + 1.25rem + ${mobileLift()}px + ${mobilePromptLift()}px`}
         >
           <Toast.Region
             class="macro-toast-region"

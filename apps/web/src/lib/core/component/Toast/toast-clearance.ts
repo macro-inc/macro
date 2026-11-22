@@ -49,7 +49,8 @@ function isShown(composer: HTMLElement): boolean {
  * The stack is measured where it would sit unlifted: its current bottom plus
  * the lift already applied. A composer it overlaps there (sideways and
  * vertically) pushes it up until its bottom is just above that composer's
- * top, but never so far that the stack's top leaves the window. A stack with
+ * top, and so does any composer the raised stack then reaches, but never so
+ * far that the stack's top leaves the window. A stack with
  * no height overlaps nothing and rests at its usual spot.
  *
  * It re-measures when the stack or a composer changes size (a toast arrives,
@@ -72,18 +73,26 @@ export function createToastLift(
 
     const bottom = column.bottom + lift();
     const top = bottom - column.height;
+    const shown = composers()
+      .filter(isShown)
+      .map((composer) => composer.getBoundingClientRect())
+      .filter((rect) => rect.left < column.right && rect.right > column.left);
 
+    // Rising above one composer can land the stack on another higher up, so
+    // lift again from the raised position until nothing new overlaps. Each
+    // pass clears at least one more composer, so this ends within one pass
+    // per composer.
     let needed = 0;
-    for (const composer of composers()) {
-      if (!isShown(composer)) continue;
-
-      const rect = composer.getBoundingClientRect();
-      const overlapsSideways =
-        rect.left < column.right && rect.right > column.left;
-      const overlapsVertically = rect.top < bottom && rect.bottom > top;
-      if (!overlapsSideways || !overlapsVertically) continue;
-
-      needed = Math.max(needed, bottom - rect.top + CLEARANCE_GAP_PX);
+    for (let pass = 0; pass <= shown.length; pass++) {
+      const raisedBottom = bottom - needed;
+      const raisedTop = top - needed;
+      let next = needed;
+      for (const rect of shown) {
+        if (rect.top >= raisedBottom || rect.bottom <= raisedTop) continue;
+        next = Math.max(next, bottom - rect.top + CLEARANCE_GAP_PX);
+      }
+      if (next === needed) break;
+      needed = next;
     }
 
     const room = Math.max(0, top - WINDOW_MARGIN_PX);
