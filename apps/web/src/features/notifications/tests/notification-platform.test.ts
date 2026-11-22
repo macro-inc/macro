@@ -476,7 +476,8 @@ describe('platform notification sender and conversation', () => {
   });
 
   function reaction(
-    channelType: 'public' | 'directMessage'
+    channelType: 'public' | 'directMessage',
+    messageContent = 'Ship it\n\non Friday'
   ): UnifiedNotification {
     return baseNotification({
       entity_id: 'channel-1',
@@ -486,7 +487,7 @@ describe('platform notification sender and conversation', () => {
         tag: 'channel_message_reaction',
         content: {
           messageId: 'message-1',
-          messageContent: 'Ship it\n\non Friday',
+          messageContent,
           emoji: '🧑🏽‍💻',
           channelType,
           channelName: 'design',
@@ -520,6 +521,19 @@ describe('platform notification sender and conversation', () => {
 
     expect(result?.title).toBe('Ada');
     expect(result?.options?.body).toBe('Reacted 🧑🏽‍💻 to: Ship it on Friday');
+  });
+
+  it('cuts a long reacted-to message so the channel stays in view', async () => {
+    const result = await toPlatformNotificationData(
+      reaction('public', `${'word '.repeat(30)}end`),
+      async () => 'Ada',
+      async () => 'design',
+      async () => undefined
+    );
+
+    expect(result?.options?.body).toBe(
+      `Reacted 🧑🏽‍💻 to: ${'word '.repeat(16)}…\n#design`
+    );
   });
 
   it('names the bot and the channel for a bot reply', async () => {
