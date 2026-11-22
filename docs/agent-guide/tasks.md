@@ -1046,7 +1046,9 @@ created task in place.
    drag or menu) until the server answers, then takes its real id; the
    project's empty state gives way to the list at once. A failed create
    removes the row, and the composer's **Task creation was not confirmed**
-   toast offers **Recover draft**.
+   toast offers **Recover draft**. A task whose Project the composer changed
+   to another project shows no row here; one the server created without the
+   project leaves the list with a **could not be added to the project** toast.
 
 The property row adapts when the launching pane supplies a task-composer preset.
 The app shell's creation-context provider snapshots the focused pane's preset
@@ -1375,9 +1377,9 @@ without assigning tasks. Tasks already in this project are excluded. Adding a ta
 moves it from its previous project. Partial failures retain only failed tasks for
 retry; request failures retain the full selection.
 
-When the authorized project has no task IDs, all layouts show the centered,
-borderless tasks empty state immediately, even while a filtered layout query is
-pending. It says “No tasks yet” and “Add tasks to plan and track this project's
+When the authorized project has no task IDs and no task is being created in
+it, all layouts show the centered, borderless tasks empty state immediately,
+even while a filtered layout query is pending. It says “No tasks yet” and “Add tasks to plan and track this project's
 work.” Editors get a filled Add task menu; everyone gets Documentation with a
 book icon, opening https://docs.macro.com/product/projects in a new tab. On phones,
 use the floating Task menu; do not add a second inline action. If linked tasks exist
