@@ -77,7 +77,8 @@ stacks. Process isolation belongs to
   access. A settle write is retried twice before the sweep is left to it.
   A job reaches no connected app: its credential is scoped, which
   connected-app admission refuses, and its lists carry no connected-app
-  route. `macro.ui.open` answers it `no_client`. Spans: `agent.job.start`, `agent.job.run` (root, linked;
+  route. Its `macro.ui.open` is refused by the job scope (the ui-commands
+  route is not on its lists); other scoped callers get `no_client`. Spans: `agent.job.start`, `agent.job.run` (root, linked;
   `agent.job.queue`, `agent.job.execute`), `agent.job.settle`,
   `agent.job.sweep`, `agent.job.cancel`.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
