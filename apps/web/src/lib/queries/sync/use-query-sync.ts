@@ -238,7 +238,7 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
       // properties and favorites when it finishes.
       .with({ type: 'starter_docs_initialized' }, () => {
         fireAndForget(invalidateFavorites(), 'websocket-query-sync');
-        invalidateAllProperties();
+        fireAndForget(invalidateAllProperties(), 'websocket-query-sync');
         invalidateAllSoup();
       })
       .with({ type: SYSTEM_STATUS_MESSAGE_TYPE }, () => {
