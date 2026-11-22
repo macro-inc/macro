@@ -42,9 +42,9 @@ const EXISTING: &str = "SELECT rowid, profile, __typename, id FROM search_rows I
 pub(super) const DELETE: &str = "DELETE FROM search_rows WHERE rowid = ?1";
 pub(super) const UPSERT_PREFIX: &str = "INSERT OR REPLACE INTO search_rows (rowid, slot, profile, __typename, id, search_text, timestamp_ms, source_hash) VALUES ";
 const UPSERT_ROW: &str = "(?, ?, ?, ?, ?, ?, ?, ?)";
-pub(super) const LOAD: &str = "SELECT __typename, id, search_text, timestamp_ms, source_hash FROM search_rows WHERE rowid BETWEEN ?1 AND ?2";
-pub(super) const BROWSE: &str = "SELECT __typename, id, search_text, timestamp_ms, source_hash FROM search_rows INDEXED BY search_rows_browse_idx WHERE slot = ?1 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?2";
-pub(super) const BROWSE_AFTER: &str = "SELECT __typename, id, search_text, timestamp_ms, source_hash FROM search_rows INDEXED BY search_rows_browse_idx WHERE slot = ?1 AND (timestamp_ms < ?2 OR (timestamp_ms = ?2 AND (__typename > ?3 OR (__typename = ?3 AND id > ?4)))) ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?5";
+pub(super) const LOAD: &str = "SELECT __typename, id, search_text, timestamp_ms, source_hash, slot, profile FROM search_rows WHERE rowid BETWEEN ?1 AND ?2";
+pub(super) const BROWSE: &str = "SELECT __typename, id, search_text, timestamp_ms, source_hash, rowid, profile FROM search_rows INDEXED BY search_rows_browse_idx WHERE slot = ?1 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?2";
+pub(super) const BROWSE_AFTER: &str = "SELECT __typename, id, search_text, timestamp_ms, source_hash, rowid, profile FROM search_rows INDEXED BY search_rows_browse_idx WHERE slot = ?1 AND (timestamp_ms < ?2 OR (timestamp_ms = ?2 AND (__typename > ?3 OR (__typename = ?3 AND id > ?4)))) ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?5";
 
 /// The stored number of a profile. Stable: it is persisted in every row.
 pub(super) const fn profile_code(profile: SearchProfile) -> i64 {
@@ -214,14 +214,21 @@ fn existing_rowids(
         .collect()
 }
 
-/// A browse row of `bucket` as a document.
+/// A browse row of `bucket`, found through `slot`, as a document. A row whose
+/// id lies outside the slot's range, or whose profile is another, is corrupt:
+/// text search would list it under another bucket.
 pub(super) fn parse_row(
     row: &[Value],
     profile: SearchProfile,
     bucket: &str,
+    slot: i64,
 ) -> Result<SearchDocument, TursoStorageError> {
-    if row.len() != 5 {
+    if row.len() != 7 {
         return Err(invariant());
+    }
+    if required_i64(row, 5)? >> SLOT_SHIFT != slot || required_i64(row, 6)? != profile_code(profile)
+    {
+        return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
     }
     let key = RecordKey {
         typename: required_text(row, 0)?,
@@ -238,10 +245,14 @@ pub(super) fn parse_row(
     })
 }
 
+/// Visits one text-search row of `slot`. A row in the slot's range whose slot
+/// or profile column says otherwise is corrupt: browse would list it under
+/// another bucket.
 pub(super) fn visit_row(
     row: &Row,
     profile: SearchProfile,
     bucket: &str,
+    slot: i64,
     query: &SearchQuery,
     key_buffer: &mut String,
     visit: &mut impl FnMut(SearchDocumentRef<'_>),
@@ -253,8 +264,12 @@ pub(super) fn visit_row(
         Some(Value::Text(search_text)),
         Some(Value::Numeric(Numeric::Integer(timestamp_ms))),
         Some(Value::Text(source_hash)),
+        Some(Value::Numeric(Numeric::Integer(row_slot))),
+        Some(Value::Numeric(Numeric::Integer(row_profile))),
         None,
     ) = (
+        values.next(),
+        values.next(),
         values.next(),
         values.next(),
         values.next(),
@@ -265,6 +280,9 @@ pub(super) fn visit_row(
     else {
         return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
     };
+    if *row_slot != slot || *row_profile != profile_code(profile) {
+        return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
+    }
     if !may_match(query, search_text.as_str()) {
         return Ok(());
     }

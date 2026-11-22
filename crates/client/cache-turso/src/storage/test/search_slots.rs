@@ -164,3 +164,51 @@ fn a_duplicated_slot_is_corruption_not_a_choice() {
         search::find_slot(&storage.connection(), SearchProfile::QuickAccessV1, "task").is_err()
     );
 }
+
+/// A row whose slot column disagrees with its rowid range would be listed under
+/// one bucket by text search and another by browse; both reads refuse it.
+#[test]
+fn a_row_outside_its_slots_range_is_corruption_for_every_read() {
+    let tampered = |name: &str, sql: &str| {
+        let storage = TursoStorage::open_in_memory(name).unwrap();
+        write(
+            &storage,
+            &[document("a", "task", 1), document("b", "document", 2)],
+        );
+        raw_execute(&storage, sql, vec![]);
+        storage
+    };
+    let moved_slot = "UPDATE search_rows SET slot = 2 WHERE id = 'a'";
+    let other_profile = "UPDATE search_rows SET profile = 2 WHERE id = 'a'";
+    block_on(async {
+        for sql in [moved_slot, other_profile] {
+            let storage = tampered("search-slot-text", sql);
+            expect_reset_reason(
+                storage
+                    .visit_search_documents(
+                        SearchProfile::QuickAccessV1,
+                        "task",
+                        &SearchQuery::new(""),
+                        |_| {},
+                    )
+                    .await,
+                PhysicalResetReason::Corruption,
+            );
+        }
+        // Browse finds the moved row through slot 2 (document), outside its range.
+        let storage = tampered("search-slot-browse", moved_slot);
+        expect_reset_reason(
+            storage
+                .browse_search_documents(SearchProfile::QuickAccessV1, "document", None, 10)
+                .await,
+            PhysicalResetReason::Corruption,
+        );
+        let storage = tampered("search-slot-browse-profile", other_profile);
+        expect_reset_reason(
+            storage
+                .browse_search_documents(SearchProfile::QuickAccessV1, "task", None, 10)
+                .await,
+            PhysicalResetReason::Corruption,
+        );
+    });
+}

@@ -1298,7 +1298,7 @@ impl Storage for TursoStorage {
             let (sql, values) = search::statement(slot)?;
             let mut key = String::new();
             driver::query_each(&connection, &sql, values, |row| {
-                search::visit_row(row, profile, bucket, query, &mut key, &mut visit)
+                search::visit_row(row, profile, bucket, slot, query, &mut key, &mut visit)
             })
         })();
         self.latch_result(result)
@@ -1333,11 +1333,25 @@ impl Storage for TursoStorage {
                     Some(Value::Text(typename)),
                     Some(Value::Text(id)),
                     Some(Value::Blob(blob)),
+                    Some(Value::Numeric(Numeric::Integer(row_slot))),
+                    Some(Value::Numeric(Numeric::Integer(row_profile))),
                     None,
-                ) = (values.next(), values.next(), values.next(), values.next())
+                ) = (
+                    values.next(),
+                    values.next(),
+                    values.next(),
+                    values.next(),
+                    values.next(),
+                    values.next(),
+                )
                 else {
                     return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
                 };
+                if *row_slot != slot
+                    || *row_profile != search::profile_code(SearchProfile::QuickAccessV1)
+                {
+                    return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
+                }
                 let key =
                     RecordKey::borrow_entity(typename.as_str(), id.as_str(), &mut key_buffer)?;
                 let record = decode_record(blob)
@@ -1388,7 +1402,7 @@ impl Storage for TursoStorage {
                 )?,
             };
             rows.into_iter()
-                .map(|row| search::parse_row(&row, profile, bucket))
+                .map(|row| search::parse_row(&row, profile, bucket, slot))
                 .collect()
         })();
         self.latch_result(result)
