@@ -1,5 +1,6 @@
 import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -30,6 +31,7 @@ import {
   soupBackfillCheckpointKey,
   soupBackfillCoordinatorKey,
   soupBackfillLaneContract,
+  soupBackfillLaneLocks,
 } from './backfill-contract';
 
 const PAGE_LIMIT = 100;
@@ -545,25 +547,43 @@ function createPageFetcher(userId: string, params: SoupBackfillParams) {
     : Effect.succeed(fetch);
 }
 
-type SoupBackfillHooks = {
+type SoupBackfillRunOptions = {
   /** After each saved page. */
   onCheckpoint?: (checkpoint: SoupBackfillCheckpoint) => void;
-  /** Once the lane's lock is held, with how long it took to get it. */
-  onLocked?: (waitMs: number) => void;
+  /** As the lane starts, with how long its lock took (none without locks). */
+  onStarted?: (lockWaitMs: number | undefined) => void;
+  /** Leave the lane, returning false, while another tab is running it. */
+  ifAvailable?: boolean;
+  /** Skip the lane if another tab completed its pass at or after this time. */
+  completedSince?: number;
+  /** The build's lanes, which decide the locks a lane run takes. */
+  lanes?: readonly SoupBackfillParams[];
 };
 
-/** Waits for the browser-wide lock `name` and succeeds with its release. */
-const acquireBrowserLock = (locks: LockManager, name: string) =>
-  Effect.callback<() => void, Error>((resume, signal) => {
+/**
+ * Waits for the browser-wide lock `name` and succeeds with its release, or
+ * with null when `ifAvailable` and another tab holds it.
+ */
+const acquireBrowserLock = (
+  locks: LockManager,
+  name: string,
+  ifAvailable: boolean
+) =>
+  Effect.callback<(() => void) | null, Error>((resume, signal) => {
     const request = async () => {
       try {
         await locks.request(
           name,
-          { signal },
-          () =>
+          // The Locks API refuses a signal beside ifAvailable, which never waits.
+          ifAvailable ? { ifAvailable } : { signal },
+          (lock) =>
             new Promise<void>((release) => {
+              if (lock === null) {
+                release();
+                resume(Effect.succeed(null));
+              }
               // Granted as the waiter was interrupted: give it straight back.
-              if (signal.aborted) release();
+              else if (signal.aborted) release();
               else resume(Effect.succeed(() => release()));
             })
         );
@@ -575,40 +595,147 @@ const acquireBrowserLock = (locks: LockManager, name: string) =>
         }
       }
     };
-    void request();
+    fireAndForget(request(), 'soup-backfill-lock');
   });
 
 /**
- * Runs `effect` holding the lock named by a lane's checkpoint key, so two tabs,
+ * Runs `effect` holding the browser-wide lock `name`, or succeeds with false,
+ * without running it, when `ifAvailable` finds the lock held. Waiting is
+ * interruptible; from the grant on, release always runs.
+ */
+function withBrowserLock<E, R>(
+  locks: LockManager,
+  name: string,
+  ifAvailable: boolean,
+  effect: Effect.Effect<boolean, E, R>
+): Effect.Effect<boolean, E | Error, R> {
+  return Effect.uninterruptibleMask((restore) =>
+    Effect.flatMap(
+      restore(acquireBrowserLock(locks, name, ifAvailable)),
+      (release) =>
+        release === null
+          ? Effect.succeed(false)
+          : restore(effect).pipe(Effect.ensuring(Effect.sync(release)))
+    )
+  );
+}
+
+/**
+ * Runs `effect` holding a lane's locks (`soupBackfillLaneLocks`), so two tabs,
  * of one build or of two that share the lane's contract, never load, scan and
  * save the same checkpoint at once: the second resumes where the first stopped
  * instead of fetching the same pages beside it and saving an older cursor over
  * a newer one. Without the Locks API, as in unit tests, it runs unlocked.
+ * Succeeds with false, without running, when `ifAvailable` finds one held.
  */
-function withCheckpointLock<A, E, R>(
-  name: string,
-  effect: Effect.Effect<A, E, R>,
-  onLocked?: (waitMs: number) => void
-): Effect.Effect<A, E | Error, R> {
+function withLaneLocks<E, R>(
+  names: readonly string[],
+  effect: Effect.Effect<void, E, R>,
+  options: SoupBackfillRunOptions
+): Effect.Effect<boolean, E | Error, R> {
   const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
-  if (!locks) return effect;
-  return Effect.uninterruptibleMask((restore) => {
+  return Effect.suspend(() => {
     const requestedAt = Date.now();
-    // Waiting is interruptible; from the grant on, release always runs.
-    return Effect.flatMap(restore(acquireBrowserLock(locks, name)), (release) =>
-      Effect.sync(() => onLocked?.(Date.now() - requestedAt)).pipe(
-        Effect.andThen(restore(effect)),
-        Effect.ensuring(Effect.sync(release))
-      )
+    const run = Effect.sync(() =>
+      options.onStarted?.(locks ? Date.now() - requestedAt : undefined)
+    ).pipe(Effect.andThen(effect), Effect.as(true));
+    if (!locks) return run;
+    return names.reduceRight<Effect.Effect<boolean, E | Error, R>>(
+      (inner, name) =>
+        withBrowserLock(locks, name, options.ifAvailable === true, inner),
+      run
     );
   });
+}
+
+/** Whether another tab completed this pass at or after `since`. */
+function completedSince(
+  checkpoint: SoupBackfillCheckpoint,
+  since: number | undefined
+): boolean {
+  return (
+    since !== undefined &&
+    checkpoint.completed &&
+    checkpoint.completedAt !== null &&
+    Date.parse(checkpoint.completedAt) >= since
+  );
+}
+
+/**
+ * The checkpoint a run starts from: the saved one in the current storage
+ * generation, without the cursor of the last run for a lane that restarts
+ * every run, or null when another tab completed the pass this run waited for.
+ */
+function loadRunCheckpoint(
+  userId: string,
+  params: SoupBackfillParams,
+  storageGeneration: string,
+  options: SoupBackfillRunOptions
+): SoupBackfillCheckpoint | null {
+  const saved = loadSoupBackfillCheckpoint(userId, params);
+  const checkpoint =
+    saved.storageGeneration === storageGeneration
+      ? saved
+      : initialCheckpoint(userId, storageGeneration);
+  if (completedSince(checkpoint, options.completedSince)) return null;
+  return params.restartOnRun
+    ? {
+        ...checkpoint,
+        nextCursor: null,
+        completed: false,
+        pagesFetched: 0,
+        scanStartedAt: null,
+      }
+    : checkpoint;
+}
+
+/** The checkpoint after saving a page that returned `nextCursor`. */
+function checkpointAfterPage(
+  checkpoint: SoupBackfillCheckpoint,
+  nextCursor: string | null | undefined,
+  params: SoupBackfillParams
+): SoupBackfillCheckpoint {
+  const advanced = {
+    ...checkpoint,
+    nextCursor: nextCursor ?? null,
+    pagesFetched: checkpoint.pagesFetched + 1,
+  };
+  if (nextCursor != null) return advanced;
+  // Use the pass start rather than its completion time so updates made while
+  // this pass was running are included next time.
+  const updatedSince = checkpoint.scanStartedAt ?? checkpoint.updatedSince;
+  const passCompletedAt = new Date().toISOString();
+  // Only a never-completed full scan needs the additional watermark pass. An
+  // interrupted catch-up already has updatedSince and resumes normally.
+  if (
+    params.catchUpAfterInitialPass === true &&
+    checkpoint.updatedSince === null
+  ) {
+    // Atomically persist the required catch-up as in progress instead of
+    // exposing a completed lane between the two passes. It filters from the
+    // full pass start, with that pass's completion as its own watermark.
+    return {
+      ...advanced,
+      completed: false,
+      updatedSince,
+      completedAt: null,
+      scanStartedAt: passCompletedAt,
+    };
+  }
+  return {
+    ...advanced,
+    completed: true,
+    updatedSince,
+    completedAt: passCompletedAt,
+    scanStartedAt: null,
+  };
 }
 
 const runUnlockedSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   userId: string,
   host: SoupBackfillCacheHost,
   params: SoupBackfillParams,
-  onCheckpoint?: (checkpoint: SoupBackfillCheckpoint) => void
+  options: SoupBackfillRunOptions
 ) {
   // Await storage readiness before reading a cursor. Generation notifications
   // may predate this runner or belong to another tab, so they cannot prove that
@@ -616,21 +743,12 @@ const runUnlockedSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   const storageGeneration = yield* Effect.tryPromise(() =>
     host.currentStorageGeneration()
   );
-  let checkpoint = yield* Effect.sync(() =>
-    loadSoupBackfillCheckpoint(userId, params)
+  const loaded = yield* Effect.sync(() =>
+    loadRunCheckpoint(userId, params, storageGeneration, options)
   );
-  if (checkpoint.storageGeneration !== storageGeneration) {
-    checkpoint = initialCheckpoint(userId, storageGeneration);
-  }
-  if (params.restartOnRun) {
-    checkpoint = {
-      ...checkpoint,
-      nextCursor: null,
-      completed: false,
-      pagesFetched: 0,
-      scanStartedAt: null,
-    };
-  }
+  // Another tab finished the pass this one waited for.
+  if (loaded === null) return;
+  let checkpoint = loaded;
   const startPass = () => {
     checkpoint = {
       ...checkpoint,
@@ -690,146 +808,162 @@ const runUnlockedSoupBackfill = Effect.fn('runSoupBackfill')(function* (
       continue;
     }
 
-    const passCompleted = page.nextCursor == null;
-    // Only a never-completed full scan needs the additional watermark pass. An
-    // interrupted catch-up already has updatedSince and resumes normally.
-    const transitionToCatchUp =
-      passCompleted &&
-      params.catchUpAfterInitialPass === true &&
-      checkpoint.updatedSince === null;
-    const passCompletedAt = passCompleted ? new Date().toISOString() : null;
-    checkpoint = {
-      ...checkpoint,
-      nextCursor: page.nextCursor ?? null,
-      pagesFetched: checkpoint.pagesFetched + 1,
-      // Atomically persist the required catch-up as in progress instead of
-      // exposing a completed lane between the two passes.
-      completed: passCompleted && !transitionToCatchUp,
-      ...(passCompleted
-        ? transitionToCatchUp
-          ? {
-              // Filter from the full pass start, while using its completion
-              // as the resumable catch-up pass watermark.
-              updatedSince: checkpoint.scanStartedAt ?? checkpoint.updatedSince,
-              completedAt: null,
-              scanStartedAt: passCompletedAt,
-            }
-          : {
-              // Use the pass start rather than its completion time so updates
-              // made while this pass was running are included next time.
-              updatedSince: checkpoint.scanStartedAt ?? checkpoint.updatedSince,
-              completedAt: passCompletedAt,
-              scanStartedAt: null,
-            }
-        : {}),
-    };
+    checkpoint = checkpointAfterPage(checkpoint, page.nextCursor, params);
     yield* Effect.sync(() => {
       saveSoupBackfillCheckpoint(checkpoint, params);
-      onCheckpoint?.(checkpoint);
+      options.onCheckpoint?.(checkpoint);
     });
 
     if (checkpoint.completed) return;
     // The terminal page transitions directly into the narrowed catch-up pass.
-    if (!passCompleted) {
+    if (checkpoint.nextCursor !== null) {
       yield* Effect.sleep(params.pageDelayMs ?? PAGE_DELAY_MS);
     }
   }
 });
 
-/** Runs one lane until its pass completes, holding its checkpoint's lock. */
+/**
+ * Runs one lane until its pass completes, holding its checkpoint's lock.
+ * Succeeds with false, without running, when `ifAvailable` finds the lane
+ * running in another tab.
+ */
 export const runSoupBackfill = (
   userId: string,
   host: SoupBackfillCacheHost,
   params: SoupBackfillParams,
-  hooks: SoupBackfillHooks = {}
+  options: SoupBackfillRunOptions = {}
 ) =>
-  withCheckpointLock(
-    soupBackfillCheckpointKey(userId, params),
-    runUnlockedSoupBackfill(userId, host, params, hooks.onCheckpoint),
-    hooks.onLocked
+  withLaneLocks(
+    soupBackfillLaneLocks(
+      userId,
+      options.lanes ?? DEFAULT_SOUP_BACKFILL_LANES,
+      params
+    ),
+    runUnlockedSoupBackfill(userId, host, params, options),
+    options
   );
 
-/** Runs each backfill lane to completion before starting the next lane. */
+/** Runs one lane with its telemetry and retries; false when it was left. */
+const runTrackedSoupBackfill = (
+  userId: string,
+  host: SoupBackfillCacheHost,
+  lane: SoupBackfillParams,
+  attempt: Pick<
+    SoupBackfillRunOptions,
+    'ifAvailable' | 'completedSince' | 'lanes'
+  >
+) =>
+  Effect.gen(function* () {
+    const startedAt = Date.now();
+    let started = false;
+    let pagesFetched = 0;
+    let lockWaitMs: number | undefined;
+    const record = (
+      state: SoupBackfillTelemetryState,
+      totalPagesFetched: number
+    ) =>
+      recordSoupBackfillTelemetry({
+        lane,
+        ...(state === 'started' ? {} : { durationMs: Date.now() - startedAt }),
+        lockWaitMs,
+        pagesFetched,
+        state,
+        totalPagesFetched,
+      });
+    const ran = yield* runSoupBackfill(userId, host, lane, {
+      ...attempt,
+      onStarted: (waitMs) => {
+        if (waitMs !== undefined) lockWaitMs = (lockWaitMs ?? 0) + waitMs;
+        if (started) return;
+        started = true;
+        record(
+          'started',
+          loadSoupBackfillCheckpoint(userId, lane).pagesFetched
+        );
+      },
+      onCheckpoint: (checkpoint) => {
+        pagesFetched += 1;
+        if (
+          !checkpoint.completed &&
+          pagesFetched % BACKFILL_PROGRESS_PAGE_INTERVAL === 0
+        ) {
+          record('progress', checkpoint.pagesFetched);
+        }
+      },
+    }).pipe(
+      Effect.retry({
+        times: BACKFILL_RETRY_COUNT,
+        schedule: BACKFILL_RETRY_SCHEDULE,
+      }),
+      Effect.matchEffect({
+        onFailure: (error) =>
+          Effect.sync(() => {
+            record(
+              'failed',
+              loadSoupBackfillCheckpoint(userId, lane).pagesFetched
+            );
+            console.warn('[graphql-soup-backfill] lane failed after retries', {
+              checkpointId: lane.checkpointId,
+              error,
+            });
+            return true;
+          }),
+        onSuccess: (ran) =>
+          Effect.sync(() => {
+            // A lane another tab completed while this one waited records
+            // completion with no pages fetched.
+            if (ran) {
+              record(
+                'completed',
+                loadSoupBackfillCheckpoint(userId, lane).pagesFetched
+              );
+            }
+            return ran;
+          }),
+      })
+    );
+    return ran;
+  });
+
+/**
+ * Runs each backfill lane to completion before starting the next lane. A lane
+ * another tab is running is left to it and revisited once the others are done,
+ * so a stalled tab holds back only the lanes it holds. Lanes that wait for a
+ * tab from before checkpoint locks, which keeps its lock while it stays open,
+ * are revisited last.
+ */
 export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
   userId: string,
   host: SoupBackfillCacheHost,
   lanes: readonly SoupBackfillParams[] = DEFAULT_SOUP_BACKFILL_LANES
 ) {
+  const busy: { lane: SoupBackfillParams; since: number; locks: number }[] = [];
   yield* Effect.forEach(
     lanes,
-    (lane) =>
-      Effect.gen(function* () {
-        const startedAt = Date.now();
-        const initialCheckpoint = yield* Effect.sync(() =>
-          loadSoupBackfillCheckpoint(userId, lane)
-        );
-        let pagesFetched = 0;
-        let lockWaitMs: number | undefined;
-        yield* Effect.sync(() =>
-          recordSoupBackfillTelemetry({
-            lane,
-            pagesFetched: 0,
-            state: 'started',
-            totalPagesFetched: initialCheckpoint.pagesFetched,
-          })
-        );
-
-        yield* runSoupBackfill(userId, host, lane, {
-          onLocked: (waitMs) => {
-            lockWaitMs = (lockWaitMs ?? 0) + waitMs;
-          },
-          onCheckpoint: (checkpoint) => {
-            pagesFetched += 1;
-            if (
-              !checkpoint.completed &&
-              pagesFetched % BACKFILL_PROGRESS_PAGE_INTERVAL === 0
-            ) {
-              recordSoupBackfillTelemetry({
-                lane,
-                durationMs: Date.now() - startedAt,
-                lockWaitMs,
-                pagesFetched,
-                state: 'progress',
-                totalPagesFetched: checkpoint.pagesFetched,
-              });
+    (lane) => {
+      const since = Date.now();
+      return runTrackedSoupBackfill(userId, host, lane, {
+        ifAvailable: true,
+        lanes,
+      }).pipe(
+        Effect.tap((ran) =>
+          Effect.sync(() => {
+            if (!ran) {
+              const locks = soupBackfillLaneLocks(userId, lanes, lane).length;
+              busy.push({ lane, since, locks });
             }
-          },
-        }).pipe(
-          Effect.retry({
-            times: BACKFILL_RETRY_COUNT,
-            schedule: BACKFILL_RETRY_SCHEDULE,
-          }),
-          Effect.matchEffect({
-            onFailure: (error) =>
-              Effect.sync(() => {
-                const checkpoint = loadSoupBackfillCheckpoint(userId, lane);
-                recordSoupBackfillTelemetry({
-                  lane,
-                  durationMs: Date.now() - startedAt,
-                  lockWaitMs,
-                  pagesFetched,
-                  state: 'failed',
-                  totalPagesFetched: checkpoint.pagesFetched,
-                });
-                console.warn(
-                  '[graphql-soup-backfill] lane failed after retries',
-                  { checkpointId: lane.checkpointId, error }
-                );
-              }),
-            onSuccess: () =>
-              Effect.sync(() => {
-                const checkpoint = loadSoupBackfillCheckpoint(userId, lane);
-                recordSoupBackfillTelemetry({
-                  lane,
-                  durationMs: Date.now() - startedAt,
-                  lockWaitMs,
-                  pagesFetched,
-                  state: 'completed',
-                  totalPagesFetched: checkpoint.pagesFetched,
-                });
-              }),
           })
-        );
+        )
+      );
+    },
+    { concurrency: 1, discard: true }
+  );
+  yield* Effect.forEach(
+    busy.sort((left, right) => left.locks - right.locks),
+    ({ lane, since }) =>
+      runTrackedSoupBackfill(userId, host, lane, {
+        completedSince: since,
+        lanes,
       }),
     { concurrency: 1, discard: true }
   );

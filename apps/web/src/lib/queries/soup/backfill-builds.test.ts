@@ -347,7 +347,7 @@ describe('soup backfill across builds', () => {
   let restoreLocks = () => {};
   beforeEach(() => {
     localStorage.clear();
-    restoreLocks = installBrowserLocks();
+    restoreLocks = installBrowserLocks().restore;
   });
   afterEach(() => {
     restoreLocks();

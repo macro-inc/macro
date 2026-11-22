@@ -7,7 +7,9 @@ import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CHANNEL_SOUP_BACKFILL_LANE,
+  CORE_SOUP_BACKFILL_LANE,
   DEFAULT_SOUP_BACKFILL_LANES,
+  INITIATIVE_SOUP_BACKFILL_LANE,
   loadSoupBackfillCheckpoint,
   NOISE_EMAIL_FILTER_BACKFILL_LANE,
   NOISE_EMAIL_SOUP_BACKFILL_LANE,
@@ -20,8 +22,14 @@ import {
   type SoupBackfillParams,
   useSoupBackfills,
 } from './backfill';
-import { soupBackfillCheckpointKey } from './backfill-contract';
-import { installBrowserLocks } from './browser-locks.test-helpers';
+import {
+  soupBackfillCheckpointKey,
+  soupBackfillLaneLocks,
+} from './backfill-contract';
+import {
+  type BrowserLocks,
+  installBrowserLocks,
+} from './browser-locks.test-helpers';
 
 type FetchInput = Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0];
 
@@ -1106,7 +1114,7 @@ describe('runSoupBackfills', () => {
   });
 });
 describe('soup backfill checkpoint locks', () => {
-  let restoreLocks = () => {};
+  let locks: BrowserLocks;
   beforeEach(() => {
     localStorage.clear();
     mockCacheHost.currentStorageGeneration
@@ -1116,29 +1124,39 @@ describe('soup backfill checkpoint locks', () => {
       setAttr: vi.fn(),
       end: vi.fn(),
     }));
-    restoreLocks = installBrowserLocks();
+    locks = installBrowserLocks();
   });
 
   afterEach(() => {
-    restoreLocks();
+    locks.restore();
+    vi.useRealTimers();
   });
 
-  /** Lets every runner that can make progress make it. */
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
-
-  it('makes a second tab wait for a lane, then resume where the first stopped', async () => {
-    let openGate = () => {};
+  /** A page fetch that waits until `open` is called. */
+  const gated = (nextCursor: string | null = null) => {
+    let open = () => {};
     const gate = new Promise<void>((resolve) => {
-      openGate = resolve;
+      open = resolve;
     });
-    const firstTab = vi.fn(async (_input: FetchInput) => {
-      if (firstTab.mock.calls.length > 1) throw new Error('the tab closes');
+    const fetchPage = vi.fn(async (_input: FetchInput) => {
       await gate;
-      return { nextCursor: 'page-2' };
+      return { nextCursor };
     });
-    const secondTab = vi.fn(async (_input: FetchInput) => ({
-      nextCursor: null,
-    }));
+    return { fetchPage, open };
+  };
+  const done = () =>
+    vi.fn(async (_input: FetchInput) => ({ nextCursor: null }));
+  const key = (params: SoupBackfillParams) =>
+    soupBackfillCheckpointKey('user-1', params);
+
+  it('leaves a lane another tab runs, then resumes where that tab stopped', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const holder = gated('page-2');
+    const firstTab = vi.fn(async (input: FetchInput) => {
+      if (firstTab.mock.calls.length > 1) throw new Error('the tab closes');
+      return holder.fetchPage(input);
+    });
+    const secondTab = done();
     const first = Effect.runPromiseExit(
       runSoupBackfill('user-1', mockCacheHost, {
         ...lane('core-entities', firstTab),
@@ -1151,44 +1169,157 @@ describe('soup backfill checkpoint locks', () => {
         lane('core-entities', secondTab),
       ])
     );
-    await settle();
+    await locks.waiting(key(lane('core-entities', secondTab)));
     expect(secondTab).not.toHaveBeenCalled();
 
-    openGate();
+    vi.setSystemTime(Date.now() + 50);
+    holder.open();
     await first;
     await second;
     expect(secondTab.mock.calls.map(([input]) => input)).toEqual([
       { continuation: { cursor: 'page-2', expand: true } },
     ]);
-    const lockWaits = telemetryMocks.anonymousSpan.mock.results
-      .flatMap((result) => result.value.setAttr.mock.calls)
-      .filter(([name]) => name === 'cache.backfill_lock_wait_ms');
-    expect(lockWaits).toHaveLength(1);
-    expect(lockWaits[0]?.[1]).toBeGreaterThanOrEqual(20);
+    const spans = telemetryMocks.anonymousSpan.mock.results.map(
+      (result) => new Map(result.value.setAttr.mock.calls)
+    );
+    // Only the revisit that ran records spans; the skip records none.
+    expect(spans.map((span) => span.get('cache.backfill_state'))).toEqual([
+      'started',
+      'completed',
+    ]);
+    for (const span of spans) {
+      expect(span.get('cache.backfill_lock_wait_ms')).toBeGreaterThanOrEqual(
+        50
+      );
+    }
+  });
+
+  it('runs the other lanes while another tab holds one, and skips it once that tab completes it', async () => {
+    const holder = gated();
+    const refreshing = {
+      ...lane('core-entities', holder.fetchPage),
+      refreshAll: true,
+    };
+    const held = Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, refreshing)
+    );
+    await vi.waitFor(() => expect(holder.fetchPage).toHaveBeenCalledOnce());
+    const waiter = done();
+    const other = done();
+    const suite = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        { ...refreshing, fetchPage: waiter },
+        lane('initiatives', other),
+      ])
+    );
+    await locks.waiting(key(refreshing));
+    expect(other).toHaveBeenCalledOnce();
+
+    holder.open();
+    await held;
+    await suite;
+    expect(waiter).not.toHaveBeenCalled();
+    expect(loadSoupBackfillCheckpoint('user-1', refreshing).completed).toBe(
+      true
+    );
+  });
+
+  it('runs a lane under its v19 key only once no tab from before checkpoint locks leads', async () => {
+    const [v19Lock, checkpoint] = soupBackfillLaneLocks(
+      'user-1',
+      [{ ...CORE_SOUP_BACKFILL_LANE, contractVersion: 1 }],
+      INITIATIVE_SOUP_BACKFILL_LANE
+    );
+    expect(checkpoint).toBe(key(INITIATIVE_SOUP_BACKFILL_LANE));
+    // A tab from before checkpoint locks leads the v19 coordinator.
+    let closeOldTab = () => {};
+    const oldTab = new Promise<void>((resolve) => {
+      closeOldTab = resolve;
+    });
+    const leads = navigator.locks.request(v19Lock ?? '', {}, () => oldTab);
+    const changed = done();
+    const unchanged = done();
+    const suite = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        { ...CORE_SOUP_BACKFILL_LANE, contractVersion: 1, fetchPage: changed },
+        { ...INITIATIVE_SOUP_BACKFILL_LANE, fetchPage: unchanged },
+      ])
+    );
+    await locks.waiting(v19Lock ?? '');
+    expect(changed).toHaveBeenCalledOnce();
+    expect(unchanged).not.toHaveBeenCalled();
+
+    closeOldTab();
+    await leads;
+    await suite;
+    expect(unchanged).toHaveBeenCalledOnce();
+  });
+
+  it('revisits a lane another build left before one that waits for a tab from before checkpoint locks', async () => {
+    const changedCore = { ...CORE_SOUP_BACKFILL_LANE, contractVersion: 1 };
+    const [v19Lock] = soupBackfillLaneLocks(
+      'user-1',
+      [changedCore],
+      INITIATIVE_SOUP_BACKFILL_LANE
+    );
+    let closeOldTab = () => {};
+    const oldTab = new Promise<void>((resolve) => {
+      closeOldTab = resolve;
+    });
+    const leads = navigator.locks.request(v19Lock ?? '', {}, () => oldTab);
+    // A tab of another build with the same changed lane stops after a page.
+    const other = gated('page-2');
+    const otherTab = vi.fn(async (input: FetchInput) => {
+      if (otherTab.mock.calls.length > 1) throw new Error('the tab closes');
+      return other.fetchPage(input);
+    });
+    const otherRun = Effect.runPromiseExit(
+      runSoupBackfill('user-1', mockCacheHost, {
+        ...changedCore,
+        fetchPage: otherTab,
+        pageDelayMs: 0,
+      })
+    );
+    await vi.waitFor(() => expect(otherTab).toHaveBeenCalledOnce());
+    const unchanged = done();
+    const resumed = done();
+    const suite = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        { ...INITIATIVE_SOUP_BACKFILL_LANE, fetchPage: unchanged },
+        { ...changedCore, fetchPage: resumed },
+      ])
+    );
+    await locks.waiting(key(changedCore));
+    other.open();
+    await otherRun;
+    await vi.waitFor(() => expect(resumed).toHaveBeenCalledOnce());
+    expect(unchanged).not.toHaveBeenCalled();
+
+    closeOldTab();
+    await leads;
+    await suite;
+    expect(unchanged).toHaveBeenCalledOnce();
   });
 
   it('leaves a lane to the next tab when a waiting tab stops', async () => {
-    let openGate = () => {};
-    const gate = new Promise<void>((resolve) => {
-      openGate = resolve;
-    });
-    const holder = vi.fn(async (_input: FetchInput) => {
-      await gate;
-      return { nextCursor: null };
-    });
-    const stopped = vi.fn(async (_input: FetchInput) => ({ nextCursor: null }));
-    const next = vi.fn(async (_input: FetchInput) => ({ nextCursor: null }));
+    const holder = gated();
+    const stopped = done();
+    const next = done();
     const held = Effect.runPromise(
-      runSoupBackfill('user-1', mockCacheHost, lane('core-entities', holder))
+      runSoupBackfill(
+        'user-1',
+        mockCacheHost,
+        lane('core-entities', holder.fetchPage)
+      )
     );
-    await vi.waitFor(() => expect(holder).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(holder.fetchPage).toHaveBeenCalledOnce());
     const waiting = Effect.runFork(
       runSoupBackfill('user-1', mockCacheHost, lane('core-entities', stopped))
     );
-    await settle();
+    await locks.waiting(key(lane('core-entities', stopped)));
     await Effect.runPromise(Fiber.interrupt(waiting));
 
-    openGate();
+    holder.open();
     await held;
     await Effect.runPromise(
       runSoupBackfill('user-1', mockCacheHost, lane('core-entities', next))
@@ -1202,29 +1333,32 @@ describe('soup backfill checkpoint locks', () => {
     const granted = new Promise<void>((resolve) => {
       grant = resolve;
     });
+    let requested = () => {};
+    const isRequested = new Promise<void>((resolve) => {
+      requested = resolve;
+    });
     let released: Promise<void> | undefined;
     // A browser can grant the lock in the same turn the waiter's signal aborts.
     Object.defineProperty(navigator, 'locks', {
       configurable: true,
       value: {
         request: async (
-          _name: string,
+          name: string,
           _options: { signal?: AbortSignal },
-          callback: () => Promise<void>
+          callback: (lock: { name: string }) => Promise<void>
         ) => {
+          requested();
           await granted;
-          released = callback();
+          released = callback({ name });
           return released;
         },
       },
     });
-    const fetchPage = vi.fn(async (_input: FetchInput) => ({
-      nextCursor: null,
-    }));
+    const fetchPage = done();
     const waiting = Effect.runFork(
       runSoupBackfill('user-1', mockCacheHost, lane('core-entities', fetchPage))
     );
-    await settle();
+    await isRequested;
     await Effect.runPromise(Fiber.interrupt(waiting));
 
     grant();
@@ -1234,19 +1368,16 @@ describe('soup backfill checkpoint locks', () => {
   });
 
   it('runs two lanes that differ in contract side by side', async () => {
-    let openGate = () => {};
-    const gate = new Promise<void>((resolve) => {
-      openGate = resolve;
-    });
-    const older = vi.fn(async (_input: FetchInput) => {
-      await gate;
-      return { nextCursor: null };
-    });
-    const newer = vi.fn(async (_input: FetchInput) => ({ nextCursor: null }));
+    const older = gated();
+    const newer = done();
     const olderRun = Effect.runPromise(
-      runSoupBackfill('user-1', mockCacheHost, lane('core-entities', older))
+      runSoupBackfill(
+        'user-1',
+        mockCacheHost,
+        lane('core-entities', older.fetchPage)
+      )
     );
-    await vi.waitFor(() => expect(older).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(older.fetchPage).toHaveBeenCalledOnce());
     await Effect.runPromise(
       runSoupBackfill('user-1', mockCacheHost, {
         ...lane('core-entities', newer),
@@ -1254,7 +1385,7 @@ describe('soup backfill checkpoint locks', () => {
       })
     );
     expect(newer).toHaveBeenCalledOnce();
-    openGate();
+    older.open();
     await olderRun;
   });
 });
