@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   loadChannelPage: vi.fn(),
   loadChannelThread: vi.fn(),
   pushesStored: vi.fn(),
+  readOlderThanPushes: vi.fn(() => false),
   catchUpAndRefresh: vi.fn(async () => {}),
   channelCacheAnswered: vi.fn(() => true),
   withUnsettledThreadReplies: vi.fn(),
@@ -53,6 +54,7 @@ vi.mock('../catch-up', () => ({
   catchUpAndRefresh: mocks.catchUpAndRefresh,
   catchUpChannel: vi.fn(),
   pushesStored: mocks.pushesStored,
+  readOlderThanPushes: mocks.readOlderThanPushes,
   refreshChannelViews: mocks.refreshChannelViews,
 }));
 
@@ -219,6 +221,23 @@ describe('loadLocalChannelThread', () => {
       thread('server')
     );
     expect(mocks.pushesStored).not.toHaveBeenCalled();
+  });
+
+  it('reads from the device a thread the server answered from before a pushed change', async () => {
+    mocks.loadChannelThread
+      .mockResolvedValueOnce({
+        thread: thread('before the edit'),
+        source: 'server',
+        seq: '11',
+      })
+      .mockResolvedValueOnce({ thread: thread('edited'), source: 'device' });
+    mocks.readOlderThanPushes.mockReturnValueOnce(true);
+
+    expect(await loadLocalChannelThread(CHANNEL_ID, 'root')).toEqual(
+      thread('edited')
+    );
+    expect(mocks.readOlderThanPushes).toHaveBeenCalledWith(CHANNEL_ID, '11');
+    expect(mocks.catchUpAndRefresh).toHaveBeenCalledWith(host, CHANNEL_ID);
   });
 
   it('answers a thread with the replies still waiting put into it', async () => {

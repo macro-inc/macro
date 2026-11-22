@@ -95,7 +95,8 @@ describe('loadChannelThread', () => {
       rootId: root.id,
       before: replies[1].sortKey,
     });
-    expect(loaded?.source).toBe('server');
+    // The oldest sequence any of its pages was answered at.
+    expect(loaded).toMatchObject({ source: 'server', seq: '8' });
     expect(loaded?.thread.replies.map((reply) => reply.id)).toEqual(
       replies.map((reply) => reply.id)
     );

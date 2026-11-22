@@ -6,6 +6,7 @@ import {
   catchUpChannel,
   noteChannelPush,
   pushesStored,
+  readOlderThanPushes,
   rereadChannelsAfterStorageReset,
   resetChannelSync,
   storeUnstoredPushes,
@@ -241,6 +242,30 @@ describe('pushesStored', () => {
     resetChannelSync();
     expect(await waiting).toBe(true);
     expect(await pushesStored(CHANNEL_ID)).toBe(false);
+  });
+});
+
+describe('readOlderThanPushes', () => {
+  it('is false for a channel nothing was pushed for', () => {
+    expect(readOlderThanPushes(CHANNEL_ID, '1')).toBe(false);
+  });
+
+  it('tells a server read made before a pushed change from one made after', () => {
+    vi.useFakeTimers();
+    channelCacheHost.mockReturnValue(sequencedHost(null));
+    noteChannelPush(CHANNEL_ID, 8);
+
+    expect(readOlderThanPushes(CHANNEL_ID, '7')).toBe(true);
+    expect(readOlderThanPushes(CHANNEL_ID, '8')).toBe(false);
+  });
+
+  it('still tells once the device has taken the push', async () => {
+    await catchUpAndRefresh(sequencedHost('7'), CHANNEL_ID, async () =>
+      changes({ seq: '9', messages: [graphqlMessage(1)] })
+    );
+
+    expect(readOlderThanPushes(CHANNEL_ID, '7')).toBe(true);
+    expect(readOlderThanPushes(CHANNEL_ID, '9')).toBe(false);
   });
 });
 

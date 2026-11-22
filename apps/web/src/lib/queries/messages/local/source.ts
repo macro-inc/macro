@@ -14,6 +14,7 @@ import {
   catchUpChannel,
   MAX_PUSH_REREADS,
   pushesStored,
+  readOlderThanPushes,
   refreshChannelViews,
 } from './catch-up';
 import { channelCacheAnswered, channelCacheHost } from './flag';
@@ -290,7 +291,15 @@ export async function loadLocalChannelThread(
       if (!(await pushesStored(channelId))) break;
       loaded = await loadChannelThread(host, channelId, rootId);
     }
-    if (loaded?.source === 'device') {
+    if (
+      loaded?.source === 'server' &&
+      readOlderThanPushes(channelId, loaded.seq)
+    ) {
+      // The server answered from before a change the views already show.
+      // The device now holds the thread: it takes the change and answers.
+      await catchUpAndRefresh(host, channelId);
+      loaded = (await loadChannelThread(host, channelId, rootId)) ?? loaded;
+    } else if (loaded?.source === 'device') {
       fireAndForget(catchUpAndRefresh(host, channelId), SYNC_SURFACE);
     }
     if (!loaded) return undefined;

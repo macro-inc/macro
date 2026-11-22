@@ -287,6 +287,18 @@ async function storePushes(
 }
 
 /**
+ * Whether a server read made at `seq` is older than a change the open views
+ * were pushed, so showing it would put the older state back.
+ */
+export function readOlderThanPushes(channelId: string, seq: string): boolean {
+  const state = channels.get(channelId);
+  if (!state) return false;
+  const read = BigInt(seq);
+  if (state.stored !== undefined && read < state.stored) return true;
+  return [...state.pushed].some((pushed) => BigInt(pushed) > read);
+}
+
+/**
  * Whether a device read is to be made again, not shown: the open views were
  * pushed a change the read is older than. The device takes a push a moment
  * after the views do, from the server's log, so this waits until it has, and
