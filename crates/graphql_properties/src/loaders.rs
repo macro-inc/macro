@@ -167,32 +167,39 @@ impl<P, A> PropertiesEntityPropertyReader<P, A> {
     }
 }
 
+/// Mint the caller's team membership proof from the canonical access service,
+/// as the REST team extractor does; `None` when the caller has no team.
+pub(crate) async fn caller_team_receipt<A: EntityAccessService>(
+    entity_access_service: &A,
+    user_id: &MacroUserIdStr<'static>,
+) -> Result<Option<properties::domain::service::TeamReceipt>, rootcause::Report> {
+    let Some(team) = entity_access_service
+        .get_user_team(user_id)
+        .await
+        .map_err(|err| rootcause::report!(err))?
+    else {
+        return Ok(None);
+    };
+    Ok(EntityAccessReceipt::try_new_authenticated_user(
+        user_id.clone(),
+        entity_access::domain::models::Entity {
+            entity_id: team.team_id.to_string(),
+            entity_type: model_entity::EntityType::Team,
+        },
+        EntityPermission::TeamRole { role: team.role },
+    )
+    .map(Some)
+    .map_err(|err| rootcause::report!(err))?)
+}
+
 impl<P, A: EntityAccessService> PropertiesEntityPropertyReader<P, A> {
     /// Mint membership proof from the canonical access service for owner-scoped reads.
     async fn caller_team_receipt(
         &self,
         user_id: &MacroUserIdStr<'static>,
     ) -> Result<Option<properties::domain::service::TeamReceipt>, rootcause::Report> {
-        let Some(team) = self
-            .entity_access_service
-            .get_user_team(user_id)
-            .await
-            .map_err(|err| rootcause::report!(err))?
-        else {
-            return Ok(None);
-        };
-        Ok(EntityAccessReceipt::try_new_authenticated_user(
-            user_id.clone(),
-            entity_access::domain::models::Entity {
-                entity_id: team.team_id.to_string(),
-                entity_type: model_entity::EntityType::Team,
-            },
-            EntityPermission::TeamRole { role: team.role },
-        )
-        .map(Some)
-        .map_err(|err| rootcause::report!(err))?)
+        caller_team_receipt(self.entity_access_service.as_ref(), user_id).await
     }
-
     /// Team membership proof for definition scopes that include team definitions.
     async fn scope_team_receipt(
         &self,
