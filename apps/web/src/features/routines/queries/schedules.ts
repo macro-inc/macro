@@ -480,3 +480,20 @@ export function useRunScheduleNowMutation(
     ),
   }));
 }
+
+/**
+ * Stop a routine's run in progress. The run ends on the server shortly
+ * after; its end and the released claim arrive through the scheduled-action
+ * websocket sync, like a run's start, so success refetches nothing.
+ */
+export function useStopRoutineRunMutation(
+  callbacks?: MutationCallbacks<void, Error, { scheduleId: string }>
+) {
+  return useMutation(() => ({
+    mutationFn: async ({ scheduleId }: { scheduleId: string }) =>
+      throwOnErr(
+        async () => await scheduledActionClient.stopRun({ scheduleId })
+      ),
+    ...withCallbacks({}, callbacks),
+  }));
+}

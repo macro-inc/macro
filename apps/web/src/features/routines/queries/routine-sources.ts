@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
 import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
@@ -38,6 +39,7 @@ import {
   useScheduleHistoryQuery,
   useSchedulesQuery,
   useSetScheduleEnabledMutation,
+  useStopRoutineRunMutation,
   useSubRoutinesQuery,
   useUnusableItemsQuery,
   useUpdateScheduleMutation,
@@ -295,7 +297,10 @@ export function createRoutineListSource(
 
 type RowOperationCallbacks = {
   /** Which operation failed, for the host to say so. */
-  onError(operation: 'run' | 'duplicate' | 'keep', error: unknown): void;
+  onError(
+    operation: 'run' | 'stop' | 'duplicate' | 'keep',
+    error: unknown
+  ): void;
   onRunStarted(): void;
   onDuplicated(id: string): void;
   /** The sub-routine became the owner's own routine. */
@@ -356,8 +361,18 @@ export function createRoutineRowOperations(
     onSuccess: () => callbacks.onKept(),
     onError: (error) => callbacks.onError('keep', error),
   });
+  const stop = useStopRoutineRunMutation({
+    onError: (error) => callbacks.onError('stop', error),
+  });
   const running = createPerRoutineMutation((id) =>
     run.mutateAsync({ scheduleId: id })
+  );
+  // One trace from the click to the server's stop; ids only.
+  const stopping = createPerRoutineMutation((id) =>
+    Telemetry.span('routine.stop', async (span) => {
+      span.setAttr('routine.id', id);
+      await stop.mutateAsync({ scheduleId: id });
+    })
   );
   const duplicating = createPerRoutineMutation(async (id) => {
     const schedule = find(id);
@@ -374,6 +389,8 @@ export function createRoutineRowOperations(
     },
     run: running.start,
     runPending: running.pending,
+    stop: stopping.start,
+    stopPending: stopping.pending,
     duplicate: duplicating.start,
     keepAsOwn: keeping.start,
     async createdCount(id) {
