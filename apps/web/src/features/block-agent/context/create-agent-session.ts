@@ -54,6 +54,16 @@ import { issueSessionAction } from '../queries/issue-session-action';
 import type { EffortSelection } from '../state/session-config';
 import { configureSessionModel } from './configure-session-model';
 
+/** What a caller of `issue` may follow while the action is out. */
+export type IssueOptions = {
+  /**
+   * The send got no clear answer (a lost response, a gateway timeout), so
+   * the session is checking the log for the prompt before calling it sent
+   * or not sent.
+   */
+  onChecking?: () => void;
+};
+
 export type AgentSessionHandle = {
   /** Session row, absent until the load resolves. */
   session: Accessor<AgentSessionResponse | undefined>;
@@ -72,7 +82,10 @@ export type AgentSessionHandle = {
    * Do something to the agent. Folded speculatively at once; settled by the
    * log. `undefined` while the block has no session to act on.
    */
-  issue: (action: AgentAction) => Promise<IssueResult> | undefined;
+  issue: (
+    action: AgentAction,
+    options?: IssueOptions
+  ) => Promise<IssueResult> | undefined;
   /** Confirm a model change, then validate and confirm its optional effort. */
   selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
   /**
@@ -418,10 +431,13 @@ export function createAgentSession(
     loadFailed: () => failure() !== undefined,
     accessDenied: () => failure() instanceof AgentSessionAccessDenied,
     retry: () => fireAndForget(refetch(), 'agent-session'),
-    issue: (action) => {
+    issue: (action, issueOptions) => {
       const current = live();
       return current
-        ? issueSessionAction(current, action, { userId: options.userId() })
+        ? issueSessionAction(current, action, {
+            userId: options.userId(),
+            onChecking: issueOptions?.onChecking,
+          })
         : undefined;
     },
     selectModel: async (model, effort) => {

@@ -189,10 +189,13 @@ describe('view-only session controls', () => {
       expect(mocks.input?.readOnly).toBe(false);
       expect(mocks.queued?.disabled).toBe(false);
       mocks.input?.onSend('A permitted prompt', []);
-      expect(mocks.issue).toHaveBeenCalledWith({
-        type: 'prompt',
-        prompt: 'A permitted prompt',
-      });
+      expect(mocks.issue).toHaveBeenCalledWith(
+        {
+          type: 'prompt',
+          prompt: 'A permitted prompt',
+        },
+        { onChecking: expect.any(Function) }
+      );
     }
   );
 });
@@ -249,10 +252,13 @@ it.each([
   render(() => <AgentComposer />);
   mocks.input?.onSend('Use external settings', []);
   expect(mocks.selectModel).not.toHaveBeenCalled();
-  expect(mocks.issue).toHaveBeenCalledWith({
-    type: 'prompt',
-    prompt: 'Use external settings',
-  });
+  expect(mocks.issue).toHaveBeenCalledWith(
+    {
+      type: 'prompt',
+      prompt: 'Use external settings',
+    },
+    { onChecking: expect.any(Function) }
+  );
 });
 
 it('retains the draft if editing access is revoked while applying speed', async () => {
@@ -344,10 +350,13 @@ it('allows another prompt after a failed turn', () => {
 
   expect(mocks.input?.busy).toBe(false);
   mocks.input?.onSend('Try again', []);
-  expect(mocks.issue).toHaveBeenCalledWith({
-    type: 'prompt',
-    prompt: 'Try again',
-  });
+  expect(mocks.issue).toHaveBeenCalledWith(
+    {
+      type: 'prompt',
+      prompt: 'Try again',
+    },
+    { onChecking: expect.any(Function) }
+  );
 });
 
 describe('a message the harness does not take', () => {

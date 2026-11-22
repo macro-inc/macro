@@ -139,7 +139,7 @@ export type BaseFetchErrorCode =
 
 /** The error safeFetch reports for a failed status when no custom handler words it. */
 export function statusError(status: number): ResultError<BaseFetchErrorCode> {
-  return match(status)
+  const error = match(status)
     .returnType<ResultError<BaseFetchErrorCode>>()
     .with(404, () => ({ code: 'NOT_FOUND', message: 'Resource not found' }))
     .with(401, () => ({ code: 'UNAUTHORIZED', message: 'Unauthorized access' }))
@@ -154,6 +154,7 @@ export function statusError(status: number): ResultError<BaseFetchErrorCode> {
       code: 'HTTP_ERROR',
       message: `HTTP error! status: ${status}`,
     }));
+  return { ...error, status };
 }
 
 /**

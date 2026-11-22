@@ -27,6 +27,7 @@ const fold = vi.hoisted(() => ({
 const harness = vi.hoisted(() => ({
   get: vi.fn(),
   control: vi.fn(),
+  queue: vi.fn(),
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   const actual =
@@ -241,6 +242,7 @@ beforeEach(() => {
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({ messages: [], metadata: {} });
   harness.get.mockResolvedValue(ok(session));
+  harness.queue.mockResolvedValue(ok({ entries: [] }));
   logSource.cached.mockResolvedValue(undefined);
   logSource.fetched.mockResolvedValue(logOf([row(1)]));
   logSource.follow = undefined;
@@ -476,23 +478,169 @@ describe('AgentSession', () => {
     live.release();
   });
 
-  it('retracts a speculation whose request threw', async () => {
+  it('retracts a speculation whose request threw once the log never shows it', async () => {
+    vi.useFakeTimers();
     harness.control.mockRejectedValue(new Error('offline'));
     const live = AgentSession.acquire(SESSION);
-    await live.load();
+    try {
+      await live.load();
 
-    await expect(live.issue({ type: 'prompt', prompt: 'hi' })).rejects.toThrow(
-      'offline'
+      const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+      const rejected = expect(issuing).rejects.toThrow('offline');
+      await vi.advanceTimersByTimeAsync(10_000);
+      await rejected;
+
+      const [speculation] = inputs().filter(
+        (input) => input.kind === 'speculated'
+      );
+      expect(inputs().at(-1)).toEqual({
+        kind: 'retracted',
+        actionId: (speculation as { actionId: string }).actionId,
+      });
+    } finally {
+      live.release();
+      vi.useRealTimers();
+    }
+  });
+
+  describe('a prompt whose send got no clear answer', () => {
+    // The confirmed user row the log folds once the harness ran the prompt.
+    const confirmed = (actionId: string): FoldedStreamEvent => ({
+      kind: 'update',
+      message: {
+        agentSessionId: SESSION,
+        key: '1:user',
+        turn: 1,
+        author: { kind: 'user', userId: 'macro|wolf@macro.com' },
+        requestId: actionId,
+        parts: [{ kind: 'text', text: 'hi' }],
+        stop: null,
+        pending: false,
+        segments: [],
+        phase: null,
+        postedAt: null,
+      },
+    });
+    const gatewayTimeout = {
+      name: 'Error',
+      code: 'HTTP_ERROR' as const,
+      status: 504,
+      message: 'Agent request failed (HTTP 504).',
+    };
+
+    it('counts as sent when its row reaches the log', async () => {
+      let actionId = '';
+      harness.control.mockImplementationOnce(
+        async (_id: string, request: { actionId: string }) => {
+          actionId = request.actionId;
+          return err([gatewayTimeout]);
+        }
+      );
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      const onChecking = vi.fn();
+
+      const issuing = live.issue(
+        { type: 'prompt', prompt: 'hi' },
+        { onChecking }
+      );
+      await settle();
+      expect(onChecking).toHaveBeenCalledOnce();
+      fold.pushSession.mockResolvedValueOnce([confirmed(actionId)]);
+      deliver(row(2));
+      const result = await issuing;
+
+      expect(result.isOk() && result.value).toEqual({
+        actionId,
+        status: 'sent',
+      });
+      expect(inputs().filter((input) => input.kind === 'retracted')).toEqual(
+        []
+      );
+      live.release();
+    });
+
+    it('counts as queued when the harness holds it behind a turn', async () => {
+      vi.useFakeTimers();
+      let actionId = '';
+      harness.control.mockImplementationOnce(
+        async (_id: string, request: { actionId: string }) => {
+          actionId = request.actionId;
+          return err([gatewayTimeout]);
+        }
+      );
+      harness.queue.mockImplementation(async () =>
+        ok({ entries: [{ actionId, kind: 'prompt', prompt: 'hi' }] })
+      );
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+
+        const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+        await vi.advanceTimersByTimeAsync(10_000);
+        const result = await issuing;
+
+        expect(result.isOk() && result.value).toEqual({
+          actionId,
+          status: 'queued',
+        });
+      } finally {
+        live.release();
+        vi.useRealTimers();
+      }
+    });
+
+    it('counts as not sent when the wait runs out without it', async () => {
+      vi.useFakeTimers();
+      harness.control.mockResolvedValueOnce(err([gatewayTimeout]));
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+
+        const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
+        await vi.advanceTimersByTimeAsync(9_000);
+        expect(inputs().filter((input) => input.kind === 'retracted')).toEqual(
+          []
+        );
+        await vi.advanceTimersByTimeAsync(1_000);
+        const result = await issuing;
+
+        expect(result.isErr() && result.error).toEqual([gatewayTimeout]);
+        const [speculation] = inputs().filter(
+          (input) => input.kind === 'speculated'
+        );
+        expect(inputs().at(-1)).toEqual({
+          kind: 'retracted',
+          actionId: (speculation as { actionId: string }).actionId,
+        });
+      } finally {
+        live.release();
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  it('retracts a refused prompt at once, without waiting for the log', async () => {
+    const refusal = {
+      name: 'Error',
+      code: 'HTTP_ERROR' as const,
+      status: 422,
+      message: 'The prompt is empty.',
+    };
+    harness.control.mockResolvedValueOnce(err([refusal]));
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+    const onChecking = vi.fn();
+
+    const result = await live.issue(
+      { type: 'prompt', prompt: 'hi' },
+      { onChecking }
     );
     await settle();
 
-    const [speculation] = inputs().filter(
-      (input) => input.kind === 'speculated'
-    );
-    expect(inputs().at(-1)).toEqual({
-      kind: 'retracted',
-      actionId: (speculation as { actionId: string }).actionId,
-    });
+    expect(result.isErr() && result.error).toEqual([refusal]);
+    expect(onChecking).not.toHaveBeenCalled();
+    expect(inputs().at(-1)).toMatchObject({ kind: 'retracted' });
     live.release();
   });
 

@@ -508,7 +508,8 @@ function documentHidden(): boolean {
   );
 }
 
-function messagesOf(event: FoldedStreamEvent): FoldedMessage[] {
+/** The messages a fold event adds or replaces. */
+export function messagesOf(event: FoldedStreamEvent): FoldedMessage[] {
   return match(event)
     .with({ kind: 'new' }, { kind: 'update' }, (changed) => [changed.message])
     .with({ kind: 'replace' }, (replaced) => replaced.messages)

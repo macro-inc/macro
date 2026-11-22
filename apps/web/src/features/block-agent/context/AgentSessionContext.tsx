@@ -16,6 +16,7 @@ import { type Accessor, createContext, useContext } from 'solid-js';
 import type { ToolApprovalController } from '../primitives/create-tool-approval-controller';
 import type { EffortSelection } from '../state/session-config';
 import type { QuoteInsert } from '../ui';
+import type { IssueOptions } from './create-agent-session';
 import type { QueueController } from './create-queue-controller';
 
 export type AgentSessionState = {
@@ -70,7 +71,10 @@ export type AgentSessionState = {
    * the action at once and the log settles it. `undefined` while the block
    * has no session to act on.
    */
-  issue: (action: AgentAction) => Promise<IssueResult> | undefined;
+  issue: (
+    action: AgentAction,
+    options?: IssueOptions
+  ) => Promise<IssueResult> | undefined;
   /**
    * Why the last prompt could not run: the agent may not run on its
    * registered runtime. Shown in the transcript; cleared by a prompt that is

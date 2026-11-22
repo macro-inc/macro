@@ -109,13 +109,21 @@ export function AgentComposer(props: {
   // observed there; only a refusal needs saying here. Resolves whether the
   // harness took the action, and its reason when it refused, so a refused
   // prompt can go back to the draft.
+  // A send that got no clear answer while the session checks the log for it.
+  const [checking, setChecking] = createSignal(false);
+
   const act = async (
     action: AgentAction,
     failure: string
   ): Promise<{ taken: boolean; refusal?: string }> => {
     if (readOnly()) return { taken: false };
     try {
-      const result = await issue(action);
+      let result: Awaited<ReturnType<typeof issue>>;
+      try {
+        result = await issue(action, { onChecking: () => setChecking(true) });
+      } finally {
+        setChecking(false);
+      }
       if (!result?.isErr()) return { taken: true };
       // A stopped agent says why in the transcript instead of a toast.
       const refused = result.error.find(isNoRuntimeAccessError);
@@ -350,6 +358,9 @@ export function AgentComposer(props: {
           )}
         </Show>
       </div>
+      <Show when={checking()}>
+        <ComposerNotice text="Checking whether it was sent…" active />
+      </Show>
       <Show when={resuming()}>
         <ComposerNotice text="Waking the agent's sandbox…" active />
       </Show>

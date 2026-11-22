@@ -65,6 +65,7 @@ const sessionError: ErrorResponseHandler<never> = async (response) => {
     : '';
   return {
     code: response.status === 401 ? 'UNAUTHORIZED' : 'HTTP_ERROR',
+    status: response.status,
     message:
       message === 'repository is not available to this user'
         ? 'Connect GitHub to Macro with access to the selected repository, or choose a repository your Macro account can access.'

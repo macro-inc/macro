@@ -47,6 +47,7 @@ import type {
   AgentAction,
   AgentSessionResponse,
   ControlRequest,
+  ControlResponse,
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
@@ -59,8 +60,9 @@ import {
   traceAcquire,
   transcriptSize,
 } from './load-telemetry';
-import { frameDelivery, PromptTrace } from './prompt-telemetry';
+import { frameDelivery, messagesOf, PromptTrace } from './prompt-telemetry';
 import { createdRecently, forgetSessionCreated } from './recently-created';
+import { isUnknownOutcome } from './send-outcome';
 import { publishSessionTurn } from './session-turn';
 import { typedInClientId } from './ui-client';
 
@@ -75,6 +77,13 @@ export type AgentSessionRecord = {
 export type IssueResult = Awaited<
   ReturnType<typeof agentHarnessServiceClient.control>
 >;
+
+/**
+ * How long a prompt whose send got no clear answer waits for its row in the
+ * log before it counts as not sent. The log flushes in about 1.5 s, so this
+ * covers a slow flush several times over.
+ */
+export const UNKNOWN_OUTCOME_WAIT_MS = 10_000;
 
 /**
  * The load was abandoned because every surface holding the session let go
@@ -372,7 +381,12 @@ export class AgentSession {
    */
   async issue(
     action: AgentAction,
-    options: { userId?: string; trace?: PromptTrace } = {}
+    options: {
+      userId?: string;
+      trace?: PromptTrace;
+      /** The send got no clear answer; its arrival is being checked. */
+      onChecking?: () => void;
+    } = {}
   ): Promise<IssueResult> {
     const actionId = uuidv7();
     const trace =
@@ -405,12 +419,40 @@ export class AgentSession {
       actionId,
       ...this.typedIn(action),
     };
-    let result: IssueResult;
+    // Watched from before the POST: the row can reach the socket before
+    // the POST's answer does, or instead of it.
+    const arrival =
+      action.type === 'prompt' ? this.watchArrival(actionId) : undefined;
+    let result: IssueResult | undefined;
+    let thrown: { error: unknown } | undefined;
     try {
       result = trace
         ? await this.sendPrompt(trace, actionId, request)
         : await agentHarnessServiceClient.control(this.id, request);
     } catch (error) {
+      thrown = { error };
+    }
+    // No clear answer: the harness may have applied the prompt anyway. Its
+    // row in the log, or its entry in the queue, settles which.
+    if (
+      arrival &&
+      (thrown !== undefined ||
+        (result?.isErr() === true && isUnknownOutcome(result.error)))
+    ) {
+      options.onChecking?.();
+      const settled = await this.settleUnknown(actionId, arrival.arrived);
+      arrival.stop();
+      if (settled) {
+        if (speculated && settled.status === 'queued')
+          fireAndForget(
+            this.enqueue({ kind: 'retracted', actionId }),
+            'agent-session'
+          );
+        return ok(settled);
+      }
+    }
+    arrival?.stop();
+    if (thrown !== undefined || result === undefined) {
       // A request that never got an answer goes back to the composer, so
       // its bubble goes too; otherwise a resend would show it twice.
       if (speculated)
@@ -418,7 +460,7 @@ export class AgentSession {
           this.enqueue({ kind: 'retracted', actionId }),
           'agent-session'
         );
-      throw error;
+      throw thrown?.error;
     }
 
     if (!speculated) return result;
@@ -457,6 +499,58 @@ export class AgentSession {
       );
     }
     return result;
+  }
+
+  /**
+   * Resolves when the log shows the prompt sent under `actionId` as
+   * confirmed. `stop` ends the watch.
+   */
+  private watchArrival(actionId: string): {
+    arrived: Promise<void>;
+    stop: () => void;
+  } {
+    let stop: () => void = () => {};
+    const arrived = new Promise<void>((resolve) => {
+      stop = this.subscribe((events) => {
+        const confirmed = events.some((event) =>
+          messagesOf(event).some(
+            (message) =>
+              message.author.kind === 'user' &&
+              !message.pending &&
+              message.requestId === actionId
+          )
+        );
+        if (confirmed) resolve();
+      });
+    });
+    return { arrived, stop: () => stop() };
+  }
+
+  /**
+   * What became of a prompt whose send got no clear answer: sent when its
+   * row reaches the log in time, queued when the harness holds it waiting
+   * behind a turn, otherwise not sent.
+   */
+  private async settleUnknown(
+    actionId: string,
+    arrived: Promise<void>
+  ): Promise<ControlResponse | undefined> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const seen = await Promise.race([
+      arrived.then(() => true),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), UNKNOWN_OUTCOME_WAIT_MS);
+      }),
+    ]);
+    clearTimeout(timer);
+    if (seen) return { actionId, status: 'sent' };
+    const queue = await agentHarnessServiceClient
+      .queue(this.id)
+      .catch(() => undefined);
+    const waiting =
+      queue?.isOk() === true &&
+      queue.value.entries.some((entry) => entry.actionId === actionId);
+    return waiting ? { actionId, status: 'queued' } : undefined;
   }
 
   /**

@@ -164,8 +164,8 @@ export function AgentSessionProvider(
     );
     return result;
   };
-  const issue: typeof live.issue = (action) => {
-    const issued = live.issue(action);
+  const issue: typeof live.issue = (action, options) => {
+    const issued = live.issue(action, options);
     if (!issued || action.type !== 'prompt') return issued;
     return recordRefusal(issued);
   };

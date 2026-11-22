@@ -9,6 +9,8 @@ export interface Error {
 export interface ResultError<Code extends string = string> extends Error {
   code: Code;
   message: string;
+  /** The HTTP status of the response the error came from, when there was one. */
+  status?: number;
 }
 
 export type ObjectLike = Record<string, any>;
