@@ -132,25 +132,33 @@ export function useListPropertiesQuery(
 /**
  * Definitions with their options, once: from the cache when it holds the
  * list, else from the server. Independent of any mounted reader, so a reader
- * refreshing cannot cancel it.
+ * refreshing cannot cancel it. A mounted reader of the same list shares this
+ * operation, so a request of its that fails can answer this one with the
+ * failure even though the cache holds the list; the cached list wins then,
+ * as TanStack's cached data did.
  */
 export async function loadPropertyDefinitionsWithOptions(
   params: Omit<ListPropertiesQueryParams, 'includeOptions'>
 ): Promise<PropertyDefinitionResponse[]> {
-  const result = await getGraphqlSoupClient()
-    .query(
-      PropertyCatalogDefinitionsWithOptionsDocument,
-      {
-        scope: toGraphqlDefinitionScope(params.scope),
-        forEntityType: (params.forEntityType ??
-          null) as GraphqlPropertyEntityType | null,
-      },
-      { requestPolicy: 'cache-first' }
-    )
+  const client = getGraphqlSoupClient();
+  const variables = {
+    scope: toGraphqlDefinitionScope(params.scope),
+    forEntityType: (params.forEntityType ??
+      null) as GraphqlPropertyEntityType | null,
+  };
+  const result = await client
+    .query(PropertyCatalogDefinitionsWithOptionsDocument, variables, {
+      requestPolicy: 'cache-first',
+    })
     .toPromise();
-  if (!result.data)
-    throw result.error ?? new Error('Property definitions returned no data');
-  return definitionsWithOptions(result.data);
+  if (result.data) return definitionsWithOptions(result.data);
+  const cached = await client
+    .query(PropertyCatalogDefinitionsWithOptionsDocument, variables, {
+      requestPolicy: 'cache-only',
+    })
+    .toPromise();
+  if (cached.data) return definitionsWithOptions(cached.data);
+  throw result.error ?? new Error('Property definitions returned no data');
 }
 
 /** One definition with its options, read from the server. */
