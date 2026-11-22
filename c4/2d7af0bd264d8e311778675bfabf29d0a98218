@@ -1,0 +1,21 @@
+apps/web/src/features/block-agent/component/ReplyFooter.test.tsx
+  s_ab1058a732cc69::t_15834e24a7b0b1 1-75
+apps/web/src/features/block-agent/component/PromptFooter.tsx
+  s_ab1058a732cc69::t_13b051a5bb9b89 96-99,103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c42d7af0bd264d8e311778675bfabf29d0a98218",
+  "prompts": {},
+  "sessions": {
+    "s_ab1058a732cc69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3744eaac-6a23-4a13-8470-3dfc1e7728a7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
