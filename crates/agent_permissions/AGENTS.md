@@ -21,9 +21,15 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
 - Operations marked `always_allowed` in the registry (the agent's own
   tightening) are outside the catalog: always allowed, and no setting can
   name them.
-- Owned agents have one policy (`agent_tool_permission`); a built-in persona
-  has one per person (`persona_tool_permission`), and in a session the
-  owner's applies.
+- Every policy has a stable id (`PolicyId`, `agent_permission_policy`; the
+  view's `policyId`), and its settings are rows under that id
+  (`agent_permission_rule`). Owned agents have one policy; a built-in persona
+  has one per person, and in a session the owner's applies.
+  `PermissionStore::ensure_policy` creates a policy's row on first use (in the
+  gate, before its read-only snapshot), and only after the request passed
+  its access checks. `agent_tool_permission` and `persona_tool_permission`
+  are the tables from before ids, copied by migration `20261122220100` and no
+  longer read; a cleanup after release drops them.
 - Tighten-only compares every operation's effective state before and after
   the change (`domain/resolve.rs` `tighten_only`). A tool's `always` is
   saved as clearing its own setting. A state asked for that is looser than
