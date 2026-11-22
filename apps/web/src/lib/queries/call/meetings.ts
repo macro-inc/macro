@@ -186,8 +186,11 @@ export function useJoinMeetingMutation() {
               params.displayName
             )
       ),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries(callKeys.activeMeetings);
+      // A scheduled meeting rejoined before its end resumes the same call id;
+      // the detail page may still cache its ended record.
+      queryClient.invalidateQueries(callKeys.record(response.callId));
     },
   }));
 }
