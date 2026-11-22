@@ -1,7 +1,11 @@
 import { routineSuggestionKeys } from '@app/features/routine-suggestions/queries/keys';
 import type { Suggestion as WireSuggestion } from '@service-scheduled-action/generated/schemas';
 import { renderHook, waitFor } from '@solidjs/testing-library';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  QueryObserver,
+} from '@tanstack/solid-query';
 import { err, ok, ResultAsync } from 'neverthrow';
 import type { ParentProps } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -32,20 +36,31 @@ const COUNTS = { open: 0, running: 0, failed: 0, done: 1 };
 const server = vi.hoisted(() => ({
   feedFails: false,
   listed: undefined as WireSuggestion[] | undefined,
+  /** The next feed reads, in turn, wait on these before they answer. */
+  gates: [] as Promise<void>[],
+  /** Runs as the server answers a restore. */
+  onRestore: undefined as (() => void) | undefined,
 }));
 
 vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: {
     suggestionGeneration: async () => ok({ state: 'idle' }),
-    listSuggestions: async () =>
-      server.feedFails
+    listSuggestions: async () => {
+      const failing = server.feedFails;
+      const listed = server.listed;
+      await server.gates.shift();
+      return failing
         ? err([{ code: 'HTTP_ERROR', message: 'unavailable' }])
         : ok({
             suggestions: [],
-            done: server.listed ?? [DONE],
+            done: listed ?? [DONE],
             counts: COUNTS,
-          }),
-    restoreSuggestion: async () => ok(undefined),
+          });
+    },
+    restoreSuggestion: async () => {
+      server.onRestore?.();
+      return ok(undefined);
+    },
     dismissSuggestion: async () => ok(undefined),
   },
 }));
@@ -78,6 +93,8 @@ function decoded(wire: WireSuggestion): Suggestion {
 beforeEach(() => {
   server.feedFails = false;
   server.listed = undefined;
+  server.gates = [];
+  server.onRestore = undefined;
 });
 
 it('shows a restored suggestion open even when the read after the restore fails', async () => {
@@ -105,18 +122,65 @@ it('puts a restored dismissal back in the feed, open, when the read after it fai
   ]);
 });
 
-it('reads routine ideas again after a dismissal, which can take an idea with it', async () => {
-  const { client, source } = mount();
-  client.setQueryData(routineSuggestionKeys.all.queryKey, []);
+it('shows a restored suggestion open before the read after the restore answers', async () => {
+  const { source } = mount();
+  await waitFor(() =>
+    expect(source.feed()?.suggestions[0]?.status).toBe('done')
+  );
+
+  server.gates.push(new Promise<void>(() => {}));
+  await source.restore(decoded(DONE));
+
+  expect(source.feed()?.suggestions[0]?.status).toBe('open');
+});
+
+it('keeps a restored suggestion open over a read that answered just before the restore', async () => {
+  const { source } = mount();
+  await waitFor(() =>
+    expect(source.feed()?.suggestions[0]?.status).toBe('done')
+  );
+  // A read goes out before the restore, and answers (still done) as the
+  // server takes the restore; the read after it fails.
+  let release: () => void = () => {};
+  server.gates.push(
+    new Promise<void>((resolve) => {
+      release = resolve;
+    })
+  );
+  const before = source.refresh();
+  server.onRestore = () => {
+    release();
+    server.feedFails = true;
+  };
+
+  await source.restore(decoded(DONE));
+  await before;
   await waitFor(() => expect(source.feed()).toBeDefined());
+
+  expect(source.feed()?.suggestions[0]?.status).toBe('open');
+});
+
+it('reads routine ideas again after a dismissal, without holding the dismissal for it', async () => {
+  const { client, source } = mount();
+  await waitFor(() => expect(source.feed()).toBeDefined());
+  // The sidebar reads the ideas: the first answer comes at once, the one
+  // after the dismissal never does.
+  const read = vi
+    .fn<() => Promise<string[]>>()
+    .mockResolvedValueOnce(['idea'])
+    .mockReturnValue(new Promise<string[]>(() => {}));
+  const ideas = new QueryObserver(client, {
+    queryKey: routineSuggestionKeys.all.queryKey,
+    queryFn: read,
+  });
+  const stop = ideas.subscribe(() => {});
+  await waitFor(() => expect(ideas.getCurrentResult().data).toEqual(['idea']));
 
   await source.dismiss('suggestion-1');
 
-  await waitFor(() =>
-    expect(
-      client.getQueryState(routineSuggestionKeys.all.queryKey)?.isInvalidated
-    ).toBe(true)
-  );
+  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+  expect(ideas.getCurrentResult().fetchStatus).toBe('fetching');
+  stop();
 });
 
 it('drops a read of the routine ideas that was out before the dismissal', async () => {

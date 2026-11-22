@@ -276,7 +276,12 @@ export function ForYouView(props: {
       { defer: true }
     )
   );
-  const selectList = (list: ForYouList) => props.onSelectList(list);
+  const selectList = (list: ForYouList) => {
+    // Choosing the list already shown changes nothing the effect above
+    // follows, but still starts it at its top.
+    if (list === props.list) scroller?.scrollTo({ top: 0 });
+    props.onSelectList(list);
+  };
 
   return (
     <ViewShell.Root

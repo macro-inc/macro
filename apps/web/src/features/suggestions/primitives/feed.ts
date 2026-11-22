@@ -337,7 +337,8 @@ export function createSuggestionsFeed(
     /**
      * Sent at once, and the row shows dismissed from the press: the feed
      * drops the suggestion as soon as the server has it, before the call
-     * answers. A refusal opens the row again, marked failed.
+     * answers. A refusal opens the row again, marked failed, while the feed
+     * still lists it.
      */
     dismiss: (suggestion: Suggestion) =>
       act(suggestion, 'dismiss', async () => {
@@ -349,6 +350,15 @@ export function createSuggestionsFeed(
           (error) => error
         );
         if (sent.isErr()) {
+          // A feed that no longer lists it says the server has the
+          // dismissal and only its answer was lost: keep the row, with Undo.
+          const listed = source
+            .feed()
+            ?.suggestions.some(
+              (other) => other.id === suggestion.id && isLive(other)
+            );
+          if (!listed) return;
+
           setDismissed(holdOthers);
           throw sent.error;
         }

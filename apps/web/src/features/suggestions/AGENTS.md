@@ -85,11 +85,15 @@ only, behind `enable-suggestions`.
   for the visit, and Undo calls `POST /suggestions/{id}/restore`, which the
   server allows for a few minutes. `restore` takes the suggestion as the row
   held it, so it shows open at once, back in the feed, even if the read after
-  it fails. A dismissed routine suggestion has no Undo: its idea
+  it fails: it drops a feed read already out first (one that predates the
+  restore could put the old state back), and resolves once the feed's readers
+  have the restored row, without waiting for the read after it. A dismissed routine suggestion has no Undo: its idea
   goes with it, which the server can't bring back. A dismissal also reads
   the routine ideas again, for the sidebar's Ideas count, dropping a read
   already out (it may predate the dismissal); the row doesn't wait for it. A refused
-  dismissal leaves the row with the failed-action line; a refused Undo says
+  dismissal leaves the row with the failed-action line, unless the feed no
+  longer lists the suggestion: then the server has it and only the answer was
+  lost, so the row stays dismissed, with Undo; a refused Undo says
   it may be too late. The Undo that replaces a pressed ✓ or ✕ takes the
   focus it left, once it can be pressed, unless the person pressed or
   focused something outside the row meanwhile (`createFocusHandoff`). Dismissing a
@@ -105,7 +109,7 @@ only, behind `enable-suggestions`.
 - The page is a sidebar of lists and the chosen list (`?view=`, Today by
   default) under its name and the date (`views/for-you-view.tsx`,
   `components/for-you-sidebar.tsx`). Every change of list, from the sidebar
-  or from history, opens the list at its top, unless a link names a
+  or from history, and choosing the list already shown, opens the list at its top, unless a link names a
   suggestion to scroll to. `core/lists.ts` says which suggestions
   each list holds: Today all that wait or run, To do entity suggestions,
   Suggestions prompts and routines, Done what the server lists as done. Each

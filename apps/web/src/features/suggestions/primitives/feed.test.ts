@@ -576,6 +576,29 @@ describe('suggestions feed', () => {
     });
   });
 
+  it('keeps a row dismissed, with Undo, when the feed dropped it before its dismissal failed', async () => {
+    await withFeed([composerSuggestion], async (feed, { source, serve }) => {
+      let fail: (error: Error) => void = () => {};
+      source.dismiss.mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            fail = reject;
+          })
+      );
+      const sent = feed.dismiss(composerSuggestion);
+      // The server took the dismissal (a poll no longer lists it), and only
+      // its answer was lost.
+      serve([]);
+      fail(new Error('connection lost'));
+      await sent;
+
+      expect(entryOf(feed, 'suggestion-composer')).toMatchObject({
+        state: 'dismissed',
+        failed: false,
+      });
+    });
+  });
+
   it('leaves the card, marked failed, when the server refused its dismissal', async () => {
     const deps = host([composerSuggestion]);
     deps.source.dismiss.mockRejectedValueOnce(new Error('refused'));

@@ -566,6 +566,25 @@ test('each list opens at its top, wherever the last one was scrolled', async ({
   ).toBe(0);
 });
 
+test('choosing the list already shown starts it at its top', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 420 });
+  await page.goto('/');
+  const today = page.locator('section[aria-label="Today"]');
+  await today.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  expect(await today.evaluate((element) => element.scrollTop)).toBeGreaterThan(
+    0
+  );
+
+  await sidebarList(page, 'today').click();
+  await expect
+    .poll(() => today.evaluate((element) => element.scrollTop))
+    .toBe(0);
+});
+
 test('a list changed by Back opens at its top too', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 420 });
   await page.goto('/');
@@ -597,6 +616,15 @@ test('Undo leaves focus where the person moved it while marking done was sent', 
   await page.locator('section[aria-label="Today"] h1').click();
 
   await expect(review).toHaveAttribute('data-suggestion-state', 'markedDone');
+  // Undo takes focus only once it can be pressed and is in the page, which
+  // the browser reports a frame later: wait for both before looking.
+  await expect(button(review, 'Undo')).toBeEnabled();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+  );
   await expect(button(review, 'Undo')).not.toBeFocused();
 });
 

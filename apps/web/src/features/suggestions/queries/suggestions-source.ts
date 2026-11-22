@@ -6,7 +6,12 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { queryReadyGate } from '@queries/gate';
 import { scheduledActionClient } from '@service-scheduled-action/client';
-import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
+import {
+  notifyManager,
+  queryOptions,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/solid-query';
 import { createEffect, createMemo } from 'solid-js';
 import type { SuggestionsSource } from '../context/suggestions-source';
 import type { Suggestion, SuggestionFeed } from '../core/suggestion';
@@ -192,12 +197,20 @@ export function useSuggestionsSource(): SuggestionsSource {
           suggestionId: suggestion.id,
         })
       );
+      // A read already out may predate the restore: drop it (awaiting lets
+      // one that has answered land first), so it can't put the old state
+      // back over the restored one.
+      await queryClient.cancelQueries({ queryKey: asked });
       // Restored is open: say so before the read, which keeps what it held
       // if it fails. A dismissed one has left the feed, so it goes back in.
       queryClient.setQueryData(asked, (held: SuggestionFeed | undefined) =>
         held ? reopened(held, suggestion) : held
       );
-      await refresh();
+      // Readers hear of the patch on the next notify; resolving after it
+      // means a caller that drops its own copy of the row never leaves a gap.
+      await new Promise<void>((resolve) => notifyManager.schedule(resolve));
+      // The row shows open now; the read that follows doesn't hold it.
+      fireAndForget(refresh(), 'suggestions');
     },
     viewed: () =>
       fireAndForget(
