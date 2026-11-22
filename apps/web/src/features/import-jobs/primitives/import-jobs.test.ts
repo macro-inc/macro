@@ -64,7 +64,7 @@ it('lets a finished import go after a few seconds and keeps a failure until dism
   vi.advanceTimersByTime(5_000);
   expect(jobs().map((job) => job.source)).toEqual(['jira']);
 
-  // A failure stays, hours later, until it is dismissed.
+  // A failure stays, hours later, until it is dismissed...
   vi.advanceTimersByTime(3 * 60 * 60 * 1000);
   expect(jobs().map((job) => job.source)).toEqual(['jira']);
   const [failed] = jobs();
@@ -139,5 +139,31 @@ it('keeps an import that finished with failures until it is dismissed', () => {
     // An unknown kind still lists, read as Macro's side.
     { kind: 'failed', errorKind: 'internal' },
   ]);
+  dispose();
+});
+
+it('stops listing a failure nobody dismissed after a week', () => {
+  const { jobs, dispose } = createRoot((dispose) => ({
+    dispose,
+    ...createImportJobs({
+      runs: {
+        runs: () => [
+          {
+            source: 'notion',
+            status: 'failed',
+            error_kind: 'unreachable',
+            updated_at: '2026-11-06T12:00:00Z',
+          },
+        ],
+        slackChannelsImporting: () => 0,
+      },
+      createReport: () => () => undefined,
+      dismissals: { restore: () => [], save: () => {} },
+    }),
+  }));
+  vi.advanceTimersByTime(6 * 24 * 60 * 60 * 1000);
+  expect(jobs()).toHaveLength(1);
+  vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+  expect(jobs()).toEqual([]);
   dispose();
 });

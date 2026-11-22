@@ -1125,8 +1125,13 @@ export type ImportSettlement_Deserialize = {
 	source?: ImportWorkspace,
 	/**  How the write ended. */
 	outcome: ImportOutcome,
-	/**  Why it failed, or what went wrong in a completed write. */
+	/**
+	 *  Why it failed, written from `error_kind`, or what went wrong in a
+	 *  completed write. Never the importer's raw error.
+	 */
 	error: string | null,
+	/**  Why it failed, when it did and the kind was recorded. */
+	errorKind?: RunErrorKind | null,
 	/**  Objects written into Macro. */
 	imported: number,
 	/**
@@ -1168,8 +1173,13 @@ export type ImportSettlement_Serialize = {
 	source: ImportWorkspace,
 	/**  How the write ended. */
 	outcome: ImportOutcome,
-	/**  Why it failed, or what went wrong in a completed write. */
+	/**
+	 *  Why it failed, written from `error_kind`, or what went wrong in a
+	 *  completed write. Never the importer's raw error.
+	 */
 	error?: string | null,
+	/**  Why it failed, when it did and the kind was recorded. */
+	errorKind?: RunErrorKind | null,
 	/**  Objects written into Macro. */
 	imported: number,
 	/**
@@ -1877,6 +1887,39 @@ export type ReviewUpdatedNotification = {
 	/**  Its saved revision after the change. */
 	revision: number,
 };
+
+/**
+ *  Why a run failed, as a closed set readers branch on instead of the error
+ *  text. Stored in `import_run.error_kind`; `None` on runs that failed
+ *  before it was recorded.
+ */
+export type RunErrorKind =
+/**
+ *  The source said an object was missing or not shared with the
+ *  connection.
+ */
+"not_found" |
+/**  The connection may not read what the import asked for. */
+"forbidden" |
+/**  The source refused the connection itself: revoked or expired. */
+"access_lost" |
+/**  The connection's proxy could not use the account at all. */
+"connection_unavailable" |
+/**  The source is not connected, or the connection is turned off. */
+"not_connected" |
+/**  The source kept rate limiting the import. */
+"rate_limited" |
+/**  The source could not be reached or answered with an error. */
+"unreachable" |
+/**  The AI work planning needs was refused (usage or billing). */
+"usage_refused" |
+/**
+ *  The run stopped before it finished (its process went away too
+ *  often); starting it again picks up what is left.
+ */
+"interrupted" |
+/**  Anything else, on Macro's side. */
+"internal";
 
 /**  A run of a reply's parts that reads as one unit. */
 export type Segment = Segment_Serialize | Segment_Deserialize;

@@ -240,3 +240,31 @@ it('reports a settled import from its counts, never its error text', () => {
   expect(status.textContent).not.toContain('Secret roadmap');
   expect(status.classList.contains('text-failure')).toBe(true);
 });
+
+it('says a refused approval did not start and left the review open', () => {
+  const view = render(() => (
+    <SessionEventRow
+      event={{
+        ...base,
+        kind: 'review.settled',
+        payload: {
+          by: 'owner',
+          via: 'card',
+          outcome: 'refused',
+          items: [
+            {
+              id: '1',
+              status: 'pending',
+              edited: false,
+              error: 'The import was not started: the import plan failed.',
+            },
+          ],
+        },
+      }}
+    />
+  ));
+  expect(view.getByRole('status').textContent).toContain(
+    'Not started · review still open'
+  );
+  expect(view.getByRole('status').textContent).not.toContain('Review finished');
+});

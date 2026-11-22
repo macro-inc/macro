@@ -30,9 +30,12 @@ export const RECENT_MS = 60 * 60 * 1000;
 /** How long a finished or cancelled run stays listed, like a toast. */
 export const FINISHED_MS = 5 * 1000;
 
+/** How long a failure stays listed when it is never dismissed. */
+export const FAILED_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
  * How long after its last change a run that stopped moving stays listed:
- * a finished one briefly, a failed one until it is dismissed.
+ * a finished one briefly, a failed one until it is dismissed or a week old.
  */
 function listedFor(run: ImportRun): number {
   return (
@@ -43,7 +46,7 @@ function listedFor(run: ImportRun): number {
         run.error ? Number.POSITIVE_INFINITY : FINISHED_MS
       )
       .with('dismissed', () => FINISHED_MS)
-      .with('failed', () => Number.POSITIVE_INFINITY)
+      .with('failed', () => FAILED_MS)
       .with('running', 'ready', 'importing', () => RECENT_MS)
       .exhaustive()
   );
