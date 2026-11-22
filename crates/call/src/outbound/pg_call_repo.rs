@@ -35,9 +35,9 @@ use crate::domain::meetings::{
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
     CallPeople, CallRecord, CallRecordGuest, CallRecordPage, CallRecordParticipant,
-    CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
-    DeletedCallRecordStorageKeys, EditCallRecordRepoArgs, EnrichedCallTranscript,
-    TranscriptSegmentRequest, WithCallId,
+    CallRecordPreview, CallRecordPreviewData, CallRecordSession, CallRecordTranscriptSegment,
+    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRepoArgs,
+    EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
 
@@ -1484,6 +1484,7 @@ impl CallRepository for PgCallRepo {
                 guests,
                 transcript,
                 source: None,
+                sessions: Vec::new(),
             }));
         }
 
@@ -1572,8 +1573,32 @@ impl CallRepository for PgCallRepo {
         })
         .collect();
 
+        // Sessions after the first; a call that was never resumed has none.
+        let later_sessions = sqlx::query!(
+            r#"
+            SELECT started_at, ended_at, recording_started_at, recording_key, preview_url
+            FROM call_record_sessions
+            WHERE call_record_id = $1
+            ORDER BY started_at ASC
+            "#,
+            call_id,
+        )
+        .fetch_all(&mut *tx)
+        .await?
+        .into_iter()
+        .map(|row| CallRecordSession {
+            started_at: row.started_at,
+            ended_at: row.ended_at,
+            recording_started_at: row.recording_started_at,
+            recording_key: row.recording_key,
+            preview_key: row.preview_url,
+            recording_url: None,
+            recording_preview_url: None,
+        })
+        .collect();
+
         tx.commit().await?;
-        Ok(Some(CallRecord {
+        let mut record = CallRecord {
             call_id: archived.id,
             user_access_level: None,
             channel_id: archived.channel_id,
@@ -1605,7 +1630,10 @@ impl CallRepository for PgCallRepo {
             guests,
             transcript,
             source: None,
-        }))
+            sessions: Vec::new(),
+        };
+        record.set_archived_sessions(later_sessions);
+        Ok(Some(record))
     }
 
     #[tracing::instrument(err, skip(self, call_ids), fields(num_call_ids = call_ids.len()))]

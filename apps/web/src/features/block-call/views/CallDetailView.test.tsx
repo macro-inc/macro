@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
       shareWithTeam: false,
       startedAt: '2026-10-02T00:00:00Z',
       transcript: [],
+      sessions: [],
     } satisfies CallRecord,
   },
 }));

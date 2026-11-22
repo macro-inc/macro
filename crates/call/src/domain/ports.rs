@@ -1141,9 +1141,12 @@ pub trait CallService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
 
     /// Stream a recording after checking the same access as the call record.
+    /// `session` is the 0-based index into the record's sessions; 0 is the
+    /// first session, and the only one a live call has.
     fn get_call_recording(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
+        session: u16,
     ) -> impl Future<Output = Result<RecordingDownload, CallError>> + Send;
 
     /// Delete a [`CallRecord`] the caller has channel-member access to.

@@ -21,7 +21,7 @@ use std::time::Duration;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, FromRequestParts, State},
+    extract::{FromRef, FromRequestParts, Query, State},
     http::{HeaderMap, StatusCode, header, request::Parts},
     response::IntoResponse,
     routing::{get, patch, post},
@@ -353,8 +353,8 @@ impl<S> FromRef<InternalCallRouterState<S>> for Arc<S> {
 ///
 /// Routes:
 /// - `POST /{room_name}/transcript` — ingest a transcript segment (from the
-///   transcription agent; the path segment is the RTC room name, which equals
-///   the call id for new calls)
+///   transcription agent; the path segment is the RTC room name: the call id
+///   for a call's first session, a fresh UUID for a resumed meeting's later ones)
 pub fn internal_call_router<S, T>(state: InternalCallRouterState<S>) -> Router<T>
 where
     S: CallService,
@@ -821,8 +821,23 @@ pub(super) fn without_presigned_urls_for_programs(
     if is_program_run(attribution, headers) {
         record.recording_url = None;
         record.recording_preview_url = None;
+        for session in &mut record.sessions {
+            session.recording_url = None;
+            session.recording_preview_url = None;
+        }
     }
     record
+}
+
+/// Which of a call's sessions to stream.
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct CallRecordingQuery {
+    /// 0-based index into the record's `sessions`. Defaults to 0, the first
+    /// session; a later session exists only when a scheduled meeting emptied
+    /// and was rejoined before its end.
+    #[serde(default)]
+    pub session: u16,
 }
 
 /// OpenAPI representation of streamed recording bytes.
@@ -838,7 +853,7 @@ pub struct RecordingBytes(
     get,
     operation_id = "get_call_recording",
     path = "/call/record/{call_id}/recording",
-    params(("call_id" = Uuid, Path, description = "Call ID")),
+    params(("call_id" = Uuid, Path, description = "Call ID"), CallRecordingQuery),
     responses(
         (status = 200, content_type = "video/mp4", body = RecordingBytes),
         (status = 403, body = ErrorResponse),
@@ -854,10 +869,11 @@ pub async fn get_call_recording_handler<
 >(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     access: CallAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
+    Query(query): Query<CallRecordingQuery>,
 ) -> Result<axum::response::Response, CallError> {
     let recording = state
         .service
-        .get_call_recording(access.entity_access_receipt)
+        .get_call_recording(access.entity_access_receipt, query.session)
         .await?;
     let content_length = recording.content_length.to_string();
 

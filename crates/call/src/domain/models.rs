@@ -15,6 +15,9 @@ use models_permissions::share_permission::team_share::{
 };
 use uuid::Uuid;
 
+mod sessions;
+pub use sessions::CallRecordSession;
+
 /// Represents an active call in a channel.
 #[derive(Debug, Clone)]
 pub struct Call {
@@ -743,6 +746,11 @@ pub struct CallRecord {
     /// External provenance for calls imported from another provider; `None`
     /// for calls recorded in Macro.
     pub source: Option<CallRecordSource>,
+    /// The call's RTC sessions in order, once archived. One, unless a
+    /// scheduled meeting emptied and was rejoined before its end. Empty while
+    /// the call is live, for imported calls, and in list contexts. The
+    /// top-level recording fields describe the first session.
+    pub sessions: Vec<CallRecordSession>,
 }
 
 /// Where an imported call came from.

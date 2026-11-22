@@ -172,6 +172,7 @@ pub(super) async fn read_imported_call_record(
             provider,
             external_url: call.external_url,
         }),
+        sessions: Vec::new(),
     }))
 }
 

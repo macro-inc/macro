@@ -119,6 +119,7 @@ const record = (over: Partial<CallRecord>): CallRecord => ({
   roomName: 'room',
   startedAt: '2026-08-21T09:00:00.000Z',
   transcript: [],
+  sessions: [],
   teamShareAccessLevel: null,
   shareWithTeam: false,
   ...over,

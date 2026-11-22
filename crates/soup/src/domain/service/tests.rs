@@ -277,6 +277,7 @@ fn call_record(
         guests: Vec::new(),
         transcript: Vec::new(),
         source: None,
+        sessions: Vec::new(),
     }
 }
 

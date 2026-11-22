@@ -3934,6 +3934,17 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "session",
+            "in": "query",
+            "description": "0-based index into the record's `sessions`. Defaults to 0, the first\nsession; a later session exists only when a scheduled meeting emptied\nand was rejoined before its end.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
           }
         ],
         "responses": {
@@ -35312,7 +35323,8 @@
           "isActive",
           "participants",
           "guests",
-          "transcript"
+          "transcript",
+          "sessions"
         ],
         "properties": {
           "callId": {
@@ -35389,6 +35401,13 @@
           "roomName": {
             "type": ["string", "null"],
             "description": "The RTC room name. `None` for imported calls, which never had a room."
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordSession"
+            },
+            "description": "The call's RTC sessions in order, once archived. One, unless a\nscheduled meeting emptied and was rejoined before its end. Empty while\nthe call is live, for imported calls, and in list contexts. The\ntop-level recording fields describe the first session."
           },
           "shareWithTeam": {
             "type": "boolean",
@@ -35581,6 +35600,36 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started (created_at for active, started_at for archived)."
+          }
+        }
+      },
+      "CallRecordSession": {
+        "type": "object",
+        "description": "One RTC session of an archived call: a time window and its recording.",
+        "required": ["startedAt", "endedAt"],
+        "properties": {
+          "endedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the session's room emptied."
+          },
+          "recordingPreviewUrl": {
+            "type": ["string", "null"],
+            "description": "Presigned URL for the session's preview image, if available."
+          },
+          "recordingStartedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the session's recording began, once known. Anchor this session's\ntranscript to it, falling back to `started_at`."
+          },
+          "recordingUrl": {
+            "type": ["string", "null"],
+            "description": "Presigned URL for the session's recording, if available."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the session's room opened."
           }
         }
       },

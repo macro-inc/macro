@@ -103,6 +103,7 @@ fn ended_call(transcript: Vec<CallRecordTranscriptSegment>) -> CallRecord {
         guests: Vec::new(),
         transcript,
         source: None,
+        sessions: Vec::new(),
     }
 }
 

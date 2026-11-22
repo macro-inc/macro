@@ -146,6 +146,7 @@ pub(super) async fn list_call_records(
                 guests,
                 transcript: Vec::new(),
                 source: None,
+                sessions: Vec::new(),
             }
         })
         .collect())

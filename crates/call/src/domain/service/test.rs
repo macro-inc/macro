@@ -1792,6 +1792,7 @@ fn call_record_for_mutation() -> CallRecord {
         guests: Vec::new(),
         transcript: Vec::new(),
         source: None,
+        sessions: Vec::new(),
     }
 }
 
@@ -2948,6 +2949,7 @@ fn summarized_call_record(custom_name: Option<&str>) -> CallRecord {
             sequence_num: 1,
         }],
         source: None,
+        sessions: Vec::new(),
     }
 }
 

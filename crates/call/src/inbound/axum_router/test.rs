@@ -916,6 +916,19 @@ mod call_record_urls {
             guests: Vec::new(),
             transcript: Vec::new(),
             source: None,
+            sessions: vec![crate::domain::models::CallRecordSession {
+                started_at: chrono::DateTime::UNIX_EPOCH,
+                ended_at: chrono::DateTime::UNIX_EPOCH,
+                recording_started_at: None,
+                recording_key: Some("recordings/r2.mp4".to_string()),
+                preview_key: Some("recordings/r2.jpg".to_string()),
+                recording_url: Some(
+                    "https://bucket.example/r2.mp4?X-Amz-Signature=secret".to_string(),
+                ),
+                recording_preview_url: Some(
+                    "https://bucket.example/r2.jpg?X-Amz-Signature=secret".to_string(),
+                ),
+            }],
         }
     }
 
@@ -951,6 +964,14 @@ mod call_record_urls {
             assert_eq!(record.recording_url, None, "{program}");
             assert_eq!(record.recording_preview_url, None, "{program}");
             assert!(
+                record
+                    .sessions
+                    .iter()
+                    .all(|session| session.recording_url.is_none()
+                        && session.recording_preview_url.is_none()),
+                "{program}: no session keeps its URLs"
+            );
+            assert!(
                 record.recording_key.is_some(),
                 "{program}: the bytes stay reachable"
             );
@@ -961,6 +982,7 @@ mod call_record_urls {
             &browser,
         );
         assert!(person.recording_url.is_some(), "a person keeps the URLs");
+        assert!(person.sessions[0].recording_url.is_some());
     }
 }
 

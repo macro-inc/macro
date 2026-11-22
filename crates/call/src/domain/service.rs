@@ -293,6 +293,24 @@ impl<
         publish_call_notification(&self.event_broker, event);
     }
 
+    /// Best-effort: a record still reads without its recording URL.
+    async fn presign_recording_url(&self, recording_key: Option<&str>) -> Option<String> {
+        self.recording_storage
+            .presign_recording_url(recording_key?)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to presign recording URL"))
+            .ok()
+    }
+
+    /// Best-effort: a record still reads without its preview URL.
+    async fn presign_recording_preview_url(&self, preview_key: Option<&str>) -> Option<String> {
+        self.recording_storage
+            .presign_recording_preview_url(preview_key?)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to presign recording preview URL"))
+            .ok()
+    }
+
     /// Authorize an explicit (`teamShareAccessLevel`) or legacy (`shareWithTeam`)
     /// canonical team-share change on an archived call against the persisted
     /// creator.
@@ -1955,24 +1973,28 @@ impl<
             .get_authenticated_user()
             .map_err(|_| CallError::Auth)?;
 
-        if let Some(recording_key) = &record.recording_key {
-            record.recording_url = self
-                .recording_storage
-                .presign_recording_url(recording_key)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, "failed to presign recording URL"))
-                .ok();
-        }
+        record.recording_url = self
+            .presign_recording_url(record.recording_key.as_deref())
+            .await;
+        record.recording_preview_url = self
+            .presign_recording_preview_url(record.preview_key.as_deref())
+            .await;
 
-        if let Some(preview_key) = &record.preview_key {
-            record.recording_preview_url = self
-                .recording_storage
-                .presign_recording_preview_url(preview_key)
-                .await
-                .inspect_err(
-                    |e| tracing::error!(error=?e, "failed to presign recording preview URL"),
-                )
-                .ok();
+        // The first session's media is the record's own; only later sessions
+        // need their own URLs.
+        for session in &mut record.sessions {
+            session.recording_url = if session.recording_key == record.recording_key {
+                record.recording_url.clone()
+            } else {
+                self.presign_recording_url(session.recording_key.as_deref())
+                    .await
+            };
+            session.recording_preview_url = if session.preview_key == record.preview_key {
+                record.recording_preview_url.clone()
+            } else {
+                self.presign_recording_preview_url(session.preview_key.as_deref())
+                    .await
+            };
         }
 
         // Only active calls keep decline rows; archived calls drop them with
@@ -1993,11 +2015,20 @@ impl<
     async fn get_call_recording(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
+        session: u16,
     ) -> Result<RecordingDownload, CallError> {
         let record = authorized_call_record(&self.repo, &receipt).await?;
-        let key = record
-            .recording_key
-            .ok_or_else(|| CallError::NotFound(record.call_id.to_string()))?;
+        // The record's own key is its first session's, and the only one a
+        // live call has.
+        let key = match session {
+            0 => record.recording_key,
+            later => record
+                .sessions
+                .into_iter()
+                .nth(usize::from(later))
+                .and_then(|session| session.recording_key),
+        }
+        .ok_or_else(|| CallError::NotFound(record.call_id.to_string()))?;
 
         self.recording_storage
             .open_recording(&key)
