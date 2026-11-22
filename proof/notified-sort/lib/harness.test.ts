@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { classify, sameInstant } from './classify.ts';
 import { closureOf } from './closed.ts';
 import { compareSnapshots, refCheck, type Snapshot } from './compare.ts';
+import { heldApartFromShared } from './dom-held.ts';
 import { parseRowId } from './dom.ts';
 import { generateReads } from './gen.ts';
 import { MUTANTS } from './mutants.ts';
@@ -202,5 +203,26 @@ describe('live closures', () => {
     expect(discrepancies(fresh.slice(1), fresh)).toEqual(['missing:a']);
     expect(discrepancies([fresh[1], fresh[0], fresh[2]], fresh)).toEqual(['order']);
     expect(discrepancies([row('a', 't0'), row('b', 't1', 'old'), row('c')], fresh)).toEqual(['notifiedAt:a', 'name:b']);
+  });
+});
+
+describe('heldApartFromShared', () => {
+  const base = { header: '# Today', a: 'document/a/today/u Doc A 3m', b: 'channel/b/today/u Chan B 3m', c: 'email/c/today/u Mail C 3m' };
+  it('sets aside a row both mounted sides kept alike, so main alone lagging shows', () => {
+    const e = {
+      oldMounted: [base.header, base.a, base.b, 'email/c/today/u Old name 3m'],
+      newMounted: [base.header, base.a, base.b, 'email/c/today/u New name 4m'],
+      oldReload: [base.header, base.a, 'email/c/today/u New name 4m'],
+      newReload: [base.header, base.a, 'email/c/today/u New name 4m'],
+    };
+    expect(heldApartFromShared(e)).toEqual({ newHeld: true, oldHeld: false, shared: ['channel/b'] });
+  });
+  it('keeps the branch not held when it misses a row main shows', () => {
+    const e = { oldMounted: [base.header, base.a, base.c], newMounted: [base.header, base.a], oldReload: [base.header, base.a, base.c], newReload: [base.header, base.a, base.c] };
+    expect(heldApartFromShared(e).newHeld).toBe(false);
+  });
+  it('keeps the branch not held when its text differs from both', () => {
+    const e = { oldMounted: [base.c], newMounted: ['email/c/today/u Other'], oldReload: ['email/c/today/u New'], newReload: ['email/c/today/u New'] };
+    expect(heldApartFromShared(e).newHeld).toBe(false);
   });
 });
