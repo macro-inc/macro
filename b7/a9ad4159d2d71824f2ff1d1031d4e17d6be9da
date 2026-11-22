@@ -1,0 +1,93 @@
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_5cea741b7a82ae::t_0347b20c0b0ee4 10-13,61,64-65,72,81,625-1448,5593-5677
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentFeedbackExportEventsParams.ts
+  s_5cea741b7a82ae::t_c98a0040c2b9ac 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentFeedbackRetractMessageParams.ts
+  s_5cea741b7a82ae::t_841f026968c42f 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentFeedbackRetractRunParams.ts
+  s_5cea741b7a82ae::t_928e729c378bf5 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentFeedbackRetractTurnParams.ts
+  s_5cea741b7a82ae::t_3c72c7251fa92b 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentKind.ts
+  s_5cea741b7a82ae::t_e6ab24bf1604d7 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/exportCursor.ts
+  s_5cea741b7a82ae::t_84ee671caff008 1-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/exportPage.ts
+  s_5cea741b7a82ae::t_d0dd15941b473f 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/exportPageNext.ts
+  s_5cea741b7a82ae::t_3a5feb235a7e74 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackErrorBody.ts
+  s_5cea741b7a82ae::t_ae4031d3d694e8 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackErrorBodyCode.ts
+  s_5cea741b7a82ae::t_f60ed3cc36b669 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEvent.ts
+  s_5cea741b7a82ae::t_a132d8689e6809 1-63
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventAgentBotId.ts
+  s_5cea741b7a82ae::t_fa7a8fc40dc55e 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventAgentKind.ts
+  s_5cea741b7a82ae::t_0dbb3282a83b81 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventAgentSessionId.ts
+  s_5cea741b7a82ae::t_0b320e23f00116 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventAgentUserId.ts
+  s_5cea741b7a82ae::t_9b2fab2f76cd81 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventHarness.ts
+  s_5cea741b7a82ae::t_1713ae7b9e9e61 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventMessageParentType.ts
+  s_5cea741b7a82ae::t_6d5c6b1703f768 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventModel.ts
+  s_5cea741b7a82ae::t_d54c6ce074e9b5 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventNote.ts
+  s_5cea741b7a82ae::t_5d775b671fe1f9 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventRating.ts
+  s_5cea741b7a82ae::t_aebd8429a8dbf1 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventTraceId.ts
+  s_5cea741b7a82ae::t_3783dbdb806b19 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackEventTurn.ts
+  s_5cea741b7a82ae::t_25a1e4d3e5203f 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackState.ts
+  s_5cea741b7a82ae::t_33393871ea854a 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackStateNote.ts
+  s_5cea741b7a82ae::t_9a6eb9ee689f1c 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackStateRating.ts
+  s_5cea741b7a82ae::t_06f6a38163d630 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/feedbackStateUpdatedAt.ts
+  s_5cea741b7a82ae::t_d6799199583309 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_5cea741b7a82ae::t_5e9bea02850104 55-59,275-277,285-302,363-366,398-400,498-499
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/myFeedback.ts
+  s_5cea741b7a82ae::t_65d9b055e7bd77 1-28
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/myFeedbackNote.ts
+  s_5cea741b7a82ae::t_37625dc3bc2c9c 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/myFeedbackResponse.ts
+  s_5cea741b7a82ae::t_dd665eed34dd09 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/myFeedbackTurn.ts
+  s_5cea741b7a82ae::t_fabe7796cda05f 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/rateFeedbackBody.ts
+  s_5cea741b7a82ae::t_ee4b64190aef4a 1-23
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/rateFeedbackBodyNote.ts
+  s_5cea741b7a82ae::t_83a8c8212dae1a 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/rating.ts
+  s_5cea741b7a82ae::t_d50ff9ba0da526 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/subjectKind.ts
+  s_5cea741b7a82ae::t_e701b3e719537b 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/surface.ts
+  s_5cea741b7a82ae::t_1a76e0b3e6bef4 1-20
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_5cea741b7a82ae::t_941458c642f3c8 411-1224,4945-5022,5718-5722,7897-7938,8033-8193,8659-8703,9005-9033,9876-9891
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b7a9ad4159d2d71824f2ff1d1031d4e17d6be9da",
+  "prompts": {},
+  "sessions": {
+    "s_5cea741b7a82ae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d43a0945-1df5-435d-8ea8-695ab0be7f08",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
