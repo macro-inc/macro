@@ -9,7 +9,7 @@ import { CombinedError } from '@urql/core';
 import { type DocumentNode, print } from 'graphql';
 import { createComputed, createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeSubject } from 'wonka';
+import { fromValue, makeSubject, merge } from 'wonka';
 import {
   type LiveQueryUpdate,
   parseCacheRevision,
@@ -2999,9 +2999,37 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     // message time, and writes it into each thread's one cached record.
     const BACKFILL = '2026-11-17T08:00:00Z';
 
-    function notifiedList() {
+    /** `replay` is a result the client gives as the first observer
+     * subscribes, as urql does for a request another observer started. */
+    function notifiedList(replay?: unknown) {
       const fake = makeFakeClient();
-      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      const client = replay
+        ? ({
+            executeQuery: (
+              request: GraphQLRequest<unknown, Record<string, unknown>>,
+              context: Partial<OperationContext>
+            ) =>
+              merge([
+                fromValue({
+                  operation: { kind: 'query', context },
+                  data: replay,
+                  extensions: {
+                    __macroNormalizedCache: {
+                      source: 'live-network',
+                      revision: REVISION_1,
+                    },
+                  },
+                  stale: false,
+                  hasNext: false,
+                } as unknown as OperationResult<
+                  unknown,
+                  Record<string, unknown>
+                >),
+                fake.client.executeQuery(request, context),
+              ]),
+          } as unknown as Client)
+        : fake.client;
+      getGraphqlSoupClientMock.mockReturnValue(client);
       makeGraphqlSoupInputMock.mockReturnValue({
         initial: { limit: 50, sortMethod: 'NOTIFIED_AT' },
       });
@@ -3056,6 +3084,22 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         fake.executions[1].next(mailPage([['thread', '2026-11-22T07:00:00Z']]));
         await refresh;
         expect(updatedAtOf('thread')).toBe('2026-11-22T07:00:00Z');
+      } finally {
+        dispose();
+      }
+    });
+
+    it('keeps the time of a result replayed while the list subscribes', () => {
+      const { fake, updatedAtOf, dispose } = notifiedList(
+        mailPage([['thread', '2026-11-21T09:00:00Z']])
+      );
+      try {
+        expect(updatedAtOf('thread')).toBe('2026-11-21T09:00:00Z');
+        fake.executions[0].next(mailPage([['thread', BACKFILL]]), {
+          source: 'affected-cache-reread',
+          revision: REVISION_2,
+        });
+        expect(updatedAtOf('thread')).toBe('2026-11-21T09:00:00Z');
       } finally {
         dispose();
       }
