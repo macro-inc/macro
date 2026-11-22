@@ -47,7 +47,6 @@ import type { Client } from '@urql/core';
 import {
   type Accessor,
   batch,
-  createEffect,
   createMemo,
   createSignal,
   onCleanup,
@@ -132,11 +131,6 @@ const NO_TRACE: TraceContext = { run: (work) => work() };
 // Records still lacking a field once the lane finished, read per refresh.
 const INCOMPLETE_READS_PER_REFRESH = 500;
 const DIRECTORY_STALE_MS = 5 * 60_000;
-// The in-memory pages read a replica, which can miss a write for a few
-// seconds: while one of the viewer's writes is ahead of them they are read
-// again, after this pause, doubling, at most this many times.
-const OWN_WRITE_REREAD_MS = 1_000;
-const OWN_WRITE_REREADS = 4;
 // A write is read back from the primary for at most this many channels, a
 // few at a time; one of more (a bulk change) waits for the directory's own
 // source, as it would without the reads.
@@ -145,9 +139,9 @@ const OWN_WRITE_READ_CONCURRENCY = 4;
 // A write's reads still unanswered after this hold nothing, as a failed
 // read does, and end their requests: the write's refresh waits on them.
 export const OWN_WRITE_READ_DEADLINE_MS = 20_000;
-// A full read of the cached directory settles the channels its walk of a
-// replica and the cache disagree on by reading each from the primary, a few
-// at a time; more than this many fail the read.
+// A full read of the cached directory settles the channels its walk and the
+// cache disagree on by reading each from the primary, a few at a time; more
+// than this many fail the read.
 const FULL_READ_PRIMARY_LIMIT = 200;
 const FULL_READ_PRIMARY_CONCURRENCY = 4;
 // The fallback's by-id reads settle a batch at a time; the channels they
@@ -207,9 +201,10 @@ export type ChannelDirectory = {
   lookup: (channelId: string, trace?: TraceContext) => ChannelLookup;
   /** Every joined channel, read from the network now, for an action on all
    * of them: what the directory shows can trail a change made on another
-   * device. The network's pages read a replica; the cached directory settles
-   * each channel they and the cache disagree on with a read of the primary,
-   * and walks again when the viewer wrote a channel meanwhile. It rejects
+   * device. The network's pages read the primary; the cached directory
+   * settles each channel they and the cache disagree on (a change that
+   * landed during the walk, or one the cache has yet to receive) with a read
+   * of that channel, and walks again when the viewer wrote a channel meanwhile. It rejects
    * with `ChannelDirectoryReadUnsettled` when a read of the primary fails or
    * the disagreements are too many to read: an action on every joined
    * channel fails then, as it did when the whole list failed to read.
@@ -456,10 +451,6 @@ function createOwnWriteOverlay(own: OwnChannelWrites, account: QueryAccount) {
         ? channels
         : overlaidDirectoryState(state, pending).joined;
     },
-    /** Whether `state`, the directory's own source, has yet to show one of
-     * the writes. */
-    behind: (state: ChannelDirectoryState) =>
-      tracker.pending(state.records, own.writes(), lacks(state, [])).length > 0,
   };
 }
 
@@ -811,8 +802,8 @@ type RefreshChannelDirectoryOptions = {
  * Re-reads the in-memory directory after a channel change, and reads the
  * `changed` channels, the ones the viewer's write named, from the primary
  * database. Both directories show those reads until what they read catches
- * up: the in-memory pages read a replica that can lag the write, and the
- * cache waits for the server's soup update. Without ids (a write whose
+ * up: the in-memory pages take seconds to read again, and the cache waits
+ * for the server's soup update. Without ids (a write whose
  * channel is not known yet) the cached directory waits for that update.
  *
  * Invalidating a first read still in flight joins it, and its success clears
@@ -911,7 +902,7 @@ export function primaryChannelReader(soup: () => UrqlQuery) {
 
 /** A full read that could not settle every channel its walk and the cache
  * disagree on: an action on every joined channel would act on membership
- * the replica may have trailed, so it fails instead, as a failed read of
+ * that may have changed under it, so it fails instead, as a failed read of
  * the whole list did. */
 export class ChannelDirectoryReadUnsettled extends Error {
   constructor(readonly reason: 'primary_failed' | 'too_many_disputes') {
@@ -921,12 +912,14 @@ export class ChannelDirectoryReadUnsettled extends Error {
 
 /**
  * The joined channels of a full read, `walked`, with each channel it and
- * the cache disagree on settled on the primary database. The walk reads a
- * replica, which can lag a join or a removal that already reached the cache
- * from the primary, and the cache can lag the replica in turn; neither tells
- * which is behind. The walk also writes what it read into that same cache,
- * so the directory is compared as it was before the walk as well as after:
- * a stale page the walk wrote makes the two agree only afterwards. The
+ * the cache disagree on settled on the primary database. The walk reads the
+ * primary a page at a time over seconds, so a join or a removal that lands
+ * meanwhile can reach the cache and not the walk, and the cache can lag the
+ * walk in turn until the soup update arrives; neither tells which is
+ * behind. The walk also writes what it read into that same cache, so the
+ * directory is compared as it was before the walk as well as after: a page
+ * read before a change that the walk wrote makes the two agree only
+ * afterwards. The
  * disagreements: a channel the cache shows joined and the walk left out,
  * one the walk shows joined and the cache holds as left, and one the walk
  * shows that a complete cache does not hold at all. The primary's read
@@ -2472,29 +2465,6 @@ export function createMemoryChannelDirectory(
   }, EMPTY_CHANNEL_DIRECTORY_STATE);
   const state = createMemo(() => views.apply(own.apply(read())));
 
-  // The pages read a replica: the read right after a write can miss it, and
-  // nothing reads them again for minutes. Read again, backing off, while a
-  // write is still ahead of them.
-  const pagesBehind = createMemo(
-    () => queryReadyGate(pages) && own.behind(read())
-  );
-  let rereads = 0;
-  createEffect(() => {
-    if (!pagesBehind()) {
-      rereads = 0;
-      return;
-    }
-    if (pages.isFetching || rereads >= OWN_WRITE_REREADS) return;
-    const timer = setTimeout(
-      () => {
-        rereads += 1;
-        fireAndForget(pages.refetch(), 'channel-directory');
-      },
-      OWN_WRITE_REREAD_MS * 2 ** rereads
-    );
-    onCleanup(() => clearTimeout(timer));
-  });
-
   return {
     channels: () => state().joined,
     complete: () => state().complete,
@@ -2504,8 +2474,8 @@ export function createMemoryChannelDirectory(
       return result;
     },
     async readComplete(signal) {
-      // The pages read the same replica as the walk, and only the viewer's
-      // own writes, read from the primary, can be ahead of it here.
+      // The pages and the walk read the primary; only the viewer's own
+      // writes, read since, can be ahead of the walk here.
       const channels = await walkCurrentJoinedChannels(
         deps.queryClient,
         deps.client(),

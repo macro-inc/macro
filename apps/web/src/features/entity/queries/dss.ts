@@ -76,7 +76,7 @@ function invalidateDeletedDssItems(
         partialMatchKey(queryKey, channelKeys.activity._def) ||
         (typeof queryKey[2] === 'string' && deleted.has(queryKey[2])),
     });
-    // The channel directory reads a replica, or waits for the soup update:
+    // The channel directory rereads its pages, or waits for the soup update:
     // the deleted channels come out at once, with no read of each.
     fireAndForget(
       refreshChannelDirectory([], { removed: channelIds, writer }),

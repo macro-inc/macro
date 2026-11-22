@@ -48,10 +48,11 @@ const RECONCILE_RETRY_MS = 1_000;
 const VERIFY_ROUNDS = 3;
 // Channels read from the primary at once, one read each.
 const PRIMARY_READ_CONCURRENCY = 4;
-// At most this many channels the replica no longer returned are confirmed on
-// the primary in one pass. The rest wait for the next pass, which this one
-// fails, so a replica that answers with nothing cannot send the whole cache
-// to the primary, and a larger removal still finishes over several passes.
+// At most this many channels the by-id read no longer returned are confirmed
+// one at a time in one pass. The rest wait for the next pass, which this one
+// fails, so a read that answers with nothing cannot send the whole cache to
+// single-channel reads, and a larger removal still finishes over several
+// passes.
 const PRIMARY_CONFIRM_LIMIT = 500;
 const NEVER_ABORTED = new AbortController().signal;
 
@@ -332,11 +333,11 @@ async function cachedHashes(
  * Deletes the cached channels the viewer can no longer read: channels they
  * were removed from or that were deleted while no event reached them.
  *
- * A by-id read of the replica decides which candidates are still readable,
- * a hundred at a time. The replica can lag an update the cache already holds
- * (the viewer was added back, and the cache read that from the primary), so
- * each channel it no longer returns is read on the primary before it is
- * deleted, and one the primary shows is kept and written back.
+ * A by-id read of the primary decides which candidates are still readable,
+ * a hundred at a time. Its answer is as of the moment it ran, and the viewer
+ * can be added back since (the cache then holds the newer record), so each
+ * channel it no longer returns is read once more on its own right before it
+ * is deleted, and one that read shows is kept and written back.
  *
  * A read that found a channel gone is as of the moment it answered. A record
  * the cache rewrote since is read again instead of deleted. The check and the
@@ -356,7 +357,7 @@ async function removeUnreadableChannels(
     let pending = input.candidates;
     let removed = 0;
     let restored = 0;
-    // The replica no longer returned them; the primary did.
+    // The by-id read no longer returned them; the single read did.
     let kept = 0;
     let deferred = 0;
     let round = 0;
@@ -385,17 +386,17 @@ async function removeUnreadableChannels(
       );
       // A channel no longer cached needs no read.
       const deciding = pending.filter((id) => before.has(id));
-      const replicaGone = await unreadableChannels(
+      const listedGone = await unreadableChannels(
         input.lane,
         deciding,
         input.fetch,
         input.signal,
         span
       );
-      if (!replicaGone) return finish('incomplete');
+      if (!listedGone) return finish('incomplete');
       const room = Math.max(0, PRIMARY_CONFIRM_LIMIT - progress.confirmed);
-      const confirming = replicaGone.slice(0, room);
-      deferred += replicaGone.length - confirming.length;
+      const confirming = listedGone.slice(0, room);
+      deferred += listedGone.length - confirming.length;
       const primaryGone = await unreadableOnPrimary(
         confirming,
         input.readFromPrimary,
@@ -588,12 +589,13 @@ async function reconcile(
  * Page fetcher for the channel backfill lane that also removes what the lane
  * proves stale. The lane lists every channel the viewer joined. When a pass
  * that started at its first page finishes, each cached channel it did not
- * return is read again by id; the ones neither the replica nor the primary
- * returns are deleted from the cache. A pass that cannot do so (it resumed
- * from a cursor, a page listed no ids, or the cache is another viewer's)
- * deletes nothing; one whose cache changed hands or whose reads kept failing
- * stops before its next round of deletes, and one with more channels to
- * confirm than `PRIMARY_CONFIRM_LIMIT` leaves the rest to the next pass.
+ * return is read again by id; the ones neither that read nor a
+ * single-channel read of the primary returns are deleted from the cache. A
+ * pass that cannot do so (it resumed from a cursor, a page listed no ids, or
+ * the cache is another viewer's) deletes nothing; one whose cache changed
+ * hands or whose reads kept failing stops before its next round of deletes,
+ * and one with more channels to confirm than `PRIMARY_CONFIRM_LIMIT` leaves
+ * the rest to the next pass.
  * Each fails on its last page, so the lane never records it complete.
  * Without a cache there is nothing to reconcile.
  *

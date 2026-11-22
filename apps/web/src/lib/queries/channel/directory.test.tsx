@@ -92,7 +92,7 @@ import {
 } from './directory';
 import { type DirectoryChannel, toDirectoryChannel } from './directory-core';
 import { CHANNEL_DIRECTORY_CHECKPOINT_ID } from './directory-lane';
-import { OWN_WRITE_HOLD_MS, ownChannelWrites } from './own-writes';
+import { ownChannelWrites } from './own-writes';
 import { channelName, channelUuid } from './tests/channel-uuid';
 import { directoryChannel as channelWithId } from './tests/directory-channel';
 import {
@@ -3709,7 +3709,7 @@ describe("the viewer's own channel writes", () => {
   const queryClient = () =>
     new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
-  it('shows a rename at once that the pages, read from a lagging replica, missed', async () => {
+  it('shows a rename at once that the pages read before it missed', async () => {
     const network = fakeNetwork([channelRecord('a', { name: 'before' })], {
       primary: [channelRecord('a', { name: 'after', updatedAt: UPDATED_MID })],
     });
@@ -3746,66 +3746,6 @@ describe("the viewer's own channel writes", () => {
     expect(ids(directory.channels())).toEqual(['kept', 'new']);
     expect(directory.lookup(channelUuid('gone')).status).toBe('missing');
     expect(ids(await directory.readComplete())).toEqual(['kept', 'new']);
-  });
-
-  it('reads the pages again, backing off, until they show the write', async () => {
-    vi.useFakeTimers();
-    try {
-      const channels = [channelRecord('a', { name: 'before' })];
-      const written = channelRecord('a', {
-        name: 'after',
-        updatedAt: UPDATED_MID,
-      });
-      const network = fakeNetwork(channels, { primary: [written] });
-      const client = queryClient();
-      const directory = mountMemoryDirectory(network, client);
-      await vi.waitFor(() => expect(directory.complete()).toBe(true));
-
-      await writeOf(client, network, ['a']);
-      const read = network.inputs.length;
-      // The replica still lags: a second, then two more.
-      await vi.advanceTimersByTimeAsync(1_000);
-      expect(network.inputs.length).toBe(read + 1);
-      await vi.advanceTimersByTimeAsync(1_999);
-      expect(network.inputs.length).toBe(read + 1);
-      channels[0] = written;
-      await vi.advanceTimersByTimeAsync(1);
-      expect(network.inputs.length).toBe(read + 2);
-
-      // The pages show the write: no more reads.
-      await vi.advanceTimersByTimeAsync(30_000);
-      expect(network.inputs.length).toBe(read + 2);
-      expect(nameOf(directory, 'a')).toBe('after');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('stops reading again after four tries, and lets the write go when its hold ends', async () => {
-    vi.useFakeTimers();
-    try {
-      const network = fakeNetwork([channelRecord('a', { name: 'before' })], {
-        primary: [
-          channelRecord('a', { name: 'after', updatedAt: UPDATED_MID }),
-        ],
-      });
-      const client = queryClient();
-      const directory = mountMemoryDirectory(network, client);
-      await vi.waitFor(() => expect(directory.complete()).toBe(true));
-
-      await writeOf(client, network, ['a']);
-      const read = network.inputs.length;
-      await vi.advanceTimersByTimeAsync(1_000 + 2_000 + 4_000 + 8_000);
-      expect(network.inputs.length).toBe(read + 4);
-      await vi.advanceTimersByTimeAsync(30_000);
-      expect(network.inputs.length).toBe(read + 4);
-      expect(nameOf(directory, 'a')).toBe('after');
-
-      await vi.advanceTimersByTimeAsync(OWN_WRITE_HOLD_MS);
-      expect(nameOf(directory, 'a')).toBe('before');
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it('shows a later update by someone else over the write', async () => {

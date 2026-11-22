@@ -1,7 +1,7 @@
 /**
  * Channels the viewer just changed, as the primary database showed them
  * right after the write. Both directories trail a write: the in-memory pages
- * read a replica that lags it, and the cache waits for the server's soup
+ * take seconds to read again, and the cache waits for the server's soup
  * update. A directory lays each write over what it read until its own source
  * shows the same channel or a later update of it, or the hold ends. Once a
  * source has, the write is let go for every directory: what the channel does

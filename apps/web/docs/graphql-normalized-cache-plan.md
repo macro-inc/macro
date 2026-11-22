@@ -1334,7 +1334,12 @@ caches every channel the viewer joined with the fields a channel list needs
 (`ChannelDirectoryFields` in `channel-directory.graphql`): members, bots in
 `botParticipants`, team, agent DM and latest messages. The channel filter has no
 updated-at watermark, so every run is a full pass (`refreshAll`), 100 channels
-a page with 250 ms between pages. It pages by creation time (`CREATED_AT`),
+a page with 250 ms between pages. Every page, the first and each continuation
+(the cursor does not carry it), asks for `channelReads: PRIMARY`, so it reads
+memberships as the REST channel list does: a replica that lags a join or a
+leave would put a stale membership back. The server takes it only on a
+channel directory page (`SoupRequest::is_channel_directory_page`), so a page naming no channel id with
+an id filter is never sent. It pages by creation time (`CREATED_AT`),
 which never changes: by updated or viewed time, activity or a view on another
 device could move a channel the pass had not reached ahead of its cursor, and
 the pass would never return it.
@@ -1342,17 +1347,17 @@ the pass would never return it.
 The lane's page fetcher (`queries/channel/directory-reconcile.ts`) also removes
 what a pass proves stale. When a pass that started at its first page finishes,
 each cached channel it did not return is read again by id, a hundred at a
-time, from the replica the list reads. A by-id page is evidence only when it
-lists entity ids and either ends or returned every id it was asked for (a page
-that reaches its limit carries a cursor). The replica can lag an update the
-cache already holds (the viewer was added back, and the cache read that from
-the primary), so each channel it no longer returns is read on the primary
+time, on the primary, as the lane's pages are. A by-id page is evidence only
+when it lists entity ids and either ends or returned every id it was asked for (a page
+that reaches its limit carries a cursor). Its answer is as of the moment it
+ran, and the viewer can be added back since, so each channel it no longer
+returns is read once more on its own
 (`ChannelDirectoryReconcileEntity`, the `user.soupEntity` read, four at a
 time) before it is deleted, and one the primary shows is kept and written back
 (`channel_directory.kept_by_primary`). At most 500 are confirmed on the
 primary in a pass: the rest wait, and the pass fails (`deferred`) so the next
-one goes on, rather than send the whole cache to the primary when the replica
-answers with nothing. Its reads are tried three times. A cached id the server
+one goes on, rather than send the whole cache to single-channel reads when the
+by-id read answers with nothing. Its reads are tried three times. A cached id the server
 could not parse as a channel id is gone without a read: one such id would fail
 the whole read. The deletes carry the cache session taken before the reads, so
 the cache refuses them after a session transition, and a channel whose cached
@@ -1429,8 +1434,9 @@ nobody asks for any more is not read. Readers that decide from absence
 built-in section (mute, snooze, mark read) call `readComplete(signal)`, which
 always pages the network, as the REST list did for each action: a complete
 directory can still miss a channel joined on another device since its last
-pass. The pages read a replica, which can lag what the cache already shows, so
-the cached directory settles each channel the walk and the cache disagree on
+pass. The pages read the primary page by page over seconds, so a change that
+lands meanwhile can reach the cache and not the walk; the cached directory
+settles each channel the walk and the cache disagree on
 (joined in one and not the other) with a read from the primary
 (`ChannelDirectoryEntity`, up to 200 of them, four at a time); a read that
 fails keeps the walk's answer, and so does every disagreement past the 200th.
@@ -1481,8 +1487,8 @@ Channel writes outside the cache's soup updates (join links, renames, new
 DMs, people added or removed) call `refreshChannelDirectory`, which rereads the in-memory directory,
 reading again after a first read that was already in flight; a full read
 (`readComplete()`) walks the pages itself (`walkCurrentJoinedChannels`) and
-walks again until no write of that QueryClient landed during its walk. Those pages, and the cache's soup update, can lag the write: the
-pages read a replica, and the update arrives a second or more later. So a
+walks again until no write of that QueryClient landed during its walk. Those pages, and the cache's soup update, trail the write: the
+pages take seconds to read again, and the update arrives a second or more later. So a
 caller that names the channels it wrote (`refreshChannelDirectory([id])`;
 message sends name none) also reads each one from the primary
 (`ChannelDirectoryEntity`, network only), and both directories of that
@@ -1505,8 +1511,7 @@ read) holds only while the source lists them in it as it first did. Writes
 carry the account, the sign-in session and the order their reads were sent
 in, so an earlier read never replaces a later one; a storage reset or a new
 sign-in lets them all go, with the reads still in flight. A write of many channels reads at most twenty, four at a
-time; a link join, whose response names no channel, reads none. The in-memory directory reads its pages again while they lag, after
-1, 2, 4 and 8 seconds. A read that fails, or that lands after the account
+time; a link join, whose response names no channel, reads none. A read that fails, or that lands after the account
 changed, holds nothing (`channel_directory.own_writes` span).
 
 A read sent before the viewer left a channel (an event's refetch, a by-id
