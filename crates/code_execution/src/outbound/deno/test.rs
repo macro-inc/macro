@@ -1716,7 +1716,10 @@ export async function main() {{
     let Outcome::Succeeded { value } = outcome else {
         panic!("{outcome:?}");
     };
-    assert!(value.as_str().unwrap().contains("NotCapable"), "{value}");
+    assert_eq!(
+        value,
+        "TypeError: Fetch a service by its own URL, not the run's forwarder."
+    );
     assert!(
         tokio::time::timeout(Duration::from_millis(500), listener.accept())
             .await
@@ -2566,10 +2569,11 @@ export async function main() {
 }
 
 /// A program crashes the sender with an abort reason that can't be turned
-/// into a string, takes the sender from its error event, and starts a worker
-/// of its own from the sender's class to send an unmarked DELETE. The reason
-/// never reaches the sender and the class is unreachable, so every request
-/// that arrives is marked and none is a write.
+/// into a string (before the answer, after it, and as a body's cancel),
+/// takes the sender from its error event, and starts a worker of its own from
+/// the sender's class to send an unmarked DELETE. The reason never reaches
+/// the sender and the class is unreachable, so every request that arrives is
+/// marked and none is a write.
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
 async fn a_hostile_abort_reason_never_hands_the_program_a_worker() {
@@ -2590,6 +2594,15 @@ async fn a_hostile_abort_reason_never_hands_the_program_a_worker() {
             tokio::spawn(async move {
                 if request.starts_with("GET /hang ") {
                     tokio::time::sleep(Duration::from_secs(2)).await;
+                }
+                if request.starts_with("GET /drip ") {
+                    // A body that is still arriving when the program aborts.
+                    let _ = stream
+                        .write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n1\r\nx\r\n")
+                        .await;
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    let _ = stream.write_all(b"0\r\n\r\n").await;
+                    return;
                 }
                 let _ = stream.write_all(ok_json("").as_bytes()).await;
             });
@@ -2618,6 +2631,16 @@ export async function main() {
   await fetch("HOST/first");
   controller.abort({message: {toString: 1}});
   await hanging;
+  // The same reason after the answer, as an abort and as the body's cancel.
+  for (const stop of ["abort", "cancel"]) {
+    const late = new AbortController();
+    const dripping = await fetch("HOST/drip", {signal: late.signal});
+    const reader = dripping.body.getReader();
+    await reader.read();
+    if (stop === "abort") late.abort({message: {toString: 1}});
+    else await reader.cancel({message: {toString: 1}}).catch(() => {});
+    await reader.read().catch(() => {});
+  }
   const after = (await fetch("HOST/after")).status;
   const portClass = Object.getPrototypeOf(new MessageChannel().port1).constructor;
   const NativeWorker = sender && Object.getPrototypeOf(sender).constructor;
@@ -2666,8 +2689,9 @@ export async function main() {
 }
 
 /// A proxied dry run learns its forwarder's URL from a response and sends a
-/// DELETE there: the sender refuses a request that names the forwarder, and
-/// the forwarder itself forwards no dry run's write.
+/// DELETE there, under every spelling of its loopback address: the sender
+/// refuses any request that isn't under a service's own URL, and the
+/// forwarder itself forwards no dry run's write.
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
 async fn a_proxied_dry_run_cannot_write_through_the_forwarder_url() {
@@ -2677,8 +2701,17 @@ async fn a_proxied_dry_run_cannot_write_through_the_forwarder_url() {
 export async function main() {
   const read = await fetch("HOST/decisions");
   const forwarder = read.url;
+  const {port, pathname} = new URL(forwarder);
   const attempts = {};
-  for (const [name, url] of [["forwarder", forwarder], ["host", "HOST/decisions"]]) {
+  for (const [name, url] of [
+    ["forwarder", forwarder],
+    ["mapped", `http://[::ffff:127.0.0.1]:${port}${pathname}`],
+    ["decimal", `http://2130706433:${port}${pathname}`],
+    ["hex", `http://0x7f.0.0.1:${port}${pathname}`],
+    ["short", `http://127.1:${port}${pathname}`],
+    ["localhost", `http://localhost.:${port}${pathname}`],
+    ["host", "HOST/decisions"],
+  ]) {
     try {
       attempts[name] = `sent ${(await fetch(url, {method: "DELETE"})).status}`;
     } catch (error) {
@@ -2707,6 +2740,11 @@ export async function main() {
             "viaForwarder": true,
             "attempts": {
                 "forwarder": "TypeError: Fetch a service by its own URL, not the run's forwarder.",
+                "mapped": "TypeError: Fetch a service by its own URL, not the run's forwarder.",
+                "decimal": "TypeError: Fetch a service by its own URL, not the run's forwarder.",
+                "hex": "TypeError: Fetch a service by its own URL, not the run's forwarder.",
+                "short": "TypeError: Fetch a service by its own URL, not the run's forwarder.",
+                "localhost": "TypeError: Fetch a service by its own URL, not the run's forwarder.",
                 "host": "Error: A dry run doesn't send changes.",
             },
         })
@@ -2718,6 +2756,52 @@ export async function main() {
             .collect::<Vec<_>>(),
         vec![("GET", true)]
     );
+    service.shutdown().await;
+}
+
+/// An abort while the request's body is read stops the request before it is
+/// sent, as it would with Deno's own fetch.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn an_abort_while_the_body_is_read_sends_nothing() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, stop, server) = recording_server(ok_json).await;
+    let source = r#"
+export async function main() {
+  const controller = new AbortController();
+  const body = new ReadableStream({
+    pull(stream) {
+      controller.abort(new Error("stopped while reading"));
+      stream.enqueue(new TextEncoder().encode("{}"));
+      stream.close();
+    },
+  });
+  try {
+    await fetch("HOST/during", {method: "POST", body, duplex: "half", signal: controller.signal});
+    return "sent";
+  } catch (error) {
+    return error.message;
+  }
+}
+"#
+    .replace("HOST", &host);
+    let (_, outcome) = run_unattended(
+        &service,
+        &source,
+        unattended(
+            "fixture-run-token",
+            &[("cognition", host.clone())],
+            serde_json::json!({}),
+            false,
+        ),
+    )
+    .await;
+    stop.send(()).unwrap();
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value, "stopped while reading");
+    assert_eq!(server.await.unwrap(), Vec::<String>::new());
     service.shutdown().await;
 }
 

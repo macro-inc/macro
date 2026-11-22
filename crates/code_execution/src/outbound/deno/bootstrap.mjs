@@ -48,6 +48,7 @@ const NativeTransformStream = TransformStream;
 const relayReadable = getter(TransformStream.prototype, "readable");
 const relayWritable = getter(TransformStream.prototype, "writable");
 const pipeTo = uncurry(ReadableStream.prototype.pipeTo);
+const cancelStream = uncurry(ReadableStream.prototype.cancel);
 const promiseCatch = uncurry(Promise.prototype.catch);
 const signalAborted = getter(AbortSignal.prototype, "aborted");
 const signalReason = getter(AbortSignal.prototype, "reason");
@@ -245,6 +246,8 @@ try {
     if (init !== null && typeof init === "object" && typeof init.priority === "string") options.priority = init.priority;
     // Read whole, so the request keeps its length, as a direct fetch sends it.
     const body = requestBody(request) === null ? null : await requestArrayBuffer(request);
+    // An abort while the body was read fired before the listener below.
+    if (signalAborted(signal)) throw signalReason(signal);
     if (senderFailed !== undefined) throw failure(senderFailed);
     const id = nextRequest++;
     const answer = await new NativePromise((resolve, reject) => {
@@ -267,7 +270,11 @@ try {
     let relayed = null;
     if (stream !== null) {
       const relay = new NativeTransformStream();
-      promiseCatch(pipeTo(stream, relayWritable(relay), {__proto__: null, signal}), () => {});
+      // The source, which crosses to the worker, is cancelled without the
+      // program's reason: only the request's id reaches the worker.
+      promiseCatch(pipeTo(stream, relayWritable(relay), {__proto__: null, signal, preventCancel: true}), () => {
+        promiseCatch(cancelStream(stream), () => {});
+      });
       relayed = relayReadable(relay);
     }
     const response = new NativeResponse(relayed, {__proto__: null, status, statusText});

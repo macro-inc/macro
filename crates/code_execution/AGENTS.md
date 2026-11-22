@@ -66,8 +66,9 @@ The forwarder sets the mark and trace context itself, outside the realm, drops
 the ones the program set, follows no redirects and records a
 `code_execution.egress` span per request. In a dry run it forwards nothing
 but GET, HEAD and the catalog's reads (`DryRunReads`, matched on the path as
-sent), and the sender refuses a program's request that names the forwarder
-instead of a service's own URL. It stops when the run ends, is
+sent, refusing dot segments and encoded separators that the upstream URL would
+resolve), and in a proxied run the sender refuses any request that isn't under
+a service's own URL, so no spelling of the forwarder's address reaches it. It stops when the run ends, is
 cancelled or times out. The agent harness picks it per user with the
 fail-closed `enable-code-execution-egress-proxy` flag; `Egress::Direct` (the
 default) is the old path.
@@ -84,8 +85,9 @@ into plain data (with copies of built-ins taken before the program loads,
 bodies whole. Answers come back the same way, with `url`, `redirected` and
 `type` set as own properties (kept by `clone()`), and headers that stay
 mutable, unlike a fetched response's; an abort after the answer stops the
-body with the signal's reason, which stays in the program's realm (only the
-request's id crosses). The program can reach the channel and could reach
+body with the signal's reason, which stays in the program's realm: only the
+request's id crosses, and the transferred body is cancelled without a reason.
+An abort while the request body is read stops the request before it is sent. The program can reach the channel and could reach
 the worker object (through an `EventTarget.prototype.dispatchEvent` hook),
 never its realm: the worker accepts only http(s) requests, checks every
 message, refuses malformed ones and can't throw back into the program's

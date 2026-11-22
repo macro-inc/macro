@@ -117,6 +117,17 @@ pub(crate) struct DryRunReads {
     reads: Vec<(String, String, Vec<Segment>)>,
 }
 
+/// Whether a path segment, as sent, is a dot segment or hides a separator
+/// once its percent-escapes are decoded.
+fn moves_the_path(segment: &str) -> bool {
+    let decoded = segment
+        .to_ascii_lowercase()
+        .replace("%2e", ".")
+        .replace("%2f", "/")
+        .replace("%5c", "\\");
+    decoded == "." || decoded == ".." || decoded.contains(['/', '\\'])
+}
+
 #[derive(Debug, PartialEq)]
 enum Segment {
     Literal(String),
@@ -159,6 +170,12 @@ impl DryRunReads {
             return true;
         }
         let sent: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+        // The upstream URL resolves dot segments, encoded ones too, so a
+        // placeholder filled with `..` would send another path than the one
+        // matched here.
+        if sent.iter().any(|segment| moves_the_path(segment)) {
+            return false;
+        }
         self.reads
             .iter()
             .any(|(read_service, read_method, segments)| {

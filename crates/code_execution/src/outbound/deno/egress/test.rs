@@ -43,6 +43,12 @@ fn a_dry_run_forwards_only_reads() {
         ("email", "POST", "/threads/t1/archive"),
         ("email", "POST", "/threads//read"),
         ("cognition", "post", "/decisions"),
+        ("email", "POST", "/threads/../read"),
+        ("email", "POST", "/threads/%2e%2e/read"),
+        ("email", "POST", "/threads/%2E./read"),
+        ("email", "POST", "/threads/./read"),
+        ("email", "POST", "/threads/a%2fb/read"),
+        ("email", "POST", "/threads/a%5Cb/read"),
     ] {
         assert!(
             !reads.allows(service, method, path),

@@ -36,8 +36,6 @@ function configure({hosts, operations, dryRun, traceHeaders, forwarder}) {
     dryRun,
     routes,
     destinations: new Set(Object.values(hosts).map(destinationOf)),
-    // A proxied run's forwarder, which only the requests sent here may reach.
-    forwarders: new Set(Object.values(forwarder).map(destinationOf)),
     traceHeaders: Object.entries(traceHeaders).filter(([name]) => name === "traceparent" || name === "tracestate"),
     // A proxied run reaches only its forwarder, longest service base first.
     forwarded: Object.entries(forwarder)
@@ -52,10 +50,17 @@ async function send({url, method, headers, body, options}) {
   const request = new Request(url, {method, headers, body});
   const {protocol} = new URL(request.url);
   if (protocol !== "http:" && protocol !== "https:") throw new TypeError("Only http and https URLs can be fetched.");
-  // The forwarder marks what it sends but holds back no dry run's writes, so
-  // the program names a service by its own URL, never the forwarder's.
-  if (settings.forwarders.has(destinationOf(request.url))) {
-    throw new TypeError("Fetch a service by its own URL, not the run's forwarder.");
+  // A proxied run's `--allow-net` names only its forwarder, so a request that
+  // isn't under a service's own URL could only reach the forwarder by
+  // another spelling of its address (`[::ffff:127.0.0.1]`, `2130706433`).
+  // Refused whatever the spelling, since the program names a service by its
+  // own URL.
+  let target = request.url;
+  if (settings.forwarded.length > 0) {
+    const route = settings.forwarded.find(([base]) =>
+      request.url === base || request.url.startsWith(`${base}/`) || request.url.startsWith(`${base}?`));
+    if (route === undefined) throw new TypeError("Fetch a service by its own URL, not the run's forwarder.");
+    target = `${route[1]}${request.url.slice(route[0].length)}`;
   }
   const sent = new Headers(request.headers);
   const init = {...options, method: request.method, headers: sent, body: request.body === null ? null : body};
@@ -77,12 +82,7 @@ async function send({url, method, headers, body, options}) {
       init.redirect = "error";
     }
   }
-  for (const [base, local] of settings.forwarded) {
-    if (request.url === base || request.url.startsWith(`${base}/`) || request.url.startsWith(`${base}?`)) {
-      return fetch(`${local}${request.url.slice(base.length)}`, init);
-    }
-  }
-  return fetch(request.url, init);
+  return fetch(target, init);
 }
 
 // Built from the error's own strings only: formatting anything else could

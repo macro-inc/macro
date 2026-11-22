@@ -191,8 +191,9 @@ real hosts for its links, its fetch sends their requests to the forwarder,
 and the forwarder, outside the realm, sets the mark and
 the trace context (a child of the run's span) on every request, dropping
 the ones the program set. It follows no redirects, forwards no dry run's
-write, and stops with the run. A program's request that names the forwarder
-instead of a service's own URL is refused.
+write, and stops with the run. In a proxied run a program's request that
+isn't under a service's own URL is refused, whatever spelling of the
+forwarder's address it uses.
 
 Deno shares the harness container. The heap setting does not hard-limit native
 memory, ArrayBuffers, or CPU; a container OOM can affect the harness and other
