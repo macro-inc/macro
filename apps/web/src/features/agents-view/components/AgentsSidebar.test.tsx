@@ -1162,11 +1162,8 @@ describe('Agents sidebar keyboard list', () => {
     expect(
       screen.getAllByRole('button', { name: 'Review draft' })
     ).toHaveLength(1);
-    expect(
-      screen
-        .getAllByRole('heading', { level: 3 })
-        .map((heading) => heading.textContent)
-    ).toEqual(['Recent2']);
+    // Both rows are Recent, so the list needs no heading.
+    expect(screen.queryAllByRole('heading', { level: 3 })).toEqual([]);
 
     await enterList();
     expect(focusedRow()).toBe('Review draft');
