@@ -29,9 +29,8 @@ test.beforeEach(({ page }) => loadAppSteadily(page));
 
 test.describe('a Google consent that withheld the mail permission', () => {
   // When this fails, "Maybe later" leaves the prompt up or starts a new
-  // connection; "Try again" does not offer the providers again; or Cancel in
-  // that chooser starts a connection or navigates away.
-  test('Maybe later puts the prompt away, Try again offers the providers, and Cancel there starts nothing', async ({
+  // connection, or "Try again" fails to restart the sole available provider.
+  test('Maybe later puts the prompt away and Try again starts the sole Gmail provider directly', async ({
     page,
     mailbox,
     auth,
@@ -59,21 +58,61 @@ test.describe('a Google consent that withheld the mail permission', () => {
     await accessPrompt(page).getByRole('button', { name: 'Try again' }).click();
     did('AX-041');
     await expect(accessPrompt(page)).toBeHidden();
-    await expect(
-      chooser(page).getByRole('button', { name: 'Gmail' })
-    ).toBeVisible();
-
-    await chooser(page).getByRole('button', { name: 'Cancel' }).click();
-    did('AX-207');
+    // b926309927a restores the sole-provider shortcut on retry as well.
+    await page.waitForURL(/\/o\/oauth2\/v2\/auth/);
     await expect(chooser(page)).toBeHidden();
+    expect(auth.starts.map((start) => start.provider)).toEqual([
+      'GMAIL',
+      'GMAIL',
+      'GMAIL',
+    ]);
+    await refuseMailAccess(page, WORK);
+    await expect(accessPrompt(page)).toBeVisible();
+    await accessPrompt(page)
+      .getByRole('button', { name: 'Maybe later' })
+      .click();
+    await expect(accessPrompt(page)).toBeHidden();
     await expect(page).toHaveURL(/\/app\/mail$/);
-    expect(auth.starts).toHaveLength(2);
     expect(await connectedInboxes(mailbox)).toEqual([mailbox.inbox.email]);
   });
 });
 
 test.describe('retrying a consent when Outlook is offered too', () => {
   test.use({ outlookOffered: true });
+
+  test('Cancel in the retry chooser starts neither of the two offered providers', async ({
+    page,
+    mailbox,
+    auth,
+  }) => {
+    await auth.googleAccount({ email: WORK });
+    await mailbox.open('/app/mail');
+    await page.getByRole('button', { name: 'Connect another account' }).click();
+    await chooser(page)
+      .getByRole('button', { name: 'Gmail', exact: true })
+      .click();
+    await refuseMailAccess(page, WORK);
+    await accessPrompt(page).getByRole('button', { name: 'Try again' }).click();
+    await expect(accessPrompt(page)).toBeHidden();
+    await expect(
+      chooser(page).getByRole('button', { name: 'Gmail', exact: true })
+    ).toBeVisible();
+    await expect(
+      chooser(page).getByRole('button', {
+        name: 'Outlook / Microsoft 365',
+        exact: true,
+      })
+    ).toBeVisible();
+    expect(auth.starts.map((start) => start.provider)).toEqual(['GMAIL']);
+    await chooser(page)
+      .getByRole('button', { name: 'Cancel', exact: true })
+      .click();
+    did('AX-207');
+    await expect(chooser(page)).toBeHidden();
+    await expect(page).toHaveURL(/\/app\/mail$/);
+    expect(auth.starts.map((start) => start.provider)).toEqual(['GMAIL']);
+    expect(await connectedInboxes(mailbox)).toEqual([mailbox.inbox.email]);
+  });
 
   // When this fails, a provider chosen in the chooser that "Try again"
   // opens does not lead to that provider's sign-in, or choosing Gmail there

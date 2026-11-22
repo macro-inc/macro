@@ -62,3 +62,9 @@ Optional MailboxIssue is sync health independent of authentication; retain a gen
 SubmissionRefusal carries a closed command phase, reply class and optional
 recipient position. Preserve the frozen To/Cc/Bcc ordering across adapters;
 never put recipient addresses or provider prose in the refusal detail.
+
+The browser's seeded recipient-refusal projection fixture is serialized by
+`tests/submission_refusal_fixture.rs`. After changing SubmissionRefusal, run
+`cargo test -p models_email --test submission_refusal_fixture regenerate_browser_refusal_fixture -- --ignored`,
+then the active consistency test. The seeded browser case does not exercise SMTP;
+the transport tests and lab recording cover the real rejection path.

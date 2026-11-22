@@ -40,10 +40,13 @@ test.describe('a send the provider refuses', () => {
     saw('STC-026');
     await expect(page.getByText('Email sent', { exact: true })).toHaveCount(0);
     await expect(sending).toHaveCount(0);
+    await expect(
+      page.getByText('Delivery unconfirmed', { exact: true })
+    ).toHaveCount(0);
     // The reply is still there to recover, and the thread is back in the inbox.
     await expect(
       page.getByText(
-        'Send failed before delivery. Cancel to recover this draft.'
+        'Message not sent. See its conversation or Drafts for details.'
       )
     ).toBeVisible();
     saw('STC-105');
@@ -131,7 +134,7 @@ for (const provider of PROVIDERS) {
 
       const sends = page.getByLabel('Queued email sends');
       const failed = sends.getByText(
-        'Send failed before delivery. Cancel to recover this draft.'
+        'Message not sent. See its conversation or Drafts for details.'
       );
       await expect(failed).toBeVisible();
       saw('STC-105');
