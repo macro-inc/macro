@@ -18,6 +18,7 @@ pub mod outbound;
 pub mod tag_color;
 
 pub use domain::error::PropertiesErr;
+pub use domain::managed::ManagedTeamDefinitions;
 pub use domain::model::{
     CRM_TEAM_STAGE_DEFINITION_NAME, EditReceipt, EntityPropertiesKey, EntityPropertyInfo,
     PropertyAccessReceiptExt, PropertyOptionInfo, PropertyTargetKey, ViewReceipt,

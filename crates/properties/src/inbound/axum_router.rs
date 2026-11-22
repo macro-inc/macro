@@ -31,6 +31,7 @@ use entity_access::inbound::axum_extractors::OptionalMacroUserTeamExtractorV2;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 
 use crate::domain::error::PropertiesErr;
+use crate::domain::managed::ManagedTeamDefinitions;
 use crate::domain::service::PropertiesService;
 
 /// State for the properties router.
@@ -38,7 +39,7 @@ pub struct PropertiesRouterState<S, A, Auth> {
     properties_service: Arc<S>,
     entity_access_service: Arc<A>,
     authorization_state: MacroAuthorizationState<Auth>,
-    managed_team_definitions: Arc<[String]>,
+    managed_team_definitions: ManagedTeamDefinitions,
 }
 
 impl<S, A, Auth> Clone for PropertiesRouterState<S, A, Auth> {
@@ -63,7 +64,7 @@ impl<S: PropertiesService, A: EntityAccessService, Auth> PropertiesRouterState<S
             properties_service,
             entity_access_service,
             authorization_state,
-            managed_team_definitions: Arc::from([]),
+            managed_team_definitions: ManagedTeamDefinitions::default(),
         }
     }
 
@@ -72,14 +73,8 @@ impl<S: PropertiesService, A: EntityAccessService, Auth> PropertiesRouterState<S
         mut self,
         names: impl IntoIterator<Item = String>,
     ) -> Self {
-        self.managed_team_definitions = names.into_iter().collect();
+        self.managed_team_definitions = ManagedTeamDefinitions::new(names);
         self
-    }
-
-    fn is_managed_team_definition_name(&self, display_name: &str) -> bool {
-        self.managed_team_definitions
-            .iter()
-            .any(|name| name == display_name)
     }
 }
 
