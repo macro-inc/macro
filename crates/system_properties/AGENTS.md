@@ -14,6 +14,7 @@ for their fixed property catalogs.
   setting/reading system property values.
 - `src/domain/port.rs`: the repository port.
 - `src/outbound/pgpool.rs`: the Postgres adapter.
+- `src/domain/model/constants/system_property_key.rs`: the canonical system catalog, including task-only Depends On and its Blocking inverse.
 
 ## Scope
 
@@ -33,7 +34,7 @@ for their fixed property catalogs.
 
 ## Recipes
 
-- Add a new system property: define it in `src/domain/mod.rs` (model) →
+- Add a new system property: define it in `src/domain/model/constants/system_property_key.rs` →
   `src/domain/port.rs` (repository method, if new storage shape) →
   `src/domain/service.rs` → `src/outbound/pgpool.rs`.
 

@@ -256,9 +256,9 @@ async fn test_copy_task_properties_empty_source(pool: Pool<Postgres>) -> anyhow:
     // Copy from empty source - should still create system properties with null values
     repo.copy_task_properties(from_task_id, to_task_id).await?;
 
-    // Should have 10 system properties with null values
+    // Should have 11 system properties with null values
     let count = count_task_properties(&pool, to_task_id).await;
-    assert_eq!(count, 10, "Should have 10 system task properties");
+    assert_eq!(count, 11, "Should have 11 system task properties");
 
     // All values should be null
     let properties = get_task_property_values(&pool, to_task_id).await;
@@ -284,13 +284,11 @@ async fn test_copy_task_properties_with_existing_properties(
     // Copy properties (source has 2 system + 2 custom properties from fixture)
     repo.copy_task_properties(from_task_id, to_task_id).await?;
 
-    // Destination should have 12 properties:
-    // - 4 copied (Status, Priority, Custom Notes, Custom Tags)
-    // - 8 null system properties backfilled
+    // Destination has 4 copied values and 9 null system properties.
     let count = count_task_properties(&pool, to_task_id).await;
     assert_eq!(
-        count, 12,
-        "Should have 12 properties (4 copied + 8 backfilled)"
+        count, 13,
+        "Should have 13 properties (4 copied + 9 backfilled)"
     );
 
     // Check that status was copied with correct SelectOption value
@@ -439,11 +437,11 @@ async fn test_copy_task_properties_idempotent(pool: Pool<Postgres>) -> anyhow::R
     repo.copy_task_properties(from_task_id, to_task_id).await?;
     repo.copy_task_properties(from_task_id, to_task_id).await?;
 
-    // Should still have exactly 10 properties
+    // Should still have exactly 11 properties
     let count = count_task_properties(&pool, to_task_id).await;
     assert_eq!(
-        count, 10,
-        "Should have exactly 10 properties after idempotent copies"
+        count, 11,
+        "Should have exactly 11 properties after idempotent copies"
     );
 
     Ok(())
@@ -576,5 +574,35 @@ async fn project_membership_reads_the_project_property(pool: Pool<Postgres>) -> 
         ]
     );
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn copying_a_task_does_not_copy_dependency_values(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let source = uuid::Uuid::now_v7().to_string();
+    let destination = uuid::Uuid::now_v7().to_string();
+    let blocker = uuid::Uuid::now_v7();
+    sqlx::query!("INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id) VALUES ($1, $2, 'TASK', $3)", uuid::Uuid::now_v7(), blocker.to_string(), SystemPropertyKey::STATUS_UUID).execute(&pool).await?;
+    sqlx::query!(
+        "INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+         VALUES ($1, $2, 'TASK', $3, $4)",
+        uuid::Uuid::now_v7(), source, SystemPropertyKey::DEPENDS_ON_UUID,
+        serde_json::json!({"type": "EntityReference", "value": [{"entity_type": "TASK", "entity_id": blocker.to_string()}]})
+    ).execute(&pool).await?;
+
+    PgSystemPropertiesRepository::new(pool.clone())
+        .copy_task_properties(&source, &destination)
+        .await?;
+    let value = sqlx::query_scalar!(
+        "SELECT values FROM entity_properties WHERE entity_id = $1 AND entity_type = 'TASK'
+         AND property_definition_id = $2",
+        destination,
+        SystemPropertyKey::DEPENDS_ON_UUID
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(value, None);
     Ok(())
 }

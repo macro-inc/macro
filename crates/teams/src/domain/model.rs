@@ -594,6 +594,8 @@ pub struct PatchTeamRequest {
     /// unchanged or pass `null` to let each member's browser decide.
     #[serde(default, deserialize_with = "double_option")]
     pub language: Option<Option<Language>>,
+    /// Reject task completion while an unfinished dependency remains. Omit to leave unchanged.
+    pub prevent_completing_blocked_tasks: Option<bool>,
 }
 
 /// Request to update the team plan
@@ -690,6 +692,8 @@ pub struct Team {
     /// The interface language for the team's members, unless a member picks
     /// their own. `None` lets each member's browser decide.
     pub(crate) language: Option<Language>,
+    /// Whether tasks owned by this team cannot complete while blocked.
+    pub(crate) prevent_completing_blocked_tasks: bool,
 }
 
 impl Team {
@@ -714,6 +718,7 @@ impl Team {
             allow_non_admin_invites: true,
             default_link_share: Some(LinkShare::Team),
             language: None,
+            prevent_completing_blocked_tasks: false,
         }
     }
 }
@@ -769,6 +774,11 @@ impl Team {
     /// member's browser decides.
     pub fn language(&self) -> Option<Language> {
         self.language
+    }
+
+    /// Whether unfinished dependencies prevent completion of team tasks.
+    pub fn prevent_completing_blocked_tasks(&self) -> bool {
+        self.prevent_completing_blocked_tasks
     }
 }
 

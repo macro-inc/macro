@@ -3499,7 +3499,7 @@ async fn entity_properties_cleared_event_publishes_once_for_authenticated_and_in
             .withf(|entity| {
                 entity.entity_id == "doc1" && entity.entity_type == EntityType::Document
             })
-            .return_once(|_| Box::pin(async { Ok(()) }));
+            .return_once(|_| Box::pin(async { Ok(vec![]) }));
         let event_broker = RecordingEventBroker::default();
         let service = service_with_event_broker(repo, event_broker.clone());
 
@@ -3521,6 +3521,59 @@ async fn entity_properties_cleared_event_publishes_once_for_authenticated_and_in
             })
         );
     }
+}
+
+#[tokio::test]
+async fn entity_properties_cleanup_publishes_surviving_task_receipts() {
+    let survivor = Uuid::now_v7().to_string();
+    let deleted = Uuid::now_v7().to_string();
+    let previous_value = Some(PropertyValue::EntityRef(vec![
+        models_properties::EntityReference::new(deleted.clone(), EntityType::Task),
+    ]));
+    let mut receipt = entity_property_mutation(
+        &survivor,
+        EntityType::Task,
+        SystemPropertyKey::DEPENDS_ON_UUID,
+        None,
+    );
+    receipt.previous_value = previous_value;
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_document_sub_types()
+        .return_once(|_| Box::pin(async { Ok(HashMap::new()) }));
+    repo.expect_delete_entity_properties()
+        .return_once(|_| Box::pin(async move { Ok(vec![receipt]) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+    service
+        .delete_entity_properties(&EditReceipt::dangerously_assert_internal_user(
+            &deleted,
+            AccessEntityType::Document,
+        ))
+        .await
+        .unwrap();
+    let published = event_broker.events();
+    assert_eq!(published.len(), 2);
+    assert_eq!(published[0].key, survivor);
+    assert_eq!(
+        published[0].envelope["event_type"],
+        "entity_property.updated"
+    );
+    assert_eq!(published[0].envelope["metadata"]["entity_type"], "TASK");
+    assert_eq!(
+        published[0].envelope["metadata"]["value"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        published[0].envelope["metadata"]["previous_value"],
+        serde_json::json!({
+            "type": "EntityReference", "value": [{"entity_id": deleted, "entity_type": "TASK"}]
+        })
+    );
+    assert_eq!(published[1].key, deleted);
+    assert_eq!(
+        published[1].envelope["event_type"],
+        "entity_properties.cleared"
+    );
 }
 
 #[tokio::test]

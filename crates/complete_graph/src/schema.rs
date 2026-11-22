@@ -825,6 +825,15 @@ where
         async_graphql::ID(self.user_id.to_string())
     }
 
+    /// Authorized dependency facts for a bounded page of task search results.
+    async fn task_dependency_states(
+        &self,
+        ctx: &Context<'_>,
+        task_ids: Vec<ID>,
+    ) -> async_graphql::Result<Vec<graphql_properties::GraphqlTaskDependencyState>> {
+        graphql_properties::load_task_dependency_batch(ctx, task_ids).await
+    }
+
     /// A page filtered and ordered across the entire authorized table.
     async fn database_view_rows(
         &self,

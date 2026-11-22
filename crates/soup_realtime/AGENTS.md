@@ -21,6 +21,7 @@ tasks itself.
 - `src/outbound/kafka_publisher.rs`, `entity_access.rs`, `agent_sessions.rs`:
   the Kafka and access-expansion adapters; `entity_access.rs` makes one
   `EntityAudienceLookup` call per entity type in a batch.
+- `src/inbound/kafka_consumer/task_dependencies.rs` + `src/outbound/task_dependency_neighbors.rs`: task status and lifecycle fanout, 500-ID neighbor batches, and each neighbor's own access source. Current relationship writers publish reciprocal events; only legacy relationship events expand again.
 
 ## Scope
 
@@ -78,4 +79,4 @@ tasks itself.
 
 ## Related
 
-- `README.md` (same content as above, kept for non-agent readers)
+- `README.md`: concise architecture and delivery overview.

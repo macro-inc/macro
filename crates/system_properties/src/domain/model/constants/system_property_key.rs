@@ -106,6 +106,7 @@ define_system_properties! {
 
     // Projects: the one project (initiative) a task belongs to
     Project,           PROJECT_UUID,            0x14, "Project";
+    Blocking,         BLOCKING_UUID,           0x15, "Blocking";
 }
 
 impl SystemPropertyKey {
@@ -123,6 +124,7 @@ impl SystemPropertyKey {
                 Self::PARENT_TASK_UUID,
                 Self::SUBTASKS_UUID,
                 Self::DEPENDS_ON_UUID,
+                Self::BLOCKING_UUID,
                 Self::EFFORT_UUID,
                 Self::STORY_POINTS_UUID,
                 Self::RELEVANT_DOCUMENTS_UUID,
@@ -183,7 +185,7 @@ mod tests {
     #[test]
     fn test_all_system_property_keys_returns_all_uuids() {
         let all_keys = SystemPropertyKey::all_system_property_keys();
-        assert_eq!(all_keys.len(), 20);
+        assert_eq!(all_keys.len(), 21);
         assert!(all_keys.contains(&SystemPropertyKey::ASSIGNEES_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::STATUS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::PRIORITY_UUID));
@@ -191,6 +193,7 @@ mod tests {
         assert!(all_keys.contains(&SystemPropertyKey::PARENT_TASK_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::SUBTASKS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::DEPENDS_ON_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::BLOCKING_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::EFFORT_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::STORY_POINTS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::RELEVANT_DOCUMENTS_UUID));
@@ -227,7 +230,7 @@ mod tests {
     #[test]
     fn test_required_property_ids_for_task() {
         let required = SystemPropertyKey::required_property_ids_for_entity(EntityType::Task);
-        assert_eq!(required.len(), 10);
+        assert_eq!(required.len(), 11);
         assert!(required.contains(&SystemPropertyKey::ASSIGNEES_UUID));
         assert!(required.contains(&SystemPropertyKey::STATUS_UUID));
         assert!(required.contains(&SystemPropertyKey::PRIORITY_UUID));
@@ -235,6 +238,7 @@ mod tests {
         assert!(required.contains(&SystemPropertyKey::PARENT_TASK_UUID));
         assert!(required.contains(&SystemPropertyKey::SUBTASKS_UUID));
         assert!(required.contains(&SystemPropertyKey::DEPENDS_ON_UUID));
+        assert!(required.contains(&SystemPropertyKey::BLOCKING_UUID));
         assert!(required.contains(&SystemPropertyKey::EFFORT_UUID));
         assert!(required.contains(&SystemPropertyKey::STORY_POINTS_UUID));
         assert!(required.contains(&SystemPropertyKey::RELEVANT_DOCUMENTS_UUID));
@@ -298,6 +302,7 @@ mod tests {
             SystemPropertyKey::ParentTask,
             SystemPropertyKey::Subtasks,
             SystemPropertyKey::DependsOn,
+            SystemPropertyKey::Blocking,
             SystemPropertyKey::Effort,
             SystemPropertyKey::StoryPoints,
             SystemPropertyKey::RelevantDocuments,

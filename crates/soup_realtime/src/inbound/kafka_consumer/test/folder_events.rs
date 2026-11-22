@@ -143,7 +143,7 @@ async fn run(
         RecordingPublisher(published.clone()),
     );
 
-    let outcome = process_event(&service, &NoPullRequestSessions, event, || {}).await;
+    let outcome = process_event(&service, &NoPullRequestSessions, &NoNeighbors, event, || {}).await;
 
     let mut messages: Vec<_> = published
         .lock()

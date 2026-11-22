@@ -11,6 +11,8 @@ mod loaders;
 mod mutations;
 /// GraphQL property objects, values, and edge resolver.
 mod objects;
+/// Authorized task dependency read model and loader.
+mod task_dependencies;
 
 pub use definitions::{
     GraphqlNumberPropertyOptionValue, GraphqlPropertyDefinition, GraphqlPropertyDefinitionOwner,
@@ -35,4 +37,9 @@ pub use objects::{
     GraphqlLinkPropertyValue, GraphqlNumberPropertyValue, GraphqlProperty, GraphqlPropertyDataType,
     GraphqlPropertyEntityReference, GraphqlPropertyValue, GraphqlSelectOptionPropertyValue,
     GraphqlStringPropertyValue, load_entity_properties,
+};
+pub use task_dependencies::{
+    GraphqlTaskDependencyState, PropertiesTaskDependencyReader, TaskDependencyLoader,
+    TaskDependencyReader, load_task_dependencies, load_task_dependency_batch,
+    task_dependency_loader,
 };

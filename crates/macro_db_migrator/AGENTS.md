@@ -10,6 +10,7 @@ Migration files belong in `../macro_db_client/migrations/`.
 - `src/lib.rs`: the shared `MACRO_DB_MIGRATIONS` static.
 - `src/test.rs`: historical-schema upgrade and migration failure regression tests.
 - `src/test/*.sql`: fixtures targeting the schema before and after an upgrade.
+- `src/test/task_dependencies.rs`: nonempty, multi-batch dependency upgrades and compatibility with deployed JSON property writers.
 
 ## Scope
 

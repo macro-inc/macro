@@ -95,7 +95,8 @@ impl TeamRepositoryImpl {
             RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,
                 auto_join_domain,
                 default_link_share as "default_link_share: LinkShare",
-                language as "language: Language"
+                language as "language: Language",
+                prevent_completing_blocked_tasks
             "#,
             id,
             team_name,
@@ -120,6 +121,7 @@ impl TeamRepositoryImpl {
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
                 language: row.language,
+                prevent_completing_blocked_tasks: row.prevent_completing_blocked_tasks,
             })
         })
         .fetch_one(&mut *transaction)
@@ -1217,6 +1219,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
                 t.language as "language: Language",
+                t.prevent_completing_blocked_tasks,
                 TRUE AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
@@ -1238,6 +1241,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
                 language: row.language,
+                prevent_completing_blocked_tasks: row.prevent_completing_blocked_tasks,
             })
         })
         .fetch_one(&self.pool)
@@ -1291,6 +1295,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
                 t.language as "language: Language",
+                t.prevent_completing_blocked_tasks,
                 TRUE AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
@@ -1313,6 +1318,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
                 language: row.language,
+                prevent_completing_blocked_tasks: row.prevent_completing_blocked_tasks,
             })
         })
         .fetch_all(&self.pool)
@@ -1462,6 +1468,7 @@ impl TeamRepository for TeamRepositoryImpl {
             || normalized_slug.is_some()
             || default_link_share_provided
             || language_provided
+            || req.prevent_completing_blocked_tasks.is_some()
         {
             let result = sqlx::query!(
                 r#"
@@ -1470,7 +1477,8 @@ impl TeamRepository for TeamRepositoryImpl {
                     name = COALESCE($2, name),
                     slug = COALESCE($3, slug),
                     default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END,
-                    language = CASE WHEN $6 THEN $7 ELSE language END
+                    language = CASE WHEN $6 THEN $7 ELSE language END,
+                    prevent_completing_blocked_tasks = COALESCE($8, prevent_completing_blocked_tasks)
                 WHERE id = $1
                 "#,
                 team_id,
@@ -1480,6 +1488,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 default_link_share as Option<LinkShare>,
                 language_provided,
                 language as Option<Language>,
+                req.prevent_completing_blocked_tasks,
             )
             .execute(&self.pool)
             .await?;

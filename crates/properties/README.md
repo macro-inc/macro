@@ -40,7 +40,7 @@ nested model specifies otherwise.
 | `property_option.deleted` | An option is deleted. `value` is the pre-delete snapshot. | `option_id`, `property_definition_id`, `actor_user_id`, `value` |
 | `entity_property.updated` | An entity value is set, replaced, attached with a null value, changed by an option add/remove, or has a deleted option stripped from it. Bulk operations emit one event for each actual `(entity, property_definition)` mutation. | `entity_property_id`, `entity_id`, `entity_type`, `property_definition_id`, `actor_user_id`, `source` (the outside event behind the change; the key is omitted when there is none), `value`, `updated_at` |
 | `entity_property.deleted` | One entity-property row is deleted. | `entity_property_id`, `entity_id`, `entity_type`, `property_definition_id`, `actor_user_id` |
-| `entity_properties.cleared` | `delete_entity_properties` successfully wipes all property values for an entity, including the document-deletion path. One clear event replaces per-value deletion events. | `entity_id`, `entity_type`, `actor_user_id` |
+| `entity_properties.cleared` | `delete_entity_properties` successfully wipes all property values for an entity, including the document-deletion path. One clear event replaces per-value deletion events for the deleted entity; surviving task dependency endpoints receive canonical `entity_property.updated` events after the cleanup transaction commits. | `entity_id`, `entity_type`, `actor_user_id` |
 
 `entity_property.updated.value` is the complete new value and may be `null` when
 the row remains attached without a value. UUID and timestamp fields serialize as
@@ -142,6 +142,29 @@ Parent Task and Subtasks writes update reciprocal task relationships in the
 same transaction. Version 1 emits `entity_property.updated` only for the entity
 targeted by the API call; it omits a separate event for each reciprocally
 updated task.
+
+Depends On and Blocking are reciprocal task-only system properties. Indexed
+`task_dependency_edges` and their JSON assignments change in one transaction;
+foreign-key cleanup removes references from surviving tasks. Writers authorize
+both the old and new endpoints before comparing that snapshot under the graph
+lock. Self-dependencies and direct two-task cycles are rejected; longer cycles
+remain allowed so each request uses bounded reverse-edge probes rather than a
+tenant-sized recursive walk. Edits accept up to 1,000 references and have a
+transaction deadline. Statement-level transition tables rebuild each changed
+endpoint once; unique-key lookup fences keep stale statistics from scanning all
+task assignments. Canonical before/after receipts publish property events for
+both endpoints, including removals, keeping search indexing and realtime current.
+The request-scoped GraphQL loader batches facts, and `setTaskProperty` returns
+normalized affected states. Status and lifecycle events refresh related tasks
+through independently authorized, batched realtime patches.
+
+A task remains blocked until every non-deleted prerequisite has Status Completed;
+Canceled is not Completed. Team admins opt into
+`team.prevent_completing_blocked_tasks` (default false). Completion admission is
+an atomic storage invariant, shared by GraphQL, REST, tools, and legacy direct
+Status writers. User-owned legacy tasks use their `team_task` team when present;
+tasks without a team have enforcement off. Unavailable blocker details require
+their own access receipt and are not exposed by dependency-state reads.
 
 There is no `property.updated` event because no endpoint currently edits a
 property definition. A future definition-edit operation can add that event as a

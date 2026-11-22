@@ -248,3 +248,179 @@ async fn project_values_must_name_one_project() {
         ));
     }
 }
+
+#[tokio::test]
+async fn dependency_removal_requires_edit_access_to_removed_task() {
+    let user = MacroUserIdStr::parse_from_str("macro|assigner@example.com").unwrap();
+    let blocker = Uuid::from_u128(2);
+    for key in [
+        SystemPropertyKey::DEPENDS_ON_UUID,
+        SystemPropertyKey::BLOCKING_UUID,
+    ] {
+        // Rebuild mocks per direction so the expectation verifies each removal.
+        let mut repo = MockPropertiesRepo::new();
+        repo.expect_task_dependency_targets()
+            .once()
+            .returning(move |_, _| Box::pin(async move { Ok(vec![blocker]) }));
+        let mut permissions = MockPermissionService::new();
+        permissions
+            .expect_mint_edit_receipt()
+            .once()
+            .withf(move |_, id, _| id == blocker.to_string())
+            .returning(|_, _, _| Box::pin(async { Err(anyhow::anyhow!("view only")) }));
+        let service =
+            PropertiesServiceImpl::new(repo, Some(permissions), None::<MockNotificationService>);
+        assert!(matches!(
+            service
+                .handle_task_relationship_property(&task_edit(&user), key, None)
+                .await,
+            Err(PropertiesErr::PermissionDenied)
+        ));
+    }
+}
+
+#[tokio::test]
+async fn dependency_self_and_invalid_references_are_rejected_without_writes() {
+    let user = MacroUserIdStr::parse_from_str("macro|assigner@example.com").unwrap();
+    let service = PropertiesServiceImpl::new(
+        MockPropertiesRepo::new(),
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
+    for reference in [
+        EntityReference::new(Uuid::from_u128(1).to_string(), EntityType::Task),
+        EntityReference::new("not-a-uuid", EntityType::Task),
+        EntityReference::new(Uuid::from_u128(2).to_string(), EntityType::Document),
+    ] {
+        assert!(matches!(
+            service
+                .handle_task_relationship_property(
+                    &task_edit(&user),
+                    SystemPropertyKey::DEPENDS_ON_UUID,
+                    Some(SetPropertyValue::MultiEntityReference {
+                        references: vec![reference]
+                    }),
+                )
+                .await,
+            Err(PropertiesErr::Validation(_))
+        ));
+    }
+}
+
+#[tokio::test]
+async fn adding_a_dependency_checks_edit_access_before_writing() {
+    let user = MacroUserIdStr::parse_from_str("macro|assigner@example.com").unwrap();
+    let blocker = Uuid::from_u128(2);
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_task_dependency_targets()
+        .once()
+        .returning(|_, _| Box::pin(async { Ok(vec![]) }));
+    let mut permissions = MockPermissionService::new();
+    permissions
+        .expect_mint_edit_receipt()
+        .once()
+        .withf(move |_, id, _| id == blocker.to_string())
+        .returning(|_, _, _| Box::pin(async { Err(anyhow::anyhow!("view only")) }));
+    let service =
+        PropertiesServiceImpl::new(repo, Some(permissions), None::<MockNotificationService>);
+
+    assert!(matches!(
+        service
+            .handle_task_relationship_property(
+                &task_edit(&user),
+                SystemPropertyKey::DEPENDS_ON_UUID,
+                Some(SetPropertyValue::MultiEntityReference {
+                    references: vec![EntityReference::new(blocker.to_string(), EntityType::Task),]
+                }),
+            )
+            .await,
+        Err(PropertiesErr::PermissionDenied)
+    ));
+}
+
+#[tokio::test]
+async fn changed_dependency_snapshot_rejects_write() {
+    let user = MacroUserIdStr::parse_from_str("macro|assigner@example.com").unwrap();
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_task_dependency_targets()
+        .once()
+        .returning(|_, _| Box::pin(async { Ok(vec![]) }));
+    repo.expect_link_task_dependencies()
+        .once()
+        .withf(|_, key, expected, desired| {
+            *key == SystemPropertyKey::DEPENDS_ON_UUID && expected.is_empty() && desired.is_empty()
+        })
+        .returning(|_, _, _, _| Box::pin(async { Ok(TaskDependencyLinkOutcome::Stale) }));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
+    assert!(matches!(
+        service
+            .handle_task_relationship_property(
+                &task_edit(&user),
+                SystemPropertyKey::DEPENDS_ON_UUID,
+                None
+            )
+            .await,
+        Err(PropertiesErr::Validation(_))
+    ));
+}
+
+#[tokio::test]
+async fn oversized_dependency_snapshot_can_clear_after_authorizing_every_endpoint() {
+    let user = MacroUserIdStr::parse_from_str("macro|assigner@example.com").unwrap();
+    for key in [
+        SystemPropertyKey::DEPENDS_ON_UUID,
+        SystemPropertyKey::BLOCKING_UUID,
+    ] {
+        let endpoints = (2..1003).map(Uuid::from_u128).collect::<Vec<_>>();
+        let expected = endpoints.clone();
+        let mut repo = MockPropertiesRepo::new();
+        repo.expect_task_dependency_targets()
+            .once()
+            .return_once(|_, _| Box::pin(async move { Ok(endpoints) }));
+        repo.expect_link_task_dependencies()
+            .once()
+            .withf(move |_, property, snapshot, desired| {
+                *property == key && *snapshot == expected && desired.is_empty()
+            })
+            .returning(move |task, _, _, _| {
+                Box::pin(async move {
+                    Ok(TaskDependencyLinkOutcome::Updated(
+                        models_properties::service::entity_property::EntityProperty {
+                            id: Uuid::now_v7(),
+                            entity_id: task.to_string(),
+                            entity_type: EntityType::Task,
+                            property_definition_id: key,
+                            created_at: chrono::Utc::now(),
+                            updated_at: chrono::Utc::now(),
+                        },
+                        vec![],
+                    ))
+                })
+            });
+        let mut permissions = MockPermissionService::new();
+        permissions
+            .expect_mint_edit_receipt()
+            .times(1001)
+            .returning(|user, id, entity_type| {
+                let receipt = EditReceipt::dangerously_assert_authenticated_user(
+                    user.clone().into_owned(),
+                    id,
+                    entity_type,
+                );
+                Box::pin(async move { Ok(receipt) })
+            });
+        let service =
+            PropertiesServiceImpl::new(repo, Some(permissions), None::<MockNotificationService>);
+        let result = service
+            .handle_task_relationship_property(&task_edit(&user), key, None)
+            .await
+            .unwrap();
+        assert!(
+            matches!(result.previous_value, Some(PropertyValue::EntityRef(refs)) if refs.len() == 1001)
+        );
+    }
+}

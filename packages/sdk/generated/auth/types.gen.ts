@@ -1642,6 +1642,10 @@ export type PatchTeamRequest = {
      */
     name?: string | null;
     /**
+     * Reject task completion while an unfinished dependency remains. Omit to leave unchanged.
+     */
+    prevent_completing_blocked_tasks?: boolean | null;
+    /**
      * The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE.
      */
     slug?: string | null;
@@ -2434,6 +2438,10 @@ export type Team = {
     language?: null | Language;
     name: string;
     owner_id: string;
+    /**
+     * Whether tasks owned by this team cannot complete while blocked.
+     */
+    prevent_completing_blocked_tasks: boolean;
     slug: string;
 };
 

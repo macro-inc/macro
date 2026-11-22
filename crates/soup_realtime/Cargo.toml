@@ -27,6 +27,8 @@ default = ["consumer", "outbound", "ports"]
 outbound = [
   "dep:agent_session",
   "dep:entity_access",
+  "dep:properties",
+  "properties/outbound",
   "ports",
 ]
 ports = [
@@ -36,6 +38,7 @@ ports = [
   "dep:tokio",
   "dep:tokio-retry",
   "dep:tracing",
+  "dep:uuid",
 ]
 
 [dependencies]
@@ -68,6 +71,8 @@ tokio = { workspace = true, features = ["sync", "time"], optional = true }
 tokio-retry = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+uuid = { workspace = true, optional = true }
 
 [dev-dependencies]
 chrono = { workspace = true }

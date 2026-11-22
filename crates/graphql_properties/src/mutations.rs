@@ -452,6 +452,16 @@ impl GraphqlSetPropertyValue {
     }
 }
 
+/// Committed task properties and dependency facts for every affected endpoint.
+#[derive(async_graphql::SimpleObject)]
+struct TaskPropertyEffects {
+    /// The assignment directly edited by the caller.
+    property: GraphqlProperty,
+    /// Authoritative normalized task facts, including reciprocal assignments.
+    tasks: Vec<crate::task_dependencies::GraphqlTaskDependencyState>,
+    /// False means the write committed but dependency facts need a scoped reload.
+    effects_complete: bool,
+}
 /// Mutations for assigning and updating entity properties.
 #[Object]
 impl<T> PropertiesMutationRoot<T>
@@ -505,6 +515,78 @@ where
             .map_err(|err| async_graphql::Error::new(err.to_string()))?;
 
         Ok(GraphqlProperty::new(property))
+    }
+
+    /// Set a task property and return all dependency effects in one cache transaction.
+    #[tracing::instrument(name = "tasks.property.set", skip_all, fields(task_id = %input.entity_id), err(Debug))]
+    async fn set_task_property(
+        &self,
+        ctx: &Context<'_>,
+        input: SetEntityPropertyInput,
+    ) -> async_graphql::Result<TaskPropertyEffects> {
+        use crate::task_dependencies::TaskDependencyLoader;
+        use async_graphql::dataloader::DataLoader;
+        if input.entity_type != GraphqlPropertyTargetEntityType::Document {
+            return Err(async_graphql::Error::new("Expected a task document"));
+        }
+        let task_id = Uuid::parse_str(&input.entity_id)
+            .map_err(|_| async_graphql::Error::new("Invalid task ID"))?;
+        let definition_id = parse_id(input.property_definition_id, "propertyDefinitionId")?;
+        if !matches!(
+            definition_id,
+            system_properties::SystemPropertyKey::STATUS_UUID
+                | system_properties::SystemPropertyKey::DEPENDS_ON_UUID
+                | system_properties::SystemPropertyKey::BLOCKING_UUID
+        ) {
+            return Err(async_graphql::Error::new(
+                "Expected a task dependency or Status property",
+            ));
+        }
+        let loader = ctx.data::<DataLoader<TaskDependencyLoader>>()?;
+        let before = loader
+            .load_one(task_id)
+            .await
+            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        let value = input
+            .value
+            .map(GraphqlSetPropertyValue::try_into_model)
+            .transpose()?;
+        let mut ids = vec![task_id];
+        if let Some(before) = before {
+            ids.extend(before.facts.blocker_ids);
+            ids.extend(before.facts.dependent_ids);
+        }
+        if let Some(SetPropertyValue::MultiEntityReference { references }) = &value {
+            ids.extend(
+                references
+                    .iter()
+                    .filter_map(|reference| Uuid::parse_str(&reference.entity_id).ok()),
+            );
+        }
+        let writer = ctx.data::<T>()?;
+        let property = writer
+            .set_entity_property(
+                model_entity::EntityType::Document,
+                input.entity_id,
+                definition_id,
+                value,
+            )
+            .await
+            .map_err(|error| crate::task_dependencies::task_property_error(error, task_id))?;
+        let effects =
+            crate::task_dependencies::load_task_property_effects(loader, task_id, ids).await;
+        let (tasks, effects_complete) = match effects {
+            Ok(tasks) => (tasks, true),
+            Err(error) => {
+                tracing::warn!(task_id = %task_id, error = ?error, "task property committed; dependency hydration failed");
+                (Vec::new(), false)
+            }
+        };
+        Ok(TaskPropertyEffects {
+            property: GraphqlProperty::new(property),
+            tasks,
+            effects_complete,
+        })
     }
 
     /// Add and remove options across one entity's multi-select properties.

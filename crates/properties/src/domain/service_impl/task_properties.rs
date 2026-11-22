@@ -19,9 +19,21 @@ use uuid::Uuid;
 
 use crate::domain::error::PropertiesErr;
 use crate::domain::model::{EditReceipt, PropertyAccessReceiptExt, TaskAssignedNotification};
-use crate::domain::ports::{NotificationService, PermissionService, PropertiesRepo};
+use crate::domain::ports::{
+    NotificationService, PermissionService, PropertiesRepo, TaskDependencyLinkOutcome,
+};
 use crate::domain::service_impl::PropertiesServiceImpl;
 
+/// Canonical relationship write and its post-commit publication receipts.
+#[derive(Debug)]
+pub(crate) struct TaskRelationshipMutation {
+    /// The edited task's persisted assignment.
+    pub property: EntityProperty,
+    /// The authorized pre-write graph snapshot.
+    pub previous_value: Option<PropertyValue>,
+    /// Canonical changed inverse assignments, read before commit.
+    pub reciprocal: Vec<crate::domain::model::EntityPropertyMutationSnapshot>,
+}
 impl<R, P, N, B> PropertiesServiceImpl<R, P, N, B>
 where
     R: PropertiesRepo,
@@ -70,7 +82,7 @@ where
     }
 
     /// Require edit access to every referenced task before linking: linking
-    /// mutates the referenced task's Parent Task / Subtasks property, so edit
+    /// mutates the referenced task's inverse property, so edit
     /// access to the primary task alone is not enough. Internal (machine)
     /// callers are trusted and skip the check.
     async fn check_referenced_task_edit_access(
@@ -154,16 +166,19 @@ where
         }])))
     }
 
-    /// Handle task relationship properties (Parent Task / Subtasks) with bidirectional linking.
+    /// Handle task relationship properties with bidirectional linking.
+    #[tracing::instrument(skip_all, fields(task_id = %access.entity_id(), property_definition_id = %property_definition_id), err)]
     pub(crate) async fn handle_task_relationship_property(
         &self,
         access: &EditReceipt,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> Result<EntityProperty, PropertiesErr> {
+    ) -> Result<TaskRelationshipMutation, PropertiesErr> {
         let task_id = Uuid::parse_str(access.entity_id())
             .map_err(|_| PropertiesErr::Validation("Invalid task ID".to_string()))?;
 
+        let mut previous_value = None;
+        let mut reciprocal = Vec::new();
         let property = match property_definition_id {
             SystemPropertyKey::PARENT_TASK_UUID => {
                 let parent_task_id = match &value {
@@ -227,6 +242,91 @@ where
                     .map_err(anyhow::Error::from)?
                     .ok_or(PropertiesErr::EntityPropertyNotFound)?
             }
+            SystemPropertyKey::DEPENDS_ON_UUID | SystemPropertyKey::BLOCKING_UUID => {
+                let references = match &value {
+                    None => &[][..],
+                    Some(SetPropertyValue::MultiEntityReference { references }) => references,
+                    Some(_) => {
+                        return Err(PropertiesErr::Validation(
+                            "Task dependencies require multiple task references".to_string(),
+                        ));
+                    }
+                };
+                if references.len() > 1000 {
+                    return Err(PropertiesErr::Validation(
+                        "At most 1000 task relationships can be edited at once".into(),
+                    ));
+                }
+                let mut desired = HashSet::new();
+                for reference in references {
+                    if reference.entity_type != EntityType::Task {
+                        return Err(PropertiesErr::Validation(
+                            "Task dependencies must reference tasks".to_string(),
+                        ));
+                    }
+                    let id = Uuid::parse_str(&reference.entity_id)
+                        .map_err(|_| PropertiesErr::Validation("Invalid task ID".to_string()))?;
+                    if id == task_id {
+                        return Err(PropertiesErr::Validation(
+                            "A task cannot depend on itself".to_string(),
+                        ));
+                    }
+                    desired.insert(id);
+                }
+
+                let current = self
+                    .repository
+                    .task_dependency_targets(task_id, property_definition_id)
+                    .await
+                    .map_err(anyhow::Error::from)?;
+                previous_value = Some(PropertyValue::EntityRef(
+                    current
+                        .iter()
+                        .map(|id| EntityReference::new(id.to_string(), EntityType::Task))
+                        .collect(),
+                ));
+                // Authorize the full pre-write snapshot as well as the desired
+                // endpoints. The repository compares that snapshot under a lock.
+                let mut touched: HashSet<Uuid> = current.iter().copied().collect();
+                touched.extend(&desired);
+                self.check_referenced_task_edit_access(
+                    access,
+                    &touched.into_iter().collect::<Vec<_>>(),
+                )
+                .await?;
+
+                match self
+                    .repository
+                    .link_task_dependencies(
+                        task_id,
+                        property_definition_id,
+                        current,
+                        desired.into_iter().collect(),
+                    )
+                    .await
+                    .map_err(anyhow::Error::from)?
+                {
+                    TaskDependencyLinkOutcome::Updated(property, effects) => {
+                        reciprocal = effects;
+                        property
+                    }
+                    TaskDependencyLinkOutcome::Stale => {
+                        return Err(PropertiesErr::Validation(
+                            "Task dependencies changed; retry".to_string(),
+                        ));
+                    }
+                    TaskDependencyLinkOutcome::Cycle => {
+                        return Err(PropertiesErr::Validation(
+                            "Task dependency cycle".to_string(),
+                        ));
+                    }
+                    TaskDependencyLinkOutcome::MissingTask => {
+                        return Err(PropertiesErr::Validation(
+                            "Task dependency endpoint not found".to_string(),
+                        ));
+                    }
+                }
+            }
             _ => {
                 return Err(PropertiesErr::Validation(
                     "Invalid property for task relationship handling".to_string(),
@@ -234,7 +334,11 @@ where
             }
         };
 
-        Ok(property)
+        Ok(TaskRelationshipMutation {
+            property,
+            previous_value,
+            reciprocal,
+        })
     }
 
     /// Handle task assignees property with permissions.

@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM entity_properties WHERE entity_id = $1 AND (entity_type = $2 OR ($3 AND entity_type IN ('DOCUMENT', 'TASK')))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT",
+                "INITIATIVE",
+                "CONTACT",
+                "DATABASE_ROW"
+              ]
+            }
+          }
+        },
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aff113c16b944117e2547f701740112a27e9376290c760611b9cac618d8836b0"
+}

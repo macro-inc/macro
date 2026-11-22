@@ -13,13 +13,33 @@ pub async fn handle(
 ) -> anyhow::Result<()> {
     tracing::debug!("processing delete document message");
 
-    let (document_id, mut owner) = if let Some(attributes) = message.message_attributes.as_ref() {
+    let (document_id, owner) = if let Some(attributes) = message.message_attributes.as_ref() {
         document_and_owner(attributes)?
     } else {
         ctx.worker.cleanup_message(message).await?;
         anyhow::bail!("message attributes not found")
     };
 
+    // Resolve task properties while document subtype metadata still exists.
+    // A failed cleanup leaves the message and document available for retry.
+    complete_after_property_cleanup(
+        async {
+            ctx.properties_service
+                .delete_entity_properties(&document_cleanup_receipt(document_id))
+                .await
+                .map_err(anyhow::Error::from)
+        },
+        complete_deletion(ctx, message, document_id, owner),
+    )
+    .await
+}
+
+async fn complete_deletion(
+    ctx: &DeleteDocumentWorkerContext,
+    message: &aws_sdk_sqs::types::Message,
+    document_id: &str,
+    mut owner: Option<Owner>,
+) -> anyhow::Result<()> {
     // Only need to get and delete document from macrodb if the owner is not present in the message attributes
     if owner.is_none() {
         tracing::info!(document_id=%document_id, "starting delete process for document");
@@ -96,20 +116,10 @@ pub async fn handle(
             tracing::trace!(error=?e, "could not delete ai edit traces");
         });
 
-    // Delete document properties
-    tracing::trace!(document_id=%document_id, "deleting document properties");
-
-    let cleanup_receipt = document_cleanup_receipt(document_id);
-    let _ = ctx
-        .properties_service
-        .delete_entity_properties(&cleanup_receipt)
+    ctx.worker
+        .cleanup_message(message)
         .await
-        .inspect_err(|e| tracing::error!(error=?e, "failed to delete entity properties"));
-    tracing::trace!(document_id=%document_id, "deleted document properties");
-
-    let _ = ctx.worker.cleanup_message(message).await.inspect_err(|e| {
-        tracing::error!(error=?e, "failed to cleanup message");
-    });
+        .context("failed to cleanup message")?;
 
     Ok(())
 }
@@ -150,4 +160,14 @@ pub(crate) fn count_occurrences(strings: Vec<String>) -> Vec<(String, i64)> {
         .into_iter()
         .map(|(string, count)| (string, count as i64))
         .collect()
+}
+
+pub(super) async fn complete_after_property_cleanup(
+    cleanup: impl std::future::Future<Output = anyhow::Result<()>>,
+    complete: impl std::future::Future<Output = anyhow::Result<()>>,
+) -> anyhow::Result<()> {
+    cleanup
+        .await
+        .context("failed to delete entity properties")?;
+    complete.await
 }

@@ -806,9 +806,15 @@ async fn updated_payload_maps_to_document_patch_and_commits() {
     let commits = AtomicUsize::new(0);
 
     assert!(matches!(
-        process_event(&service, &NoPullRequestSessions, &event, || {
-            commits.fetch_add(1, Ordering::SeqCst);
-        })
+        process_event(
+            &service,
+            &NoPullRequestSessions,
+            &NoNeighbors,
+            &event,
+            || {
+                commits.fetch_add(1, Ordering::SeqCst);
+            }
+        )
         .await,
         EventOutcome::Notified
     ));
@@ -844,10 +850,16 @@ async fn transient_service_failures_are_retried_before_committing() {
     let commits = AtomicUsize::new(0);
     let started = tokio::time::Instant::now();
 
-    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
-        assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
-        commits.fetch_add(1, Ordering::SeqCst);
-    })
+    let outcome = process_event(
+        &service,
+        &NoPullRequestSessions,
+        &NoNeighbors,
+        &event,
+        || {
+            assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
+            commits.fetch_add(1, Ordering::SeqCst);
+        },
+    )
     .await;
 
     assert!(matches!(outcome, EventOutcome::Notified));
@@ -865,11 +877,17 @@ async fn exhausted_service_retries_drop_and_commit_the_event() {
     let commits = AtomicUsize::new(0);
     let started = tokio::time::Instant::now();
 
-    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
-        assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
-        assert_eq!(started.elapsed(), Duration::from_secs(15));
-        commits.fetch_add(1, Ordering::SeqCst);
-    })
+    let outcome = process_event(
+        &service,
+        &NoPullRequestSessions,
+        &NoNeighbors,
+        &event,
+        || {
+            assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
+            assert_eq!(started.elapsed(), Duration::from_secs(15));
+            commits.fetch_add(1, Ordering::SeqCst);
+        },
+    )
     .await;
 
     assert!(matches!(outcome, EventOutcome::Dropped));
@@ -883,20 +901,32 @@ async fn dropped_event_does_not_prevent_later_events_from_being_processed() {
     let service = flaky_service(MAX_NOTIFY_ATTEMPTS);
     let committed_offsets = Mutex::new(Vec::new());
 
-    let first_outcome = process_event(&service, &NoPullRequestSessions, &first_event, || {
-        assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
-        committed_offsets.lock().expect("offsets lock").push(0);
-    })
+    let first_outcome = process_event(
+        &service,
+        &NoPullRequestSessions,
+        &NoNeighbors,
+        &first_event,
+        || {
+            assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
+            committed_offsets.lock().expect("offsets lock").push(0);
+        },
+    )
     .await;
     assert!(matches!(first_outcome, EventOutcome::Dropped));
 
-    let next_outcome = process_event(&service, &NoPullRequestSessions, &next_event, || {
-        assert_eq!(
-            service.attempts.load(Ordering::SeqCst),
-            MAX_NOTIFY_ATTEMPTS + 1
-        );
-        committed_offsets.lock().expect("offsets lock").push(1);
-    })
+    let next_outcome = process_event(
+        &service,
+        &NoPullRequestSessions,
+        &NoNeighbors,
+        &next_event,
+        || {
+            assert_eq!(
+                service.attempts.load(Ordering::SeqCst),
+                MAX_NOTIFY_ATTEMPTS + 1
+            );
+            committed_offsets.lock().expect("offsets lock").push(1);
+        },
+    )
     .await;
     assert!(matches!(next_outcome, EventOutcome::Notified));
     assert_eq!(*committed_offsets.lock().expect("offsets lock"), vec![0, 1]);
@@ -921,10 +951,16 @@ async fn multi_batch_event_retries_only_the_failed_batch_before_committing() {
     service.failures.insert(2);
     let commits = AtomicUsize::new(0);
 
-    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
-        assert_eq!(service.attempts.load(Ordering::SeqCst), 3);
-        commits.fetch_add(1, Ordering::SeqCst);
-    })
+    let outcome = process_event(
+        &service,
+        &NoPullRequestSessions,
+        &NoNeighbors,
+        &event,
+        || {
+            assert_eq!(service.attempts.load(Ordering::SeqCst), 3);
+            commits.fetch_add(1, Ordering::SeqCst);
+        },
+    )
     .await;
 
     assert!(matches!(outcome, EventOutcome::Notified));
@@ -954,13 +990,19 @@ async fn partial_event_failure_discards_remaining_batches_and_commits() {
     service.failures = (2..=MAX_NOTIFY_ATTEMPTS + 1).collect();
     let commits = AtomicUsize::new(0);
 
-    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
-        assert_eq!(
-            service.attempts.load(Ordering::SeqCst),
-            MAX_NOTIFY_ATTEMPTS + 1
-        );
-        commits.fetch_add(1, Ordering::SeqCst);
-    })
+    let outcome = process_event(
+        &service,
+        &NoPullRequestSessions,
+        &NoNeighbors,
+        &event,
+        || {
+            assert_eq!(
+                service.attempts.load(Ordering::SeqCst),
+                MAX_NOTIFY_ATTEMPTS + 1
+            );
+            commits.fetch_add(1, Ordering::SeqCst);
+        },
+    )
     .await;
 
     assert!(matches!(outcome, EventOutcome::Dropped));
@@ -981,9 +1023,15 @@ async fn ignored_event_commits_without_notifying() {
     let service = flaky_service(0);
     let commits = AtomicUsize::new(0);
 
-    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
-        commits.fetch_add(1, Ordering::SeqCst);
-    })
+    let outcome = process_event(
+        &service,
+        &NoPullRequestSessions,
+        &NoNeighbors,
+        &event,
+        || {
+            commits.fetch_add(1, Ordering::SeqCst);
+        },
+    )
     .await;
 
     assert!(matches!(outcome, EventOutcome::Ignored));
@@ -1005,9 +1053,15 @@ async fn offset_is_committed_only_after_every_batch_finishes() {
     let event = reindex_event((0..NOTIFY_BATCH_SIZE + 1).map(|_| Uuid::now_v7()).collect());
     let service = GatedService(tokio::sync::Semaphore::new(0));
     let commits = AtomicUsize::new(0);
-    let process = process_event(&service, &NoPullRequestSessions, &event, || {
-        commits.fetch_add(1, Ordering::SeqCst);
-    });
+    let process = process_event(
+        &service,
+        &NoPullRequestSessions,
+        &NoNeighbors,
+        &event,
+        || {
+            commits.fetch_add(1, Ordering::SeqCst);
+        },
+    );
     tokio::pin!(process);
 
     assert!(futures::poll!(&mut process).is_pending());
@@ -1026,9 +1080,15 @@ async fn cancellation_during_publication_leaves_the_event_uncommitted() {
     let service = GatedService(tokio::sync::Semaphore::new(0));
     let commits = AtomicUsize::new(0);
     {
-        let process = process_event(&service, &NoPullRequestSessions, &event, || {
-            commits.fetch_add(1, Ordering::SeqCst);
-        });
+        let process = process_event(
+            &service,
+            &NoPullRequestSessions,
+            &NoNeighbors,
+            &event,
+            || {
+                commits.fetch_add(1, Ordering::SeqCst);
+            },
+        );
         tokio::pin!(process);
         assert!(futures::poll!(&mut process).is_pending());
     }
@@ -1042,9 +1102,15 @@ async fn cancellation_during_retry_backoff_leaves_the_event_uncommitted() {
     let service = flaky_service(MAX_NOTIFY_ATTEMPTS);
     let commits = AtomicUsize::new(0);
     {
-        let process = process_event(&service, &NoPullRequestSessions, &event, || {
-            commits.fetch_add(1, Ordering::SeqCst);
-        });
+        let process = process_event(
+            &service,
+            &NoPullRequestSessions,
+            &NoNeighbors,
+            &event,
+            || {
+                commits.fetch_add(1, Ordering::SeqCst);
+            },
+        );
         tokio::pin!(process);
         assert!(futures::poll!(&mut process).is_pending());
         assert_eq!(service.attempts.load(Ordering::SeqCst), 1);
@@ -1160,4 +1226,11 @@ fn imported_call_records_update_soup_and_native_call_events_are_ignored() {
         ai_name_generated: false,
     });
     assert!(patches_from_call_event(&summarized).is_empty());
+}
+
+struct NoNeighbors;
+impl TaskDependencyNeighbors for NoNeighbors {
+    async fn neighbors(&self, _: &[Uuid]) -> Result<Vec<Entity<'static>>, Report> {
+        Ok(Vec::new())
+    }
 }

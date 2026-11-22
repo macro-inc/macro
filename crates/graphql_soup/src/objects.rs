@@ -78,6 +78,15 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
     /// GraphQL activity event object supplied by the activity adapter.
     type ActivityEvent: OutputType;
 
+    /// Task-only dependency facts supplied by the properties adapter.
+    type TaskDependencyState: OutputType;
+
+    /// Resolve batched dependency facts for one task document.
+    fn resolve_task_dependencies(
+        ctx: &Context<'_>,
+        task_id: Uuid,
+    ) -> impl Future<Output = async_graphql::Result<Option<Self::TaskDependencyState>>> + Send;
+
     /// Construct the common/global edge object for a Soup entity.
     /// This is for edges that apply to all soup entities, e.g. notifications
     fn from_entity(entity: model_entity::Entity<'static>) -> Self;
@@ -793,6 +802,17 @@ where
     /// Entity-owned icon and color overrides.
     async fn appearance(&self) -> Option<Json<model_entity::EntityAppearance>> {
         self.0.appearance.clone().map(Json)
+    }
+
+    /// Dependency facts for tasks; ordinary documents do not have dependency state.
+    async fn task_dependencies(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<E::TaskDependencyState>> {
+        if !matches!(self.0.sub_type, Some(SoupDocumentSubType::Task { .. })) {
+            return Ok(None);
+        }
+        E::resolve_task_dependencies(ctx, self.0.id).await
     }
 
     /// User-visible display name.

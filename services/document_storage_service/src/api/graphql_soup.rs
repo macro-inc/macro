@@ -177,6 +177,16 @@ fn insert_graphql_context_data(
         state.properties_service.clone(),
         state.entity_access_service.clone(),
     );
+    data.insert(complete_graph::task_dependency_loader(
+        macro_user_id.clone(),
+        complete_graph::PropertiesTaskDependencyReader::new(
+            properties::outbound::task_dependency_state::PgTaskDependencyStateRepository::new(
+                state.db.clone(),
+            ),
+            state.properties_service.clone(),
+            state.entity_access_service.clone(),
+        ),
+    ));
     let property_writer = complete_graph::PropertiesEntityPropertyWriter::new(
         state.properties_service.clone(),
         state.entity_access_service.clone(),

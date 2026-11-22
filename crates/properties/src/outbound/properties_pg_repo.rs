@@ -12,7 +12,7 @@ use uuid::Uuid;
 use super::{
     entity_properties_get_query, entity_property_queries, metadata_queries,
     property_definition_queries, property_option_queries, tag_promotion_queries,
-    task_property_queries,
+    task_dependency_queries, task_property_queries,
 };
 use crate::domain::model::{
     EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
@@ -20,7 +20,7 @@ use crate::domain::model::{
     PropertyOptionReplaceOutcome, PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome,
     UpdatePropertyOptionOutcome,
 };
-use crate::domain::ports::PropertiesRepo;
+use crate::domain::ports::{PropertiesRepo, TaskDependencyLinkOutcome};
 use models_properties::DataType;
 use models_properties::EntityPropertyReference;
 use models_properties::service::document_metadata::DocumentMetadata;
@@ -404,14 +404,15 @@ impl PropertiesRepo for PropertiesPgRepo {
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
     ) -> Result<EntityPropertyMutationSnapshot, Self::Err> {
-        Ok(entity_property_queries::upsert_entity_property(
-            &self.pool,
-            entity_id,
-            entity_type,
-            property_definition_id,
-            value,
-        )
-        .await?)
+        entity_property_queries::upsert_entity_property(
+            &self.pool, entity_id, entity_type, property_definition_id, value,
+        ).await.map_err(|error| {
+            if matches!(&error, super::query_error::PropertyQueryError::Sqlx(error)
+                if error.as_database_error().and_then(|error| error.constraint()) == Some("task_completion_blocked")) {
+                return anyhow::Error::new(crate::domain::error::TaskCompletionBlocked);
+            }
+            anyhow::Error::from(error)
+        })
     }
 
     #[tracing::instrument(skip(self, references), err)]
@@ -505,6 +506,32 @@ impl PropertiesRepo for PropertiesPgRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn task_dependency_targets(
+        &self,
+        task_id: Uuid,
+        property_definition_id: Uuid,
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        let mut connection = self.pool.acquire().await?;
+        task_dependency_queries::targets(&mut connection, task_id, property_definition_id).await
+    }
+
+    async fn link_task_dependencies(
+        &self,
+        task_id: Uuid,
+        property_definition_id: Uuid,
+        expected: Vec<Uuid>,
+        desired: Vec<Uuid>,
+    ) -> Result<TaskDependencyLinkOutcome, Self::Err> {
+        task_dependency_queries::link(
+            &self.pool,
+            task_id,
+            property_definition_id,
+            expected,
+            desired,
+        )
+        .await
+    }
+
     async fn get_entity_properties(
         &self,
         entity_id: &str,
@@ -600,7 +627,7 @@ impl PropertiesRepo for PropertiesPgRepo {
     async fn delete_entity_properties(
         &self,
         entity_reference: &EntityReference,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Vec<crate::domain::model::EntityPropertyMutationSnapshot>, Self::Err> {
         entity_property_queries::delete_entity_properties(&self.pool, entity_reference).await
     }
 

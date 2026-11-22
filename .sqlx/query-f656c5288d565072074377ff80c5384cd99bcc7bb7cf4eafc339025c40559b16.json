@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT target.id, target.entity_id, target.values FROM unnest($1::text[]) requested(entity_id)\n         CROSS JOIN LATERAL (SELECT id, entity_id, values FROM entity_properties\n             WHERE entity_id = requested.entity_id AND entity_type = 'TASK' AND property_definition_id = $2 LIMIT 1) target",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "values",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "f656c5288d565072074377ff80c5384cd99bcc7bb7cf4eafc339025c40559b16"
+}

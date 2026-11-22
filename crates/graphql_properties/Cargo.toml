@@ -17,6 +17,7 @@ properties = { path = "../properties", default-features = false, features = [
   "ports",
 ] }
 rootcause = { workspace = true }
+system_properties = { path = "../system_properties", default-features = false }
 tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }

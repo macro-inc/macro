@@ -47,6 +47,7 @@ async fn preference_changes_wait_for_rollout_without_other_patch_effects() {
         user_role_updates: None,
         default_link_share: None,
         language: None,
+        prevent_completing_blocked_tasks: None,
     };
     assert!(matches!(
         service

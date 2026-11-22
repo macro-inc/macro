@@ -88,6 +88,14 @@ impl SoupEntityEdges for TestSoupEdges {
     type Notification = String;
     type NotificationFilter = String;
     type ActivityEvent = String;
+    type TaskDependencyState = bool;
+
+    async fn resolve_task_dependencies(
+        _ctx: &Context<'_>,
+        _task_id: uuid::Uuid,
+    ) -> async_graphql::Result<Option<bool>> {
+        Ok(None)
+    }
     type EmailThreadEdges = TestEmailThreadEdges;
     type CrmRecordEdges = TestEmailThreadEdges;
     type AgentSessionEdges = TestAgentSessionEdges;

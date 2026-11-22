@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE team\n                SET\n                    name = COALESCE($2, name),\n                    slug = COALESCE($3, slug),\n                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END,\n                    language = CASE WHEN $6 THEN $7 ELSE language END,\n                    prevent_completing_blocked_tasks = COALESCE($8, prevent_completing_blocked_tasks)\n                WHERE id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Varchar",
+        "Bool",
+        "Text",
+        "Bool",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7d1885050ea516e115ff5bfd5a779d4094c79e0c7e4c19dbf11b9042b7145cdf"
+}

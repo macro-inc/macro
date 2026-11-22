@@ -2254,6 +2254,12 @@ async fn run_server() -> anyhow::Result<()> {
             db.clone(),
             owned_entity_registrar.clone(),
         );
+        let dependency_neighbors =
+            soup_realtime::outbound::task_dependency_neighbors::PgTaskDependencyNeighbors(
+                properties::outbound::task_dependency_state::PgTaskDependencyStateRepository::new(
+                    db.clone(),
+                ),
+            );
         let brokers = config.kafka_brokers.as_ref().to_string();
         let entity_access_service = entity_access_service.as_ref().clone();
         let macro_event_broker = macro_event_broker.clone();
@@ -2276,6 +2282,7 @@ async fn run_server() -> anyhow::Result<()> {
                         &soup_realtime::outbound::agent_sessions::AgentSessionPullRequestLookup(
                             session_repo.clone(),
                         ),
+                        &dependency_neighbors,
                         cancellation_token.cancelled(),
                     )
                     .await;

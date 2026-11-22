@@ -33,6 +33,7 @@ use models_properties::service::property_option::{PropertyOption, PropertyOption
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType};
 use system_properties::{StatusOption, SystemPropertyKey};
+use tracing::Instrument;
 use uuid::Uuid;
 
 use super::error::{InvalidStoredPropertyValue, PropertiesErr};
@@ -737,24 +738,35 @@ where
         // primary entity's canonical assignment from that transaction.
         if matches!(
             property_definition_id,
-            SystemPropertyKey::PARENT_TASK_UUID | SystemPropertyKey::SUBTASKS_UUID
+            SystemPropertyKey::PARENT_TASK_UUID
+                | SystemPropertyKey::SUBTASKS_UUID
+                | SystemPropertyKey::DEPENDS_ON_UUID
+                | SystemPropertyKey::BLOCKING_UUID
         ) && entity_type == EntityType::Task
         {
-            let property = self
+            let change = self
                 .handle_task_relationship_property(access, property_definition_id, value)
                 .await?;
+            for reciprocal in &change.reciprocal {
+                self.publish_property_event(Self::entity_property_updated_event(
+                    &reciprocal.property,
+                    &reciprocal.value,
+                    &reciprocal.previous_value,
+                    access,
+                    source.as_ref(),
+                    None,
+                ));
+            }
             self.publish_property_event(Self::entity_property_updated_event(
-                &property,
+                &change.property,
                 &property_value,
-                // The relationship transaction doesn't capture the pre-write
-                // value; the activity transition simply omits its "from" side.
-                &None,
+                &change.previous_value,
                 access,
                 source.as_ref(),
                 None,
             ));
             return Ok(EntityPropertyWithDefinition {
-                property,
+                property: change.property,
                 definition: property_definition,
                 value: property_value,
                 options: None,
@@ -783,6 +795,16 @@ where
                 .await?;
         }
 
+        // Completion admission and persistence share the storage transaction,
+        // including legacy writers protected by the database invariant.
+        let completing_task = entity_type == EntityType::Task
+            && property_definition_id == SystemPropertyKey::STATUS_UUID
+            && matches!(&property_value, Some(PropertyValue::SelectOption(options)) if options.contains(&StatusOption::Completed.uuid()));
+        let completion_span = if completing_task {
+            tracing::info_span!("tasks.completion.check", task_id = entity_id)
+        } else {
+            tracing::Span::none()
+        };
         let snapshot = self
             .repository
             .upsert_entity_property(
@@ -791,8 +813,15 @@ where
                 property_definition_id,
                 property_value.clone(),
             )
+            .instrument(completion_span)
             .await
-            .map_err(anyhow::Error::from)?;
+            .map_err(|error| {
+                let error = anyhow::Error::from(error);
+                if error.is::<super::error::TaskCompletionBlocked>() {
+                    return PropertiesErr::Validation("Task is blocked".into());
+                }
+                PropertiesErr::Repo(error)
+            })?;
 
         self.publish_property_event(Self::entity_property_updated_event(
             &snapshot.property,
@@ -1926,10 +1955,22 @@ where
         let subject = self.resolve_subject(access).await?;
         let entity_reference =
             EntityReference::new(access.entity_id().to_string(), subject.storage_entity_type);
-        self.repository
+        let reciprocal = self
+            .repository
             .delete_entity_properties(&entity_reference)
             .await
             .map_err(anyhow::Error::from)?;
+
+        for change in reciprocal {
+            self.publish_property_event(Self::entity_property_updated_event(
+                &change.property,
+                &change.value,
+                &change.previous_value,
+                access,
+                None,
+                None,
+            ));
+        }
 
         let PublishedEventActors {
             actor,

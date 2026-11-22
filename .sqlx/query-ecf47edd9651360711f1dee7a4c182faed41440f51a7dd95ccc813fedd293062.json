@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT target.id AS \"id!\", target.values FROM (\n            SELECT blocking_property_id AS id FROM task_dependency_edges WHERE dependent_task_id = $1\n            UNION\n            SELECT dependent_property_id AS id FROM task_dependency_edges WHERE blocker_task_id = $1\n        ) reciprocal\n        CROSS JOIN LATERAL (SELECT id, entity_id, values FROM entity_properties\n            WHERE id = reciprocal.id LIMIT 1) target\n        WHERE target.entity_id <> $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "values",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "ecf47edd9651360711f1dee7a4c182faed41440f51a7dd95ccc813fedd293062"
+}

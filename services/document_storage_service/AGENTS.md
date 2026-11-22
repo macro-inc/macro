@@ -23,6 +23,7 @@ threads, pins, recents, notifications, folders, activity.
 - Personal contact pages use `graphql_contacts` and the contacts directory service.
   Compose primary-backed graph and name readers in `server.rs`, and insert the
   context through the shared GraphQL HTTP/websocket request-data function.
+- Insert `task_dependency_loader` alongside the property loader for both HTTP and websocket requests; dependency facts use the shared properties domain and canonical document access receipts.
 - `src/api/graphql_soup.rs`: the `/items/soup/graphql` (+
   `/items/soup/graphql/ws` subscriptions; mounted under `ITEMS_PATH`, and
   `no_scope_reaches_graphql_where_it_is_mounted` holds `agent_correlation`'s
@@ -69,7 +70,7 @@ threads, pins, recents, notifications, folders, activity.
   committed write, so they share `event_broker_tracker`'s bounded shutdown
   drain with event broker publishes.
 - `src/service/delete_document_worker.rs`: background worker handling document
-  deletion side effects (feature-gated: `delete_document_worker`).
+  deletion side effects (feature-gated: `delete_document_worker`). Property cleanup runs before document deletion to retain task subtype metadata; cleanup failures leave the message unacknowledged for retry.
 - `src/released_attachments.rs`: drains `released_email_attachment_documents`
   on LISTEN `email_attachment_documents_released` and a one-minute sweep,
   through the documents domain's `ReleasedAttachmentService`, which trashes

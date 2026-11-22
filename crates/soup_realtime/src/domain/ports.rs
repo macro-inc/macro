@@ -94,3 +94,12 @@ pub trait PullRequestSessions: Send + Sync + 'static {
         github_key: &str,
     ) -> impl Future<Output = Result<Vec<Entity<'static>>, Report>> + Send;
 }
+
+/// Finds tasks whose displayed dependency state changes with a task.
+pub trait TaskDependencyNeighbors: Send + Sync + 'static {
+    /// Returns both blockers and dependents; resolve each neighbor's own access.
+    fn neighbors(
+        &self,
+        task_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, Report>> + Send;
+}

@@ -7,6 +7,8 @@
 //! recognized-but-irrelevant events are also committed. Cancellation leaves the
 //! in-flight event uncommitted; partial delivery and replay can produce duplicates.
 
+mod task_dependencies;
+
 #[cfg(test)]
 mod test;
 
@@ -14,7 +16,7 @@ use std::{collections::HashSet, future::Future, time::Duration};
 
 use crate::domain::{
     models::{Patch, SoupRealtimePatch},
-    ports::{PullRequestSessions, SoupRealtimeService},
+    ports::{PullRequestSessions, SoupRealtimeService, TaskDependencyNeighbors},
     service::SoupRealtimeServiceImpl,
 };
 use call::domain::events::{CallMacroEvent, CallTopicEvent};
@@ -650,7 +652,7 @@ enum EventOutcome {
 }
 
 #[tracing::instrument(
-    skip(service, sessions, event, commit),
+    skip(service, sessions, neighbors, event, commit),
     fields(
         entity_count = tracing::field::Empty,
         recipient_lookup_count = tracing::field::Empty,
@@ -661,6 +663,7 @@ enum EventOutcome {
 async fn process_event<S: SoupRealtimeService, L: PullRequestSessions>(
     service: &S,
     sessions: &L,
+    neighbors: &impl TaskDependencyNeighbors,
     event: &DeclaredMacroEvent,
     commit: impl FnOnce(),
 ) -> EventOutcome {
@@ -689,6 +692,21 @@ async fn process_event<S: SoupRealtimeService, L: PullRequestSessions>(
                 );
             }
         }
+    }
+    let direct_patches = patches.clone();
+    match Retry::start(notify_retry_strategy(), || async {
+        let mut expanded = direct_patches.clone();
+        task_dependencies::expand(neighbors, event, &mut expanded).await?;
+        Ok::<_, Report>(expanded)
+    })
+    .await
+    {
+        Ok(expanded) => patches = expanded,
+        Err(error) => tracing::error!(
+            error=?error,
+            attempts=MAX_NOTIFY_ATTEMPTS,
+            "skipping task dependency neighbors after lookup retries; publishing direct patches"
+        ),
     }
     let mut outcome = if patches.is_empty() {
         tracing::trace!("ignoring event without a Soup patch");
@@ -767,11 +785,12 @@ impl SoupRealtimeServiceImpl {
     /// intentionally preferring consumer progress over delivery during persistent
     /// failures. Shutdown during processing or retry backoff leaves the event
     /// uncommitted for replay.
-    #[tracing::instrument(skip(self, sessions, shutdown), fields(brokers), err)]
+    #[tracing::instrument(skip(self, sessions, neighbors, shutdown), fields(brokers), err)]
     pub async fn run_entity_update_consumer(
         &self,
         brokers: &str,
         sessions: &impl PullRequestSessions,
+        neighbors: &impl TaskDependencyNeighbors,
         shutdown: impl Future<Output = ()> + Send,
     ) -> Result<(), Report> {
         let consumer = KafkaEventConsumer::<SoupRealtimeConsumerGroup>::from_env(brokers)?;
@@ -827,7 +846,7 @@ impl SoupRealtimeServiceImpl {
                     tokio::select! {
                         biased;
                         _ = &mut shutdown => break,
-                        _ = process_event(self, sessions, &event, || {
+                        _ = process_event(self, sessions, neighbors, &event, || {
                             commit_logged(&consumer, kafka_message);
                         }).instrument(span) => {}
                     }

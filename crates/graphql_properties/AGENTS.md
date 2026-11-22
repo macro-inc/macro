@@ -18,6 +18,7 @@ edge.
 - `src/mutations.rs`: `PropertiesMutationRoot` — setting/clearing a property
   value on an entity.
 - `src/loaders.rs`: `EntityPropertiesLoader` batching.
+- `src/task_dependencies.rs`: request-scoped task dependency facts; `setTaskProperty` returns the edited assignment and reciprocal normalized state. Search hydrates at most 500 task IDs per request; realtime uses independent related-task patches, and incomplete mutation effects trigger a scoped repair.
 
 ## Scope
 

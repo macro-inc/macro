@@ -18,3 +18,6 @@ pub mod database_cell_writer;
 
 /// Atomic option writes for database select and tag properties.
 pub mod database_option_writer;
+
+/// Authorized batched reads of task dependency state.
+pub mod task_dependency_state;

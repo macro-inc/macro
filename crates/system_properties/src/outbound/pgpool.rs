@@ -153,13 +153,14 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
             SystemPropertyKey::ParentTask.uuid(),
             SystemPropertyKey::Subtasks.uuid(),
             SystemPropertyKey::DependsOn.uuid(),
+            SystemPropertyKey::Blocking.uuid(),
             SystemPropertyKey::Effort.uuid(),
             SystemPropertyKey::StoryPoints.uuid(),
             SystemPropertyKey::RelevantDocuments.uuid(),
         ];
 
-        // Step 1: Fetch all properties from source task. A copy doesn't join
-        // the source's project: that needs edit access to the project.
+        // Step 1: Fetch source properties. Do not copy relationships that
+        // need authorization and updates to the other task.
         let source_properties = sqlx::query!(
             r#"
             SELECT property_definition_id, values
@@ -172,7 +173,13 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
             SystemPropertyKey::PROJECT_UUID
         )
         .fetch_all(&self.pool)
-        .await?;
+        .await?
+        .into_iter()
+        .filter(|property| {
+            property.property_definition_id != SystemPropertyKey::DEPENDS_ON_UUID
+                && property.property_definition_id != SystemPropertyKey::BLOCKING_UUID
+        })
+        .collect::<Vec<_>>();
 
         // Step 2: Copy all properties to destination task (with v7 UUIDs)
         if !source_properties.is_empty() {
@@ -256,7 +263,7 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(name = "tasks.completion.check", skip_all, fields(task_id), err)]
     async fn update_task_status(
         &self,
         task_id: &str,
