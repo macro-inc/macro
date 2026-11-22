@@ -1,0 +1,17 @@
+{
+ "duration": 27.848,
+ "captions": [
+  {
+   "at": 1,
+   "text": "PR #10966 · Connected apps from code · real Macro and a local stand-in vendor"
+  },
+  {
+   "at": 6.431,
+   "text": "List apps, inspect app.tools(), then call the discovered tool through the SDK"
+  },
+  {
+   "at": 21.26,
+   "text": "Real Macro → SDK → egress → HTTPS stand-in vendor with a local test CA: returned tag + ready"
+  }
+ ]
+}

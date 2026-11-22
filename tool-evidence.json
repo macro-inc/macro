@@ -1,0 +1,16 @@
+{
+  "sessionPath": "/app/home/agent/01a20092-1094-722b-a3ce-40c1698466bc",
+  "internalToolNames": [
+    "mcp__macro_internal__ExecuteCode",
+    "mcp__macro_internal__ReadCodeDocs"
+  ],
+  "vendorReceipts": [
+    {
+      "tool": "lookup_proof_status",
+      "tag": "t252-10966-recorded",
+      "call": 2,
+      "status": "ready"
+    }
+  ],
+  "scope": "real Macro agent, SDK, egress and custom MCP client; stand-in vendor with local test CA"
+}

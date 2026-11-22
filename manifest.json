@@ -1,0 +1,31 @@
+{
+  "pr": 10966,
+  "head": "5fac0ccc8eb535d793a0b1c8e7a4283bf089faa9",
+  "integration": "48ba8bfee7c9214164dd9aa9fe82556d180f47e4",
+  "recordedUtc": "2026-11-22",
+  "real": [
+    "Macro in-process agent (Gemini 3.8 Flash)",
+    "local Macro services",
+    "TypeScript SDK"
+  ],
+  "testDataOnly": true,
+  "verified": "connectedApps.list(execution) -> app.tools() -> tool.call(args) -> egress -> HTTPS stand-in vendor; recorded tag matches vendor receipt",
+  "standIns": [
+    "stand-in vendor with a local test CA on local compose network"
+  ],
+  "limitations": [
+    "Shared integration includes other PRs; not an isolated PR build",
+    "No real third-party vendor account used",
+    "NoSend, cross-session and cross-execution refusals not exercised in this video",
+    "Integration omits only final 5fac0ccc8eb backlink URL-source wording; behavior matches c38d3fae55f"
+  ],
+  "pricedUsdIncludingRehearsal": "0.0379",
+  "unpricedCalls": 0,
+  "files": {
+    "after.png": "9482f87f46648bc04657653ec3c1a7444080316fc7842f88dc2715762b714015",
+    "before.png": "5b463f900fc9682fc333a17f8c72a68e77608fb0a1cf5b9c989525bbe00c3fac",
+    "captions.json": "68ccc73b35958bf4145ad28550ed23bc6b1ffd14ebce7ac511f874bb0e57db6e",
+    "proof.mp4": "f5c9917ba357aff5bbe5960c120718b3e4bf2110a5772ab1c57e9f6ebd0fb0b2",
+    "tool-evidence.json": "5d295f765d453b99fadb5269a2860bc70256af3a701be78f90cc12e490954994"
+  }
+}
