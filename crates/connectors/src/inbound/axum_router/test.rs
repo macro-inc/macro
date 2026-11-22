@@ -200,6 +200,39 @@ async fn connecting_answers_the_step_to_take() {
     assert!(body["url"].as_str().unwrap().starts_with("https://"));
 }
 
+/// GitHub is no special case: the answer is a page to open, the app's own
+/// link page for a user the account link counts for, and Connect's consent
+/// for a user on Connect.
+#[tokio::test]
+async fn connecting_github_answers_the_page_of_the_source_that_counts() {
+    let flagged = user("flagged");
+    let fake = FakeConnectors::new()
+        .with_connect_app("github", false)
+        .with_flag_on(&flagged);
+    let harness = harness(&fake);
+
+    let (status, linked) = harness
+        .send("POST", "/connectors/app/github/connect", "owner", None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        linked,
+        json!({"type": "openUrl", "url": crate::fake::source::FAKE_GITHUB_LINK_PAGE})
+    );
+
+    let (status, on_connect) = harness
+        .send("POST", "/connectors/app/github/connect", "flagged", None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(on_connect["type"], "openUrl");
+    assert!(
+        on_connect["url"]
+            .as_str()
+            .unwrap()
+            .starts_with("https://connect.fake.test/")
+    );
+}
+
 #[tokio::test]
 async fn connecting_an_app_nobody_serves_is_not_found() {
     let harness = harness(&FakeConnectors::new());

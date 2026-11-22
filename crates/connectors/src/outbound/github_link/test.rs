@@ -244,9 +244,9 @@ async fn the_link_serves_github_as_mcp_only() {
     );
 }
 
-/// Linking starts in settings, from the user's own hands.
+/// Connecting opens the app's page that starts the account link.
 #[tokio::test]
-async fn connecting_github_opens_settings() {
+async fn connecting_github_opens_the_link_page() {
     let fixture = linked(LinkToken::NotLinked, Vec::new());
 
     let step = fixture
@@ -257,9 +257,7 @@ async fn connecting_github_opens_settings() {
 
     assert_eq!(
         step,
-        ConnectStep::OpenUrl(
-            Url::parse("https://app.example.com/app/settings/connections").unwrap()
-        )
+        ConnectStep::OpenUrl(Url::parse("https://app.example.com/app/connect/github").unwrap())
     );
 }
 

@@ -22,6 +22,9 @@ use rmcp::service::{RequestContext, RoleServer};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+/// The app's GitHub link page, as the fake account link answers a connect.
+pub(crate) const FAKE_GITHUB_LINK_PAGE: &str = "https://app.fake.test/app/connect/github";
+
 /// Bytes buffered each way between a fake MCP server and its client.
 const SESSION_BUFFER: usize = 64 * 1024;
 
@@ -242,6 +245,13 @@ impl Source for FakeSource {
         _user: &MacroUserIdStr<'static>,
         key: &ConnectorKey,
     ) -> Result<ConnectStep, rootcause::Report> {
+        // The account link opens the app's link page, as the real source
+        // does; every other source a consent page of its own.
+        if self.kind == SourceKind::GithubLink {
+            let page = url::Url::parse(FAKE_GITHUB_LINK_PAGE)
+                .map_err(|error| rootcause::report!("{error}"))?;
+            return Ok(ConnectStep::OpenUrl(page));
+        }
         let mut url = url::Url::parse("https://connect.fake.test/")
             .map_err(|error| rootcause::report!("{error}"))?;
         url.query_pairs_mut()

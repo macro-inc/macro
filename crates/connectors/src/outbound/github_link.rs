@@ -35,8 +35,10 @@ mod test;
 /// The name GitHub goes by until the user renames it.
 const GITHUB_NAME: &str = "GitHub";
 
-/// Where the settings page that links GitHub lives, under the app's origin.
-const LINK_SETTINGS_PATH: &str = "/app/settings/connections";
+/// The web page that starts linking GitHub to the user's Macro account,
+/// under the app's origin. Connecting GitHub through this source opens it,
+/// so the web opens what the server answers for every app, GitHub included.
+const LINK_PAGE_PATH: &str = "/app/connect/github";
 
 /// Where a user's GitHub account link stands.
 #[derive(Clone, PartialEq, Eq)]
@@ -78,7 +80,7 @@ pub(crate) struct GithubLinkSource<S> {
     toggles: Arc<S>,
     http: McpHttp,
     server: Url,
-    link_settings: Url,
+    link_page: Url,
 }
 
 impl<S> GithubLinkSource<S>
@@ -88,7 +90,7 @@ where
 {
     /// A source over `link`, keeping each user's toggle in the `mcp_servers`
     /// rows of `toggles`, dialing GitHub's MCP server through `http`. A user
-    /// connects by linking GitHub in the settings of the app at `app_origin`.
+    /// connects on the app's GitHub link page, at `app_origin`.
     pub(crate) fn new(
         link: Arc<dyn GithubAccountLink>,
         toggles: Arc<S>,
@@ -100,7 +102,7 @@ where
             toggles,
             http,
             server: Url::parse(GITHUB_MCP_SERVER_URL)?,
-            link_settings: app_origin.join(LINK_SETTINGS_PATH)?,
+            link_page: app_origin.join(LINK_PAGE_PATH)?,
         })
     }
 
@@ -224,16 +226,16 @@ where
         Ok(Vec::new())
     }
 
-    /// Linking happens in settings, where the user starts it themselves: the
-    /// consent URL signs whoever finishes it in to the account, so it is
-    /// never handed to a caller that might be an agent.
+    /// The answer is the app's own link page, never GitHub's consent URL:
+    /// that URL signs whoever finishes it in to the account, so it is only
+    /// minted by the page, in the signed-in user's browser.
     async fn start_connect(
         &self,
         _user: &MacroUserIdStr<'static>,
         key: &ConnectorKey,
     ) -> Result<ConnectStep, Report> {
         Self::github_key(key)?;
-        Ok(ConnectStep::OpenUrl(self.link_settings.clone()))
+        Ok(ConnectStep::OpenUrl(self.link_page.clone()))
     }
 
     #[tracing::instrument(skip(self, user), err)]
