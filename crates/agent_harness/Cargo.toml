@@ -55,9 +55,7 @@ feature_flags = { path = "../feature_flags" }
 jev = { path = "../jev" }
 macro_env_var = { path = "../macro_env_var" }
 # The owner's custom MCP server rows, listed so a sandbox can be told they exist.
-mcp_client = { path = "../mcp_client" }
-mcp_select = { path = "../mcp_select" }
-pipedream_mcp = { path = "../pipedream_mcp" }
+connectors = { path = "../connectors" }
 macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
 macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 macro_tower_layers = { path = "../macro_tower_layers" }
@@ -110,6 +108,8 @@ agent_fold = { path = "../folds/agent_fold", features = ["test-utils"] }
 dynamic_ui = { path = "../dynamic_ui" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
+# The real connection services over in-memory sources.
+connectors = { path = "../connectors", features = ["test-fakes"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 harnesses = { path = "../harnesses", default-features = false, features = ["test-utils"] }
 model_user = { path = "../model_user" }
