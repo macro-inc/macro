@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE team_agent_installs\n            SET revoke_pending = FALSE, updated_at = now()\n            WHERE agent_user_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c0ab20689884dc069c137b3e671a3a249d81099081da1c6a6acb4e02e5690738"
+}

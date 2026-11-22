@@ -1233,3 +1233,166 @@ async fn a_membership_change_parks_the_agents_it_unentitled_at_once() {
     );
     assert_kept(&service, &journal);
 }
+
+/// Repositories whose first token issue waits until released, so a sweep
+/// can be held mid-page.
+struct GatedRepos {
+    journal: Journal,
+    gated: std::sync::atomic::AtomicBool,
+    entered: Arc<tokio::sync::Notify>,
+    release: Arc<tokio::sync::Notify>,
+}
+
+impl AgentRepos for GatedRepos {
+    async fn create(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: Uuid,
+        seed: &PersonaSeed,
+    ) -> Result<AgentRepo, TeamAgentError> {
+        if self.gated.swap(false, Ordering::SeqCst) {
+            self.entered.notify_one();
+            self.release.notified().await;
+        }
+        self.journal.record(format!("repo.create {}", seed.name));
+        Ok(AgentRepo {
+            url: "https://git.example.com/ada.git".to_owned(),
+            token: RepoToken::generate(),
+        })
+    }
+
+    async fn delete(&self, _: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        unreachable!("sweeps delete no repository")
+    }
+
+    async fn voice(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: Uuid,
+    ) -> Result<Option<VoiceModel>, TeamAgentError> {
+        unreachable!("sweeps read no voice")
+    }
+
+    async fn set_voice(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: Uuid,
+        _: &VoiceModel,
+    ) -> Result<(), TeamAgentError> {
+        unreachable!("sweeps set no voice")
+    }
+}
+
+#[tokio::test]
+async fn a_stale_sweep_cant_void_the_key_a_moved_agent_was_just_given() {
+    let (service, journal, _) = self_hosted_service();
+    // Ada first, so a sweep reaches her before Sam.
+    let ada = service
+        .create(
+            receipt(),
+            CreateTeamAgent {
+                purchase_key: "invite-2".to_owned(),
+                name: "Ada".to_owned(),
+                ..own(LAPTOP)
+            },
+        )
+        .await
+        .unwrap();
+    let sam = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    // Both move to the desktop, and both revokes at the move fail.
+    service.api_keys.fail_revokes(true);
+    for agent in [&ada, &sam] {
+        let old = install_of(&service, agent);
+        service
+            .move_install(
+                receipt(),
+                &agent.user_id,
+                MoveTeammate {
+                    harness_id: DESKTOP,
+                },
+            )
+            .await
+            .unwrap();
+        assert!(service.finish_checkpoint(old.install_id).await.is_err());
+        assert!(install_of(&service, agent).revoke_pending);
+    }
+    service.api_keys.fail_revokes(false);
+
+    // Sweep B lists both pending revokes, then stalls on Ada's.
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let release = Arc::new(tokio::sync::Notify::new());
+    let stale = Arc::new(crate::domain::service::InstallOffboarding::new(
+        service.repository.clone(),
+        FakeApiKeys(journal.clone(), Arc::default()),
+        GatedRepos {
+            journal: journal.clone(),
+            gated: std::sync::atomic::AtomicBool::new(true),
+            entered: entered.clone(),
+            release: release.clone(),
+        },
+        service.installs.clone(),
+        FakeRuntimes(journal.clone()),
+    ));
+    let sweep_b = tokio::spawn({
+        let stale = stale.clone();
+        async move { stale.offboard_unentitled().await }
+    });
+    entered.notified().await;
+
+    // Sweep A revokes both meanwhile, and Sam's new machine is minted a key.
+    service.offboard_unentitled_hosts().await.unwrap();
+    let moved = install_of(&service, &sam);
+    assert!(!moved.revoke_pending);
+    service
+        .issue_install(DESKTOP, moved.install_id, None)
+        .await
+        .unwrap()
+        .expect("the new machine gets Sam");
+    let minted = journal.entries().len();
+
+    // Sweep B goes on with what it listed.
+    release.notify_one();
+    sweep_b.await.unwrap().unwrap();
+
+    let after = &journal.entries()[minted..];
+    assert!(
+        !after
+            .iter()
+            .any(|entry| entry == "api_key.revoke_all" || entry == "repo.create Sam Rivera"),
+        "a stale sweep voided Sam's new key or repository token: {after:?}"
+    );
+    assert!(machines_key_works(&journal));
+}
+
+#[tokio::test]
+async fn an_unpair_parks_only_that_machines_agents() {
+    let (service, _, _) = self_hosted_service();
+    let on_laptop = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let on_desktop = service
+        .create(
+            receipt(),
+            CreateTeamAgent {
+                purchase_key: "invite-2".to_owned(),
+                name: "Ada".to_owned(),
+                ..own(DESKTOP)
+            },
+        )
+        .await
+        .unwrap();
+    // Both machines lost the right; only the laptop was just unpaired.
+    service
+        .installs
+        .unentitled
+        .lock()
+        .unwrap()
+        .extend([LAPTOP, DESKTOP]);
+
+    assert_eq!(service.offboard_host(LAPTOP).await.unwrap(), 1);
+
+    assert!(install_of(&service, &on_laptop).parked());
+    assert!(
+        !install_of(&service, &on_desktop).parked(),
+        "left to the sweep"
+    );
+    assert_eq!(service.offboard_host(LAPTOP).await.unwrap(), 0);
+}

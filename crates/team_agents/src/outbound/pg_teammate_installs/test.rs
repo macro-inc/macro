@@ -283,7 +283,7 @@ async fn a_move_waits_on_its_checkpoint_then_makes_a_new_install_on_the_target(p
     // delivered until they are.
     assert_eq!(deliver(&installs, new_id, desktop, (0, 0)).await, None);
     assert_eq!(installs.revoke_pending(10).await.unwrap(), vec![moved]);
-    installs.revoked(&user(AGENT)).await.unwrap();
+    revoke_now(&installs).await;
     assert!(installs.revoke_pending(10).await.unwrap().is_empty());
     assert_eq!(
         deliver(&installs, new_id, desktop, (0, 0)).await,
@@ -816,7 +816,7 @@ async fn parking_waits_for_a_delivery_in_flight_and_stops_every_later_one(pool: 
     assert_eq!(deliver(&installs, INSTALL, laptop, (0, 0)).await, None);
     // Revoked, still parked: still nothing, and the machine no longer
     // counts it among its own, so it stops it.
-    installs.revoked(&user(AGENT)).await.unwrap();
+    revoke_now(&installs).await;
     assert_eq!(deliver(&installs, INSTALL, laptop, (0, 0)).await, None);
     assert!(installs.installs_on(laptop).await.unwrap().is_empty());
     // The agent keeps its seat.
@@ -864,7 +864,7 @@ async fn a_move_of_a_parked_agent_hosts_it_again(pool: PgPool) {
         .await
         .unwrap();
     installs.park(&user(AGENT)).await.unwrap();
-    installs.revoked(&user(AGENT)).await.unwrap();
+    revoke_now(&installs).await;
     let laptop = HarnessId::new_from_uuid(LAPTOP);
     installs
         .begin_checkpoint(&user(AGENT), Checkpoint::Moving { to: laptop })
@@ -880,7 +880,7 @@ async fn a_move_of_a_parked_agent_hosts_it_again(pool: PgPool) {
 
     assert!(!moved.parked());
     assert_eq!(moved.harness_id, laptop);
-    installs.revoked(&user(AGENT)).await.unwrap();
+    revoke_now(&installs).await;
     assert_eq!(installs.installs_on(laptop).await.unwrap().len(), 1);
     assert_eq!(
         deliver(&installs, new_id, laptop, (0, 0)).await,
@@ -1003,4 +1003,145 @@ async fn only_the_teams_owner_owns_it(pool: PgPool) {
     assert!(!installs.owns_team(Uuid::nil(), &user(ADMIN)).await.unwrap());
     make_admin(&pool, OTHER_ADMIN, "owner").await;
     assert!(installs.owns_team(TEAM, &user(OTHER_ADMIN)).await.unwrap());
+}
+
+/// Hold the pending revoke and finish it, as a revoker that succeeded.
+async fn revoke_now(installs: &PgTeammateInstalls) {
+    installs
+        .begin_revoke(&user(AGENT))
+        .await
+        .unwrap()
+        .expect("a revoke is pending")
+        .done()
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_held_revoke_holds_off_the_next_mint_and_a_racing_revoke_finds_nothing(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+    let desktop = HarnessId::new_from_uuid(DESKTOP);
+    installs
+        .begin_checkpoint(&user(AGENT), Checkpoint::Moving { to: desktop })
+        .await
+        .unwrap();
+    let new_id = Uuid::from_u128(0x06);
+    installs
+        .finish_move(INSTALL, new_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let held = installs.begin_revoke(&user(AGENT)).await.unwrap().unwrap();
+    assert!(held.install().revoke_pending);
+    // A second revoker (a stale sweep) waits; the new machine gets nothing
+    // while the revoke is pending.
+    let racing = installs.clone();
+    let second =
+        tokio::spawn(async move { racing.begin_revoke(&user(AGENT)).await.unwrap().is_some() });
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert!(!second.is_finished());
+    assert_eq!(deliver(&installs, new_id, desktop, (0, 0)).await, None);
+
+    held.done().await.unwrap();
+
+    // The racing revoke rechecks under the lock and finds nothing to do, and
+    // the new machine gets its first key.
+    assert!(!second.await.unwrap());
+    assert_eq!(
+        deliver(&installs, new_id, desktop, (0, 0)).await,
+        Some((2, 1))
+    );
+    assert!(installs.begin_revoke(&user(AGENT)).await.unwrap().is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_dropped_revoke_leaves_it_pending(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+    installs.park(&user(AGENT)).await.unwrap().unwrap();
+
+    drop(installs.begin_revoke(&user(AGENT)).await.unwrap().unwrap());
+
+    assert!(
+        installs
+            .by_id(INSTALL)
+            .await
+            .unwrap()
+            .unwrap()
+            .revoke_pending
+    );
+    assert_eq!(installs.revoke_pending(10).await.unwrap().len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn one_machines_unentitled_installs_are_those_on_or_moving_to_it(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+    let laptop = HarnessId::new_from_uuid(LAPTOP);
+    let desktop = HarnessId::new_from_uuid(DESKTOP);
+    sqlx::query!(
+        "UPDATE harnesses SET deleted_at = now() WHERE id = $1",
+        LAPTOP
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        installs
+            .unentitled_installs_on(laptop, 10)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(
+        installs
+            .unentitled_installs_on(desktop, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    // Moving to an unpaired desktop: listed for the desktop too.
+    sqlx::query!(
+        "UPDATE harnesses SET deleted_at = NULL WHERE id = $1",
+        LAPTOP
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    installs
+        .begin_checkpoint(&user(AGENT), Checkpoint::Moving { to: desktop })
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE harnesses SET deleted_at = now() WHERE id = $1",
+        DESKTOP
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        installs
+            .unentitled_installs_on(desktop, 10)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
 }

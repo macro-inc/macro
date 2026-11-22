@@ -180,7 +180,9 @@ where
     }
 
     /// Offboarding over this service's ports.
-    fn offboarding(&self) -> Offboarding<'_, Repository, ApiKeys, Repos, Installs, Runtimes> {
+    pub(super) fn offboarding(
+        &self,
+    ) -> Offboarding<'_, Repository, ApiKeys, Repos, Installs, Runtimes> {
         Offboarding {
             repository: &self.repository,
             api_keys: &self.api_keys,
@@ -553,17 +555,43 @@ where
     }
 
     /// Revoke an install's pending credentials, then let deliveries resume
-    /// (nudging its machine, unless it is parked).
+    /// (nudging its machine, unless it is parked). The revoke runs under the
+    /// install's row lock and only while the flag is still set, so a caller
+    /// holding a stale copy (a sweep that listed it before another revoke
+    /// finished) can't void the key a machine was given since.
     pub(super) async fn finish_revoke(
         &self,
         install: &TeammateInstallRecord,
     ) -> Result<(), TeamAgentError> {
-        revoke_credentials(self.repository, self.api_keys, self.repos, &install.agent).await?;
-        self.installs.revoked(&install.agent).await?;
-        if !install.parked() {
-            self.runtimes.installs_changed(install.harness_id).await;
+        let Some(held) = self.installs.begin_revoke(&install.agent).await? else {
+            return Ok(());
+        };
+        let current = held.install().clone();
+        revoke_credentials(self.repository, self.api_keys, self.repos, &current.agent).await?;
+        held.done().await?;
+        if !current.parked() {
+            self.runtimes.installs_changed(current.harness_id).await;
         }
         Ok(())
+    }
+
+    /// Offboard the installs on (or moving to) `harness` that it may no
+    /// longer host; one failure doesn't stop the rest. How many.
+    pub(super) async fn offboard_host(&self, harness: HarnessId) -> Result<usize, TeamAgentError> {
+        let installs = self
+            .installs
+            .unentitled_installs_on(harness, OFFBOARD_PAGE)
+            .await?;
+        let mut offboarded = 0;
+        for install in &installs {
+            match self.offboard(install).await {
+                Ok(()) => offboarded += 1,
+                Err(error) => {
+                    tracing::error!(install_id = %install.install_id, error = ?error, "could not take an agent off its machine");
+                }
+            }
+        }
+        Ok(offboarded)
     }
 
     /// Offboard every install on a machine that may no longer host it, and

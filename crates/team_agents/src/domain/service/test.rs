@@ -529,8 +529,30 @@ impl CountedDelivery for FakeDelivery {
     }
 }
 
+/// A held revoke; the fake locks nothing.
+pub(super) struct FakeRevoke {
+    installs: FakeInstalls,
+    install: TeammateInstallRecord,
+}
+
+impl HeldRevoke for FakeRevoke {
+    fn install(&self) -> &TeammateInstallRecord {
+        &self.install
+    }
+
+    async fn done(self) -> Result<(), TeamAgentError> {
+        self.installs.journal.record("install.revoked");
+        self.installs.update(
+            |row| row.agent == self.install.agent,
+            |row| row.revoke_pending = false,
+        );
+        Ok(())
+    }
+}
+
 impl TeammateInstalls for FakeInstalls {
     type Delivery = FakeDelivery;
+    type Revoke = FakeRevoke;
 
     async fn create(&self, install: &NewTeammateInstall) -> Result<CreatedInstall, TeamAgentError> {
         let mut rows = self.rows.lock().unwrap();
@@ -724,6 +746,20 @@ impl TeammateInstalls for FakeInstalls {
             .map(|(_, host)| host.clone()))
     }
 
+    async fn unentitled_installs_on(
+        &self,
+        harness: HarnessId,
+        limit: u32,
+    ) -> Result<Vec<TeammateInstallRecord>, TeamAgentError> {
+        let mut installs = self.unentitled_installs(u32::MAX).await?;
+        installs.retain(|row| {
+            row.harness_id == harness
+                || matches!(row.checkpoint, Some((Checkpoint::Moving { to }, _)) if to == harness)
+        });
+        installs.truncate(limit as usize);
+        Ok(installs)
+    }
+
     async fn park(
         &self,
         agent: &MacroUserIdStr<'_>,
@@ -742,13 +778,21 @@ impl TeammateInstalls for FakeInstalls {
         ))
     }
 
-    async fn revoked(&self, agent: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
-        self.journal.record("install.revoked");
-        self.update(
-            |row| row.agent.as_ref() == agent.as_ref(),
-            |row| row.revoke_pending = false,
-        );
-        Ok(())
+    async fn begin_revoke(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<FakeRevoke>, TeamAgentError> {
+        let install = self
+            .rows
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|row| row.agent.as_ref() == agent.as_ref() && row.revoke_pending)
+            .cloned();
+        Ok(install.map(|install| FakeRevoke {
+            installs: self.clone(),
+            install,
+        }))
     }
 
     async fn revoke_pending(

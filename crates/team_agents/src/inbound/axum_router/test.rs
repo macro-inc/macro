@@ -118,6 +118,9 @@ impl TeamAgentService for Reached {
     async fn offboard_unentitled_hosts(&self) -> Result<usize, TeamAgentError> {
         unreachable!("not a route")
     }
+    async fn offboard_host(&self, _: HarnessId) -> Result<usize, TeamAgentError> {
+        self.reached()
+    }
     async fn issue_enrollment(
         &self,
         _: ComputerId,

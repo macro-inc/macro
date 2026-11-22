@@ -255,10 +255,24 @@ pub trait CountedDelivery: Send {
     fn release(self) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 }
 
+/// A pending revoke held by [`TeammateInstalls::begin_revoke`]: the install
+/// row stays locked, so no delivery is counted (and no key minted) until it
+/// is done or dropped.
+pub trait HeldRevoke: Send {
+    /// The install, as locked.
+    fn install(&self) -> &TeammateInstallRecord;
+
+    /// The credentials were revoked: clear the flag and let deliveries
+    /// resume. Dropped undone, the flag stays for the sweep to retry.
+    fn done(self) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+}
+
 /// Agents' installs on their owners' own machines, and those machines.
 pub trait TeammateInstalls: Send + Sync + 'static {
     /// A delivery counted by [`TeammateInstalls::next_delivery`].
     type Delivery: CountedDelivery;
+    /// A revoke held by [`TeammateInstalls::begin_revoke`].
+    type Revoke: HeldRevoke;
 
     /// Create the agent's install. When the agent already has one, creates
     /// nothing and returns it: one install per agent, whoever races.
@@ -353,6 +367,14 @@ pub trait TeammateInstalls: Send + Sync + 'static {
         limit: u32,
     ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
 
+    /// [`TeammateInstalls::unentitled_installs`] on (or moving to) one
+    /// machine.
+    fn unentitled_installs_on(
+        &self,
+        harness: HarnessId,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
+
     /// Park the agent's install: no machine hosts it, nothing is delivered,
     /// any move is cancelled, and its credentials are due for revoking
     /// ([`TeammateInstallRecord::revoke_pending`]). Waits for a delivery in
@@ -363,11 +385,15 @@ pub trait TeammateInstalls: Send + Sync + 'static {
         agent: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<TeammateInstallRecord>, TeamAgentError>> + Send;
 
-    /// The agent's credentials were revoked: deliveries may resume.
-    fn revoked(
+    /// Lock the agent's install while its credentials are still due for
+    /// revoking, rechecking the flag under the lock; `None` when they no
+    /// longer are (another revoke finished first, and a fresh key may
+    /// already be out). Waits for a delivery in flight, and holds off the
+    /// next one until the revoke is done.
+    fn begin_revoke(
         &self,
         agent: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+    ) -> impl Future<Output = Result<Option<Self::Revoke>, TeamAgentError>> + Send;
 
     /// Up to `limit` installs whose credentials are still due for revoking.
     fn revoke_pending(
@@ -516,6 +542,13 @@ pub trait TeamAgentService: Send + Sync + 'static {
     /// before. How many were taken off.
     fn offboard_unentitled_hosts(
         &self,
+    ) -> impl Future<Output = Result<usize, TeamAgentError>> + Send;
+
+    /// [`TeamAgentService::offboard_unentitled_hosts`] for the agents on (or
+    /// moving to) one machine, just unpaired. How many were taken off.
+    fn offboard_host(
+        &self,
+        harness: HarnessId,
     ) -> impl Future<Output = Result<usize, TeamAgentError>> + Send;
 
     /// The agent part of a computer's enrollment: fresh credentials and its

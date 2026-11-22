@@ -23,8 +23,8 @@ use super::models::{
 };
 use super::ports::{
     AgentApiKeys, AgentPictureChanges, AgentReadyNotices, AgentRepos, Computers, CountedDelivery,
-    EnrollmentEnvironment, TeamAgentRepository, TeamAgentService, TeamMembership, TeammateInstalls,
-    TeammateRuntimes,
+    EnrollmentEnvironment, HeldRevoke, TeamAgentRepository, TeamAgentService, TeamMembership,
+    TeammateInstalls, TeammateRuntimes,
 };
 use super::self_hosting::{
     CHECKPOINT_TIMEOUT, Checkpoint, CreatedInstall, HostEligibility, IssuedInstall, MoveTeammate,
@@ -990,6 +990,18 @@ where
         let span = tracing::Span::current();
         span.record("offboarded", offboarded);
         span.record("revoked", revoked);
+        Ok(offboarded)
+    }
+
+    #[tracing::instrument(
+        name = "team_agents.offboard_host",
+        skip(self),
+        fields(%harness, offboarded = tracing::field::Empty),
+        err
+    )]
+    async fn offboard_host(&self, harness: HarnessId) -> Result<usize, TeamAgentError> {
+        let offboarded = self.offboarding().offboard_host(harness).await?;
+        tracing::Span::current().record("offboarded", offboarded);
         Ok(offboarded)
     }
 

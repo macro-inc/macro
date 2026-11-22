@@ -1,5 +1,6 @@
 //! Tells the authentication service a machine was unpaired, so the agent
 //! teammates it hosted are parked at once rather than at its next 60 s sweep.
+//! The call covers only that machine's installs, so the unpair waits briefly.
 
 use std::time::Duration;
 
@@ -10,11 +11,11 @@ use harnesses::domain::retired::{HarnessId, HarnessRetired, RetiredFuture};
 const TIMEOUT: Duration = Duration::from_secs(10);
 
 /// [`HarnessRetired`] over the authentication service's internal
-/// `POST /internal/teammate_hosts/offboard`.
+/// `POST /internal/teammate_hosts/{harness_id}/offboard`.
 #[derive(Clone)]
 pub struct TeammateHostOffboarding {
     http: reqwest::Client,
-    url: String,
+    base: String,
     internal_key: String,
 }
 
@@ -33,10 +34,7 @@ impl TeammateHostOffboarding {
                 .timeout(TIMEOUT)
                 .redirect(reqwest::redirect::Policy::none())
                 .build()?,
-            url: format!(
-                "{}/internal/teammate_hosts/offboard",
-                auth_service_url.trim_end_matches('/')
-            ),
+            base: auth_service_url.trim_end_matches('/').to_owned(),
             internal_key,
         })
     }
@@ -50,7 +48,10 @@ impl HarnessRetired for TeammateHostOffboarding {
                 macro_tower_layers::inject_trace_headers(&mut headers);
                 let response = self
                     .http
-                    .post(&self.url)
+                    .post(format!(
+                        "{}/internal/teammate_hosts/{harness_id}/offboard",
+                        self.base
+                    ))
                     .headers(headers)
                     .header(
                         macro_authorization::INTERNAL_API_KEY_HEADER,

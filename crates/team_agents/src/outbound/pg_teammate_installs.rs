@@ -11,7 +11,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::domain::models::TeamAgentError;
-use crate::domain::ports::{CountedDelivery, TeammateInstalls};
+use crate::domain::ports::{CountedDelivery, HeldRevoke, TeammateInstalls};
 use crate::domain::self_hosting::{
     Checkpoint, CreatedInstall, HostFacts, InstallFailure, InstallRunState, NewTeammateInstall,
     TeammateInstallRecord,
@@ -169,6 +169,36 @@ pub struct PgCountedDelivery {
     pair: (u64, u64),
 }
 
+/// A held revoke: its transaction holds the install row's lock.
+pub struct PgHeldRevoke {
+    transaction: Transaction<'static, Postgres>,
+    install: TeammateInstallRecord,
+}
+
+impl HeldRevoke for PgHeldRevoke {
+    fn install(&self) -> &TeammateInstallRecord {
+        &self.install
+    }
+
+    async fn done(mut self) -> Result<(), TeamAgentError> {
+        sqlx::query!(
+            r#"
+            UPDATE team_agent_installs
+            SET revoke_pending = FALSE, updated_at = now()
+            WHERE agent_user_id = $1
+            "#,
+            self.install.agent.as_ref(),
+        )
+        .execute(&mut *self.transaction)
+        .await
+        .map_err(TeamAgentError::internal)?;
+        self.transaction
+            .commit()
+            .await
+            .map_err(TeamAgentError::internal)
+    }
+}
+
 impl CountedDelivery for PgCountedDelivery {
     fn pair(&self) -> (u64, u64) {
         self.pair
@@ -184,6 +214,7 @@ impl CountedDelivery for PgCountedDelivery {
 
 impl TeammateInstalls for PgTeammateInstalls {
     type Delivery = PgCountedDelivery;
+    type Revoke = PgHeldRevoke;
 
     #[tracing::instrument(skip_all, fields(install_id = %install.install_id), err)]
     async fn create(&self, install: &NewTeammateInstall) -> Result<CreatedInstall, TeamAgentError> {
@@ -577,6 +608,57 @@ impl TeammateInstalls for PgTeammateInstalls {
             .collect()
     }
 
+    #[tracing::instrument(skip(self), err)]
+    async fn unentitled_installs_on(
+        &self,
+        harness: HarnessId,
+        limit: u32,
+    ) -> Result<Vec<TeammateInstallRecord>, TeamAgentError> {
+        // The machine's installs, by the harness indexes.
+        let rows = sqlx::query_as!(
+            InstallRow,
+            r#"
+            SELECT i.install_id, i.agent_user_id, i.team_id, i.harness_id, i.generation,
+                   i.run_state, i.failure, i.delivery, i.applied_generation, i.applied_delivery,
+                   i.checkpoint, i.move_to_harness_id, i.checkpoint_started_at,
+                   i.delivered_image_id, i.parked_at, i.revoke_pending
+            FROM team_agent_installs i
+            JOIN team t ON t.id = i.team_id
+            WHERE (i.harness_id = $2 OR i.move_to_harness_id = $2)
+              AND i.checkpoint IS DISTINCT FROM 'removing'
+              AND i.parked_at IS NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM harnesses h
+                  WHERE h.id IN (i.harness_id, i.move_to_harness_id)
+                    AND (
+                        h.deleted_at IS NOT NULL
+                        OR h.owner_user_id IS NULL
+                        OR (
+                            h.owner_user_id IS DISTINCT FROM t.owner_id
+                            AND NOT EXISTS (
+                                SELECT 1 FROM team_user tu
+                                WHERE tu.user_id = h.owner_user_id
+                                  AND tu.team_id = i.team_id
+                                  AND tu.team_role IN ('owner', 'admin')
+                            )
+                        )
+                    )
+              )
+            ORDER BY i.install_id
+            LIMIT $1
+            "#,
+            i64::from(limit),
+            harness.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(TeamAgentError::internal)?;
+        rows.into_iter()
+            .map(TeammateInstallRecord::try_from)
+            .collect()
+    }
+
     #[tracing::instrument(skip_all, err)]
     async fn park(
         &self,
@@ -608,19 +690,37 @@ impl TeammateInstalls for PgTeammateInstalls {
     }
 
     #[tracing::instrument(skip_all, err)]
-    async fn revoked(&self, agent: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
-        sqlx::query!(
+    async fn begin_revoke(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<PgHeldRevoke>, TeamAgentError> {
+        // Under READ COMMITTED the lock waits for a delivery or another
+        // revoke in flight, then rechecks revoke_pending against the
+        // committed row.
+        let mut transaction = self.pool.begin().await.map_err(TeamAgentError::internal)?;
+        let row = sqlx::query_as!(
+            InstallRow,
             r#"
-            UPDATE team_agent_installs
-            SET revoke_pending = FALSE, updated_at = now()
+            SELECT install_id, agent_user_id, team_id, harness_id, generation, run_state,
+                   failure, delivery, applied_generation, applied_delivery, checkpoint,
+                   move_to_harness_id, checkpoint_started_at, delivered_image_id, parked_at,
+                   revoke_pending
+            FROM team_agent_installs
             WHERE agent_user_id = $1 AND revoke_pending
+            FOR UPDATE
             "#,
             agent.as_ref(),
         )
-        .execute(&self.pool)
+        .fetch_optional(&mut *transaction)
         .await
         .map_err(TeamAgentError::internal)?;
-        Ok(())
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        Ok(Some(PgHeldRevoke {
+            install: row.try_into()?,
+            transaction,
+        }))
     }
 
     #[tracing::instrument(skip(self), err)]

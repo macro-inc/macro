@@ -610,9 +610,9 @@ impl<S, Auth> FromRef<AgentEnrollmentRouterState<S, Auth>> for MacroAuthorizatio
 /// - `POST /team_agent_install/{install_id}/checkpointed`: the machine
 ///   stopped an install that is moving or being removed, or the wait gave
 ///   up.
-/// - `POST /teammate_hosts/offboard`: a machine was just unpaired (in the
-///   service that owns harnesses); park the agents on machines that may no
-///   longer host them now instead of at the next 60 s sweep.
+/// - `POST /teammate_hosts/{harness_id}/offboard`: that machine was just
+///   unpaired (in the service that owns harnesses); park its agents now
+///   instead of at the next 60 s sweep.
 pub fn agent_enrollment_router<S, Auth, T>(state: AgentEnrollmentRouterState<S, Auth>) -> Router<T>
 where
     S: TeamAgentService,
@@ -633,7 +633,7 @@ where
             post(install_checkpointed_handler::<S, Auth>),
         )
         .route(
-            "/teammate_hosts/offboard",
+            "/teammate_hosts/{harness_id}/offboard",
             post(offboard_teammate_hosts_handler::<S, Auth>),
         )
         .with_state(state)
@@ -737,16 +737,20 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Park every agent on a machine that may no longer host it, now: 204.
-#[tracing::instrument(skip_all, err)]
+/// Park the agents on an unpaired machine, now: 204.
+#[tracing::instrument(skip_all, fields(%harness_id), err)]
 pub async fn offboard_teammate_hosts_handler<S, Auth>(
     _authorization: MacroAuthorizationExtractor<Auth, InternalOnly>,
     State(state): State<AgentEnrollmentRouterState<S, Auth>>,
+    Path(harness_id): Path<Uuid>,
 ) -> Result<StatusCode, TeamAgentError>
 where
     S: TeamAgentService,
     Auth: MacroAuthorizationService,
 {
-    state.service.offboard_unentitled_hosts().await?;
+    state
+        .service
+        .offboard_host(HarnessId::new_from_uuid(harness_id))
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
