@@ -1,0 +1,271 @@
+crates/import_linear/src/outbound/client/test.rs
+  s_a37ce135bddc8b::t_452e3694135018 2
+crates/ai_tools/src/import_channels/test.rs
+  s_a37ce135bddc8b::t_452e3694135018 40
+services/agent_harness_service/src/cognition/api/tool_selection.rs
+  s_a37ce135bddc8b::t_d0b54ed7695d6e 93
+crates/connectors/src/outbound/macro_connect.rs
+  s_a37ce135bddc8b::t_26f3e223b6c70b 13
+crates/connectors/src/outbound/native/server_directory/test.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1-209
+crates/mcp_toolset/src/combined/test.rs
+  s_a37ce135bddc8b::t_c968c1eeb60fcf 1-104
+crates/mcp_toolset/src/mangle.rs
+  s_a37ce135bddc8b::t_c968c1eeb60fcf 9-10
+crates/connectors/src/outbound/guarded_http.rs
+  s_a37ce135bddc8b::t_e40bc76942d2db 24-25,27
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1-22,26,28-228
+  s_03b21ec112ad69::t_486324dcf85774 23
+crates/connectors/src/outbound/native/memory_store.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 3-4
+crates/connectors/src/outbound/native/server_access.rs
+  s_a37ce135bddc8b::t_e40bc76942d2db 18
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1-17,20-122
+  s_03b21ec112ad69::t_9bf8e8ee7313ad 19
+services/agent_harness_service/src/code_mode/connected_apps/test.rs
+  s_a37ce135bddc8b::t_452e3694135018 77
+crates/agent_inmem/src/outbound/rig_engine/test/code_tools.rs
+  s_a37ce135bddc8b::t_d0b54ed7695d6e 124
+crates/connectors/src/lib.rs
+  s_a37ce135bddc8b::t_803b4a04d69b35 2-3,5-10,13,19,21-31
+services/agent_harness_service/src/cognition/server.rs
+  s_a37ce135bddc8b::t_452e3694135018 980
+crates/connectors/src/outbound/app_directory.rs
+  s_a37ce135bddc8b::t_d77728699549f3 32
+  s_a37ce135bddc8b::t_53089f0461005f 137,140
+  s_a37ce135bddc8b::t_8e0863145c9696 6,16-31,33-55
+  s_a37ce135bddc8b::t_80673cd3910004 56
+services/agent_harness_service/src/scheduling.rs
+  s_a37ce135bddc8b::t_452e3694135018 7
+crates/import/src/domain/service/notion_workspace/object.rs
+  s_a37ce135bddc8b::t_452e3694135018 6
+crates/connectors/src/outbound/pipedream/models.rs
+  s_a37ce135bddc8b::t_9e1b8fec862c80 1-70
+crates/connectors/src/outbound/native/models/server.rs
+  s_a37ce135bddc8b::t_b225e5192d3c6a 4-5,29
+  s_a37ce135bddc8b::t_95fd1725b63fe3 3,6-28,30-109
+  s_a37ce135bddc8b::t_e40bc76942d2db 1
+  s_03b21ec112ad69::t_bf190bffa8e62f 2
+crates/connectors/src/outbound/pipedream.rs
+  s_a37ce135bddc8b::t_68a8fc1cd33a9c 1-4
+  s_a37ce135bddc8b::t_95fd1725b63fe3 6-7
+crates/mcp_toolset/src/lib.rs
+  s_a37ce135bddc8b::t_c968c1eeb60fcf 14,19-20
+  s_a37ce135bddc8b::t_d81dc136092e94 23-25
+crates/connectors/src/outbound/native/persisting_credential_store.rs
+  s_a37ce135bddc8b::t_c35b7e38a4377a 1-85
+crates/agent_inmem/src/rig_engine.rs
+  s_a37ce135bddc8b::t_d0b54ed7695d6e 163,194,309,906,910
+crates/import/src/domain/service/slack_discovery.rs
+  s_a37ce135bddc8b::t_452e3694135018 13
+crates/import/src/domain/models/test.rs
+  s_a37ce135bddc8b::t_452e3694135018 2
+crates/connectors/src/outbound.rs
+  s_a37ce135bddc8b::t_68a8fc1cd33a9c 1-5,10-11,16-17,20-21
+crates/connectors/src/outbound/native.rs
+  s_a37ce135bddc8b::t_68a8fc1cd33a9c 1-3,10
+  s_a37ce135bddc8b::t_95fd1725b63fe3 5-9,11-14,16
+crates/connectors/src/outbound/native/models/oauth_client_metadata.rs
+  s_a37ce135bddc8b::t_b225e5192d3c6a 1-31,33-36,38-45
+  s_a37ce135bddc8b::t_4112551fa0d027 32,37
+crates/connectors/src/outbound/pipedream/source.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 16
+  s_a37ce135bddc8b::t_9e1b8fec862c80 15,17,97,101,109-111
+crates/agent_egress/src/domain/model.rs
+  s_a37ce135bddc8b::t_452e3694135018 30
+crates/connectors/src/outbound/app_directory/test.rs
+  s_a37ce135bddc8b::t_7ed65e67103756 2,52-53
+  s_a37ce135bddc8b::t_95fd1725b63fe3 26-27
+crates/agent_egress/src/outbound/mcp_credentials.rs
+  s_a37ce135bddc8b::t_452e3694135018 15
+crates/connectors/src/outbound/native/models/aes_key.rs
+  s_a37ce135bddc8b::t_4112551fa0d027 1-6,8-47
+  s_a37ce135bddc8b::t_9ea105a94ebfc7 7
+crates/ai_tools/src/tool_context/test/import_link_access.rs
+  s_a37ce135bddc8b::t_452e3694135018 215
+crates/mcp_toolset/src/combined.rs
+  s_a37ce135bddc8b::t_c968c1eeb60fcf 1-106
+crates/connectors/src/outbound/github_link/auth_service.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 5
+crates/agent_egress/src/outbound/macro_mcp/test.rs
+  s_a37ce135bddc8b::t_452e3694135018 3
+crates/connectors/src/outbound/native/sign_in.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 6-7
+crates/connectors/src/outbound/native/source/test.rs
+  s_a37ce135bddc8b::t_a6b0a1755d9dd0 451
+  s_a37ce135bddc8b::t_f3367044b32ef5 2
+  s_03b21ec112ad69::t_7239183a43dac6 4
+crates/import/src/domain/service/workspace/events.rs
+  s_a37ce135bddc8b::t_452e3694135018 15
+crates/granola_sync/src/outbound/accounts/test.rs
+  s_a37ce135bddc8b::t_452e3694135018 11
+crates/import/src/domain/service/workspace/run.rs
+  s_a37ce135bddc8b::t_452e3694135018 14
+crates/connectors/src/outbound/native/server_directory.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1-5,8-158
+  s_a37ce135bddc8b::t_d76542486fdc8c 6-7
+crates/connectors/src/outbound/pipedream/api/capabilities/test.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1-73
+crates/connectors/src/outbound/native/pg_server_repo.rs
+  s_a37ce135bddc8b::t_c35b7e38a4377a 1-190
+crates/connectors/src/domain/models.rs
+  s_a37ce135bddc8b::t_4dcf5204a04652 298
+  s_a37ce135bddc8b::t_47a8ef5e80203b 9-11,13
+  s_a37ce135bddc8b::t_803b4a04d69b35 625-675
+crates/onboarding/src/domain/service/test.rs
+  s_a37ce135bddc8b::t_452e3694135018 3
+crates/agent_egress/src/outbound/forwarder.rs
+  s_a37ce135bddc8b::t_452e3694135018 8
+crates/import/src/domain/models.rs
+  s_a37ce135bddc8b::t_452e3694135018 6
+crates/connectors/src/outbound/native/source.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 12,15
+  s_a37ce135bddc8b::t_d76542486fdc8c 16-18
+  s_a37ce135bddc8b::t_a6b0a1755d9dd0 253-254
+  s_03b21ec112ad69::t_ac50eb44397494 11
+crates/connectors/src/domain/resolve/test/properties.rs
+  s_a37ce135bddc8b::t_4dcf5204a04652 357-358
+crates/ai_tools/src/tool_context.rs
+  s_a37ce135bddc8b::t_452e3694135018 178,192,2170,2172-2173,2311
+services/agent_harness_service/src/routine_sessions/test.rs
+  s_a37ce135bddc8b::t_452e3694135018 16
+  s_a37ce135bddc8b::t_c5fb0a94547d95 122
+  s_a37ce135bddc8b::t_c5c4e47114ca5e 99-121
+  s_a37ce135bddc8b::t_f517259916b336 24
+crates/connectors/src/outbound/github_link/test.rs
+  s_a37ce135bddc8b::t_f3367044b32ef5 2
+  s_03b21ec112ad69::t_4f443774814154 4
+crates/ai_tools/src/mcp_app_catalog/test.rs
+  s_a37ce135bddc8b::t_452e3694135018 4,47
+crates/connectors/src/outbound/native/pg_server_repo/test.rs
+  s_a37ce135bddc8b::t_f3367044b32ef5 4-6
+  s_a37ce135bddc8b::t_cbc5d474d6daea 77,111,133,185
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1-3,7,9-76,78-110,112-132,134-184,186-228
+  s_a37ce135bddc8b::t_b842004e3a7656 8
+crates/import/src/domain/service/test/admission.rs
+  s_a37ce135bddc8b::t_452e3694135018 372
+services/agent_harness_service/src/cognition/api/context.rs
+  s_a37ce135bddc8b::t_452e3694135018 100,107,116,169
+crates/connectors/src/outbound/native/models.rs
+  s_a37ce135bddc8b::t_b225e5192d3c6a 1-2,7-9,11-12
+  s_a37ce135bddc8b::t_95fd1725b63fe3 3-6,10
+  s_a37ce135bddc8b::t_bfcfaf524d9f67 13-16
+services/agent_harness_service/src/lib.rs
+  s_a37ce135bddc8b::t_452e3694135018 546
+crates/import_jira/src/outbound/client.rs
+  s_a37ce135bddc8b::t_452e3694135018 8
+crates/connectors/src/outbound/pipedream/api/capabilities.rs
+  s_a37ce135bddc8b::t_c35b7e38a4377a 2,4,16,32
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1,5-15,17-26,28-31,33-44
+  s_a37ce135bddc8b::t_9e1b8fec862c80 3,27
+crates/import/src/domain/service/notion_workspace.rs
+  s_a37ce135bddc8b::t_452e3694135018 37
+crates/import/src/domain/service/tracker_workspace.rs
+  s_a37ce135bddc8b::t_452e3694135018 4
+crates/connectors/src/outbound/pipedream/api.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 3,5-158,162,167-198,201,203-225,228,230-251,256-370,372-379,385,390-407,411,414-434,442-443,452-454,456-462,464-465,467-479,481-607
+  s_a37ce135bddc8b::t_38b0ea3a553305 1-2,4,159-161,163-164,166,199-200,202,226-227,229,252-253,255,371,380-384,386-387,389,408-410,412-413,435-441,444-451,455,463,466,480
+  s_03b21ec112ad69::t_619e9765d3024f 165,254
+services/agent_harness_service/src/cognition/config/test.rs
+  s_a37ce135bddc8b::t_ceac37383f294c 6
+services/agent_harness_service/src/scheduling/routine_suggestions.rs
+  s_a37ce135bddc8b::t_452e3694135018 12
+crates/agent_egress/src/domain/service/test.rs
+  s_a37ce135bddc8b::t_452e3694135018 8
+services/agent_harness_service/Cargo.toml
+  s_a37ce135bddc8b::t_dc8dbc9cd0971b 150
+crates/connectors/src/outbound/native/server_access/test.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1-157
+crates/connectors/src/outbound/native/sign_in/test.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 2
+crates/connectors/src/outbound/native/oauth.rs
+  s_a37ce135bddc8b::t_f2fc84870346e5 4
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1-2,5-320
+  s_03b21ec112ad69::t_35c0e4a52603fd 3
+crates/connectors/src/outbound/native/models/server/test.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1-84
+crates/import_linear/src/outbound/client.rs
+  s_a37ce135bddc8b::t_452e3694135018 8
+services/agent_harness_service/src/cognition/service/integration_analytics/test.rs
+  s_a37ce135bddc8b::t_452e3694135018 2
+crates/connectors/src/domain/service.rs
+  s_a37ce135bddc8b::t_47a8ef5e80203b 10,491
+crates/agent_egress/src/outbound/macro_mcp.rs
+  s_a37ce135bddc8b::t_452e3694135018 20
+crates/agent_egress/src/domain/ports.rs
+  s_a37ce135bddc8b::t_452e3694135018 18
+crates/import/src/domain/service/notion_workspace/personal.rs
+  s_a37ce135bddc8b::t_452e3694135018 10
+crates/ai_tools/src/connectors_config.rs
+  s_a37ce135bddc8b::t_452e3694135018 1
+crates/connectors/src/outbound/native/provider_registry.rs
+  s_a37ce135bddc8b::t_55eda9b86a42c0 57-58
+  s_a37ce135bddc8b::t_4112551fa0d027 1-56,59-114
+crates/import/src/domain/service/workspace.rs
+  s_a37ce135bddc8b::t_452e3694135018 5
+crates/connectors/src/outbound/github_link.rs
+  s_a37ce135bddc8b::t_ca9ed859f5eef8 24
+  s_a37ce135bddc8b::t_95fd1725b63fe3 20,23
+  s_03b21ec112ad69::t_4d2c731bd83349 19
+crates/connectors/src/composition.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 20-22,24,26,44,46-47
+  s_a37ce135bddc8b::t_6251f6f568e82a 100-102
+  s_a37ce135bddc8b::t_cf39c9a0667811 17,103
+crates/connectors/src/outbound/native/ports.rs
+  s_a37ce135bddc8b::t_c35b7e38a4377a 1-137
+crates/import_notion/src/outbound/connected/test.rs
+  s_a37ce135bddc8b::t_452e3694135018 4,20
+crates/connectors/src/outbound/native/persisting_credential_store/test.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1-145
+crates/mcp_toolset/src/test.rs
+  s_a37ce135bddc8b::t_d81dc136092e94 1-53
+crates/connectors/src/outbound/native/oauth/test.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1-239
+services/document_storage_service/src/api/context.rs
+  s_a37ce135bddc8b::t_452e3694135018 558
+crates/connectors/src/outbound/native/redis_state_store.rs
+  s_a37ce135bddc8b::t_95fd1725b63fe3 1-49
+services/agent_harness_service/src/cognition/service/integration_analytics.rs
+  s_a37ce135bddc8b::t_452e3694135018 10
+crates/agent_egress/src/outbound/actor_mcp.rs
+  s_a37ce135bddc8b::t_452e3694135018 7
+services/agent_harness_service/src/internal_mcp/test/code_mode.rs
+  s_a37ce135bddc8b::t_d0b54ed7695d6e 258
+Cargo.lock
+  s_a37ce135bddc8b::t_8d256b98157588 765
+services/agent_harness_service/src/code_mode/connected_apps.rs
+  s_a37ce135bddc8b::t_5c1b3053662499 26
+crates/agent_session/src/domain/routines/service.rs
+  s_a37ce135bddc8b::t_32863e1f6c36ef 102-106,109,112,115
+services/agent_harness_service/src/routine_sessions.rs
+  s_a37ce135bddc8b::t_32863e1f6c36ef 94,98-99,112-132
+  s_a37ce135bddc8b::t_42e0421010259a 13,133-136
+crates/agent_session/src/domain/routines/service/test.rs
+  s_a37ce135bddc8b::t_32863e1f6c36ef 189,192-197
+crates/agent_session/src/domain/routines.rs
+  s_a37ce135bddc8b::t_32863e1f6c36ef 68,70-73,76-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9ce992d4ba9782abc6576c3132f13533be31505b",
+  "prompts": {},
+  "sessions": {
+    "s_03b21ec112ad69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4313240-0b8c-4454-9ac4-f2c59a5300e6",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_a37ce135bddc8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "93833ac7-7fb8-4d30-be2e-a077fdc24000",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
