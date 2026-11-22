@@ -21,7 +21,7 @@ import {
   useSoupBackfills,
 } from './backfill';
 import { soupBackfillCheckpointKey } from './backfill-contract';
-
+import { installBrowserLocks } from './browser-locks.test-helpers';
 
 type FetchInput = Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0];
 
@@ -279,7 +279,7 @@ describe('runSoupBackfills', () => {
         'user-1',
         mockCacheHost,
         { ...lane('core-entities', fetchPage), createFetchPage },
-        onCheckpoint
+        { onCheckpoint }
       )
     );
     expect(fetchPage.mock.calls.map(([input]) => input)).toEqual([
@@ -313,12 +313,14 @@ describe('runSoupBackfills', () => {
         'user-1',
         mockCacheHost,
         { ...lane('core-entities', fetchPage), pageDelayMs: 0 },
-        (checkpoint) => {
-          if (checkpoint.nextCursor === 'saved-page') {
-            mockCacheHost.currentStorageGeneration.mockResolvedValue(
-              'storage-2'
-            );
-          }
+        {
+          onCheckpoint: (checkpoint) => {
+            if (checkpoint.nextCursor === 'saved-page') {
+              mockCacheHost.currentStorageGeneration.mockResolvedValue(
+                'storage-2'
+              );
+            }
+          },
         }
       )
     );
@@ -1087,6 +1089,124 @@ describe('runSoupBackfills', () => {
     expect(fetchSignals[1]?.aborted).toBe(true);
   });
 });
+describe('soup backfill checkpoint locks', () => {
+  let restoreLocks = () => {};
+  beforeEach(() => {
+    localStorage.clear();
+    mockCacheHost.currentStorageGeneration
+      .mockReset()
+      .mockResolvedValue('storage-1');
+    telemetryMocks.anonymousSpan.mockReset().mockImplementation(() => ({
+      setAttr: vi.fn(),
+      end: vi.fn(),
+    }));
+    restoreLocks = installBrowserLocks();
+  });
+
+  afterEach(() => {
+    restoreLocks();
+  });
+
+  /** Lets every runner that can make progress make it. */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+  it('makes a second tab wait for a lane, then resume where the first stopped', async () => {
+    let openGate = () => {};
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    const firstTab = vi.fn(async (_input: FetchInput) => {
+      if (firstTab.mock.calls.length > 1) throw new Error('the tab closes');
+      await gate;
+      return { nextCursor: 'page-2' };
+    });
+    const secondTab = vi.fn(async (_input: FetchInput) => ({
+      nextCursor: null,
+    }));
+    const first = Effect.runPromiseExit(
+      runSoupBackfill('user-1', mockCacheHost, {
+        ...lane('core-entities', firstTab),
+        pageDelayMs: 0,
+      })
+    );
+    await vi.waitFor(() => expect(firstTab).toHaveBeenCalledOnce());
+    const second = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        lane('core-entities', secondTab),
+      ])
+    );
+    await settle();
+    expect(secondTab).not.toHaveBeenCalled();
+
+    openGate();
+    await first;
+    await second;
+    expect(secondTab.mock.calls.map(([input]) => input)).toEqual([
+      { continuation: { cursor: 'page-2', expand: true } },
+    ]);
+    const lockWaits = telemetryMocks.anonymousSpan.mock.results
+      .flatMap((result) => result.value.setAttr.mock.calls)
+      .filter(([name]) => name === 'cache.backfill_lock_wait_ms');
+    expect(lockWaits).toHaveLength(1);
+    expect(lockWaits[0]?.[1]).toBeGreaterThanOrEqual(20);
+  });
+
+  it('leaves a lane to the next tab when a waiting tab stops', async () => {
+    let openGate = () => {};
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    const holder = vi.fn(async (_input: FetchInput) => {
+      await gate;
+      return { nextCursor: null };
+    });
+    const stopped = vi.fn(async (_input: FetchInput) => ({ nextCursor: null }));
+    const next = vi.fn(async (_input: FetchInput) => ({ nextCursor: null }));
+    const held = Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, lane('core-entities', holder))
+    );
+    await vi.waitFor(() => expect(holder).toHaveBeenCalledOnce());
+    const waiting = Effect.runFork(
+      runSoupBackfill('user-1', mockCacheHost, lane('core-entities', stopped))
+    );
+    await settle();
+    await Effect.runPromise(Fiber.interrupt(waiting));
+
+    openGate();
+    await held;
+    await Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, lane('core-entities', next))
+    );
+    expect(stopped).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('runs two lanes that differ in contract side by side', async () => {
+    let openGate = () => {};
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    const older = vi.fn(async (_input: FetchInput) => {
+      await gate;
+      return { nextCursor: null };
+    });
+    const newer = vi.fn(async (_input: FetchInput) => ({ nextCursor: null }));
+    const olderRun = Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, lane('core-entities', older))
+    );
+    await vi.waitFor(() => expect(older).toHaveBeenCalledOnce());
+    await Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, {
+        ...lane('core-entities', newer),
+        contractVersion: 1,
+      })
+    );
+    expect(newer).toHaveBeenCalledOnce();
+    openGate();
+    await olderRun;
+  });
+});
+
 it('warms sender metadata before paged backfill and pauses it without identity or leadership', () => {
   const [user, setUser] = createSignal<string>();
   const [leader, setLeader] = createSignal(true);

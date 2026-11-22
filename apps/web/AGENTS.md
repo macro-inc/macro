@@ -1334,7 +1334,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill.
 - Soup backfill checkpoints are keyed by each lane's contract
   (`queries/soup/backfill-contract.ts`): changing a lane's operation, input or
-  pass flags restarts that lane alone. Bump the lane's `contractVersion` when
+  pass flags restarts that lane alone, and a tab runs a lane only while holding
+  the lock named by its checkpoint key. Bump the lane's `contractVersion` when
   it must refetch for a reason those do not show (a projection that needs
   fields the cache lacks, a page size that must reach scans in flight); bump
   `BACKFILL_VERSION` only for a runner change every lane shares. Never edit

@@ -416,6 +416,8 @@ type SoupBackfillTelemetryState =
 function recordSoupBackfillTelemetry(input: {
   lane: SoupBackfillParams;
   durationMs?: number;
+  /** Time spent waiting for another tab to finish this lane. */
+  lockWaitMs?: number;
   pagesFetched: number;
   state: SoupBackfillTelemetryState;
   totalPagesFetched: number;
@@ -433,6 +435,9 @@ function recordSoupBackfillTelemetry(input: {
     span.setAttr('cache.backfill_total_pages_fetched', input.totalPagesFetched);
     if (input.durationMs !== undefined) {
       span.setAttr('cache.duration_ms', input.durationMs);
+    }
+    if (input.lockWaitMs !== undefined) {
+      span.setAttr('cache.backfill_lock_wait_ms', input.lockWaitMs);
     }
     span.end();
   } catch {
@@ -531,7 +536,63 @@ function withEmailRecency(
 
 type SoupBackfillCacheHost = Pick<CacheHost, 'currentStorageGeneration'>;
 
-export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
+type SoupBackfillHooks = {
+  /** After each saved page. */
+  onCheckpoint?: (checkpoint: SoupBackfillCheckpoint) => void;
+  /** Once the lane's lock is held, with how long it took to get it. */
+  onLocked?: (waitMs: number) => void;
+};
+
+/** Waits for the browser-wide lock `name` and succeeds with its release. */
+const acquireBrowserLock = (locks: LockManager, name: string) =>
+  Effect.callback<() => void, Error>((resume, signal) => {
+    void locks
+      .request(
+        name,
+        { signal },
+        () =>
+          new Promise<void>((release) => {
+            // Granted as the waiter was interrupted: give it straight back.
+            if (signal.aborted) release();
+            else resume(Effect.succeed(() => release()));
+          })
+      )
+      .catch((error: unknown) => {
+        if (!signal.aborted) {
+          resume(
+            Effect.fail(new Error('backfill lock failed', { cause: error }))
+          );
+        }
+      });
+  });
+
+/**
+ * Runs `effect` holding the lock named by a lane's checkpoint key, so two tabs,
+ * of one build or of two that share the lane's contract, never load, scan and
+ * save the same checkpoint at once: the second resumes where the first stopped
+ * instead of fetching the same pages beside it and saving an older cursor over
+ * a newer one. Without the Locks API, as in unit tests, it runs unlocked.
+ */
+function withCheckpointLock<A, E, R>(
+  name: string,
+  effect: Effect.Effect<A, E, R>,
+  onLocked?: (waitMs: number) => void
+): Effect.Effect<A, E | Error, R> {
+  const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+  if (!locks) return effect;
+  return Effect.uninterruptibleMask((restore) => {
+    const requestedAt = Date.now();
+    // Waiting is interruptible; from the grant on, release always runs.
+    return Effect.flatMap(restore(acquireBrowserLock(locks, name)), (release) =>
+      Effect.sync(() => onLocked?.(Date.now() - requestedAt)).pipe(
+        Effect.andThen(restore(effect)),
+        Effect.ensuring(Effect.sync(release))
+      )
+    );
+  });
+}
+
+const runUnlockedSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   userId: string,
   host: SoupBackfillCacheHost,
   params: SoupBackfillParams,
@@ -668,6 +729,19 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   }
 });
 
+/** Runs one lane until its pass completes, holding its checkpoint's lock. */
+export const runSoupBackfill = (
+  userId: string,
+  host: SoupBackfillCacheHost,
+  params: SoupBackfillParams,
+  hooks: SoupBackfillHooks = {}
+) =>
+  withCheckpointLock(
+    soupBackfillCheckpointKey(userId, params),
+    runUnlockedSoupBackfill(userId, host, params, hooks.onCheckpoint),
+    hooks.onLocked
+  );
+
 /** Runs each backfill lane to completion before starting the next lane. */
 export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
   userId: string,
@@ -683,6 +757,7 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
           loadSoupBackfillCheckpoint(userId, lane)
         );
         let pagesFetched = 0;
+        let lockWaitMs: number | undefined;
         yield* Effect.sync(() =>
           recordSoupBackfillTelemetry({
             lane,
@@ -692,20 +767,26 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
           })
         );
 
-        yield* runSoupBackfill(userId, host, lane, (checkpoint) => {
-          pagesFetched += 1;
-          if (
-            !checkpoint.completed &&
-            pagesFetched % BACKFILL_PROGRESS_PAGE_INTERVAL === 0
-          ) {
-            recordSoupBackfillTelemetry({
-              lane,
-              durationMs: Date.now() - startedAt,
-              pagesFetched,
-              state: 'progress',
-              totalPagesFetched: checkpoint.pagesFetched,
-            });
-          }
+        yield* runSoupBackfill(userId, host, lane, {
+          onLocked: (waitMs) => {
+            lockWaitMs = (lockWaitMs ?? 0) + waitMs;
+          },
+          onCheckpoint: (checkpoint) => {
+            pagesFetched += 1;
+            if (
+              !checkpoint.completed &&
+              pagesFetched % BACKFILL_PROGRESS_PAGE_INTERVAL === 0
+            ) {
+              recordSoupBackfillTelemetry({
+                lane,
+                durationMs: Date.now() - startedAt,
+                lockWaitMs,
+                pagesFetched,
+                state: 'progress',
+                totalPagesFetched: checkpoint.pagesFetched,
+              });
+            }
+          },
         }).pipe(
           Effect.retry({
             times: BACKFILL_RETRY_COUNT,
@@ -718,6 +799,7 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
                 recordSoupBackfillTelemetry({
                   lane,
                   durationMs: Date.now() - startedAt,
+                  lockWaitMs,
                   pagesFetched,
                   state: 'failed',
                   totalPagesFetched: checkpoint.pagesFetched,
@@ -733,6 +815,7 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
                 recordSoupBackfillTelemetry({
                   lane,
                   durationMs: Date.now() - startedAt,
+                  lockWaitMs,
                   pagesFetched,
                   state: 'completed',
                   totalPagesFetched: checkpoint.pagesFetched,

@@ -203,7 +203,7 @@ async function replay(
           createFetchPage: undefined,
           pageDelayMs: 0,
         },
-        () => lastSaver.set(key, build)
+        { onCheckpoint: () => lastSaver.set(key, build) }
       )
     );
     if (Exit.isFailure(exit) && !interrupted) {
