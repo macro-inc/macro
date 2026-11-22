@@ -150,6 +150,16 @@ async function connectVnc(
   let closedByViewer = false;
   let rfbReady = false;
   const filter = createRfbClientFilter();
+  // One end per connection: the socket's close and a later failure (a
+  // queued client message the filter rejects) both report one.
+  let endReported = false;
+  const reportEnd = (
+    reason: Parameters<ScreenSessionHandlers['onEnded']>[0]
+  ) => {
+    if (endReported) return;
+    endReported = true;
+    handlers.onEnded(reason);
+  };
 
   // Server bytes that arrive before the frame is listening wait here.
   let port: MessagePort | undefined;
@@ -203,7 +213,7 @@ async function connectVnc(
 
   socket.addEventListener('close', () => {
     toFrame({ type: 'close' });
-    if (!closedByViewer) handlers.onEnded(endReason ?? 'connectionLost');
+    if (!closedByViewer) reportEnd(endReason ?? 'connectionLost');
     // Before the handshake: the connect ends here too (the end is reported
     // once, above; the session ignores the connect's rejection after it).
     if (!rfbReady) attempt.abort();
@@ -240,7 +250,7 @@ async function connectVnc(
           // end, one still handshaking has the rejection.
           const established = rfbReady;
           close();
-          if (established) handlers.onEnded('error');
+          if (established) reportEnd('error');
           return;
         }
         if (socket.readyState !== WebSocket.OPEN) return;
