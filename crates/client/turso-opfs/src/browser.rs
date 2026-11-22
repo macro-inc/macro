@@ -819,6 +819,9 @@ thread_local! {
     static SHORT_READ: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
     /// Makes the next attempt count write fail, as a storage error would.
     static FAIL_ATTEMPT_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// How many times an entry operation waited on a busy entry, so a test
+    /// can tell that one never waited without timing it.
+    static BUSY_WAITS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
 
 async fn existing_file(
@@ -2907,6 +2910,8 @@ async fn retry_busy_entry(
                 if remaining <= 0.0 {
                     return Err(error);
                 }
+                #[cfg(test)]
+                BUSY_WAITS.with(|waits| waits.set(waits.get() + 1));
                 sleep_ms(delay.min(remaining.ceil() as i32)).await?;
                 delay = (delay * 2).min(BUSY_ENTRY_MAX_DELAY_MS);
             }

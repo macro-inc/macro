@@ -955,11 +955,11 @@ async fn a_return_clears_a_marker_its_older_identity_was_left_with() {
     let (held, _) = open_sync_handle(&root, &attempts_name(&old), BusyDeadline::start())
         .await
         .expect("hold the count open");
-    let started = performance_now();
+    BUSY_WAITS.with(|waits| waits.set(0));
     assert_eq!(give_back(&old, &new).await, ReturnOutcome::Returned);
-    let took = performance_now() - started;
+    let waits = BUSY_WAITS.with(std::cell::Cell::get);
     close_sync_handle(&held).expect("close the count");
-    assert!(took < BUSY_ENTRY_WAIT_MS, "the return took {took} ms");
+    assert_eq!(waits, 0, "the return waited on the held count");
     assert!(!marker_exists(&old).await);
     assert_eq!(read_adoption(&old).await, None);
     assert_eq!(read_pair(&old).await, 18);
