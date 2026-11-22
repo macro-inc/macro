@@ -240,11 +240,18 @@ const { sdkVerbs } = await import(`${root}packages/sdk/src/utils/verbs.ts`);
 const skippedLists: Record<string, readonly string[]> = await import(
   `${root}packages/sdk/src/coverage/skipped.ts`
 );
+// Every client has an Excluded list, empty or not: a renamed export must not
+// quietly let its excluded operations back into the catalog.
 const excluded = Object.fromEntries(
-  Object.entries(clients).map(([service, client]) => [
-    service,
-    skippedLists[`${client}Excluded`] ?? [],
-  ])
+  Object.entries(clients).map(([service, client]) => {
+    const list = skippedLists[`${client}Excluded`];
+    if (!list) {
+      throw new Error(
+        `packages/sdk/src/coverage/skipped.ts exports no ${client}Excluded for ${service}`
+      );
+    }
+    return [service, list];
+  })
 );
 const registry: Registry = await Bun.file(
   join(root, 'crates/agent_permission_registry/registry.json')
