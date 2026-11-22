@@ -8,10 +8,7 @@ import {
   runSoupBackfill,
   type SoupBackfillParams,
 } from './backfill';
-import {
-  soupBackfillCheckpointKey,
-  soupBackfillLaneContract,
-} from './backfill-contract';
+import { soupBackfillCheckpointKey } from './backfill-contract';
 
 vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
 vi.mock('../contacts/top-up', () => ({ useContactTopUp: () => {} }));
@@ -104,12 +101,14 @@ const actionArb: fc.Arbitrary<Action> = fc.oneof(
 );
 
 /**
- * Two builds against one cache: the shipped lanes, and a newer build whose
- * lanes differ in some contracts. Each contract has its own server pages, and a
- * cursor names the contract that issued it, so a runner that resumes another
- * contract's cursor is caught. After every action, each saved checkpoint at
- * the current storage generation must vouch only for pages that generation
- * holds, as a freshly built cache's would.
+ * Two builds against one cache: the shipped lanes, and a newer build with some
+ * lanes changed. The server answers what a lane asks for, not its contract
+ * hash: each changed lane has pages of its own, and a cursor names the lane
+ * request that issued it, so a key that lets one request resume or trust
+ * another's progress is caught even when the contract misses the change.
+ * After every action, each saved checkpoint at the current storage generation
+ * must vouch only for pages that generation holds, as a freshly built cache's
+ * would.
  */
 async function replay(
   changes: readonly LaneChange[],
@@ -127,18 +126,17 @@ async function replay(
       changeLane(lane, changes[index])
     ),
   ] as const;
+  /** What the server sees a lane ask for. */
+  const requestOf = (build: 0 | 1, laneIndex: number) => {
+    const id = DEFAULT_SOUP_BACKFILL_LANES[laneIndex].checkpointId;
+    return build === 1 && changes[laneIndex] !== 'same'
+      ? `${id}:${changes[laneIndex]}`
+      : id;
+  };
   // A changed lane returns one more page than the shipped one.
-  const pageCount = new Map<string, number>();
-  builds.forEach((build, buildIndex) =>
-    build.forEach((lane, laneIndex) =>
-      pageCount.set(
-        soupBackfillLaneContract(lane),
-        pageCounts[laneIndex] +
-          (buildIndex === 1 && changes[laneIndex] !== 'same' ? 1 : 0)
-      )
-    )
-  );
-  const pagesOf = (contract: string) => pageCount.get(contract) ?? 0;
+  const pagesOf = (build: 0 | 1, laneIndex: number) =>
+    pageCounts[laneIndex] +
+    (build === 1 && changes[laneIndex] !== 'same' ? 1 : 0);
   const lastSaver = new Map<string, 0 | 1>();
   const host = { currentStorageGeneration: async () => `g${generation}` };
 
@@ -149,7 +147,7 @@ async function replay(
     { resetOnFetch = false, checkResume = true } = {}
   ) => {
     const lane = builds[build][laneIndex];
-    const contract = soupBackfillLaneContract(lane);
+    const request = requestOf(build, laneIndex);
     const key = soupBackfillCheckpointKey('user-1', lane);
     const before = loadSoupBackfillCheckpoint('user-1', lane);
     // Two runners started together each resume whatever the other saved
@@ -178,12 +176,12 @@ async function replay(
       let page = 0;
       if (continuation) {
         const [issuer, index] = continuation.cursor.split('|');
-        if (issuer !== contract) {
-          violations.push(`${key} resumed a cursor of contract ${issuer}`);
+        if (issuer !== request) {
+          violations.push(`${request} resumed a cursor of ${issuer}`);
         }
         page = Number(index);
       }
-      hydrated.get(generation)?.add(`${contract}|${page}`);
+      hydrated.get(generation)?.add(`${request}|${page}`);
       if (resetOnFetch) {
         resetOnFetch = false;
         generation += 1;
@@ -191,7 +189,8 @@ async function replay(
       }
       const next = page + 1;
       return {
-        nextCursor: next < pagesOf(contract) ? `${contract}|${next}` : null,
+        nextCursor:
+          next < pagesOf(build, laneIndex) ? `${request}|${next}` : null,
       };
     };
     const exit = await Effect.runPromiseExit(
@@ -213,30 +212,31 @@ async function replay(
   };
 
   const check = () => {
-    for (const build of builds) {
-      build.forEach((lane) => {
+    builds.forEach((lanes, buildIndex) => {
+      const build = buildIndex as 0 | 1;
+      lanes.forEach((lane, laneIndex) => {
         const checkpoint = loadSoupBackfillCheckpoint('user-1', lane);
         if (checkpoint.storageGeneration !== `g${generation}`) return;
-        const contract = soupBackfillLaneContract(lane);
+        const request = requestOf(build, laneIndex);
         const held = hydrated.get(generation) ?? new Set<string>();
         let vouched = 0;
-        if (checkpoint.completed) vouched = pagesOf(contract);
+        if (checkpoint.completed) vouched = pagesOf(build, laneIndex);
         else if (checkpoint.nextCursor) {
           const [issuer, index] = checkpoint.nextCursor.split('|');
-          if (issuer !== contract) {
-            violations.push(`${lane.checkpointId} holds a foreign cursor`);
+          if (issuer !== request) {
+            violations.push(`${request} holds a cursor of ${issuer}`);
           }
           vouched = Number(index);
         }
         for (let page = 0; page < vouched; page += 1) {
-          if (!held.has(`${contract}|${page}`)) {
+          if (!held.has(`${request}|${page}`)) {
             violations.push(
-              `${lane.checkpointId} vouches for page ${page} the cache lacks`
+              `${request} vouches for page ${page} the cache lacks`
             );
           }
         }
       });
-    }
+    });
   };
 
   for (const action of actions) {
@@ -266,12 +266,12 @@ async function replay(
     await runLane(1, laneIndex, 1_000);
   }
   check();
-  builds[1].forEach((lane) => {
-    const contract = soupBackfillLaneContract(lane);
+  builds[1].forEach((lane, laneIndex) => {
+    const request = requestOf(1, laneIndex);
     const held = hydrated.get(generation) ?? new Set<string>();
-    for (let page = 0; page < pagesOf(contract); page += 1) {
-      if (!held.has(`${contract}|${page}`)) {
-        violations.push(`${lane.checkpointId} finished without page ${page}`);
+    for (let page = 0; page < pagesOf(1, laneIndex); page += 1) {
+      if (!held.has(`${request}|${page}`)) {
+        violations.push(`${request} finished without page ${page}`);
       }
     }
     expect(loadSoupBackfillCheckpoint('user-1', lane).completed).toBe(true);
