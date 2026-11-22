@@ -26,8 +26,10 @@ export function ControlLostBanner(props: {
       .with({ kind: 'reconnecting' }, () =>
         t('agentScreen.controlLostReconnecting')
       )
-      .with({ kind: 'released', reason: 'agentNotPausable' }, () =>
-        t('agentScreen.controlLostAgentResumed', { name: props.agentName })
+      .with(
+        { kind: 'released', driver: null, reason: 'agentNotPausable' },
+        () =>
+          t('agentScreen.controlLostAgentResumed', { name: props.agentName })
       )
       .with({ kind: 'released', driver: null, reconnected: true }, () =>
         t('agentScreen.controlLostReleased')

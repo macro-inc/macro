@@ -1297,6 +1297,15 @@ describe('createScreenSession', () => {
         reason: 'agentNotPausable',
       });
       expect(session.store.notice).toBeUndefined();
+
+      // Someone else takes over meanwhile: they have it now, not the agent.
+      live.onState(state({ name: 'Bob', isYou: false }));
+      expect(session.controlLost()).toEqual({
+        kind: 'released',
+        driver: { name: 'Bob', isYou: false },
+        reconnected: false,
+        reason: undefined,
+      });
       dispose();
     });
   });

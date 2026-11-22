@@ -266,7 +266,10 @@ export function createScreenSession(options: ScreenSessionOptions) {
             // person moved it to another tab of theirs on purpose.
             const lapsed = drivingMe() && !driving && !ours && !handedBackHere;
             if (driving) handedBackHere = false;
-            if (driving) setStore('lapseReason', undefined);
+            // Driving again, or someone else drives now: the agent having the
+            // computer back is no longer the news.
+            if (driving || (state.driver && !ours))
+              setStore('lapseReason', undefined);
             // One update, so a lease being taken back never shows as lost.
             batch(() => {
               setStore({
