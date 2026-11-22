@@ -55,6 +55,13 @@ maps a data source onto Macro database columns and cells
 - `inventory` counts rows and samples titles from the search results (rows are
   pages there) and queries a data source only when search showed none of its
   rows; the ~3 requests/second pacing makes every extra request count.
+- Errors follow Notion's documented status codes
+  (developers.notion.com/reference/status-codes): `401 unauthorized` is
+  `AccessLost` (token revoked or expired), `403` is `Forbidden`, and a `404`
+  in Notion's error shape (`{"object":"error", ...}`) is `NotFound`. A `404`
+  without that shape never came from Notion: the Pipedream proxy could not
+  use the account, so it is `ConnectionUnavailable`. Both connection errors
+  fail the whole plan with a "reconnect Notion" reason.
 - Decoding skips (and warns on) a single unreadable search/query item rather
   than failing the page; fixtures in `fixtures/` cover every property type.
 - Unknown property and value types map to `Unsupported` / `Empty`, never an

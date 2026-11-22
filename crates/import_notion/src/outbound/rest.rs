@@ -508,9 +508,13 @@ enum Failure {
 }
 
 fn failure(response: TransportResponse) -> Failure {
-    let code = serde_json::from_str::<WireError>(&response.body)
-        .ok()
-        .and_then(|error| error.code);
+    let wire = serde_json::from_str::<WireError>(&response.body).ok();
+    // Notion answers every error as `{"object":"error", ...}`; a body
+    // without that shape came from the proxy in front of it.
+    let from_notion = wire
+        .as_ref()
+        .is_some_and(|error| error.object.as_deref() == Some("error"));
+    let code = wire.and_then(|error| error.code);
     match (response.status, code.as_deref()) {
         (StatusCode::TOO_MANY_REQUESTS, _) | (_, Some("rate_limited")) => Failure::Transient {
             error: NotionError::RateLimited {
@@ -533,6 +537,14 @@ fn failure(response: TransportResponse) -> Failure {
             retry_after: response.retry_after,
             error: upstream(response),
         },
+        // Notion's answer to a revoked or expired token
+        // (https://developers.notion.com/reference/status-codes).
+        (StatusCode::UNAUTHORIZED, _) | (_, Some("unauthorized")) => {
+            Failure::Final(NotionError::AccessLost)
+        }
+        (StatusCode::NOT_FOUND, _) if !from_notion => {
+            Failure::Final(NotionError::ConnectionUnavailable)
+        }
         (StatusCode::NOT_FOUND, _) | (_, Some("object_not_found")) => {
             Failure::Final(NotionError::NotFound)
         }

@@ -743,3 +743,62 @@ fn every_request_the_client_can_send_only_reads_notion() {
         ]
     );
 }
+
+#[tokio::test]
+async fn a_lost_connection_is_told_apart_from_an_object_that_is_not_shared() {
+    let transport = ScriptedTransport::new(vec![
+        // Notion: the token is not valid (revoked or expired).
+        TransportResponse {
+            status: StatusCode::UNAUTHORIZED,
+            retry_after: None,
+            body: r#"{"object":"error","status":401,"code":"unauthorized","message":"API token is invalid."}"#.into(),
+        },
+        // Notion: this object is missing or not shared.
+        TransportResponse {
+            status: StatusCode::NOT_FOUND,
+            retry_after: None,
+            body: r#"{"object":"error","status":404,"code":"object_not_found","message":"Could not find page"}"#.into(),
+        },
+        // Not Notion's error shape: the proxy itself could not use the account.
+        TransportResponse {
+            status: StatusCode::NOT_FOUND,
+            retry_after: None,
+            body: r#"{"error":"account apn_1 not found"}"#.into(),
+        },
+        // Notion: the connection may not read this object.
+        TransportResponse {
+            status: StatusCode::FORBIDDEN,
+            retry_after: None,
+            body: r#"{"object":"error","status":403,"code":"restricted_resource","message":"no access"}"#.into(),
+        },
+    ]);
+    let client = NotionRestClient::new(
+        transport.clone(),
+        Arc::new(RequestPacer::new(NOTION_REQUEST_INTERVAL)),
+    );
+    let id = NotionId::parse("598337872cf94fdf8782e53db20768a5").unwrap();
+
+    let revoked = client.page(&id).await.unwrap_err();
+    let not_shared = client.page(&id).await.unwrap_err();
+    let unavailable = client.page(&id).await.unwrap_err();
+    let forbidden = client.page(&id).await.unwrap_err();
+
+    assert!(matches!(revoked, NotionError::AccessLost), "{revoked:?}");
+    assert!(
+        matches!(not_shared, NotionError::NotFound),
+        "{not_shared:?}"
+    );
+    assert!(
+        matches!(unavailable, NotionError::ConnectionUnavailable),
+        "{unavailable:?}"
+    );
+    assert!(matches!(forbidden, NotionError::Forbidden), "{forbidden:?}");
+    assert_eq!(
+        revoked.to_string(),
+        "Notion no longer accepts Macro's connection (it was revoked or expired); reconnect Notion"
+    );
+    assert_eq!(
+        unavailable.to_string(),
+        "Macro couldn't use your Notion connection; reconnect Notion"
+    );
+}

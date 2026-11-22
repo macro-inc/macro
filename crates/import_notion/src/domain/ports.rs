@@ -22,6 +22,16 @@ pub enum NotionError {
     /// The object does not exist or was not shared with the connection.
     #[error("Notion object not found or not shared with the connection")]
     NotFound,
+    /// Notion refused the connection's token (`401 unauthorized`): it was
+    /// revoked or expired.
+    #[error(
+        "Notion no longer accepts Macro's connection (it was revoked or expired); reconnect Notion"
+    )]
+    AccessLost,
+    /// The request never reached Notion: the connection's proxy answered 404
+    /// without Notion's error shape, so it could not use the account.
+    #[error("Macro couldn't use your Notion connection; reconnect Notion")]
+    ConnectionUnavailable,
     /// The connection may not read this.
     #[error("the Notion connection may not read this object")]
     Forbidden,

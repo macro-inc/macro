@@ -389,6 +389,8 @@ struct WirePerson {
 /// Notion's error body.
 #[derive(Deserialize)]
 pub(super) struct WireError {
+    /// `"error"` on every error Notion itself answers.
+    pub object: Option<String>,
     pub code: Option<String>,
     pub message: Option<String>,
 }
