@@ -26,8 +26,8 @@ use crate::domain::models::{
 
 use super::meetings::{
     ActiveMeeting, CreateMeetingRequest, GuestId, GuestJoinRequest, InviteMeetingUsersRequest,
-    Meeting, MeetingInvitePermissions, MeetingParticipants, MeetingPreparation,
-    MeetingRtcParticipant, MeetingToken, UpdateMeetingRequest,
+    Meeting, MeetingCallAllocation, MeetingInvitePermissions, MeetingParticipants,
+    MeetingPreparation, MeetingRtcParticipant, MeetingToken, UpdateMeetingRequest,
 };
 
 use super::models::{
@@ -157,13 +157,19 @@ pub trait CallRepository: Send + Sync + 'static {
         meeting_id: &Uuid,
         user_id: &str,
     ) -> impl Future<Output = Result<bool, CallError>> + Send;
-    /// Lock the invitation and allocate or reuse its active call, returning whether it was created.
-    /// New standalone sessions must have no team grant or pending team-share intent.
+    /// Lock the invitation and allocate or reuse its active call.
+    ///
+    /// With `resume_allowed`, a meeting whose latest call ended inside its
+    /// slot ([`Meeting::resumes_call`]) resumes that call: a new live session
+    /// in the candidate's room under the ended call's id, sharing and owner.
+    /// Otherwise a new call starts under the candidate id. New standalone
+    /// sessions must have no team grant or pending team-share intent.
     fn get_or_create_meeting_call(
         &self,
         meeting_id: &Uuid,
         candidate_call_id: &Uuid,
-    ) -> impl Future<Output = Result<(Call, bool), CallError>> + Send;
+        resume_allowed: bool,
+    ) -> impl Future<Output = Result<MeetingCallAllocation, CallError>> + Send;
     /// Persist a validated guest's participation and name.
     ///
     /// Must fail (not silently insert) when the call is no longer active, so
@@ -1418,6 +1424,15 @@ impl VoiceRepository for NoOpVoiceRepository {
 pub trait ProgrammaticCallGate: Send + Sync + 'static {
     /// Return false when the flag is disabled or unavailable.
     async fn enabled_for(&self, caller: MacroUserIdStr<'_>) -> bool;
+}
+
+/// Per-owner switch for resuming a scheduled meeting's ended call when it is
+/// rejoined before its scheduled end. Object-safe (`async_trait`) because the
+/// service holds it as `Arc<dyn ScheduledCallResumeGate>`.
+#[async_trait::async_trait]
+pub trait ScheduledCallResumeGate: Send + Sync + 'static {
+    /// Return false when the flag is disabled or unavailable.
+    async fn enabled_for(&self, meeting_owner: MacroUserIdStr<'_>) -> bool;
 }
 
 /// Creates the channel thread a new channel call discusses in.

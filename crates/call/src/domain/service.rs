@@ -68,7 +68,7 @@ use super::models::{
 use super::ports::{
     CallRecordQueryService, CallRecordReader, CallRepository, CallRtcClient, CallService,
     CallStartLimiter, CallSummarizer, NoOpVoiceRepository, ProgrammaticCallGate, RecordingDownload,
-    RecordingStorage, VoiceRepository,
+    RecordingStorage, ScheduledCallResumeGate, VoiceRepository,
 };
 
 /// The concrete call service implementation.
@@ -101,6 +101,7 @@ pub struct CallServiceImpl<
     channel_threads: Option<Arc<dyn crate::domain::ports::ChannelThreads>>,
     start_limiter: Option<Arc<dyn CallStartLimiter>>,
     programmatic_call_gate: Option<Arc<dyn ProgrammaticCallGate>>,
+    scheduled_call_resume_gate: Option<Arc<dyn ScheduledCallResumeGate>>,
 }
 
 impl<
@@ -141,6 +142,7 @@ impl<
             channel_threads: None,
             start_limiter: None,
             programmatic_call_gate: None,
+            scheduled_call_resume_gate: None,
         }
     }
 }
@@ -176,6 +178,13 @@ impl<
     /// Attach the per-caller switch for explicit programmatic call routes.
     pub fn with_programmatic_call_gate(mut self, gate: impl ProgrammaticCallGate) -> Self {
         self.programmatic_call_gate = Some(Arc::new(gate));
+        self
+    }
+
+    /// Attach the per-owner switch for resuming a scheduled meeting's ended
+    /// call when it is rejoined before its end. Without one, meetings never resume.
+    pub fn with_scheduled_call_resume_gate(mut self, gate: impl ScheduledCallResumeGate) -> Self {
+        self.scheduled_call_resume_gate = Some(Arc::new(gate));
         self
     }
 
@@ -230,6 +239,7 @@ impl<
             channel_threads: self.channel_threads,
             start_limiter: self.start_limiter,
             programmatic_call_gate: self.programmatic_call_gate,
+            scheduled_call_resume_gate: self.scheduled_call_resume_gate,
         }
     }
 
@@ -256,6 +266,7 @@ impl<
             channel_threads: self.channel_threads,
             start_limiter: self.start_limiter,
             programmatic_call_gate: self.programmatic_call_gate,
+            scheduled_call_resume_gate: self.scheduled_call_resume_gate,
         }
     }
 
@@ -282,6 +293,7 @@ impl<
             channel_threads: self.channel_threads,
             start_limiter: self.start_limiter,
             programmatic_call_gate: self.programmatic_call_gate,
+            scheduled_call_resume_gate: self.scheduled_call_resume_gate,
         }
     }
 

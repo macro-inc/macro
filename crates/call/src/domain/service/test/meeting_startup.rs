@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::meetings::MeetingCallAllocation;
 
 fn service(
     mut repo: MockCallRepository,
@@ -110,10 +111,10 @@ async fn prepared_room_skips_external_creation_and_a_concurrent_join_does_not_de
         });
     repo.expect_get_or_create_meeting_call()
         .times(1)
-        .return_once(move |_, candidate| {
+        .return_once(move |_, candidate, _| {
             assert_eq!(*candidate, call_id);
             // Another first join has already won allocation of this same room.
-            Box::pin(async move { Ok((call, false)) })
+            Box::pin(async move { Ok(MeetingCallAllocation::Joined(call)) })
         });
     let mut rtc = MockCallRtcClient::new();
     rtc.expect_create_room().never();
@@ -123,7 +124,7 @@ async fn prepared_room_skips_external_creation_and_a_concurrent_join_does_not_de
             .prepare_meeting_call(&meeting)
             .await
             .unwrap()
-            .0
+            .call()
             .id,
         call_id
     );
@@ -214,7 +215,9 @@ async fn meeting_allocation_does_not_wait_for_recording_or_transcription() {
         .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_get_or_create_meeting_call()
         .times(1)
-        .return_once(move |_, _| Box::pin(async move { Ok((call, true)) }));
+        .return_once(move |_, _, _| {
+            Box::pin(async move { Ok(MeetingCallAllocation::Started(call)) })
+        });
     let (release_agent, agent_wait) = tokio::sync::oneshot::channel();
     let (release_recorder, recorder_wait) = tokio::sync::oneshot::channel();
     let (attached, attachment) = tokio::sync::oneshot::channel();
@@ -276,7 +279,7 @@ async fn meeting_allocation_does_not_wait_for_recording_or_transcription() {
     .await
     .expect("room allocation must not wait for media services")
     .unwrap();
-    assert_eq!(prepared.0.id, call_id);
+    assert_eq!(prepared.call().id, call_id);
     // The recording progresses even though transcription is still blocked.
     release_recorder.send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(2), attachment)

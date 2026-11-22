@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::domain::meetings::{
-    CreateMeetingRequest, GuestId, GuestJoinRequest, Meeting, MeetingToken,
+    CreateMeetingRequest, GuestId, GuestJoinRequest, Meeting, MeetingCallAllocation, MeetingToken,
 };
 use rootcause::compat::boxed_error::IntoBoxedError;
 use tracing::Instrument;
@@ -301,11 +301,34 @@ impl<
         Ok(MeetingParticipants { participants })
     }
 
-    #[tracing::instrument(err, skip_all)]
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(
+            call.id = tracing::field::Empty,
+            call.room = tracing::field::Empty,
+            call.session = tracing::field::Empty,
+        )
+    )]
     pub(super) async fn prepare_meeting_call(
         &self,
         meeting: &Meeting,
-    ) -> Result<(Call, bool), CallError> {
+    ) -> Result<MeetingCallAllocation, CallError> {
+        let allocation = self.allocate_meeting_session(meeting).await?;
+        let call = allocation.call();
+        let span = tracing::Span::current();
+        span.record("call.id", tracing::field::display(call.id));
+        span.record("call.room", call.room_name.as_str());
+        span.record("call.session", allocation.kind());
+        Ok(allocation)
+    }
+
+    /// The live session a meeting join enters: the one already live, or a
+    /// new one that starts or resumes the meeting's call.
+    async fn allocate_meeting_session(
+        &self,
+        meeting: &Meeting,
+    ) -> Result<MeetingCallAllocation, CallError> {
         if let Some(call_id) = meeting.call_id
             && let Some(call) = self
                 .repo
@@ -313,8 +336,9 @@ impl<
                 .await
                 .map_err(|e| CallError::Internal(e.into()))?
         {
-            return Ok((call, false));
+            return Ok(MeetingCallAllocation::Joined(call));
         }
+        let resume_allowed = self.scheduled_call_resume_allowed(meeting).await;
         let preparation = self.repo.get_meeting_preparation(&meeting.id).await?;
         let candidate_id = preparation
             .as_ref()
@@ -328,9 +352,12 @@ impl<
         }
         let allocated = self
             .repo
-            .get_or_create_meeting_call(&meeting.id, &candidate_id)
+            .get_or_create_meeting_call(&meeting.id, &candidate_id, resume_allowed)
             .await;
-        if !matches!(&allocated, Ok((_, true))) && preparation.is_none() {
+        // The candidate room hosts the session this request opened; a join
+        // that lost the race, or failed, leaves it unused.
+        let opened = matches!(&allocated, Ok(allocation) if allocation.opened_session());
+        if !opened && preparation.is_none() {
             self.rtc_client
                 .delete_room(&candidate_room)
                 .await
@@ -339,8 +366,11 @@ impl<
                 )
                 .ok();
         }
-        let (call, created) = allocated?;
-        if created {
+        let allocation = allocated?;
+        let call = allocation.call();
+        if let MeetingCallAllocation::Started(call) = &allocation {
+            // A resumed call already started once: its consumers (activity,
+            // `call_started` routines) must not see a second start.
             let created_by = MacroUserIdStr::parse_from_str(&call.created_by)
                 .map_err(|error| CallError::Internal(error.into()))?
                 .into_owned();
@@ -351,6 +381,8 @@ impl<
                 created_at: call.created_at,
                 recording_enabled: self.egress_s3_config.is_some(),
             }));
+        }
+        if allocation.opened_session() {
             let mut metadata = CallNotificationMetadata::new(call.id, None);
             metadata.created_by = Some(call.created_by.clone());
             self.publish_call_notification(CallNotificationEvent::Started(metadata));
@@ -368,9 +400,29 @@ impl<
                 };
                 let recording = start_meeting_recording(&repo, rtc.as_ref(), call_id, &room_name, config.as_ref());
                 tokio::join!(transcription, recording);
-            }.instrument(tracing::info_span!("start_meeting_media", call_id = %call_id)));
+            }.instrument(tracing::info_span!("start_meeting_media", call_id = %call_id, call.room = %call.room_name)));
         }
-        Ok((call, created))
+        Ok(allocation)
+    }
+
+    /// Whether a join with no live session may resume the meeting's ended
+    /// call. Only a scheduled meeting can, so the owner's flag is read only then.
+    async fn scheduled_call_resume_allowed(&self, meeting: &Meeting) -> bool {
+        let scheduled = meeting.scheduled_start.is_some() && meeting.scheduled_end.is_some();
+        let Some(gate) = self
+            .scheduled_call_resume_gate
+            .as_ref()
+            .filter(|_| scheduled)
+        else {
+            return false;
+        };
+        match MacroUserIdStr::parse_from_str(&meeting.user_id) {
+            Ok(owner) => gate.enabled_for(owner).await,
+            Err(error) => {
+                tracing::warn!(error = ?error, "meeting owner is not a user id; not resuming");
+                false
+            }
+        }
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -409,7 +461,9 @@ impl<
                 ));
             }
         }
-        let (call, started) = self.prepare_meeting_call(&meeting).await?;
+        let allocation = self.prepare_meeting_call(&meeting).await?;
+        let started = allocation.opened_session();
+        let call = allocation.call().clone();
         if let Some((other_id, _)) = self
             .repo
             .find_active_call_for_user(actor.copied())
@@ -516,7 +570,9 @@ impl<
                 "Sign in to join this call".to_string(),
             ));
         }
-        let (call, started) = self.prepare_meeting_call(&meeting).await?;
+        let allocation = self.prepare_meeting_call(&meeting).await?;
+        let started = allocation.opened_session();
+        let call = allocation.call().clone();
         let guest_id = GuestId::generate();
         // Lock and persist before minting so a join racing archival fails here.
         self.repo.add_guest(&call.id, guest_id, &name).await?;

@@ -30,7 +30,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::meetings::{
-    GuestId, Meeting, MeetingPreparation, MeetingToken, UpdateMeetingRequest,
+    GuestId, Meeting, MeetingCallAllocation, MeetingPreparation, MeetingToken, UpdateMeetingRequest,
 };
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
@@ -417,8 +417,9 @@ impl CallRepository for PgCallRepo {
         &self,
         meeting_id: &Uuid,
         candidate_call_id: &Uuid,
-    ) -> Result<(Call, bool), CallError> {
-        self.allocate_meeting_call(meeting_id, candidate_call_id)
+        resume_allowed: bool,
+    ) -> Result<MeetingCallAllocation, CallError> {
+        self.allocate_meeting_call(meeting_id, candidate_call_id, resume_allowed)
             .await
     }
     async fn add_guest(

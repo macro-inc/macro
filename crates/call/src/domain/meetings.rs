@@ -1,10 +1,10 @@
 //! Persistent meeting links and guest identity validation.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use super::models::CallError;
+use super::models::{Call, CallError};
 
 /// An invitation capability for joining a meeting's RTC room. Chat additionally
 /// requires the resulting participant credential and current guest membership.
@@ -76,6 +76,66 @@ pub struct Meeting {
     /// Channel call this invitation is pinned to; prevents reuse for later calls.
     #[serde(skip)]
     pub channel_call_id: Option<Uuid>,
+}
+
+/// How long before its scheduled start a meeting's slot opens: people join a
+/// few minutes early, and a session that ends in that window is part of the slot.
+const SLOT_EARLY_JOIN: TimeDelta = TimeDelta::minutes(15);
+
+impl Meeting {
+    /// Whether a join now continues the call whose last session ended at
+    /// `previous_ended_at`, instead of starting a new call.
+    ///
+    /// Only a standalone scheduled meeting resumes, only before its scheduled
+    /// end, and only a call that ended inside its slot: a link test from the
+    /// day before, or last week's call on a rescheduled link, is not glued to
+    /// today's meeting. Instant meetings and channel calls never resume.
+    pub fn resumes_call(&self, previous_ended_at: DateTime<Utc>, now: DateTime<Utc>) -> bool {
+        if self.channel_id.is_some() || self.channel_call_id.is_some() {
+            return false;
+        }
+        let (Some(scheduled_start), Some(scheduled_end)) =
+            (self.scheduled_start, self.scheduled_end)
+        else {
+            return false;
+        };
+        now < scheduled_end && previous_ended_at >= scheduled_start - SLOT_EARLY_JOIN
+    }
+}
+
+/// What a meeting join found or opened.
+#[derive(Debug, Clone)]
+pub enum MeetingCallAllocation {
+    /// The meeting already has a live session.
+    Joined(Call),
+    /// A new call started with this session.
+    Started(Call),
+    /// An ended call of this meeting's slot went live again with a new session.
+    Resumed(Call),
+}
+
+impl MeetingCallAllocation {
+    /// The live session the join enters.
+    pub fn call(&self) -> &Call {
+        match self {
+            Self::Joined(call) | Self::Started(call) | Self::Resumed(call) => call,
+        }
+    }
+
+    /// Whether this join opened the session (started or resumed the call)
+    /// rather than entering one already live.
+    pub fn opened_session(&self) -> bool {
+        matches!(self, Self::Started(_) | Self::Resumed(_))
+    }
+
+    /// The outcome's name, for traces.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Joined(_) => "joined",
+            Self::Started(_) => "started",
+            Self::Resumed(_) => "resumed",
+        }
+    }
 }
 
 /// Longest accepted meeting title, in characters.

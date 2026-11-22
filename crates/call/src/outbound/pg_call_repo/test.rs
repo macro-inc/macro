@@ -1,6 +1,6 @@
 use std::{ops::Deref, sync::Arc, sync::LazyLock};
 
-use crate::domain::meetings::GuestId;
+use crate::domain::meetings::{GuestId, MeetingCallAllocation};
 use crate::domain::models::{
     AddParticipantError, CallRecord, CallRecordPage, CallRecordPreview, CustomSpeakerAssignment,
     EditCallRecordRepoArgs, TranscriptSegmentRequest,
@@ -3414,9 +3414,11 @@ async fn live_call_join_access_requires_membership_or_invitation(
     assert!(!repo.can_join_call(&CALL1, USER_D.as_ref()).await?);
 
     let meeting = repo.create_meeting(standalone_meeting()).await?;
-    let (call, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
+    let call = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+        .call()
+        .clone();
     assert!(repo.can_join_call(&call.id, USER_B.as_ref()).await?);
     assert!(!repo.can_join_call(&call.id, USER_C.as_ref()).await?);
     repo.add_meeting_participant(&call.id, USER_C.clone())
@@ -3475,10 +3477,12 @@ async fn standalone_meeting_archives_guest_names_and_preserves_invitation(
     insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
     let repo = repo(pool);
     let meeting = repo.create_meeting(standalone_meeting()).await?;
-    let (call, created) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
-    assert!(created);
+    let MeetingCallAllocation::Started(call) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+    else {
+        panic!("expected a new call");
+    };
     assert_eq!(call.channel_id, None);
     let guest_id = GuestId::generate();
     repo.add_guest(&call.id, guest_id, "Ada Guest").await?;
@@ -3519,10 +3523,12 @@ async fn standalone_meeting_archives_guest_names_and_preserves_invitation(
             .id,
         meeting.id
     );
-    let (next, created) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
-    assert!(created);
+    let MeetingCallAllocation::Started(next) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+    else {
+        panic!("expected a new call");
+    };
     assert_ne!(next.id, call.id);
     assert_ne!(next.room_name, call.room_name);
     Ok(())
@@ -3538,9 +3544,11 @@ async fn guest_join_racing_archival_fails_instead_of_stranding_a_guest(
     insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
     let repo = repo(pool);
     let meeting = repo.create_meeting(standalone_meeting()).await?;
-    let (call, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
+    let call = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+        .call()
+        .clone();
     repo.archive_call(&call.id, &call.room_name).await?;
     // The calls row is gone; the guest insert must fail loudly rather than
     // write a row for a room that no longer exists.
@@ -3569,13 +3577,12 @@ async fn concurrent_meeting_joins_allocate_exactly_one_session(
     let first = Uuid::now_v7();
     let second = Uuid::now_v7();
     let (one, two) = tokio::join!(
-        repo.get_or_create_meeting_call(&meeting.id, &first),
-        repo.get_or_create_meeting_call(&meeting.id, &second)
+        repo.get_or_create_meeting_call(&meeting.id, &first, false),
+        repo.get_or_create_meeting_call(&meeting.id, &second, false)
     );
-    let (one, created_one) = one?;
-    let (two, created_two) = two?;
-    assert_eq!(one.id, two.id);
-    assert_ne!(created_one, created_two);
+    let (one, two) = (one?, two?);
+    assert_eq!(one.call().id, two.call().id);
+    assert_ne!(one.opened_session(), two.opened_session());
     Ok(())
 }
 
@@ -3638,7 +3645,7 @@ async fn meeting_cancellation_is_owner_only_and_revokes_join(
     assert!(repo.cancel_meeting(&meeting.id, USER_B.as_ref()).await?);
     assert!(repo.get_meeting(&meeting.share_token).await?.is_none());
     assert!(
-        repo.get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        repo.get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
             .await
             .is_err()
     );
@@ -3664,7 +3671,7 @@ async fn channel_invitation_is_pinned_to_original_session(
     assert_eq!(resolved.call_id, None);
     assert_eq!(resolved.channel_call_id, Some(CALL1));
     assert!(
-        repo.get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        repo.get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
             .await
             .is_err()
     );
@@ -3683,9 +3690,11 @@ async fn authenticated_meeting_attendee_gets_only_call_access_and_owner_keeps_ow
     insert_user_mapping(&pool, &attendee, Uuid::now_v7()).await?;
     let repo = repo(pool.clone());
     let meeting = repo.create_meeting(standalone_meeting()).await?;
-    let (call, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
+    let call = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+        .call()
+        .clone();
     repo.add_meeting_participant(&call.id, attendee.copied())
         .await?;
     repo.remove_participant(&CALL1, USER_B.deref().copied())
@@ -3720,9 +3729,11 @@ async fn standalone_archive_never_translates_pending_intent_into_team_memory(
     give_user_a_team(&pool, USER_B.as_ref(), &Uuid::now_v7()).await?;
     let repo = repo(pool.clone());
     let meeting = repo.create_meeting(standalone_meeting()).await?;
-    let (call, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
+    let call = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+        .call()
+        .clone();
     assert!(
         !repo
             .get_call_record_by_call_id(&call.id)
@@ -3765,9 +3776,11 @@ async fn standalone_call_list_requires_individual_grants_live_and_archived(
     give_user_a_team(&pool, USER_C.deref().as_ref(), &team_id).await?;
     let repo = repo(pool.clone());
     let meeting = repo.create_meeting(standalone_meeting()).await?;
-    let (call, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
+    let call = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+        .call()
+        .clone();
     repo.add_meeting_participant(&call.id, USER_D.deref().copied())
         .await?;
 
