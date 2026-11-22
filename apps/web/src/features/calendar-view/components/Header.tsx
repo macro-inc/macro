@@ -13,6 +13,7 @@ import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-ho
 import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
+import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import { beginInteraction } from '@app/observability/flow';
 import { calendarSearchRoute } from '@app/routes/routes';
@@ -328,7 +329,7 @@ export function Header(props: {
                   variant="ghost"
                   size="icon-lg"
                   class="rounded-full"
-                  aria-label="Search events"
+                  aria-label={t('calendar.searchEvents')}
                   onClick={() =>
                     fireAndForget(
                       navigate({ route: calendarSearchRoute }),
