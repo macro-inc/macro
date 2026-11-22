@@ -298,13 +298,52 @@ pub const PRIMARY_CHANNEL_READS_REFUSED: &str =
 /// into a Soup request, and executes it against the Soup service, or against
 /// [`PrimaryChannelSoup`] when the input asks for its channels from the
 /// primary and the page is a channel directory page.
+///
+/// The span records how the page ended as `outcome`, never an error's text:
+/// errors here carry submitted filter values, such as a sender's address.
 #[tracing::instrument(
     name = "soup.page",
     skip_all,
-    fields(channel_reads = tracing::field::Empty, limit = tracing::field::Empty),
-    err(Debug)
+    fields(
+        channel_reads = tracing::field::Empty,
+        limit = tracing::field::Empty,
+        outcome = tracing::field::Empty,
+    )
 )]
 pub async fn resolve_soup<S, E, EAS, Auth, St, Edges>(
+    service: &S,
+    ctx: &Context<'_>,
+    input: SoupInput,
+) -> async_graphql::Result<SoupPage<Edges>>
+where
+    S: SoupService,
+    E: EmailService,
+    EAS: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    St: Clone + Send + Sync + 'static,
+    EmailRouterState<E>: FromRef<St>,
+    Arc<EAS>: FromRef<St>,
+    MacroAuthorizationState<Auth>: FromRef<St>,
+    Edges: SoupEntityEdges,
+{
+    let result = resolve_soup_page::<S, E, EAS, Auth, St, Edges>(service, ctx, input).await;
+    tracing::Span::current().record("outcome", soup_page_outcome(&result));
+    result
+}
+
+/// How a Soup page ended, for its span: served, refused a primary read, or
+/// failed.
+fn soup_page_outcome<T>(result: &async_graphql::Result<T>) -> &'static str {
+    match result {
+        Ok(_) => "ok",
+        Err(error) if error.message == PRIMARY_CHANNEL_SOUP_MISSING => "primary_missing",
+        Err(error) if error.message == PRIMARY_CHANNEL_READS_REFUSED => "primary_refused",
+        Err(_) => "error",
+    }
+}
+
+/// The page itself, run inside [`resolve_soup`]'s span.
+async fn resolve_soup_page<S, E, EAS, Auth, St, Edges>(
     service: &S,
     ctx: &Context<'_>,
     input: SoupInput,
@@ -376,3 +415,6 @@ where
         Ok(SoupPage::new_with_projection(page.type_erase()))
     }
 }
+
+#[cfg(test)]
+mod tests;
