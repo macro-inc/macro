@@ -804,14 +804,10 @@ async fn real_worker_opfs_contract_and_consuming_lifecycle() {
     clean_pair(&cancel_db).await;
 
     for (suffix, fault, expected_kind) in [
-        (
-            "remove",
-            ResetFault::AfterMainRemoval,
-            OpfsErrorKind::Remove,
-        ),
+        ("remove", ResetFault::MainRemoved, OpfsErrorKind::Remove),
         (
             "recreate",
-            ResetFault::AfterMainRecreate,
+            ResetFault::MainRecreated,
             OpfsErrorKind::Recreate,
         ),
     ] {

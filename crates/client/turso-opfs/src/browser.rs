@@ -2065,9 +2065,9 @@ struct Registry {
 #[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ResetFault {
-    AfterMainRemoval,
-    AfterMarkerRemoval,
-    AfterMainRecreate,
+    MainRemoved,
+    MarkerRemoved,
+    MainRecreated,
 }
 
 #[cfg(test)]
@@ -3094,7 +3094,7 @@ async fn reset_paths(paths: &Paths, recursive: bool) -> Result<(), OpfsError> {
     for role in FileRole::ALL {
         remove_if_present(&root, paths.get(role), recursive, deadline).await?;
         #[cfg(test)]
-        if role == FileRole::Main && take_reset_failure(ResetFault::AfterMainRemoval) {
+        if role == FileRole::Main && take_reset_failure(ResetFault::MainRemoved) {
             return Err(OpfsError::new(
                 OpfsErrorKind::Remove,
                 "injected failure after removing the main path",
@@ -3103,7 +3103,7 @@ async fn reset_paths(paths: &Paths, recursive: bool) -> Result<(), OpfsError> {
     }
     remove_marker(&root, paths, deadline).await?;
     #[cfg(test)]
-    if take_reset_failure(ResetFault::AfterMarkerRemoval) {
+    if take_reset_failure(ResetFault::MarkerRemoved) {
         return Err(OpfsError::new(
             OpfsErrorKind::Remove,
             "injected failure after removing the adoption marker",
@@ -3120,7 +3120,7 @@ async fn reset_paths(paths: &Paths, recursive: bool) -> Result<(), OpfsError> {
                 js_error(OpfsErrorKind::Recreate, "OPFS recreated entry type", &error)
             })?;
         #[cfg(test)]
-        if role == FileRole::Main && take_reset_failure(ResetFault::AfterMainRecreate) {
+        if role == FileRole::Main && take_reset_failure(ResetFault::MainRecreated) {
             return Err(OpfsError::new(
                 OpfsErrorKind::Recreate,
                 "injected failure after recreating the main path",

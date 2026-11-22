@@ -1035,7 +1035,7 @@ async fn discarding_or_wiping_ends_the_adoption() {
     let (old, new) = identities("wipe-stopped");
     write_pair(&old, 20).await;
     clean_pair(&new).await;
-    for fault in [ResetFault::AfterMarkerRemoval, ResetFault::AfterMainRemoval] {
+    for fault in [ResetFault::MarkerRemoved, ResetFault::MainRemoved] {
         assert_eq!(
             adopt_into(&old, &new).await,
             AdoptOutcome::Adopted,
@@ -1043,7 +1043,7 @@ async fn discarding_or_wiping_ends_the_adoption() {
         );
         let owner = OpfsOwner::acquire(&new).await.expect("owner");
         REGISTRY.with(|registry| registry.borrow_mut().faults.reset_fault = Some(fault));
-        let failure = owner.recovery_wipe().await.err().expect("stopped wipe");
+        let failure = owner.recovery_wipe().await.expect_err("stopped wipe");
         assert_eq!(failure.error().kind(), OpfsErrorKind::Remove, "{fault:?}");
         replace_poisoned_registry_for_test().await;
         assert!(!present(&new).await[0], "{fault:?}");
