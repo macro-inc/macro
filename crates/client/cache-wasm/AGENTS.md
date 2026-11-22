@@ -89,12 +89,12 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   could not read the adoption reads it again first (`unreadable_adoption`), and
   with neither marker nor count readable it keeps them. Either open that keeps
   moved files marks its error `cacheRecoveryDeferred` (`recovery_deferred`),
-  which the worker reports as `recovery-deferred`; the coordinator then keeps
-  the scope instead of failing for good until an open succeeds, so the page's
-  cache recovery runs it again later. A version probe that meets a busy sync
-  handle fails as
-  `storage-busy`, which ends the coordinator's retries the same way, so the
-  count can span page loads.
+  which the worker reports as `movedFilesKept` beside its failure code; the
+  coordinator then keeps the scope instead of failing for good until an open
+  succeeds, so the page's cache recovery runs it again later. A version probe
+  that meets a busy sync handle fails as `storage-busy` too, which ends the
+  coordinator's retries the same way, so the count can span page loads. Mark
+  every error such an open returns, the owner's release included.
   The result's `outcome` is
   `upgraded-existing` with `fromStorageVersion`;
   `carryForward` (`moved`, `resumed`, `older-in-use`, `unsupported`,

@@ -162,8 +162,9 @@ that returns fewer bytes than the file holds is an error, never a shorter
 marker or WAL header.
 
 An open that keeps moved files says so (`cacheRecoveryDeferred` on its error,
-`recovery-deferred` to the coordinator), whether it is the ordinary open that
-found them unusable or a recovery that could not decide. The coordinator
+`movedFilesKept` beside its failure code to the coordinator), whether it is the
+ordinary open that found them unusable or a recovery that could not decide,
+and whatever else failed with it. The coordinator
 retries a failed recovery five times at once, so with counting this resolves
 within one page load. Until an open succeeds, it never gives up a scope where
 an open kept moved files, whatever ended the retries: a recovery that kept
@@ -176,10 +177,21 @@ recovery (backoff doubling to 30 seconds with 20% jitter, so at most 36
 seconds, and on reconnect or return to the tab) registers again. After that
 first deferral each registration runs one recovery, not five, so a page waits
 for one open before it runs uncached again; the attempts go on counting.
-Readiness the coordinator accepts ends this, even when the owner drains at
-once because its tab is hidden: the retries and the deferral start over there.
-A version probe that meets a busy sync handle fails as `storage-busy`, which
-stops the coordinator's retries the same way. Files at a newer version
+Requests sent meanwhile wait for that open as they wait for any activation:
+the 10-second request timeout starts only after it, so the startup budgets
+bound the wait (five minutes for the assets, then the lock and the 20-second
+database open). Readiness the coordinator accepts ends this, even when the
+owner drains at once because its tab is hidden: the retries and the deferral
+start over there. A version probe that meets a busy sync handle fails as
+`storage-busy`, which stops the coordinator's retries the same way; it still
+carries `movedFilesKept`, so the scope stays after it too. Two paths older
+than upgrades still lose the deferral. A transport failure of the cache worker
+itself never reaches the coordinator, and the host quarantines the scope as it
+does for any queue, which leaves the moved files behind with it. A coordinator
+that restarts forgets the deferral: its next ordinary open finds the marker
+and defers again, failures that never reach storage keep the scope because
+storage was untouched, and only the one-recovery rule is lost until that
+open. Files at a newer version
 were upgraded here, so the older build could not open them, and files whose
 older name holds a database again cannot go back over it; both are reset
 (`discarded`). Once the moved files have opened they are this build's own.
@@ -193,11 +205,13 @@ lose them instead, and each needs a worker lost or an open failing mid-upgrade:
   again a tab of the older build opens its name, or stale cleanup in a tab of
   this or a newer build finds the lone older WAL: either removes the half it
   finds, the WAL no longer matches the marker, and the main file is discarded.
-  Stale cleanup in a tab of a newer storage version removes the moved main file
-  itself, as it removes any half pair under an older name: keeping it for a
-  marker only this build resolves would leave it on disk for good once this
-  build no longer runs. A WAL move that fails, and whose move of the main file
-  back fails too, leaves the same split;
+  Whatever the older WAL held, even nothing, stale cleanup in a tab of a build
+  whose name is newer in any part (schema epoch, record format or storage
+  version) removes the moved main file itself, with the queue it holds, as it
+  removes any half pair under an older name: keeping it for a marker only this
+  build resolves would leave it on disk for good once this build no longer
+  runs. A WAL move that fails, and whose move of the main file back fails too,
+  leaves the same split;
 - the worker is lost during the first open, before any step committed, and a
   tab of the older build opens its now empty name before the recovery open: the
   files cannot go back over its new ones and are discarded;
@@ -212,7 +226,12 @@ lose them instead, and each needs a worker lost or an open failing mid-upgrade:
   build through all three, or recoveries lost after counting their attempt. The
   next one discards the files unread, though the older build might still have
   opened them. Recoveries whose attempts cannot be counted do the same once ten
-  minutes passed since the adoption began, or the clock moved back as far;
+  minutes passed since the adoption began by the browser's clock, so a clock
+  jump either way can bring that early, and then one count write that fails
+  while a tab of the older build briefly holds its lock is enough. An uncounted
+  recovery whose two reads of the adoption both fail takes the time from the
+  marker alone, so two passing read failures after ten minutes discard files
+  that could have gone back;
 - the first carry-forward into storage 12 only: a tab of a build from before
   upgrades that is already at storage 12 shares this build's name but knows
   nothing of markers. If it opens that name after the adopting worker was lost

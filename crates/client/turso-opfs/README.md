@@ -48,8 +48,9 @@ an empty one is recreated without the lock) and, when it held frames, only
 under the older identity's lock (`LockNeeded` without one). `return_adoption`
 moves a self-contained database (empty WAL, which a close leaves;
 `WalNotEmpty` otherwise) back to an older identity that holds no database
-(`Occupied` otherwise), and `discard_adoption` makes the files this owner's
-own. `record_attempt` counts a caller attempt and returns the count, so a
+(`Occupied` otherwise), and reports it `Returned` once the main file is back,
+even when removing the leftovers fails; `discard_adoption` makes the files
+this owner's own. `record_attempt` counts a caller attempt and returns the count, so a
 caller can bound how often it retries a decision. The count is a file of its
 own beside the marker (`<identity>-adopting-attempts`), written whole with
 eight free slots before the marker and before any file moves, so a new

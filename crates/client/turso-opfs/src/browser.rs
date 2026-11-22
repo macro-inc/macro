@@ -484,8 +484,11 @@ impl OpfsOwner {
     /// [`ReturnOutcome::WalNotEmpty`]; and the previous identity must have no
     /// main file and at most an empty WAL, or it is
     /// [`ReturnOutcome::Occupied`]. Either way nothing moves. A pair that is
-    /// not whole here is an error. The caller decides that the files are still
-    /// what the older build wrote; this method only moves them.
+    /// not whole here is an error. Once the main file is back the result is
+    /// [`ReturnOutcome::Returned`], even if removing this owner's empty WAL or
+    /// the marker fails: the next read removes a marker left without a main
+    /// file. The caller decides that the files are still what the older build
+    /// wrote; this method only moves them.
     pub async fn return_adoption(
         &mut self,
         previous: &PreviousLock,

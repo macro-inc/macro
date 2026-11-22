@@ -430,8 +430,9 @@ triggering error class, and whether the wait completed or was canceled. This is
 separate from a repeated-ready restart and does not make generic transport
 failures storage-safe. Engine recovery retains its bounded five retries. When
 an open since the last accepted readiness kept files an interrupted storage
-upgrade moved (`recovery-deferred`, from the ordinary open or a recovery), the
-end of the retries is never terminal, whatever failure ends them: the
+upgrade moved (`movedFilesKept` on `activation-failed`, from the ordinary open
+or a recovery, beside any failure code including `storage-busy`), the end of
+the retries is never terminal, whatever failure ends them: the
 coordinator keeps the scope and its `wipe-before-open` requirement, fails
 closed as for an unavailable lock (`owner-lock-unavailable`,
 `cache-unavailable`, telemetry `ownerEvent: recovery-deferred`), and each later
@@ -440,6 +441,9 @@ failure would quarantine the scope and strand the moved files with their
 queue; the Rust side bounds these recoveries by count and age
 (`crates/client/README.md#storage-upgrades`). Accepted readiness resets the
 retries and the deferral, even when visibility drains that owner at once.
+The deferral lives in the coordinator's memory: a worker transport failure
+still quarantines as for any queue, and a restarted coordinator relearns it
+from the next open that keeps the files.
 Exhausted bootstrap retries preserve the cache
 scope only when the coordinator explicitly proves storage was untouched, not from
 a page's last-seen phase. Missing/broken transports remain conservatively
