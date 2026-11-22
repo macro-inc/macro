@@ -1,7 +1,7 @@
 import type { InputAttachmentData } from '@channel/Input/types';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
-import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
+import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
 import {
   cleanup,
   fireEvent,
@@ -716,7 +716,7 @@ describe('agent-led new conversation', () => {
     );
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
-      target: { value: `bot|${MACRO_AGENT_BOT_ID}` },
+      target: { value: `bot|${MACRO_NEW_BOT_ID}` },
     });
     expect(
       (screen.getByRole('radio', { name: 'Chat' }) as HTMLInputElement).checked
@@ -864,7 +864,7 @@ describe('agent-led new conversation', () => {
       const { send, mention, load, sendNow } = loadingPage();
       fireEvent.click(screen.getByRole('radio', { name: 'Chat' }));
       mention('bot|maya-agent');
-      mention(`bot|${MACRO_AGENT_BOT_ID}`);
+      mention(`bot|${MACRO_NEW_BOT_ID}`);
       load();
       sendNow();
       expect(send).toHaveBeenLastCalledWith(

@@ -1,6 +1,7 @@
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
+import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
 import { describe, expect, it } from 'vitest';
 import { agentPickerGroups } from './agent-picker-groups';
 import {
@@ -253,6 +254,10 @@ describe('rosterAgentForMention', () => {
       'bot-macrod'
     );
     expect(rosterAgentForMention(roster, `bot|${MACRO_AGENT_BOT_ID}`)?.id).toBe(
+      MACRO_PERSONA_ID
+    );
+    // The @ menu's Macro is the agent-session bot.
+    expect(rosterAgentForMention(roster, `bot|${MACRO_NEW_BOT_ID}`)?.id).toBe(
       MACRO_PERSONA_ID
     );
   });
