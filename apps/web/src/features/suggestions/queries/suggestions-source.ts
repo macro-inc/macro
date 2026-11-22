@@ -52,6 +52,11 @@ export function feedOptions(
   });
 }
 
+/** A feed read a write started. */
+interface WriteRead {
+  done: Promise<unknown>;
+}
+
 /** `feed` with `suggestion` open, added at its end if the feed no longer lists it. */
 function reopened(
   feed: SuggestionFeed,
@@ -94,23 +99,30 @@ export function useSuggestionsSource(): SuggestionsSource {
   );
   const queryClient = useQueryClient();
   const key = () => feedOptions(userId() ?? '', false, false).queryKey;
+  // The feed read the latest write started. Polls aren't counted: a write
+  // waits only on reads that replaced its own.
+  let latestRead: WriteRead | undefined;
   const refresh = async () => {
+    const read: WriteRead = { done: feed.refetch() };
+    latestRead = read;
     // Home's rows read their own entry: every reader follows a change.
     await Promise.all([
-      feed.refetch(),
+      read.done,
       queryClient.invalidateQueries({ queryKey: suggestionsKeys.top._def }),
     ]);
-    await followReplacingReads();
+    await followReplacingReads(read);
   };
   // A later write's read replaces this one's, and a write after that can
-  // replace it again: wait for the read that is out last, so a write isn't
-  // let go on a feed from before it.
-  const followReplacingReads = async () => {
-    const asked = { queryKey: key(), exact: true };
-    // Bounded: a read that never settles must not hold the row for good.
+  // replace it again: wait for the write read that is out last, so a write
+  // isn't let go on a feed from before it.
+  const followReplacingReads = async (own: WriteRead) => {
+    let followed = own;
+    // Bounded: reads that keep replacing each other must not hold the row.
     for (let turn = 0; turn < 3; turn++) {
-      if (queryClient.isFetching(asked) === 0) return;
-      await queryClient.refetchQueries(asked, { cancelRefetch: false });
+      const last = latestRead;
+      if (!last || last === followed) return;
+      followed = last;
+      await last.done;
     }
   };
   // Each write to a suggestion, counted, so a write's late follow-up can

@@ -1,4 +1,5 @@
 import { routineSuggestionKeys } from '@app/features/routine-suggestions/queries/keys';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Suggestion as WireSuggestion } from '@service-scheduled-action/generated/schemas';
 import { renderHook, waitFor } from '@solidjs/testing-library';
 import {
@@ -11,6 +12,7 @@ import type { ParentProps } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { Suggestion } from '../core/suggestion';
 import { toSuggestion } from './decode';
+import { suggestionsKeys } from './keys';
 import { useSuggestionsSource } from './suggestions-source';
 
 const DONE: WireSuggestion = {
@@ -227,6 +229,57 @@ it('holds a write through two reads that replaced its own', async () => {
   release();
   await Promise.all([waiting, third]);
   expect(settled).toBe(true);
+});
+
+it('lets a write go without waiting on a poll that started after its read', async () => {
+  const { client, source } = mount();
+  await waitFor(() => expect(source.feed()).toBeDefined());
+  // Home's rows are slow to answer; a poll of the feed goes out meanwhile
+  // and never answers.
+  let releaseHome: () => void = () => {};
+  const home = new QueryObserver(client, {
+    queryKey: suggestionsKeys.top('user-1', 5).queryKey,
+    queryFn: () =>
+      new Promise<string[]>((resolve) => {
+        releaseHome = () => resolve(['row']);
+      }),
+  });
+  const stop = home.subscribe(() => {});
+  await waitFor(() =>
+    expect(home.getCurrentResult().fetchStatus).toBe('fetching')
+  );
+  releaseHome();
+  await waitFor(() => expect(home.getCurrentResult().data).toEqual(['row']));
+
+  let settled = false;
+  const waiting = (async () => {
+    await source.refresh();
+    settled = true;
+  })();
+  await waitFor(() =>
+    expect(home.getCurrentResult().fetchStatus).toBe('fetching')
+  );
+  const feedKey = suggestionsKeys.feed('user-1').queryKey;
+  await waitFor(() =>
+    expect(client.getQueryState(feedKey)?.fetchStatus).toBe('idle')
+  );
+  server.gates.push(new Promise<void>(() => {}));
+  fireAndForget(
+    client.refetchQueries(
+      {
+        queryKey: feedKey,
+        exact: true,
+      },
+      { cancelRefetch: false }
+    ),
+    'test.poll'
+  );
+  await waitFor(() => expect(server.gates).toHaveLength(0));
+  releaseHome();
+
+  await waiting;
+  expect(settled).toBe(true);
+  stop();
 });
 
 it('leaves a restored suggestion as a later write left it when the read after the restore fails', async () => {
