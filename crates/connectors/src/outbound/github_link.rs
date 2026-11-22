@@ -193,6 +193,7 @@ where
             server_name: GITHUB_NAME.to_owned(),
             credentials: None,
             enabled: true,
+            requires_sign_in: false,
         });
         update(&mut row);
         // The token lives with the link; the row never holds one.

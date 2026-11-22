@@ -61,6 +61,11 @@ pub struct McpServerRecord {
     pub credentials: Option<StoredCredentials>,
     /// Whether the user has this toolset enabled.
     pub enabled: bool,
+    /// The server answered HTTP 401 to a request without a token, so it
+    /// needs a sign-in. Only means something while `credentials` is `None`:
+    /// signing in stores a grant and clears it.
+    #[serde(default)]
+    pub requires_sign_in: bool,
 }
 
 /// Open an MCP session to `url` with a fixed bearer token: a grant that

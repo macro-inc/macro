@@ -57,6 +57,7 @@ fn row(url: &str, enabled: bool) -> McpServerRecord {
         server_name: "Wiki".to_owned(),
         credentials: None,
         enabled,
+        requires_sign_in: false,
     }
 }
 
@@ -152,7 +153,8 @@ async fn every_row_is_its_servers_address() {
 
 /// A row's grant, from what the row shows: a finished grant works, a
 /// sign-in that never finished or an expired token with nothing to refresh
-/// it is dead, and a row never signed in to holds none.
+/// it is dead, and a row never signed in to holds none, unless its server
+/// answered 401 without a token: that one is dead until signed in.
 #[tokio::test]
 async fn a_rows_grant_is_read_from_the_row() {
     let fixture = holding(vec![
@@ -173,6 +175,15 @@ async fn a_rows_grant_is_read_from_the_row() {
             credentials: Some(expired(Some("refresh"))),
             ..row("https://e.example.com/mcp", true)
         },
+        McpServerRecord {
+            requires_sign_in: true,
+            ..row("https://f.example.com/mcp", true)
+        },
+        McpServerRecord {
+            credentials: Some(granted("token")),
+            requires_sign_in: true,
+            ..row("https://g.example.com/mcp", true)
+        },
     ]);
 
     let grants: Vec<_> = fixture
@@ -189,6 +200,8 @@ async fn a_rows_grant_is_read_from_the_row() {
             GrantState::Working,
             GrantState::Dead,
             GrantState::Missing,
+            GrantState::Dead,
+            GrantState::Working,
             GrantState::Dead,
             GrantState::Working
         ]
@@ -542,4 +555,157 @@ async fn a_sign_in_that_never_finished_needs_reauth() {
         refusal(&error),
         Some(&SourceRefusal::NeedsReauth(server(WIKI)))
     );
+}
+
+/// A local MCP endpoint answering every POST with `status`, with the
+/// `WWW-Authenticate` challenge a server that needs sign-in sends when it is
+/// 401, and counting the requests it got.
+async fn endpoint(status: http::StatusCode) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+    use axum::response::IntoResponse as _;
+    let hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let router = axum::Router::new().route(
+        "/mcp",
+        axum::routing::post({
+            let hits = Arc::clone(&hits);
+            move || async move {
+                hits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let mut headers = http::HeaderMap::new();
+                if status == http::StatusCode::UNAUTHORIZED {
+                    headers.insert(
+                        http::header::WWW_AUTHENTICATE,
+                        http::HeaderValue::from_static(
+                            r#"Bearer resource_metadata="https://auth.example.com/.well-known/oauth-protected-resource""#,
+                        ),
+                    );
+                }
+                (status, headers, "{}").into_response()
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+    (format!("http://127.0.0.1:{port}/mcp"), hits)
+}
+
+/// Adding a server that answers 401 without a token stores it as needing a
+/// sign-in: its grant is dead, so it reads as needing sign-in, not connected.
+#[tokio::test]
+async fn adding_a_server_that_needs_sign_in_marks_it() {
+    let (url, hits) = endpoint(http::StatusCode::UNAUTHORIZED).await;
+    let fixture = holding(Vec::new());
+
+    let added = fixture
+        .source
+        .add_server(
+            &user(),
+            &ServerUrl::parse(&url).unwrap(),
+            "Tracker",
+            AddedBy::User,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(added.grant, GrantState::Dead);
+    assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert!(fixture.store.rows()[0].requires_sign_in);
+    let listed = fixture.source.connections(&user()).await.unwrap();
+    assert_eq!(listed[0].grant, GrantState::Dead);
+}
+
+/// A server that takes requests without a token, or doesn't answer, stays
+/// as it was: connected without a sign-in.
+#[tokio::test]
+async fn adding_a_server_that_needs_no_sign_in_leaves_it_anonymous() {
+    let (url, hits) = endpoint(http::StatusCode::OK).await;
+    let fixture = holding(Vec::new());
+
+    let added = fixture
+        .source
+        .add_server(
+            &user(),
+            &ServerUrl::parse(&url).unwrap(),
+            "Docs",
+            AddedBy::User,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(added.grant, GrantState::Missing);
+    assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert!(!fixture.store.rows()[0].requires_sign_in);
+}
+
+/// A server already marked is refused before anything is sent to it, in
+/// process and for the proxy.
+#[tokio::test]
+async fn a_server_needing_sign_in_is_neither_dialed_nor_addressed() {
+    let (url, hits) = endpoint(http::StatusCode::UNAUTHORIZED).await;
+    let fixture = holding(vec![McpServerRecord {
+        requires_sign_in: true,
+        ..row(&url, true)
+    }]);
+    let connection = fixture.source.connections(&user()).await.unwrap().remove(0);
+    let mcp = connection.mcp.unwrap();
+
+    let dialed = mcp.dial().await.map(|_| ()).unwrap_err();
+    let addressed = mcp.upstream().await.unwrap_err();
+
+    assert_eq!(
+        refusal(&dialed),
+        Some(&SourceRefusal::NeedsReauth(server(&url)))
+    );
+    assert_eq!(
+        refusal(&addressed),
+        Some(&SourceRefusal::NeedsReauth(server(&url)))
+    );
+    assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
+/// A server added before it was asked, which answers a dial without a token
+/// with 401, needs reauth and is stored as needing a sign-in.
+#[tokio::test]
+async fn a_dial_answered_401_marks_the_server() {
+    let (url, _) = endpoint(http::StatusCode::UNAUTHORIZED).await;
+    let fixture = holding(vec![row(&url, true)]);
+    let connection = fixture.source.connections(&user()).await.unwrap().remove(0);
+    assert_eq!(connection.grant, GrantState::Missing);
+
+    let error = connection
+        .mcp
+        .unwrap()
+        .dial()
+        .await
+        .map(|_| ())
+        .unwrap_err();
+
+    assert_eq!(
+        refusal(&error),
+        Some(&SourceRefusal::NeedsReauth(server(&url)))
+    );
+    assert!(fixture.store.rows()[0].requires_sign_in);
+}
+
+/// A 401 the proxy saw marks a server called without a token, and leaves a
+/// signed-in one alone.
+#[tokio::test]
+async fn a_reported_401_marks_only_a_server_without_a_grant() {
+    let fixture = holding(vec![
+        row("https://a.example.com/mcp", true),
+        McpServerRecord {
+            credentials: Some(granted("token")),
+            ..row("https://b.example.com/mcp", true)
+        },
+    ]);
+    for connection in fixture.source.connections(&user()).await.unwrap() {
+        connection.mcp.unwrap().unauthorized().await.unwrap();
+    }
+
+    let marks: Vec<_> = fixture
+        .store
+        .rows()
+        .iter()
+        .map(|row| row.requires_sign_in)
+        .collect();
+    assert_eq!(marks, [true, false]);
 }

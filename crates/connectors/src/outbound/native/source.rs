@@ -15,7 +15,7 @@ use crate::outbound::native::models::StoredCredentials;
 use crate::outbound::native::models::{
     GITHUB_MCP_SERVER_URL, MacroUserIdStr, McpServer, McpServerRecord,
 };
-use crate::outbound::native::ports::{McpConnector, McpServerStore, OAuthClient};
+use crate::outbound::native::ports::{McpConnector, McpServerHttp, McpServerStore, OAuthClient};
 use crate::outbound::native::server_access::{
     ServerAccess, now_epoch_secs, server_access, unexpired_access_token,
 };
@@ -23,11 +23,19 @@ use crate::outbound::native::server_directory::{
     self as native_service, AddServerError, ServerDirectory,
 };
 use oauth2::TokenResponse as _;
+use rmcp::service::ClientInitializeError;
+use rmcp::transport::DynamicTransportError;
 use rmcp::transport::auth::AuthError;
+use rmcp::transport::streamable_http_client::StreamableHttpError;
 use rootcause::Report;
 use rootcause::compat::IntoRootcause as _;
 use std::sync::Arc;
+use std::time::Duration;
 use url::Url;
+
+/// How long adding a server waits for its answer to a request without a
+/// token, before taking it as a server that needs none.
+const SIGN_IN_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[cfg(test)]
 mod test;
@@ -54,6 +62,10 @@ where
     /// Add `url` to the user's servers under `name`, enabled and not yet
     /// signed in to. A URL the user already has, in any spelling, is
     /// returned as it stands: saving over it would wipe its grant.
+    ///
+    /// A new server is asked once, without a token, whether it takes
+    /// requests like that: one that answers HTTP 401 is stored as needing a
+    /// sign-in, so it reads as such instead of connected.
     ///
     /// An agent may only add a public `https` server
     /// ([`SourceRefusal::NonPublic`]); an empty name is
@@ -91,7 +103,19 @@ where
                 AddServerError::Store(error) => error.into_rootcause(),
             })?;
 
-        Ok(self.connection(url.clone(), added.record().clone()))
+        let mut record = added.record().clone();
+        if record.credentials.is_none()
+            && !record.requires_sign_in
+            && needs_sign_in(&self.http, &record.url).await
+        {
+            self.store
+                .mark_requires_sign_in(user, &record.url)
+                .await
+                .map_err(|error| anyhow::Error::from(error).into_rootcause())?;
+            record.requires_sign_in = true;
+        }
+
+        Ok(self.connection(url.clone(), record))
     }
 
     /// The user's rows with their normalized address, leaving out rows whose
@@ -146,7 +170,11 @@ where
 
     fn connection(&self, url: ServerUrl, record: McpServerRecord) -> SourceConnection {
         let key = ConnectorKey::Server(url);
-        let grant = grant(record.credentials.as_ref(), now_epoch_secs());
+        let grant = grant(
+            record.credentials.as_ref(),
+            record.requires_sign_in,
+            now_epoch_secs(),
+        );
         SourceConnection {
             source: SourceKind::Native,
             key: key.clone(),
@@ -319,24 +347,48 @@ struct NativeMcp<S> {
     store: Arc<S>,
 }
 
+impl<S> NativeMcp<S>
+where
+    S: McpServerStore,
+    anyhow::Error: From<S::Err>,
+{
+    /// Whether the row is a server that needs a sign-in it never got.
+    fn awaits_sign_in(&self) -> bool {
+        self.record.credentials.is_none() && self.record.requires_sign_in
+    }
+}
+
 #[async_trait::async_trait]
-impl<S: McpServerStore> McpConnection for NativeMcp<S> {
+impl<S> McpConnection for NativeMcp<S>
+where
+    S: McpServerStore,
+    anyhow::Error: From<S::Err>,
+{
     /// Today's in-process connect: rmcp refreshes the grant lazily and the
-    /// rotated grant is written back to the row.
+    /// rotated grant is written back to the row. A server that answers 401
+    /// needs reauth, and one called without a token is stored as needing a
+    /// sign-in.
     async fn dial(&self) -> Result<McpServer, Report> {
-        self.record
-            .connect(&self.http, self.store.clone())
-            .await
-            .map_err(|error| {
-                if matches!(
-                    error.downcast_ref::<AuthError>(),
-                    Some(AuthError::AuthorizationRequired)
-                ) {
-                    SourceRefusal::NeedsReauth(self.key.clone()).into()
-                } else {
-                    error.into_rootcause()
-                }
-            })
+        if self.awaits_sign_in() {
+            return Err(SourceRefusal::NeedsReauth(self.key.clone()).into());
+        }
+        let error = match self.record.connect(&self.http, self.store.clone()).await {
+            Ok(server) => return Ok(server),
+            Err(error) => error,
+        };
+        if answered_unauthorized(&error) {
+            if let Err(error) = self.unauthorized().await {
+                tracing::warn!(error = ?error, server = %self.record.server_name, "could not record that a server needs a sign-in");
+            }
+            return Err(SourceRefusal::NeedsReauth(self.key.clone()).into());
+        }
+        if matches!(
+            error.downcast_ref::<AuthError>(),
+            Some(AuthError::AuthorizationRequired)
+        ) {
+            return Err(SourceRefusal::NeedsReauth(self.key.clone()).into());
+        }
+        Err(error.into_rootcause())
     }
 
     /// The stored bearer, refreshed and written back first if it is about to
@@ -353,6 +405,19 @@ impl<S: McpServerStore> McpConnection for NativeMcp<S> {
         };
         Ok(Upstream::new(url, bearer, http::HeaderMap::new()))
     }
+
+    /// A 401 to a request without a token means the server needs a sign-in:
+    /// stored on the row. A row holding a grant is left alone; its grant is
+    /// judged when it is refreshed.
+    async fn unauthorized(&self) -> Result<(), Report> {
+        if self.record.credentials.is_some() {
+            return Ok(());
+        }
+        self.store
+            .mark_requires_sign_in(&self.record.user_id, &self.record.url)
+            .await
+            .map_err(|error| anyhow::Error::from(error).into_rootcause())
+    }
 }
 
 /// What a row's stored credentials hold, from what the row itself shows:
@@ -360,10 +425,19 @@ impl<S: McpServerStore> McpConnection for NativeMcp<S> {
 /// reads as working until a dial or the proxy finds out. Dead is what the
 /// proxy would answer "authorization required" for without asking the
 /// server: a sign-in that never finished, or an expired token with no
-/// refresh token.
-pub(crate) fn grant(credentials: Option<&StoredCredentials>, now_epoch_secs: u64) -> GrantState {
+/// refresh token. A server that answered 401 without a token and was never
+/// signed in to is dead too: the proxy refuses it the same way.
+pub(crate) fn grant(
+    credentials: Option<&StoredCredentials>,
+    requires_sign_in: bool,
+    now_epoch_secs: u64,
+) -> GrantState {
     let Some(credentials) = credentials else {
-        return GrantState::Missing;
+        return if requires_sign_in {
+            GrantState::Dead
+        } else {
+            GrantState::Missing
+        };
     };
     let Some(token) = &credentials.token_response else {
         return GrantState::Dead;
@@ -396,4 +470,59 @@ fn is_not_found(error: &Report) -> bool {
         error.downcast_current_context::<SourceRefusal>(),
         Some(SourceRefusal::NotFound(_))
     )
+}
+
+/// Whether the server at `url` answers an MCP `initialize` sent without a
+/// token with HTTP 401, the MCP authorization spec's way of saying it needs
+/// a sign-in. Any other answer, or none within [`SIGN_IN_PROBE_TIMEOUT`],
+/// proves nothing, and the server is taken as one that needs no sign-in.
+/// A server that does answer may keep the session it opened until it
+/// expires it.
+async fn needs_sign_in(http: &McpHttp, url: &str) -> bool {
+    let Ok(url) = Url::parse(url) else {
+        return false;
+    };
+    if http.check_url(&url).is_err() {
+        return false;
+    }
+    let initialize = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": mcp_toolset::client_info(),
+    });
+    let answer = http
+        .transport()
+        .post(url)
+        .timeout(SIGN_IN_PROBE_TIMEOUT)
+        .header(http::header::ACCEPT, "application/json, text/event-stream")
+        .json(&initialize)
+        .send()
+        .await;
+    match answer {
+        Ok(response) => response.status() == http::StatusCode::UNAUTHORIZED,
+        Err(error) => {
+            tracing::info!(error = %error, "a new server did not answer the sign-in probe; taking it as needing none");
+            false
+        }
+    }
+}
+
+/// Whether a failed dial failed because the server answered HTTP 401 with
+/// a challenge, as the MCP authorization spec has a server that needs a
+/// sign-in do.
+fn answered_unauthorized(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        let transport = match cause.downcast_ref::<ClientInitializeError>() {
+            Some(ClientInitializeError::TransportError { error, .. }) => Some(error),
+            _ => cause.downcast_ref::<DynamicTransportError>(),
+        };
+        let http = match transport {
+            Some(transport) => transport
+                .error
+                .downcast_ref::<StreamableHttpError<reqwest::Error>>(),
+            None => cause.downcast_ref::<StreamableHttpError<reqwest::Error>>(),
+        };
+        matches!(http, Some(StreamableHttpError::AuthRequired(_)))
+    })
 }

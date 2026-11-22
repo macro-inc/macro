@@ -56,6 +56,14 @@ impl McpServerStore for FakeServerStore {
         unimplemented!()
     }
 
+    async fn mark_requires_sign_in(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _server_url: &str,
+    ) -> Result<(), Self::Err> {
+        unimplemented!()
+    }
+
     async fn list(
         &self,
         _user_id: &MacroUserIdStr<'static>,
@@ -73,6 +81,7 @@ fn record() -> McpServerRecord {
         server_name: "Linear".to_string(),
         credentials: None,
         enabled: true,
+        requires_sign_in: false,
     }
 }
 

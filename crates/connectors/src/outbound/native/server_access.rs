@@ -37,7 +37,8 @@ pub enum ServerAccess {
     Bearer(String),
     /// The stored grant no longer yields a token - expired with no refresh
     /// token, refused on refresh, or an authorization that never finished -
-    /// and only the owner re-authorizing can mend it.
+    /// or the server needs a sign-in it was never given, and only the owner
+    /// authorizing can mend it.
     AuthorizationRequired,
 }
 
@@ -89,7 +90,13 @@ pub async fn server_access<S: McpServerStore>(
     store: Arc<S>,
 ) -> Result<ServerAccess, AuthError> {
     let Some(credentials) = &record.credentials else {
-        return Ok(ServerAccess::Anonymous);
+        // A server that answered 401 without a token takes none: only the
+        // owner signing in gives it one.
+        return Ok(if record.requires_sign_in {
+            ServerAccess::AuthorizationRequired
+        } else {
+            ServerAccess::Anonymous
+        });
     };
     if credentials.token_response.is_none() {
         // An authorization that started and never finished: the client is

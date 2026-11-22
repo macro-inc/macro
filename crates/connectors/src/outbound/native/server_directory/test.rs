@@ -41,6 +41,14 @@ impl McpServerStore for FakeServerStore {
         unimplemented!()
     }
 
+    async fn mark_requires_sign_in(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _server_url: &str,
+    ) -> Result<(), Self::Err> {
+        unimplemented!()
+    }
+
     async fn list(
         &self,
         _user_id: &MacroUserIdStr<'static>,
@@ -100,6 +108,7 @@ async fn re_adding_a_url_keeps_the_grant_it_holds() {
                 Some(1_000),
             )),
             enabled: false,
+            requires_sign_in: false,
         })
         .await
         .unwrap();

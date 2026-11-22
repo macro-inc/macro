@@ -141,6 +141,12 @@ impl FakeSource {
                     }
                     _ => None,
                 },
+                row: Some((
+                    row.user.clone(),
+                    row.source,
+                    row.key.clone(),
+                    self.store.clone(),
+                )),
             })),
             api,
         }
@@ -235,6 +241,7 @@ impl Source for FakeSource {
             name: app.to_string(),
             tools: Vec::new(),
             scope: Some((user.clone(), app.clone())),
+            row: None,
         };
 
         mcp.upstream().await.map(Some)
@@ -366,6 +373,13 @@ struct FakeMcp {
     /// For a Pipedream row, the user and app its upstream is scoped to,
     /// stamped as Pipedream's own scoping headers.
     scope: Option<(MacroUserIdStr<'static>, ConnectorId)>,
+    /// The row it serves, by owner, source and key, in the shared table.
+    row: Option<(
+        MacroUserIdStr<'static>,
+        SourceKind,
+        ConnectorKey,
+        SharedStore,
+    )>,
 }
 
 /// Pipedream's header naming whose account a call spends.
@@ -408,6 +422,27 @@ impl McpConnection for FakeMcp {
         }
 
         Ok(Upstream::new(url, Some("fake-token".to_owned()), headers))
+    }
+
+    /// As the native source does: a server added by URL and never signed in
+    /// to that answers 401 needs a sign-in from then on.
+    async fn unauthorized(&self) -> Result<(), rootcause::Report> {
+        let Some((user, source, key, store)) = &self.row else {
+            return Ok(());
+        };
+        if *source != SourceKind::Native {
+            return Ok(());
+        }
+        for row in &mut lock(store).rows {
+            if row.user == *user
+                && row.source == *source
+                && row.key == *key
+                && row.grant == GrantState::Missing
+            {
+                row.grant = GrantState::Dead;
+            }
+        }
+        Ok(())
     }
 }
 

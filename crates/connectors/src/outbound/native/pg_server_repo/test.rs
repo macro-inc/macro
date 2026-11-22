@@ -44,6 +44,7 @@ fn record(owner: &str, url: &str, credentials: Option<StoredCredentials>) -> Mcp
         server_name: "Wiki".to_owned(),
         credentials,
         enabled: true,
+        requires_sign_in: false,
     }
 }
 
@@ -228,4 +229,56 @@ async fn the_native_source_reads_and_changes_the_table(pool: PgPool) {
         .map(|row| row.url)
         .collect();
     assert_eq!(left, [GITHUB_MCP_SERVER_URL]);
+}
+
+/// A 401 without a token marks a row that holds no grant, and the mark
+/// survives a toggle; a row signed in to keeps reading as it is, and signing
+/// in clears the mark.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("users"))
+)]
+async fn a_server_needing_sign_in_is_marked_until_signed_in(pool: PgPool) {
+    let repo = PgServerRepo::new(pool, key(7));
+    let signed_in = "https://signed-in.example.com/mcp";
+    repo.save(&record(OWNER, WIKI, None)).await.unwrap();
+    repo.save(&record(OWNER, signed_in, Some(granted("kept"))))
+        .await
+        .unwrap();
+
+    repo.mark_requires_sign_in(&user(OWNER), WIKI)
+        .await
+        .unwrap();
+    repo.mark_requires_sign_in(&user(OWNER), signed_in)
+        .await
+        .unwrap();
+
+    let mut marked = repo.load(&user(OWNER), WIKI).await.unwrap().unwrap();
+    assert!(marked.requires_sign_in);
+    assert!(
+        !repo
+            .load(&user(OWNER), signed_in)
+            .await
+            .unwrap()
+            .unwrap()
+            .requires_sign_in
+    );
+
+    marked.enabled = false;
+    repo.save(&marked).await.unwrap();
+    assert!(
+        repo.load(&user(OWNER), WIKI)
+            .await
+            .unwrap()
+            .unwrap()
+            .requires_sign_in
+    );
+
+    // What completing a sign-in saves.
+    repo.save(&record(OWNER, WIKI, Some(granted("fresh"))))
+        .await
+        .unwrap();
+    let signed = repo.load(&user(OWNER), WIKI).await.unwrap().unwrap();
+    assert!(!signed.requires_sign_in);
+    assert_eq!(token(&signed).as_deref(), Some("fresh"));
 }

@@ -294,6 +294,7 @@ where
             server_name: pending.server_name,
             credentials: Some(credentials.clone()),
             enabled: true,
+            requires_sign_in: false,
         };
 
         self.server_store
