@@ -552,7 +552,7 @@ async fn channel_list_unseen_or_seen_stays_on_joined_channels(
 
     // The sidebar Inbox presets send `channelDone: false` without a
     // participation literal, so the candidates are joined channels only.
-    let (_, builder) = super::build_channel_list_query(&Some(Arc::new(not_done.clone())));
+    let builder = super::build_channel_list_query(&Some(Arc::new(not_done.clone())));
     let sql = builder.sql().to_owned();
     assert!(!sql.contains("team_user"), "{sql}");
 
@@ -3117,7 +3117,7 @@ fn home_unread_channel_list_reads_notifications_once() {
         channel_state,
         Expr::val(ChannelLiteral::IsParticipant(true)),
     );
-    let (_, builder) = super::build_channel_list_query(&Some(Arc::new(filter)));
+    let builder = super::build_channel_list_query(&Some(Arc::new(filter)));
     let sql = builder.sql().to_owned();
     assert_eq!(sql.matches("FROM user_notification").count(), 1, "{sql}");
     assert!(!sql.contains("JOIN notification"), "{sql}");

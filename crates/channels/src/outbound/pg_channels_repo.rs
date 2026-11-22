@@ -845,7 +845,7 @@ fn channel_filter_requires_participation(expr: &Expr<ChannelLiteral>) -> bool {
 
 /// Which channels a channel list reads before its filter applies.
 #[cfg(feature = "list")]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 enum ChannelCandidates {
     /// Channels the user participates in ([`CHANNEL_LIST_PREFIX`]).
     Joined,
@@ -887,7 +887,7 @@ impl ChannelCandidates {
 #[cfg(feature = "list")]
 fn build_channel_list_query(
     filter_ast: &LiteralTree<ChannelLiteral>,
-) -> (ChannelCandidates, QueryBuilder<'static, Postgres>) {
+) -> QueryBuilder<'static, Postgres> {
     // QueryBuilder is required because the channel filter is an AST with arbitrary
     // AND/OR/NOT shape. Dynamic literals are constrained to parsed domain types.
     let filter = filter_ast
@@ -897,7 +897,7 @@ fn build_channel_list_query(
     let mut builder = QueryBuilder::new(candidates.prefix());
     builder.push(build_channel_list_filter(filter.as_ref()));
     builder.push(CHANNEL_LIST_SELECT);
-    (candidates, builder)
+    builder
 }
 
 #[cfg(feature = "list")]
@@ -1750,7 +1750,7 @@ impl ChannelListRepo for PgChannelsRepo {
         let (cursor_id, cursor_timestamp) = cursor.vals();
         let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
 
-        let (candidates, mut builder) = build_channel_list_query(cursor.filter());
+        let mut builder = build_channel_list_query(cursor.filter());
         let query = builder
             .build()
             .bind(user_id.as_ref())
@@ -1778,12 +1778,11 @@ impl ChannelListRepo for PgChannelsRepo {
                 }
                 .into_channel_with_participants()
             });
-        if candidates != ChannelCandidates::Named {
-            return Ok(query.fetch_all(&self.pool).await?);
-        }
-        // A by-id read reaches channels the user never joined, so its cost
-        // follows the ids a client sends: bound it a little above Soup's 12 s
-        // client timeout.
+        // Every shape's cost follows the viewer's data: a joined page sorts
+        // their memberships, and a by-id read reaches channels they never
+        // joined. The pool sets no timeout, so bound each a little above
+        // Soup's 12 s client timeout, or a page the client gave up on keeps
+        // running while its retry starts another.
         let mut tx = self.pool.begin().await?;
         sqlx::query!("SET LOCAL statement_timeout = '15s'")
             .execute(&mut *tx)
