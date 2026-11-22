@@ -3,20 +3,23 @@ use crate::domain::{
     models::*,
     ports::{Granola, Result},
 };
+use crate::outbound::accounts::granola;
 use async_trait::async_trait;
 use call::domain::{imports::ImportedCall, records::*};
 use chrono::{DateTime, Utc};
-use connectors::outbound::pipedream::domain::{
-    models::PipedreamConnection, ports::ConnectedAppProxy,
-};
+use connectors::domain::models::{ApiHandle, ApiRequest};
+use connectors::domain::service::ApiConnectionsService;
 use http::{HeaderMap, Method};
-use rootcause::prelude::IntoRootcause;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{collections::HashSet, sync::Arc};
 use strum::VariantArray;
 
-pub struct GranolaApi<P>(pub Arc<P>);
+/// Granola's REST API through the user's Granola connection.
+pub struct GranolaApi<S>(pub Arc<S>);
+
+/// Granola's public API origin.
+const GRANOLA_API_URL: &str = "https://public-api.granola.ai/v1";
 
 /// Granola's answer, whatever its status. Never log the body: registration
 /// returns the webhook secret.
@@ -30,34 +33,34 @@ fn segment(id: &str) -> String {
     url::form_urlencoded::byte_serialize(id.as_bytes()).collect()
 }
 
-impl<P: ConnectedAppProxy> GranolaApi<P> {
+impl<S: ApiConnectionsService> GranolaApi<S> {
+    /// The user's API access to Granola, resolved once per operation.
+    async fn handle(&self, connection: &Connection) -> Result<ApiHandle> {
+        self.0
+            .connection(&connection.user_id, &granola()?)
+            .await?
+            .ok_or_else(|| rootcause::report!("the user's Granola connection gives no API access"))
+    }
+
     async fn send(
         &self,
-        connection: &Connection,
+        handle: &ApiHandle,
         method: Method,
         path: &str,
         body: Option<Value>,
     ) -> Result<Reply> {
-        let account = PipedreamConnection {
-            user_id: connection.user_id.clone(),
-            app_slug: GRANOLA_APP.into(),
-            server_name: "Granola".into(),
-            account_id: connection.account_id.clone(),
-            enabled: true,
-            provider:
-                connectors::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
-        };
         let response = self
             .0
-            .proxy(
-                &account,
-                method,
-                &format!("https://public-api.granola.ai/v1{path}"),
-                &HeaderMap::new(),
-                body.as_ref(),
+            .call(
+                handle,
+                ApiRequest {
+                    method,
+                    url: format!("{GRANOLA_API_URL}{path}"),
+                    headers: HeaderMap::new(),
+                    body,
+                },
             )
-            .await
-            .into_rootcause()?;
+            .await?;
         // Preserve status for provider-specific retries and missing resources.
         let body = if response.body.trim().is_empty() {
             Value::Null
@@ -73,12 +76,12 @@ impl<P: ConnectedAppProxy> GranolaApi<P> {
 
     async fn request(
         &self,
-        connection: &Connection,
+        handle: &ApiHandle,
         method: Method,
         path: &str,
         body: Option<Value>,
     ) -> Result<Option<Value>> {
-        let response = self.send(connection, method, path, body).await?;
+        let response = self.send(handle, method, path, body).await?;
         checked(response)
     }
 }
@@ -127,16 +130,17 @@ fn error_reason(body: &Value) -> String {
 }
 
 #[async_trait]
-impl<P: ConnectedAppProxy> Granola for GranolaApi<P> {
+impl<S: ApiConnectionsService> Granola for GranolaApi<S> {
     async fn register(
         &self,
         connection: &Connection,
         url: &str,
         scope: Scope,
     ) -> Result<Registration> {
+        let handle = self.handle(connection).await?;
         let response = self
             .send(
-                connection,
+                &handle,
                 Method::POST,
                 "/webhook-endpoints",
                 Some(json!({
@@ -165,8 +169,9 @@ impl<P: ConnectedAppProxy> Granola for GranolaApi<P> {
     async fn unregister(&self, connection: &Connection) -> Result<()> {
         if let Some(id) = &connection.endpoint_id {
             let id = segment(id);
+            let handle = self.handle(connection).await?;
             self.request(
-                connection,
+                &handle,
                 Method::DELETE,
                 &format!("/webhook-endpoints/{id}"),
                 None,
@@ -176,9 +181,10 @@ impl<P: ConnectedAppProxy> Granola for GranolaApi<P> {
         Ok(())
     }
     async fn meeting(&self, connection: &Connection, id: &NoteId) -> Result<Option<ImportedCall>> {
+        let handle = self.handle(connection).await?;
         let Some(body) = self
             .request(
-                connection,
+                &handle,
                 Method::GET,
                 &format!("/notes/{}", segment(id.as_ref())),
                 None,
@@ -206,7 +212,7 @@ impl<P: ConnectedAppProxy> Granola for GranolaApi<P> {
                 path.push('?');
                 path.push_str(&query);
             }
-            let Some(page) = self.request(connection, Method::GET, &path, None).await? else {
+            let Some(page) = self.request(&handle, Method::GET, &path, None).await? else {
                 if cursor.is_some() {
                     return Err(rootcause::report!(
                         "Granola transcript disappeared during pagination"

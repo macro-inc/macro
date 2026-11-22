@@ -19,20 +19,20 @@ maps a data source onto Macro database columns and cells
   each row's `CellWrite`s.
 - `src/outbound/rest.rs`: requests, retries, pacing; `rest/wire.rs` maps
   Notion's wire shapes to the model.
-- `src/outbound/pipedream.rs`: reaching Notion through Pipedream's Connect
-  proxy with the user's `notion` connection.
+- `src/outbound/connected.rs`: reaching Notion through the user's `notion`
+  connection, over the connectors `ApiConnectionsService`.
 
 ## Scope
 
 - Owns: reading Notion over REST (`Notion-Version: 2026-03-11`, data sources
   API), and the Notion → Macro database column and cell mapping.
 - Not here: import planning, writing Macro entities → `crates/import`;
-  Pipedream connections and the proxy port → `crates/connectors` (`outbound::pipedream`).
+  which connection counts and how it reaches Notion → `crates/connectors`.
 
 ## Boundaries
 
-- Depends on: `connectors::outbound::pipedream` (`ConnectionStore`, `ConnectedAppProxy`),
-  `models_databases` (the column and cell vocabulary).
+- Depends on: `connectors` (`ApiConnectionsService`; tests use its
+  `FakeConnectors`), `models_databases` (the column and cell vocabulary).
 - Used by: `import`.
 
 ## Checks
@@ -44,8 +44,8 @@ maps a data source onto Macro database columns and cells
 - Read-only by construction: the REST client can only send a `NotionRead`
   (GETs, plus the read POSTs `/v1/search` and `/v1/data_sources/{id}/query`);
   never add a variant that writes to the user's Notion.
-- One `RequestPacer` per Pipedream account (~3 requests/second), shared by
-  every client of it; a `Retry-After` holds every request on the account.
+- One `RequestPacer` per user's Notion connection (~3 requests/second), shared
+  by every client of it; a `Retry-After` holds every request on it.
 - `query_data_source` cursors are this crate's own JSON, not Notion's: past
   Notion's 10,000-row cap the query restarts from the last row's
   `created_time`, so drain with `inventory::all_rows`, which de-duplicates.

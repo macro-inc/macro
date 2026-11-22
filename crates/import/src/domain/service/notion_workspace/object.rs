@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use connectors::ConnectorSelect;
+use connectors::domain::service::McpConnectionsService;
 use import_notion::domain::inventory::full_markdown;
 use import_notion::domain::macro_cells::PeopleMap;
 use import_notion::domain::model::NotionId;
@@ -37,7 +37,7 @@ const KEPT_MOVING: &str =
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,

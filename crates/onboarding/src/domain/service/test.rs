@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::models::OnboardingStatus;
-use connectors::outbound::native::domain::models::{McpServerRecord, StoredCredentials};
+use connectors::domain::service::Connectors;
+use connectors::fake::{FakeConnection, FakeConnectors};
 use std::sync::Mutex;
 
 fn user() -> MacroUserIdStr<'static> {
@@ -82,74 +83,50 @@ impl OnboardingRepo for MockRepo {
     }
 }
 
-struct MockStore {
-    records: Vec<McpServerRecord>,
+fn no_connections() -> Arc<Connectors> {
+    Arc::new(FakeConnectors::new().build())
 }
 
-impl McpServerStore for MockStore {
-    type Err = ();
-
-    async fn save(&self, _record: &McpServerRecord) -> std::result::Result<(), ()> {
-        Ok(())
-    }
-
-    async fn load(
-        &self,
-        _user: &MacroUserIdStr<'static>,
-        _url: &str,
-    ) -> std::result::Result<Option<McpServerRecord>, ()> {
-        Ok(None)
-    }
-
-    async fn delete(
-        &self,
-        _user: &MacroUserIdStr<'static>,
-        _url: &str,
-    ) -> std::result::Result<(), ()> {
-        Ok(())
-    }
-
-    async fn list(
-        &self,
-        _user: &MacroUserIdStr<'static>,
-    ) -> std::result::Result<Vec<McpServerRecord>, ()> {
-        Ok(self.records.clone())
-    }
-}
-
-fn record(url: &str, authenticated: bool) -> McpServerRecord {
-    McpServerRecord {
-        user_id: user(),
-        url: url.to_string(),
-        server_name: url.to_string(),
-        credentials: authenticated
-            .then(|| StoredCredentials::new("client".into(), None, Vec::new(), None)),
-        enabled: true,
-    }
-}
-
+/// The setup page lists what the connectors services count as usable:
+/// a connected app and a server added by URL, not a disabled app or one
+/// that needs authorizing again.
 #[tokio::test]
-async fn get_state_lists_connected_servers_without_starting_imports() {
+async fn get_state_lists_usable_connections_without_starting_imports() {
+    let fake = FakeConnectors::new()
+        .with_connection(&user(), FakeConnection::app("linear").named("Linear"))
+        .with_connection(&user(), FakeConnection::app("jira").disabled())
+        .with_connection(&user(), FakeConnection::app("github").needs_reauth())
+        .with_connection(
+            &user(),
+            FakeConnection::server("https://mcp.example.com/mcp").named("Example"),
+        );
     let service = OnboardingServiceImpl::new(
         MockRepo::new(OnboardingStatus::Active),
-        Arc::new(MockStore {
-            records: vec![
-                record("https://mcp.linear.app/mcp", true),
-                record("https://mcp.notion.com/mcp", false),
-            ],
-        }),
+        Arc::new(fake.build()),
     );
 
     let state = service.get_state(user()).await.expect("state");
-    assert_eq!(state.connected_servers.len(), 2);
-    assert!(state.connected_servers[0].authenticated);
-    assert!(!state.connected_servers[1].authenticated);
+    assert_eq!(
+        state.connected_servers,
+        vec![
+            ConnectedServer {
+                name: "Linear".into(),
+                url: "linear".into(),
+                authenticated: true,
+            },
+            ConnectedServer {
+                name: "Example".into(),
+                url: "https://mcp.example.com/mcp".into(),
+                authenticated: true,
+            },
+        ]
+    );
 }
 
 #[tokio::test]
 async fn completing_records_how_the_flow_ended() {
     let repo = MockRepo::new(OnboardingStatus::Active);
-    let service = OnboardingServiceImpl::new(repo, Arc::new(MockStore { records: vec![] }));
+    let service = OnboardingServiceImpl::new(repo, no_connections());
 
     let row = service.complete(user(), true).await.expect("complete");
     assert_eq!(row.status, OnboardingStatus::Completed);
@@ -171,10 +148,8 @@ fn suggested_team_domain_offers_custom_domains_only() {
 
 #[tokio::test]
 async fn get_state_carries_the_suggested_team_domain() {
-    let service = OnboardingServiceImpl::new(
-        MockRepo::new(OnboardingStatus::Active),
-        Arc::new(MockStore { records: vec![] }),
-    );
+    let service =
+        OnboardingServiceImpl::new(MockRepo::new(OnboardingStatus::Active), no_connections());
 
     let state = service.get_state(user()).await.expect("get_state");
     assert_eq!(state.suggested_team_domain.as_deref(), Some("macro.com"));
@@ -204,10 +179,8 @@ fn prompt_ids_accept_card_slugs_and_reject_everything_else() {
 
 #[tokio::test]
 async fn dismissed_prompts_round_trip_without_entering_onboarding() {
-    let service = OnboardingServiceImpl::new(
-        MockRepo::new(OnboardingStatus::Active),
-        Arc::new(MockStore { records: vec![] }),
-    );
+    let service =
+        OnboardingServiceImpl::new(MockRepo::new(OnboardingStatus::Active), no_connections());
     service
         .dismiss_prompt(user(), PromptId::parse("import:tasks").unwrap())
         .await

@@ -4,7 +4,7 @@
 
 Part of the onboarding feature (`/setup`). Tracks one row per user for
 whether they are still in the flow, and assembles the state the flow reads
-(connected MCP servers, a suggested team domain). Connecting an app during
+(usable connections, a suggested team domain). Connecting an app during
 onboarding does not start an import.
 
 ## Start here

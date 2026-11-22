@@ -2,7 +2,7 @@
 
 ## What it is
 
-Shared read-only issue tracker contracts and Pipedream transport. Used by the reviewed workspace importer in `crates/import`.
+Shared read-only issue tracker contracts and the transport over a connected app's API. Used by the reviewed workspace importer in `crates/import`.
 
 ## Start here
 

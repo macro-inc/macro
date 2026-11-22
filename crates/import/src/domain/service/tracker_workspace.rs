@@ -1,7 +1,7 @@
 //! Issue tracker planning and writes. The shared workspace engine owns jobs,
 //! leases, approval, cancellation, adoption and session notifications.
 
-use connectors::ConnectorSelect;
+use connectors::domain::service::McpConnectionsService;
 use futures::StreamExt;
 use import_notion::domain::ports::NotionConnections;
 use import_tracker::domain::model::{Group, Inventory, Issue, TrackerError};
@@ -55,7 +55,7 @@ struct TrackerMeta {
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,

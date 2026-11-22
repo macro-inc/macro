@@ -1,16 +1,16 @@
-//! Linear GraphQL inventory through the user's Pipedream grant.
+//! Linear GraphQL inventory through the user's connected Linear API.
 
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use connectors::outbound::pipedream::domain::ports::{ConnectedAppProxy, ConnectionStore};
+use connectors::domain::service::ApiConnectionsService;
 use http::Method;
 use import_tracker::domain::model::{
     Comment, Cycle, Group, GroupKind, Inventory, Issue, ObjectId, TrackerConnections, TrackerError,
 };
-use import_tracker::outbound::pipedream::{Connections, Session};
+use import_tracker::outbound::connection::{Connections, Session};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -76,27 +76,28 @@ impl LinearRead {
     }
 }
 
-/// Opens Linear inventories from enabled Pipedream `linear` connections.
-pub struct PipedreamLinearConnections<Store, Proxy>(Connections<Store, Proxy>);
+/// Linear's catalog app.
+const LINEAR_APP: &str = "linear";
 
-impl<Store: ConnectionStore, Proxy: ConnectedAppProxy> PipedreamLinearConnections<Store, Proxy> {
+/// Opens Linear inventories through users' Linear connections that provide
+/// Linear's API.
+pub struct LinearConnections<S>(Connections<S>);
+
+impl<S: ApiConnectionsService> LinearConnections<S> {
     /// One account budget is shared by concurrent imports. One request per
     /// second stays below the OAuth hourly budget; issues include only the
     /// first ten comments and labels, with remaining pages fetched separately.
-    pub fn new(store: Arc<Store>, proxy: Option<Arc<Proxy>>) -> Self {
+    pub fn new(service: Arc<S>) -> Self {
         Self(Connections::new(
-            store,
-            proxy,
-            "linear",
+            service,
+            LINEAR_APP,
             Duration::from_secs(1),
         ))
     }
 }
 
 #[async_trait]
-impl<Store: ConnectionStore, Proxy: ConnectedAppProxy> TrackerConnections
-    for PipedreamLinearConnections<Store, Proxy>
-{
+impl<S: ApiConnectionsService> TrackerConnections for LinearConnections<S> {
     #[tracing::instrument(skip_all, err)]
     async fn inventory(
         &self,
@@ -251,13 +252,13 @@ fn optional_unavailable(error: &TrackerError) -> bool {
         || matches!(error, TrackerError::Upstream { message, .. } if message.contains("Cannot query field") || message.contains("not enabled") || message.contains("permission"))
 }
 
-struct Client<Proxy> {
-    session: Session<Proxy>,
+struct Client<S> {
+    session: Session<S>,
     warnings: std::sync::Mutex<Vec<String>>,
 }
 
-impl<Proxy: ConnectedAppProxy> Client<Proxy> {
-    fn new(session: Session<Proxy>) -> Self {
+impl<S: ApiConnectionsService> Client<S> {
+    fn new(session: Session<S>) -> Self {
         Self {
             session,
             warnings: Default::default(),

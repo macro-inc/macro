@@ -5,7 +5,8 @@ use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use ai_toolset::{RequestContext, ToolSet};
-use connectors::{ConnectorSelect, UserMcpTools};
+use connectors::UserMcpTools;
+use connectors::domain::service::McpConnectionsService;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::{Value, json};
 
@@ -13,33 +14,33 @@ use crate::domain::models::{
     ImportSource, SlackConversationId, SlackConversationPage, SlackMemberPage, SlackUserPage,
 };
 use crate::domain::ports::{SlackSourceError, SlackWorkspaceSession, SlackWorkspaceSource};
+use crate::domain::service::source_tools;
 
 mod parse;
 #[cfg(test)]
 mod test;
 
-/// Opens Slack readers without depending on either connector stack's adapters.
-pub struct McpSlackSource<S: ConnectorSelect> {
-    select: Arc<S>,
+/// Opens Slack readers over the user's Slack connection, the one the
+/// connectors services count.
+pub struct McpSlackSource<S: McpConnectionsService> {
+    connections: Arc<S>,
 }
 
-impl<S: ConnectorSelect> McpSlackSource<S> {
-    /// Use the host's connector selector.
-    pub fn new(select: Arc<S>) -> Self {
-        Self { select }
+impl<S: McpConnectionsService> McpSlackSource<S> {
+    /// Read Slack through the host's connectors service.
+    pub fn new(connections: Arc<S>) -> Self {
+        Self { connections }
     }
 }
 
-impl<S: ConnectorSelect> SlackWorkspaceSource for McpSlackSource<S> {
+impl<S: McpConnectionsService> SlackWorkspaceSource for McpSlackSource<S> {
     type Session = McpSlackSession;
 
     async fn open(
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> Result<Self::Session, SlackSourceError> {
-        let tools = self
-            .select
-            .connector_toolset(user, ImportSource::Slack.connector_ref())
+        let tools = source_tools(self.connections.as_ref(), user, ImportSource::Slack)
             .await?
             .filter(|tools| !tools.is_empty())
             .ok_or(SlackSourceError::NotConnected)?;

@@ -9603,7 +9603,6 @@ name = "granola_sync"
 version = "0.1.0"
 dependencies = [
  "aes-gcm 0.10.3",
- "anyhow",
  "async-trait",
  "axum",
  "base64 0.22.1",
@@ -11411,7 +11410,6 @@ dependencies = [
 name = "import_jira"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "connectors",
  "http 1.4.0",
@@ -11428,7 +11426,6 @@ dependencies = [
 name = "import_linear"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "connectors",
  "http 1.4.0",
@@ -11446,7 +11443,6 @@ dependencies = [
 name = "import_notion"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "chrono",
  "connectors",
  "futures",
@@ -11470,7 +11466,6 @@ dependencies = [
 name = "import_tracker"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "connectors",
  "http 1.4.0",

@@ -232,6 +232,7 @@ contain only the call ID and tab kind, never transcript or message contents.
 
 Adding Granola in **Settings → Agent connections** (Pipedream Connect, Granola
 Business or Enterprise API key) is the only setup; there are no sync controls.
+Users on Macro Connect get no sync: Connect holds Granola as tools only.
 Within about 30 seconds the backend registers a Granola webhook at the widest
 scope the key allows, and removing or disabling the connection stops sync. Notes
 whose first summary is generated, edited, or shared after that are imported as

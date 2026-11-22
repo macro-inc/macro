@@ -48,6 +48,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+connectors = { path = "../connectors", features = ["test-fakes"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
 tower = { workspace = true, features = ["util"] }

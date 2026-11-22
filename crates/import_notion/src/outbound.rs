@@ -1,4 +1,4 @@
 //! Adapters reaching Notion.
 
-pub mod pipedream;
+pub mod connected;
 pub mod rest;

@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::SlackConversationKind;
 use ai_toolset::{RequestSchema, ToolCallError, ToolResult, ToolSetError};
-use connectors::ConnectorRef;
+use connectors::fake::{FakeConnection, FakeConnectors};
 use std::collections::VecDeque;
 use std::pin::Pin;
 use std::sync::Mutex;
@@ -566,39 +566,85 @@ fn rate_limit_status_requires_a_standalone_token() {
     }
 }
 
-struct NoConnector;
-impl ConnectorSelect for NoConnector {
-    async fn user_toolset(&self, _: &MacroUserIdStr<'static>) -> UserMcpTools {
-        panic!("must request only the Slack connector")
-    }
+async fn open(fake: FakeConnectors) -> Result<McpSlackSession, SlackSourceError> {
+    McpSlackSource::new(Arc::new(fake.build()))
+        .open(&user())
+        .await
+}
 
-    async fn connector_toolset(
-        &self,
-        caller: &MacroUserIdStr<'static>,
-        connector: ConnectorRef<'_>,
-    ) -> anyhow::Result<Option<UserMcpTools>> {
-        assert_eq!(caller, &user());
-        let slack = ImportSource::Slack.connector_ref();
-        assert_eq!(connector.pipedream_app_slugs, slack.pipedream_app_slugs);
-        assert_eq!(connector.native_server_url, slack.native_server_url);
-        Ok(None)
-    }
-
-    async fn connector_connected(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: ConnectorRef<'_>,
-    ) -> anyhow::Result<bool> {
-        panic!("opening a session must load its toolset directly")
+/// Slack is read only through the connection the connectors services count
+/// for Slack; anything else is "not connected".
+#[tokio::test]
+async fn without_a_usable_slack_connection_slack_is_not_connected() {
+    let tools = ["slack-list-channels"];
+    for fake in [
+        FakeConnectors::new().with_catalog_app("slack"),
+        FakeConnectors::new().with_connection(
+            &user(),
+            FakeConnection::app("slack").with_tools(&tools).disabled(),
+        ),
+        FakeConnectors::new().with_connection(
+            &user(),
+            FakeConnection::app("slack")
+                .with_tools(&tools)
+                .needs_reauth(),
+        ),
+        // A native server at Slack's address is a server added by URL, not
+        // the Slack app.
+        FakeConnectors::new().with_connection(
+            &user(),
+            FakeConnection::server("https://mcp.slack.com/mcp").with_tools(&tools),
+        ),
+        // Another app's tools are not Slack's.
+        FakeConnectors::new()
+            .with_connection(&user(), FakeConnection::app("discord").with_tools(&tools)),
+    ] {
+        assert!(matches!(
+            open(fake).await,
+            Err(SlackSourceError::NotConnected)
+        ));
     }
 }
 
 #[tokio::test]
-async fn no_connector_is_not_connected() {
+async fn the_counted_slack_connection_opens_with_its_channel_tools() {
+    // `slack_v2` is the Slack app too.
+    let session = open(
+        FakeConnectors::new().with_connection(
+            &user(),
+            FakeConnection::app("slack_v2")
+                .with_tools(&["slack_v2-list-channels", "slack_v2-list-users"]),
+        ),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        tool_suffix(&session.channels_tool),
+        "slack_v2-list-channels"
+    );
+    assert!(session.members_tool.is_none());
+    assert_eq!(
+        session.users_tool.as_deref().map(tool_suffix),
+        Some("slack_v2-list-users")
+    );
+
+    // A connection without channel tools cannot be imported from.
     assert!(matches!(
-        McpSlackSource::new(Arc::new(NoConnector))
-            .open(&user())
-            .await,
-        Err(SlackSourceError::NotConnected)
+        open(FakeConnectors::new().with_connection(
+            &user(),
+            FakeConnection::app("slack").with_tools(&["slack-send-message"]),
+        ))
+        .await,
+        Err(SlackSourceError::ToolsUnavailable(_))
     ));
+
+    // A user on Macro Connect reads Slack through Connect.
+    let flagged = FakeConnectors::new()
+        .with_connect_app("slack", true)
+        .with_flag_on(&user())
+        .with_connection(
+            &user(),
+            FakeConnection::app("slack").with_tools(&["slack-list-channels"]),
+        );
+    assert!(open(flagged).await.is_ok());
 }

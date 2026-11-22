@@ -1,14 +1,14 @@
-//! Shared pacing and retry transport for fixed provider reads.
+//! Shared pacing and retry transport for fixed provider reads through a
+//! user's connected app.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use connectors::outbound::pipedream::domain::models::PipedreamConnection;
-use connectors::outbound::pipedream::domain::ports::{ConnectedAppProxy, ConnectionStore};
+use connectors::domain::models::{ApiHandle, ApiRequest, ConnectorId, ConnectorsError};
+use connectors::domain::service::ApiConnectionsService;
 use http::{HeaderMap, Method, StatusCode};
 use macro_user_id::user_id::MacroUserIdStr;
-use rootcause::compat::IntoRootcause;
 use tokio::time::Instant;
 
 use crate::domain::model::TrackerError;
@@ -44,72 +44,64 @@ impl RequestPacer {
     }
 }
 
-/// Loads grants and shares rate budgets per connected account.
-pub struct Connections<Store, Proxy> {
-    store: Arc<Store>,
-    proxy: Option<Arc<Proxy>>,
-    pacers: Mutex<HashMap<String, Arc<RequestPacer>>>,
+/// Opens a user's API access to one app and shares one request budget per
+/// user and app across every client.
+pub struct Connections<S> {
+    service: Arc<S>,
+    pacers: Mutex<HashMap<MacroUserIdStr<'static>, Arc<RequestPacer>>>,
     app: &'static str,
     interval: Duration,
 }
 
-impl<Store: ConnectionStore, Proxy: ConnectedAppProxy> Connections<Store, Proxy> {
-    /// Configure one provider's connection lookup and request budget.
-    pub fn new(
-        store: Arc<Store>,
-        proxy: Option<Arc<Proxy>>,
-        app: &'static str,
-        interval: Duration,
-    ) -> Self {
+impl<S: ApiConnectionsService> Connections<S> {
+    /// Configure one app's connection lookup and request budget. `app` is
+    /// the app's catalog slug, e.g. `linear`.
+    pub fn new(service: Arc<S>, app: &'static str, interval: Duration) -> Self {
         Self {
-            store,
-            proxy,
+            service,
             pacers: Mutex::new(HashMap::new()),
             app,
             interval,
         }
     }
 
-    /// Open the enabled grant for this user.
-    pub async fn open(
-        &self,
-        user: &MacroUserIdStr<'static>,
-    ) -> Result<Session<Proxy>, TrackerError> {
-        let proxy = self.proxy.clone().ok_or(TrackerError::NotConnected)?;
-        let connection = self
-            .store
-            .load(user, self.app)
+    /// Open the user's API access to the app. A user whose connection gives
+    /// no API access (or who has none) is not connected.
+    pub async fn open(&self, user: &MacroUserIdStr<'static>) -> Result<Session<S>, TrackerError> {
+        let app = ConnectorId::parse(self.app).map_err(|error| {
+            TrackerError::Transport(rootcause::Report::new(error).into_dynamic())
+        })?;
+        let handle = self
+            .service
+            .connection(user, &app)
             .await
-            .map_err(|error| {
-                TrackerError::Transport(rootcause::report!("loading tracker connection: {error:?}"))
-            })?
-            .filter(|connection| connection.enabled)
+            .map_err(|error| TrackerError::Transport(rootcause::Report::new(error).into_dynamic()))?
             .ok_or(TrackerError::NotConnected)?;
         let pacer = self
             .pacers
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .entry(connection.account_id.clone())
+            .entry(user.clone())
             .or_insert_with(|| Arc::new(RequestPacer::new(self.interval)))
             .clone();
         Ok(Session {
-            proxy,
-            connection,
+            service: self.service.clone(),
+            handle,
             pacer,
         })
     }
 }
 
-/// A provider request through one grant. Provider clients keep this private and
-/// expose only a closed enum of read requests.
-pub struct Session<Proxy> {
-    proxy: Arc<Proxy>,
-    connection: PipedreamConnection,
+/// A provider request through one user's connection. Provider clients keep
+/// this private and expose only a closed enum of read requests.
+pub struct Session<S> {
+    service: Arc<S>,
+    handle: ApiHandle,
     /// Shared account budget, including GraphQL complexity exhaustion.
     pub pacer: Arc<RequestPacer>,
 }
 
-impl<Proxy: ConnectedAppProxy> Session<Proxy> {
+impl<S: ApiConnectionsService> Session<S> {
     /// Send a fixed provider read, retrying transient and rate-limit failures.
     #[tracing::instrument(skip_all, fields(attempts, status), err)]
     pub async fn read(
@@ -121,29 +113,36 @@ impl<Proxy: ConnectedAppProxy> Session<Proxy> {
         for attempt in 0..5_u32 {
             self.pacer.wait().await;
             let response = self
-                .proxy
-                .proxy(
-                    &self.connection,
-                    method.clone(),
-                    url,
-                    &HeaderMap::from_iter([
-                        (
-                            http::header::CONTENT_TYPE,
-                            http::HeaderValue::from_static("application/json"),
-                        ),
-                        (
-                            http::header::ACCEPT,
-                            http::HeaderValue::from_static("application/json"),
-                        ),
-                    ]),
-                    body,
+                .service
+                .call(
+                    &self.handle,
+                    ApiRequest {
+                        method: method.clone(),
+                        url: url.to_owned(),
+                        headers: HeaderMap::from_iter([
+                            (
+                                http::header::CONTENT_TYPE,
+                                http::HeaderValue::from_static("application/json"),
+                            ),
+                            (
+                                http::header::ACCEPT,
+                                http::HeaderValue::from_static("application/json"),
+                            ),
+                        ]),
+                        body: body.cloned(),
+                    },
                 )
                 .await;
             tracing::Span::current().record("attempts", attempt + 1);
             let response = match response {
                 Ok(response) => response,
+                // A grant that stopped working is not retried: the user must
+                // connect again.
+                Err(ConnectorsError::NeedsReauth(_)) => return Err(TrackerError::NotConnected),
                 Err(error) if attempt == 4 => {
-                    return Err(TrackerError::Transport(error.into_rootcause()));
+                    return Err(TrackerError::Transport(
+                        rootcause::Report::new(error).into_dynamic(),
+                    ));
                 }
                 Err(_) => {
                     self.pacer.hold(Duration::from_secs(1 << attempt)).await;

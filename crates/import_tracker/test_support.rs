@@ -1,84 +1,44 @@
-use connectors::outbound::pipedream::domain::models::PipedreamConnection;
-use connectors::outbound::pipedream::domain::ports::{
-    ConnectedAppProxy, ConnectionStore, ProxyResponse,
-};
-use http::{HeaderMap, Method, StatusCode};
+//! Tests drive the real connectors services over `FakeConnectors`: a user
+//! holds an app the way the rules count it, and its API answers in turn.
+
+use connectors::domain::models::ApiResponse;
+use connectors::domain::service::Connectors;
+use connectors::fake::{FakeConnection, FakeConnectors};
+use http::{HeaderMap, StatusCode};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value;
-use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::Arc;
 
-pub struct Store;
-impl ConnectionStore for Store {
-    type Err = std::convert::Infallible;
-    async fn load(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        slug: &str,
-    ) -> Result<Option<PipedreamConnection>, Self::Err> {
-        Ok(Some(PipedreamConnection {
-            user_id: user.clone(),
-            app_slug: slug.into(),
-            server_name: slug.into(),
-            account_id: "apn_test".into(),
-            enabled: true,
-            provider:
-                connectors::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
-        }))
-    }
-    async fn save(&self, _: &PipedreamConnection) -> Result<(), Self::Err> {
-        unreachable!()
-    }
-    async fn delete(&self, _: &MacroUserIdStr<'static>, _: &str) -> Result<(), Self::Err> {
-        unreachable!()
-    }
-    async fn list(
-        &self,
-        _: &MacroUserIdStr<'static>,
-    ) -> Result<Vec<PipedreamConnection>, Self::Err> {
-        unreachable!()
+pub fn user() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email("owner@example.com").unwrap()
+}
+
+/// A `200` answer with a JSON body.
+pub fn ok(body: Value) -> ApiResponse {
+    answer(StatusCode::OK, body)
+}
+
+/// An answer with a JSON body.
+pub fn answer(status: StatusCode, body: Value) -> ApiResponse {
+    ApiResponse {
+        status,
+        headers: HeaderMap::new(),
+        body: body.to_string(),
     }
 }
 
-pub struct Proxy {
-    pub responses: Mutex<VecDeque<ProxyResponse>>,
-    pub requests: Mutex<Vec<(Method, String, Option<Value>)>>,
+/// [`user`] connected to `app` with API access, its API answering
+/// `responses` in turn.
+pub fn connected(app: &str, responses: Vec<ApiResponse>) -> (FakeConnectors, Arc<Connectors>) {
+    let fake = FakeConnectors::new().with_catalog_app(app).with_connection(
+        &user(),
+        FakeConnection::app(app).answering_in_turn(responses),
+    );
+    let connectors = Arc::new(fake.build());
+    (fake, connectors)
 }
-impl Proxy {
-    pub fn new(bodies: Vec<Value>) -> Self {
-        Self {
-            responses: Mutex::new(
-                bodies
-                    .into_iter()
-                    .map(|body| ProxyResponse {
-                        status: StatusCode::OK,
-                        headers: HeaderMap::new(),
-                        body: body.to_string(),
-                    })
-                    .collect(),
-            ),
-            requests: Mutex::new(Vec::new()),
-        }
-    }
-}
-impl ConnectedAppProxy for Proxy {
-    async fn proxy(
-        &self,
-        _: &PipedreamConnection,
-        method: Method,
-        url: &str,
-        _: &HeaderMap,
-        body: Option<&Value>,
-    ) -> anyhow::Result<ProxyResponse> {
-        self.requests
-            .lock()
-            .unwrap()
-            .push((method, url.to_string(), body.cloned()));
-        Ok(self
-            .responses
-            .lock()
-            .unwrap()
-            .pop_front()
-            .expect("unexpected provider request"))
-    }
+
+/// The JSON bodies of every API call made so far, in order.
+pub fn bodies(fake: &FakeConnectors) -> Vec<Option<Value>> {
+    fake.api_calls().into_iter().map(|call| call.body).collect()
 }

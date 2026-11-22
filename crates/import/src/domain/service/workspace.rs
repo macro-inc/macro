@@ -2,7 +2,7 @@
 //! writing; leases, adoption, reviews, reporting and notifications are shared.
 
 use agent_session::domain::model::AgentSessionId;
-use connectors::ConnectorSelect;
+use connectors::domain::service::McpConnectionsService;
 use import_notion::domain::{model::ImportScope, ports::NotionConnections};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::time::Duration;
@@ -107,7 +107,7 @@ fn workspace_source(source: ImportSource) -> Result<()> {
 impl<R, S, C, W, N> WorkspaceImporter for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -169,7 +169,7 @@ where
 impl<R, S, C, W, N> Importer for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,

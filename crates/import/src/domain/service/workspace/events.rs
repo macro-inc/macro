@@ -12,7 +12,7 @@ use agent_runtime_protocol::domain::notification::{
     NotificationEvent, ReviewSettlement,
 };
 use agent_session::domain::notifications::{PendingNotification, ProduceNotification};
-use connectors::ConnectorSelect;
+use connectors::domain::service::McpConnectionsService;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -33,7 +33,7 @@ const MAX_TEXT_CHARS: usize = 300;
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
