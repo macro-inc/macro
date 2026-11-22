@@ -100,6 +100,7 @@ import {
   canRetryCacheFailure,
   createCacheRecovery,
 } from './cache-recovery';
+import { channelMembershipReceiptExchange } from './channel-membership';
 import {
   initializeCrmCacheOwner,
   installCrmCacheHost,
@@ -130,7 +131,6 @@ import {
 } from './graphql/generated/graphql';
 import { isActivityUpdatesSubscription } from './graphql-activity-updates';
 import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
-import { channelMembershipReceiptExchange } from './channel-membership';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
