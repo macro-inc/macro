@@ -101,6 +101,9 @@ purpose (it says what).
   Seeds that differ or fail keep the file in `runs/RUN/upgrade/SEED`. When NEW hashes
   records differently, add `--mask-source-hashes` to `FUZZ_ARGS`: NEW rehashes
   records OLD stored when the case writes them again, though their content is the same.
+  `UPGRADE_FROM=OLDER` has a third side write the file instead, so two builds (a change and
+  its base, or a mutant and its tip) both upgrade the same older build's file: what runs only
+  on such an open, like deriving a new sort fact in place, is compared too.
 - Downgrade and mixed builds: `CHAIN_A="a a" CHAIN_B="b a" fuzz.sh RUN FIRST COUNT OLD NEW`.
   Each side runs a chain of builds on one file (`a` is SIDE_A, `b` SIDE_B): the first
   runs the case on an empty file, each next one starts from what the one before left,

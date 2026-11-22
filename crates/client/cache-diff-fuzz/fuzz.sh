@@ -10,7 +10,8 @@
 # the first line that does, failures.txt each seed a side could not finish.
 # Exits 0 only when every seed finished on both sides with the same trace.
 # UPGRADE=1 starts both sides from the file SIDE_A left after the seed's case, so
-# SIDE_B reads and writes on top of what the older build stored.
+# SIDE_B reads and writes on top of what the older build stored. UPGRADE_FROM=SIDE has that
+# side write the file instead, so two newer builds both upgrade one older build's file.
 # CHAIN_A and CHAIN_B (e.g. "a a" and "b a", a downgrade) run each side as a chain of builds on
 # one file: the first build runs the case on an empty file, each next one reopens what the one
 # before left and runs a probe and the case again.
@@ -43,10 +44,14 @@ if [ -n "${CHAIN_A:-}${CHAIN_B:-}" ]; then
     || { echo "CHAIN_A and CHAIN_B must be equally long lists of a and b" >&2; exit 2; }
   [ -z "${UPGRADE:-}" ] || { echo "UPGRADE and CHAIN_A do not mix" >&2; exit 2; }
 fi
+if [ -n "${UPGRADE_FROM:-}" ]; then
+  [ -n "${UPGRADE:-}" ] || { echo "UPGRADE_FROM needs UPGRADE=1" >&2; exit 2; }
+  [[ "$UPGRADE_FROM" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || { echo "UPGRADE_FROM may hold only letters, digits, - and _" >&2; exit 2; }
+fi
 repo=$(git rev-parse --show-toplevel)
 home=${CACHE_DIFF_FUZZ_HOME:-$HOME/.cache/cache-diff-fuzz}
 out=$home/runs/$run
-for name in "$side_a" "$side_b"; do
+for name in "$side_a" "$side_b" ${UPGRADE_FROM:-}; do
   [ -x "$home/bin/$name" ] && [ -f "$home/bin/$name.side" ] || { echo "no built side $name" >&2; exit 1; }
 done
 mkdir -p "$home/runs"
@@ -79,6 +84,17 @@ if [ -z "$hash_a" ] || [ "$hash_a" != "$hash_b" ]; then
   echo "$side_a and $side_b were not built from the same fuzzer sources; rebuild one" >&2
   exit 1
 fi
+# The upgrade file's writer runs as bin/u.
+writer=a
+if [ -n "${UPGRADE_FROM:-}" ]; then
+  flock -s "$home/locks/side-$UPGRADE_FROM" sh -c 'cp "$1.side" "$2" && cp "$1" "$3"' _ \
+    "$home/bin/$UPGRADE_FROM" "$out/u.side" "$work/bin/u"
+  if [ "$(awk '$1 == "fuzzer" { print $3 }' "$out/u.side")" != "$hash_a" ]; then
+    echo "$UPGRADE_FROM was not built from the same fuzzer sources as $side_a; rebuild one" >&2
+    exit 1
+  fi
+  writer=u
+fi
 cp "$repo/static_assets/schema.graphql" "$work/schema.graphql"
 cp -r "$repo/crates/client/cache-diff-fuzz/assets" "$work/assets"
 {
@@ -89,12 +105,14 @@ cp -r "$repo/crates/client/cache-diff-fuzz/assets" "$work/assets"
   echo "fuzz-args ${FUZZ_ARGS:-}"
   echo "fuzz-args-a ${FUZZ_ARGS_A:-}"
   echo "fuzz-args-b ${FUZZ_ARGS_B:-}"
-  echo "upgrade ${UPGRADE:-}"
+  echo "upgrade ${UPGRADE:-} ${UPGRADE_FROM:-}"
   echo "chain-a ${CHAIN_A:-}"
   echo "chain-b ${CHAIN_B:-}"
 } > "$out/run.txt"
 
-export out work
+writer_args=${FUZZ_ARGS_A:-}
+[ "$writer" = u ] && writer_args=
+export out work writer writer_args
 # Returns non-zero only when it cannot record its result; a seed that fails or differs is
 # recorded and returns 0.
 one() {
@@ -102,15 +120,15 @@ one() {
   # shellcheck disable=SC2206
   common=(--seed "$seed" --schema "$work/schema.graphql" --assets "$work/assets" ${FUZZ_ARGS:-})
   if [ -n "${UPGRADE:-}" ]; then
-    # Side a runs the case on an empty file and keeps what it leaves. Both sides then start
-    # from that file (an upgrade, when b is the newer build): a probe of everything, the case
-    # again, and its probes.
+    # Side a (or UPGRADE_FROM) runs the case on an empty file and keeps what it leaves. Both
+    # sides then start from that file (an upgrade, when b is the newer build): a probe of
+    # everything, the case again, and its probes.
     up=$work/up/$seed
     mkdir -p "$up"
     # shellcheck disable=SC2086
-    if ! { "$work/bin/a" "${common[@]}" ${FUZZ_ARGS_A:-} --emit-case --out "$up" --work "$up/w" \
+    if ! { "$work/bin/$writer" "${common[@]}" $writer_args --emit-case --out "$up" --work "$up/w" \
       && jq -c '.ops = [{"op": "probe"}] + .ops' "$up/$seed.case.json" > "$up/upgrade.json" \
-      && "$work/bin/a" "${common[@]}" ${FUZZ_ARGS_A:-} --keep --out "$up/o" --work "$up/w"; } \
+      && "$work/bin/$writer" "${common[@]}" $writer_args --keep --out "$up/o" --work "$up/w"; } \
       2> "$out/stderr/$seed.write"; then
       echo "$seed write-failed" >> "$out/failures.txt" || return 1
       rm -rf "${up:?}"
