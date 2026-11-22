@@ -42,6 +42,8 @@ const EXISTING: &str = "SELECT rowid, profile, __typename, id FROM search_rows I
 pub(super) const DELETE: &str = "DELETE FROM search_rows WHERE rowid = ?1";
 pub(super) const UPSERT_PREFIX: &str = "INSERT OR REPLACE INTO search_rows (rowid, slot, profile, __typename, id, search_text, timestamp_ms, source_hash) VALUES ";
 const UPSERT_ROW: &str = "(?, ?, ?, ?, ?, ?, ?, ?)";
+const UPDATE_KEPT: &str =
+    "UPDATE search_rows SET search_text = ?2, timestamp_ms = ?3, source_hash = ?4 WHERE rowid = ?1";
 pub(super) const LOAD: &str = "SELECT __typename, id, search_text, timestamp_ms, source_hash FROM search_rows WHERE rowid BETWEEN ?1 AND ?2";
 pub(super) const BROWSE: &str = "SELECT __typename, id, search_text, timestamp_ms, source_hash, rowid, profile FROM search_rows INDEXED BY search_rows_browse_idx WHERE slot = ?1 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?2";
 pub(super) const BROWSE_AFTER: &str = "SELECT __typename, id, search_text, timestamp_ms, source_hash, rowid, profile FROM search_rows INDEXED BY search_rows_browse_idx WHERE slot = ?1 AND (timestamp_ms < ?2 OR (timestamp_ms = ?2 AND (__typename > ?3 OR (__typename = ?3 AND id > ?4)))) ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?5";
@@ -146,9 +148,10 @@ impl Slots {
     }
 }
 
-/// Writes each document's row, replacing the row its key had. A document that
-/// stays in its bucket keeps its row id; one that moves gets the next row id
-/// of its new bucket, and the replace removes its old row.
+/// Writes each document's row. A document that stays in its bucket keeps its
+/// row id and is updated in place, which leaves the key index untouched; a new
+/// one, or one that moves, gets the next row id of its bucket, and the replace
+/// removes its old row.
 pub(super) fn upsert(
     connection: &Db,
     documents: &[(&RecordKey, &SearchDocument)],
@@ -156,17 +159,37 @@ pub(super) fn upsert(
     let mut slots = Slots::default();
     for documents in documents.chunks(SEARCH_WRITE_BATCH_SIZE) {
         let existing = existing_rowids(connection, documents)?;
-        let values_sql = std::iter::repeat_n(UPSERT_ROW, documents.len())
-            .collect::<Vec<_>>()
-            .join(", ");
         let mut parameters = Vec::with_capacity(documents.len() * 8);
+        let mut inserted = 0usize;
+        let mut update: Option<driver::Prepared> = None;
         for (key, document) in documents {
             let profile = profile_code(document.profile);
             let slot = slots.slot(connection, document.profile, &document.bucket)?;
             let rowid = match existing.get(&(profile, key.typename.clone(), key.id.clone())) {
-                Some(rowid) if rowid >> SLOT_SHIFT == slot => *rowid,
+                Some(rowid) if rowid >> SLOT_SHIFT == slot => {
+                    if update.is_none() {
+                        update = Some(driver::prepare(connection, UPDATE_KEPT)?);
+                    }
+                    let Some(statement) = update.as_mut() else {
+                        return Err(invariant());
+                    };
+                    require_changed(
+                        driver::execute_prepared(
+                            statement,
+                            vec![
+                                Value::from_i64(*rowid),
+                                text(&document.search_text),
+                                Value::from_i64(document.timestamp_ms),
+                                text(&document.source_hash),
+                            ],
+                        )?,
+                        1,
+                    )?;
+                    continue;
+                }
                 _ => slots.next_rowid(connection, slot)?,
             };
+            inserted += 1;
             parameters.push(Value::from_i64(rowid));
             parameters.push(Value::from_i64(slot));
             parameters.push(Value::from_i64(profile));
@@ -176,13 +199,19 @@ pub(super) fn upsert(
             parameters.push(Value::from_i64(document.timestamp_ms));
             parameters.push(text(&document.source_hash));
         }
+        if inserted == 0 {
+            continue;
+        }
+        let values_sql = std::iter::repeat_n(UPSERT_ROW, inserted)
+            .collect::<Vec<_>>()
+            .join(", ");
         require_changed(
             driver::execute(
                 connection,
                 &format!("{UPSERT_PREFIX}{values_sql}"),
                 parameters,
             )?,
-            i64::try_from(documents.len()).map_err(|_| invariant())?,
+            i64::try_from(inserted).map_err(|_| invariant())?,
         )?;
     }
     Ok(())
