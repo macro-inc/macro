@@ -1,6 +1,6 @@
 //! Measures the first open of a retained production-size cache that a storage
-//! 11 build left, against an ordinary reopen of the same cache, and splits it
-//! into the 11 to 12 step and each derived rebuild that open also runs. Not a
+//! 11 or 12 build left, against an ordinary reopen of the same cache, and splits
+//! it into the 11 to 12 step and each derived rebuild that open also runs. Not a
 //! regular test: it needs a file and runs for minutes.
 use super::*;
 use crate::storage::migration::test_hooks::{self, Storage11DerivedState};
@@ -157,6 +157,10 @@ fn upgrade_cost_on_a_retained_cache() {
     rewrite(&older, &|storage| {
         test_hooks::rewrite_as_storage_11(storage).unwrap();
     });
+    let twelve = directory.path().join("twelve.turso");
+    rewrite(&twelve, &|storage| {
+        test_hooks::rewrite_as_storage_12(storage).unwrap();
+    });
     // The same derived state at storage 12, all of it and one part at a time,
     // so each rebuild's cost is its open's difference from a reopen.
     let derived = directory.path().join("derived.turso");
@@ -194,10 +198,13 @@ fn upgrade_cost_on_a_retained_cache() {
         let upgrade = timed_open(&database);
         let after = timed_open(&database);
         eprintln!(
-            "run {run}: reopen at 12 {reopen}; open at 11 with upgrade {upgrade}; \
+            "run {run}: reopen at the current version {reopen}; open at 11 with upgrade {upgrade}; \
              reopen after upgrade {after}; file after upgrade {} B",
             file_bytes(&live),
         );
+        copy_pair(&twelve, &live);
+        let from_twelve = timed_open(&database);
+        eprintln!("run {run}: open at 12 with the 12 to 13 step {from_twelve}");
         copy_pair(&derived, &live);
         let rebuilds = timed_open(&database);
         let each = parts
