@@ -21,12 +21,12 @@ use agent_harness::outbound::egress::EgressProvisioner;
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use agent_session::domain::model::{AgentSessionId, TurnPrompter};
 use agent_session::domain::ports::AgentSessionRepo;
-use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
+
 use async_trait::async_trait;
 use connectors::McpConnectionsService;
 use connectors::inbound::toolset::{
-    ConnectMcpServer, ConnectMcpServerResponse, DiscoverConnectors, DiscoverConnectorsResponse,
-    DiscoveryRequest,
+    ConnectMcpServer, ConnectMcpServerResponse, ConnectorToolError, DiscoverConnectors,
+    DiscoverConnectorsResponse, DiscoveryRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::{Value, json};
@@ -243,12 +243,9 @@ where
         let arguments = json!({ "request": &request });
         self.gate(usage, "DiscoverConnectors", arguments).await?;
         DiscoverConnectors { request }
-            .call(
-                ServiceContext(self.connector_tools.clone()),
-                RequestContext::new(usage.user.clone()),
-            )
+            .run(&self.connector_tools, &usage.user)
             .await
-            .map_err(|error| CodeModeError::Invalid(error.description))
+            .map_err(connector_tool_error)
     }
 
     async fn add_server(
@@ -259,12 +256,21 @@ where
         let arguments = json!({ "url": &server.url, "serverName": &server.server_name });
         self.gate(usage, "ConnectMcpServer", arguments).await?;
         server
-            .call(
-                ServiceContext(self.connector_tools.clone()),
-                RequestContext::new(usage.user.clone()),
-            )
+            .run(&self.connector_tools, &usage.user)
             .await
-            .map_err(|error| CodeModeError::Invalid(error.description))
+            .map_err(connector_tool_error)
+    }
+}
+
+/// A refused discovery or server is the caller's to fix (400); a host
+/// without the services, or a store or vendor that failed, is ours (503).
+fn connector_tool_error(error: ConnectorToolError) -> CodeModeError {
+    match error {
+        ConnectorToolError::Refused(description) => CodeModeError::Invalid(description),
+        ConnectorToolError::Unavailable { cause, .. } => {
+            tracing::error!(error = ?cause, "a connector tool failed in code mode");
+            CodeModeError::Unavailable
+        }
     }
 }
 

@@ -186,3 +186,36 @@ async fn a_program_given_apps_reaches_exactly_those() {
     };
     assert!(code_mode.tools(&usage, &linear).await.unwrap().is_empty());
 }
+
+/// A program's refused `addServer` or `discover` is its own mistake (400);
+/// a host whose connector services are missing or failing answers 5xx, as
+/// before the tools served these calls.
+#[tokio::test]
+async fn connector_tool_outages_are_not_the_programs_mistake() {
+    let (code_mode, usage) = code_mode(AgentMcpServers::OwnerConnections);
+
+    let added = code_mode
+        .add_server(
+            &usage,
+            ConnectMcpServer {
+                url: "https://mcp.example.com/mcp".to_owned(),
+                server_name: "Example".to_owned(),
+            },
+        )
+        .await;
+    let discovered = code_mode
+        .discover(
+            &usage,
+            DiscoveryRequest::Inspect {
+                app_slug: "linear".to_owned(),
+            },
+        )
+        .await;
+
+    assert!(matches!(added, Err(CodeModeError::Unavailable)));
+    assert!(matches!(discovered, Err(CodeModeError::Unavailable)));
+    assert!(matches!(
+        connector_tool_error(ConnectorToolError::Refused("not https".to_owned())),
+        CodeModeError::Invalid(message) if message == "not https"
+    ));
+}

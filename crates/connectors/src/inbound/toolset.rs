@@ -13,6 +13,7 @@ use ai_toolset::{
     ToolCallError, ToolResult,
 };
 use async_trait::async_trait;
+use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -59,18 +60,57 @@ impl<S, C> ConnectorToolContext<S, C> {
         }
     }
 
-    fn connectors(&self) -> Result<&S, ToolCallError> {
-        self.connectors.as_deref().ok_or_else(|| ToolCallError {
-            description: "Connecting MCP servers is not available here.".to_owned(),
-            internal_error: anyhow::anyhow!("connection services not wired into this host"),
-        })
+    fn connectors(&self) -> Result<&S, ConnectorToolError> {
+        self.connectors
+            .as_deref()
+            .ok_or_else(|| ConnectorToolError::Unavailable {
+                description: "Connecting MCP servers is not available here.".to_owned(),
+                cause: anyhow::anyhow!("connection services not wired into this host"),
+            })
     }
 
-    fn catalog(&self) -> Result<&C, ToolCallError> {
-        self.catalog.as_deref().ok_or_else(|| ToolCallError {
-            description: "Connector discovery is not configured on this deployment".to_owned(),
-            internal_error: anyhow::anyhow!("connector catalog not wired into this host"),
-        })
+    fn catalog(&self) -> Result<&C, ConnectorToolError> {
+        self.catalog
+            .as_deref()
+            .ok_or_else(|| ConnectorToolError::Unavailable {
+                description: "Connector discovery is not configured on this deployment".to_owned(),
+                cause: anyhow::anyhow!("connector catalog not wired into this host"),
+            })
+    }
+}
+
+/// Why a connector tool did not answer, kept apart so a host that is not an
+/// agent loop (code mode's HTTP routes) can answer a refusal as the caller's
+/// mistake and an outage as its own.
+#[derive(Debug, thiserror::Error)]
+pub enum ConnectorToolError {
+    /// The request was refused: arguments the caller can change, an app the
+    /// catalog does not have, a server an agent may not add.
+    #[error("{0}")]
+    Refused(String),
+    /// The services are not wired into this host, or a store or vendor
+    /// failed.
+    #[error("{description}")]
+    Unavailable {
+        /// What the caller is told.
+        description: String,
+        /// What went wrong, for diagnostics only.
+        cause: anyhow::Error,
+    },
+}
+
+impl From<ConnectorToolError> for ToolCallError {
+    fn from(error: ConnectorToolError) -> Self {
+        match error {
+            ConnectorToolError::Refused(description) => ToolCallError {
+                internal_error: anyhow::anyhow!("connector tool refused: {description}"),
+                description,
+            },
+            ConnectorToolError::Unavailable { description, cause } => ToolCallError {
+                description,
+                internal_error: cause,
+            },
+        }
     }
 }
 
@@ -87,15 +127,13 @@ where
 
 /// A service failure as a tool error: refusals the agent can act on keep
 /// their message; anything else is a plain failure.
-fn tool_error(error: ConnectorsError, failure: &str) -> ToolCallError {
-    let description = match &error {
-        ConnectorsError::Internal(_) => failure.to_owned(),
-        refusal => refusal.to_string(),
-    };
-
-    ToolCallError {
-        description,
-        internal_error: anyhow::anyhow!("{error:?}"),
+fn tool_error(error: ConnectorsError, failure: &str) -> ConnectorToolError {
+    match error {
+        ConnectorsError::Internal(report) => ConnectorToolError::Unavailable {
+            description: failure.to_owned(),
+            cause: anyhow::anyhow!("{report:?}"),
+        },
+        refusal => ConnectorToolError::Refused(refusal.to_string()),
     }
 }
 
@@ -238,35 +276,29 @@ impl ToolAnnotated for DiscoverConnectors {
 }
 
 /// An inspection of a slug the catalog does not have.
-fn unknown_app() -> ToolCallError {
-    ToolCallError {
-        description: "No connectable app has that slug; search the catalog first".to_owned(),
-        internal_error: anyhow::anyhow!("DiscoverConnectors inspected an unknown app"),
-    }
+fn unknown_app() -> ConnectorToolError {
+    ConnectorToolError::Refused(
+        "No connectable app has that slug; search the catalog first".to_owned(),
+    )
 }
 
-#[async_trait]
-impl<S, C> AsyncTool<ConnectorToolContext<S, C>> for DiscoverConnectors
-where
-    S: ConnectionManagementService,
-    C: ConnectorCatalogService,
-{
-    type Output = DiscoverConnectorsResponse;
-
-    async fn call(
+impl DiscoverConnectors {
+    /// Search or inspect the catalog for `user`.
+    pub async fn run<S, C>(
         &self,
-        context: ServiceContext<ConnectorToolContext<S, C>>,
-        request: RequestContext,
-    ) -> ToolResult<Self::Output> {
+        context: &ConnectorToolContext<S, C>,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<DiscoverConnectorsResponse, ConnectorToolError>
+    where
+        C: ConnectorCatalogService,
+    {
         let catalog = context.catalog()?;
-        let user = &request.user_id;
         let result = match &self.request {
             DiscoveryRequest::Search { query } => {
                 if query.trim().is_empty() {
-                    return Err(ToolCallError {
-                        description: "Search for an app name, such as Linear".to_owned(),
-                        internal_error: anyhow::anyhow!("DiscoverConnectors searched for nothing"),
-                    });
+                    return Err(ConnectorToolError::Refused(
+                        "Search for an app name, such as Linear".to_owned(),
+                    ));
                 }
                 let page = catalog
                     .search(user, Some(query), None, Some(SEARCH_PAGE_SIZE))
@@ -289,6 +321,23 @@ where
         };
 
         Ok(DiscoverConnectorsResponse::from(result))
+    }
+}
+
+#[async_trait]
+impl<S, C> AsyncTool<ConnectorToolContext<S, C>> for DiscoverConnectors
+where
+    S: ConnectionManagementService,
+    C: ConnectorCatalogService,
+{
+    type Output = DiscoverConnectorsResponse;
+
+    async fn call(
+        &self,
+        context: ServiceContext<ConnectorToolContext<S, C>>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        Ok(self.run(&context.0, &request.user_id).await?)
     }
 }
 
@@ -359,6 +408,28 @@ impl ConnectMcpServerResponse {
     }
 }
 
+impl ConnectMcpServer {
+    /// Add the server to `user`'s connections.
+    pub async fn run<S, C>(
+        &self,
+        context: &ConnectorToolContext<S, C>,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<ConnectMcpServerResponse, ConnectorToolError>
+    where
+        S: ConnectionManagementService,
+    {
+        let connectors = context.connectors()?;
+        let url = ServerUrl::parse(&self.url)
+            .map_err(|error| ConnectorToolError::Refused(error.to_string()))?;
+        let connector = connectors
+            .add_server(user, url.clone(), &self.server_name, AddedBy::Agent)
+            .await
+            .map_err(|error| tool_error(error, "Could not save the MCP server."))?;
+
+        Ok(ConnectMcpServerResponse::new(&url, &connector))
+    }
+}
+
 #[async_trait]
 impl<S, C> AsyncTool<ConnectorToolContext<S, C>> for ConnectMcpServer
 where
@@ -372,21 +443,6 @@ where
         context: ServiceContext<ConnectorToolContext<S, C>>,
         request: RequestContext,
     ) -> ToolResult<Self::Output> {
-        let connectors = context.connectors()?;
-        let url = ServerUrl::parse(&self.url).map_err(|error| ToolCallError {
-            description: error.to_string(),
-            internal_error: anyhow::anyhow!("invalid ConnectMcpServer arguments: {error}"),
-        })?;
-        let connector = connectors
-            .add_server(
-                &request.user_id,
-                url.clone(),
-                &self.server_name,
-                AddedBy::Agent,
-            )
-            .await
-            .map_err(|error| tool_error(error, "Could not save the MCP server."))?;
-
-        Ok(ConnectMcpServerResponse::new(&url, &connector))
+        Ok(self.run(&context.0, &request.user_id).await?)
     }
 }

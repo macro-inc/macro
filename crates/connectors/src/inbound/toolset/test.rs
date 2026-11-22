@@ -254,3 +254,54 @@ async fn an_agent_may_add_only_public_https_servers() {
     assert!(not_a_url.is_err());
     assert!(connectors.list(&user("owner")).await.unwrap().is_empty());
 }
+
+/// Hosts that are not an agent loop tell the caller's mistakes from their
+/// own outages: a server an agent may not add, an empty search and an
+/// unknown app are refusals; a host without the services is unavailable.
+#[tokio::test]
+async fn refusals_and_outages_are_told_apart() {
+    let (context, _) = context(&FakeConnectors::new());
+    let owner = user("owner");
+
+    let plain = ConnectMcpServer {
+        url: "http://mcp.example.com/mcp".to_owned(),
+        server_name: "Example".to_owned(),
+    }
+    .run(&context, &owner)
+    .await;
+    let empty = DiscoverConnectors {
+        request: DiscoveryRequest::Search {
+            query: " ".to_owned(),
+        },
+    }
+    .run(&context, &owner)
+    .await;
+    let unknown = DiscoverConnectors {
+        request: inspect("Not A Slug"),
+    }
+    .run(&context, &owner)
+    .await;
+
+    assert!(matches!(plain, Err(ConnectorToolError::Refused(_))));
+    assert!(matches!(empty, Err(ConnectorToolError::Refused(_))));
+    assert!(matches!(unknown, Err(ConnectorToolError::Refused(_))));
+
+    let unwired: Context = ConnectorToolContext::unwired();
+    let add = ConnectMcpServer {
+        url: "https://mcp.example.com/mcp".to_owned(),
+        server_name: "Example".to_owned(),
+    }
+    .run(&unwired, &owner)
+    .await;
+    let search = DiscoverConnectors {
+        request: inspect("linear"),
+    }
+    .run(&unwired, &owner)
+    .await;
+
+    assert!(matches!(add, Err(ConnectorToolError::Unavailable { .. })));
+    assert!(matches!(
+        search,
+        Err(ConnectorToolError::Unavailable { .. })
+    ));
+}
