@@ -18,8 +18,13 @@ case "$1" in
   freeze)
     [ -e "$fake/cannot-freeze" ] && exit 1
     echo frozen >"$fake/FreezerState" ;;
-  thaw) echo running >"$fake/FreezerState" ;;
-  stop) for name in "${@:2}"; do [ "$name" = macro-agent-autothaw.timer ] && rm -f "$fake/armed"; done ;;
+  thaw)
+    [ -e "$fake/cannot-thaw" ] && exit 1
+    echo running >"$fake/FreezerState" ;;
+  stop)
+    for name in "${@:2}"; do
+      [ "$name" = "$(cat "$fake/armed-unit" 2>/dev/null).timer" ] && rm -f "$fake/armed" "$fake/armed-unit"
+    done ;;
   restart) echo restarted >"$fake/restarted" ;;
 esac
 exit 0
@@ -28,6 +33,9 @@ cat >"$work/systemd-run" <<'EOF'
 #!/usr/bin/env bash
 # Records what the dead-man timer would run; fails while told to.
 [ -e "$FAKE/cannot-arm" ] && exit 1
+for arg in "$@"; do
+  case "$arg" in --unit=*) printf '%s' "${arg#--unit=}" >"$FAKE/armed-unit" ;; esac
+done
 printf '%s\n' "${@: -2}" | tr '\n' ' ' >"$FAKE/armed"
 EOF
 # This bash, not /usr/bin/env's: the nix build sandbox has no /usr/bin/env.
@@ -149,6 +157,40 @@ flock 8
 expect "a request that can't get the lock fails" "$(ask freeze aa)" failed
 flock -u 8
 exec 8>&-
+
+reset
+ask freeze aa >/dev/null
+ask thaw aa >/dev/null
+expect "a drive the harness thawed never freezes again" "$(ask freeze aa)" superseded
+expect "and the agent keeps running" "$(frozen)" running
+expect "with no fence" "$([ -e "$work/run/paused" ] && echo paused || echo none)" none
+
+reset
+ask freeze bb >/dev/null
+expect "a thaw of an ended drive under a live one is superseded" "$(ask thaw aa)" superseded
+expect "and that drive can't freeze again" "$(ask freeze aa)" superseded
+expect "the live drive keeps its fence" "$(cat "$work/run/paused")" bb
+expect "and its timer" "$(cat "$work/fake/armed")" "autothaw bb "
+expect "and stays frozen" "$(frozen)" frozen
+
+reset
+ask freeze bb >/dev/null
+touch "$work/fake/cannot-arm"
+expect "a freeze that can't arm a timer fails" "$(ask freeze aa)" failed
+expect "and gives the fence back to the drive it held" "$(cat "$work/run/paused")" bb
+expect "whose timer still runs" "$(cat "$work/fake/armed")" "autothaw bb "
+
+reset
+ask freeze aa >/dev/null
+touch "$work/fake/cannot-thaw"
+expect "a thaw that doesn't take fails" "$(ask thaw aa)" failed
+expect "and keeps the fence" "$(cat "$work/run/paused")" aa
+expect "and the timer that bounds it" "$(cat "$work/fake/armed")" "autothaw aa "
+
+reset
+ask freeze aa >/dev/null
+echo running >"$work/fake/FreezerState"
+expect "a keep finds a unit that was thawed or restarted under its drive" "$(ask keep aa)" thawed
 
 # A slow late thaw racing a newer freeze, twenty times: whatever the order, the
 # newer drive stays frozen.
