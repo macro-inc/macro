@@ -264,3 +264,48 @@ async fn audit_skill_instructions_are_not_rewritten_by_mentions_or_no_send_runs(
         }
     }
 }
+
+#[tokio::test]
+async fn a_no_send_program_can_still_write_its_own_normal_document() {
+    use agent_correlation::{
+        context::{Attribution, scope_attribution},
+        scope::SessionScope,
+    };
+    let mut worker = MockEditingWorkerService::new();
+    worker
+        .expect_write_markdown()
+        .times(1)
+        .returning(|document_id, token, revision, markdown| {
+            let claims = decode_permission_token(token, SECRET).unwrap();
+            assert_eq!(document_id, DOCUMENT);
+            assert_eq!(claims.access_level, AccessLevel::Edit);
+            assert_eq!(claims.user_id, Some(user()));
+            assert_eq!(revision, "AQID");
+            assert_eq!(markdown, "# Updated own notes");
+            Box::pin(async {
+                Ok(MarkdownWrite::Written(DocumentMarkdownWritten {
+                    revision: "AQIE".into(),
+                    changed: true,
+                }))
+            })
+        });
+    let written = scope_attribution(
+        Attribution {
+            scope: Some(SessionScope::NoSend),
+            signed_scope: true,
+            ..Attribution::default()
+        },
+        write_markdown(
+            &worker,
+            SECRET,
+            edit_receipt(),
+            &document("md"),
+            "AQID",
+            "# Updated own notes",
+        ),
+    )
+    .await
+    .unwrap();
+    assert_eq!(written.revision, "AQIE");
+    assert!(written.changed);
+}

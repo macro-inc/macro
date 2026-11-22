@@ -29,6 +29,18 @@ impl CorrelationRepository for NoCorrelations {
 }
 
 async fn refuses_before_dispatch(method: &str, path: &str) {
+    refuses_signed_request_before_dispatch(
+        SignedClaims::channel_mention(
+            bot_id::MACRO_AI_BOT_ID.as_uuid(),
+            uuid::Uuid::from_u128(902),
+        ),
+        method,
+        path,
+    )
+    .await;
+}
+
+async fn refuses_signed_request_before_dispatch(claims: SignedClaims, method: &str, path: &str) {
     let signer = MacroApiTokenSigner::new(
         sqlx::postgres::PgPoolOptions::new()
             .connect_lazy("postgres://fixture@127.0.0.1:1/unused")
@@ -40,16 +52,7 @@ async fn refuses_before_dispatch(method: &str, path: &str) {
         )),
     );
     let bearer = signer
-        .encode(
-            60,
-            SignedClaims::channel_mention(
-                bot_id::MACRO_AI_BOT_ID.as_uuid(),
-                uuid::Uuid::from_u128(902),
-            ),
-            "fixture".into(),
-            owner().to_string(),
-            None,
-        )
+        .encode(60, claims, "fixture".into(), owner().to_string(), None)
         .unwrap();
     let dispatched = Arc::new(AtomicUsize::new(0));
     let effects = dispatched.clone();
@@ -169,6 +172,20 @@ async fn mention_refuses_copying_or_restoring_a_skill() {
     refuses_before_dispatch(
         "PUT",
         "/documents/00000000-0000-0000-0000-000000000001/revert_delete",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn no_send_refuses_exporting_a_document_permission_token() {
+    refuses_signed_request_before_dispatch(
+        SignedClaims::routine(
+            None,
+            uuid::Uuid::from_u128(904),
+            Some(agent_correlation::scope::SessionScope::NoSend),
+        ),
+        "POST",
+        "/documents/permissions_token/00000000-0000-0000-0000-000000000001",
     )
     .await;
 }
