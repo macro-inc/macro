@@ -60,8 +60,8 @@ pub enum ClassifyOutcome {
     /// The thread is out of the inbox, or outside the signal inbox without
     /// being key mail right now.
     NotSignal,
-    /// Nobody whose Focus tab shows the inbox is in the rollout, so nothing
-    /// left the system.
+    /// Nobody whose Focus tab shows the inbox is in the rollout (which leaves
+    /// out people away from Macro), so nothing left the system.
     NotEnabled,
     /// The classifier was unavailable; a later sweep retries.
     Unavailable,

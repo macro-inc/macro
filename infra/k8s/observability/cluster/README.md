@@ -16,7 +16,7 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 | Application | Namespace | What it is |
 | --- | --- | --- |
 | `apps` | `argocd` | The app of apps: one Application per directory below. Applied once by hand (bootstrap); it is in `apps/` itself, so from then on it manages itself too. |
-| `argocd` | `argocd` | Argo CD, managing itself. Every Application syncs with prune and self-heal, automatically once `macro.cluster.autoSync` is on (below). |
+| `argocd` | `argocd` | Argo CD, managing itself. Every Application syncs with prune and self-heal, automatically while `macro.cluster.autoSync` is on (below). UI and API at `argo.macro-internal.com`, Google sign-in, read-only ("Argo CD" below). |
 | `cert-manager` | `cert-manager` | Issues the load balancer controller's webhook certificate. |
 | `aws-load-balancer-controller` | `kube-system` | Registers pods in ALB/NLB target groups (`TargetGroupBinding`). Creates no load balancers: no IngressClass, Service controller, Service mutator or Ingress validation, and its role can only register targets. |
 | `external-secrets` | `external-secrets` | External Secrets Operator and the `secrets-manager` ClusterSecretStore over the Secrets Manager secret `observability/prod`. Only cluster admins can create stores (namespace `edit` and `admin` can't), since a store without credentials reads with the operator's. |
@@ -28,7 +28,7 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 | `mimir` | `observability` | Mimir, three monolithic replicas, metrics in S3, in place of the host's Prometheus. |
 | `reloader` | `observability` | Restarts a Deployment when a Secret it names in `secret.reloader.stakater.com/reload` changes (Grafana's rotated database password). |
 | `grafana` | `observability` | Grafana, two replicas on RDS Postgres with HA alerting between them, provisioned from the host's `nixos/grafana-provisioning`. Sends no notification until the switch, except the watchdog heartbeat (below). |
-| `edge` | `observability` | nginx, the only target of the ALB: Grafana by hostname, OTLP to `alloy-ingest`, basic-auth remote write and Loki push. Runs only in the ALB's zones. |
+| `edge` | `observability` | nginx, the only target of the ALB: Grafana and Argo CD by hostname, OTLP to `alloy-ingest`, basic-auth remote write and Loki push. Runs only in the ALB's zones. |
 | `query-gateway` | `observability` | nginx between Grafana's datasources and the backends: only query endpoints and methods pass. |
 | `alloy-ingest` | `observability` | Two Alloys running the host's `nixos/ingest.alloy`: check the OTLP token, send to Loki, Tempo and Mimir. |
 
@@ -67,31 +67,54 @@ On a new cluster, set `macro.cluster.autoSync = false` in `env/prod.nix`,
 render and merge it before the bootstrap (prod ran its first rollout that way).
 `apps` still syncs itself, but it holds only the Application objects; every
 other application shows what it would change and applies nothing until
-someone syncs it. Read each diff, then sync them in the order of the table
-above (`argocd` first: until then the bootstrap's copy runs):
+someone syncs it. Read each diff, then sync `external-secrets` (its CRD
+comes first: `argocd` has an ExternalSecret), `argocd` (until then the
+bootstrap's copy runs), and the rest in the order of the table above.
+
+The UI is read-only (below), so sync with the CLI as a cluster admin, which
+talks to the cluster through kubectl and needs no Argo CD login. It uses the
+context's namespace, so set that to `argocd` once:
 
 ```sh
-kubectl --context observability -n argocd get applications
-kubectl --context observability -n argocd get secret argocd-initial-admin-secret \
-  -o jsonpath='{.data.password}' | base64 -d
-kubectl --context observability -n argocd port-forward svc/argocd-server 8080:443
-# https://localhost:8080, user admin: each application's "App diff", then "Sync".
-# Or with the CLI (`nix shell nixpkgs#argocd`), after
-# `argocd login localhost:8080 --username admin`:
-argocd app diff argocd/cert-manager
-argocd app sync argocd/cert-manager
+kubectl config set-context observability --namespace argocd
+a="nix shell nixpkgs#argocd -c argocd --core --kube-context observability"
+$a app list
+$a app diff argocd/cert-manager
+$a app sync argocd/cert-manager
 ```
 
 Then a change sets `autoSync = true`, and merging deploys from then on. Prod
 has it on.
 
-After the first login, change the admin password (`argocd account update-password`)
-and delete `argocd-initial-admin-secret`. Any pod in the cluster can reach the
-Argo CD API, and admin there controls the cluster.
+The local `admin` account is off (`admin.enabled = false`), so the install's
+`argocd-initial-admin-secret` is useless; delete it after the bootstrap
+(`kubectl --context observability -n argocd delete secret argocd-initial-admin-secret`).
 
 The repository is public, so Argo CD clones it over HTTPS without a deploy key
 (shallow, `depth: 1`). If it ever goes private, add a read-only deploy key to
 `observability/prod` and an ExternalSecret for the repository Secret.
+
+## Argo CD
+
+The UI and API are at https://argo.macro-internal.com: the ALB (listener rule,
+DNS record and certificate from `../aws/` settings `hosts.argocd`) → the edge
+→ `argocd-server`, plain HTTP inside the cluster (`server.insecure`).
+
+- **Sign-in** is Google only, through Argo CD's Dex
+  (`modules/platform/argocd.nix`), for accounts in `macro.com`: Dex rejects
+  any account without that hosted domain. It uses Grafana's Google OAuth
+  client (`google_client_id`, `google_client_secret` in `observability/prod`,
+  through the ExternalSecret `argocd-google`), whose authorized redirect URIs
+  must include `https://argo.macro-internal.com/api/dex/callback`.
+- **Everyone is read-only** (`policy.default: role:readonly`): applications,
+  diffs, history, resources and pod logs, with Secret values masked, plus a
+  refresh (re-reading `main`), which changes nothing. Nothing grants more. Changes ship by merging to `main`; anything else (a manual sync, a
+  rollback) is a cluster admin with `argocd --core` ("Bootstrap").
+- **No local accounts**: `admin.enabled = false`.
+- The ALB alarms see only the edge, so after any change to sign-in (the OAuth
+  client, `dex.config`, the hostname), sign in once in a browser.
+- The CLI signs in through the browser:
+  `argocd login argo.macro-internal.com --sso --grpc-web`.
 
 ## What `../aws/` must provide
 

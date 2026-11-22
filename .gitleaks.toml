@@ -1,0 +1,15 @@
+# Gitleaks, run on every commit by tooling/pii/scan.py: its default rules,
+# plus the false positives below.
+[extend]
+useDefault = true
+
+# An ExternalSecret names the Secrets Manager secret it reads
+# (`remoteRef.key: observability/prod`, infra/k8s/observability/cluster). The
+# name isn't a secret, but the generic API key rule reads `key: <token>`. Only
+# that rule, and only a line that is exactly that key and name; any other
+# finding in the same file is still reported.
+[[allowlists]]
+description = "The Secrets Manager secret name in ExternalSecret manifests"
+targetRules = ["generic-api-key"]
+regexTarget = "line"
+regexes = ['''^\s*key: observability/prod$''']
