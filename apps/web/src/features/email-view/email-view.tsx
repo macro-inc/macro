@@ -471,6 +471,7 @@ function EmailViewRoot() {
     enabled: () => panel.isPanelActive() && !isTouchDevice(),
     readingPane,
     setReadingPane,
+    readerHasKeyboard: () => listPane()?.readerHasKeyboard() ?? false,
   });
 
   useEmailViewHotkeys({
