@@ -915,8 +915,9 @@ fn channel_filter_names_channels(expr: &Expr<ChannelLiteral>) -> bool {
 ///
 /// Judges the predicate [`build_channel_list_filter`] renders: literals it
 /// leaves out (a sender, mention, thread or `importance: true`) drop out of
-/// their AND or OR here too, and a NOT flips which side keys, so
-/// `NOT NOT id` and `id OR sender` still read the one channel.
+/// their AND or OR here too, `importance: false` (rendered `1=0`) matches
+/// no channel, and a NOT flips which side keys, so `NOT NOT id`,
+/// `id OR sender` and `id OR importance: false` still read the one channel.
 #[cfg(feature = "list")]
 fn channel_filter_keys_channels(expr: &Expr<ChannelLiteral>) -> bool {
     /// Whether the rendered subtree keys channels, and whether its negation
@@ -940,6 +941,9 @@ fn channel_filter_keys_channels(expr: &Expr<ChannelLiteral>) -> bool {
             | ChannelLiteral::Sender(_)
             | ChannelLiteral::Importance(true),
         ) => None,
+        // Rendered as `1=0`: it matches nothing, so it keys vacuously, and its
+        // negation matches everything.
+        filter_ast::ExprFrame::Literal(ChannelLiteral::Importance(false)) => Some((true, false)),
         filter_ast::ExprFrame::Literal(_) => Some((false, false)),
     })
     .is_some_and(|(keys, _)| keys)

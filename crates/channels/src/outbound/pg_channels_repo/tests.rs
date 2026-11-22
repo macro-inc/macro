@@ -519,6 +519,23 @@ fn joined_candidates_start_from_named_ids_or_teams() {
         want(Joined, Some(Expr::is_not(Expr::and(id(), org()))))
     );
     assert_eq!(pick(thread()), want(Joined, Some(thread())));
+    let unimportant = || Expr::val(ChannelLiteral::Importance(false));
+    assert_eq!(
+        pick(Expr::or(id(), unimportant())),
+        want(JoinedKeyed, Some(Expr::or(id(), unimportant())))
+    );
+    assert_eq!(
+        pick(Expr::and(team(), Expr::is_not(unimportant()))),
+        want(
+            JoinedKeyed,
+            Some(Expr::and(team(), Expr::is_not(unimportant())))
+        )
+    );
+    assert_eq!(
+        pick(Expr::is_not(unimportant())),
+        want(Joined, Some(Expr::is_not(unimportant())))
+    );
+    assert_eq!(pick(unimportant()), want(JoinedKeyed, Some(unimportant())));
     let either = Expr::or(participant(true), participant(false));
     assert_eq!(
         pick(Expr::and(id(), either.clone())),
