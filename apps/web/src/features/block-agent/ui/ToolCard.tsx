@@ -21,6 +21,8 @@ export interface ToolCardProps {
   title: JSX.Element | string;
   /** Mono, truncated detail next to the title (a path, a command, ...). */
   subtitle?: string;
+  /** A short title that never truncates; the subtitle gives way instead. */
+  fixedTitle?: boolean;
   /** Compact `key=value` details after the subtitle. */
   args?: Record<string, string>;
   /** Status text or counts after the detail; a failed call says so by default. */
@@ -58,7 +60,7 @@ export function ToolCard(props: ToolCardProps) {
     <>
       {/* The detail gives way first: it shrinks a hundredfold faster, so a
           label truncates only once its detail is gone. */}
-      <span class="min-w-0 truncate">
+      <span class={props.fixedTitle ? 'shrink-0' : 'min-w-0 truncate'}>
         {typeof props.title === 'string' ? (
           <Tooltip
             label={props.title}

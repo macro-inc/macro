@@ -239,6 +239,7 @@ function ResolvedQuestion(props: { part: ElicitationPartData }) {
   return (
     <ToolCard
       title="Question"
+      fixedTitle
       subtitle={props.part.message}
       status={props.part.outcome.kind === 'errored' ? 'failed' : 'completed'}
       muted={props.part.outcome.kind === 'errored'}
