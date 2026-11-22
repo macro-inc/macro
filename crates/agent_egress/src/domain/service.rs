@@ -12,9 +12,10 @@ use crate::domain::approval::{
 use crate::domain::error::EgressError;
 use crate::domain::model::{
     EgressTarget, MAX_MCP_REQUEST_BYTES, McpDestination, McpResolution, ProxyRequest,
-    ProxyResponse, SessionToken, TOOLS_CALL_METHOD, UpstreamCall, disconnected_tool_result,
-    ensure_method_allowed, not_connected_tool_result, peek_json_rpc, sanitize_request_headers,
-    sanitize_response_headers,
+    ProxyResponse, SessionToken, TOOLS_CALL_METHOD, UpstreamCall, answered_initialize,
+    connect_prompt_listing, disconnected_text, ensure_method_allowed, json_rpc_method_not_found,
+    json_rpc_result, not_connected_text, peek_json_rpc, sanitize_request_headers,
+    sanitize_response_headers, tool_result_response,
 };
 use crate::domain::observed_body::{ObservedBody, StreamIdentity};
 use crate::domain::ports::{Forwarder, GithubTokens, McpCredentials, SessionAuthority};
@@ -266,63 +267,49 @@ where
                 | McpDestination::Connected(_)
                 | McpDestination::Custom(_)),
             ) => {
-                let (call, answer): (UpstreamCall, Option<Answer>) = match self
+                match self
                     .credentials
                     .resolve(
                         &grant.owner,
                         grant.agent,
                         grant.session.as_uuid(),
+                        &grant.selection,
                         destination,
                     )
                     .await?
                 {
-                    McpResolution::Connected(call) => (call, None),
-                    // The owner has no grant for this app, but it can
-                    // still be addressed for them: the handshake and tool
-                    // listing go through, and a tool call is answered
-                    // here with a result the model can act on. Only a
-                    // Pipedream app resolves this way; Macro's own server
-                    // has no grant to lack, and a custom server with no
-                    // row is refused by its resolver outright.
-                    McpResolution::Unconnected(call) => match destination {
-                        McpDestination::Connected(slug) => {
-                            let name = grant.display_name(slug);
-                            let slug = slug.clone();
-                            let answer: Answer = Box::new(move |id| {
-                                tracing::info!(
-                                    app = %slug,
-                                    "answering tools/call for an app the owner has not connected"
-                                );
-                                not_connected_tool_result(&slug, &name, id)
-                            });
-                            (call, Some(answer))
-                        }
-                        _ => (call, None),
-                    },
-                    // The owner connected this server once and the grant
-                    // has since died. Same treatment: the handshake is
-                    // forwarded bare, in case the server allows it, and a
-                    // tool call is answered with how to reconnect.
-                    McpResolution::Disconnected { call, name } => {
-                        let answer: Answer = Box::new(move |id| {
-                            tracing::info!(
-                                server = %name,
-                                "answering tools/call for a server whose grant has died"
-                            );
-                            disconnected_tool_result(&name, id)
-                        });
-                        (call, Some(answer))
+                    McpResolution::Connected(call) => call,
+                    // The agent may reach this app, but the owner cannot use
+                    // it yet, so there is no upstream to forward to. The
+                    // proxy answers the client itself: its handshake works,
+                    // its listing offers a tool that says how to connect,
+                    // and a tool call is answered with that, so the model
+                    // can ask the person to connect it.
+                    McpResolution::NotConnected => {
+                        let (name, text) = match destination {
+                            McpDestination::Connected(slug) => {
+                                let name = grant.display_name(slug);
+                                let text = not_connected_text(slug, &name);
+                                (name, text)
+                            }
+                            _ => ("MCP server".to_owned(), NO_CONNECTION.to_owned()),
+                        };
+                        tracing::info!(
+                            upstream = %target.name(),
+                            "answering for an app the owner cannot use yet"
+                        );
+                        return Self::answer_unusable(&name, text, request).await;
                     }
-                };
-                match answer {
-                    None => call,
-                    Some(answer) => match Self::answer_unconnected(answer, request).await? {
-                        Unconnected::Answered(response) => return Ok(response),
-                        Unconnected::Forward(forwarded) => {
-                            request = forwarded;
-                            call
-                        }
-                    },
+                    // The owner connected this server once and the grant
+                    // has since died. Same treatment, with how to reconnect.
+                    McpResolution::Disconnected { name } => {
+                        tracing::info!(
+                            server = %name,
+                            "answering for a server whose grant has died"
+                        );
+                        let text = disconnected_text(&name);
+                        return Self::answer_unusable(&name, text, request).await;
+                    }
                 }
             }
             EgressTarget::GitHubGit { endpoint } => {
@@ -510,51 +497,51 @@ fn log_proxy_error(error: &EgressError) {
     }
 }
 
-/// What became of a request to a server the owner has no live grant for.
-enum Unconnected {
-    /// The proxy answered it itself; nothing goes upstream.
-    Answered(ProxyResponse),
-    /// Forward it, addressed for the owner, so the handshake and tool listing
-    /// work. The body has been read and put back.
-    Forward(ProxyRequest),
-}
-
-/// How a `tools/call` with the given JSON-RPC id is answered in the
-/// upstream's place.
-type Answer = Box<dyn FnOnce(serde_json::Value) -> ProxyResponse + Send>;
+/// What a tool call is told when the selected account has no connection to
+/// a destination that is not an app.
+const NO_CONNECTION: &str = "The selected account has no connection for this tool.";
 
 impl<Sessions, Credentials, Tokens, Forward, Approvals>
     EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
 {
-    /// A server the owner has no live grant for: forward everything except
-    /// `tools/call`.
+    /// Answer a request to an app or server the owner cannot use yet, with
+    /// nothing sent upstream: there is no connection to send it through.
     ///
-    /// `initialize`, `tools/list`, notifications, the GET event stream and
-    /// DELETE all go to the upstream addressed for the owner, so the agent's
-    /// client completes its handshake and sees the server's real tools from
-    /// the first turn. A `tools/call` is answered here with `answer` - a tool
-    /// result that names the server and how to connect it - and the moment
-    /// the owner does, the same advertised server resolves as connected and
-    /// calls flow through, with nothing re-attached.
-    async fn answer_unconnected(
-        answer: Answer,
+    /// `initialize` and `ping` succeed, so the client's handshake completes;
+    /// `tools/list` offers one tool whose answer is `text`; `tools/call`, of
+    /// any tool, answers `text`, which names the app or server and how to
+    /// connect it. Notifications are accepted, other requests get "method
+    /// not found", and the GET event stream and DELETE are refused. Once the
+    /// owner connects, the same advertised server resolves as connected and
+    /// requests flow through, with nothing re-attached.
+    async fn answer_unusable(
+        name: &str,
+        text: String,
         request: ProxyRequest,
-    ) -> Result<Unconnected, EgressError> {
+    ) -> Result<ProxyResponse, EgressError> {
         if *request.method() != Method::POST {
-            return Ok(Unconnected::Forward(request));
+            let mut response = ProxyResponse::new(full_body(bytes::Bytes::new()));
+            *response.status_mut() = http::StatusCode::METHOD_NOT_ALLOWED;
+            return Ok(response);
         }
-        let (parts, bytes) = read_mcp_body(request).await?;
+        let (_parts, bytes) = read_mcp_body(request).await?;
 
-        if let Some(call) = peek_json_rpc(&bytes)
-            && call.method == TOOLS_CALL_METHOD
-        {
-            return Ok(Unconnected::Answered(answer(call.id)));
-        }
-
-        Ok(Unconnected::Forward(ProxyRequest::from_parts(
-            parts,
-            full_body(bytes),
-        )))
+        let Some(call) = peek_json_rpc(&bytes) else {
+            // A notification wants no answer.
+            let mut response = ProxyResponse::new(full_body(bytes::Bytes::new()));
+            *response.status_mut() = http::StatusCode::ACCEPTED;
+            return Ok(response);
+        };
+        Ok(match call.method.as_str() {
+            "initialize" => {
+                let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+                json_rpc_result(call.id, answered_initialize(&value, name))
+            }
+            "ping" => json_rpc_result(call.id, serde_json::json!({})),
+            "tools/list" => json_rpc_result(call.id, connect_prompt_listing(name)),
+            TOOLS_CALL_METHOD => tool_result_response(call.id, text),
+            _ => json_rpc_method_not_found(call.id),
+        })
     }
 }
 

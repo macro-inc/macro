@@ -17,6 +17,7 @@
 
 use bot_id::BotId;
 use chrono::{DateTime, Duration as ChronoDuration, TimeZone, Utc};
+use connectors::domain::models::Selection;
 use lru::LruCache;
 use macro_auth::macro_api_token::{EncodeMacroApiTokenArgs, encode_macro_api_token};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -162,10 +163,15 @@ where
         owner: &MacroUserIdStr<'static>,
         agent: BotId,
         session: uuid::Uuid,
+        selection: &Selection,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
+        // Macro's own server is every session's, whatever its agent selected.
         if *destination != McpDestination::Macro {
-            return self.inner.resolve(owner, agent, session, destination).await;
+            return self
+                .inner
+                .resolve(owner, agent, session, selection, destination)
+                .await;
         }
 
         let token = BearerToken::new(self.token(owner, agent, session).await?);

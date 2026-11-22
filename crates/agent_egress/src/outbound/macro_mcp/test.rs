@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::model::McpServerSlug;
+use connectors::domain::models::Selection;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -74,6 +75,7 @@ impl McpCredentials for &SpyInner {
         _owner: &MacroUserIdStr<'static>,
         _agent: BotId,
         _session: uuid::Uuid,
+        _selection: &Selection,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
         let McpDestination::Connected(slug) = destination else {
@@ -99,6 +101,7 @@ async fn answers_macros_own_destination_with_a_minted_token() {
             &owner(),
             BotId::TEST_A,
             uuid::Uuid::nil(),
+            &Selection::All,
             &McpDestination::Macro,
         )
         .await
@@ -128,6 +131,7 @@ async fn reuses_a_token_until_it_nears_expiry() {
                 &owner(),
                 BotId::TEST_A,
                 uuid::Uuid::nil(),
+                &Selection::All,
                 &McpDestination::Macro,
             )
             .await
@@ -148,7 +152,13 @@ async fn each_agent_of_one_owner_gets_its_own_token() {
 
     for agent in [BotId::TEST_A, BotId::TEST_B, BotId::TEST_A] {
         credentials
-            .resolve(&owner(), agent, uuid::Uuid::nil(), &McpDestination::Macro)
+            .resolve(
+                &owner(),
+                agent,
+                uuid::Uuid::nil(),
+                &Selection::All,
+                &McpDestination::Macro,
+            )
             .await
             .expect("resolved");
     }
@@ -172,6 +182,7 @@ async fn a_token_about_to_expire_is_replaced() {
                 &owner(),
                 BotId::TEST_A,
                 uuid::Uuid::nil(),
+                &Selection::All,
                 &McpDestination::Macro,
             )
             .await
@@ -192,6 +203,7 @@ async fn every_other_slug_delegates_to_the_inner_resolver() {
             &owner(),
             BotId::TEST_A,
             uuid::Uuid::nil(),
+            &Selection::All,
             &connected("linear"),
         )
         .await
@@ -221,6 +233,7 @@ async fn refuses_a_cleartext_url_unless_local_dev_permits_it() {
             &owner(),
             BotId::TEST_A,
             uuid::Uuid::nil(),
+            &Selection::All,
             &McpDestination::Macro,
         )
         .await
@@ -255,7 +268,13 @@ async fn sessions_of_the_same_agent_never_share_mcp_credentials() {
     let second = uuid::Uuid::now_v7();
     for session in [first, second, first] {
         credentials
-            .resolve(&owner(), BotId::TEST_A, session, &McpDestination::Macro)
+            .resolve(
+                &owner(),
+                BotId::TEST_A,
+                session,
+                &Selection::All,
+                &McpDestination::Macro,
+            )
             .await
             .unwrap();
     }

@@ -113,7 +113,7 @@ impl HttpActorMcpTransport {
                     StreamableHttpClientTransport::with_client(self.client.clone(), config);
                 let client = tokio::time::timeout(
                     std::time::Duration::from_secs(30),
-                    connectors::outbound::native::domain::models::client_info().serve(transport),
+                    mcp_toolset::client_info().serve(transport),
                 )
                 .await
                 .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?

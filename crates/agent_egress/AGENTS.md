@@ -26,8 +26,18 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   grant → credential).
 - `src/domain/ports.rs`: `SessionAuthority`, `McpCredentials`, `GithubTokens`,
   `Forwarder`.
-- `src/outbound/mcp_credentials.rs` / `macro_mcp.rs` / `custom_mcp.rs` /
-  `github_tokens.rs`: the credential resolvers.
+- `src/outbound/mcp_credentials.rs` / `macro_mcp.rs` / `github_tokens.rs`:
+  the credential resolvers. Connected apps and custom servers resolve only
+  through `connectors::McpConnectionsService` (`connections(owner)
+  .scoped(selection).permit(key)` then `upstream`); never read a connection
+  store, the flag or the overlay table here.
+- The agent's selected app list (`SessionGrant::selection`, from the
+  session's `AgentMcpServers`) is a permission: a destination outside it is
+  `EgressError::OutOfScope` (403; a tool result on the actor path). An app
+  in scope the owner cannot use has no upstream: the proxy answers its MCP
+  client itself (`answer_unusable`): `initialize`/`ping` succeed,
+  `tools/list` offers one `connect` tool, and every `tools/call` answers the
+  connect prompt.
 - `src/inbound/axum_router.rs`: the HTTP entry point the sandbox calls.
 - `SessionMcpExchange` (`src/domain/service/actor.rs`): in-process
   `tools/list`/`tools/call` on a connected app or custom server for a caller

@@ -15,6 +15,7 @@ use crate::domain::model::{
     AgentSessionId, McpDestination, McpResolution, ProxyRequest, ProxyResponse, RepoSlug,
     SessionGrant, SessionToken, UpstreamCall,
 };
+use connectors::domain::models::Selection;
 use macro_user_id::user_id::MacroUserIdStr;
 
 /// Turn a sandbox's session token into what it is allowed to spend.
@@ -46,22 +47,25 @@ pub trait SessionAuthority: Send + Sync {
 /// that is what it took. The service above deliberately knows nothing about
 /// OAuth.
 pub trait McpCredentials: Send + Sync {
-    /// The upstream and credential for `destination`, on behalf of `owner`.
+    /// The upstream and credential for `destination`, on behalf of `owner`,
+    /// for a session whose agent may reach `selection`.
     /// `agent` is the session's bound agent: Macro's own server signs it into
     /// the credential so tool writes are attributed to it; connected and
     /// custom servers ignore it.
     ///
     /// Resolution is scoped to `owner`: a slug that names somebody else's
     /// server is never somebody else's server. [`McpResolution::Connected`]
-    /// when the owner holds an enabled grant; [`McpResolution::Unconnected`]
-    /// when they do not but the upstream can still be addressed for them
-    /// (Pipedream scopes by user and app alone); [`EgressError::UnknownServer`]
-    /// only when the destination cannot be addressed at all.
+    /// when the owner holds a usable grant; [`McpResolution::NotConnected`]
+    /// for an app they cannot use yet; [`EgressError::OutOfScope`] for an
+    /// app or server outside `selection`, connected or not; and
+    /// [`EgressError::UnknownServer`] / [`EgressError::UnknownCustomServer`]
+    /// when the destination names nothing that could be connected.
     fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
         agent: bot_id::BotId,
         session: uuid::Uuid,
+        selection: &Selection,
         destination: &McpDestination,
     ) -> impl Future<Output = Result<McpResolution, EgressError>> + Send;
 }

@@ -329,7 +329,8 @@ async fn an_in_process_listing_reads_the_owner_catalog_and_an_unconnected_call_o
         .await
         .unwrap();
 
-    assert_eq!(listing["tools"][0]["name"], "search");
+    // Unconnected for the owner too, so the listing is the connect tool.
+    assert_eq!(listing["tools"][0]["name"], "connect");
     assert_eq!(call["isError"], true);
     assert!(
         call["content"][0]["text"]
@@ -340,7 +341,7 @@ async fn an_in_process_listing_reads_the_owner_catalog_and_an_unconnected_call_o
     let asked = service.credentials.asked.lock().unwrap();
     assert_eq!(asked[0].0, owner().to_string());
     assert_eq!(asked[1].0, asker.to_string());
-    assert_eq!(transport.0.lock().unwrap().len(), 1);
+    assert!(transport.0.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -526,4 +527,51 @@ async fn an_in_process_call_the_upstream_rate_limited_is_an_error_not_a_tool_res
         }
         other => panic!("expected a rate limit, got {other:?}"),
     }
+}
+
+/// On the actor path, a tool call to an app the agent was not given answers
+/// with a tool result saying so, and nothing reaches an upstream; a listing
+/// of it is refused outright.
+#[tokio::test]
+async fn an_app_outside_the_agents_selection_is_refused_on_the_actor_path() {
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let transport = Arc::new(ActorTransport::default());
+    let service = gated(
+        prompted_by(Some(asker.clone())),
+        SpyCredentials::out_of_scope(),
+    )
+    .with_actor_mcp(transport.clone());
+    let linear = || {
+        EgressTarget::McpServer(McpDestination::Connected(
+            McpServerSlug::parse("linear").unwrap(),
+        ))
+    };
+
+    let call = service
+        .proxy(
+            &SessionToken::new("session"),
+            linear(),
+            json_request(
+                r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"search","arguments":{"acting_as":"requester"}}}"#,
+            ),
+        )
+        .await
+        .unwrap();
+    let call = body_json(call).await;
+    assert_eq!(call["result"]["isError"], true);
+    let text = call["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("This agent was not given"), "{text}");
+
+    let listing = service
+        .proxy(
+            &SessionToken::new("session"),
+            linear(),
+            json_request(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#),
+        )
+        .await
+        .expect_err("refused");
+    assert!(matches!(listing, EgressError::OutOfScope), "{listing:?}");
+
+    assert!(transport.0.lock().unwrap().is_empty());
+    assert!(!service.forward.was_called());
 }

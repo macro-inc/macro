@@ -107,6 +107,8 @@ agent_fold = { path = "../folds/agent_fold", features = ["test-utils"] }
 dynamic_ui = { path = "../dynamic_ui" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
+# The real connection services over in-memory sources.
+connectors = { path = "../connectors", features = ["test-fakes"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 harnesses = { path = "../harnesses", default-features = false, features = ["test-utils"] }
 model_user = { path = "../model_user" }

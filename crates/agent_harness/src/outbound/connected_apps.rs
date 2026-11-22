@@ -1,12 +1,10 @@
-//! The apps a user has connected: their Pipedream connections, or the native
-//! MCP connection for an app that is overlaid onto its own server.
+//! Whether a user has an app connected, as the connectors service decides
+//! it: the same answer chat tool loading and the sandbox get.
 
 use std::sync::Arc;
 
-use connectors::outbound::pipedream::domain::models::ConnectionProvider;
-use connectors::outbound::pipedream::domain::ports::{
-    ConnectionStore, ConnectorOverlays, OverlayConnections,
-};
+use connectors::domain::models::{ConnectorId, ConnectorKey, ConnectorsError, Status};
+use connectors::domain::service::McpConnectionsService;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::app_connections::ConnectedApps;
@@ -14,68 +12,50 @@ use crate::domain::app_connections::ConnectedApps;
 #[cfg(test)]
 mod test;
 
-/// The connection store could not be read.
+/// The user's connections could not be read.
 #[derive(Debug, thiserror::Error)]
 #[error("could not read the app connection: {0}")]
-pub struct ConnectionLookupError(String);
+pub struct ConnectionLookupError(#[from] ConnectorsError);
 
-/// [`ConnectedApps`] over the Pipedream connection store, answering overlaid
-/// apps from the native MCP stack.
-pub struct PipedreamConnectedApps<Connections, Overlays> {
+/// [`ConnectedApps`] over the connectors service.
+pub struct ConnectorsConnectedApps<Connections> {
     connections: Arc<Connections>,
-    overlay_connections: Arc<Overlays>,
 }
 
-impl<Connections, Overlays> PipedreamConnectedApps<Connections, Overlays> {
-    /// Read Pipedream connections and overlays from `connections`, and
-    /// overlaid apps' connections from `overlay_connections`.
-    pub fn new(connections: Arc<Connections>, overlay_connections: Arc<Overlays>) -> Self {
-        Self {
-            connections,
-            overlay_connections,
-        }
+impl<Connections> ConnectorsConnectedApps<Connections> {
+    /// Answer from `connections`.
+    pub fn new(connections: Arc<Connections>) -> Self {
+        Self { connections }
     }
 }
 
-impl<Connections, Overlays> ConnectedApps for PipedreamConnectedApps<Connections, Overlays>
+impl<Connections> ConnectedApps for ConnectorsConnectedApps<Connections>
 where
-    Connections: ConnectionStore + ConnectorOverlays,
-    Overlays: OverlayConnections,
+    Connections: McpConnectionsService,
 {
     type Err = ConnectionLookupError;
 
+    #[tracing::instrument(skip(self, user), err)]
     async fn connected_app_name(
         &self,
         user: &MacroUserIdStr<'static>,
         app_slug: &str,
     ) -> Result<Option<String>, ConnectionLookupError> {
-        let lookup = |error: &dyn std::fmt::Debug| ConnectionLookupError(format!("{error:?}"));
-        let connection = self
-            .connections
-            .load(user, app_slug)
-            .await
-            .map_err(|error| lookup(&error))?;
-        // A Macro Connect grant outranks an overlay; a Pipedream grant doesn't.
-        if let Some(connection) = connection
-            .as_ref()
-            .filter(|connection| connection.provider == ConnectionProvider::Connect)
-        {
-            return Ok(connection.enabled.then(|| connection.server_name.clone()));
+        // A string that is not an app slug names no app anyone connected.
+        let Ok(app) = ConnectorId::parse(app_slug) else {
+            return Ok(None);
+        };
+        let key = ConnectorKey::App(app);
+        let connections = self.connections.connections(user).await?;
+        if connections.status(&key) != Status::Connected {
+            return Ok(None);
         }
-        if let Some(overlay) = self
-            .connections
-            .overlay(app_slug)
-            .await
-            .map_err(|error| lookup(&error))?
-        {
-            return self
-                .overlay_connections
-                .connected_name(user, &overlay)
-                .await
-                .map_err(|error| lookup(&error));
-        }
-        Ok(connection
-            .filter(|connection| connection.enabled)
-            .map(|connection| connection.server_name))
+
+        let name = connections
+            .handles()
+            .find(|handle| *handle.key() == key)
+            .map(|handle| handle.name().to_owned());
+
+        Ok(name)
     }
 }

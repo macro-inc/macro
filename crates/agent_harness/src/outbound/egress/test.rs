@@ -1,178 +1,80 @@
 use super::*;
 use agent_session::domain::model::AgentMcpServer;
-use connectors::outbound::native::domain::models::McpServerRecord;
+use connectors::fake::{FakeConnection, FakeConnectors};
 
 fn slug(name: &str) -> McpServerSlug {
     McpServerSlug::parse(name).expect("a valid app slug")
 }
 
-struct FixedConnections(Vec<connectors::outbound::pipedream::domain::models::PipedreamConnection>);
+fn owner() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")
+}
 
-impl ConnectionStore for FixedConnections {
-    type Err = std::convert::Infallible;
+const WIKI: &str = "https://wiki.example.com/mcp";
 
-    async fn save(
-        &self,
-        _record: &connectors::outbound::pipedream::domain::models::PipedreamConnection,
-    ) -> Result<(), Self::Err> {
-        unreachable!("provisioning never writes")
-    }
+fn provisioner(
+    fake: &FakeConnectors,
+) -> EgressProvisioner<connectors::domain::service::Connectors> {
+    EgressProvisioner::new(Arc::new(fake.build()), "https://egress.macro.com")
+}
 
-    async fn load(
-        &self,
-        _user_id: &MacroUserIdStr<'static>,
-        _app_slug: &str,
-    ) -> Result<
-        Option<connectors::outbound::pipedream::domain::models::PipedreamConnection>,
-        Self::Err,
-    > {
-        unreachable!("provisioning lists, never loads one")
-    }
-
-    async fn delete(
-        &self,
-        _user_id: &MacroUserIdStr<'static>,
-        _app_slug: &str,
-    ) -> Result<(), Self::Err> {
-        unreachable!("provisioning never deletes")
-    }
-
-    async fn list(
-        &self,
-        _user_id: &MacroUserIdStr<'static>,
-    ) -> Result<Vec<connectors::outbound::pipedream::domain::models::PipedreamConnection>, Self::Err>
-    {
-        Ok(self.0.clone())
+fn selected(slugs: &[&str]) -> AgentMcpServers {
+    AgentMcpServers::Selected {
+        servers: slugs
+            .iter()
+            .map(|slug| AgentMcpServer {
+                app_slug: (*slug).to_owned(),
+                server_name: (*slug).to_owned(),
+            })
+            .collect(),
     }
 }
 
-/// `sentry` is the only overlaid app.
-impl ConnectorOverlays for FixedConnections {
-    async fn overlays(
-        &self,
-    ) -> anyhow::Result<Vec<connectors::outbound::pipedream::domain::models::ConnectorOverlay>>
-    {
-        Ok(vec![
-            connectors::outbound::pipedream::domain::models::ConnectorOverlay {
-                app_slug: "sentry".to_owned(),
-                server_url: "https://mcp.sentry.dev/mcp".to_owned(),
-            },
-        ])
-    }
-
-    async fn overlay(
-        &self,
-        _app_slug: &str,
-    ) -> anyhow::Result<Option<connectors::outbound::pipedream::domain::models::ConnectorOverlay>>
-    {
-        unreachable!("provisioning lists overlays once")
-    }
-}
-
-struct FixedServers(Vec<McpServerRecord>);
-
-impl McpServerStore for FixedServers {
-    type Err = std::convert::Infallible;
-
-    async fn save(&self, _record: &McpServerRecord) -> Result<(), Self::Err> {
-        unreachable!("provisioning never writes")
-    }
-
-    async fn load(
-        &self,
-        _user_id: &MacroUserIdStr<'static>,
-        _server_url: &str,
-    ) -> Result<Option<McpServerRecord>, Self::Err> {
-        unreachable!("provisioning lists, never loads one")
-    }
-
-    async fn delete(
-        &self,
-        _user_id: &MacroUserIdStr<'static>,
-        _server_url: &str,
-    ) -> Result<(), Self::Err> {
-        unreachable!("provisioning never deletes")
-    }
-
-    async fn list(
-        &self,
-        _user_id: &MacroUserIdStr<'static>,
-    ) -> Result<Vec<McpServerRecord>, Self::Err> {
-        Ok(self.0.clone())
-    }
-}
-
-fn custom_server(url: &str, name: &str, enabled: bool) -> McpServerRecord {
-    McpServerRecord {
-        user_id: MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-        url: url.to_owned(),
-        server_name: name.to_owned(),
-        credentials: None,
-        enabled,
-    }
-}
-
-fn connection(
-    app_slug: &str,
-    enabled: bool,
-) -> connectors::outbound::pipedream::domain::models::PipedreamConnection {
-    connectors::outbound::pipedream::domain::models::PipedreamConnection {
-        user_id: MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-        app_slug: app_slug.to_owned(),
-        server_name: app_slug.to_owned(),
-        account_id: format!("apn_{app_slug}"),
-        enabled,
-        provider: connectors::outbound::pipedream::domain::models::ConnectionProvider::Pipedream,
-    }
-}
-
-/// Provisioning lists the owner's enabled app slugs verbatim - nothing is
-/// derived, disabled apps are absent, and an app slug the strict parse
-/// refuses is skipped rather than repaired into something dialable.
-#[tokio::test]
-async fn lists_enabled_app_slugs_verbatim() {
-    let provisioner = EgressProvisioner::new(
-        Arc::new(FixedConnections(vec![
-            connection("linear", true),
-            connection("google_sheets", true),
-            connection("datadog", false),
-            connection("Not A Slug!", true),
-        ])),
-        Arc::new(FixedServers(vec![])),
-        "https://egress.macro.com",
-    );
-
-    let provisioned = provisioner
-        .provision(
-            AgentSessionId::new(),
-            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            &AgentMcpServers::OwnerConnections,
-        )
+async fn advertised(
+    fake: &FakeConnectors,
+    selection: &AgentMcpServers,
+) -> (Vec<String>, Vec<CustomMcpServerListing>) {
+    let provisioned = provisioner(fake)
+        .provision(AgentSessionId::new(), &owner(), selection)
         .await
         .expect("provisioned");
-
-    let slugs: Vec<String> = provisioned
+    let mut slugs: Vec<String> = provisioned
         .sandbox
         .mcp_servers
         .iter()
         .map(ToString::to_string)
         .collect();
-    assert_eq!(slugs, ["linear", "google_sheets"]);
+    if matches!(selection, AgentMcpServers::OwnerConnections) {
+        slugs.sort();
+    }
+    (slugs, provisioned.sandbox.custom_servers)
+}
+
+/// An agent given everything is advertised every app the owner can use;
+/// a disabled app, or one needing authorization again, is absent.
+#[tokio::test]
+async fn an_agent_given_everything_is_advertised_the_owners_usable_apps() {
+    let fake = FakeConnectors::new()
+        .with_connection(&owner(), FakeConnection::app("linear"))
+        .with_connection(&owner(), FakeConnection::app("google_sheets"))
+        .with_connection(&owner(), FakeConnection::app("datadog").disabled())
+        .with_connection(&owner(), FakeConnection::app("sentry").needs_reauth());
+
+    let (slugs, custom) = advertised(&fake, &AgentMcpServers::OwnerConnections).await;
+
+    assert_eq!(slugs, ["google_sheets", "linear"]);
+    assert!(custom.is_empty());
 }
 
 /// `restore` rebuilds the same environment around a token that already
 /// exists: nothing is minted, and the server list is read fresh.
 #[tokio::test]
 async fn restore_wraps_an_existing_token_in_a_fresh_listing() {
-    let provisioner = EgressProvisioner::new(
-        Arc::new(FixedConnections(vec![connection("linear", true)])),
-        Arc::new(FixedServers(vec![])),
-        "https://egress.macro.com",
-    );
+    let fake = FakeConnectors::new().with_connection(&owner(), FakeConnection::app("linear"));
 
-    let restored = provisioner
+    let restored = provisioner(&fake)
         .restore(
-            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+            &owner(),
             "already-minted-token".to_owned(),
             &AgentMcpServers::OwnerConnections,
         )
@@ -188,85 +90,107 @@ async fn restore_wraps_an_existing_token_in_a_fresh_listing() {
     assert_eq!(slugs, ["linear"]);
 }
 
-fn selected(slugs: &[&str]) -> AgentMcpServers {
-    AgentMcpServers::Selected {
-        servers: slugs
-            .iter()
-            .map(|slug| AgentMcpServer {
-                app_slug: (*slug).to_owned(),
-                server_name: (*slug).to_owned(),
-            })
-            .collect(),
-    }
-}
-
 /// A selected list is advertised whole, in the agent's order, whatever the
-/// owner has connected: an unconnected app is still dialable, because the
-/// proxy answers it with a "not connected" tool result rather than refusing
-/// it, and a connected-but-unselected app is not offered at all.
+/// owner has connected (rule 7): an unconnected app is still dialable,
+/// because the proxy answers it with how to connect, and a connected app
+/// that was not selected is not offered at all. A slug that is not an app
+/// slug is skipped rather than repaired.
 #[tokio::test]
 async fn a_selected_list_is_advertised_regardless_of_connections() {
-    let provisioner = EgressProvisioner::new(
-        Arc::new(FixedConnections(vec![
-            connection("datadog", true),
-            connection("linear", false),
-        ])),
-        Arc::new(FixedServers(vec![])),
-        "https://egress.macro.com",
-    );
+    let fake = FakeConnectors::new()
+        .with_connection(&owner(), FakeConnection::app("datadog"))
+        .with_connection(&owner(), FakeConnection::app("linear").disabled());
 
-    let provisioned = provisioner
-        .provision(
-            AgentSessionId::new(),
-            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            &selected(&["notion", "linear", "Not A Slug!"]),
-        )
-        .await
-        .expect("provisioned");
+    let (slugs, custom) = advertised(&fake, &selected(&["notion", "linear", "Not A Slug!"])).await;
 
-    let slugs: Vec<String> = provisioned
-        .sandbox
-        .mcp_servers
-        .iter()
-        .map(ToString::to_string)
-        .collect();
     assert_eq!(slugs, ["notion", "linear"]);
-
-    let restored = provisioner
-        .restore(
-            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            "already-minted-token".to_owned(),
-            &selected(&["notion"]),
-        )
-        .await
-        .expect("restored");
-    let slugs: Vec<String> = restored
-        .mcp_servers
-        .iter()
-        .map(ToString::to_string)
-        .collect();
-    assert_eq!(slugs, ["notion"]);
+    assert!(custom.is_empty());
 }
 
 /// An explicitly empty selection is the agent author's choice: nothing of the
 /// owner's is offered in its place.
 #[tokio::test]
 async fn an_empty_selection_offers_nothing_of_the_owners() {
-    let provisioner = EgressProvisioner::new(
-        Arc::new(FixedConnections(vec![connection("datadog", true)])),
-        Arc::new(FixedServers(vec![])),
-        "https://egress.macro.com",
-    );
+    let fake = FakeConnectors::new()
+        .with_connection(&owner(), FakeConnection::app("datadog"))
+        .with_connection(&owner(), FakeConnection::server(WIKI));
 
-    let provisioned = provisioner
+    let (slugs, custom) = advertised(&fake, &selected(&[])).await;
+
+    assert!(slugs.is_empty());
+    assert!(custom.is_empty());
+}
+
+/// The owner's usable custom servers ride along for an agent given
+/// everything, keyed by the digest of their address rather than the address
+/// itself, under the owner's name for them; one turned off is absent.
+#[tokio::test]
+async fn lists_the_owners_usable_custom_servers_by_key() {
+    let fake = FakeConnectors::new()
+        .with_connection(
+            &owner(),
+            FakeConnection::server(WIKI).named("Internal wiki"),
+        )
+        .with_connection(
+            &owner(),
+            FakeConnection::server("https://old.example.com/mcp")
+                .named("Retired")
+                .disabled(),
+        );
+
+    let provisioned = provisioner(&fake)
         .provision(
             AgentSessionId::new(),
-            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            &selected(&[]),
+            &owner(),
+            &AgentMcpServers::OwnerConnections,
         )
         .await
         .expect("provisioned");
-    assert!(provisioned.sandbox.mcp_servers.is_empty());
+
+    assert_eq!(
+        provisioned.sandbox.custom_servers,
+        [listing(WIKI, "Internal wiki")]
+    );
+    let printed = format!("{:?}", provisioned.sandbox);
+    assert!(!printed.contains("wiki.example.com"), "{printed}");
+}
+
+/// A selected app list is an author's choice of apps; the owner's servers
+/// added by URL are not added behind it.
+#[tokio::test]
+async fn a_selected_list_carries_none_of_the_owners_custom_servers() {
+    let fake = FakeConnectors::new().with_connection(&owner(), FakeConnection::server(WIKI));
+
+    let (_, custom) = advertised(&fake, &selected(&["notion"])).await;
+
+    assert!(custom.is_empty());
+}
+
+/// An overlaid app is one app whichever server holds it: connected through
+/// the vendor's own server, it is advertised under its app slug, as every
+/// app is, and the proxy reaches the vendor's server for it.
+#[tokio::test]
+async fn an_overlaid_app_is_advertised_as_the_app() {
+    let fake = FakeConnectors::new()
+        .with_overlay("sentry", "https://mcp.sentry.dev/mcp")
+        .with_connection(&owner(), FakeConnection::app("sentry").named("Sentry"));
+
+    for selection in [AgentMcpServers::OwnerConnections, selected(&["sentry"])] {
+        let (slugs, custom) = advertised(&fake, &selection).await;
+
+        assert_eq!(slugs, ["sentry"]);
+        assert!(custom.is_empty());
+    }
+}
+
+/// `slack` and `slack_v2` are one app, advertised once.
+#[tokio::test]
+async fn an_aliased_app_is_advertised_once() {
+    let fake = FakeConnectors::new().with_connection(&owner(), FakeConnection::app("slack_v2"));
+
+    let (slugs, _) = advertised(&fake, &AgentMcpServers::OwnerConnections).await;
+
+    assert_eq!(slugs, ["slack"]);
 }
 
 fn egress(slugs: &[&str]) -> SandboxEgress {
@@ -283,77 +207,6 @@ fn listing(url: &str, name: &str) -> CustomMcpServerListing {
         key: CustomMcpServerKey::for_url(url),
         name: name.to_owned(),
     }
-}
-
-/// The owner's enabled custom servers ride along with their connections,
-/// keyed by the digest of their URL rather than the URL itself, and a server
-/// the owner turned off is absent. The lapsed-connection case is not
-/// distinguished here: the record's credentials never reach the listing.
-#[tokio::test]
-async fn lists_the_owners_enabled_custom_servers_by_key() {
-    let provisioner = EgressProvisioner::new(
-        Arc::new(FixedConnections(vec![connection("linear", true)])),
-        Arc::new(FixedServers(vec![
-            custom_server("https://wiki.example.com/mcp", "Internal wiki", true),
-            custom_server("https://old.example.com/mcp", "Retired", false),
-        ])),
-        "https://egress.macro.com",
-    );
-
-    let provisioned = provisioner
-        .provision(
-            AgentSessionId::new(),
-            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            &AgentMcpServers::OwnerConnections,
-        )
-        .await
-        .expect("provisioned");
-
-    assert_eq!(
-        provisioned.sandbox.custom_servers,
-        [listing("https://wiki.example.com/mcp", "Internal wiki")]
-    );
-    let printed = format!("{:?}", provisioned.sandbox);
-    assert!(!printed.contains("wiki.example.com"), "{printed}");
-
-    let restored = provisioner
-        .restore(
-            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            "already-minted-token".to_owned(),
-            &AgentMcpServers::OwnerConnections,
-        )
-        .await
-        .expect("restored");
-    assert_eq!(
-        restored.custom_servers,
-        [listing("https://wiki.example.com/mcp", "Internal wiki")]
-    );
-}
-
-/// A selected app list is an author's choice of apps; the owner's private
-/// servers are not added behind it.
-#[tokio::test]
-async fn a_selected_list_carries_none_of_the_owners_custom_servers() {
-    let provisioner = EgressProvisioner::new(
-        Arc::new(FixedConnections(vec![])),
-        Arc::new(FixedServers(vec![custom_server(
-            "https://wiki.example.com/mcp",
-            "Internal wiki",
-            true,
-        )])),
-        "https://egress.macro.com",
-    );
-
-    let provisioned = provisioner
-        .provision(
-            AgentSessionId::new(),
-            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            &selected(&["notion"]),
-        )
-        .await
-        .expect("provisioned");
-
-    assert!(provisioned.sandbox.custom_servers.is_empty());
 }
 
 /// Custom servers are advertised after the apps, on the proxy's custom
@@ -522,8 +375,7 @@ fn the_egress_environment_does_not_print_its_secrets() {
 fn external_runtime_uses_host_reachable_urls_with_the_existing_session_credential() {
     use agent_client_protocol::schema::v1::McpServer;
     let provisioner = EgressProvisioner::new(
-        Arc::new(FixedConnections(vec![])),
-        Arc::new(FixedServers(vec![])),
+        Arc::new(FakeConnectors::new().build()),
         "http://agent-harness-service:8102",
     )
     .with_external_base_url(Some("http://localhost:28102/".into()));
@@ -548,93 +400,4 @@ fn external_runtime_uses_host_reachable_urls_with_the_existing_session_credentia
         assert_eq!(server.headers[0].value, sandbox.authorization_header());
     }
     assert_eq!(sandbox.base_url, "https://egress.macro.com");
-}
-
-#[tokio::test]
-async fn native_provider_wins_without_hiding_other_hosted_apps() {
-    let mut native = custom_server("https://mcp.linear.app/mcp", "Linear", true);
-    native.credentials = Some(
-        serde_json::from_value(serde_json::json!({"client_id":"test","token_response":null}))
-            .unwrap(),
-    );
-    let provisioner = EgressProvisioner::new(
-        Arc::new(FixedConnections(vec![
-            connection("linear", true),
-            connection("stripe", true),
-            connection("slack", true),
-            connection("slack_v2", true),
-        ])),
-        Arc::new(FixedServers(vec![native])),
-        "https://egress.macro.com",
-    );
-    let provisioned = provisioner
-        .provision(
-            AgentSessionId::new(),
-            &MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
-            &AgentMcpServers::OwnerConnections,
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        provisioned
-            .sandbox
-            .mcp_servers
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>(),
-        ["stripe", "slack"]
-    );
-    assert_eq!(provisioned.sandbox.custom_servers.len(), 1);
-    assert_eq!(provisioned.sandbox.custom_servers[0].name, "Linear");
-}
-
-/// A selected overlaid app the owner authorized natively is advertised as
-/// that server, not its Pipedream slug; unauthorized, the slug stays so a
-/// call answers with a connect prompt.
-#[tokio::test]
-async fn a_selected_overlaid_app_is_advertised_as_its_native_server_once_connected() {
-    let mut authorized = custom_server("https://mcp.sentry.dev/mcp", "Sentry", true);
-    authorized.credentials = Some(
-        serde_json::from_value(serde_json::json!({"client_id":"test", "token_response":null}))
-            .expect("credentials"),
-    );
-    let owner = MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id");
-
-    for (servers, expected_slugs, expected_custom) in [
-        (vec![authorized.clone()], vec!["notion"], vec!["Sentry"]),
-        (
-            vec![custom_server("https://mcp.sentry.dev/mcp", "Sentry", true)],
-            vec!["sentry", "notion"],
-            vec![],
-        ),
-    ] {
-        let provisioner = EgressProvisioner::new(
-            Arc::new(FixedConnections(vec![connection("sentry", true)])),
-            Arc::new(FixedServers(servers)),
-            "https://egress.macro.com",
-        );
-        let provisioned = provisioner
-            .provision(
-                AgentSessionId::new(),
-                &owner,
-                &selected(&["sentry", "notion"]),
-            )
-            .await
-            .expect("provisioned");
-
-        let slugs: Vec<String> = provisioned
-            .sandbox
-            .mcp_servers
-            .iter()
-            .map(ToString::to_string)
-            .collect();
-        assert_eq!(slugs, expected_slugs);
-        let custom: Vec<&str> = provisioned
-            .sandbox
-            .custom_servers
-            .iter()
-            .map(|server| server.name.as_str())
-            .collect();
-        assert_eq!(custom, expected_custom);
-    }
 }
