@@ -80,7 +80,9 @@ fence() {
 arm() {
   local name
   name="$timer-$(date +%s%N)"
+  # AccuracySec: a timer may otherwise fire up to a minute late.
   "$systemd_run" --quiet --collect --unit="$name" --on-active="$after" \
+    --timer-property=AccuracySec=1s \
     "$self" autothaw "$1" "$name" >/dev/null 2>&1 || return 1
   disarm
   printf '%s\n' "$name" >"$dir/timer"
