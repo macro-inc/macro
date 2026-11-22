@@ -42,14 +42,22 @@ scheduler's spec.
   carries `preview`, the first 300 characters of its plain text, read when it
   is attached.
 - The person takes back a dismissal within five minutes
-  (`POST /suggestions/{id}/restore`, lifecycle event `undismiss`): it is
-  proposed again, and a run the dismissal cancelled stays cancelled, so a new
-  one starts once that settles: until then it shows `running`, and accepting
-  it answers 409 with it as it is. A routine suggestion isn't restored (409):
+  (`POST /suggestions/{id}/restore`, lifecycle event `undo`), or marking done
+  one they completed themself (opened, or a composer prompt; never a finished
+  run or an answered reply, 409), within five minutes too: it is proposed
+  again, and a run the dismissal cancelled stays cancelled, so a new one
+  starts once that settles: until then it shows `running`, and accepting it
+  answers 409 with it as it is. A routine suggestion isn't restored (409):
   its routine suggestion has no way back.
-- The feed, `accept`, `dismiss` and `restore` (`UserOnly`) serve the person and anyone
-  acting for them: a code-mode credential is a Macro API token for the
-  person, so it passes. The router labels the caller (`SuggestionCaller`, span
+- The person stops a run without dismissing its suggestion
+  (`POST /suggestions/{id}/stop`): its run moves to `cancelling` and its
+  session is stopped, under the suggestion's row lock; the suggestion stays
+  accepted, shows `running` until the run settles `cancelled`, then `open`
+  with nothing made, to run again. Nothing under way is a 204 that changes
+  nothing.
+- The feed, `accept`, `dismiss`, `restore` and `stop` (`UserOnly`) serve the
+  person and anyone acting for them: a code-mode credential is a Macro API
+  token for the person, so it passes. The router labels the caller (`SuggestionCaller`, span
   field `suggestions.caller`): only the person's own session with no program's
   marks (no code-mode invocation, no code-execution header) is `user`; any
   other credential is `agent`. An agent whose signed invocation names a
@@ -172,8 +180,8 @@ scheduler's spec.
 - Runs move only through the run state machine (`domain/run.rs`, one table of
   `(state, event) → (state, effect)`): `starting` → `running` ⇄ `waiting` →
   `finished` or `failed`, plus `stopping` (over its time: stop it, delete it
-  after a 5 minute grace, end `failed`) and `cancelling` (its suggestion closed:
-  end `cancelled`). A run gets 10 minutes to start, 10 minutes waiting
+  after a 5 minute grace, end `failed`) and `cancelling` (its suggestion
+  closed, or the person stopped it: end `cancelled`). A run gets 10 minutes to start, 10 minutes waiting
   (counted from when it began waiting) and 60 minutes in all. The state and
   when it was entered are stored, so the feed never asks a session. Every move
   compares and sets the state it read, under a 2 minute hold

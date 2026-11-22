@@ -228,6 +228,15 @@ impl SuggestionApi for FakeSuggestions {
         Ok(())
     }
 
+    async fn stop_run(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+        _: Uuid,
+    ) -> Result<(), SuggestionError> {
+        self.reach(user, caller)
+    }
+
     fn brief(&self, _: GenerationTrigger, _: chrono_tz::Tz) -> String {
         unreachable!()
     }
@@ -387,6 +396,7 @@ async fn a_refused_generation_session_gets_a_403() {
         ("POST", format!("/suggestions/{suggestion}/accept")),
         ("POST", format!("/suggestions/{suggestion}/dismiss")),
         ("POST", format!("/suggestions/{suggestion}/restore")),
+        ("POST", format!("/suggestions/{suggestion}/stop")),
         ("POST", "/suggestions/viewed".to_owned()),
     ] {
         let status = send(&service, method, &uri, AGENT_JWT, true, Some(generation)).await;

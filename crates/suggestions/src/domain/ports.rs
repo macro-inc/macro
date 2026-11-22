@@ -213,14 +213,23 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         change: &Change,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Bring back the person's suggestion `id` if they dismissed it at
-    /// `dismissed_since` or later, as proposed; a run its dismissal cancelled
-    /// stays cancelled. Whether it came back.
-    fn undismiss(
+    /// Bring back the person's suggestion `id` if they dismissed it, or it
+    /// became done, at `closed_since` or later, as proposed; a run its
+    /// dismissal cancelled stays cancelled. Whether it came back.
+    fn undo(
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
-        dismissed_since: DateTime<Utc>,
+        closed_since: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Cancel the unsettled run of the person's suggestion `id` while the
+    /// suggestion is open, which stays as it is; whether it is open.
+    fn cancel_run(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
@@ -466,7 +475,19 @@ pub trait SuggestionApi: Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
 
-    /// The person, or their own agent, takes back dismissing a suggestion, within
+    /// The person, or their own agent, stops an open suggestion's run without
+    /// dismissing the suggestion: the run is cancelled and its session
+    /// stopped, and once it settles the suggestion is open to run again.
+    /// Nothing under way is nothing to stop.
+    fn stop_run(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+        id: Uuid,
+    ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
+
+    /// The person, or their own agent, takes back dismissing a suggestion, or
+    /// completing one they acted on themself, within
     /// [`RESTORE_WITHIN`](super::service::RESTORE_WITHIN) of it: it is proposed
     /// again, and a run the dismissal cancelled stays cancelled.
     fn restore(

@@ -944,9 +944,11 @@ pub enum SuggestionError {
     /// produced.
     #[error("a routine suggestion is not accepted; the user saves its routine in the app")]
     RoutineNotAccepted,
-    /// Only a suggestion the person dismissed in the last few minutes comes
-    /// back, and not a routine suggestion.
-    #[error("only a suggestion dismissed in the last five minutes can be restored")]
+    /// Only a suggestion the person dismissed, or completed themself, in the
+    /// last few minutes comes back, and not a routine suggestion.
+    #[error(
+        "only a suggestion dismissed, or completed by opening it, in the last five minutes can be restored"
+    )]
     NotRestorable,
     /// Anything else.
     #[error("internal suggestions error: {0:?}")]
