@@ -717,7 +717,10 @@ export type RunErrorKind =
  *  often); starting it again picks up what is left.
  */
 "interrupted" |
-/**  Anything else, on Macro's side. */
+/**
+ *  Anything else, on Macro's side. A kind this build does not know (a
+ *  newer writer's) reads as this one.
+ */
 "internal";
 
 /**  Lifecycle of a discovery run (one per user × source). */

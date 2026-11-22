@@ -35,13 +35,14 @@ export const FAILED_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * How long after its last change a run that stopped moving stays listed:
- * a finished one briefly, a failed one until it is dismissed or a week old.
+ * a finished one briefly, a failed one until it is dismissed or a week old,
+ * and one that finished with failures until it is dismissed.
  */
 function listedFor(run: ImportRun): number {
   return (
     match(run.status)
-      // One that finished with objects it could not import stays, like a
-      // failure; the server stops listing either after a week.
+      // One that finished with objects it could not import needs action, so
+      // it stays until dismissed, however old.
       .with('completed', () =>
         run.error ? Number.POSITIVE_INFINITY : FINISHED_MS
       )

@@ -167,3 +167,29 @@ it('stops listing a failure nobody dismissed after a week', () => {
   expect(jobs()).toEqual([]);
   dispose();
 });
+
+it('keeps a partly failed import listed however old, until dismissed', () => {
+  const { jobs, dispose } = createRoot((dispose) => ({
+    dispose,
+    ...createImportJobs({
+      runs: {
+        runs: () => [
+          {
+            source: 'linear',
+            status: 'completed',
+            error: '2 objects could not be imported. Plan again to retry them.',
+            updated_at: '2026-10-27T12:00:00Z',
+          },
+        ],
+        slackChannelsImporting: () => 0,
+      },
+      createReport: () => () => undefined,
+      dismissals: { restore: () => [], save: () => {} },
+    }),
+  }));
+  // Ten days after it finished.
+  expect(jobs().map((job) => job.phase)).toEqual([
+    { kind: 'completed', partial: true },
+  ]);
+  dispose();
+});
