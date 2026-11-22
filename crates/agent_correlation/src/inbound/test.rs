@@ -70,6 +70,7 @@ async fn optional_claim_is_validated_before_a_handler_can_use_it() {
     let state = CorrelationState {
         jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         repository: repository.clone(),
+        specs: None,
     };
     for bearer in [None, Some(token(None, None))] {
         let mut request = Request::builder()
@@ -141,6 +142,7 @@ async fn propagate_scopes_the_signed_routine_beside_the_correlation() {
     let state = CorrelationState {
         jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         repository: repository.clone(),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -209,6 +211,7 @@ async fn a_scoped_session_is_refused_outside_its_scope() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let ran = Arc::new(AtomicUsize::new(0));
     let handler = {
@@ -265,6 +268,7 @@ async fn a_scoped_session_is_refused_outside_its_scope() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let refused = AgentCorrelationExtractor::from_request_parts(&mut parts, &state).await;
     assert_eq!(
@@ -286,6 +290,7 @@ async fn a_signed_scope_is_refused_outside_it_without_a_lookup() {
     let state = CorrelationState {
         jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         repository: repository.clone(),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -342,6 +347,7 @@ async fn a_handler_reads_the_signed_scope_when_none_is_stored() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -435,6 +441,21 @@ async fn a_service_without_a_database_enforces_the_signed_scope() {
             "DELETE",
             false,
             StatusCode::OK,
+        ),
+        // A background job's credential makes only its listed requests,
+        // here too: neither this delete nor this read is on its lists (it
+        // reads files at `/file/{id}`), so both are refused.
+        (
+            Some(scoped(Some("job"))),
+            "DELETE",
+            false,
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            Some(scoped(Some("job"))),
+            "GET",
+            false,
+            StatusCode::FORBIDDEN,
         ),
         (Some(scoped(None)), "DELETE", false, StatusCode::OK),
         (
@@ -620,6 +641,7 @@ async fn propagate_refuses_tokens_of_different_users() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let handled = Arc::new(AtomicUsize::new(0));
     let app = axum::Router::new()
@@ -713,6 +735,7 @@ async fn a_refused_sharing_change_is_answered_as_a_refusal() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -778,6 +801,7 @@ async fn ordinary_agents_reach_policy_put_while_restricted_agents_do_not() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -814,4 +838,51 @@ async fn ordinary_agents_reach_policy_put_while_restricted_agents_do_not() {
             "{scope:?}",
         );
     }
+}
+
+/// A signed-scope-only service a job reads declares its specs: there a
+/// job's listed read counts; without them it fails closed.
+#[tokio::test]
+async fn a_signed_scope_service_holds_a_job_to_its_own_specs() {
+    use tower::ServiceExt;
+
+    let job = mint(
+        Some(Uuid::from_u128(1)),
+        Some(Uuid::from_u128(3)),
+        None,
+        Some("job"),
+    );
+    let file = || {
+        Request::builder()
+            .method("GET")
+            .uri("/file/0192f1a0-0000-7000-8000-000000000001")
+            .header("authorization", format!("Bearer {job}"))
+            .body(axum::body::Body::empty())
+            .unwrap()
+    };
+    let route = || {
+        axum::Router::new().route(
+            "/file/{id}",
+            axum::routing::get(|| async { StatusCode::OK }),
+        )
+    };
+    let serving = route().layer(axum::middleware::from_fn_with_state(
+        SignedScopeState {
+            jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+            specs: &["static-files"],
+        },
+        enforce_signed_scope_serving,
+    ));
+    assert_eq!(
+        serving.oneshot(file()).await.unwrap().status(),
+        StatusCode::OK
+    );
+    let unbound = route().layer(axum::middleware::from_fn_with_state(
+        JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        enforce_signed_scope,
+    ));
+    assert_eq!(
+        unbound.oneshot(file()).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
 }

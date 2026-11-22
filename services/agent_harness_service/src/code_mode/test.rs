@@ -273,13 +273,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
     // Send-looking writes that reach nobody else.
     let reviewed = [
         "auth.generateEmailLink",
-        "auth.deleteTeamInviteLink",
-        "auth.deleteTeamInviteHandler",
         "auth.rejectInvitation",
-        "auth.revokeGtmInviteLink",
-        "auth.redeemGtmInviteLink",
-        "auth.joinTeamByInviteLink",
-        "auth.toggleTeamNonAdminInvites",
         "auth.postProfilePictures",
         // Its route refuses a scoped session tools.
         "cognition.sendChatMessage",
@@ -326,7 +320,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "storage.cancelChannelAccessRequest",
         "storage.deleteWebhook",
         "storage.deleteDatabaseWebhook",
-        "storage.patchWebhook",
         "storage.externalChatRead",
         "storage.externalChatUpload",
         "storage.externalChatRemove",
@@ -413,10 +406,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         // Unauthenticated: a credential adds nothing.
         "storage.claimHarnessPairing",
         "storage.createHarnessPairing",
-        // Document tokens for the editing worker, whose routes edit
-        // documents, which a run that sends nothing may do.
-        "storage.getDocumentPermissionsToken",
-        "storage.validateDocumentPermissionsToken",
     ];
     let looks_like_a_send = |key: &str, path: &str| {
         let text = format!("{key} {path}").to_lowercase();

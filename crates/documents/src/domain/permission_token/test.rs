@@ -105,3 +105,43 @@ async fn signed_document_grant_retains_invocation_attribution() {
         None
     );
 }
+
+/// Under a scope that caps document tokens (a background job), every token
+/// grants view access only; elsewhere it keeps the requested level.
+#[tokio::test]
+async fn a_capped_scope_mints_only_view_tokens() {
+    let principal = CreationPrincipal::User(user());
+    let level = || {
+        let token = encode_principal_permission_token(
+            &principal,
+            "doc-1".into(),
+            AccessLevel::Edit,
+            SECRET,
+        )
+        .expect("token should encode");
+        decode_permission_token(&token, SECRET)
+            .expect("token should decode")
+            .access_level
+    };
+    assert_eq!(level(), AccessLevel::Edit);
+    for (scope, expected) in [
+        (
+            agent_correlation::scope::SessionScope::Job,
+            AccessLevel::View,
+        ),
+        (
+            agent_correlation::scope::SessionScope::NoSend,
+            AccessLevel::Edit,
+        ),
+    ] {
+        let minted = agent_correlation::context::scope_attribution(
+            agent_correlation::context::Attribution {
+                scope: Some(scope),
+                ..Default::default()
+            },
+            async { level() },
+        )
+        .await;
+        assert_eq!(minted, expected, "{scope:?}");
+    }
+}

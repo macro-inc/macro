@@ -41,6 +41,14 @@ pub fn encode_permission_token(
         .transpose()
         .map_err(|e| DocumentError::Internal(anyhow::anyhow!("invalid user id: {e}")))?;
 
+    let access_level = if agent_correlation::context::current_scope()
+        .is_some_and(agent_correlation::scope::SessionScope::caps_document_tokens_to_view)
+    {
+        AccessLevel::View
+    } else {
+        access_level
+    };
+
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
