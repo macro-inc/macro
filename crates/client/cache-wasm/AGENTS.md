@@ -85,12 +85,14 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   read, their version is unknown. An attempt that cannot be counted decides as
   any other, and only where it would keep the files discards them once
   `UNCOUNTED_RECOVERY_MS` (10 minutes) passed since the adoption began (by the
-  marker's time, read alone when the files beside it do not read); with neither
-  marker nor count readable it keeps them. A recovery that keeps the files
-  marks its error `cacheRecoveryDeferred` (`recovery_deferred`), which the
-  worker reports as `recovery-deferred`; the coordinator then keeps the scope
-  instead of failing for good, so the page's cache recovery runs it again
-  later. A version probe that meets a busy sync handle fails as
+  marker's time, read alone when the files beside it do not read); one that
+  could not read the adoption reads it again first (`unreadable_adoption`), and
+  with neither marker nor count readable it keeps them. Either open that keeps
+  moved files marks its error `cacheRecoveryDeferred` (`recovery_deferred`),
+  which the worker reports as `recovery-deferred`; the coordinator then keeps
+  the scope instead of failing for good until an open succeeds, so the page's
+  cache recovery runs it again later. A version probe that meets a busy sync
+  handle fails as
   `storage-busy`, which ends the coordinator's retries the same way, so the
   count can span page loads.
   The result's `outcome` is

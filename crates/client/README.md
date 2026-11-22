@@ -149,25 +149,37 @@ adoption began, is never written again. An attempt that cannot be counted
 decides as any other, and only where it would keep the files does it look at
 that time: ten minutes after the adoption began it discards them instead, so
 those are bounded too. The clock can only shorten that wait (a jump back counts
-as time passed), and never discards files that could go back. When the marker
-reads but the files beside it cannot be looked up, the time still comes from
-the marker. When neither the marker nor the count reads, nothing bounds the
-attempt or says how old the adoption is, so it keeps everything. A read that
-returns fewer bytes than the file holds is an error, never a shorter marker or
-WAL header.
+as time passed), and never discards files that could go back. An attempt that
+could not read the adoption and cannot count reads it again before it looks at
+the time, and decides as above if it now reads, so a read that fails once never
+discards files that could go back. When it still does not read but the marker
+does (the files beside it cannot be looked up), the time comes from the marker.
+When neither the marker nor the count reads, nothing bounds the attempt or says
+how old the adoption is, so it keeps everything. A version probe that fails
+loses its hold on the files before any of them changes, so it cannot discard
+them and only the count bounds it; uncounted, it keeps everything too. A read
+that returns fewer bytes than the file holds is an error, never a shorter
+marker or WAL header.
 
-A recovery that keeps the files says so (`cacheRecoveryDeferred` on its error,
-`recovery-deferred` to the coordinator). The coordinator retries a failed
-recovery five times at once, so with counting this resolves within one page
-load. When any recovery in that run kept the files, the last failure does not
-end the cache for good, which would quarantine the scope and open a different
-database on the next load, leaving the moved files and their queue behind: the
+An open that keeps moved files says so (`cacheRecoveryDeferred` on its error,
+`recovery-deferred` to the coordinator), whether it is the ordinary open that
+found them unusable or a recovery that could not decide. The coordinator
+retries a failed recovery five times at once, so with counting this resolves
+within one page load. Until an open succeeds, it never gives up a scope where
+an open kept moved files, whatever ended the retries: a recovery that kept
+them again, or failures that never reached storage, such as assets that did
+not load. Giving up would quarantine the scope and open a different database
+on the next load, leaving the moved files and their queue behind. Instead the
 coordinator keeps the scope and the pending recovery, refuses queued requests
 with `owner-lock-unavailable`, and the page runs uncached until its cache
-recovery (backoff up to 30 seconds, and on reconnect or return to the tab)
-registers again and runs the same recovery, which goes on counting. A version
-probe that meets a busy sync handle fails as `storage-busy`, which stops the
-coordinator's retries the same way. Files at a newer version
+recovery (backoff doubling to 30 seconds with 20% jitter, so at most 36
+seconds, and on reconnect or return to the tab) registers again. After that
+first deferral each registration runs one recovery, not five, so a page waits
+for one open before it runs uncached again; the attempts go on counting.
+Readiness the coordinator accepts ends this, even when the owner drains at
+once because its tab is hidden: the retries and the deferral start over there.
+A version probe that meets a busy sync handle fails as `storage-busy`, which
+stops the coordinator's retries the same way. Files at a newer version
 were upgraded here, so the older build could not open them, and files whose
 older name holds a database again cannot go back over it; both are reset
 (`discarded`). Once the moved files have opened they are this build's own.
@@ -181,8 +193,11 @@ lose them instead, and each needs a worker lost or an open failing mid-upgrade:
   again a tab of the older build opens its name, or stale cleanup in a tab of
   this or a newer build finds the lone older WAL: either removes the half it
   finds, the WAL no longer matches the marker, and the main file is discarded.
-  A WAL move that fails, and whose move of the main file back fails too, leaves
-  the same split;
+  Stale cleanup in a tab of a newer storage version removes the moved main file
+  itself, as it removes any half pair under an older name: keeping it for a
+  marker only this build resolves would leave it on disk for good once this
+  build no longer runs. A WAL move that fails, and whose move of the main file
+  back fails too, leaves the same split;
 - the worker is lost during the first open, before any step committed, and a
   tab of the older build opens its now empty name before the recovery open: the
   files cannot go back over its new ones and are discarded;
