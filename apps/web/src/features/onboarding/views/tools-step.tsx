@@ -1,4 +1,3 @@
-import { canonicalPipedreamSlug } from '@core/pipedream/slugs';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
@@ -40,7 +39,7 @@ export function ToolsStep(props: { onContinue: () => void }) {
     )
       return;
     setBusy(tool.slug);
-    setPending((set) => new Set(set).add(canonicalPipedreamSlug(tool.slug)));
+    setPending((set) => new Set(set).add(tool.slug));
     try {
       await context.connectTool(tool);
     } finally {

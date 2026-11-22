@@ -3,8 +3,7 @@ import { createSignal } from 'solid-js';
 /**
  * An app somebody asked to connect from outside the Connections page (an
  * agent reply's "Connect X" chip). The chip sets it and opens Settings →
- * Connections; the Pipedream section there consumes it and starts the
- * Connect flow. A signal rather than a URL parameter because the settings
+ * Integrations, which consumes it and starts connecting the app. A signal rather than a URL parameter because the settings
  * layout rebuilds its URL from split state and drops query strings.
  */
 export type PendingConnectRequest = {

@@ -1,20 +1,16 @@
 import { toast } from '@core/component/Toast/Toast';
-import { ConnectedAppIcon } from '@core/pipedream/ConnectedAppIcon';
-import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
+import { ConnectedAppIcon } from '@core/connectors/ConnectedAppIcon';
+import { createConnectAction } from '@core/connectors/connect-action';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import {
-  useDeletePipedreamConnectionMutation,
-  useUpdatePipedreamConnectionMutation,
-} from '@queries/pipedream-connectors';
+  useRemoveConnectorMutation,
+  useUpdateConnectorMutation,
+} from '@queries/connectors';
 import { Button, Dialog, Panel } from '@ui';
-import { createEffect, createSignal, type JSX, on, Show } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ConnectAction } from '../integration-ui';
-import {
-  readMcpAuthAttempted,
-  writeMcpAuthAttempted,
-} from '../mcp-auth-attempt';
 import {
   type ConnectionMenuItem,
   ConnectionRowActions,
@@ -28,144 +24,52 @@ import {
   type IntegrationStatus,
 } from './integrations-list';
 import type { Leftover } from './model';
-import { useNativeMcpActions } from './native-actions';
 
-/** Overlaid catalog apps read as agent tools; other native servers are custom. */
-export function leftoverCategories(
-  leftover: Leftover,
-  overlaidAppSlug: string | undefined
-): string[] {
-  return leftover.kind === 'native-mcp' && !overlaidAppSlug
-    ? ['Custom MCP']
-    : ['Agent tools'];
+/** Apps read as agent tools; servers added by URL are custom. */
+export function leftoverCategories(leftover: Leftover): string[] {
+  return leftover.kind === 'server' ? ['Custom MCP'] : ['Agent tools'];
 }
 
-function leftoverDisabled(leftover: Leftover): boolean {
-  return match(leftover)
-    .with({ kind: 'native-mcp' }, (row) => row.authenticated && !row.enabled)
-    .with({ kind: 'pipedream' }, (row) => !row.enabled)
-    .exhaustive();
-}
+const AGENT_APP_DESCRIPTION =
+  'Agents can use this app when you ask them to. Nothing is copied into Macro.';
 
-export function LeftoverRow(props: {
-  leftover: Leftover;
-  /** The catalog app a native server stands in for, when it is overlaid. */
-  overlaidAppSlug?: string;
-}) {
+export function LeftoverRow(props: { leftover: Leftover }) {
   const [disconnect, setDisconnect] = createSignal<DisconnectConfirm | null>(
     null
   );
   const [renaming, setRenaming] = createSignal(false);
   const [nameDraft, setNameDraft] = createSignal('');
-  const native = useNativeMcpActions();
-  const updatePipedream = useUpdatePipedreamConnectionMutation();
-  const deletePipedream = useDeletePipedreamConnectionMutation();
-  const [attempted, setAttempted] = createSignal(
-    props.leftover.kind === 'native-mcp'
-      ? readMcpAuthAttempted(props.leftover.url)
-      : false
-  );
-  const [justStarted, setJustStarted] = createSignal(false);
-  const { connect: connectPipedream, busy: pipedreamConnectBusy } =
-    createPipedreamCatalogConnect({
-      entry: () =>
-        props.leftover.kind === 'pipedream'
-          ? {
-              app_slug: props.leftover.appSlug,
-              display_name: props.leftover.title,
-            }
-          : { app_slug: '', display_name: props.leftover.title },
-    });
+  const update = useUpdateConnectorMutation();
+  const removal = useRemoveConnectorMutation();
+  const { connect, busy: connectBusy } = createConnectAction({
+    key: () => props.leftover.key,
+    name: () => props.leftover.title,
+  });
 
-  createEffect(
-    on(
-      () => {
-        const leftover = props.leftover;
-        return leftover.kind === 'native-mcp' && leftover.authenticated
-          ? leftover.url
-          : null;
-      },
-      (url) => {
-        if (url) writeMcpAuthAttempted(url, false);
-      }
-    )
-  );
+  const busy = () => update.isPending || removal.isPending || connectBusy();
+  const failureNoun = () =>
+    props.leftover.kind === 'server' ? 'server' : 'connector';
 
-  const busy = () =>
-    native.update.isPending ||
-    native.remove.isPending ||
-    native.authorize.isPending ||
-    updatePipedream.isPending ||
-    deletePipedream.isPending ||
-    pipedreamConnectBusy();
-
-  const connectionFailed = () => {
-    const leftover = props.leftover;
-    return (
-      leftover.kind === 'native-mcp' &&
-      !leftover.authenticated &&
-      !justStarted() &&
-      attempted()
+  const setEnabled = (enabled: boolean) =>
+    update.mutate(
+      { key: props.leftover.key, enabled },
+      { onError: () => toast.failure(`Failed to update ${failureNoun()}`) }
     );
-  };
 
-  const toggle = () => {
-    match(props.leftover)
-      .with({ kind: 'native-mcp' }, (leftover) => {
-        native.update.mutate(
-          { url: leftover.url, enabled: !leftover.enabled },
-          { onError: () => toast.failure('Failed to update server') }
-        );
-      })
-      .with({ kind: 'pipedream' }, (leftover) => {
-        updatePipedream.mutate(
-          { app_slug: leftover.appSlug, enabled: !leftover.enabled },
-          { onError: () => toast.failure('Failed to update connector') }
-        );
-      })
-      .exhaustive();
-  };
+  const remove = (connected: boolean) =>
+    removal.mutate(
+      { key: props.leftover.key },
+      {
+        onSuccess: () =>
+          toast.success(connected ? 'Disconnected from Macro' : 'Removed'),
+        onError: () =>
+          toast.failure(
+            connected ? 'Failed to disconnect' : 'Failed to remove'
+          ),
+      }
+    );
 
-  const remove = (connected: boolean) => {
-    const leftover = props.leftover;
-    const ok = connected ? 'Disconnected from Macro' : 'Removed';
-    const fail = connected ? 'Failed to disconnect' : 'Failed to remove';
-    match(leftover)
-      .with({ kind: 'native-mcp' }, (row) => {
-        native.remove.mutate(
-          { url: row.url },
-          {
-            onSuccess: () => toast.success(ok),
-            onError: () => toast.failure(fail),
-          }
-        );
-      })
-      .with({ kind: 'pipedream' }, (row) => {
-        deletePipedream.mutate(
-          { app_slug: row.appSlug },
-          {
-            onSuccess: () => toast.success(ok),
-            onError: () => toast.failure(fail),
-          }
-        );
-      })
-      .exhaustive();
-  };
-
-  const startAuth = () => {
-    const leftover = props.leftover;
-    if (leftover.kind !== 'native-mcp') return;
-    native.startAuth(leftover.url, leftover.title, {
-      onStarted: () => {
-        setAttempted(true);
-        setJustStarted(true);
-      },
-      onFailed: () => {
-        setAttempted(true);
-        setJustStarted(false);
-      },
-    });
-  };
+  const startConnect = () => fireAndForget(connect(), 'connections-settings');
 
   const askRemove = (connected: boolean) =>
     setDisconnect({
@@ -178,18 +82,15 @@ export function LeftoverRow(props: {
     });
 
   const openRename = () => {
-    if (props.leftover.kind !== 'native-mcp') return;
     setNameDraft(props.leftover.title);
     setRenaming(true);
   };
 
   const saveRename = () => {
-    const leftover = props.leftover;
-    if (leftover.kind !== 'native-mcp') return;
     const name = nameDraft().trim();
     if (!name) return;
-    native.update.mutate(
-      { url: leftover.url, server_name: name },
+    update.mutate(
+      { key: props.leftover.key, name },
       {
         onSuccess: () => setRenaming(false),
         onError: () => toast.failure('Failed to update server'),
@@ -205,143 +106,115 @@ export function LeftoverRow(props: {
     icon: 'disconnect',
   });
 
-  const renameItem = (): ConnectionMenuItem => ({
-    label: 'Rename',
-    onSelect: openRename,
-    disabled: busy(),
-    icon: 'rename',
-  });
+  // Only a server added by URL is named by the user.
+  const renameItems = (): ConnectionMenuItem[] =>
+    props.leftover.kind === 'server'
+      ? [
+          {
+            label: 'Rename',
+            onSelect: openRename,
+            disabled: busy(),
+            icon: 'rename',
+          },
+        ]
+      : [];
 
   const reconnectItem = (): ConnectionMenuItem => ({
     label: 'Reconnect',
     icon: 'reconnect',
-    onSelect: () => {
-      match(props.leftover)
-        .with({ kind: 'native-mcp' }, () => {
-          startAuth();
-        })
-        .with({ kind: 'pipedream' }, () => {
-          fireAndForget(connectPipedream(), 'connections-settings');
-        })
-        .exhaustive();
-    },
+    onSelect: startConnect,
     disabled: busy(),
   });
 
   const actions = (): JSX.Element =>
-    match(props.leftover)
-      .with({ kind: 'native-mcp', authenticated: false }, () => (
+    match(props.leftover.status)
+      .with('not-connected', 'action-required', () => (
         <ConnectionRowActions
           primary={
             <ConnectAction
               label="Connect"
-              onClick={startAuth}
+              onClick={startConnect}
               disabled={busy()}
             />
           }
-          items={[renameItem(), disconnectItem(false)]}
+          items={[
+            ...renameItems(),
+            // A server never signed in to holds nothing to disconnect.
+            disconnectItem(
+              props.leftover.kind === 'app' ||
+                props.leftover.status === 'action-required'
+            ),
+          ]}
         />
       ))
-      .with({ kind: 'native-mcp', enabled: true }, () => (
+      .with('connected', () => (
         <ConnectionRowActions
           items={[
             {
               label: 'Disable',
-              onSelect: toggle,
+              onSelect: () => setEnabled(false),
               disabled: busy(),
               icon: 'disable',
             },
-            renameItem(),
+            ...renameItems(),
             reconnectItem(),
             disconnectItem(),
           ]}
         />
       ))
-      .with({ kind: 'native-mcp' }, () => (
+      .with('off', () => (
         <ConnectionRowActions
           primary={
             <ConnectAction
               label="Enable"
               variant="neutral"
-              onClick={toggle}
+              onClick={() => setEnabled(true)}
               disabled={busy()}
             />
           }
-          items={[renameItem(), reconnectItem(), disconnectItem()]}
-        />
-      ))
-      .with({ kind: 'pipedream', enabled: true }, () => (
-        <ConnectionRowActions
-          items={[
-            {
-              label: 'Disable',
-              onSelect: toggle,
-              disabled: busy(),
-              icon: 'disable',
-            },
-            reconnectItem(),
-            disconnectItem(),
-          ]}
-        />
-      ))
-      .with({ kind: 'pipedream' }, () => (
-        <ConnectionRowActions
-          primary={
-            <ConnectAction
-              label="Enable"
-              variant="neutral"
-              onClick={toggle}
-              disabled={busy()}
-            />
-          }
-          items={[reconnectItem(), disconnectItem()]}
+          items={[...renameItems(), reconnectItem(), disconnectItem()]}
         />
       ))
       .exhaustive();
 
-  const status = (): IntegrationStatus => {
-    const leftover = props.leftover;
-    if (leftover.kind === 'native-mcp' && !leftover.authenticated)
-      return 'attention';
-    return leftoverDisabled(leftover) ? 'disconnected' : 'connected';
-  };
+  const status = (): IntegrationStatus =>
+    match(props.leftover.status)
+      .with('connected', () => 'connected' as const)
+      .with('off', () => 'disconnected' as const)
+      .with('action-required', 'not-connected', () => 'attention' as const)
+      .exhaustive();
+
+  const statusLabel = () =>
+    match(props.leftover.status)
+      .with('not-connected', () => 'Not connected')
+      .with('action-required', () => 'Reconnect required')
+      .otherwise(() => undefined);
 
   const row = (): JSX.Element =>
     match(props.leftover)
-      .with({ kind: 'native-mcp' }, (item) => (
+      .with({ kind: 'server' }, (item) => (
         <IntegrationListRow
-          icon={
-            <Show when={props.overlaidAppSlug} fallback={<PlugIcon />}>
-              {(appSlug) => (
-                <ConnectedAppIcon appSlug={appSlug()} class="size-5" />
-              )}
-            </Show>
-          }
+          icon={<PlugIcon />}
           name={item.title}
           kind="mcp"
-          description={
-            connectionFailed()
-              ? `Last attempt failed · ${item.subtitle}`
-              : props.overlaidAppSlug
-                ? 'Agents can use this app when you ask them to. Nothing is copied into Macro.'
-                : item.subtitle
-          }
-          categories={leftoverCategories(item, props.overlaidAppSlug)}
+          description={item.subtitle}
+          categories={leftoverCategories(item)}
           status={status()}
-          statusLabel={item.authenticated ? undefined : 'Not connected'}
+          statusLabel={statusLabel()}
           muted={status() === 'disconnected'}
         >
           {actions()}
         </IntegrationListRow>
       ))
-      .with({ kind: 'pipedream' }, (item) => (
+      .with({ kind: 'app' }, (item) => (
         <IntegrationListRow
           icon={<ConnectedAppIcon appSlug={item.appSlug} class="size-5" />}
           name={item.title}
           kind="mcp"
-          description="Agents can use this app when you ask them to. Nothing is copied into Macro."
-          categories={['Agent tools']}
+          description={AGENT_APP_DESCRIPTION}
+          categories={leftoverCategories(item)}
           status={status()}
+          statusLabel={statusLabel()}
           muted={status() === 'disconnected'}
         >
           {actions()}
@@ -392,10 +265,10 @@ export function LeftoverRow(props: {
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={!nameDraft().trim() || native.update.isPending}
+                disabled={!nameDraft().trim() || update.isPending}
                 onClick={saveRename}
               >
-                {native.update.isPending ? 'Saving...' : 'Save'}
+                {update.isPending ? 'Saving...' : 'Save'}
               </Button>
             </div>
           </Panel.Body>

@@ -74,7 +74,7 @@ test('a new user signs up, connects everything, and starts the trial', async ({
     licensed: true,
   });
   expect(world.teams).toEqual([{ name: 'Acme' }]);
-  expect(world.connectedTools).toEqual(['linear']);
+  expect(world.connectors).toEqual([{ slug: 'linear', status: 'connected' }]);
 });
 
 test('a deep link survives the inbox OAuth round-trip', async ({ page }) => {
@@ -538,21 +538,13 @@ test('tools keep Drive and Sheets, hide excluded Google apps and preserve native
       ['asana', 'Asana'],
       ['trello', 'Trello'],
       ['slack', 'Slack'],
-      ['slack_v2', 'Slack'],
       ['linear', 'Linear'],
     ].map(([slug, name]) => ({
       slug,
       name,
       iconUrl: fixtureConnectorIcon(slug),
     })),
-    nativeTools: [
-      {
-        url: 'https://mcp.linear.app/mcp/',
-        server_name: 'My issues',
-        authenticated: true,
-        enabled: true,
-      },
-    ],
+    connectors: [{ slug: 'linear', status: 'connected' }],
   });
   await page.evaluate(() =>
     localStorage.setItem(
@@ -669,24 +661,12 @@ test('tools keep Drive and Sheets, hide excluded Google apps and preserve native
   ).toBeDisabled();
 });
 
-for (const githubLinkStatus of [
-  'unlinked',
-  'reauthentication_required',
-] as const) {
-  test(`GitHub uses native account linking from ${githubLinkStatus} and returns to tools`, async ({
+for (const status of ['notConnected', 'needsReauth'] as const) {
+  test(`GitHub uses native account linking from ${status} and returns to tools`, async ({
     page,
   }) => {
     await openFixture(page, '/?view=flow', {
-      githubLinkStatus,
-      connectedTools: ['github'],
-      nativeTools: [
-        {
-          url: 'https://api.githubcopilot.com/mcp',
-          authenticated: true,
-          enabled: true,
-          server_name: 'GitHub MCP',
-        },
-      ],
+      connectors: [{ slug: 'github', status }],
     });
     await page.evaluate(() =>
       localStorage.setItem(
@@ -706,7 +686,9 @@ for (const githubLinkStatus of [
       })
     ).toBeDisabled();
     await expect(heading(page, 'Connect your tools.')).toBeVisible();
-    expect((await fakeWorld(page)).githubLinkStatus).toBe('linked');
+    expect((await fakeWorld(page)).connectors).toEqual([
+      { slug: 'github', status: 'connected' },
+    ]);
     await page.reload();
     await expect(
       page.getByRole('button', {
@@ -717,10 +699,10 @@ for (const githubLinkStatus of [
   });
 }
 
-test('connection status failure leaves native GitHub available', async ({
+test('connection status failure holds connecting and offers retry', async ({
   page,
 }) => {
-  await openFixture(page, '/?view=flow', { connectionFailures: ['pipedream'] });
+  await openFixture(page, '/?view=flow', { connectorsFail: true });
   await page.evaluate(() =>
     localStorage.setItem(
       'onboarding-flow-step',
@@ -728,29 +710,18 @@ test('connection status failure leaves native GitHub available', async ({
     )
   );
   await page.reload();
-  await expect(
-    page.getByRole('button', { name: 'Connect GitHub', exact: true })
-  ).toBeEnabled();
-  await expect(
-    page.getByRole('button', { name: 'Connect Notion', exact: true })
-  ).toBeDisabled();
+  for (const name of ['GitHub', 'Notion'])
+    await expect(
+      page.getByRole('button', { name: `Connect ${name}`, exact: true })
+    ).toBeDisabled();
   await expect(
     page.getByRole('button', { name: 'Retry connection status' })
   ).toBeVisible();
 });
 
-test('enables an existing native tool without reconnecting', async ({
-  page,
-}) => {
+test('enables a held tool without reconnecting', async ({ page }) => {
   await openFixture(page, '/?view=flow', {
-    nativeTools: [
-      {
-        url: 'https://mcp.linear.app/mcp',
-        server_name: 'Linear',
-        authenticated: true,
-        enabled: false,
-      },
-    ],
+    connectors: [{ slug: 'linear', status: 'disabled' }],
   });
   await page.evaluate(() =>
     localStorage.setItem(
@@ -765,8 +736,9 @@ test('enables an existing native tool without reconnecting', async ({
   await expect(
     page.getByRole('button', { name: 'Connected to Linear', exact: true })
   ).toBeDisabled();
-  expect((await fakeWorld(page)).connectedTools).toEqual([]);
-  expect((await fakeWorld(page)).nativeTools[0].enabled).toBe(true);
+  expect((await fakeWorld(page)).connectors).toEqual([
+    { slug: 'linear', status: 'connected' },
+  ]);
 });
 
 for (const width of [1280, 390]) {

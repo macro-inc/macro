@@ -1,4 +1,3 @@
-import { SLACK_PIPEDREAM_SLUGS } from '@core/pipedream/slugs';
 import LinearIcon from '@icon/linear-color.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import NotionIcon from '@icon/mcp-notion.svg';
@@ -7,13 +6,13 @@ import type { JSX } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { ProviderId } from './model';
 
-export const PIPEDREAM_BROWSE_HIDDEN_SLUGS: ReadonlySet<string> = new Set([
+/** Catalog apps the Integrations page never lists among apps to connect. */
+export const CATALOG_HIDDEN_SLUGS: ReadonlySet<string> = new Set([
   // Featured providers have their own rows.
   'github',
   'linear',
   'notion',
   'slack',
-  ...SLACK_PIPEDREAM_SLUGS,
   'cursor',
   // Macro syncs email and calendars natively (Settings → Integrations → Email).
   'gmail',

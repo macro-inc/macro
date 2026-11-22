@@ -1,8 +1,8 @@
 import { SlackImport } from '@app/features/slack-import/slack-import';
+import { ConnectorIcon } from '@core/connectors/ConnectorIcon';
 import { ENABLE_EMAIL } from '@core/constant/featureFlags';
 import { useEmailLinks } from '@core/email-link';
 import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import ClaudeIcon from '@icon/claude-color.svg';
@@ -35,7 +35,7 @@ import {
   type ConnectionsModel,
   CURATED_AI,
   type CuratedAiProvider,
-  capabilitiesFor,
+  capabilityFor,
 } from './model';
 import { providerIcon } from './provider-meta';
 import { useConnectionsView } from './view-state';
@@ -47,7 +47,7 @@ export type IntegrationItemHosts = {
   onOpenLocalAgents?: () => void;
 };
 
-function capabilityStatus(status: CapabilityStatus): IntegrationStatus {
+function integrationStatus(status: CapabilityStatus): IntegrationStatus {
   return match(status)
     .with('connected', () => 'connected' as const)
     .with('off', () => 'disconnected' as const)
@@ -60,8 +60,9 @@ function agentToolStatus(
   model: Accessor<ConnectionsModel>,
   provider: CuratedAiProvider
 ): IntegrationStatus {
-  const capability = capabilitiesFor(model(), provider)[0];
-  return capabilityStatus(capability?.status ?? 'not-connected');
+  return integrationStatus(
+    capabilityFor(model(), provider)?.status ?? 'not-connected'
+  );
 }
 
 function emailItem(
@@ -242,27 +243,38 @@ export function useGithubItem(
   };
 }
 
-/** Slack export import for team admins, else the agent-led channel import. */
-function SlackImportAction() {
+/**
+ * Slack export import for team admins, else the agent-led channel import
+ * when it is `offered`.
+ */
+function SlackImportAction(props: { offered: boolean }) {
   const teams = useUserTeamsQuery();
   const team = () => (teams.isSuccess ? teams.data[0] : undefined);
   return (
     <Show
       when={team()}
       keyed
-      fallback={<ImportAction appSlug="slack" name="Slack" />}
+      fallback={<OfferedSlackImport offered={props.offered} />}
     >
-      {(found) => <TeamSlackImport team={found} />}
+      {(found) => <TeamSlackImport team={found} offered={props.offered} />}
     </Show>
   );
 }
 
-function TeamSlackImport(props: { team: TeamSummary }) {
+function OfferedSlackImport(props: { offered: boolean }) {
+  return (
+    <Show when={props.offered}>
+      <ImportAction appSlug="slack" name="Slack" />
+    </Show>
+  );
+}
+
+function TeamSlackImport(props: { team: TeamSummary; offered: boolean }) {
   const { isAdminOrOwner } = useTeamViewer(() => props.team);
   return (
     <Show
       when={isAdminOrOwner()}
-      fallback={<ImportAction appSlug="slack" name="Slack" />}
+      fallback={<OfferedSlackImport offered={props.offered} />}
     >
       <SlackImport
         teamId={props.team.id}
@@ -298,15 +310,24 @@ export function useAgentProviderItem(
   const view = useConnectionsView();
   const name = CURATED_AI[provider].title;
   const status = () => agentToolStatus(model, provider);
+  // Before connecting, Import connects first; after, the connection must
+  // provide what the import reads.
+  const importOffered = () =>
+    status() === 'available' ||
+    (capabilityFor(model(), provider)?.importAvailable ?? false);
 
   function Actions() {
     return (
       <>
         <Show
           when={provider === 'slack'}
-          fallback={<ImportAction appSlug={provider} name={name} />}
+          fallback={
+            <Show when={importOffered()}>
+              <ImportAction appSlug={provider} name={name} />
+            </Show>
+          }
         >
-          <SlackImportAction />
+          <SlackImportAction offered={importOffered()} />
         </Show>
         <ConnectAction
           label={status() === 'available' ? 'Connect' : 'Manage'}
@@ -355,7 +376,12 @@ export function useGranolaItem(): IntegrationItem {
             loading={granola.connecting()}
           />
         </Match>
-        <Match when={granola.status() === 'available'}>
+        <Match
+          when={
+            granola.status() === 'available' ||
+            granola.status() === 'needs-reauth'
+          }
+        >
           <ConnectAction
             label="Connect"
             ariaLabel="Connect Granola"
@@ -372,7 +398,7 @@ export function useGranolaItem(): IntegrationItem {
     name: 'Granola',
     kind: 'native',
     icon: (
-      <PipedreamConnectorIcon
+      <ConnectorIcon
         appSlug={GRANOLA_APP_SLUG}
         iconUrl={GRANOLA_ICON_URL}
         class="size-5"
@@ -385,10 +411,17 @@ export function useGranolaItem(): IntegrationItem {
       const status = granola.status();
       if (status === 'connected') return 'connected';
       if (status === 'disabled') return 'disconnected';
+      if (status === 'needs-reauth') return 'attention';
       return 'available';
     },
     get statusLabel() {
-      return granola.status() === 'disabled' ? 'Paused' : undefined;
+      return match(granola.status())
+        .with('disabled', () => 'Paused')
+        .with('needs-reauth', () => 'Reconnect required')
+        .with('connected', () =>
+          granola.syncs() ? undefined : "Connected · Meetings don't sync"
+        )
+        .otherwise(() => undefined);
     },
     Actions,
   };

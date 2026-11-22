@@ -1,84 +1,41 @@
-import { QUICK_CONNECT_SERVERS } from '@core/component/AI/constant/mcpServers';
-import { canonicalPipedreamSlug } from '@core/pipedream/slugs';
+import type { ConnectorStatus } from '@queries/connectors';
+import { match } from 'ts-pattern';
 import type {
   Loadable,
   ToolConnectionState,
 } from '../context/onboarding-context';
 
-type NativeConnection = {
-  url: string;
-  authenticated: boolean;
-  enabled: boolean;
-};
+/** An app the user holds, with the server's status for it. */
+export type HeldApp = { slug: string; status: ConnectorStatus };
 
-/** Identify native providers by endpoint, not their editable display name. */
+/** The apps that are connected now, by catalog slug. */
 export function onboardingConnectedTools(
-  pipedream: ReadonlySet<string>,
-  native: readonly NativeConnection[],
-  githubLinked = false
+  apps: readonly HeldApp[]
 ): ReadonlySet<string> {
-  const connected = new Set([...pipedream].map(canonicalPipedreamSlug));
-  for (const server of native) {
-    if (!server.authenticated || !server.enabled) continue;
-    const preset = QUICK_CONNECT_SERVERS.find(
-      (preset) => preset.url === server.url.replace(/\/+$/, '')
-    );
-    if (preset) connected.add(canonicalPipedreamSlug(preset.app_slug));
-  }
-  // The GitHub card links Macro's native account, not an MCP connector.
-  connected.delete('github');
-  if (githubLinked) connected.add('github');
-  return connected;
+  return new Set(
+    apps.filter((app) => app.status === 'connected').map((app) => app.slug)
+  );
 }
 
-export function nativeToolSlug(server: NativeConnection): string | undefined {
-  return QUICK_CONNECT_SERVERS.find(
-    (preset) => preset.url === server.url.replace(/\/+$/, '')
-  )?.app_slug;
-}
-
-/** A known successful connection remains usable when an unrelated source fails. */
+/**
+ * A tool's tile state from the server's status. GitHub's connection is the
+ * Macro account link: a linked account reads as linked even with its agent
+ * tools switched off.
+ */
 export function onboardingToolState(
   slug: string,
-  pipedream: Loadable<readonly { app_slug: string; enabled: boolean }[]>,
-  native: Loadable<readonly NativeConnection[]>,
-  github: Loadable<string>
+  apps: Loadable<readonly HeldApp[]>
 ): ToolConnectionState {
-  slug = canonicalPipedreamSlug(slug);
-  if (slug === 'github') {
-    return github.t === 'ready'
-      ? github.value === 'linked'
-        ? 'account-linked'
-        : 'available'
-      : github.t;
-  }
-  const nativeMatches =
-    native.t === 'ready'
-      ? native.value.filter(
-          (server) => nativeToolSlug(server) === slug && server.authenticated
-        )
-      : [];
-  const pdMatches =
-    pipedream.t === 'ready'
-      ? pipedream.value.filter(
-          (server) => canonicalPipedreamSlug(server.app_slug) === slug
-        )
-      : [];
-  if (
-    nativeMatches.some((server) => server.enabled) ||
-    pdMatches.some((server) => server.enabled)
-  )
-    return 'connected';
-  if (nativeMatches.length || pdMatches.length) return 'disabled';
-  const hasNativeProvider = QUICK_CONNECT_SERVERS.some(
-    (server) => server.app_slug === slug
-  );
-  if (pipedream.t === 'error' || (hasNativeProvider && native.t === 'error'))
-    return 'error';
-  if (
-    pipedream.t === 'loading' ||
-    (hasNativeProvider && native.t === 'loading')
-  )
-    return 'loading';
-  return 'available';
+  if (apps.t !== 'ready') return apps.t;
+  const status =
+    apps.value.find((app) => app.slug === slug)?.status ?? 'notConnected';
+  return match(status)
+    .with('connected', () =>
+      slug === 'github' ? ('account-linked' as const) : ('connected' as const)
+    )
+    .with('disabled', () =>
+      slug === 'github' ? ('account-linked' as const) : ('disabled' as const)
+    )
+    .with('needsReauth', 'notConnected', () => 'available' as const)
+    .exhaustive(() => 'available' as const);
 }

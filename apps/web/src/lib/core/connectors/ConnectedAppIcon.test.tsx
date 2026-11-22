@@ -6,8 +6,8 @@ const iconUrl = 'https://connect.example/v1/catalog/airtable/icon.svg?v=abc';
 
 const catalog = vi.hoisted(() => ({ pending: false }));
 
-vi.mock('@queries/pipedream-connectors', () => ({
-  usePipedreamCatalogIconsQuery: () => ({
+vi.mock('@queries/connectors', () => ({
+  useConnectorCatalogIconsQuery: () => ({
     get isPending() {
       return catalog.pending;
     },

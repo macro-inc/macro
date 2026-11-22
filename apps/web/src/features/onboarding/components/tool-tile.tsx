@@ -1,4 +1,4 @@
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
+import { ConnectorIcon } from '@core/connectors/ConnectorIcon';
 import CheckIcon from '@icon/system/regular/check.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
@@ -42,7 +42,7 @@ export function ToolTile(props: {
           'border-2 border-success': connected(),
         }}
       >
-        <PipedreamConnectorIcon
+        <ConnectorIcon
           appSlug={props.tool.slug}
           iconUrl={props.tool.iconUrl}
           class="size-7"

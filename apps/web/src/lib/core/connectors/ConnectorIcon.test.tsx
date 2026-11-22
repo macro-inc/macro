@@ -1,16 +1,16 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { PipedreamConnectorIcon } from './ConnectorIcon';
+import { ConnectorIcon } from './ConnectorIcon';
 
 afterEach(cleanup);
 
-describe('Pipedream app logos', () => {
+describe('app logos', () => {
   it('prefers the proxied directory image, falls back on failure, and retries a new URL', () => {
     const url = 'https://pipedream.com/s.v0/app_example/logo/orig';
     const [iconUrl, setIconUrl] = createSignal(url);
     const { container } = render(() => (
-      <PipedreamConnectorIcon appSlug="linear" iconUrl={iconUrl()} />
+      <ConnectorIcon appSlug="linear" iconUrl={iconUrl()} />
     ));
     const image = container.querySelector('img');
     expect(image?.getAttribute('src')).toContain(encodeURIComponent(url));

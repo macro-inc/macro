@@ -500,9 +500,17 @@ attachments-only menu. The block composer's plus menu has a backend-free
 browser regression on desktop and phone:
 `bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts composer.browser.e2e.ts`.
 
-Composer `/` menus list Connections between Skills and Pull requests. Keep native
-and hosted providers aligned with `connectors::select_connections`, prefer native
-credentials per provider, and preserve editor focus on pointer and touch selection.
+Composer `/` menus list Connections between Skills and Pull requests: the
+connected apps and servers `GET /connectors` lists, as the server decided them.
+Preserve editor focus on pointer and touch selection.
+
+Web code reads connection state (which apps and servers are connected, and
+how) only through `src/lib/queries/connectors/` (`useConnectors`, its
+mutations, `connectConnector` and the catalog). The server applies every
+rule; the web never picks a source, reads `macro-connect`, or computes a
+status. Connecting asks the server (`POST /connectors/{key}/connect`) and
+follows the step it answers; only `app/github` starts the GitHub account link
+itself.
 
 Undo in a large collaborative Markdown document (Loro undo, mirror, reconcile,
 caret mapping) has a backend-free timing regression:
@@ -897,8 +905,8 @@ ownership. Done, logout, and the ten-minute timeout retire pending callbacks.
 
 Connect can close without reporting success (an OAuth provider severs its
 consent popup's opener) even though Pipedream created the account. Every close
-without success, on web and native, asks `/pipedream/mcp/recover` to register
-the user's newest account for that app from the last fifteen minutes.
+without success, on web and native, asks `POST /connectors/{key}/complete`
+once, which records the account if the flow made one.
 Desktop Home and Agents new-conversation and active-session composers show the shared **Run agents
 on this computer** invitation until this installation is paired or the current
 user dismisses it locally. Keep the invitation tied to bundled macrod support,

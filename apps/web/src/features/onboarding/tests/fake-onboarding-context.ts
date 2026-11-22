@@ -3,7 +3,6 @@ import { createEmptyDraft } from '@app/features/routines/core/routine-draft';
 import type { RoutineTemplate } from '@app/features/routines/core/routine-templates';
 import { TEST_CATALOG } from '@app/features/routines/tests/catalog';
 import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
-import type { ServerResponse } from '@service-cognition/generated/schemas';
 import type { RoutineSuggestions } from '@service-scheduled-action/generated/schemas';
 import { createSignal } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
@@ -23,7 +22,7 @@ import {
   suggestionByline,
 } from '../core/routine-suggestions';
 import {
-  nativeToolSlug,
+  type HeldApp,
   onboardingConnectedTools,
   onboardingToolState,
 } from '../queries/connected-tools';
@@ -47,10 +46,10 @@ export type FakeOnboardingWorld = {
   invites: TeamInvite[];
   contacts: string[];
   catalog: Tool[];
-  connectedTools: string[];
-  githubLinkStatus: 'linked' | 'unlinked' | 'reauthentication_required';
-  nativeTools: ServerResponse[];
-  connectionFailures: ('pipedream' | 'native' | 'github')[];
+  /** The apps the user holds, with the server's status for each. */
+  connectors: HeldApp[];
+  /** Reading the connector list fails. */
+  connectorsFail: boolean;
   githubStars: number | undefined;
   inviteOffer: InviteOffer | null;
   trialEligible: boolean;
@@ -119,10 +118,8 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
         iconUrl: fixtureConnectorIcon(name.toLowerCase()),
       })
     ),
-    connectedTools: [],
-    githubLinkStatus: 'unlinked',
-    nativeTools: [],
-    connectionFailures: [],
+    connectors: [],
+    connectorsFail: false,
     githubStars: 12_345,
     inviteOffer: null,
     trialEligible: true,
@@ -285,59 +282,42 @@ export function createFakeOnboarding(
       };
     },
     createConnectedTools: () => ({
-      connected: () =>
-        onboardingConnectedTools(
-          new Set(world.connectedTools),
-          world.nativeTools,
-          world.githubLinkStatus === 'linked'
-        ),
+      connected: () => onboardingConnectedTools(world.connectors),
       state: (slug) =>
         onboardingToolState(
           slug,
-          world.connectionFailures.includes('pipedream')
+          world.connectorsFail
             ? { t: 'error' }
-            : {
-                t: 'ready',
-                value: world.connectedTools.map((app_slug) => ({
-                  app_slug,
-                  enabled: true,
-                })),
-              },
-          world.connectionFailures.includes('native')
-            ? { t: 'error' }
-            : { t: 'ready', value: world.nativeTools },
-          world.connectionFailures.includes('github')
-            ? { t: 'error' }
-            : { t: 'ready', value: world.githubLinkStatus }
+            : { t: 'ready', value: world.connectors }
         ),
       retry: () => call('retryConnections'),
     }),
     configureGithubRepositories: () => call('configureGithubRepositories'),
-    // Native GitHub OAuth returns to the current step; Pipedream stays in an iframe.
+    // GitHub's account link returns to the current step; other apps connect
+    // in place.
     connectTool: async (tool) => {
-      if (tool.slug === 'github') {
-        if (world.githubLinkStatus === 'linked') return;
-        call('connectNativeGithub');
-        return roundTrip(() =>
-          update((draft) => {
-            draft.githubLinkStatus = 'linked';
-          })
-        );
-      }
-      const native = world.nativeTools.find(
-        (server) => server.authenticated && nativeToolSlug(server) === tool.slug
-      );
-      if (native) {
+      const held = world.connectors.find((app) => app.slug === tool.slug);
+      if (held?.status === 'connected') return;
+      if (held?.status === 'disabled') {
+        if (tool.slug === 'github') return;
         update((draft) => {
-          const server = draft.nativeTools.find((s) => s.url === native.url);
-          if (server) server.enabled = true;
+          const app = draft.connectors.find((item) => item.slug === tool.slug);
+          if (app) app.status = 'connected';
         });
         return;
       }
+      const connect = () =>
+        update((draft) => {
+          const app = draft.connectors.find((item) => item.slug === tool.slug);
+          if (app) app.status = 'connected';
+          else draft.connectors.push({ slug: tool.slug, status: 'connected' });
+        });
+      if (tool.slug === 'github') {
+        call('connectNativeGithub');
+        return roundTrip(connect);
+      }
       call(`connectTool:${tool.slug}`);
-      update((draft) => {
-        draft.connectedTools.push(tool.slug);
-      });
+      connect();
     },
     createTeamDirectory: () => ({
       teams: () => loadable('teams', () => world.teams),

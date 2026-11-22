@@ -1,13 +1,14 @@
-import { ConnectedAppIcon } from '@core/pipedream/ConnectedAppIcon';
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
-import {
-  createPipedreamCatalogConnect,
-  createPipedreamCatalogSearch,
-} from '@core/pipedream/catalog';
+import { ConnectedAppIcon } from '@core/connectors/ConnectedAppIcon';
+import { ConnectorIcon } from '@core/connectors/ConnectorIcon';
+import { createConnectAction } from '@core/connectors/connect-action';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import XIcon from '@icon/system/regular/x.svg';
-import type { PipedreamCatalogEntryResponse } from '@service-cognition/client';
+import {
+  appConnectorKey,
+  type CatalogApp,
+  createConnectorCatalogSearch,
+} from '@queries/connectors';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import { Button } from '@ui';
 import { type Accessor, createMemo, For, Show } from 'solid-js';
@@ -21,7 +22,7 @@ import { ConnectAction, StatusDot } from './integration-ui';
 import { IntegrationRow } from './primitives';
 
 /**
- * Picks Pipedream apps from the whole catalog, connected or not, and shows
+ * Picks apps from the whole connector catalog, connected or not, and shows
  * for each picked app whether the *viewer* has connected it.
  *
  * For an agent, selection is the agent's and connection is personal: a
@@ -30,23 +31,23 @@ import { IntegrationRow } from './primitives';
  * an error. A routine runs as its owner and requires its apps, so the
  * routine editor refuses to save until each one is connected.
  */
-export function PipedreamAppPicker(props: {
+export function ConnectorAppPicker(props: {
   selected: readonly AgentMcpServer[];
   onChange: (servers: AgentMcpServer[]) => void;
   /** The viewer's connected app slugs. */
   connectedSlugs: Accessor<ReadonlySet<string>>;
   /** False while the viewer's connections are still loading. */
   connectionsReady: Accessor<boolean>;
-  /** Where the Connect iframe mounts; the enclosing dialog's content. */
+  /** Where an embedded connect dialog mounts; the enclosing dialog's content. */
   connectContainer: Accessor<HTMLElement | undefined>;
 }) {
   const selectedSlugs = createMemo<ReadonlySet<string>>(
     () => new Set(props.selected.map((server) => server.app_slug))
   );
-  const catalog = createPipedreamCatalogSearch(selectedSlugs);
+  const catalog = createConnectorCatalogSearch(selectedSlugs);
   const searching = () => catalog.searchInput().trim().length > 0;
 
-  const pick = (entry: PipedreamCatalogEntryResponse) => {
+  const pick = (entry: CatalogApp) => {
     props.onChange(
       addMcpServer(props.selected, catalogEntryToMcpServer(entry))
     );
@@ -88,7 +89,7 @@ export function PipedreamAppPicker(props: {
               {(entry) => (
                 <CatalogResult
                   entry={entry}
-                  connected={props.connectedSlugs().has(entry.app_slug)}
+                  connected={props.connectedSlugs().has(entry.slug)}
                   onPick={() => pick(entry)}
                 />
               )}
@@ -163,7 +164,7 @@ export function PipedreamAppPicker(props: {
 }
 
 function CatalogResult(props: {
-  entry: PipedreamCatalogEntryResponse;
+  entry: CatalogApp;
   connected: boolean;
   onPick: () => void;
 }) {
@@ -175,15 +176,13 @@ function CatalogResult(props: {
       class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-hover focus-visible:bg-active outline-none"
       onClick={() => props.onPick()}
     >
-      <PipedreamConnectorIcon
-        appSlug={props.entry.app_slug}
-        iconUrl={props.entry.icon_url}
+      <ConnectorIcon
+        appSlug={props.entry.slug}
+        iconUrl={props.entry.iconUrl}
         class="size-4"
       />
       <span class="min-w-0 flex-1">
-        <span class="block truncate text-sm text-ink">
-          {props.entry.display_name}
-        </span>
+        <span class="block truncate text-sm text-ink">{props.entry.name}</span>
         <Show when={props.entry.description}>
           <span class="block truncate text-xs text-ink-muted">
             {props.entry.description}
@@ -209,11 +208,9 @@ function SelectedAppRow(props: {
 }) {
   const state = () =>
     mcpServerConnectionState(props.server, props.connectedSlugs());
-  const { connect, busy } = createPipedreamCatalogConnect({
-    entry: () => ({
-      app_slug: props.server.app_slug,
-      display_name: props.server.server_name,
-    }),
+  const { connect, busy } = createConnectAction({
+    key: () => appConnectorKey(props.server.app_slug),
+    name: () => props.server.server_name,
     container: props.connectContainer,
   });
 
