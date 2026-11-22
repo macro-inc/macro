@@ -547,6 +547,16 @@ async fn catalog_apps_are_connectable_and_unknown_ones_are_not() {
 }
 
 #[tokio::test]
+async fn an_overlaid_app_is_connectable_without_a_hosted_source_listing_it() {
+    let connectors = FakeConnectors::new()
+        .with_overlay("figma", "https://mcp.figma.com/mcp")
+        .build();
+
+    assert!(connectors.connectable(&app("figma")).await.unwrap());
+    assert!(!connectors.connectable(&app("not-an-app")).await.unwrap());
+}
+
+#[tokio::test]
 async fn connecting_goes_through_the_source_that_counts() {
     let world = World::new().flagged(&other_user());
     let connectors = world.connectors();

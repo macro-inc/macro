@@ -584,6 +584,11 @@ impl ConnectionManagementService for Connectors {
 
     #[tracing::instrument(name = "connectors.connectable", skip(self), err)]
     async fn connectable(&self, app: &ConnectorId) -> Result<bool> {
+        // An overlaid app is Macro's own part of the catalog: it connects to
+        // its vendor's server, whether or not a hosted source lists it.
+        if self.inner.overlays.read().await?.is_overlaid(app) {
+            return Ok(true);
+        }
         let answers =
             futures::future::join_all(self.inner.sources.iter().map(|source| source.supports(app)))
                 .await;

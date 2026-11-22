@@ -16,18 +16,15 @@ use crate::outbound::app_directory::{HostedAppDirectory, NoAppDirectory};
 use crate::outbound::github_link::GithubLinkSource;
 use crate::outbound::github_link::auth_service::AuthServiceGithubLink;
 use crate::outbound::hosted_connections::{HostedRepo, Provider, RevokeGrant};
-use crate::outbound::macro_connect::{ConnectConfig, ConnectSource, ConnectVendorClient};
+use crate::outbound::macro_connect::{ConnectSource, ConnectVendorClient};
 use crate::outbound::native::NativeSource;
-use crate::outbound::native::domain::models::{AesKey, OAuthClientMetadata};
-#[cfg(feature = "providers")]
-use crate::outbound::native::domain::provider_registry::PreRegisteredProviders;
-use crate::outbound::native::outbound::guarded_http::{AddressPolicy, McpHttp};
+use crate::outbound::native::outbound::guarded_http::McpHttp;
 use crate::outbound::native::outbound::oauth::OAuthService;
 use crate::outbound::native::outbound::pg_server_repo::PgServerRepo;
 use crate::outbound::native::outbound::redis_state_store::RedisOAuthStateStore;
 use crate::outbound::native::sign_in::OAuthSignIn;
 use crate::outbound::overlays::PgOverlayCatalog;
-use crate::outbound::pipedream::outbound::api::{PipedreamClient, PipedreamConfig};
+use crate::outbound::pipedream::outbound::api::PipedreamClient;
 use crate::outbound::pipedream::source::PipedreamSource;
 use authentication_service_client::AuthServiceClient;
 use feature_flags::outbound::posthog::PostHogFeatureFlags;
@@ -41,6 +38,20 @@ use url::Url;
 
 #[cfg(test)]
 mod test;
+
+// The types a process fills [`ConnectorsConfig`] with, named here so the
+// composition root never reaches into a source's module.
+pub use crate::outbound::macro_connect::ConnectConfig;
+pub use crate::outbound::native::domain::models::{AesKey, OAuthClientMetadata};
+#[cfg(feature = "providers")]
+pub use crate::outbound::native::domain::provider_registry::PreRegisteredProviders;
+/// Which addresses a process's outbound MCP traffic may reach; the egress
+/// proxy's forwarders take the same policy the connectors dial with.
+pub use crate::outbound::native::outbound::guarded_http::AddressPolicy;
+pub use crate::outbound::pipedream::outbound::api::{
+    DEFAULT_API_URL as PIPEDREAM_DEFAULT_API_URL, DEFAULT_MCP_URL as PIPEDREAM_DEFAULT_MCP_URL,
+    PipedreamConfig,
+};
 
 /// How long one read of the rollout flag may take before it counts as off.
 const FLAG_READ_TIMEOUT: Duration = Duration::from_secs(3);

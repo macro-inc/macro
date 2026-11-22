@@ -37,7 +37,11 @@ and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
   place the sources, the overlay catalog and the flag reader are constructed;
   `compose` also returns the app catalog and the server sign-ins the routes
   need. Call one of them once per process; the flag, overlay and Connect
-  catalog caches live in what it returns.
+  catalog caches live in what it returns. It re-exports the types a host
+  fills `ConnectorsConfig` with (`AesKey`, `OAuthClientMetadata`,
+  `PreRegisteredProviders`, `PipedreamConfig`, `ConnectConfig`) and
+  `AddressPolicy`, so a composition root never reaches into a source's
+  module.
 - `src/inbound/`: `axum_router.rs`, the authenticated `/connectors` API
   (list, add a server, catalog, connect, complete, update, remove; connector
   keys are `app/{slug}` or `server/{base64url url}`, see `dto.rs`);
@@ -74,10 +78,9 @@ and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
   overlaid slugs, and completing a Pipedream connection to one refuses it (409)
   and deletes the new Pipedream account.
 - `src/outbound/pipedream/outbound/connect.rs`: the old ports over
-  `macro_connect`'s client; `dispatch.rs`: `ConnectorBackends`, which holds
-  the host's `ConnectRollout` (the `macro-connect` flag, read by
-  `ai_tools::macro_connect_rollout` until its consumers move onto the
-  services).
+  `macro_connect`'s client; `dispatch.rs`: `ConnectorBackends` and its
+  optional `ConnectRollout`, which no host wires any more (the flag is read
+  only in `domain/policy.rs`).
 
 ## Boundaries
 
@@ -117,8 +120,9 @@ and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
 - `github` is overlaid, but its native server is authorized by the GitHub
   account link, not MCP OAuth.
 - The Connect consent redirect (`/pipedream/mcp/connect/callback`) is public
-  and records nothing; `/pipedream/mcp/connect/complete` trusts only Connect's
-  own connection list.
+  and records nothing; completing a connection
+  (`POST /connectors/{kind}/{id}/complete`) trusts only the source's own
+  connection list.
 
 ## Related
 
