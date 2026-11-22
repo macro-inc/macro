@@ -184,31 +184,32 @@ async function replay(
     let fetched = 0;
     let interrupted = false;
     let savesAtRequest = 0;
+    /** A run's first request resumes the last save it may, or starts afresh. */
+    const checkFirstRequest = (sent: string | null, last?: Saved) => {
+      const expected =
+        last?.generation === generation &&
+        !last.completed &&
+        lane.restartOnRun !== true
+          ? last.cursor
+          : null;
+      if (sent !== expected) {
+        violations.push(
+          `${key} sent ${sent ?? 'a fresh pass'} where ${expected ?? 'a fresh pass'} was due`
+        );
+        return;
+      }
+      if (sent === null || last?.build === build) return;
+      const direction = build === 1 ? 'forward' : 'back';
+      resumes.set(
+        `${laneIndex}:${direction}`,
+        (resumes.get(`${laneIndex}:${direction}`) ?? 0) + 1
+      );
+    };
     const fetchPage: FetchPage = async (input: Input) => {
       const continuation = 'continuation' in input ? input.continuation : null;
       const last = saved.get(key);
       savesAtRequest = last?.saves ?? 0;
-      if (fetched === 0) {
-        const expected =
-          last &&
-          last.generation === generation &&
-          !last.completed &&
-          lane.restartOnRun !== true
-            ? last.cursor
-            : null;
-        const sent = continuation?.cursor ?? null;
-        if (sent !== expected) {
-          violations.push(
-            `${key} sent ${sent ?? 'a fresh pass'} where ${expected ?? 'a fresh pass'} was due`
-          );
-        } else if (sent !== null && last && last.build !== build) {
-          const direction = build === 1 ? 'forward' : 'back';
-          resumes.set(
-            `${laneIndex}:${direction}`,
-            (resumes.get(`${laneIndex}:${direction}`) ?? 0) + 1
-          );
-        }
-      }
+      if (fetched === 0) checkFirstRequest(continuation?.cursor ?? null, last);
       if (fetched === budget) {
         interrupted = true;
         throw new Error('the run ends here');

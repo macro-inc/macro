@@ -536,6 +536,15 @@ function withEmailRecency(
 
 type SoupBackfillCacheHost = Pick<CacheHost, 'currentStorageGeneration'>;
 
+/** A lane's page fetch, wrapped afresh for each scan when the lane asks. */
+function createPageFetcher(userId: string, params: SoupBackfillParams) {
+  const fetch = params.fetchPage ?? fetchOperation(params.operation);
+  const { createFetchPage } = params;
+  return createFetchPage
+    ? Effect.tryPromise(() => createFetchPage(userId, fetch))
+    : Effect.succeed(fetch);
+}
+
 type SoupBackfillHooks = {
   /** After each saved page. */
   onCheckpoint?: (checkpoint: SoupBackfillCheckpoint) => void;
@@ -546,24 +555,27 @@ type SoupBackfillHooks = {
 /** Waits for the browser-wide lock `name` and succeeds with its release. */
 const acquireBrowserLock = (locks: LockManager, name: string) =>
   Effect.callback<() => void, Error>((resume, signal) => {
-    void locks
-      .request(
-        name,
-        { signal },
-        () =>
-          new Promise<void>((release) => {
-            // Granted as the waiter was interrupted: give it straight back.
-            if (signal.aborted) release();
-            else resume(Effect.succeed(() => release()));
-          })
-      )
-      .catch((error: unknown) => {
+    const request = async () => {
+      try {
+        await locks.request(
+          name,
+          { signal },
+          () =>
+            new Promise<void>((release) => {
+              // Granted as the waiter was interrupted: give it straight back.
+              if (signal.aborted) release();
+              else resume(Effect.succeed(() => release()));
+            })
+        );
+      } catch (error) {
         if (!signal.aborted) {
           resume(
             Effect.fail(new Error('backfill lock failed', { cause: error }))
           );
         }
-      });
+      }
+    };
+    void request();
   });
 
 /**
@@ -632,18 +644,13 @@ const runUnlockedSoupBackfill = Effect.fn('runSoupBackfill')(function* (
     checkpoint = initialCheckpoint(userId, generation);
     startPass();
   };
-  const fetchLanePage = params.fetchPage ?? fetchOperation(params.operation);
-  const createPageFetcher = () =>
-    params.createFetchPage
-      ? Effect.tryPromise(() => params.createFetchPage!(userId, fetchLanePage))
-      : Effect.succeed(fetchLanePage);
 
   // `completed` marks the end of one pass. Start a fresh pass from its stored
   // watermark, while an unfinished checkpoint keeps its cursor.
   if (checkpoint.completed || checkpoint.scanStartedAt === null) {
     yield* Effect.sync(startPass);
   }
-  let fetchPage = yield* createPageFetcher();
+  let fetchPage = yield* createPageFetcher(userId, params);
 
   while (true) {
     const beforeFetchGeneration = yield* Effect.tryPromise(() =>
@@ -651,7 +658,7 @@ const runUnlockedSoupBackfill = Effect.fn('runSoupBackfill')(function* (
     );
     if (checkpoint.storageGeneration !== beforeFetchGeneration) {
       yield* Effect.sync(() => restartForGeneration(beforeFetchGeneration));
-      fetchPage = yield* createPageFetcher();
+      fetchPage = yield* createPageFetcher(userId, params);
       continue;
     }
     const passInput = withUpdatedSince(
@@ -679,7 +686,7 @@ const runUnlockedSoupBackfill = Effect.fn('runSoupBackfill')(function* (
       // A reset during hydration invalidates the page's continuation even when
       // its request could not be cancelled. Never save it into the new scan.
       yield* Effect.sync(() => restartForGeneration(afterFetchGeneration));
-      fetchPage = yield* createPageFetcher();
+      fetchPage = yield* createPageFetcher(userId, params);
       continue;
     }
 

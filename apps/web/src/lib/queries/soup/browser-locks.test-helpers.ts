@@ -1,4 +1,4 @@
-type Waiter = { grant: () => void };
+type Waiter = { grant: () => Promise<void> };
 
 /**
  * Installs the Locks API as one browser gives it to all of its tabs: one
@@ -16,18 +16,21 @@ export function installBrowserLocks(): () => void {
       return new Promise<void>((resolve, reject) => {
         const lock = names.get(name) ?? { held: false, waiters: [] };
         names.set(name, lock);
-        const grant = () => {
+        const grant = async () => {
           lock.held = true;
-          Promise.resolve()
-            .then(granted)
-            .then(resolve, reject)
-            .finally(() => {
-              lock.held = false;
-              lock.waiters.shift()?.grant();
-            });
+          try {
+            // A browser calls back in a later task, never inside `request`.
+            await null;
+            resolve(await granted());
+          } catch (error) {
+            reject(error);
+          } finally {
+            lock.held = false;
+            void lock.waiters.shift()?.grant();
+          }
         };
         if (!lock.held) {
-          grant();
+          void grant();
           return;
         }
         const waiter = { grant };
