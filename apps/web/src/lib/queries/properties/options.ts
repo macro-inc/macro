@@ -120,16 +120,13 @@ export function useDeletePropertyOptionMutation(
   );
 }
 
-/**
- * Adds an option; resolves with it under its final id, at once when the add
- * queues. A queued add the server refuses later toasts then.
- */
+/** Adds an option; resolves with it once the server has it. */
 export function useAddPropertyOptionMutation(
   callbacks?: CatalogMutationCallbacks<PropertyOption, AddPropertyOptionParams>
 ) {
   return createCatalogMutation(
     (vars: AddPropertyOptionParams) =>
-      addPropertyOption(vars.propertyDefinitionId, vars.body, addFailed),
+      addPropertyOption(vars.propertyDefinitionId, vars.body),
     {
       onError(error) {
         console.error('Failed to add property option', error);

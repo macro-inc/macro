@@ -182,7 +182,7 @@ const createTagFailed = () => toast.failure('Failed to create tag');
 
 /**
  * Create a tag in the caller's personal or team set. Resolves with the tag
- * under its final id, at once when the add queues offline.
+ * once the server has it.
  */
 export async function createTag(
   vars: CreateTagParams
@@ -192,18 +192,14 @@ export async function createTag(
   if (!definition) {
     throw new Error(`Tag set for scope "${vars.scope}" has no definition`);
   }
-  const option = await addPropertyOption(
-    definition.id,
-    {
-      type: 'select_string',
-      option: {
-        value: vars.value,
-        color: vars.color,
-        display_order: nextTagDisplayOrder(tagSet),
-      },
+  const option = await addPropertyOption(definition.id, {
+    type: 'select_string',
+    option: {
+      value: vars.value,
+      color: vars.color,
+      display_order: nextTagDisplayOrder(tagSet),
     },
-    createTagFailed
-  );
+  });
   return { scope: vars.scope, tagSet, option };
 }
 

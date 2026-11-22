@@ -6,8 +6,8 @@
  *   the cache rolls it back if the server refuses, and offline writes queue.
  * - Adding an option shows it at once under an id minted here, linked into the
  *   cached lists it belongs to. The server creates it under that id and a
- *   replay answers with it, so a queued add resolves at once with its final id
- *   and callers can apply it to an entity.
+ *   replay answers with it. The add resolves once the server has it, so the
+ *   id a caller applies to an entity always exists there.
  * - Creating a definition, provisioning a tag set, and sharing or replacing a
  *   tag are answered by the server (it assigns ids and owners, and decides
  *   name collisions); the lists that hold them reload after it answers.
@@ -49,7 +49,7 @@ import {
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
 import type { AnyVariables, OperationResult } from '@urql/core';
-import { v4 as uuidv4 } from 'uuid';
+import { v7 as uuidv7 } from 'uuid';
 import { queryClient } from '../../client';
 import { observePropertyMutationSettlements } from '../graphql/mutation-settlements';
 import { propertiesKeys } from '../keys';
@@ -91,7 +91,7 @@ function errorOf(result: OperationResult): CatalogMutationError {
 }
 
 type Settled<TData> =
-  | { kind: 'committed'; data: TData | undefined }
+  | { kind: 'committed'; data: TData | undefined; waited?: true }
   | { kind: 'queued' };
 
 /**
@@ -113,7 +113,7 @@ async function settle<TData, TVariables extends AnyVariables>(
     if (disposition?.kind === 'queued') {
       if (options.waitForCommit) {
         await settlements.waitForCommit(disposition.transactionId);
-        return { kind: 'committed', data: undefined };
+        return { kind: 'committed', data: undefined, waited: true };
       }
       observing = true;
       settlements
@@ -290,20 +290,20 @@ async function optionListLinks(
 }
 
 /**
- * Adds an option under an id minted here. The server creates it under that
- * id, and a replay of the same add answers with the option the first attempt
- * made, so a queued add can resolve at once and the id it returns is final.
- * A refusal that arrives after a queued add resolved goes to `onLateFailure`;
- * the cache has removed the option by then.
+ * Adds an option under an id minted here. Readers show it at once; the
+ * server creates it under that id, and a replay of the same add answers with
+ * the option the first attempt made. Resolves once the server has it (a
+ * queued add waits for its commit, as TanStack paused an offline write), so
+ * callers never apply an id the server could still refuse; a refusal rejects
+ * after the cache has removed the option.
  */
 export async function addPropertyOption(
   propertyDefinitionId: string,
-  request: AddPropertyOptionRequest,
-  onLateFailure: (error: Error) => void
+  request: AddPropertyOptionRequest
 ): Promise<PropertyOption> {
   return Telemetry.span('property_catalog.add_option', async (span) => {
     span.setAttr('property.definition_id', propertyDefinitionId);
-    const id = uuidv4();
+    const id = uuidv7();
     span.setAttr('property.option_id', id);
     const input = { ...toAddOptionInput(propertyDefinitionId, request), id };
     const client = getGraphqlSoupClient();
@@ -336,11 +336,18 @@ export async function addPropertyOption(
               }
             ).toPromise()
           : client.mutation(AddPropertyOptionDocument, { input }).toPromise(),
-      { waitForCommit: false, onLateFailure }
+      { waitForCommit: true }
     );
-    span.setAttr('property.outcome', outcome.kind);
+    span.setAttr(
+      'property.outcome',
+      outcome.kind === 'committed' && outcome.waited ? 'queued' : outcome.kind
+    );
+    // A queued add commits under the id sent, so the local record is the
+    // option the server made.
     const created =
-      outcome.kind === 'committed' ? outcome.data?.addPropertyOption : option;
+      (outcome.kind === 'committed'
+        ? outcome.data?.addPropertyOption
+        : undefined) ?? option;
     const mapped = created && toPropertyOption(created);
     if (!mapped) noData('addPropertyOption');
     return mapped;
