@@ -2,7 +2,7 @@ import {
   blockNameToDefaultFile,
   itemToSafeName,
 } from '@core/constant/allBlocks';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { emailToId } from '@core/user';
 import {
   extractSearchSnippet,
@@ -35,6 +35,7 @@ import type {
   WithSearch,
 } from '@entity';
 import { type GithubPullRequestLabel, toSubType } from '@entity/types/entity';
+import type { DirectoryChannel } from '@queries/channel/directory-core';
 import { resolveNotifiedAt } from '@queries/soup/normalized-cache/notified-floor';
 import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type {
@@ -58,6 +59,7 @@ import type { ChannelType } from '@service-storage/generated/schemas/channelType
 import type { SoupItemWithCalendarInvite } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { differenceInMilliseconds } from 'date-fns';
+import { createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import { mapChannelToEntity } from '../channel/list-entity';
 import { mapAgentSessionSearchResult } from './agent-session-search';
@@ -330,18 +332,30 @@ export function mapChannelSearchResultItem(
 const formatDisplayName = (text: string, fileType?: string | null) =>
   formatDocumentName(text, fileType, { fullyQualifiedBlockName: true });
 
+type SearchChannelMetadata = {
+  id: string;
+  name?: string | null;
+  team_id?: string | null;
+};
+
+/** What a search result mapper reads of each joined channel. */
+export const channelSearchMetadata = (
+  channels: readonly DirectoryChannel[]
+): SearchChannelMetadata[] =>
+  channels.map(({ id, name, teamId }) => ({ id, name, team_id: teamId }));
+
 export const useSearchResponseItemMapper = () => {
-  const { channels } = useChannelsContext();
+  const { channels } = useChannelDirectory();
+  // Projected once per directory change, not once per result.
+  const mapper = createMemo(() =>
+    createSearchResponseItemMapper(channelSearchMetadata(channels()))
+  );
   return (result: UnifiedSearchResponseItem, searchQuery: string) =>
-    createSearchResponseItemMapper(channels())(result, searchQuery);
+    mapper()(result, searchQuery);
 };
 
 export const createSearchResponseItemMapper = (
-  channels: ReadonlyArray<{
-    id: string;
-    name?: string | null;
-    team_id?: string | null;
-  }>
+  channels: ReadonlyArray<SearchChannelMetadata>
 ) => {
   return (
     result: UnifiedSearchResponseItem,

@@ -135,6 +135,15 @@ work budget, and omitted `matching` retains the deployed subsequence behavior.
 can differ by viewer. Keep the bounded read context in DSS HTTP and websocket
 request data and run the `contacts` schema tests after changes.
 
+`GraphqlUser.directMessageChannelId(userId)` and
+`GraphqlUser.channelViewedAt(channelId)` flatten `graphql_channel`'s viewer
+reads, which go through `ChannelQueryContext` in request data; DSS HTTP and
+websocket requests insert it. The DM lookup returns the DM get-or-create would
+reuse while the viewer is still in it, null otherwise, and never creates
+one. `channelViewedAt` is the viewer's own activity
+row, so it answers for channels they left, which the channel list no longer
+holds.
+
 Saved-view definitions live under authenticated `GraphqlUser`; reads include shared appearance and creation accepts optional validated appearance. Mutations use the authenticated request user and a domain service from request data. Run `cargo test -p complete_graph --lib saved_view_contract` after changing the saved-view contract.
 
 - Mail capsule negotiation lives in `mail_cache_profile`: absent/unknown capabilities receive v2; explicit `soup-mail-v5` receives current capsules. Never infer client support from the server version.

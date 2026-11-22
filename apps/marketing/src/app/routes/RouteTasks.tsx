@@ -1,25 +1,20 @@
-import { DemoInteractionBoundary } from '../../features/marketing/components/DemoInteractionBoundary';
 import {
   FeaturePageFaq,
   FeaturePageSection,
 } from '../../features/marketing/components/FeaturePage';
 import { HomepageClosing } from '../../features/marketing/components/HomepageClosing';
-import { PaperFeatureGraphic } from '../../features/marketing/components/paper/PaperFeatureGraphic';
 import {
   ProductHero,
   ProductPage,
 } from '../../features/marketing/components/product/ProductPage';
-import { GithubConversationDemo } from '../../features/marketing/components/reviews/GithubWorkflow';
-import { EmailTaskDemo } from '../../features/marketing/components/tasks/EmailTaskDemo';
-import { TaskPaperGraphic } from '../../features/marketing/components/tasks/TaskPaperGraphic';
-import {
-  TaskAgentChannelDemo,
-  TaskGithubDemo,
-} from '../../features/marketing/components/tasks/TaskStories';
 import { TasksComparison } from '../../features/marketing/components/tasks/TasksComparison';
-import { TaskViewsGraphic } from '../../features/marketing/components/tasks/TaskViewsGraphic';
 import { DEMO_BOOKING_URL } from '../../features/marketing/core/navigation';
 import '../../features/marketing/components/tasks/tasks-page.css';
+import { FeaturePhoneScreens } from '../../features/marketing/components/FeatureScreenshot';
+import {
+  featureScreens,
+  phoneScreens,
+} from '../../features/marketing/core/feature-screens';
 import { setPageSeo } from '../utils/utilSeo';
 
 const tasksFaq = [
@@ -109,80 +104,41 @@ export function RouteTasks() {
         />
         <FeaturePageSection
           id="from-a-message"
-          demo={{
-            tone: 'tasks',
-            glassFrame: true,
-          }}
           title="Create tasks right from Macro Chat."
           description="Click Create task on any message and the task is linked to that thread, so the conversation on the task and the conversation in the channel are deep linked together. Or mention @Macro and ask it to create tasks from what was just said; it can create many at once. Hit C then T to create one from anywhere."
-        >
-          <span id="ask-macro" />
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            render={() => <TaskAgentChannelDemo />}
-          />
-        </FeaturePageSection>
+          screen={featureScreens['from-a-message']}
+        />
         <FeaturePageSection
           id="from-docs-and-email"
-          demo={{
-            tone: 'tasks',
-          }}
           title="Directly linked to customer Macro Mail."
           description="Create a task from a customer email, or highlight to-do boxes in a document to create many at once. Tasks are linked back to their source bidirectionally: the task remembers where it came from, and the source knows the task exists. Paste a task into a channel and the pill shows its status, assignee, and priority."
-        >
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            render={() => <EmailTaskDemo />}
-          />
-        </FeaturePageSection>
+          screen={featureScreens['from-docs-and-email']}
+        />
         <FeaturePageSection
           id="task-agents"
-          demo={{
-            tone: 'tasks',
-          }}
           title="Assign tasks to Macro Agents, like teammates."
           description="Put an agent on a task and it picks it up and gets to work, with the context linked to the task. Open its session to follow along. Through Macro’s MCP server, Claude Code, Codex, and Cursor can find, create, and update your tasks without leaving your editor."
-        >
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            render={() => <GithubConversationDemo agent />}
-          />
-        </FeaturePageSection>
+          screen={featureScreens['task-agents']}
+        />
         <FeaturePageSection
           id="github"
-          demo={{
-            tone: 'tasks',
-            glassFrame: true,
-          }}
           title="Linked to Macro GitHub, both ways."
           description="As you create, review, and merge pull requests, the linked task moves through In Progress, In Review, and Completed. Click the GitHub pill to open the pull request from the task, or go back to the task from the pull request. Your team can see where the work stands without you having to update two systems."
-        >
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            render={() => <TaskGithubDemo />}
-          />
-        </FeaturePageSection>
+          screen={featureScreens['github']}
+        />
         <FeaturePageSection
           id="task-projects"
           title="Projects and tags."
           description="Group your work into projects. A project has its own page with a description, a discussion, and all of its tasks. Tags are for everything that cuts across projects: use a project when the work has an owner, a goal, and a finish line, and a tag when a task relates to many things at once."
-        >
-          <TaskPaperGraphic />
-        </FeaturePageSection>
+          screen={featureScreens['task-projects']}
+        />
         <FeaturePageSection
           id="task-views"
           title="List, board, or timeline."
           description="Look at your tasks as a list, as a kanban board, or on a timeline, so you can see what’s in flight and what’s coming up next. Filter, sort, and group them, or ask your agent for an update on your team’s tasks."
-        >
-          <PaperFeatureGraphic
-            interactive
-            height={370}
-            mobileHeight={390}
-            label="The same tasks shown as a list, a board, or a timeline."
-          >
-            <TaskViewsGraphic />
-          </PaperFeatureGraphic>
-        </FeaturePageSection>
+          screen={featureScreens['task-views']}
+        />
+        <FeaturePhoneScreens screens={phoneScreens['tasks']} product="Tasks" />
         <TasksComparison />
         <FeaturePageFaq
           guide={{ href: '/tasks#guide', label: 'tasks' }}
