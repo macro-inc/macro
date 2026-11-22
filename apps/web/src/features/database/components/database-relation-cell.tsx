@@ -252,7 +252,9 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                     class="inline-flex min-w-0 items-center gap-1 rounded border border-edge-muted/60 bg-hover/60 py-0.5 pl-1.5 text-xs text-ink"
                     classList={{
                       'max-w-44': !props.expanded,
-                      'max-w-full': props.expanded,
+                      // A narrow panel gives each chip the row, so the arrows line up.
+                      'max-w-full @max-[24rem]/record-fields:w-full':
+                        props.expanded,
                       '@max-[24rem]/record-fields:hidden':
                         narrowHidden() > 0 && index() >= PHONE_CHIP_LIMIT,
                     }}
@@ -262,7 +264,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                     <span
                       classList={{
                         truncate: !props.expanded,
-                        'min-w-0 wrap-break-word': props.expanded,
+                        'min-w-0 flex-1 wrap-break-word': props.expanded,
                       }}
                       data-relation-chip-name
                     >
@@ -274,6 +276,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                       aria-label={`Open ${name(id)}`}
                       title={`Open ${name(id)}`}
                       class={buttonClasses({
+                        variant: 'ghost',
                         size: 'icon-xs',
                         class: 'pointer-events-auto shrink-0',
                       })}
@@ -323,6 +326,27 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                     +{hidden()} more
                   </button>
                 )}
+              </Show>
+              <Show
+                when={
+                  props.expanded &&
+                  showingAll() &&
+                  ids().length > PHONE_CHIP_LIMIT
+                }
+              >
+                <button
+                  type="button"
+                  aria-label={`Show fewer ${props.source.name()}`}
+                  class={buttonClasses({
+                    variant: 'ghost',
+                    size: 'xs',
+                    class:
+                      'pointer-events-auto hidden basis-full justify-start @max-[24rem]/record-fields:inline-flex',
+                  })}
+                  onClick={() => setShowingAll(false)}
+                >
+                  Show less
+                </button>
               </Show>
             </span>
           </Show>

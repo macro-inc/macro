@@ -752,7 +752,8 @@ The record panel has a desktop/phone regression in the same suite,
 `record.browser.e2e.ts`: every related record's chip and every property name
 shows in full. The panel passes `expanded` to its fields, so a relation field
 wraps its chips (up to 20, then "+N"; in a panel under 24rem, as on a phone,
-five, then a "+N more" row that opens the rest) instead of showing two; grids
+five, then a "+N more" row that opens the rest and a "Show less" that
+closes it; each chip there takes the full row so the open arrows line up) instead of showing two; grids
 and board cards keep two. The narrow case is a container query on the panel's
 `record-fields` container, not a device check (FE-70).
 Property names wrap under their icon, and stack above their values when the
