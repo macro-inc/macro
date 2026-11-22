@@ -576,30 +576,36 @@ function InboxRow(props: {
             )}
           </Show>
           <Show when={ENABLE_INBOX_SYNC_STATUS && !props.link.mailbox_issue}>
-            <Switch
-              fallback={
-                <Show when={props.link.sync_status !== SyncStatus.UP_TO_DATE}>
-                  <span
-                    class="flex items-center gap-1 text-xs"
-                    classList={{
-                      'text-failure': isSyncFailure(props.link.sync_status),
-                      'text-ink-muted': !isSyncFailure(props.link.sync_status),
-                    }}
-                  >
-                    <Show when={props.link.sync_status === SyncStatus.SYNCING}>
-                      <ArrowsClockwiseIcon class="size-3 animate-spin" />
-                    </Show>
-                    {syncStatusLabel(props.link.sync_status)}
-                  </span>
-                </Show>
-              }
-            >
-              {/* Live backfill progress (connection gateway) wins over the coarse
+            <div class="min-h-5 min-w-24">
+              <Switch
+                fallback={
+                  <Show when={props.link.sync_status !== SyncStatus.UP_TO_DATE}>
+                    <span
+                      class="flex items-center gap-1 text-xs"
+                      classList={{
+                        'text-failure': isSyncFailure(props.link.sync_status),
+                        'text-ink-muted': !isSyncFailure(
+                          props.link.sync_status
+                        ),
+                      }}
+                    >
+                      <Show
+                        when={props.link.sync_status === SyncStatus.SYNCING}
+                      >
+                        <ArrowsClockwiseIcon class="size-3 animate-spin" />
+                      </Show>
+                      {syncStatusLabel(props.link.sync_status)}
+                    </span>
+                  </Show>
+                }
+              >
+                {/* Live backfill progress (connection gateway) wins over the coarse
                   sync_status while a backfill is actively running. */}
-              <Match when={getBackfillProgress(props.link.id)}>
-                {(progress) => <BackfillProgressBar progress={progress()} />}
-              </Match>
-            </Switch>
+                <Match when={getBackfillProgress(props.link.id)}>
+                  {(progress) => <BackfillProgressBar progress={progress()} />}
+                </Match>
+              </Switch>
+            </div>
           </Show>
         </div>
         <div class="flex max-w-full flex-wrap items-center gap-2 shrink-0">

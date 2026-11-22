@@ -355,7 +355,7 @@ it.each(providers)(
 );
 
 it.each(providers)(
-  '%s: keeps one new-message notice from sending until it fails',
+  '%s: changes one in-flight new-message notice to a timed failure',
   async (provider) => {
     const { context, report } = outbox(provider);
     const notices = recordNotices(context);
@@ -380,7 +380,7 @@ it.each(providers)(
         'update 1 success: Sending…',
         'update 1 failure: Email failed to send',
       ]);
-      expect(notices.open()[0]?.options?.persistent).toBe(true);
+      expect(notices.open()[0]?.options?.persistent).toBe(false);
     } finally {
       root.dispose();
     }

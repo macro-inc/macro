@@ -79,7 +79,7 @@ export function announceQueuedSend(options: {
     notice = undefined;
     if (withdrawn != null) notices.feedback.dismiss(withdrawn);
   };
-  // The outcome stays until it is read; later progress never takes it back.
+  // Terminal notices use normal expiry; later progress never takes them back.
   const finish = (
     tone: 'success' | 'failure' | 'alert',
     message: string,
@@ -171,9 +171,11 @@ export function announceQueuedSend(options: {
       .with({ state: 'failed' }, () => {
         finished = true;
         finish('failure', 'Email failed to send', {
+          // Durable recovery remains in the conversation and Drafts. Keeping
+          // this toast persistent makes it resurface when its page returns.
           subtext:
             'See the conversation or Drafts for the reason and recovery options.',
-          persistent: true,
+          persistent: false,
         });
         options.onUndelivered?.();
       })

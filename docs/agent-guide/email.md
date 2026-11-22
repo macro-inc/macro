@@ -2003,7 +2003,10 @@ IMAP send refusals identify sender, recipient or message refusal when the server
 provides that evidence. A recipient refusal names the address from the already
 loaded message; no accepted recipient receives the body after another RCPT is
 refused. The send is marked failed, with details in the conversation or Drafts,
-and requires a deliberate recovery. A local queued-send timer must never say
+and requires a deliberate recovery. The failure toast expires normally; the
+conversation and Drafts keep the failure and recovery actions. Returning from
+another conversation must not reveal an indefinitely persistent failure toast.
+A local queued-send timer must never say
 Delivery unconfirmed before a provider outcome. Reconnect uses the Reconnect
 action; server fields stack at full dialog width and port choices name SSL/TLS
 or STARTTLS in both the selected value and menu.
