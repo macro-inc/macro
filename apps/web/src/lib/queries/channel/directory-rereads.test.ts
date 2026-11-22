@@ -166,13 +166,16 @@ describe('channel rereads owed after a delete', () => {
 
   it('keeps only the generations written to most recently', () => {
     vi.useFakeTimers({ now: 1_000_000 });
-    for (const generation of ['g1', 'g2', 'g3', 'g4']) {
+    for (const generation of Array.from(
+      { length: 17 },
+      (_, i) => `g${i + 1}`
+    )) {
       deleted('viewer', generation, [generation]);
       vi.setSystemTime(Date.now() + 1);
     }
 
     expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
-    expect(pendingChannelRereads('viewer', 'g4')).toEqual(['g4']);
+    expect(pendingChannelRereads('viewer', 'g17')).toEqual(['g17']);
     expect(pendingChannelRereads('viewer', 'g2')).toEqual(['g2']);
   });
 
@@ -191,6 +194,25 @@ describe('channel rereads owed after a delete', () => {
     const owed = addChannelRereads('viewer', 'g4', ['d']);
     expect(owed).toBeDefined();
     expect(pendingChannelRereads('viewer', 'g4')).toEqual(['d']);
+  });
+
+  it('keeps a generation that owes when an older pass owes after it', () => {
+    vi.useFakeTimers({ now: 1_000_000 });
+    // Another tab, its clock ahead of this one's, wrote two generations.
+    const ahead = (mark: string) => ({
+      touched: Date.now() + 60_000,
+      owed: { [mark]: [{ mark }] },
+    });
+    localStorage.setItem(
+      'channel-directory-rereads:v4:viewer',
+      JSON.stringify({ g1: ahead('a'), g2: ahead('b') })
+    );
+
+    deleted('viewer', 'g4', ['d']);
+    deleted('viewer', 'g3', ['c']);
+
+    expect(pendingChannelRereads('viewer', 'g4')).toEqual(['d']);
+    expect(pendingChannelRereads('viewer', 'g3')).toEqual(['c']);
   });
 
   it('ignores what it cannot read back', () => {
