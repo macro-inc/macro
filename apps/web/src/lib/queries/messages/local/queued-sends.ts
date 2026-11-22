@@ -5,6 +5,7 @@ import { ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 import { mapChannelTimelineEntry } from './map';
 import { queueOwner } from './queue-owner';
+import { rereadAfterDeviceFault } from './rereads';
 import { predictedMessage } from './writes';
 
 /**
@@ -84,6 +85,8 @@ async function queuedSends(
     host.inspectMutations(),
     (error) => error
   );
+  // A send waiting there is missing from this page: read again shortly.
+  if (listed.isErr()) rereadAfterDeviceFault(channelId);
   const queue = listed.unwrapOr([]);
   const shown = messageIdsOf(page);
   // A message deleted before it was sent stays off the page.

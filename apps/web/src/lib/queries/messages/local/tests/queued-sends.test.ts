@@ -1,10 +1,15 @@
 import type { MutationInspection } from '@graphql-cache/protocol';
 import type { MessageTimelinePage } from '@service-storage/messages';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mapChannelTimelineEntry } from '../map';
 import { setQueueOwner } from '../queue-owner';
 import { pageLacksQueuedSends, withQueuedSends } from '../queued-sends';
 import { CHANNEL_ID, graphqlMessage } from './fixtures';
+
+const { rereadAfterDeviceFault } = vi.hoisted(() => ({
+  rereadAfterDeviceFault: vi.fn(),
+}));
+vi.mock('../rereads', () => ({ rereadAfterDeviceFault }));
 
 type Row = ReturnType<typeof graphqlMessage>;
 
@@ -152,7 +157,8 @@ describe('withQueuedSends', () => {
     expect(await withQueuedSends(host, CHANNEL_ID, page)).toBe(page);
   });
 
-  it('answers with the page when the queue cannot be listed', async () => {
+  it('answers with the page when the queue cannot be listed, and has it read again', async () => {
+    rereadAfterDeviceFault.mockClear();
     const page = pageOf([placed]);
     const failing = {
       inspectMutations: async () => {
@@ -160,6 +166,7 @@ describe('withQueuedSends', () => {
       },
     };
     expect(await withQueuedSends(failing, CHANNEL_ID, page)).toBe(page);
+    expect(rereadAfterDeviceFault).toHaveBeenCalledExactlyOnceWith(CHANNEL_ID);
     expect(await withQueuedSends({}, CHANNEL_ID, page)).toBe(page);
   });
 });

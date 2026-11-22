@@ -5,6 +5,8 @@ import type { FetchChannelServerPage } from '../pages';
 import {
   CHANNEL_EVICTION_AGE_MS,
   evictIdleChannels,
+  PREWARM_LOOK_EVERY,
+  PREWARM_MAX_LOOKS,
   runChannelPrewarm,
   runChannelPrewarmPass,
 } from '../prewarm';
@@ -263,6 +265,52 @@ describe('runChannelPrewarmPass', () => {
     const { pass, load, warmed } = run([['a'], ['a'], ['never asked']]);
     await pass;
     expect(warmed()).toEqual(['a']);
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('warms next a channel listed while a long pass is under way', async () => {
+    const first = Array.from({ length: 20 }, (_, index) => `c${index}`);
+    const { pass, load, warmed } = run([
+      first,
+      ['late', ...first],
+      ['late', ...first],
+      ['late', ...first],
+    ]);
+    expect(await pass).toMatchObject({ fetched: 21, failed: 0 });
+    // Not after all twenty: after the first few, then the rest.
+    expect(warmed()).toEqual([
+      ...first.slice(0, PREWARM_LOOK_EVERY),
+      'late',
+      ...first.slice(PREWARM_LOOK_EVERY),
+    ]);
+    // Two looks while channels waited, one that found nothing once done.
+    expect(load).toHaveBeenCalledTimes(4);
+  });
+
+  it('warms what is left without looking again once it has looked often enough', async () => {
+    const lists = Array.from({ length: PREWARM_MAX_LOOKS + 5 }, (_, look) =>
+      Array.from({ length: 20 }, (_, index) => `l${look}-${index}`)
+    );
+    const { pass, load, warmed } = run(lists);
+    await pass;
+    expect(load).toHaveBeenCalledTimes(PREWARM_MAX_LOOKS);
+    expect(new Set(warmed()).size).toBe(PREWARM_MAX_LOOKS * 20);
+  });
+
+  it('warms the channels still waiting when a later look fails', async () => {
+    const first = Array.from({ length: 12 }, (_, index) => `c${index}`);
+    const host = fakeHost(() => devicePage([], { covered: false }));
+    const fetched = vi.fn(fetchPage);
+    const load = vi
+      .fn<() => Promise<string[]>>()
+      .mockResolvedValueOnce(first)
+      .mockRejectedValueOnce(new Error('list failed'));
+    const outcome = await runChannelPrewarmPass(host, load, {
+      signal: new AbortController().signal,
+      delayMs: 0,
+      fetchPage: fetched,
+    });
+    expect(outcome).toMatchObject({ fetched: 12, failed: 0 });
     expect(load).toHaveBeenCalledTimes(2);
   });
 

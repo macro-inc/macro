@@ -119,15 +119,20 @@ export async function runChannelPrewarm(
   });
 }
 
-/** How many times a pass asks again for channels listed since it began. */
+/** How many times a pass asks again, once done, for channels listed since it began. */
 export const PREWARM_FOLLOW_UPS = 2;
+/** Channels warmed between two looks at the lists while a pass has more to warm. */
+export const PREWARM_LOOK_EVERY = 8;
+/** Looks at the lists one pass makes at most. */
+export const PREWARM_MAX_LOOKS = 12;
 
 /**
- * One pass: warms the listed channels, then asks for the lists again and
- * warms the ones that were not on them before. A channel becomes unread on
- * the server a moment after its message is stored, and a pass takes a while,
- * so a channel that turned unread around its start is not on the first list;
- * without the second look it would wait for the next pass, minutes away.
+ * One pass: warms the listed channels, looking at the lists again every few
+ * channels and once it is done, and warms the ones listed since first. A
+ * channel becomes unread on the server a moment after its message is stored,
+ * and a first pass takes half a minute, so a channel that turned unread
+ * around its start is not on the first list; without the further looks it
+ * would wait for the end of the pass, or for the next pass, minutes away.
  */
 export async function runChannelPrewarmPass(
   host: ChannelPrewarmHost,
@@ -141,25 +146,48 @@ export async function runChannelPrewarmPass(
     unavailable: false,
   };
   const listed = new Set<string>();
-  for (let round = 0; round <= PREWARM_FOLLOW_UPS; round += 1) {
+  /** Listed and not yet warmed, in warming order. */
+  let waiting: string[] = [];
+  let looks = 0;
+  let followUps = 0;
+  let looking = true;
+  while (looking || waiting.length > 0) {
     // Offline the lists cannot be asked for; the pass after the reconnect runs.
     if (options.signal.aborted || !onlineManager.isOnline()) break;
-    let asked: string[];
-    try {
-      // A second look waits for the person to leave the app alone, too.
-      if (round > 0) await options.ready?.(options.signal);
+    if (looking) {
+      const done = waiting.length === 0;
+      let asked: string[];
+      try {
+        // A further look waits for the person to leave the app alone, too.
+        if (looks > 0) await options.ready?.(options.signal);
+        if (options.signal.aborted) break;
+        asked = await loadChannelIds();
+      } catch (error) {
+        // Only the first look fails the pass; the channels already listed are still warmed.
+        if (looks === 0) throw error;
+        if (!options.signal.aborted) Telemetry.error(error);
+        asked = [];
+        looking = false;
+      }
+      looks += 1;
+      const fresh = asked.filter((id) => !listed.has(id));
+      for (const id of fresh) listed.add(id);
+      // The lists are most recent first, and so is what was listed since.
+      waiting = [...fresh, ...waiting];
+      if (done && looks > 1) followUps += 1;
+      if (
+        looks >= PREWARM_MAX_LOOKS ||
+        followUps >= PREWARM_FOLLOW_UPS ||
+        (done && fresh.length === 0)
+      ) {
+        looking = false;
+      }
       if (options.signal.aborted) break;
-      asked = await loadChannelIds();
-    } catch (error) {
-      // The channels already warmed stay warmed; only the first look fails the pass.
-      if (round === 0) throw error;
-      if (!options.signal.aborted) Telemetry.error(error);
-      break;
     }
-    const channelIds = asked.filter((id) => !listed.has(id));
-    if (options.signal.aborted || channelIds.length === 0) break;
-    for (const id of channelIds) listed.add(id);
-    const outcome = await runChannelPrewarm(host, channelIds, options);
+    const next = waiting.slice(0, looking ? PREWARM_LOOK_EVERY : undefined);
+    waiting = waiting.slice(next.length);
+    if (next.length === 0) continue;
+    const outcome = await runChannelPrewarm(host, next, options);
     total.fetched += outcome.fetched;
     total.caughtUp += outcome.caughtUp;
     total.failed += outcome.failed;

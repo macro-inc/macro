@@ -14,6 +14,7 @@ import { ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 import { insertReplyIntoThreadPreview } from '../thread-preview';
 import { mapChannelMessage } from './map';
+import { rereadAfterDeviceFault } from './rereads';
 import { channelMessageKey, timestampMicros } from './sort-key';
 
 /**
@@ -105,6 +106,8 @@ async function queuedReplies(
     host.inspectMutations(),
     (error) => error
   );
+  // A reply waiting there is missing from this answer: read again shortly.
+  if (queued.isErr()) rereadAfterDeviceFault(channelId);
   for (const mutation of queued.unwrapOr([])) {
     const parsed = queuedReplySchema.safeParse(mutation);
     if (!parsed.success) continue;
