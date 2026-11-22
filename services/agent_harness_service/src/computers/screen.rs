@@ -34,6 +34,8 @@ pub mod media;
 pub mod refreezes;
 mod rfb;
 mod socket;
+#[cfg(test)]
+mod test;
 pub mod tunnel;
 
 use media::ScreenMedia;
@@ -170,8 +172,12 @@ impl IntoResponse for TicketError {
             | ScreenError::AgentNotPausable => (StatusCode::FORBIDDEN, None),
             ScreenError::NotFound => (StatusCode::NOT_FOUND, None),
             ScreenError::NotAComputer => (StatusCode::BAD_REQUEST, None),
-            ScreenError::TooManyTickets | ScreenError::TooManySockets => {
-                (StatusCode::TOO_MANY_REQUESTS, None)
+            // Distinct codes: a rate limit is retried later, a full computer is not.
+            ScreenError::TooManyTickets => {
+                (StatusCode::TOO_MANY_REQUESTS, Some("too_many_tickets"))
+            }
+            ScreenError::TooManySockets => {
+                (StatusCode::TOO_MANY_REQUESTS, Some("too_many_screens"))
             }
             ScreenError::Internal(report) => {
                 tracing::error!(error = ?report, "screen ticket failed");
