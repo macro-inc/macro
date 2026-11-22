@@ -33,17 +33,20 @@ describe('onboarding connections', () => {
     expect(onboardingToolState('figma', apps)).toBe('available');
   });
 
-  it('shows a linked GitHub account as linked, even with its tools off', () => {
-    for (const status of ['connected', 'disabled'] as const)
-      expect(
-        onboardingToolState('github', ready([{ slug: 'github', status }]))
-      ).toBe('account-linked');
+  it('reads GitHub like any app: only the server says it is connected', () => {
+    // A flagged user's linked account does not count; the server says so.
     expect(
       onboardingToolState(
         'github',
-        ready([{ slug: 'github', status: 'needsReauth' }])
+        ready([{ slug: 'github', status: 'notConnected' }])
       )
     ).toBe('available');
+    expect(
+      onboardingToolState(
+        'github',
+        ready([{ slug: 'github', status: 'connected' }])
+      )
+    ).toBe('connected');
   });
 
   it('passes loading and failure through', () => {

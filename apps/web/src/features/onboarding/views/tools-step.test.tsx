@@ -93,13 +93,13 @@ it('holds connecting while connection status is unknown and offers retry', () =>
   );
   expect(fake.calls()).toContain('retryConnections');
 });
-it('distinguishes a linked GitHub account from repository setup', () => {
+it('offers repository setup once GitHub is connected', () => {
   const { fake } = renderWithFakeOnboarding(
     () => <ToolsStep onContinue={vi.fn()} />,
     { connectors: [{ slug: 'github', status: 'connected' }] }
   );
   expect(
-    screen.getByRole('button', { name: 'Account linked to GitHub' })
+    screen.getByRole('button', { name: 'Connected to GitHub' })
   ).toBeTruthy();
   fireEvent.click(
     screen.getByRole('button', { name: 'Configure GitHub repositories' })

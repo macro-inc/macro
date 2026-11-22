@@ -803,9 +803,10 @@ dot sits beside the name.
   description. **Connect** (or **Add account** with multi-inbox) starts that
   provider's flow; Outlook checks availability first. **Manage** opens Email
   settings, where each inbox is managed.
-- **GitHub**: one row for the account link (pull request reviews and status)
-  and agent tools. Its menu has **Configure GitHub App**, **Agent tools** (the
-  GitHub provider page) and **Disconnect**.
+- **GitHub**: one row for pull request reviews and status and agent tools.
+  Its status is the server's (`app/github`), not the account link's; the link
+  only adds the username and, when linked, **Configure GitHub App** to the
+  menu beside **Agent tools** (the GitHub provider page) and **Disconnect**.
 - **Slack**, **Linear**, **Notion**: agent tools, with **Connect**/**Manage**
   opening the provider page and **Import** beside it. Slack's Import opens the
   Slack export importer for team admins with archive import enabled, otherwise
@@ -841,11 +842,14 @@ otherwise. An app with a row of its own
 (Granola) is listed once, in that row. A held connection that no longer
 counts (for example one through a provider the user is not on) reads
 **Not connected** with **Connect**.
-GitHub's connection is the GitHub account link (the same GitHub App), so
-connecting GitHub anywhere (catalog, chat connect card, import dialog, the
-GitHub AI provider page) runs the account link, a link needing reauthorization
-reads as such, and disconnecting GitHub on its AI provider page unlinks the
-account.
+Connecting GitHub anywhere (its row, the chat connect card, the import
+dialog, the GitHub AI provider page) asks the server like any app. When
+GitHub's connection is the GitHub account link (the same GitHub App), the
+server answers with `/app/connect/github`, which starts the link and returns
+to Integrations; someone on Macro Connect gets Connect's consent page instead,
+and a linked account then reads Not connected. A link needing reauthorization
+reads as such, and disconnecting GitHub (`DELETE /connectors/app/github`)
+unlinks the account.
 The Agents workspace opens this same Integrations page. The list includes featured providers, a searchable catalog,
 and `Add Custom`. Slack is available in production and development from the
 featured Slack provider. Connecting Slack here grants tool

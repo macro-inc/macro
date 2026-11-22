@@ -343,11 +343,13 @@ The catalog scrolls with the page; Continue stays visible in a sticky footer.
 At desktop and phone widths, verify scrolling over the cards moves the page,
 the last row remains reachable, and Continue stays fully visible after searching.
 
-GitHub uses Macro's native OAuth/re-authorization flow and returns to the tools
-step. It shows **Account linked**, distinct from agent-tool readiness. A
-**Configure GitHub repositories** action opens native GitHub App installation;
-repository access must not be inferred from the account link. No catalog
-GitHub card is offered. The same setup remains available in Settings.
+GitHub connects like any other tool: the server answers how (the Macro
+GitHub account link through `/app/connect/github`, or Macro Connect's consent
+page for someone on Connect), and the tile reads **Connected** only when the
+server says GitHub is. Once it is, a **Configure GitHub repositories** action
+opens native GitHub App installation; repository access must not be inferred
+from the connection. No catalog GitHub card is offered. The same setup remains
+available in Settings.
 
 Gmail and Google Calendar are hidden, including search and later pages. Google
 Drive and Google Sheets remain available in browse and search, with their own

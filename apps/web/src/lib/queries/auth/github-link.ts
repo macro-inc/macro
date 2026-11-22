@@ -1,7 +1,5 @@
-import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
-import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { authServiceClient } from '@service-auth/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { connectorKeys } from '../connectors/keys';
@@ -139,16 +137,5 @@ export function useReauthenticateGithubMutation() {
       await throwOnErr(() =>
         authServiceClient.reauthenticateGithub(originalUrl)
       ),
-  }));
-}
-
-export function useDeleteGithubLinkMutation() {
-  return useMutation(() => ({
-    mutationFn: async () =>
-      await throwOnErr(() => authServiceClient.deleteGithubLink()),
-    onSuccess: () => {
-      fireAndForget(invalidateGithubLinkStatus(), 'github-link');
-      invalidateAllSoup();
-    },
   }));
 }

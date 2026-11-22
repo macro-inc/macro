@@ -299,7 +299,6 @@ export function createFakeOnboarding(
       const held = world.connectors.find((app) => app.slug === tool.slug);
       if (held?.status === 'connected') return;
       if (held?.status === 'disabled') {
-        if (tool.slug === 'github') return;
         update((draft) => {
           const app = draft.connectors.find((item) => item.slug === tool.slug);
           if (app) app.status = 'connected';

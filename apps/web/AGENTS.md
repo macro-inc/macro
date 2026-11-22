@@ -509,8 +509,9 @@ how) only through `src/lib/queries/connectors/` (`useConnectors`, its
 mutations, `connectConnector` and the catalog). The server applies every
 rule; the web never picks a source, reads `macro-connect`, or computes a
 status. Connecting asks the server (`POST /connectors/{key}/connect`) and
-follows the step it answers; only `app/github` starts the GitHub account link
-itself.
+follows the step it answers, for GitHub too: when GitHub's connection is the
+account link, the server answers with `/app/connect/github`, the page that
+starts it.
 
 Undo in a large collaborative Markdown document (Loro undo, mirror, reconcile,
 caret mapping) has a backend-free timing regression:

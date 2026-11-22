@@ -1,5 +1,7 @@
 import { SlackImport } from '@app/features/slack-import/slack-import';
+import { toast } from '@core/component/Toast/Toast';
 import { ConnectorIcon } from '@core/connectors/ConnectorIcon';
+import { createConnectAction } from '@core/connectors/connect-action';
 import { ENABLE_EMAIL } from '@core/constant/featureFlags';
 import { useEmailLinks } from '@core/email-link';
 import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
@@ -10,6 +12,10 @@ import GmailIcon from '@icon/gmail-color.svg';
 import OutlookIcon from '@icon/outlook-color.svg';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
+import {
+  GITHUB_CONNECTOR_KEY,
+  useRemoveConnectorMutation,
+} from '@queries/connectors';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import {
@@ -24,7 +30,7 @@ import {
 } from '../../granola-connect/core/granola';
 import { createGranolaConnection } from '../../granola-connect/primitives/create-granola-connection';
 import { useConnectInbox } from '../Email';
-import { GITHUB_APP_INSTALL_URL, useGithubConnection } from '../GitHub';
+import { GITHUB_APP_INSTALL_URL, useGithubAccountLink } from '../GitHub';
 import { ConnectAction } from '../integration-ui';
 import { useTeamViewer } from '../Team';
 import { ConnectionRowActions } from './connection-more';
@@ -164,26 +170,62 @@ export function useEmailItems(
 
 /**
  * One GitHub row for the account link (pull requests, reviews, repositories)
- * and the agent tools, which are managed from its menu.
+ * and the agent tools, which are managed from its menu. Whether GitHub is
+ * connected is the connectors list's answer: for someone on Macro Connect a
+ * linked account does not count. The link supplies only the username and
+ * the GitHub App setup.
  */
 export function useGithubItem(
   model: Accessor<ConnectionsModel>
 ): IntegrationItem {
-  const github = useGithubConnection();
+  const link = useGithubAccountLink();
   const view = useConnectionsView();
-  const agentStatus = () => agentToolStatus(model, 'github');
+  const remove = useRemoveConnectorMutation();
+  const capability = () => capabilityFor(model(), 'github');
+  const status = () => agentToolStatus(model, 'github');
+  const { connect, busy } = createConnectAction({
+    key: () => GITHUB_CONNECTOR_KEY,
+    name: () => 'GitHub',
+  });
+  const startConnect = () => fireAndForget(connect(), 'github-settings');
+  const disconnect = () =>
+    remove.mutate(
+      { key: GITHUB_CONNECTOR_KEY },
+      {
+        onSuccess: () => toast.success('Disconnected GitHub from Macro'),
+        onError: () => toast.failure('Failed to disconnect GitHub'),
+      }
+    );
 
   function Actions() {
     return (
-      <Switch>
-        <Match when={github.status() === 'linked'}>
+      <Switch
+        fallback={
+          <ConnectAction
+            label="Connect"
+            ariaLabel="Connect GitHub"
+            onClick={startConnect}
+            loading={busy()}
+          />
+        }
+      >
+        <Match
+          when={
+            capability()?.status === 'connected' ||
+            capability()?.status === 'off'
+          }
+        >
           <ConnectionRowActions
             items={[
-              {
-                label: 'Configure GitHub App',
-                icon: 'external',
-                onSelect: () => openExternalUrl(GITHUB_APP_INSTALL_URL),
-              },
+              ...(link.linked()
+                ? [
+                    {
+                      label: 'Configure GitHub App',
+                      icon: 'external' as const,
+                      onSelect: () => openExternalUrl(GITHUB_APP_INSTALL_URL),
+                    },
+                  ]
+                : []),
               {
                 label: 'Agent tools',
                 icon: 'settings',
@@ -193,26 +235,18 @@ export function useGithubItem(
                 label: 'Disconnect',
                 icon: 'disconnect',
                 danger: true,
-                disabled: github.disconnecting(),
-                onSelect: () =>
-                  fireAndForget(github.disconnect(), 'github-settings'),
+                disabled: remove.isPending,
+                onSelect: disconnect,
               },
             ]}
           />
         </Match>
-        <Match when={github.status() === 'reauthentication_required'}>
+        <Match when={capability()?.status === 'action-required'}>
           <ConnectAction
             label="Reconnect"
-            onClick={() => fireAndForget(github.reconnect(), 'github-settings')}
-            disabled={github.reconnecting()}
-          />
-        </Match>
-        <Match when={!github.loading()}>
-          <ConnectAction
-            label="Connect"
-            ariaLabel="Connect GitHub"
-            onClick={() => fireAndForget(github.connect(), 'github-settings')}
-            disabled={github.connecting()}
+            ariaLabel="Reconnect GitHub"
+            onClick={startConnect}
+            loading={busy()}
           />
         </Match>
       </Switch>
@@ -227,15 +261,15 @@ export function useGithubItem(
     get description() {
       const summary =
         'Pull request reviews and status in Macro, and repository access for agents.';
-      const username = github.username();
+      const username = link.username();
       return username ? `@${username} · ${summary}` : summary;
     },
     categories: ['Code', 'Agent tools'],
     get status() {
-      return github.connectionState() ?? agentStatus();
+      return status();
     },
     get statusLabel() {
-      return github.connectionState() === 'attention'
+      return capability()?.status === 'action-required'
         ? 'Reconnect required'
         : undefined;
     },

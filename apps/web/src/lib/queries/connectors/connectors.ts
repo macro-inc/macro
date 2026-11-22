@@ -18,7 +18,7 @@ export type {
   ConnectorStatus,
 } from '@service-cognition/generated/schemas';
 
-/** The key of the one app whose connection is the Macro GitHub account link. */
+/** GitHub's connector key. Its connection may be the Macro GitHub account link. */
 export const GITHUB_CONNECTOR_KEY = 'app/github';
 
 /** The key the server gives a catalog app. Never build a server's key. */

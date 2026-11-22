@@ -67,10 +67,10 @@ it('switches a held app back on instead of connecting it again', async () => {
   expect(mocks.connect).not.toHaveBeenCalled();
 });
 
-it('leaves connected apps and a linked GitHub account alone', async () => {
+it('leaves connected apps alone', async () => {
   mocks.read.mockResolvedValue([
     held('linear', 'connected'),
-    held('github', 'disabled'),
+    held('github', 'connected'),
   ]);
   await createOnboardingToolConnect()(tool('linear'));
   await createOnboardingToolConnect()(tool('github'));

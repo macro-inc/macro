@@ -681,7 +681,7 @@ for (const status of ['notConnected', 'needsReauth'] as const) {
       .click();
     await expect(
       page.getByRole('button', {
-        name: 'Account linked to GitHub',
+        name: 'Connected to GitHub',
         exact: true,
       })
     ).toBeDisabled();
@@ -692,7 +692,7 @@ for (const status of ['notConnected', 'needsReauth'] as const) {
     await page.reload();
     await expect(
       page.getByRole('button', {
-        name: 'Account linked to GitHub',
+        name: 'Connected to GitHub',
         exact: true,
       })
     ).toBeDisabled();

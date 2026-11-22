@@ -12,24 +12,21 @@ export function ToolTile(props: {
   disabled: boolean;
   onConnect: () => void;
 }) {
-  const connected = () =>
-    props.state === 'connected' || props.state === 'account-linked';
+  const connected = () => props.state === 'connected';
   const label = () =>
-    props.state === 'account-linked'
-      ? 'Account linked'
-      : props.state === 'connected'
-        ? 'Connected'
-        : props.state === 'disabled'
-          ? 'Enable'
-          : props.state === 'loading'
-            ? 'Checking connection…'
-            : props.state === 'error'
-              ? 'Status unavailable'
-              : 'Integration';
+    props.state === 'connected'
+      ? 'Connected'
+      : props.state === 'disabled'
+        ? 'Enable'
+        : props.state === 'loading'
+          ? 'Checking connection…'
+          : props.state === 'error'
+            ? 'Status unavailable'
+            : 'Integration';
   return (
     <button
       type="button"
-      aria-label={`${props.state === 'account-linked' ? 'Account linked to' : connected() ? 'Connected to' : props.busy ? 'Connecting' : props.state === 'disabled' ? 'Enable' : 'Connect'} ${props.tool.name}`}
+      aria-label={`${connected() ? 'Connected to' : props.busy ? 'Connecting' : props.state === 'disabled' ? 'Enable' : 'Connect'} ${props.tool.name}`}
       aria-busy={props.busy}
       disabled={props.disabled || props.busy || connected()}
       onClick={() => props.onConnect()}

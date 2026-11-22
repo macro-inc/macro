@@ -7,10 +7,7 @@ import {
 } from '@queries/connectors';
 import type { Tool } from '../context/onboarding-context';
 
-/**
- * Connect a tool, or switch back on one the user holds but turned off.
- * GitHub's connection is the Macro account link, which connecting starts.
- */
+/** Connect a tool, or switch back on one the user holds but turned off. */
 export function createOnboardingToolConnect() {
   const update = useUpdateConnectorMutation();
 
@@ -23,9 +20,7 @@ export function createOnboardingToolConnect() {
       );
       if (held?.status === 'connected') return;
       if (held?.status === 'disabled') {
-        // A linked GitHub account is already what onboarding asks for.
-        if (tool.slug !== 'github')
-          await update.mutateAsync({ key, enabled: true });
+        await update.mutateAsync({ key, enabled: true });
         return;
       }
       await connectConnector({ key });

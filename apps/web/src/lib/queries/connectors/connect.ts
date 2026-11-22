@@ -1,4 +1,3 @@
-import { linkGithubAccount } from '@core/auth/authorize-github';
 import {
   openPipedreamConnectUI,
   type PipedreamConnectEvent,
@@ -18,11 +17,7 @@ import type {
 } from '@service-cognition/generated/schemas';
 import { Result } from 'neverthrow';
 import { match } from 'ts-pattern';
-import {
-  GITHUB_CONNECTOR_KEY,
-  invalidateConnectors,
-  upsertConnector,
-} from './connectors';
+import { invalidateConnectors, upsertConnector } from './connectors';
 
 /**
  * `connected` once the connection exists (every reader's list already holds
@@ -63,18 +58,15 @@ const sleep = (ms: number) =>
  * system browser in the native apps; its completion is polled, because the
  * page cannot message this tab) or an embedded dialog with a short-lived
  * token (Pipedream's Connect UI, in an iframe on the web and the system
- * browser in the native apps). The web never chooses between them.
- *
- * GitHub is the one exception: its connection is the Macro GitHub account
- * link, which only the web can start, so it links the account as the GitHub
- * settings row does.
+ * browser in the native apps). The web never chooses between them, for
+ * GitHub either: when GitHub's connection is the account link, the page the
+ * server answers with is the app's own `/app/connect/github`, which starts it.
  *
  * Rejects when the server refuses or the connection fails.
  */
 export async function connectConnector(
   args: ConnectArgs
 ): Promise<ConnectOutcome> {
-  if (args.key === GITHUB_CONNECTOR_KEY) return await connectGithub();
   // The server may answer with a page to open, which Safari only allows from
   // a tab opened inside the click: reserve one now (none in the native apps),
   // and close it again unless the answer needs it.
@@ -251,24 +243,4 @@ async function confirmConnection(key: string): Promise<Connector | undefined> {
     await sleep(COMPLETE_POLL_MS);
   }
   return undefined;
-}
-
-/**
- * Link the Macro GitHub account, which is GitHub's connection. On the web
- * the page leaves for GitHub and returns after the link, so this resolves
- * `closed`; on native mobile it resolves once the link is made.
- */
-async function connectGithub(): Promise<ConnectOutcome> {
-  return await Telemetry.span('connector.connect', async (span) => {
-    span.setAttr('connector.kind', 'app');
-    span.setAttr('connector.app_slug', 'github');
-    const linked = await span.span(
-      'github.link',
-      async () => await linkGithubAccount('Failed to connect GitHub')
-    );
-    span.setAttr('connector.outcome', linked ? 'connected' : 'closed');
-    if (!linked) return 'closed';
-    await invalidateConnectors();
-    return 'connected';
-  });
 }

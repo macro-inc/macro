@@ -17,11 +17,7 @@ export function onboardingConnectedTools(
   );
 }
 
-/**
- * A tool's tile state from the server's status. GitHub's connection is the
- * Macro account link: a linked account reads as linked even with its agent
- * tools switched off.
- */
+/** A tool's tile state from the server's status, GitHub included. */
 export function onboardingToolState(
   slug: string,
   apps: Loadable<readonly HeldApp[]>
@@ -30,12 +26,8 @@ export function onboardingToolState(
   const status =
     apps.value.find((app) => app.slug === slug)?.status ?? 'notConnected';
   return match(status)
-    .with('connected', () =>
-      slug === 'github' ? ('account-linked' as const) : ('connected' as const)
-    )
-    .with('disabled', () =>
-      slug === 'github' ? ('account-linked' as const) : ('disabled' as const)
-    )
+    .with('connected', () => 'connected' as const)
+    .with('disabled', () => 'disabled' as const)
     .with('needsReauth', 'notConnected', () => 'available' as const)
     .exhaustive(() => 'available' as const);
 }

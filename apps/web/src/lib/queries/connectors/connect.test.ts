@@ -14,14 +14,10 @@ const mocks = vi.hoisted(() => ({
   closeTab: vi.fn(),
   reservePopup: vi.fn(),
   assignUrl: vi.fn(),
-  linkGithub: vi.fn(),
   setData: vi.fn(),
   invalidate: vi.fn(async () => {}),
 }));
 vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.native }));
-vi.mock('@core/auth/authorize-github', () => ({
-  linkGithubAccount: mocks.linkGithub,
-}));
 vi.mock('@core/pipedream/connect-native', () => ({
   openNativePipedreamConnectUI: mocks.openNative,
 }));
@@ -227,17 +223,19 @@ describe('connecting on a page', () => {
 });
 
 describe('connecting GitHub', () => {
-  it('links the Macro GitHub account without asking the server how', async () => {
-    mocks.linkGithub.mockResolvedValue(true);
-    expect(await connectConnector({ key: 'app/github' })).toBe('connected');
-    expect(mocks.start).not.toHaveBeenCalled();
-    // The account link opens its own way; no tab is reserved for it.
-    expect(mocks.reservePopup).not.toHaveBeenCalled();
-    expect(mocks.invalidate).toHaveBeenCalled();
-  });
-
-  it('is closed while the web page leaves for GitHub', async () => {
-    mocks.linkGithub.mockResolvedValue(false);
+  it('asks the server like any app and opens the page it answers', async () => {
+    // A flagged user's GitHub goes through Connect's consent page, and the
+    // account link through the app's own page: the server picks.
+    const tab = { closed: true, close: mocks.closeTab };
+    mocks.reservePopup.mockReturnValue(tab);
+    mocks.start.mockResolvedValue(
+      ok({ type: 'openUrl', url: 'https://app.example/app/connect/github' })
+    );
     expect(await connectConnector({ key: 'app/github' })).toBe('closed');
+    expect(mocks.start).toHaveBeenCalledWith({ key: 'app/github' });
+    expect(mocks.assignUrl).toHaveBeenCalledWith(
+      tab,
+      'https://app.example/app/connect/github'
+    );
   });
 });

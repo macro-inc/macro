@@ -74,10 +74,10 @@ export function IntegrationsView(props: IntegrationsViewProps) {
 }
 
 /**
- * Whether the GitHub account is linked, so GitHub is connected or only
- * switched off; unknown reads as not linked.
+ * Whether GitHub is connected or only switched off, by the server's answer;
+ * unknown reads as not connected.
  */
-async function githubAlreadyLinked(): Promise<boolean> {
+async function githubAlreadyHeld(): Promise<boolean> {
   const connectors = await ResultAsync.fromPromise(readConnectors(), () => ({
     kind: 'connectors-unavailable' as const,
   }));
@@ -120,15 +120,14 @@ function ConnectionsContent(props: IntegrationsViewProps) {
   async function connectRequestedApp(appSlug: string) {
     try {
       const key = appConnectorKey(appSlug);
-      // A linked account already authorizes GitHub's agent tools, so a
-      // request to connect it means they are switched off. Show them instead
-      // of linking again, which on the web navigates the whole page away.
-      const alreadyLinked =
-        key === GITHUB_CONNECTOR_KEY && (await githubAlreadyLinked());
+      // A request to connect a GitHub that is already held means its agent
+      // tools are switched off: show them instead of connecting again.
+      const alreadyHeld =
+        key === GITHUB_CONNECTOR_KEY && (await githubAlreadyHeld());
       // The user left Connections while the read was pending; starting
       // authorization now would navigate away from their newer work.
       if (disposed) return;
-      if (alreadyLinked) {
+      if (alreadyHeld) {
         view.openProvider('github');
         return;
       }

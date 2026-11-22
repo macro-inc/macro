@@ -21,6 +21,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   invalidateGithubLink: vi.fn(async () => {}),
+  invalidateSoup: vi.fn(),
 }));
 
 vi.mock('@queries/client', async () => {
@@ -31,6 +32,9 @@ vi.mock('@queries/client', async () => {
     }),
   };
 });
+vi.mock('@queries/soup/normalized-cache', () => ({
+  invalidateAllSoup: mocks.invalidateSoup,
+}));
 vi.mock('@queries/auth/github-link', () => ({
   invalidateGithubLinkStatus: mocks.invalidateGithubLink,
 }));
@@ -190,5 +194,6 @@ describe('useConnectors', () => {
     await vi.waitFor(() =>
       expect(mocks.invalidateGithubLink).toHaveBeenCalledOnce()
     );
+    expect(mocks.invalidateSoup).toHaveBeenCalledOnce();
   });
 });

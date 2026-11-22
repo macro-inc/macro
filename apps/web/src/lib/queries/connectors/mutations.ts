@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { invalidateGithubLinkStatus } from '@queries/auth/github-link';
+import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
   AddServerRequest,
@@ -76,9 +77,12 @@ async function settleRemove(
   _error: unknown,
   variables: { key: string }
 ) {
-  // Removing GitHub unlinks the account, which pull request features read.
-  if (variables.key === GITHUB_CONNECTOR_KEY)
+  // Removing GitHub unlinks the account, which pull request features and
+  // the pull requests listed everywhere read.
+  if (variables.key === GITHUB_CONNECTOR_KEY) {
     fireAndForget(invalidateGithubLinkStatus(), 'connectors');
+    invalidateAllSoup();
+  }
   await invalidateConnectors();
 }
 
