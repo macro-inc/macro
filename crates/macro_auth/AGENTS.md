@@ -45,7 +45,8 @@ Macro API tokens may include a signed `agent_id` for SDK message attribution,
 and with it an `agent_via` client label ("Claude Code"), plus a signed
 `routine_id` naming the routine whose run the token acts for (loop protection,
 see `agent_correlation`), and a signed `channel_mention_id` naming the channel
-message a bot's program answers (email refuses those runs' sends). Ordinary user token producers leave them absent; only
+message a bot's program answers, with `channel_mention_channel_id` binding
+reads to the trusted origin channel. Ordinary user token producers leave them absent; only
 key-holders signing for a verified context set them, never from request input.
 
 ## Gotchas

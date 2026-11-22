@@ -73,7 +73,15 @@ where
         let token = tokens.authenticating;
         let signed = checked_signed_scope(token.as_ref(), parts, state.specs)?;
         let correlation = accept_correlation(&state, token.as_ref()).await?;
-        if !within_own_session(signed, correlation.map(|(_, c)| c), state.specs, parts) {
+        if !within_own_session(
+            signed,
+            correlation.map(|(_, c)| c),
+            state.specs,
+            parts,
+            token
+                .as_ref()
+                .and_then(|token| token.channel_mention_channel_id),
+        ) {
             return Err(CorrelationRejection(CorrelationError::OutOfScope));
         }
         let id = correlation.map(|(id, _)| id);
@@ -192,7 +200,13 @@ async fn other_tokens_scope(
         let correlation = accept_correlation(state, Some(token))
             .await?
             .map(|(_, c)| c);
-        if !within_own_session(signed, correlation, specs, parts) {
+        if !within_own_session(
+            signed,
+            correlation,
+            specs,
+            parts,
+            token.channel_mention_channel_id,
+        ) {
             return Err(CorrelationRejection(CorrelationError::OutOfScope));
         }
         if let Some(stored) = correlation.and_then(|correlation| correlation.scope) {
@@ -216,12 +230,17 @@ fn within_own_session(
     correlation: Option<Correlation>,
     specs: Option<&[&str]>,
     parts: &Parts,
+    mention_channel: Option<Uuid>,
 ) -> bool {
     let own = correlation.map_or(OwnSession::Unknown, |correlation| {
         OwnSession::Is(correlation.session_id)
     });
     let (method, path) = (parts.method.as_str(), parts.uri.path());
-    signed.allows_within(specs, own, method, path)
+    let stored = correlation.and_then(|correlation| correlation.scope);
+    let mention = signed.known() == Some(SessionScope::ChannelMention)
+        || stored == Some(SessionScope::ChannelMention);
+    (!mention || crate::scope::mention_channel_allows(mention_channel, method, path))
+        && signed.allows_within(specs, own, method, path)
         && correlation
             .and_then(|correlation| correlation.scope)
             .is_none_or(|stored| stored.allows_within(specs, own, method, path))
@@ -240,7 +259,14 @@ fn checked_signed_scope(
     // A verified legacy mention adds the new restriction; it never replaces
     // the original scope (an unknown scope still permits GET only).
     let mention = token.is_some_and(|token| token.channel_mention_id.is_some());
-    if !scope.allows_on(specs, parts.method.as_str(), parts.uri.path())
+    let channel_bound = !(mention || scope.known() == Some(SessionScope::ChannelMention))
+        || crate::scope::mention_channel_allows(
+            token.and_then(|token| token.channel_mention_channel_id),
+            parts.method.as_str(),
+            parts.uri.path(),
+        );
+    if !channel_bound
+        || !scope.allows_on(specs, parts.method.as_str(), parts.uri.path())
         || (mention
             && !SessionScope::ChannelMention.allows_on(
                 specs,
@@ -250,6 +276,9 @@ fn checked_signed_scope(
     {
         tracing::warn!(
             ?scope,
+            refusal = if channel_bound { "signed_scope" } else { "mention_channel" },
+            channel_mention_id = ?token.and_then(|token| token.channel_mention_id),
+            channel_mention_channel_id = ?token.and_then(|token| token.channel_mention_channel_id),
             method = %parts.method,
             agent_correlation_id = ?token.and_then(|token| token.agent_correlation_id),
             agent_session_id = ?token.and_then(|token| token.agent_session_id),
@@ -402,6 +431,9 @@ async fn propagate_request(
         correlation.map(|(_, correlation)| correlation),
         state.specs,
         &parts,
+        token
+            .as_ref()
+            .and_then(|token| token.channel_mention_channel_id),
     ) {
         tracing::warn!(
             scope = correlation
@@ -503,7 +535,15 @@ async fn enforce_signed_scope_request(
         Err(rejection) => return rejection.into_response(),
     };
     // No correlation is read here, so no session is known.
-    if !within_own_session(signed, None, specs, &parts) {
+    if !within_own_session(
+        signed,
+        None,
+        specs,
+        &parts,
+        token
+            .as_ref()
+            .and_then(|token| token.channel_mention_channel_id),
+    ) {
         return CorrelationRejection(CorrelationError::OutOfScope).into_response();
     }
     next.run(Request::from_parts(parts, body)).await

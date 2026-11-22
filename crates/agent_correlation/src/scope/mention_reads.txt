@@ -1,6 +1,8 @@
 # ChannelMention reads, under the verified mentioner's existing access.
 # Only these operations are allowed; paths are exact OpenAPI templates.
-# POST entries below are reads (search or batch lookup), not writes.
+# POST entries below are batch reads, not writes.
+# Channel/message reads additionally require the signed origin channel.
+# Email, private chats and unified search are deliberately unavailable.
 
 [auth]
 GET /permissions/me
@@ -15,9 +17,6 @@ GET /calendars
 GET /events/{event_id}/provider-url
 
 [cognition]
-GET /attachments/{attachment_id}/chats
-GET /chats/history/{chat_id}
-GET /chats/{chat_id}
 GET /citations/{id}
 GET /skills
 GET /skills/{id}
@@ -25,17 +24,6 @@ GET /skills/{id}
 [contacts]
 GET /contacts
 GET /contacts/search
-
-[email]
-GET /email/attachments/{id}
-GET /email/contacts
-GET /email/labels
-GET /email/messages/{id}
-GET /email/messages/{id}/eml
-GET /email/threads/previews/cursor/{view}
-GET /email/threads/{id}/messages
-GET /email/threads/{thread_id}
-GET /email/threads/{thread_id}/calendar-invitations
 
 [properties]
 GET /properties/definitions
@@ -50,10 +38,6 @@ GET /scheduled-actions
 GET /scheduled-actions/{id}
 GET /scheduled-actions/{id}/history
 
-[search]
-POST /search
-POST /search/simple
-
 [static-files]
 GET /api/file/metadata/{file_id}
 GET /file/{file_id}
@@ -61,7 +45,6 @@ GET /file/{file_id}
 [storage]
 GET /calendar-events
 GET /calendar-events/{event_id}/ics
-GET /channels/attachments/{entity_type}/{entity_id}/references
 GET /channels/{channel_id}
 GET /channels/{channel_id}/attachments
 GET /channels/{channel_id}/bots
@@ -90,6 +73,5 @@ GET /messages/{parent_type}/{parent_id}/timeline
 GET /projects
 GET /projects/{id}
 GET /projects/{id}/content
-POST /channels/preview
 POST /documents/preview
 POST /projects/preview

@@ -33,6 +33,7 @@ async fn refuses_before_dispatch(method: &str, path: &str) {
         SignedClaims::channel_mention(
             bot_id::MACRO_AI_BOT_ID.as_uuid(),
             uuid::Uuid::from_u128(902),
+            Some(uuid::Uuid::from_u128(909)),
         ),
         method,
         path,
@@ -268,6 +269,7 @@ async fn a_legacy_mention_without_a_scope_still_cannot_launch_work() {
     let mut claims = SignedClaims::channel_mention(
         bot_id::MACRO_AI_BOT_ID.as_uuid(),
         uuid::Uuid::from_u128(906),
+        None,
     );
     claims.agent_scope = None;
     refuses_signed_request_before_dispatch(claims, "POST", "/documents/create_task").await;
@@ -278,6 +280,7 @@ async fn a_legacy_mention_with_no_send_still_cannot_launch_work() {
     let mut claims = SignedClaims::channel_mention(
         bot_id::MACRO_AI_BOT_ID.as_uuid(),
         uuid::Uuid::from_u128(906),
+        None,
     );
     claims.agent_scope = Some(agent_correlation::scope::SessionScope::NoSend);
     refuses_signed_request_before_dispatch(claims, "POST", "/documents/create_task").await;

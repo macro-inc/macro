@@ -54,17 +54,31 @@ fn legacy_mentions_keep_the_new_restriction_on_allowed_reads() {
 
 #[test]
 fn a_mention_claim_cannot_widen_an_unknown_signed_scopes_get_only_fallback() {
+    assert!(SessionScope::ChannelMention.allows_on(
+        Some(&["storage"]),
+        "POST",
+        "/documents/preview"
+    ));
     let token = verified_mention(Some("future_scope"));
     let (parts, _) = Request::builder()
         .method("POST")
-        .uri("/search")
+        .uri("/documents/preview")
         .body(())
         .unwrap()
         .into_parts();
-    assert!(checked_signed_scope(Some(&token), &parts, Some(&["search"])).is_err());
+    assert!(checked_signed_scope(Some(&token), &parts, Some(&["storage"])).is_err());
 }
 
 async fn mention_request(bearer: &str, cookie: Option<&str>, path: &str) -> (StatusCode, usize) {
+    mention_request_method(bearer, cookie, "GET", path).await
+}
+
+async fn mention_request_method(
+    bearer: &str,
+    cookie: Option<&str>,
+    method: &str,
+    path: &str,
+) -> (StatusCode, usize) {
     use tower::ServiceExt;
     let calls = Arc::new(AtomicUsize::new(0));
     let observed = calls.clone();
@@ -79,11 +93,12 @@ async fn mention_request(bearer: &str, cookie: Option<&str>, path: &str) -> (Sta
                 repository: Arc::new(Repository {
                     calls: AtomicUsize::new(0),
                 }),
-                specs: Some(&["storage"]),
+                specs: Some(&["storage", "email", "cognition", "search"]),
             },
             propagate,
         ));
     let mut request = Request::builder()
+        .method(method)
         .uri(path)
         .header("authorization", format!("Bearer {bearer}"));
     if let Some(cookie) = cookie {
@@ -202,4 +217,34 @@ async fn secondary_mention_credentials_keep_their_own_channel_restriction() {
         mention_request(&own, Some(&other), &path).await,
         (StatusCode::FORBIDDEN, 0)
     );
+}
+
+#[tokio::test]
+async fn mentions_refuse_email_chats_unified_search_and_unbound_channel_lookups() {
+    let channel = Uuid::from_u128(910);
+    let bearer = mention_bearer(Some("channel_mention"), Some(channel));
+    for (method, path) in [
+        (
+            "GET",
+            "/email/attachments/00000000-0000-0000-0000-000000000001",
+        ),
+        (
+            "GET",
+            "/email/messages/00000000-0000-0000-0000-000000000001",
+        ),
+        ("GET", "/chats/00000000-0000-0000-0000-000000000001"),
+        ("POST", "/search"),
+        ("POST", "/dss/v1/search/simple"),
+        ("POST", "/channels/preview"),
+        (
+            "GET",
+            "/channels/attachments/document/00000000-0000-0000-0000-000000000001/references",
+        ),
+    ] {
+        assert_eq!(
+            mention_request_method(&bearer, None, method, path).await,
+            (StatusCode::FORBIDDEN, 0),
+            "{method} {path}"
+        );
+    }
 }

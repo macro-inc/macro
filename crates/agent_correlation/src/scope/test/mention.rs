@@ -77,7 +77,7 @@ fn mentions_do_not_read_email_or_private_chat_history() {
         "/attachments/0192f1a0-0000-7000-8000-000000000001/chats",
     ] {
         assert!(
-            !SessionScope::ChannelMention.allows_on(Some(ALL_SPECS), "GET", path),
+            !SessionScope::ChannelMention.allows_on(Some(&["email", "cognition"]), "GET", path),
             "{path}"
         );
     }

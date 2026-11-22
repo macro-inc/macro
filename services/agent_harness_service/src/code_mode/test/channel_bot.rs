@@ -28,6 +28,18 @@ impl MentionCodeMode for Programs {
         request: ExecuteRequest,
         _: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError> {
+        assert_eq!(
+            agent_correlation::context::current_scope(),
+            Some(agent_correlation::scope::SessionScope::ChannelMention)
+        );
+        assert_eq!(
+            agent_correlation::context::current_channel_mention(),
+            Some(mention.message_id)
+        );
+        assert_eq!(
+            agent_correlation::context::current_mention_channel(),
+            mention.channel_id
+        );
         self.0
             .lock()
             .unwrap()
@@ -97,6 +109,9 @@ async fn the_responder_runs_code_for_the_original_user_and_mention(pool: sqlx::P
         .await
         .unwrap();
     assert_eq!(reply, "I found the document.");
+    assert_eq!(agent_correlation::context::current_scope(), None);
+    assert_eq!(agent_correlation::context::current_channel_mention(), None);
+    assert_eq!(agent_correlation::context::current_mention_channel(), None);
     // Classic mentions use AgentLoop directly, without the session runtime's
     // automatic memory fetch. Even that hidden read would enroll this user.
     let memory = PgMemoryRepo::new(pool);

@@ -280,6 +280,7 @@ fn a_routine_token_signs_its_routine_and_scope() {
             agent_scope: Some(agent_correlation::scope::SessionScope::DryRun),
             routine_id: Some(routine),
             channel_mention_id: None,
+            channel_mention_channel_id: None,
         }
     );
 }
@@ -287,7 +288,10 @@ fn a_routine_token_signs_its_routine_and_scope() {
 #[test]
 fn audit_mention_claims_are_channel_scoped_and_keep_the_original_message() {
     let message = uuid::Uuid::from_u128(901);
-    let claims = SignedClaims::channel_mention(bot_id::MACRO_AI_BOT_ID.as_uuid(), message);
+    let channel = uuid::Uuid::from_u128(909);
+    let claims =
+        SignedClaims::channel_mention(bot_id::MACRO_AI_BOT_ID.as_uuid(), message, Some(channel));
+    assert_eq!(claims.channel_mention_channel_id, Some(channel));
     assert_eq!(claims.channel_mention_id, Some(message));
     assert_eq!(
         claims.agent_scope,

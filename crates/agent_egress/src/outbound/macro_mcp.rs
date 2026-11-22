@@ -299,9 +299,9 @@ impl MacroApiTokenSigner {
 
     /// Mint a credential for one program answering a channel mention: the
     /// mentioning user's access, attributed to `agent_id`, signed with the
-    /// mention for attribution and NoSend scope so services refuse sends and
-    /// delegation independently of the program.
-    #[tracing::instrument(skip_all, err, fields(%agent_id, %channel_mention_id))]
+    /// mention and trusted origin channel, with the ChannelMention allowlist
+    /// enforced independently of the program.
+    #[tracing::instrument(skip_all, err, fields(%agent_id, %channel_mention_id, ?channel_mention_channel_id))]
     pub async fn mint_for_channel_mention(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -310,8 +310,8 @@ impl MacroApiTokenSigner {
         channel_mention_id: uuid::Uuid,
         channel_mention_channel_id: Option<uuid::Uuid>,
     ) -> Result<String, EgressError> {
-        let mut claims = SignedClaims::channel_mention(agent_id, channel_mention_id);
-        claims.channel_mention_channel_id = channel_mention_channel_id;
+        let claims =
+            SignedClaims::channel_mention(agent_id, channel_mention_id, channel_mention_channel_id);
         self.sign(user, lifetime_seconds, claims).await
     }
 
@@ -448,7 +448,11 @@ struct SignedClaims {
 }
 
 impl SignedClaims {
-    fn channel_mention(agent_id: macro_uuid::Uuid, channel_mention_id: uuid::Uuid) -> Self {
+    fn channel_mention(
+        agent_id: macro_uuid::Uuid,
+        channel_mention_id: uuid::Uuid,
+        channel_mention_channel_id: Option<uuid::Uuid>,
+    ) -> Self {
         Self {
             agent_id: Some(agent_id),
             agent_via: None,
@@ -457,7 +461,7 @@ impl SignedClaims {
             agent_scope: Some(agent_correlation::scope::SessionScope::ChannelMention),
             routine_id: None,
             channel_mention_id: Some(channel_mention_id),
-            channel_mention_channel_id: None,
+            channel_mention_channel_id,
         }
     }
 

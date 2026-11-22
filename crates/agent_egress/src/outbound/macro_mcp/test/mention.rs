@@ -51,7 +51,11 @@ async fn audit_a_signed_mention_refuses_sends_and_persistent_instructions() {
     let bearer = signer
         .encode(
             60,
-            SignedClaims::channel_mention(bot_id::MACRO_AI_BOT_ID.as_uuid(), mention),
+            SignedClaims::channel_mention(
+                bot_id::MACRO_AI_BOT_ID.as_uuid(),
+                mention,
+                Some(uuid::Uuid::from_u128(909)),
+            ),
             "fixture".into(),
             owner().to_string(),
             None,
@@ -64,6 +68,10 @@ async fn audit_a_signed_mention_refuses_sends_and_persistent_instructions() {
         panic!("expected Macro API token")
     };
     assert_eq!(decoded.channel_mention_id, Some(mention));
+    assert_eq!(
+        decoded.channel_mention_channel_id,
+        Some(uuid::Uuid::from_u128(909))
+    );
     assert_eq!(decoded.agent_id, Some(bot_id::MACRO_AI_BOT_ID.as_uuid()));
     let app = Router::new()
         .route(

@@ -125,8 +125,8 @@ fn a_hidden_native_tool_is_refused_not_dispatched() {
     assert!(refusal.description.contains("ExecuteCode"));
 }
 
-/// Direct calls never carry the program's signed restriction, so their
-/// complete set must stay read-only, including tools without SDK equivalents.
+/// In-process calls bypass the program token validator, so their complete
+/// set must stay read-only, including tools without SDK equivalents.
 #[test]
 fn mention_native_tools_only_offer_discovery_and_knowledge_reads() {
     let mention = ai_tools::tools_for_channel_bot_code_mode();

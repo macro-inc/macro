@@ -102,6 +102,38 @@ static MENTION_ALLOWLIST: std::sync::LazyLock<Allowlist> = std::sync::LazyLock::
     )
 });
 
+/// Bind mention message reads to the channel the host signed. This is an
+/// additional restriction on the allowlist, never an independent admission.
+/// Legacy credentials without that claim cannot read channels or messages.
+#[cfg(feature = "http")]
+pub(crate) fn mention_channel_allows(
+    channel: Option<uuid::Uuid>,
+    method: &str,
+    path: &str,
+) -> bool {
+    let method = if method == "HEAD" { "GET" } else { method };
+    MENTION_ALLOWLIST
+        .requests
+        .iter()
+        .filter(|(_, listed, template, _)| {
+            *listed == method
+                && (template.starts_with("/channels/") || template.starts_with("/messages/"))
+                && typed_matches(path, template, OwnSession::Unchecked)
+        })
+        .all(|(_, _, template, _)| {
+            let Some(channel) = channel else {
+                return false;
+            };
+            // A bulk lookup with no channel in its path cannot be bound here.
+            (template.contains("{channel_id}") || template.contains("{parent_id}"))
+                && matches_with(path, template, |name, segment| match name {
+                    "{channel_id}" | "{parent_id}" => segment.parse::<uuid::Uuid>() == Ok(channel),
+                    "{parent_type}" => segment == "channel",
+                    _ => !segment.is_empty(),
+                })
+        })
+}
+
 /// The `(spec, method, path)` lines of an allowlist: `[spec]` headers, then
 /// `METHOD /path` lines; `#` starts a comment.
 fn list_lines(

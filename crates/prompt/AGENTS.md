@@ -41,7 +41,9 @@ AI system prompts: one module per prompt section, each exporting a
   only the general code-mode section.
   Its `REPLY_PROMPT` shares the general rules while keeping classic channel-bot
   results in the reply and limiting ChannelMention programs to explicitly allowed
-  workspace reads. It overrides general write guidance, excludes memory reads,
+  workspace reads. Channel/message reads are limited to the signed origin channel
+  and its threads; email, private chats and unified search are unavailable.
+  It overrides general write guidance, excludes memory reads,
   web requests and connected apps, and leaves reply delivery to the trusted host.
 
 ## Tool contracts

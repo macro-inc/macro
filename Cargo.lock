@@ -4406,6 +4406,7 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "agent_code_mode",
+ "agent_correlation",
  "ai_billing",
  "ai_tools",
  "ai_toolset",

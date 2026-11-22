@@ -27,11 +27,12 @@ static INSTRUCTIONS: &str = concat!(
 /// Hosts without `execution.views` (the channel-mention bot) answer in their reply.
 static REPLY_INSTRUCTIONS: &str = concat!(
     shared_instructions!(),
-    "- This channel reply is read-only. These channel rules override general instructions about writing, editing or sending: only the permitted workspace searches and reads are available. Never create or modify an item, including a task or document, or try another route around a refusal.\n",
+    "- This channel reply is read-only. These channel rules override general instructions about writing, editing or sending: only the permitted workspace reads are available. Never create or modify an item, including a task or document, or try another route around a refusal.\n",
     "- Answer in your reply: name what you found with its link. The conversation host delivers this reply; do not post messages from an action.\n",
     "- Never sleep, set timers, poll or schedule anything to check back later: finish the answer in this reply.\n",
     "- You cannot send or schedule email, create or change calendar events or bookings, invite guests, share items, obtain booking manage tokens, or change booking links, settings or attendance here, even with the user's approval. Tell the user to make the change from Macro.\n",
     "- You cannot start or prompt agent sessions, create or run routines, change memories, skills or settings, obtain permission or upload tokens, or change connected-app configurations here. Tell the user to do that from Macro.\n",
+    "- Channel and message reads are limited to this mention’s own channel and its threads. Email, private chats and unified workspace search are unavailable; tool discovery is still available.\n",
     "- You cannot read memory, call connected apps, or fetch or search the web here. Use the context supplied with this conversation and the permitted workspace reads.\n"
 );
 
@@ -41,7 +42,7 @@ returns ids and URLs, schedules a routine instead of waiting, and presents what 
 view without being asked, never telling the user it works in code.";
 
 static REPLY_INTENT: &str = "The model answers channel mentions using permitted read-only \
-workspace searches and reads after reading the SDK symbols it uses, returns ids and URLs, \
+workspace reads after reading the SDK symbols it uses, returns ids and URLs, \
 never writes, reads memory, waits or schedules a check-back, and answers in its reply, \
 never telling the user it works in code.";
 

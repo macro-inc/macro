@@ -40,7 +40,7 @@ impl AgentLoopResponder {
 impl AgentResponder for AgentLoopResponder {
     #[tracing::instrument(
         skip(self, prompt, user_id),
-        fields(message_id = %mention.message_id),
+        fields(message_id = %mention.message_id, channel_id = ?mention.channel_id),
         err
     )]
     async fn respond(
@@ -49,40 +49,51 @@ impl AgentResponder for AgentLoopResponder {
         mention: BotMention,
         prompt: String,
     ) -> anyhow::Result<String> {
-        let user_id = MacroUserIdStr::try_from(user_id.to_string())?;
-        let toolset = self.tools.for_mention(
-            &mention,
-            self.tool_context.cognition_tool_context.service.clone(),
-        );
+        let attribution = agent_correlation::context::Attribution {
+            channel_mention_id: Some(mention.message_id),
+            channel_mention_channel_id: mention.channel_id,
+            scope: Some(agent_correlation::scope::SessionScope::ChannelMention),
+            ..Default::default()
+        };
+        // Native tools run in DSS, so they need the same restriction as the
+        // program credential. The caller delivers the reply outside this scope.
+        agent_correlation::context::scope_attribution(attribution, async {
+            let user_id = MacroUserIdStr::try_from(user_id.to_string())?;
+            let toolset = self.tools.for_mention(
+                &mention,
+                self.tool_context.cognition_tool_context.service.clone(),
+            );
 
-        let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::ChannelBot, user_id);
-        // Carry the feature on the context so AI calls made by tools are attributed to it.
-        let mut tool_context = (*self.tool_context).clone();
-        tool_context.usage_context = usage_ctx.clone();
-        let mut session = self
-            .agent_loop
-            .session(
-                toolset,
-                Arc::new(tool_context),
-                self.tools.system_prompt(),
-                usage_ctx,
-            )
-            .await;
+            let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::ChannelBot, user_id);
+            // Carry the feature on the context so AI calls made by tools are attributed to it.
+            let mut tool_context = (*self.tool_context).clone();
+            tool_context.usage_context = usage_ctx.clone();
+            let mut session = self
+                .agent_loop
+                .session(
+                    toolset,
+                    Arc::new(tool_context),
+                    self.tools.system_prompt(),
+                    usage_ctx,
+                )
+                .await;
 
-        let messages = vec![agent::types::ChatMessage {
-            role: agent::types::Role::User,
-            content: agent::types::ChatMessageContent::Text(prompt),
-            attachments: None,
-        }];
+            let messages = vec![agent::types::ChatMessage {
+                role: agent::types::Role::User,
+                content: agent::types::ChatMessageContent::Text(prompt),
+                attachments: None,
+            }];
 
-        let mut stream = session.send_message(to_rig_messages(&messages)).await?;
-        let mut text = String::new();
-        while let Some(part) = stream.next().await {
-            if let StreamPart::Content(chunk) = part? {
-                text.push_str(&chunk);
+            let mut stream = session.send_message(to_rig_messages(&messages)).await?;
+            let mut text = String::new();
+            while let Some(part) = stream.next().await {
+                if let StreamPart::Content(chunk) = part? {
+                    text.push_str(&chunk);
+                }
             }
-        }
 
-        Ok(text.trim().to_string())
+            Ok(text.trim().to_string())
+        })
+        .await
     }
 }

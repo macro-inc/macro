@@ -91,6 +91,9 @@ GET /scheduling/settings  # outside mention context reads
 GET /team-sharing  # outside mention context reads
 
 [cognition]
+GET /chats/{chat_id}  # not bound to the signed origin channel or its thread
+GET /chats/history/{chat_id}  # not bound to the signed origin channel or its thread
+GET /attachments/{attachment_id}/chats  # not bound to the signed origin channel or its thread
 GET /activity  # outside mention context reads
 GET /chats/{chat_id}/permissions  # outside mention context reads
 GET /health  # outside mention context reads
@@ -114,6 +117,15 @@ GET /pipedream/mcp/overlays  # outside mention context reads
 GET /track/{entity_type}/{entity_id}  # outside mention context reads
 
 [email]
+GET /email/threads/{thread_id}/calendar-invitations  # email is outside the mention context
+GET /email/threads/{thread_id}  # email is outside the mention context
+GET /email/threads/{id}/messages  # email is outside the mention context
+GET /email/threads/previews/cursor/{view}  # email is outside the mention context
+GET /email/messages/{id}/eml  # email is outside the mention context
+GET /email/messages/{id}  # email is outside the mention context
+GET /email/labels  # email is outside the mention context
+GET /email/contacts  # email is outside the mention context
+GET /email/attachments/{id}  # returns a signed bearer download capability
 GET /email/attachments/{id}/document_id  # outside mention context reads
 GET /email/backfill/gmail  # outside mention context reads
 GET /email/backfill/gmail/active  # outside mention context reads
@@ -154,6 +166,7 @@ GET /suggestions/generation  # outside mention context reads
 GET /suggestions/review  # outside mention context reads
 
 [storage]
+GET /channels/attachments/{entity_type}/{entity_id}/references  # not bound to the signed origin channel or its thread
 GET /account-managers  # outside mention context reads
 GET /account-managers/{id}  # outside mention context reads
 GET /agents  # outside mention context reads

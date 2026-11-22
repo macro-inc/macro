@@ -3,7 +3,7 @@
 ## What it is
 
 Attribution of work to the code-mode invocation (agent session) and/or the
-routine run that caused it. Channel-mention programs sign `no_send` as well
+routine run that caused it. Channel-mention programs sign `channel_mention` as well
 as their mention claim. A code-mode correlation is durable and validated
 against its session; a routine id is a signed Macro API token claim
 (`routine_id`) that needs no lookup, as is a channel mention
@@ -150,7 +150,11 @@ code, not in its prompt. The harness also signs the scope into the credential
 - Used by code-mode credential minting, HTTP services, and the event broker.
 
 - `ChannelMention` is default-deny via `scope/mention_{reads,writes}.txt`:
-  only listed workspace reads, no program writes or memory reads. A verified
+  only listed workspace reads, no program writes or memory, email, private-chat
+  or unified-search reads. `channel_mention_channel_id` signs the trusted
+  origin channel: channel and message paths must name it, with no per-request
+  lookup. A missing channel claim fails closed for those reads. Every verified
+  secondary credential independently restricts the channel too. A verified
   mention claim adds this restriction even to old tokens and secondary
   credentials; the original signed and stored scopes are still checked.
   Mention attribution never grants access. Like Job, ChannelMention forces

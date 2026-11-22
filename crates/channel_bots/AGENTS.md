@@ -19,13 +19,16 @@ decides whether to trigger, authorizes, and delivers a reply.
   automatic owner-memory fetch; native memory tools are hidden. The composed
   responder regression checks that a reply does not enroll memory refresh.
 - `src/outbound/code_mode.rs`: every reply runs code mode (`ChannelBotTools`).
-  The direct tools are `ai_tools::tools_for_channel_bot_code_mode` (SDK-covered
-  and Anthropic sandbox tools dropped) plus `agent_code_mode`'s user `ExecuteCode`,
+  The direct tools are `ai_tools::tools_for_channel_bot_code_mode` (only SearchTools, LoadTools, SelfKnowledge, and ReadToolResult when present) plus `agent_code_mode`'s user `ExecuteCode`,
   `DescribeCodeTools` and `ReadCodeDocs`. Programs run on the agent harness
   (`POST /internal/code-mode/user-executions`, internal key) as the mentioning
   user attributed to Macro AI, the same identity as the direct tools, with a
-  signed allowlisted ChannelMention scope and the original mention claim.
-  Programs make only explicitly listed workspace reads; they cannot write,
+  signed allowlisted ChannelMention scope, original mention claim and trusted
+  origin channel. The whole responder also runs under mention attribution
+  so in-process guards apply.
+  Channel/message reads are bound to that signed origin channel and its
+  threads; a missing origin fails closed. Email, private chats and unified
+  search are unavailable. Programs make only explicitly listed workspace reads; they cannot write,
   query memory, mint tokens, delegate work or call connected apps. Their
   egress always uses the forwarder, even with its rollout flag off, and has
   no unfurl upstream; DSS delivers the final reply.

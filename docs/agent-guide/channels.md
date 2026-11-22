@@ -749,10 +749,15 @@ session. Repeat with revoked channel access and confirm no new work starts.
 
 Classic `@Macro` replies use read-only code mode on the agent harness. The
 channel shows a thinking placeholder followed by the final answer and links;
-execution steps are not rendered. Verify a mention that searches for and reads
-a test document under the mentioning account, then ask it to create a task and
+execution steps are not rendered. Verify a mention that reads a supplied
+test document under the mentioning account, then ask it to create a task and
 confirm that no task or delegated agent session is created. Programs use a signed
 ChannelMention credential with an explicit read allowlist and no program writes.
+Channel/message reads are restricted to the original channel and its threads;
+legacy credentials without a signed channel cannot read channels or messages.
+Email, private-chat reads and unified workspace search are unavailable under
+this default policy. The native reply tools only discover tools, load them,
+read self-knowledge or retrieve tool results; import planners are unavailable.
 They cannot create or edit documents or tasks, assign bots, send or schedule
 messages or email, mutate calendar events or bookings, change sharing or
 configuration, mint permission/upload tokens, start sessions or routines, query
