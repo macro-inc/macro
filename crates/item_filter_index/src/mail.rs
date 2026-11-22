@@ -23,6 +23,22 @@ pub const INBOX_VIEW_DERIVATION: SortFactDerivation = SortFactDerivation {
     target: INBOX_VIEW_SORT,
     required: &[("mail-inbox", &[1]), ("mail-has-message", &[1])],
 };
+/// Inbox timestamp of a thread the Important tab can show: one the Inbox view
+/// can show that is also marked important. Its window then walks only those
+/// threads instead of every inbox thread.
+pub const IMPORTANT_VIEW_SORT: &str = "mail-important-view-ts";
+/// How the projection derives [`IMPORTANT_VIEW_SORT`]; storage applies it to
+/// Mail documents written before it existed.
+pub const IMPORTANT_VIEW_DERIVATION: SortFactDerivation = SortFactDerivation {
+    profiles: &[PROFILE, crate::properties::MAIL_PROFILE],
+    source: "mail-inbox-ts",
+    target: IMPORTANT_VIEW_SORT,
+    required: &[
+        ("mail-inbox", &[1]),
+        ("mail-has-message", &[1]),
+        ("mail-signal", &[1]),
+    ],
+};
 /// Mail-owned fact vocabulary.
 pub fn token(value: &str) -> Token {
     Token::new(value).expect("static Mail token")
@@ -97,7 +113,11 @@ pub fn compile(
     // still tests both facts: a patch cannot remove that sort fact when a
     // thread leaves the inbox, so a stale one can remain until the next full
     // projection. Date filters read the timestamp every thread has.
-    let sort = if view == "INBOX" {
+    // The Important tab narrows that to threads marked important, so its window
+    // skips the rest of the inbox too.
+    let sort = if view == "INBOX" && requires_importance(ast.email_filter.tree.as_deref()) {
+        token(IMPORTANT_VIEW_SORT)
+    } else if view == "INBOX" {
         token(INBOX_VIEW_SORT)
     } else {
         timestamp.clone()
@@ -185,6 +205,16 @@ pub fn boolean(attribute: &str, value: bool) -> PredicateExpr {
     PredicateExpr::Exact {
         attribute: token(attribute),
         value: ExactValue::new([u8::from(value)]).expect("bounded boolean"),
+    }
+}
+
+/// Whether every row the tree matches must be marked important: an
+/// `importance: true` literal reached through `And` alone.
+fn requires_importance(expr: Option<&Expr<EmailLiteral>>) -> bool {
+    match expr {
+        Some(Expr::And(a, b)) => requires_importance(Some(a)) || requires_importance(Some(b)),
+        Some(Expr::Literal(EmailLiteral::Importance(true))) => true,
+        _ => false,
     }
 }
 

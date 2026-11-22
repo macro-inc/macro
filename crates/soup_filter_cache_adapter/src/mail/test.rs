@@ -874,6 +874,112 @@ fn turso_inbox_sorts_by_its_own_view_key() {
     ));
 }
 
+fn important_filters() -> Value {
+    let mut f = filters();
+    f["emailFilter"] = json!({"tree":{"and":{
+        "left":{"literal":{"importance":true}},
+        "right":{"literal":{"shared":"EXCLUDE"}}
+    }}});
+    f
+}
+
+fn sort_fact(document: &IndexDocument, attribute: &str) -> Option<i64> {
+    document
+        .sort_facts
+        .iter()
+        .find(|fact| fact.attribute == vocabulary::token(attribute))
+        .map(|fact| fact.value)
+}
+
+async fn important_view_sort<S: PredicateIndexStorage>(storage: S) {
+    let mut engine = Engine::new(storage);
+    write(&mut engine, QUERY, &seed()).await;
+    let keys = (1..=75)
+        .map(|n| RecordKey::new(format!("{TYPE}:{}", id(n))).unwrap())
+        .collect::<Vec<_>>();
+    let states = engine
+        .storage()
+        .load_projection_states(&keys)
+        .await
+        .unwrap();
+    let mut shown = Vec::new();
+    for (n, state) in (1..=75u128).zip(states) {
+        let Some(ProjectionState::Complete(document)) = state else {
+            panic!("seeded thread {n} is complete")
+        };
+        // An Inbox-view thread that is also marked important.
+        let inbox = n.is_multiple_of(2) && n != 2 && n != 7;
+        let expected = inbox && n.is_multiple_of(3);
+        let important = sort_fact(&document, vocabulary::IMPORTANT_VIEW_SORT);
+        assert_eq!(important.is_some(), expected, "thread {n}");
+        assert_eq!(
+            sort_fact(&document, vocabulary::INBOX_VIEW_SORT).is_some(),
+            inbox,
+            "thread {n}"
+        );
+        if expected {
+            assert_eq!(important, sort_fact(&document, "mail-inbox-ts"));
+            if n <= 70 {
+                shown.push(format!("{TYPE}:{}", id(n)));
+            }
+        }
+    }
+    shown.sort_by(|a, b| b.cmp(a));
+    assert_eq!(
+        all_keys(&mut engine, important_filters(), "INBOX").await,
+        shown
+    );
+
+    // Clearing importance by patch removes the derived fact, and the thread
+    // leaves the tab; marking it again brings it back.
+    let thread = format!("{TYPE}:{}", id(6));
+    let signal = |value: bool| {
+        json!({"user":{"id":VIEWER,"soup":{"items":[{
+            "__typename":TYPE,"id":id(6),"isSignal":value
+        }]}}})
+    };
+    write(&mut engine, QUERY, &signal(false)).await;
+    let key = RecordKey::new(thread.clone()).unwrap();
+    let states = engine
+        .storage()
+        .load_projection_states(std::slice::from_ref(&key))
+        .await
+        .unwrap();
+    let [Some(ProjectionState::Complete(document))] = states.as_slice() else {
+        panic!("thread stays complete")
+    };
+    assert_eq!(sort_fact(document, vocabulary::IMPORTANT_VIEW_SORT), None);
+    assert!(sort_fact(document, vocabulary::INBOX_VIEW_SORT).is_some());
+    let important = all_keys(&mut engine, important_filters(), "INBOX").await;
+    assert!(!important.contains(&thread));
+    assert_eq!(important.len(), shown.len() - 1);
+    write(&mut engine, QUERY, &signal(true)).await;
+    assert_eq!(
+        all_keys(&mut engine, important_filters(), "INBOX").await,
+        shown
+    );
+
+    // Archiving removes it as well.
+    let archive = json!({"user":{"id":VIEWER,"soup":{"items":[{
+        "__typename":TYPE,"id":id(6),"isRead":false,"inboxVisible":false
+    }]}}});
+    write(&mut engine, PARTIAL, &archive).await;
+    let important = all_keys(&mut engine, important_filters(), "INBOX").await;
+    assert!(!important.contains(&thread));
+}
+
+#[test]
+fn memory_important_sorts_by_its_own_view_key() {
+    pollster::block_on(important_view_sort(InMemoryStorage::new()));
+}
+
+#[test]
+fn turso_important_sorts_by_its_own_view_key() {
+    pollster::block_on(important_view_sort(
+        cache_turso::TursoStorage::open_in_memory("mail-important-view-test").unwrap(),
+    ));
+}
+
 #[test]
 fn optimistic_replace_without_inbox_timestamp_makes_the_view_key_uncertain() {
     pollster::block_on(async {
