@@ -295,7 +295,9 @@ pub mod test_hooks {
 
     /// Removes every queued write's optimistic layer, so the next open of
     /// this database finds its queue inconsistent and must reset it, after
-    /// any upgrade step has committed.
+    /// any upgrade step has committed. Only cache-wasm's browser tests call
+    /// it, through the feature.
+    #[cfg(feature = "migration-test-hooks")]
     pub fn drop_optimistic_layers(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
         storage.require_healthy()?;
         let connection = storage.connection();
@@ -306,7 +308,9 @@ pub mod test_hooks {
     }
 
     /// Removes the row that says which storage version wrote this database,
-    /// so no open can tell, and the next open of it must reset it.
+    /// so no open can tell, and the next open of it must reset it. Only
+    /// cache-wasm's browser tests call it, through the feature.
+    #[cfg(feature = "migration-test-hooks")]
     pub fn forget_storage_version(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
         storage.require_healthy()?;
         let connection = storage.connection();
