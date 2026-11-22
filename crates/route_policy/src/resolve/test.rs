@@ -48,7 +48,8 @@ fn the_code_execution_header_only_narrows_a_person_or_an_api_credential() {
                 code_execution: true,
                 ..PERSON
             }),
-            Some(caller)
+            Some(Caller::Program),
+            "{caller}"
         );
     }
     assert_eq!(

@@ -105,20 +105,20 @@ pub fn resolve_caller(evidence: CallerEvidence) -> Option<Caller> {
         Authenticated::ApiCredential => Caller::ApiCredential,
     };
 
+    // The code-execution header claims the request runs a program's code. A
+    // program may drop it but never add it for someone else, so it wins over
+    // any header that would pick a caller with fewer refusals (a junk bot
+    // token must not turn a program into a `Bot`).
+    if evidence.code_execution {
+        return Some(Caller::Program);
+    }
+
     // A header nobody verified may only make the caller narrower: a bot's or
     // a computer's row refuses more than a person's or an API credential's.
-    let caller = match evidence.header {
+    Some(match evidence.header {
         Some(UnverifiedHeader::Bot) => Caller::Bot,
         Some(UnverifiedHeader::Harness) => Caller::Harness,
         Some(UnverifiedHeader::UserApiKey) => Caller::ApiCredential,
         Some(UnverifiedHeader::Internal) | None => verified,
-    };
-
-    let narrowed_by_header =
-        evidence.code_execution && matches!(caller, Caller::Person | Caller::ApiCredential);
-    Some(if narrowed_by_header {
-        Caller::Program
-    } else {
-        caller
     })
 }

@@ -102,12 +102,17 @@ the axum route constructors that declare each handler's category.
   which is the fail-closed default, and beside a verified token it only
   narrows it.
 - **Rule for a service's categorization PR.** Categorizing a service's routes
-  must not start refusing a production caller. Before a route declares a
-  category, decide each real caller kind that reaches it with no verified
-  user token (a bot, a computer, an internal service, a user API key) where
-  its credential is verified: in the extractor that checks it, deciding again
-  as `macro_authorization` does for an account manager's key. The PR carries
-  one test per real caller kind that reaches a categorized route, showing it
-  is allowed what its table row allows and refused what it refuses, so no
-  production path starts returning 403. A route no such caller reaches says
-  so in the PR. Verifying credentials centrally instead is bead mac-vq1j.
+  must not start refusing a production caller. A credential header alone
+  resolves no caller, and a categorized route with no caller is refused
+  `no_caller` before any extractor runs, so the route's own extractor can't
+  decide it afterwards. Before a route declares a category, decide each real
+  caller kind that reaches it with no verified user token (a bot, a computer,
+  an internal service, a user API key, an account manager's key) in a layer
+  that verifies its credential and puts the `ResolvedCaller` in the request
+  extensions before `route_policy` runs (as `macro_authorization` does for an
+  account manager's key, which decides again once the key's lookup finds a
+  manager's). The PR carries one test per real caller kind that reaches a
+  categorized route, showing it is allowed what its table row allows and
+  refused what it refuses, so no production path starts returning 403. A route
+  no such caller reaches says so in the PR. Verifying credentials centrally
+  instead is bead mac-vq1j.
