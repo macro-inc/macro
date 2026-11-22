@@ -168,4 +168,33 @@ fn clustered_search_rows_dump_as_search_documents() {
     );
     assert_ne!(before["search_documents"], broken["search_documents"]);
     assert_eq!(broken["search_slots_shared"].len(), 1);
+    // Each defect alone: a row id in another slot's range (a bucket move that kept
+    // its row id), a text profile, and a storage 13 table left behind.
+    for (rows, extra) in [
+        (
+            "(17592186044417, 2, 1, 'Doc', 'a', 'alpha', 5, 'h1'), (17592186044418, 1, 1, 'Mail', 'b', 'beta', 7, 'h2')",
+            "",
+        ),
+        (
+            "(35184372088837, 2, 'quick-access-v1', 'Doc', 'a', 'alpha', 5, 'h1'), (17592186044417, 1, 1, 'Mail', 'b', 'beta', 7, 'h2')",
+            "",
+        ),
+        (
+            "(35184372088837, 2, 1, 'Doc', 'a', 'alpha', 5, 'h1'), (17592186044417, 1, 1, 'Mail', 'b', 'beta', 7, 'h2')",
+            "CREATE TABLE search_documents (profile TEXT); INSERT INTO search_documents VALUES ('quick-access-v1');",
+        ),
+    ] {
+        let defect = dump_with(
+            &format!(
+                "CREATE TABLE search_slots (slot INTEGER PRIMARY KEY, profile INTEGER, bucket TEXT);
+                 INSERT INTO search_slots VALUES (1, 1, 'mail'), (2, 1, 'docs');
+                 CREATE TABLE search_rows (slot INTEGER, profile INTEGER, __typename TEXT, id TEXT, search_text TEXT, timestamp_ms INTEGER, source_hash TEXT);
+                 INSERT INTO search_rows (rowid, slot, profile, __typename, id, search_text, timestamp_ms, source_hash) VALUES {rows}; {extra}"
+            ),
+            true,
+            &[],
+            &[],
+        );
+        assert_ne!(before, defect, "{rows} {extra}");
+    }
 }

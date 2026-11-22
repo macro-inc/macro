@@ -6,7 +6,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::Arc;
 use turso_core::{
-    Connection, Database, IO, OpenOptions, PlatformIO, SqliteDialect, Statement, StepResult, Value,
+    Connection, Database, IO, Numeric, OpenOptions, PlatformIO, SqliteDialect, Statement,
+    StepResult, Value,
 };
 
 /// Table name to its rows, each row as text, sorted.
@@ -146,17 +147,22 @@ fn decode_records(
 
 /// The profile a schema 14 search row's number stands for (`profile_code` in
 /// cache-turso); an unknown number is kept as one, so two different ones differ.
+/// The profile name storage 13 stores for a storage 14 profile number. Anything
+/// but the number 1 is marked, so it never matches a storage 13 row.
 fn search_profile(code: &Value) -> Value {
     if render(code) == render(&Value::from_i64(1)) {
         Value::build_text("quick-access-v1")
     } else {
-        code.clone()
+        Value::build_text(format!("unknown-profile {}", render(code)))
     }
 }
 
 /// Writes schema 14's `search_slots` and `search_rows` as `search_documents`
 /// rows, as [`tables`] describes for `search`. A row whose slot has no
-/// `search_slots` row keeps the slot number as its bucket, marked, so it differs.
+/// `search_slots` row, whose slot names another profile, or whose row id lies
+/// outside its slot's range (where a scan of its bucket misses it) is written
+/// with a marked bucket, so it differs. A `search_documents` table the file also
+/// holds is kept as `search_documents_left`.
 fn decode_search(
     connection: &Arc<Connection>,
     ignore: &[(String, String)],
@@ -195,13 +201,19 @@ fn decode_search(
             connection,
             ignore,
             "search_rows",
-            "slot, profile, __typename, id, search_text, timestamp_ms, source_hash",
+            "rowid, slot, profile, __typename, id, search_text, timestamp_ms, source_hash",
         )?,
         |values| {
+            let range = match &values[0] {
+                Value::Numeric(Numeric::Integer(rowid)) => render(&Value::from_i64(rowid >> 44)),
+                other => format!("rowid {}", render(other)),
+            };
+            let values = &values[1..];
             let slot = render(&values[0]);
-            // The bucket a row is in is its slot's; a row naming another profile
-            // than its slot does shows as that mismatch.
+            // The bucket a row is in is its slot's; a row outside its slot's row
+            // ids, or naming another profile than its slot does, shows as that.
             let bucket = match slots.get(&slot) {
+                Some(_) if range != slot => format!("row-range {range} slot {slot}"),
                 Some((profile, bucket)) if *profile == render(&values[1]) => render(bucket),
                 Some((profile, bucket)) => format!("slot-profile {profile} {}", render(bucket)),
                 None => format!("no-slot {slot}"),
@@ -222,6 +234,9 @@ fn decode_search(
     )?;
     out.remove("search_rows");
     out.remove("search_slots");
+    if let Some(left) = out.remove("search_documents") {
+        out.insert("search_documents_left".into(), left);
+    }
     out.insert("search_documents".into(), documents);
     Ok(())
 }
