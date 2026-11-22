@@ -1020,10 +1020,12 @@ async fn return_pair(to: Paths, from: Paths) -> Result<ReturnOutcome, OpfsError>
         None => create_empty(&root, from.get(FileRole::Wal)).await?,
     }
     move_entry(&root, &main, from.get(FileRole::Main), deadline).await?;
-    // A stop from here on leaves a marker without a main file, which the next
-    // read removes together with this empty WAL.
-    remove_if_present(&root, to.get(FileRole::Wal), false, deadline).await?;
-    remove_marker(&root, &to, deadline).await?;
+    // The pair went back. A stop or a failure from here on leaves a marker
+    // without a main file, which the next read removes together with this
+    // empty WAL, so cleaning up is best effort and never says the files are
+    // still here.
+    let _ = remove_if_present(&root, to.get(FileRole::Wal), false, deadline).await;
+    let _ = remove_marker(&root, &to, deadline).await;
     Ok(ReturnOutcome::Returned)
 }
 

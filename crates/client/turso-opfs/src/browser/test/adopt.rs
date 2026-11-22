@@ -872,6 +872,30 @@ async fn a_return_stopped_after_its_main_move_reads_as_no_adoption() {
 }
 
 #[wasm_bindgen_test]
+async fn a_return_whose_cleanup_fails_still_reports_the_files_returned() {
+    let (old, new) = identities("return-cleanup");
+    write_pair(&old, 19).await;
+    clean_pair(&new).await;
+    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
+    // Another context keeps the marker open, so removing it fails after the
+    // main file went back.
+    let root = worker_root().await.expect("root");
+    let (held, _) = open_sync_handle(&root, &marker_name(&new), BusyDeadline::start())
+        .await
+        .expect("hold the marker open");
+    assert_eq!(give_back(&old, &new).await, ReturnOutcome::Returned);
+    assert_eq!(read_pair(&old).await, 19);
+    assert!(marker_exists(&new).await);
+    close_sync_handle(&held).expect("close the marker");
+
+    // The marker left without a main file reads as no adoption, and goes.
+    assert_eq!(read_adoption(&new).await, None);
+    assert!(!marker_exists(&new).await);
+    assert_eq!(present(&new).await, [false, false]);
+    clean_pair(&old).await;
+}
+
+#[wasm_bindgen_test]
 async fn discarding_or_wiping_ends_the_adoption() {
     let (old, new) = identities("discarded");
     write_pair(&old, 18).await;
