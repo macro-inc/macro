@@ -1,0 +1,22 @@
+apps/web/src/lib/core/signal/profilePicture.ts
+  s_abf11522d55e91::t_9760910446c370 7,59-60,64-68,72-73,110,116-118,121-123,145,147-148,153,158-164,179,196,200,286-288,292-294,296-329,331,338-340,344
+  s_abf11522d55e91::t_401af6a970255c 69-71
+apps/web/src/lib/core/signal/profilePicture.test.ts
+  s_abf11522d55e91::t_401af6a970255c 28-29,132-141,143-150,261,275-277,309-369
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d6580271493c913bb67dd3d4bad689de24cd9207",
+  "prompts": {},
+  "sessions": {
+    "s_abf11522d55e91": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc20c629-7a69-4fed-92d8-3d1285788525",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
