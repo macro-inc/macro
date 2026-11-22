@@ -558,9 +558,7 @@ describe('import review', () => {
       'Imported 2 of 3 objects'
     );
     // The reason is visible text, not a tooltip, so touch shows it too.
-    expect(
-      within(plan).getByText("Notion couldn't be reached.")
-    ).toBeTruthy();
+    expect(within(plan).getByText("Notion couldn't be reached.")).toBeTruthy();
   });
 
   it('offers to reconnect only when the connection was lost', () => {
