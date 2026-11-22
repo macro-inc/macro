@@ -415,7 +415,16 @@ export function DesktopModelSelector(props: {
             </div>
           }
         >
-          <div class="flex max-h-[min(28rem,var(--kb-popper-content-available-height))] flex-col">
+          <div
+            class="flex max-h-[min(28rem,var(--kb-popper-content-available-height))] flex-col"
+            // ArrowLeft goes back, as it closes the flyout in a wide window.
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                back();
+              }
+            }}
+          >
             <div class="flex h-10 shrink-0 items-center gap-1 px-1.5">
               <Button
                 variant="ghost"

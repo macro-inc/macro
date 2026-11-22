@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
+import { catalogModelLabel } from '@core/component/AI/constant/model-label';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import Check from '@icon/system/regular/check.svg';
@@ -338,10 +339,7 @@ export function MobileModelSelector() {
                   <ModelIcon model={state.model} />
                   <span class="flex-1">{t('agentControls.model')}</span>
                   <span class="max-w-32 truncate text-ink-subtle">
-                    {
-                      state.models.find((option) => option.id === state.model)
-                        ?.label
-                    }
+                    {catalogModelLabel(state.model, state.models)}
                   </span>
                   <CaretRight class="size-4" />
                 </MobileDrawer.Item>
