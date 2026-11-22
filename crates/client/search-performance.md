@@ -16,14 +16,9 @@ full-app observations separate from the engine timings below.
 
 ## SQL scan comparison
 
-Run from the repository root:
-
-```sh
-cargo test --release -p cache-turso --lib compare_search_scan_options -- --ignored --nocapture
-```
-
-The test uses a disposable filesystem database. It alternates six modes, discards
-two warmup rounds, and reports the median of seven warm samples. It includes SQL
+The test that produced these numbers was removed with storage 14, whose clustered
+`search_rows` replaced the layout it compared. It used a disposable filesystem database, alternated six modes, discarded
+two warmup rounds, and reported the median of seven warm samples. It included SQL
 filtering and row decoding, not engine ranking. The owned-row modes reproduce the
 previous copying path; borrowed-row modes use the production visitor. The fixture
 adds a legacy non-covering index alongside the production covering index, whose

@@ -463,16 +463,20 @@ entity-only optimism and retain that recovery query for eventual commit/replay.
 
 ## Streaming text search
 
-Text search streams each `(profile, bucket)` through
-`search_documents_browse_idx`, and the adapter drops rows in which some query
+Text search streams each `(profile, bucket)` as one rowid range of
+`search_rows`, and the adapter drops rows in which some query
 token is not an ordered byte subsequence of `search_text` before decoding the
 rest. A token whose characters occur in order also has its UTF-8 bytes in order,
 so this keeps every row the core accepts. It replaces a SQL `LIKE '%a%b%c%'`
 prefilter that Turso evaluated several times slower per token; contact search,
 which must avoid decoding records, keeps its bound LIKE. Searching documents does not
 read cached email buckets. Empty bucket selection still means every profile bucket.
-The index includes `search_text` and `source_hash` after its existing browse keys,
-so filtering and result reads use an index-only scan without table lookups.
+Storage 14 clusters `search_rows` by bucket: `search_slots` numbers each
+`(profile, bucket)` and a row's rowid is `slot << 44 | seq`, so a bucket's rows
+are one contiguous range of the table, read without an index or a lookup. The
+empty-query browse uses the narrow `search_rows_browse_idx (slot, timestamp_ms
+DESC, __typename, id)` and fetches each row it returns by rowid. Storage 12 to 13
+kept the text in a covering browse index instead, which stored every row twice.
 
 The driver borrows each Turso row directly instead of collecting or copying it.
 The adapter validates every row and reuses one canonical-key buffer; only winning
@@ -510,18 +514,19 @@ lookups and the optimistic window. The registered 12 to 13 step creates the
 table and fills it from the fact tables in place, so records and queued writes
 stay, and browsers carry a `t12` database forward to `t13` before it runs.
 
+Storage schema 14 replaces `search_documents` with the clustered `search_slots`
+and `search_rows` above. The registered 13 to 14 step numbers the existing
+buckets, copies every row into its bucket's range in the old rowid order, drops
+the old table and builds the browse index, keeping records and queued writes.
+
 `cargo test -p cache-turso --test search` checks matching/ranking parity, including
 Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
 measurement with `cargo test -p cache-turso --test search -- --ignored --nocapture`.
 The `web` test target exercises the same parity contract over real browser OPFS;
 its ignored `search_100k_rows_over_opfs` measurement runs with
 `-- --include-ignored --nocapture` under the browser runner.
-The ignored native `compare_search_scan_options` test separately compares prepared
-statement reuse, covering-index scans, and borrowed-row decoding against the same
-100k rows (release build, alternating order, seven warm samples). Its disposable
-fixture adds a legacy non-covering index for comparison with the production
-covering index. Statement reuse has not shown a material benefit and is not
-enabled in production. See [search performance](search-performance.md) for
+Statement reuse has not shown a material benefit and is not enabled in
+production. See [search performance](search-performance.md) for
 measured costs and memory boundaries.
 
 ### Contact projection and page retention
