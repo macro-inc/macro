@@ -546,6 +546,9 @@ the shimmer.
   combines Type, Status, and Pull request filters; choices within a category are
   ORed and categories are ANDed. Sort and filters are remembered per user;
   previously saved grouping is ignored by the redesigned desktop list.
+  The phone list's **Group conversations** offers Status (default) and None:
+  Needs you and Working show counts above an uncounted Recent, a list that is
+  all Recent has no heading, and Archived shows no count.
   With `enable-agent-updates`, **Open PRs** remains between Waiting on you and
   Conversations, showing non-waiting active coding sessions with open or draft
   PRs. Each session appears in only one section; disabling Open PRs returns its
