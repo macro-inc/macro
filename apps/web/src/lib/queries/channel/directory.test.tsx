@@ -4056,6 +4056,54 @@ describe("the viewer's own channel writes", () => {
     expect(ids(directory.channels())).toEqual([]);
   });
 
+  it('holds a leave made while the fallback waits to decide the channel, against a lagging read of it', async () => {
+    const client = queryClient();
+    let answer!: (channels: DirectoryChannel[]) => void;
+    let open!: () => void;
+    // What a lagging replica answers a by-id read with: the viewer still in.
+    const joined = publicChannel('a', UPDATED_OLD, UPDATED_OLD);
+    const { cache, directory, hydrate, reopen } = mountCachedDirectory(
+      [joined],
+      {
+        queryClient: client,
+        byIdGate: new Promise<void>((done) => {
+          open = done;
+        }),
+        pageAll: () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      }
+    );
+    cache.put(channelRecord('kept'));
+    cache.put(joined);
+    await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() => expect(answer).toBeDefined());
+    cache.put({ ...joined, viewedAt: VIEWED_2 }, { sourceHash: 'a-2' });
+    reopen();
+    await vi.waitFor(() => expect(viewedAt(directory, 'a')).toBe(VIEWED_2));
+    answer([directoryChannel('kept')]);
+    await vi.waitFor(() =>
+      expect(directory.lookup(channelUuid('a')).status).toBe('pending')
+    );
+
+    // The fallback has yet to decide the channel: its absence shows nothing
+    // of the viewer, so the joined record the read lands is the membership
+    // the leave ended, not a rejoin.
+    await writeOf(
+      client,
+      fakeNetwork([], { primary: [publicChannel('a', UPDATED_MID)] }),
+      ['a']
+    );
+    open();
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    expect(ids(directory.channels())).toEqual(['kept']);
+    expect(directory.lookup(channelUuid('a')).status).toBe('missing');
+  });
+
   it('does not bring back a channel the cache lost before it showed the write', async () => {
     const client = queryClient();
     const { cache, directory, reopen } = mountCachedDirectory([], {

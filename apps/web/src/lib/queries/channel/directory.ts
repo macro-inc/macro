@@ -411,11 +411,17 @@ function overlaidDirectoryState(
 }
 
 /** Whether a directory state, lacking a channel, shows the viewer out of
- * it: it lists every channel they joined and holds no part of that one. */
+ * it: it lists every channel they joined, holds no part of that one, and
+ * has not left it out until a read decides it (`undecided`). */
 const lacks =
-  (state: ChannelDirectoryState) =>
+  (
+    state: ChannelDirectoryState,
+    undecided: readonly Readonly<Record<string, true>>[]
+  ) =>
   (channelId: string): boolean =>
-    state.complete && !state.incomplete[channelId];
+    state.complete &&
+    !state.incomplete[channelId] &&
+    !undecided.some((ids) => ids[channelId]);
 
 /**
  * The viewer's own channel writes (`own-writes.ts`) laid over what a
@@ -424,11 +430,15 @@ const lacks =
 function createOwnWriteOverlay(own: OwnChannelWrites, account: QueryAccount) {
   const tracker = createOwnWriteTracker(own, account);
   return {
-    apply(state: ChannelDirectoryState) {
+    /** `undecided`: channels `state` leaves out until a read decides them. */
+    apply(
+      state: ChannelDirectoryState,
+      undecided: readonly Readonly<Record<string, true>>[] = []
+    ) {
       const pending = tracker.pending(
         state.records,
         own.writes(),
-        lacks(state)
+        lacks(state, undecided)
       );
       return pending.length === 0
         ? state
@@ -440,7 +450,7 @@ function createOwnWriteOverlay(own: OwnChannelWrites, account: QueryAccount) {
       const pending = tracker.pendingFor(
         state.records,
         untrack(own.writes),
-        lacks(state)
+        lacks(state, [])
       );
       return pending.length === 0
         ? channels
@@ -449,7 +459,7 @@ function createOwnWriteOverlay(own: OwnChannelWrites, account: QueryAccount) {
     /** Whether `state`, the directory's own source, has yet to show one of
      * the writes. */
     behind: (state: ChannelDirectoryState) =>
-      tracker.pending(state.records, own.writes(), lacks(state)).length > 0,
+      tracker.pending(state.records, own.writes(), lacks(state, [])).length > 0,
   };
 }
 
@@ -1681,7 +1691,14 @@ export function createCachedChannelDirectory(
     signal: controller.signal,
   });
   const view = createMemo(() =>
-    views.apply(own.apply(removals.apply(state())))
+    views.apply(
+      // The fallback's unconfirmed channels, and the hidden ones the primary
+      // has yet to decide, show nothing of the viewer.
+      own.apply(removals.apply(state()), [
+        shown().unconfirmed,
+        removals.waiting(),
+      ])
+    )
   );
   // Cached records older than a recorded view that the view was written
   // over again: a soup page read before the view can overwrite it.
