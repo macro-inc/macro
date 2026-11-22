@@ -451,8 +451,10 @@ export type RemoveGoneInput = {
  * longer read, with the checks reconciliation makes: the record the read
  * decided on is the one deleted (a record rewritten since is kept), only for
  * the viewer and storage generation it was read for, and each deleted
- * channel owes a second look on the primary first. Storage that refuses the
- * second look deletes nothing. Returns the ids deleted. A failed read throws.
+ * channel is read on the primary once more after the delete, which writes
+ * back one the viewer can read again. Returns the ids deleted. A failed read
+ * before the delete throws; one after it leaves the lane's next pass to
+ * restore the channel.
  */
 export async function removeChannelsGoneOnPrimary(
   input: RemoveGoneInput
@@ -484,25 +486,25 @@ export async function removeChannelsGoneOnPrimary(
     );
     const stale = decided.filter((id) => after.get(id) === before.get(id));
     if (stale.length === 0) return finish([], 'rewritten');
-    // Owed before the delete, so a write that lands between the check and
-    // the delete is read back.
-    if (!addChannelRereads(input.userId, input.generation, stale))
-      return finish([], 'unsaved');
     await span.run(() =>
       input.host.deleteRecords(
         stale.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`),
         session
       )
     );
-    await settleRereads(
-      {
-        userId: input.userId,
-        generation: input.generation,
-        readFromPrimary: read,
-        signal: input.signal,
-      },
-      span
-    );
+    // Read once more, which writes back one the viewer was let into between
+    // the check and the delete. Kept in memory: the lane's journal is the
+    // lane's, and its next pass lists any channel this read misses.
+    try {
+      const still = await unreadableOnPrimary(stale, read, input.signal, span);
+      span.setAttr(
+        'channel_directory.restored',
+        stale.filter((id) => !still.has(id)).length
+      );
+    } catch (error) {
+      if (input.signal?.aborted) throw error;
+      return finish(stale, 'removed_unconfirmed');
+    }
     return finish(stale, 'removed');
   });
 }

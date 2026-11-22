@@ -12,7 +12,7 @@ import {
   createChannelDirectoryBackfillFetcher,
   removeChannelsGoneOnPrimary,
 } from './directory-reconcile';
-import { pendingChannelRereads } from './directory-rereads';
+import { addChannelRereads, pendingChannelRereads } from './directory-rereads';
 import { channelName, channelUuid } from './tests/channel-uuid';
 import {
   fakeChannelCache,
@@ -1060,20 +1060,54 @@ describe('removing channels the primary shows gone', () => {
     expect(host.deleteRecords).not.toHaveBeenCalled();
   });
 
-  it('deletes nothing when storage refuses the second look', async () => {
+  it("leaves the lane's owed second looks to the lane", async () => {
+    const { host } = reconcileHost(['gone']);
+    addChannelRereads('viewer', 'g1', [channelUuid('owed')]);
+    const read = vi.fn<ReadFromPrimary>(async () => 'unreadable');
+
+    expect((await remove(host, ['gone'], read)).map(channelName)).toEqual([
+      'gone',
+    ]);
+    // Only its own channel read, twice; the lane's owed one is untouched.
+    expect(read.mock.calls.map(([id]) => channelName(id))).toEqual([
+      'gone',
+      'gone',
+    ]);
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([
+      channelUuid('owed'),
+    ]);
+  });
+
+  it('keeps the delete when the look after it fails, and does not throw', async () => {
+    const { host } = reconcileHost(['gone']);
+    let reads = 0;
+    const read = vi.fn<ReadFromPrimary>(async () => {
+      reads += 1;
+      if (reads > 1) throw new Error('primary down');
+      return 'unreadable';
+    });
+
+    expect((await remove(host, ['gone'], read)).map(channelName)).toEqual([
+      'gone',
+    ]);
+    expect(deleted(host)).toEqual(['GraphqlSoupChannel:gone']);
+  });
+
+  it('works without browser storage', async () => {
     const { host } = reconcileHost(['gone']);
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('full', 'QuotaExceededError');
     });
 
     expect(
-      await remove(
-        host,
-        ['gone'],
-        vi.fn<ReadFromPrimary>(async () => 'unreadable')
-      )
-    ).toEqual([]);
-    expect(host.deleteRecords).not.toHaveBeenCalled();
+      (
+        await remove(
+          host,
+          ['gone'],
+          vi.fn<ReadFromPrimary>(async () => 'unreadable')
+        )
+      ).map(channelName)
+    ).toEqual(['gone']);
   });
 
   it('deletes nothing once the storage generation changed', async () => {
