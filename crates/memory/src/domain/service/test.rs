@@ -637,3 +637,30 @@ async fn a_programs_memory_read_enrolls_no_one() {
         "a person's own read enrolls"
     );
 }
+
+/// A request a program makes (a correlation, a routine or a scope) reads
+/// memory as a program; any other is the person's own.
+#[tokio::test]
+async fn a_request_reads_as_whoever_made_it() {
+    assert_eq!(MemoryReader::of_request(), MemoryReader::Person);
+    for attribution in [
+        agent_correlation::context::Attribution {
+            correlation_id: Some(Uuid::from_u128(1)),
+            ..Default::default()
+        },
+        agent_correlation::context::Attribution {
+            routine_id: Some(Uuid::from_u128(2)),
+            ..Default::default()
+        },
+        agent_correlation::context::Attribution {
+            scope: Some(agent_correlation::scope::SessionScope::NoSend),
+            ..Default::default()
+        },
+    ] {
+        let reader = agent_correlation::context::scope_attribution(attribution, async {
+            MemoryReader::of_request()
+        })
+        .await;
+        assert_eq!(reader, MemoryReader::Program);
+    }
+}

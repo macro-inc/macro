@@ -110,7 +110,13 @@ pub async fn get_memory_handler<T: MemoryService, Auth: MacroAuthorizationServic
 ) -> Response {
     let user = user.authorization.user;
 
-    match service.get_memory(user.macro_user_id, reader()).await {
+    match service
+        .get_memory(
+            user.macro_user_id,
+            crate::domain::MemoryReader::of_request(),
+        )
+        .await
+    {
         Ok(Some(memory)) => Json(MemoryResponse { memory }).into_response(),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => {
@@ -167,7 +173,13 @@ pub async fn get_explicit_memory_handler<T: MemoryService, Auth: MacroAuthorizat
 ) -> Response {
     let user = user.authorization.user;
 
-    match service.explicit(&user.macro_user_id, reader()).await {
+    match service
+        .explicit(
+            &user.macro_user_id,
+            crate::domain::MemoryReader::of_request(),
+        )
+        .await
+    {
         Ok(memory) => Json(memory).into_response(),
         Err(error) => memory_error_response(error),
     }
@@ -290,17 +302,4 @@ fn memory_error_response(error: MemoryError) -> Response {
         }),
     )
         .into_response()
-}
-
-/// A request a program makes (code mode, a routine, a scoped run) reads as
-/// a program; anything else is the person's own read.
-fn reader() -> crate::domain::MemoryReader {
-    let program = agent_correlation::context::current().is_some()
-        || agent_correlation::context::current_routine().is_some()
-        || agent_correlation::context::current_scope().is_some();
-    if program {
-        crate::domain::MemoryReader::Program
-    } else {
-        crate::domain::MemoryReader::Person
-    }
 }

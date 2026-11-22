@@ -382,9 +382,12 @@ impl UserExecutionCredentials for UserRunCredentials {
 /// The SDK hosts a run reaches. A scoped run (a hidden session, a scoped
 /// public-MCP run, a routine's dry run, a background job) gets no unfurl
 /// host: unfurl fetches what its caller names from Macro's servers and
-/// takes no credential, so no scope can refuse it there. A scoped run also
-/// always goes through the egress proxy ([`EgressRollout::egress_for`]), so
-/// `--allow-net` names only the forwarder, which has no unfurl upstream.
+/// takes no credential, so no scope can refuse it there. A run under an
+/// allowlisted scope also always goes through the egress proxy
+/// ([`EgressRollout::egress_for`]), so `--allow-net` names only the
+/// forwarder, which has no unfurl upstream; other scoped runs follow the
+/// egress flag, and going direct can still reach unfurl on a shared gateway
+/// origin.
 pub(crate) fn run_endpoints(endpoints: &SdkEndpoints, scoped: bool) -> SdkEndpoints {
     let mut endpoints = endpoints.clone();
     if scoped {
