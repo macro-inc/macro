@@ -50,11 +50,18 @@ test.describe('Settings › Email of a Gmail inbox', () => {
     await expect(retry).toBeVisible();
     saw('STX-004');
 
-    listing.release();
+    // Keep the fault until Retry requests the list. Releasing first lets a
+    // focus or backfill refetch recover and remove the button before its click.
+    const beforeRetry = listing.seen();
     await retry.click();
-    await expect(
-      page.getByRole('tablist', { name: `Signature views for ${own}` })
-    ).toBeVisible();
+    await expect.poll(listing.seen).toBeGreaterThan(beforeRetry);
+    listing.release();
+    await expect(async () => {
+      if (await retry.isVisible()) await retry.click({ timeout: 3_000 });
+      await expect(
+        page.getByRole('tablist', { name: `Signature views for ${own}` })
+      ).toBeVisible({ timeout: 3_000 });
+    }).toPass({ timeout: 45_000 });
     await expect(signatures.getByText("Couldn't load signatures")).toBeHidden();
 
     // The service refuses the switch: it flips back and says so.

@@ -290,6 +290,13 @@ for (const provider of PROVIDERS) {
     }) => {
       // Without the live updates, so that only the pull can bring mail in.
       await page.routeWebSocket(/\/dss\/items\/soup\/graphql\/ws/, () => {});
+      // Gateway hints also refresh the list. Keep its heartbeat alive while
+      // withholding those hints, so a reconnect cannot bring the mail in either.
+      await page.routeWebSocket(/\/connection-gateway(\/|\?|$)/, (socket) => {
+        socket.onMessage((message) => {
+          if (message === 'ping') socket.send('pong');
+        });
+      });
       await mailbox.deliver({
         from: 'Grace <grace@example.com>',
         subject: 'Agenda',

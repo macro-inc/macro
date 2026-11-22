@@ -61,6 +61,10 @@ the app's disconnected paths.
 - The bundle is built by `just apps/web/build-email-e2e`: every service on the
   page's own origin, with the inbox re-sync control switched on
   (`VITE_ENABLE_INBOX_RESYNC`), which is off in a normal build.
+- Pull-to-refresh cases silence Soup and gateway live updates while answering
+  gateway heartbeats, so only the gesture can bring the next row. Settings
+  recovery cases keep the list fault active until Retry requests it, then allow
+  automatic recovery after releasing the fault.
 - The connection gateway is not run. The fixture answers the browser's gateway
   socket and passes on what the email services ask the gateway to send the user.
 - Not in the stack: the notification, search, contacts and calendar services.
