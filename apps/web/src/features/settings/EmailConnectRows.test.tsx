@@ -1,4 +1,6 @@
 /** @vitest-environment jsdom */
+
+import type { Link } from '@service-email/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -8,13 +10,19 @@ const mocks = vi.hoisted(() => ({
   startAddInbox: vi.fn(async () => {}),
   providers: vi.fn(async () => ({ outlook: true })),
   failure: vi.fn(),
+  links: [] as Link[],
 }));
 const [connected, setConnected] = createSignal(false);
 const [outlookOffered, setOutlookOffered] = createSignal(true);
 
 vi.mock('@core/email-link', () => ({
   useEmailLinks: () => ({
-    query: { isSuccess: true, data: { links: [] } },
+    query: {
+      isSuccess: true,
+      get data() {
+        return { links: mocks.links };
+      },
+    },
     resyncInbox: vi.fn(),
   }),
   useEmailLinksStatus: () => connected,
@@ -50,6 +58,7 @@ vi.mock('./SignatureSection', () => ({ clearSignatureState: vi.fn() }));
 
 beforeEach(() => {
   setConnected(false);
+  mocks.links = [];
   setOutlookOffered(true);
   mocks.providers.mockResolvedValue({ outlook: true });
 });
@@ -91,3 +100,52 @@ it('offers another account once an inbox is connected', () => {
     screen.getByRole('button', { name: 'Connect an Outlook account' })
   ).toBeTruthy();
 });
+
+it.each([
+  {
+    issue: 'credentials_unreadable',
+    needsReauth: true,
+    expected: "Macro can't read this mailbox's saved password",
+  },
+  {
+    issue: 'snapshot_too_large',
+    needsReauth: false,
+    expected: 'Mailbox too large to sync yet',
+  },
+] satisfies {
+  issue: Link['mailbox_issue'];
+  needsReauth: boolean;
+  expected: string;
+}[])(
+  'renders specific $issue guidance for the connected inbox',
+  ({ issue, needsReauth, expected }) => {
+    setConnected(true);
+    mocks.links = [
+      {
+        id: 'synthetic-link',
+        macro_id: 'me',
+        email_address: 'user@example.com',
+        fusionauth_user_id: 'synthetic-user',
+        provider: 'IMAP',
+        is_primary: true,
+        is_sync_active: true,
+        needs_reauth: needsReauth,
+        mailbox_issue: issue,
+        needs_calendar_permission: true,
+        calendar_disabled: false,
+        has_calendar_data: false,
+        sync_status: 'ERROR',
+        settings: {},
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ];
+    render(() => <EmailCard />);
+    expect(screen.getByText(expected, { exact: false })).toBeTruthy();
+    expect(
+      screen.queryByText(
+        'Mailbox sync needs attention. Open server settings for details.'
+      )
+    ).toBeNull();
+  }
+);

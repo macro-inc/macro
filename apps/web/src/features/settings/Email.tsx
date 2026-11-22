@@ -540,9 +540,9 @@ function InboxRow(props: {
           </Show>
           <Show
             when={
-              props.link.mailbox_issue &&
               (!props.link.needs_reauth ||
-                props.link.mailbox_issue === 'credentials_unreadable')
+                props.link.mailbox_issue === 'credentials_unreadable') &&
+              props.link.mailbox_issue
             }
           >
             {(issue) => (
