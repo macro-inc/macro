@@ -760,6 +760,16 @@ export class CoordinatorRouter {
             );
           }
         }
+        if (violated) {
+          // A rejected proof already ended the epoch in the core. Its
+          // recovery wipe was not proven, so the next attempt repeats it.
+          const pendingReason = this.recordPendingResetFailure(
+            message.ownerEpoch,
+            'engine readiness proof was rejected'
+          );
+          if (pendingReason !== undefined)
+            this.nextRecoveryResetReason = pendingReason;
+        }
         this.applyActions(actions);
         if (violated) {
           if (this.isCurrentOwner(route.tabId, route.ownerEpoch)) {

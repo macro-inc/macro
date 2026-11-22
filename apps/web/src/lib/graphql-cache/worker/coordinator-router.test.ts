@@ -974,6 +974,65 @@ describe('CoordinatorRouter', () => {
     expect(messagesOfKind(tab, 'terminal-error')).toHaveLength(1);
   });
 
+  it('repeats a recovery wipe whose readiness proof was rejected, for the same reason', async () => {
+    vi.useFakeTimers();
+    const observations: Array<Record<string, unknown>> = [];
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a');
+    const first = new FakePort();
+    await attach(router, tab, 'tab-a', 1, first);
+    ready(first, 'tab-a', 1, 'opened-existing');
+    first.receive({
+      ...version,
+      kind: 'engine-fatal',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'cache storage requested physical reset',
+      fatalCode: 'storage-reset-required',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      ownerEpoch: 2,
+      databaseAction: 'wipe-before-open',
+    });
+    const rejected = new FakePort();
+    await attach(router, tab, 'tab-a', 2, rejected);
+    // The proof says the files were opened, the outcome that they were wiped.
+    ready(rejected, 'tab-a', 2, 'opened-existing', 'reset-storage-uncertain');
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      ownerEpoch: 3,
+      databaseAction: 'wipe-before-open',
+    });
+    const repeated = new FakePort();
+    await attach(router, tab, 'tab-a', 3, repeated);
+    ready(repeated, 'tab-a', 3, 'wiped-before-open');
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.reset_wipe'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        outcome: 'error',
+        resetReason: 'storage-reset-required',
+      }),
+      expect.objectContaining({
+        outcome: 'success',
+        resetReason: 'storage-reset-required',
+      }),
+    ]);
+  });
+
   it('registers only after independent liveness-lock contention succeeds', async () => {
     let releaseVerification: ((held: boolean) => void) | undefined;
     const verification = new Promise<boolean>((resolve) => {
