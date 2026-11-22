@@ -270,18 +270,32 @@ function template(path: string): string {
 export function restCalls(): DerivedOperation[] {
   const file = parse(EMAIL_CLIENT);
   const found = new Map<string, DerivedOperation>();
-  for (const call of calls(file, /^(emailFetch|fetchWithToken)$/)) {
+  for (const call of calls(
+    file,
+    /^(emailFetch|emailRequest|fetchWithToken)$/
+  )) {
     const [url, init] = call.arguments;
     if (!url) continue;
     let scope: ts.Node = call;
     while (scope.parent && !ts.isFunctionLike(scope)) scope = scope.parent;
-    // `emailFetch` itself passes its argument on: not a call of its own.
-    if (ts.isFunctionDeclaration(scope) && scope.name?.text === 'emailFetch') {
+    // Both wrappers forward their URL; the retry callback inside emailRequest
+    // is implementation, not another endpoint. Find its outer declaration too.
+    // Keep both wrappers pure URL forwarders; declare endpoint calls outside them.
+    let implementation: ts.Node | undefined = call;
+    while (implementation && !ts.isFunctionDeclaration(implementation)) {
+      implementation = implementation.parent;
+    }
+    if (
+      implementation &&
+      (implementation.name?.text === 'emailFetch' ||
+        implementation.name?.text === 'emailRequest')
+    ) {
       continue;
     }
     const method = property(init, 'method');
     const verb = method && ts.isStringLiteralLike(method) ? method.text : 'GET';
-    const prefix = call.expression.getText() === 'emailFetch' ? '/email' : '';
+    const prefix =
+      call.expression.getText() === 'fetchWithToken' ? '' : '/email';
     for (const path of new Set(paths(url, scope).map(template))) {
       const id = `${verb} ${prefix}${path}`;
       found.set(id, { id, kind: 'rest', file: EMAIL_CLIENT });

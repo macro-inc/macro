@@ -4,6 +4,7 @@ import {
   graphqlOperations,
   socketMessages,
 } from '../harness/front';
+import { restCalls } from './derive';
 import { type Enforced, fullStackOnly, violations } from './enforce';
 import {
   functionRows,
@@ -18,6 +19,14 @@ import {
   parseProofs,
   parseWaivers,
 } from './manifest/functions';
+
+describe('email REST source paths', () => {
+  it('counts the original message source route without inventing the wrapper URL', () => {
+    const ids = restCalls().map((call) => call.id);
+    expect(ids).toContain('GET /email/email/messages/{}/eml');
+    expect(ids).not.toContain('GET /email');
+  });
+});
 
 /** A websocket frame as a browser sends it: masked. */
 function frame(payload: Buffer, opcode: number, final = true): Buffer {
