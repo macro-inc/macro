@@ -597,6 +597,39 @@ impl Connection {
         Ok(woken)
     }
 
+    /// When `was` was this socket's lease and `now` isn't, and its drive
+    /// ended because the agent couldn't be kept paused, say so, whichever
+    /// path noticed first (a renewal, a lease change, the lapse timer), so
+    /// the viewer never claims the agent is paused.
+    async fn report_drive_end(
+        &self,
+        sender: &Outbox,
+        was: Option<Lease>,
+        now: Option<&Lease>,
+    ) -> Result<(), Stalled> {
+        let Some(was) = was.filter(|was| was.session_id == self.session) else {
+            return Ok(());
+        };
+        if drives_here(now, self.session) {
+            return Ok(());
+        }
+        match self.deps.screens.drive_end(&was).await {
+            Ok(Some(DriveEnd::Unpaused)) => {
+                Self::error(
+                    sender,
+                    ErrorCode::AgentNotPausable,
+                    "The agent couldn't be kept paused, so it has the computer back.",
+                )
+                .await
+            }
+            Ok(_) => Ok(()),
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not read how a drive ended");
+                Ok(())
+            }
+        }
+    }
+
     async fn error(sender: &Outbox, code: ErrorCode, message: &str) -> Result<(), Stalled> {
         send(sender, &ServerMessage::Error { code, message }).await
     }
@@ -823,8 +856,16 @@ impl Connection {
                         match self.deps.screens.renew(computer, self.session).await {
                             Ok(renewed) => {
                                 if renewed.is_none() {
-                                    lease = None;
-                                    if self.state(sender, None, surface).await.is_err() {
+                                    // Read again: a lapsed lease is released
+                                    // (and its drive ended) by the read.
+                                    let was = lease.take();
+                                    lease = match self.deps.screens.lease(computer).await {
+                                        Ok(lease) => lease,
+                                        Err(error) => return internal(&error),
+                                    };
+                                    if self.state(sender, lease.as_ref(), surface).await.is_err()
+                                        || self.report_drive_end(sender, was, lease.as_ref()).await.is_err()
+                                    {
                                         return Ending::plain(EndReason::Stopped);
                                     }
                                 } else {
@@ -843,19 +884,13 @@ impl Connection {
                         Err(broadcast::error::RecvError::Closed) => false,
                     };
                     if relevant {
-                        let was_driving = lease.clone().filter(|lease| lease.session_id == self.session);
+                        let was = lease.take();
                         lease = match self.deps.screens.lease(computer).await {
                             Ok(lease) => lease,
                             Err(error) => return internal(&error),
                         };
-                        if self.state(sender, lease.as_ref(), surface).await.is_err() {
-                            return Ending::plain(EndReason::Stopped);
-                        }
-                        // The agent couldn't be kept paused: say why the
-                        // drive ended, so the viewer doesn't claim it is.
-                        if let Some(ended) = was_driving.filter(|_| !drives_here(lease.as_ref(), self.session))
-                            && matches!(self.deps.screens.drive_end(&ended).await, Ok(Some(DriveEnd::Unpaused)))
-                            && Self::error(sender, ErrorCode::AgentNotPausable, "The agent couldn't be kept paused, so it has the computer back.").await.is_err()
+                        if self.state(sender, lease.as_ref(), surface).await.is_err()
+                            || self.report_drive_end(sender, was, lease.as_ref()).await.is_err()
                         {
                             return Ending::plain(EndReason::Stopped);
                         }
@@ -871,11 +906,14 @@ impl Connection {
                 }
 
                 () = sleep_until_some(lapse) => {
+                    let was = lease.take();
                     lease = match self.deps.screens.lease(computer).await {
                         Ok(lease) => lease,
                         Err(error) => return internal(&error),
                     };
-                    if self.state(sender, lease.as_ref(), surface).await.is_err() {
+                    if self.state(sender, lease.as_ref(), surface).await.is_err()
+                        || self.report_drive_end(sender, was, lease.as_ref()).await.is_err()
+                    {
                         return Ending::plain(EndReason::Stopped);
                     }
                 }
