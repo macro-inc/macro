@@ -11,13 +11,17 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Leftover } from '../../settings/connections/model';
 import { AgentComposerAddMenu } from './AgentComposerAddMenu';
 
-const [savedConnection, setSavedConnection] = createSignal<Leftover>({
-  kind: 'pipedream',
-  id: 'pd-slack',
-  title: 'Slack workspace',
-  appSlug: 'slack_v2',
-  enabled: false,
-});
+const SAVED_CONNECTION: Leftover = {
+  kind: 'app',
+  id: 'app/hubspot',
+  key: 'app/hubspot',
+  title: 'HubSpot workspace',
+  appSlug: 'hubspot',
+  status: 'off',
+  importAvailable: false,
+};
+const [savedConnection, setSavedConnection] =
+  createSignal<Leftover>(SAVED_CONNECTION);
 
 const state = vi.hoisted(() => ({
   mobile: false,
@@ -35,7 +39,7 @@ vi.mock('@core/constant/SettingsState', () => ({
 vi.mock('../../settings/connections/use-connections-model', () => ({
   useConnectionsModel: () => ({
     ready: () => state.ready,
-    partialError: () => state.failed,
+    error: () => state.failed,
     retry: state.retry,
     model: () => ({
       capabilities: [
@@ -60,14 +64,14 @@ vi.mock('../../settings/connections/integrations-view', () => ({
     </p>
   ),
 }));
-vi.mock('@core/pipedream/ConnectedAppIcon', () => ({
+vi.mock('@core/connectors/ConnectedAppIcon', () => ({
   ConnectedAppIcon: () => <svg aria-hidden="true" />,
 }));
 vi.mock('../../settings/connections/leftover-row', () => ({
   LeftoverRow: (props: { leftover: Leftover }) => (
     <p>
-      Saved Slack connection settings:{' '}
-      {props.leftover.enabled ? 'enabled' : 'disabled'}
+      Saved HubSpot connection settings:{' '}
+      {props.leftover.status === 'connected' ? 'enabled' : 'disabled'}
     </p>
   ),
 }));
@@ -77,14 +81,7 @@ const originalScrollTo = Object.getOwnPropertyDescriptor(
   'scrollTo'
 );
 beforeEach(() => {
-  setSavedConnection({
-    kind: 'pipedream',
-    id: 'pd-slack',
-    title: 'Slack workspace',
-    subtitle: 'Slack',
-    appSlug: 'slack_v2',
-    enabled: false,
-  });
+  setSavedConnection(SAVED_CONNECTION);
   state.mobile = false;
   state.ready = true;
   state.failed = false;
@@ -164,11 +161,14 @@ it('opens the selected provider settings without inserting a prompt', async () =
 });
 it('opens a disabled connection for management', async () => {
   setup();
-  fireEvent.keyDown(screen.getByRole('menuitem', { name: /Slack workspace/ }), {
-    key: 'Enter',
-  });
+  fireEvent.keyDown(
+    screen.getByRole('menuitem', { name: /HubSpot workspace/ }),
+    {
+      key: 'Enter',
+    }
+  );
   expect(
-    await screen.findByText('Saved Slack connection settings: disabled')
+    await screen.findByText('Saved HubSpot connection settings: disabled')
   ).toBeTruthy();
 });
 it('opens the unified catalog for Add connections', async () => {
@@ -198,13 +198,16 @@ it('offers the same actions in the mobile sheet', async () => {
 
 it('refreshes an open connection when the query returns its updated state', async () => {
   setup();
-  fireEvent.keyDown(screen.getByRole('menuitem', { name: /Slack workspace/ }), {
-    key: 'Enter',
-  });
-  await screen.findByText('Saved Slack connection settings: disabled');
-  setSavedConnection((connection) => ({ ...connection, enabled: true }));
+  fireEvent.keyDown(
+    screen.getByRole('menuitem', { name: /HubSpot workspace/ }),
+    {
+      key: 'Enter',
+    }
+  );
+  await screen.findByText('Saved HubSpot connection settings: disabled');
+  setSavedConnection((connection) => ({ ...connection, status: 'connected' }));
   expect(
-    await screen.findByText('Saved Slack connection settings: enabled')
+    await screen.findByText('Saved HubSpot connection settings: enabled')
   ).toBeTruthy();
 });
 
