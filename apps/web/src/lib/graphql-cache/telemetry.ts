@@ -159,6 +159,7 @@ export const CACHE_OWNER_EVENTS = [
   'multiple-owner-detected',
   'owner-lock-unavailable',
   'storage-busy',
+  'recovery-deferred',
   'takeover-granted',
   'superseded',
   'stale-databases-removed',

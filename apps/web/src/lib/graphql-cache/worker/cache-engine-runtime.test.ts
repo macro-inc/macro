@@ -426,6 +426,44 @@ describe('cache engine worker runtime', () => {
     }
   });
 
+  it('reports a recovery that kept moved files as recovery-deferred', async () => {
+    // Only a recovery open defers; storage-busy wins over it.
+    const cases = [
+      ['wipe-before-open', false, 'recovery-deferred'],
+      ['open-existing', false, 'initialization-failed'],
+      ['wipe-before-open', true, 'storage-busy'],
+    ] as const;
+    for (const [databaseAction, busy, failureCode] of cases) {
+      const scope = new FakeWorkerScope();
+      const direct = new FakePort();
+      installRuntime({
+        scope,
+        ownerLockIsHeld: async () => true,
+        createCore: (coreOptions) => ({
+          handleRequest: async (port, request) => {
+            await coreOptions.onOwnerLockAcquired?.();
+            if (busy) coreOptions.onStorageBusy?.();
+            coreOptions.onRecoveryDeferred?.();
+            port.postMessage({
+              id: request.id,
+              ok: false,
+              error: 'cache recovery kept the files an upgrade moved here',
+            });
+          },
+          addPort: vi.fn(),
+          drain: vi.fn(),
+        }),
+      });
+      scope.activate(activation(databaseAction), direct);
+
+      await vi.waitFor(() =>
+        expect(messagesOfKind(direct, 'activation-failed')).toEqual([
+          expect.objectContaining({ failureCode }),
+        ])
+      );
+    }
+  });
+
   it('deletes stale databases when started as a cleanup worker', async () => {
     const scope = new FakeWorkerScope();
     const reply = new FakePort();

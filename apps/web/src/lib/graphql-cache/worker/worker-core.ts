@@ -79,6 +79,13 @@ const isStorageBusy = (error: unknown): boolean =>
   'cacheStorageBusy' in error &&
   error.cacheStorageBusy === true;
 
+/** A WASM recovery open kept files a storage upgrade moved, undecided. */
+const isRecoveryDeferred = (error: unknown): boolean =>
+  typeof error === 'object' &&
+  error !== null &&
+  'cacheRecoveryDeferred' in error &&
+  error.cacheRecoveryDeferred === true;
+
 type PortLike = {
   postMessage(msg: unknown): void;
 };
@@ -103,6 +110,10 @@ export interface CacheWorkerCoreOptions {
   /** Called when opening gave up on database files another context kept
    * open. The failed request's response carries only the message. */
   onStorageBusy?: () => void;
+  /** Called when a recovery open kept the files a storage upgrade moved here
+   * because it could not yet decide whether they go back to the older build.
+   * It wiped nothing. */
+  onRecoveryDeferred?: () => void;
   /** Reports the bounded open outcome to the coordinator transport. */
   onInitializationOutcome?: (outcome: CacheOpenOutcome) => void;
   /**
@@ -417,8 +428,7 @@ export class CacheWorkerCore {
           durationMs,
         });
       }
-      this.reportResetRequired(error);
-      if (isStorageBusy(error)) this.options.onStorageBusy?.();
+      this.reportFailureKind(error);
       respond({
         id: request.id,
         ok: false,
@@ -1380,6 +1390,13 @@ export class CacheWorkerCore {
         await onOwnerLockBusy(attempt);
       }
     }
+  }
+
+  /** Tells the transport what kind of storage failure `error` was. */
+  private reportFailureKind(error: unknown): void {
+    this.reportResetRequired(error);
+    if (isStorageBusy(error)) this.options.onStorageBusy?.();
+    if (isRecoveryDeferred(error)) this.options.onRecoveryDeferred?.();
   }
 
   private reportResetRequired(error: unknown): void {

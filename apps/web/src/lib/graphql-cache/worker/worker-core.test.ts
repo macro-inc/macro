@@ -3266,6 +3266,38 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('reports a recovery open that kept moved files undecided', async () => {
+    const deferredError = Object.assign(
+      new Error('cache recovery kept the files an upgrade moved here'),
+      { cacheRecoveryDeferred: true as const }
+    );
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockRejectedValue(deferredError),
+    });
+    const onRecoveryDeferred = vi.fn();
+    const onStorageBusy = vi.fn();
+    const messages: unknown[] = [];
+    const core = new CacheWorkerCore({ onRecoveryDeferred, onStorageBusy });
+
+    await core.handleRequest(
+      {
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
+      },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    expect(onRecoveryDeferred).toHaveBeenCalledOnce();
+    expect(onStorageBusy).not.toHaveBeenCalled();
+    expect(messages).toEqual([
+      {
+        id: 1,
+        ok: false,
+        error: 'cache recovery kept the files an upgrade moved here',
+      },
+    ]);
+  });
+
   it('reports an open that gave up on busy database files', async () => {
     const busyError = Object.assign(
       new Error('OPFS sync handle open failed (NoModificationAllowedError)'),

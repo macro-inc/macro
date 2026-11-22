@@ -632,6 +632,35 @@ export class CoordinatorCore {
     return actions;
   }
 
+  /**
+   * Every automatic recovery retry kept the files a storage upgrade moved
+   * here, because none could decide whether they go back to the older build.
+   * Keep this scope and the pending recovery: refuse queued work, keep every
+   * tab registered now uncached for the rest of its page session, and let a
+   * tab that registers later run the recovery again. A lost engine promised
+   * to a newer build hands over instead, as `resumeAfterLoss` does.
+   */
+  deferRecovery(reason: string): CoordinatorAction[] {
+    const state = this.stateValue;
+    if (state.kind !== 'resetting-after-loss') return [];
+    this.stateValue = {
+      kind: 'waiting-for-tab',
+      nextDatabaseAction: state.databaseAction,
+    };
+    if (this.supersedePending) return this.completeSupersede();
+    const actions: CoordinatorAction[] = this.queuedRequests
+      .splice(0)
+      .map(({ tabId: requester, request }) =>
+        this.rejectUnavailable(requester, request.id, reason)
+      );
+    for (const registered of this.tabs) {
+      this.unavailableTabs.set(registered, reason);
+    }
+    actions.push({ kind: 'broadcast-cache-unavailable', reason });
+    this.assertInvariants();
+    return actions;
+  }
+
   /** Stops this recovery cycle. Only untouched storage permits a new host to retry. */
   terminalFailure(reason: string): CoordinatorAction[] {
     if (this.stateValue.kind === 'failed') return [];

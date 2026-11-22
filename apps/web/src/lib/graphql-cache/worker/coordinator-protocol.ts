@@ -78,10 +78,15 @@ export type EngineOpenOutcome =
 export type EngineFatalCode = 'storage-reset-required' | 'runtime-failure';
 /** `storage-busy`: another context kept the database files open through the
  * engine's bounded wait. An open changed nothing; a wipe may have removed one
- * file, so the coordinator keeps the attempt's database action. */
+ * file, so the coordinator keeps the attempt's database action.
+ * `recovery-deferred`: a recovery open kept the files a storage upgrade moved
+ * here, because it could not yet tell whether they go back to the older
+ * build; it wiped nothing, so the coordinator keeps the scope for a later
+ * attempt once its retries run out. */
 export type ActivationFailureCode =
   | 'initialization-failed'
   | 'recovery-open-failed'
+  | 'recovery-deferred'
   | 'storage-busy';
 
 export type TabToCoordinatorEnvelope =
@@ -445,6 +450,7 @@ const isActivationFailureCode = (
 ): value is ActivationFailureCode =>
   value === 'initialization-failed' ||
   value === 'recovery-open-failed' ||
+  value === 'recovery-deferred' ||
   value === 'storage-busy';
 
 const isOptionalRecord = (

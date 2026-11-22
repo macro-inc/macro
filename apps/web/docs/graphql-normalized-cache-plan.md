@@ -428,7 +428,15 @@ is created by a canceled initialization, even if its timer already fired.
 `graphql_cache.registration_retry` reports the wait duration, retry number,
 triggering error class, and whether the wait completed or was canceled. This is
 separate from a repeated-ready restart and does not make generic transport
-failures storage-safe. Engine recovery retains its bounded five retries.
+failures storage-safe. Engine recovery retains its bounded five retries. When
+a recovery open in those retries kept files an interrupted storage upgrade
+moved (`recovery-deferred`), the fifth failure is not terminal: the coordinator
+keeps the scope and its `wipe-before-open` requirement, fails closed as for an
+unavailable lock (`owner-lock-unavailable`, `cache-unavailable`, telemetry
+`ownerEvent: recovery-deferred`), and the next registration runs the same
+recovery. A terminal failure would quarantine the scope and strand the moved
+files with their queue; the Rust side bounds these recoveries by count and age
+(`crates/client/README.md#storage-upgrades`).
 Exhausted bootstrap retries preserve the cache
 scope only when the coordinator explicitly proves storage was untouched, not from
 a page's last-seen phase. Missing/broken transports remain conservatively

@@ -829,6 +829,16 @@ describe('coordinator runtime protocol', () => {
         kind: 'activation-failed',
         tabId: 'tab',
         ownerEpoch: 1,
+        reason: 'cache recovery kept the files an upgrade moved here',
+        failureCode: 'recovery-deferred',
+      }).ok
+    ).toBe(true);
+    expect(
+      validateEngineToCoordinatorEnvelope({
+        ...version,
+        kind: 'activation-failed',
+        tabId: 'tab',
+        ownerEpoch: 1,
         reason: 'open failed',
         failureCode: 'busy',
       }).ok

@@ -15,9 +15,11 @@ import {
 import { workerCacheTelemetry } from '../telemetry-relay';
 import { compiledEngineFromPage } from './compiled-engine';
 import {
+  type ActivationFailureCode,
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CleanupToPageEnvelope,
   type CoordinatorToEngineEnvelope,
+  type DatabaseAction,
   type EngineFatalCode,
   type EngineOpenOutcome,
   type EngineToCoordinatorEnvelope,
@@ -138,6 +140,20 @@ const engineOpenOutcome = (outcome: CacheOpenOutcome): EngineOpenOutcome =>
     )
     .exhaustive((): EngineOpenOutcome => 'reset-storage-uncertain');
 
+/** Why an activation failed. Busy files outrank everything: the open
+ * changed nothing. Only a recovery open can defer its decision. */
+function activationFailureCode(
+  databaseAction: DatabaseAction,
+  {
+    storageBusy,
+    recoveryDeferred,
+  }: { storageBusy: boolean; recoveryDeferred: boolean }
+): ActivationFailureCode {
+  if (storageBusy) return 'storage-busy';
+  if (databaseAction !== 'wipe-before-open') return 'initialization-failed';
+  return recoveryDeferred ? 'recovery-deferred' : 'recovery-open-failed';
+}
+
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
@@ -237,6 +253,8 @@ async function activate(
   let ownerLockGaveUp = false;
   // Set when opening outwaited database files another context kept open.
   let storageBusy = false;
+  // Set when a recovery open kept files an upgrade moved, undecided.
+  let recoveryDeferred = false;
   let openGranted = false;
   let resolveOpen!: () => void;
   const openPermission = new Promise<void>((resolve) => {
@@ -344,6 +362,9 @@ async function activate(
     },
     onStorageBusy: () => {
       storageBusy = true;
+    },
+    onRecoveryDeferred: () => {
+      recoveryDeferred = true;
     },
     onInitializationOutcome: (outcome) => {
       initializationOpenOutcome = engineOpenOutcome(outcome);
@@ -556,11 +577,10 @@ async function activate(
               tabId: activation.tabId,
               ownerEpoch: activation.ownerEpoch,
               reason: errorMessage(error),
-              failureCode: storageBusy
-                ? 'storage-busy'
-                : activation.databaseAction === 'wipe-before-open'
-                  ? 'recovery-open-failed'
-                  : 'initialization-failed',
+              failureCode: activationFailureCode(activation.databaseAction, {
+                storageBusy,
+                recoveryDeferred,
+              }),
             })
       );
     }

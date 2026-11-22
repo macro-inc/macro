@@ -280,6 +280,9 @@ export class CoordinatorRouter {
   private nextRecoveryResetReason: CacheResetReason | undefined;
   private readonly resetRequiredEpochs = new Set<number>();
   private recoveryAttemptCount = 0;
+  /** Whether a recovery in this retry cycle kept files a storage upgrade
+   * moved because it could not decide on them (`recovery-deferred`). */
+  private recoveryDeferred = false;
   private recoveryRetryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now = (): number =>
     globalThis.performance?.now() ?? Date.now();
@@ -1322,6 +1325,22 @@ export class CoordinatorRouter {
     const core = this.coreValue;
     if (!core || core.state.kind !== 'resetting-after-loss') return;
     if (this.recoveryAttemptCount >= RECOVERY_RETRY_LIMIT) {
+      if (this.recoveryDeferred) {
+        // Giving the scope up would strand the files a recovery kept: the
+        // next scope's name never looks for them. Run uncached and let a
+        // later attempt decide again; the engine bounds those decisions.
+        const reason = `cache recovery kept files it could not decide on after ${RECOVERY_RETRY_LIMIT} attempts: ${core.state.reason}`;
+        this.resetRecoveryRetries();
+        this.telemetry.record({
+          name: 'graphql_cache.owner',
+          operationCategory: 'lifecycle',
+          outcome: 'error',
+          ownerEvent: 'recovery-deferred',
+          ...describeCacheError(core.state.reason),
+        });
+        this.applyActions(core.deferRecovery(reason));
+        return;
+      }
       const reason = `cache recovery failed after ${RECOVERY_RETRY_LIMIT} attempts: ${core.state.reason}`;
       this.clearRecoveryRetryTimer();
       this.applyActions(core.terminalFailure(reason));
@@ -1345,6 +1364,7 @@ export class CoordinatorRouter {
 
   private resetRecoveryRetries(): void {
     this.recoveryAttemptCount = 0;
+    this.recoveryDeferred = false;
     this.clearRecoveryRetryTimer();
   }
 
@@ -1365,6 +1385,7 @@ export class CoordinatorRouter {
     if (!core) return;
     const actions = core.ownerLost(tabId, ownerEpoch, reason);
     if (actions.length === 0) return;
+    if (failureCode === 'recovery-deferred') this.recoveryDeferred = true;
     this.handoff.cancel();
     this.activationStarted.delete(ownerEpoch);
     const next = core.state;
@@ -1575,7 +1596,8 @@ export class CoordinatorRouter {
       operationCategory: 'storage',
       outcome: 'error',
       errorCode:
-        failureCode === 'recovery-open-failed'
+        failureCode === 'recovery-open-failed' ||
+        failureCode === 'recovery-deferred'
           ? 'storage-reset'
           : classifyCacheError(reason),
       resetReason,
