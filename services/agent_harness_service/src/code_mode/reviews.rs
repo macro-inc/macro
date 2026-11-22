@@ -9,6 +9,7 @@ use agent_session::domain::{
 use ai_toolset::RequestContext;
 use async_trait::async_trait;
 use import::domain::models::{NotionImportReport, NotionWriteChoices, RunStatus};
+use import::domain::ports::UnreviewableRun;
 use import::domain::service::WorkspaceImporter;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Serialize, de::DeserializeOwned};
@@ -37,12 +38,7 @@ fn import_source(
 /// tells the user instead of presenting an empty plan.
 fn attach_error(review: uuid::Uuid, error: import::domain::ports::ImportError) -> CodeModeError {
     match error {
-        import::domain::ports::ImportError::RunNotReviewable(refusal) => {
-            tracing::info!(refusal = ?refusal, %review, "import review refused");
-            CodeModeError::Invalid(format!(
-                "Review {review} was not presented: {refusal}. Tell the user why instead of presenting it again."
-            ))
-        }
+        import::domain::ports::ImportError::RunNotReviewable(refusal) => refused(review, &refusal),
         error => {
             tracing::warn!(error = ?error, %review, "could not tie the import plan to its review");
             CodeModeError::Invalid(format!(
@@ -50,6 +46,14 @@ fn attach_error(review: uuid::Uuid, error: import::domain::ports::ImportError) -
             ))
         }
     }
+}
+
+/// The agent hears why an import review cannot be shown, and tells the user.
+fn refused(review: uuid::Uuid, refusal: &UnreviewableRun) -> CodeModeError {
+    tracing::info!(refusal = ?refusal, %review, "import review refused");
+    CodeModeError::Invalid(format!(
+        "Review {review} was not presented: {refusal}. Tell the user why instead of presenting it again."
+    ))
 }
 
 pub struct Actions<S, L, H> {
@@ -98,6 +102,24 @@ where
             .import_report(account_holder, import_source(record)?)
             .await?;
         Ok(report.review_id == Some(record.id.0) && report.status == Some(RunStatus::Ready))
+    }
+    async fn presentable(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        record: &ReviewRecord,
+    ) -> Result<(), CodeModeError> {
+        if record.kind() != ReviewKind::Import {
+            return Ok(());
+        }
+        let report = self.import_report(owner, import_source(record)?).await?;
+        let refusal = match report.status {
+            None => Some(UnreviewableRun::Missing),
+            Some(status) => UnreviewableRun::of(status, report.error),
+        };
+        match refusal {
+            Some(refusal) => Err(refused(record.id.0, &refusal)),
+            None => Ok(()),
+        }
     }
     async fn send_email(
         &self,

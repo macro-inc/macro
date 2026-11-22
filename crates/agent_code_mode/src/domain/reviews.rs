@@ -259,6 +259,17 @@ pub trait ReviewActions: Send + Sync + 'static {
     ) -> Result<bool, CodeModeError> {
         Ok(true)
     }
+    /// Whether a new `record` can be presented to `owner`, checked before it
+    /// is saved so a refused review leaves no record that a later read would
+    /// try to present again. A kind whose review depends on other work (an
+    /// import's plan) refuses with the reason. Default: always.
+    async fn presentable(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _record: &ReviewRecord,
+    ) -> Result<(), CodeModeError> {
+        Ok(())
+    }
     /// Send a reviewed email as the record's saved, authenticated account holder.
     async fn send_email(
         &self,
@@ -415,6 +426,8 @@ impl ReviewService {
             decision: None,
             items: input.drafts.into(),
         };
+        let owner = self.owner(session).await?;
+        self.actions.presentable(&owner, &record).await?;
         self.store.create(&record, MAX_REVIEWS_PER_SESSION).await?;
         self.present(record).await
     }

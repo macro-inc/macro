@@ -132,6 +132,8 @@ struct Actions {
     action_started: tokio::sync::Notify,
     approvable: AtomicBool,
     fail_import: AtomicBool,
+    /// Why a new review cannot be presented, when it cannot.
+    refuse_presentation: Mutex<Option<String>>,
 }
 impl Actions {
     async fn act(&self, account_holder: &MacroUserIdStr<'static>, call: String) {
@@ -159,6 +161,17 @@ impl ReviewActions for Actions {
     ) -> Result<bool, CodeModeError> {
         assert_eq!(account_holder, &record.acting_user);
         Ok(self.approvable.load(Ordering::SeqCst))
+    }
+    async fn presentable(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        _: &ReviewRecord,
+    ) -> Result<(), CodeModeError> {
+        assert_eq!(owner, &self.owner);
+        match self.refuse_presentation.lock().unwrap().clone() {
+            Some(reason) => Err(CodeModeError::Invalid(reason)),
+            None => Ok(()),
+        }
     }
     async fn send_email(
         &self,
@@ -255,6 +268,7 @@ impl Fixture {
             action_started: tokio::sync::Notify::new(),
             approvable: AtomicBool::new(true),
             fail_import: AtomicBool::new(false),
+            refuse_presentation: Mutex::new(None),
         });
         let service = ReviewService::new(
             store.clone(),
@@ -1350,4 +1364,39 @@ async fn a_view_is_presented_only_by_its_session_and_execution() {
         Err(CodeModeError::NotFound)
     ));
     assert!(f.actions.views.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_review_that_cannot_be_presented_is_never_saved() {
+    let f = Fixture::new();
+    *f.actions.refuse_presentation.lock().unwrap() = Some("the import plan failed".into());
+    let refused = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await;
+    match refused {
+        Err(CodeModeError::Invalid(reason)) => assert_eq!(reason, "the import plan failed"),
+        Err(error) => panic!("expected the refusal, got {error:?}"),
+        Ok(_) => panic!("a refused review was created"),
+    }
+    assert!(f.store.0.lock().unwrap().is_empty(), "nothing is saved");
+    assert!(f.actions.presentations.lock().unwrap().is_empty());
+
+    // Listing the execution's reviews is unaffected, and a later review
+    // presents as usual.
+    *f.actions.refuse_presentation.lock().unwrap() = None;
+    let row = f
+        .create(vec![
+            json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+        ])
+        .await;
+    let listed = f.service.list(&f.view(), f.execution).await.unwrap();
+    assert_eq!(
+        listed.iter().map(|row| row.id).collect::<Vec<_>>(),
+        vec![row.id]
+    );
 }

@@ -134,7 +134,10 @@ direct user authentication; programs (`macro_authorization::is_program_run`:
 agent or routine attribution, or the execution header) cannot edit, submit, or dismiss through the HTTP decision endpoint,
 which refuses them before decoding the decision; `DecideReview` requires a real turn prompted by the
 review's acting account, and its Submit waits for `ReviewActions::approvable`
-(default: always), the hook a kind uses to refuse until it is ready. `GetReview`
+(default: always), the hook a kind uses to refuse until it is ready. Creating a
+review first asks `ReviewActions::presentable` (default: always), so a review
+that cannot be presented (an import whose plan failed) is refused and never
+saved; a saved, unpresented review is presented again on every read. `GetReview`
 reads final
 drafts and outcomes. Legacy notificationId/notificationAttemptAt fields are no
 longer delivery state.
