@@ -496,3 +496,35 @@ export function toChannelListItem(
   channelListItems.set(channel, item);
   return item;
 }
+
+/**
+ * The viewer's DM with `personId` among `channels`, when the directory alone
+ * can tell which one the server's lookup answers: a direct message whose
+ * members still in it are exactly the two of them, no bot among them. The
+ * server ranks those first (`find_dm`, `DmRoster::Joined`), then the oldest,
+ * then the lowest id, and so does this. Undefined when there is none: the
+ * server may still answer a DM only the other person left, which a record
+ * cannot tell apart from one a third member also left (records list current
+ * members only), or a DM the directory has not received yet.
+ */
+export function directMessageWithPerson(
+  channels: readonly DirectoryChannel[],
+  viewerId: string,
+  personId: string
+): string | undefined {
+  let best: { id: string; at: number } | undefined;
+  for (const channel of channels) {
+    if (channel.channelType !== 'direct_message') continue;
+    if (channel.botParticipants.some(({ leftAt }) => leftAt === null)) continue;
+    const members = channel.participants.filter(
+      ({ leftAt }) => leftAt === null
+    );
+    if (members.length !== 2) continue;
+    const ids = new Set(members.map(({ userId }) => userId));
+    if (!ids.has(viewerId) || !ids.has(personId)) continue;
+    const at = instantMicros(channel.createdAt);
+    if (!best || at < best.at || (at === best.at && channel.id < best.id))
+      best = { id: channel.id, at };
+  }
+  return best?.id;
+}
