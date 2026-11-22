@@ -65,18 +65,20 @@ export type ImportInitiator = 'onboarding' | 'chat' | 'archive' | 'manual';
 
 export type ImportRunStatus = RunStatus;
 
-const RUN_ERROR_KINDS: readonly RunErrorKind[] = [
-  'not_found',
-  'forbidden',
-  'access_lost',
-  'connection_unavailable',
-  'not_connected',
-  'rate_limited',
-  'unreachable',
-  'usage_refused',
-  'interrupted',
-  'internal',
-];
+// Every kind, checked against the generated union: a new kind fails to
+// compile here until it is listed.
+const RUN_ERROR_KINDS = {
+  not_found: true,
+  forbidden: true,
+  access_lost: true,
+  connection_unavailable: true,
+  not_connected: true,
+  rate_limited: true,
+  unreachable: true,
+  usage_refused: true,
+  interrupted: true,
+  internal: true,
+} satisfies Record<RunErrorKind, true>;
 
 /**
  * A run's failure kind from the server; a kind this build does not know (a
@@ -84,7 +86,9 @@ const RUN_ERROR_KINDS: readonly RunErrorKind[] = [
  */
 export function parseRunErrorKind(value: unknown): RunErrorKind | null {
   if (value === null || value === undefined) return null;
-  return RUN_ERROR_KINDS.find((kind) => kind === value) ?? 'internal';
+  return typeof value === 'string' && Object.hasOwn(RUN_ERROR_KINDS, value)
+    ? (value as RunErrorKind)
+    : 'internal';
 }
 
 /** Metadata shape for staged Linear issues (`source === 'linear'`). */
