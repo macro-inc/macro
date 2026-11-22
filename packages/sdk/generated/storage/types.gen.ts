@@ -2768,6 +2768,13 @@ export type CallRecord = {
      */
     roomName?: string | null;
     /**
+     * The call's RTC sessions in order, once archived. One, unless a
+     * scheduled meeting emptied and was rejoined before its end. Empty while
+     * the call is live, for imported calls, and in list contexts. The
+     * top-level recording fields describe the first session.
+     */
+    sessions: Array<CallRecordSession>;
+    /**
      * Whether the call is shared with the creator's team. While the call is
      * live this is the pending toggle applied at archive; afterwards it
      * mirrors `team_share_access_level`.
@@ -2878,6 +2885,33 @@ export type CallRecordPreviewData = {
     endedAt?: string | null;
     /**
      * When the call started (created_at for active, started_at for archived).
+     */
+    startedAt: string;
+};
+
+/**
+ * One RTC session of an archived call: a time window and its recording.
+ */
+export type CallRecordSession = {
+    /**
+     * When the session's room emptied.
+     */
+    endedAt: string;
+    /**
+     * Presigned URL for the session's preview image, if available.
+     */
+    recordingPreviewUrl?: string | null;
+    /**
+     * When the session's recording began, once known. Anchor this session's
+     * transcript to it, falling back to `started_at`.
+     */
+    recordingStartedAt?: string | null;
+    /**
+     * Presigned URL for the session's recording, if available.
+     */
+    recordingUrl?: string | null;
+    /**
+     * When the session's room opened.
      */
     startedAt: string;
 };
@@ -26860,7 +26894,14 @@ export type GetCallRecordingData = {
          */
         call_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * 0-based index into the record's `sessions`. Defaults to 0, the first
+         * session; a later session exists only when a scheduled meeting emptied
+         * and was rejoined before its end.
+         */
+        session?: number;
+    };
     url: '/call/record/{call_id}/recording';
 };
 

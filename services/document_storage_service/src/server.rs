@@ -1059,6 +1059,14 @@ async fn run_server() -> anyhow::Result<()> {
     let call_service_builder = call_service_builder.with_programmatic_call_gate(
         call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags.clone()),
     );
+    let call_service_builder = match config.environment {
+        Environment::Local => call_service_builder.with_scheduled_call_resume_gate(
+            call::outbound::scheduled_call_resume::AlwaysResumeScheduledCalls,
+        ),
+        _ => call_service_builder.with_scheduled_call_resume_gate(
+            call::outbound::scheduled_call_resume::FlaggedScheduledCallResume(flags.clone()),
+        ),
+    };
     let call_public_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
             redis: redis_client.clone(),

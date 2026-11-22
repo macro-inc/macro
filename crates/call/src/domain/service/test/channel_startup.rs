@@ -112,7 +112,7 @@ async fn channel_token_does_not_wait_for_media_or_recipient_notifications() {
     background_repo
         .expect_attach_meeting_recording()
         .times(1)
-        .return_once(move |id, egress| {
+        .return_once(move |id, _, egress| {
             assert_eq!(*id, STARTED_EVENT_CALL_ID);
             assert_eq!(egress, "egress");
             Box::pin(async move {

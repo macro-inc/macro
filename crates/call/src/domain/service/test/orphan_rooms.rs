@@ -40,15 +40,15 @@ fn joined_webhook(
     rtc_client
 }
 
-/// No active call owns the room; the record lookup by its id answers `record`.
-fn untracked_room_repo(record: Option<CallRecord>) -> MockCallRepository {
+/// No active call owns the room; an ended session of `ended_call` ran in it.
+fn untracked_room_repo(ended_call: Option<Uuid>) -> MockCallRepository {
     let mut repo = MockCallRepository::new();
     repo.expect_get_call_by_room_name()
         .times(1)
         .returning(|_| Box::pin(async { Ok(None) }));
-    repo.expect_get_call_record_by_call_id()
+    repo.expect_get_ended_session_call()
         .times(1)
-        .return_once(move |_| Box::pin(async move { Ok(record) }));
+        .return_once(move |_| Box::pin(async move { Ok(ended_call) }));
     repo
 }
 
@@ -77,7 +77,7 @@ async fn user_joining_an_archived_call_room_is_removed_and_the_room_deleted() {
         .times(1)
         .returning(|_| Box::pin(async { Ok(()) }));
 
-    let mut repo = untracked_room_repo(Some(archived_record(ORPHAN_CALL_ID)));
+    let mut repo = untracked_room_repo(Some(ORPHAN_CALL_ID));
     // The stale joiner never becomes a participant of the archived call.
     repo.expect_add_participant().never();
 
@@ -102,7 +102,7 @@ async fn guest_joining_an_archived_call_room_is_removed_and_the_room_deleted() {
         .times(1)
         .returning(|_| Box::pin(async { Ok(()) }));
 
-    let mut repo = untracked_room_repo(Some(archived_record(ORPHAN_CALL_ID)));
+    let mut repo = untracked_room_repo(Some(ORPHAN_CALL_ID));
     repo.expect_reconcile_guest().never();
 
     process_join(repo, rtc_client).await;
@@ -136,38 +136,41 @@ async fn bot_joining_an_archived_call_room_is_removed_without_attendance() {
         .expect_delete_room()
         .times(1)
         .returning(|_| Box::pin(async { Ok(()) }));
-    let mut repo = untracked_room_repo(Some(archived_record(ORPHAN_CALL_ID)));
+    let mut repo = untracked_room_repo(Some(ORPHAN_CALL_ID));
     repo.expect_add_participant().never();
     process_join(repo, rtc_client).await;
 }
 
 #[tokio::test]
-async fn joins_to_rooms_without_an_archived_call_are_left_alone() {
-    let mut active = archived_record(ORPHAN_CALL_ID);
-    active.is_active = true;
-    let mut renamed_room = archived_record(ORPHAN_CALL_ID);
-    renamed_room.room_name = Some(ORPHAN_CHANNEL_ID.to_string());
-    // A meeting preparation or the get-or-create race's candidate room has no
-    // record; an active record or one bound to a different room is not orphaned.
-    for record in [None, Some(active), Some(renamed_room)] {
-        let mut rtc_client = joined_webhook(&ORPHAN_CALL_ID.to_string(), Some(STALE_JOINER), None);
-        rtc_client.expect_remove_participant().never();
-        rtc_client.expect_delete_room().never();
+async fn joins_to_rooms_without_an_ended_session_are_left_alone() {
+    // A meeting preparation or the get-or-create race's candidate room never
+    // hosted a session.
+    let mut rtc_client = joined_webhook(&ORPHAN_CALL_ID.to_string(), Some(STALE_JOINER), None);
+    rtc_client.expect_remove_participant().never();
+    rtc_client.expect_delete_room().never();
 
-        process_join(untracked_room_repo(record), rtc_client).await;
-    }
+    process_join(untracked_room_repo(None), rtc_client).await;
 }
 
 #[tokio::test]
-async fn joins_to_rooms_not_named_after_a_call_are_left_alone() {
-    let mut rtc_client = joined_webhook("not-a-call-room", Some(STALE_JOINER), None);
-    rtc_client.expect_remove_participant().never();
-    rtc_client.expect_delete_room().never();
-    let mut repo = MockCallRepository::new();
-    repo.expect_get_call_by_room_name()
+async fn a_user_joining_a_resumed_meetings_earlier_room_is_removed() {
+    // A later session's room is not named after the call.
+    let room_name = PREPARED_ROOM_ID.to_string();
+    let mut rtc_client = joined_webhook(&room_name, Some(STALE_JOINER), None);
+    let removed_room = room_name.clone();
+    rtc_client
+        .expect_remove_participant()
+        .withf(move |room, _| room == removed_room)
         .times(1)
-        .returning(|_| Box::pin(async { Ok(None) }));
-    repo.expect_get_call_record_by_call_id().never();
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let deleted_room = room_name.clone();
+    rtc_client
+        .expect_delete_room()
+        .withf(move |room| room == deleted_room)
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(()) }));
+    let mut repo = untracked_room_repo(Some(ORPHAN_CALL_ID));
+    repo.expect_add_participant().never();
 
     process_join(repo, rtc_client).await;
 }
@@ -180,7 +183,7 @@ async fn service_agents_joining_an_untracked_room_are_left_alone() {
     rtc_client.expect_delete_room().never();
     let mut repo = MockCallRepository::new();
     repo.expect_get_call_by_room_name().never();
-    repo.expect_get_call_record_by_call_id().never();
+    repo.expect_get_ended_session_call().never();
 
     process_join(repo, rtc_client).await;
 }
@@ -219,14 +222,17 @@ async fn sweep_deletes_only_archived_call_rooms_past_the_grace_period() {
     repo.expect_get_participant_count()
         .times(1)
         .returning(|_| Box::pin(async { Ok(1) }));
-    repo.expect_get_call_record_by_call_id()
-        .withf(|call_id| *call_id == ORPHAN_CALL_ID)
+    repo.expect_get_ended_session_call()
+        .withf(|room_name| room_name == ORPHAN_CALL_ID.to_string())
         .times(1)
-        .returning(|_| Box::pin(async { Ok(Some(archived_record(ORPHAN_CALL_ID))) }));
-    // An expired meeting preparation has no call record yet.
-    repo.expect_get_call_record_by_call_id()
-        .withf(|call_id| *call_id == PREPARED_ROOM_ID)
-        .times(1)
+        .returning(|_| Box::pin(async { Ok(Some(ORPHAN_CALL_ID)) }));
+    // An expired meeting preparation, or a room this deployment did not
+    // create, never hosted a session.
+    repo.expect_get_ended_session_call()
+        .withf(|room_name| {
+            room_name == PREPARED_ROOM_ID.to_string() || room_name == "not-a-call-room"
+        })
+        .times(2)
         .returning(|_| Box::pin(async { Ok(None) }));
 
     let mut rtc_client = MockCallRtcClient::new();

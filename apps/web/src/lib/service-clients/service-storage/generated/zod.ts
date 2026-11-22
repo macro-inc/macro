@@ -4746,6 +4746,42 @@ export const getCallRecordResponse = zod
       .describe(
         'The RTC room name. `None` for imported calls, which never had a room.'
       ),
+    sessions: zod
+      .array(
+        zod
+          .object({
+            endedAt: zod.iso
+              .datetime({})
+              .describe("When the session's room emptied."),
+            recordingPreviewUrl: zod
+              .string()
+              .nullish()
+              .describe(
+                "Presigned URL for the session's preview image, if available."
+              ),
+            recordingStartedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                "When the session's recording began, once known. Anchor this session's\ntranscript to it, falling back to `started_at`."
+              ),
+            recordingUrl: zod
+              .string()
+              .nullish()
+              .describe(
+                "Presigned URL for the session's recording, if available."
+              ),
+            startedAt: zod.iso
+              .datetime({})
+              .describe("When the session's room opened."),
+          })
+          .describe(
+            'One RTC session of an archived call: a time window and its recording.'
+          )
+      )
+      .describe(
+        "The call's RTC sessions in order, once archived. One, unless a\nscheduled meeting emptied and was rejoined before its end. Empty while\nthe call is live, for imported calls, and in list contexts. The\ntop-level recording fields describe the first session."
+      ),
     shareWithTeam: zod
       .boolean()
       .describe(
@@ -5115,6 +5151,18 @@ export const getCallParticipantsResponse = zod
  */
 export const getCallRecordingParams = zod.object({
   call_id: zod.uuid().describe('Call ID'),
+});
+
+export const getCallRecordingQuerySessionMin = 0;
+
+export const getCallRecordingQueryParams = zod.object({
+  session: zod
+    .number()
+    .min(getCallRecordingQuerySessionMin)
+    .optional()
+    .describe(
+      "0-based index into the record's `sessions`. Defaults to 0, the first\nsession; a later session exists only when a scheduled meeting emptied\nand was rejoined before its end."
+    ),
 });
 
 /**

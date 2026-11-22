@@ -43,6 +43,7 @@ fn record_with_participants(user_ids: &[&str]) -> CallRecord {
         guests: Vec::new(),
         transcript: Vec::new(),
         source: None,
+        sessions: Vec::new(),
         user_access_level: None,
         viewer_has_declined: false,
     }

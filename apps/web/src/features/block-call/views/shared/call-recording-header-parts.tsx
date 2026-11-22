@@ -10,13 +10,10 @@ import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
-import { createFileDownload } from '@core/util/createFileDownload';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
 import IconShared from '@icon/share.svg';
-import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import type { CallRecord } from '@service-call/client';
-import { callRecordingDownloadSource } from '../../queries/recording-download';
+import { createRecordingDownloadOps } from './recording-download-ops';
 
 /**
  * The call recording block's title menu operations, its entity for the
@@ -34,27 +31,10 @@ export function useCallRecordingHeaderTools(record: () => CallRecord) {
     userPermissions: permissions(),
     owner: blockMetadataSignal()?.owner,
   }));
-  const recordingDownload = createFileDownload(() =>
-    callRecordingDownloadSource(record(), callName())
-  );
+  const downloadOps = createRecordingDownloadOps(record, callName);
   const ops = (): FileOperation[] => [
     { op: 'rename' },
-    ...(record().recordingUrl
-      ? [
-          {
-            group: 'file' as const,
-            get label() {
-              return t('entityActions.download');
-            },
-            icon: DownloadSimple,
-            action: () =>
-              fireAndForget(
-                recordingDownload.start(),
-                'call-recording-download'
-              ),
-          },
-        ]
-      : []),
+    ...downloadOps(),
     { op: 'delete' },
   ];
 

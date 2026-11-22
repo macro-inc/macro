@@ -56,6 +56,11 @@ with their `email_links` row; `user_id` and `list_key` on them repeat the link's
 owner and provider on purpose, so reads never join `email_links`. List rows have no
 foreign key: the contacts worker removes them on account deletion.
 
+`call_record_sessions` (owned by `crates/call`) holds the second and later RTC
+sessions of a resumed scheduled meeting, keyed by room name; the record's own
+columns stay the first session's, so a record that was never resumed has no
+rows and needed no backfill. Rows cascade with their `call_records` row.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,

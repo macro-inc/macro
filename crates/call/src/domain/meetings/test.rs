@@ -114,3 +114,56 @@ fn clearing_schedule_is_explicit_and_cannot_conflict_with_new_times() {
         .is_err()
     );
 }
+
+fn scheduled_meeting(start: DateTime<Utc>, end: DateTime<Utc>) -> Meeting {
+    Meeting {
+        id: Uuid::from_u128(1),
+        share_token: MeetingToken::generate(),
+        title: "Weekly review".to_string(),
+        scheduled_start: Some(start),
+        scheduled_end: Some(end),
+        channel_id: None,
+        call_id: None,
+        user_id: "macro|owner@example.com".to_string(),
+        channel_call_id: None,
+    }
+}
+
+#[test]
+fn a_scheduled_meeting_resumes_a_call_that_ended_inside_its_slot_until_its_end() {
+    let start = DateTime::parse_from_rfc3339("2026-11-22T10:00:00Z")
+        .unwrap()
+        .to_utc();
+    let end = start + TimeDelta::hours(1);
+    let meeting = scheduled_meeting(start, end);
+    let minutes = TimeDelta::minutes;
+
+    // Rejoined mid-meeting after a session that ended during it.
+    assert!(meeting.resumes_call(start + minutes(20), start + minutes(25)));
+    // A session that ended in the early-join window belongs to the slot.
+    assert!(meeting.resumes_call(start - minutes(15), start + minutes(1)));
+    // At or after the scheduled end a join starts a new call.
+    assert!(!meeting.resumes_call(start + minutes(50), end));
+    assert!(!meeting.resumes_call(start + minutes(50), end + minutes(5)));
+    // A session that ended before the slot opened is a separate call.
+    assert!(!meeting.resumes_call(start - minutes(16), start + minutes(1)));
+    assert!(!meeting.resumes_call(start - TimeDelta::days(7), start + minutes(1)));
+}
+
+#[test]
+fn instant_meetings_and_channel_links_never_resume() {
+    let start = DateTime::parse_from_rfc3339("2026-11-22T10:00:00Z")
+        .unwrap()
+        .to_utc();
+    let during = start + TimeDelta::minutes(10);
+
+    let mut instant = scheduled_meeting(start, start + TimeDelta::hours(1));
+    instant.scheduled_start = None;
+    instant.scheduled_end = None;
+    assert!(!instant.resumes_call(during, during));
+
+    let mut channel_link = scheduled_meeting(start, start + TimeDelta::hours(1));
+    channel_link.channel_id = Some(Uuid::from_u128(2));
+    channel_link.channel_call_id = Some(Uuid::from_u128(3));
+    assert!(!channel_link.resumes_call(during, during));
+}

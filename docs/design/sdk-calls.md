@@ -180,7 +180,7 @@ Status: **Exists** in the SDK; **Wrap**, the route exists; **New**, needs backen
 | List and revoke links | `macro.meetings.list()`, `meeting.cancel()` | Exists |
 | Register work, see others' work | `session.registerAsWork()`; add a read of others' work (GraphQL in the app) | Exists, New |
 | Read the transcript and summary | `call.transcript`, `call.summary` | Exists |
-| Download the recording | `call.recording.bytes()`, since code mode cannot reach the presigned URL | New |
+| Download the recording | `call.recording.bytes({ session? })`, since code mode cannot reach the presigned URL; `session` picks a resumed meeting's later recording | New |
 
 No moderation: people have no mute-others, remove or end-for-everyone controls in a call
 today, and programs should not get power people lack. If those arrive, they arrive in the
@@ -200,7 +200,7 @@ All in `crates/call`, in its hexagonal layout.
 | `GET /call/active/all` | Channel and standalone calls in one shape, each with its kind and whether it is ringing for the caller |
 | `GET /call/record/{call_id}/ring` | Ring state for an authenticated user, reusing `get_ring_status`'s logic. The push-token route stays for native clients |
 | `GET /call/record/{call_id}/participants` | Live roster from `list_participants`, with track state and whether each is a program. Same access as join |
-| `GET /call/record/{call_id}/recording` | Recording bytes through a Macro host |
+| `GET /call/record/{call_id}/recording` | Recording bytes through a Macro host; optional `?session=N` (0-based) for a later session's recording, 404 when out of range |
 
 **Refuse tokens in code mode.** All token routes return `403` to a program: a credential
 signed for an agent or a routine run (`is_program_run`), or a request carrying
@@ -232,6 +232,12 @@ only rate limited.
   `call.participant_joined`, `call.participant_left`, `call.recording_ready`,
   `call.summarized`.
 - For one user: `call.ringing`, `call.answered`, `call.declined`, `call.invited`.
+
+A scheduled meeting that empties and is rejoined before its scheduled end resumes as the
+same call id in a new room, so `call.started`, `call.ended` and the participant events can
+repeat for one call, and `call.recording_ready` and `call.summarized` arrive again after the
+later session ends. Each session has its own recording: `CallRecord.sessions()` lists them
+and `call.recording.bytes({ session })` reads one (`?session=N` on the recording route).
 
 Today the per-user ones are hand-written JSON on the app's websocket and the others are an
 internal broker topic. A program reconciles with `macro.calls.active()` when its stream

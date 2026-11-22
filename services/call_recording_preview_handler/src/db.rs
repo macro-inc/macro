@@ -5,8 +5,8 @@ use sqlx::{Pool, Postgres};
 /// `recording_key` is the MP4 key without the `calls/` prefix. `preview_key`
 /// is the stable S3 object key/path for the preview image, for example
 /// `calls/{room}/{recording_stem}/PREVIEW.jpg`. Returns the total number
-/// of active and archived rows updated so callers can retry when no matching
-/// recording row exists yet.
+/// of active and archived rows updated, including a resumed meeting's later
+/// sessions, so callers can retry when no matching recording row exists yet.
 #[tracing::instrument(skip(db), err)]
 pub async fn update_preview_key(
     db: &Pool<Postgres>,
@@ -39,9 +39,22 @@ pub async fn update_preview_key(
     .execute(tx.as_mut())
     .await?;
 
+    // A later session of a resumed scheduled meeting keeps its own recording.
+    let later_session = sqlx::query!(
+        r#"
+        UPDATE call_record_sessions
+        SET preview_url = $2
+        WHERE recording_key = $1
+        "#,
+        recording_key,
+        preview_key,
+    )
+    .execute(tx.as_mut())
+    .await?;
+
     tx.commit().await?;
 
-    Ok(active.rows_affected() + archived.rows_affected())
+    Ok(active.rows_affected() + archived.rows_affected() + later_session.rows_affected())
 }
 
 #[cfg(test)]
@@ -234,6 +247,36 @@ mod test {
 
         assert_eq!(rows, 0);
         assert!(preview_url_for_active_call(&pool).await?.is_none());
+        assert!(preview_url_for_archived_call(&pool).await?.is_none());
+        Ok(())
+    }
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn update_preview_key_updates_a_later_sessions_recording(
+        pool: Pool<Postgres>,
+    ) -> anyhow::Result<()> {
+        insert_channel(&pool).await?;
+        insert_archived_call(&pool, OTHER_RECORDING_KEY).await?;
+        sqlx::query(
+            r#"
+            INSERT INTO call_record_sessions (room_name, call_record_id, started_at, ended_at, recording_key)
+            VALUES ('preview-later-room', $1, NOW(), NOW(), $2)
+            "#,
+        )
+        .bind(ARCHIVED_CALL_ID)
+        .bind(MATCHING_RECORDING_KEY)
+        .execute(&pool)
+        .await?;
+
+        let rows = update_preview_key(&pool, MATCHING_RECORDING_KEY, PREVIEW_KEY).await?;
+
+        assert_eq!(rows, 1);
+        let session_preview: Option<String> = sqlx::query_scalar(
+            "SELECT preview_url FROM call_record_sessions WHERE room_name = 'preview-later-room'",
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(session_preview.as_deref(), Some(PREVIEW_KEY));
         assert!(preview_url_for_archived_call(&pool).await?.is_none());
         Ok(())
     }

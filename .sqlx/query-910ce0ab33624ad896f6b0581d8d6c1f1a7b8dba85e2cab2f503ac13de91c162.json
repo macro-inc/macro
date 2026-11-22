@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE call_records SET summary = $2 WHERE id = $1 AND ended_at = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "910ce0ab33624ad896f6b0581d8d6c1f1a7b8dba85e2cab2f503ac13de91c162"
+}

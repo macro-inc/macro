@@ -30,14 +30,14 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::meetings::{
-    GuestId, Meeting, MeetingPreparation, MeetingToken, UpdateMeetingRequest,
+    GuestId, Meeting, MeetingCallAllocation, MeetingPreparation, MeetingToken, UpdateMeetingRequest,
 };
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
     CallPeople, CallRecord, CallRecordGuest, CallRecordPage, CallRecordParticipant,
-    CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
-    DeletedCallRecordStorageKeys, EditCallRecordRepoArgs, EnrichedCallTranscript,
-    TranscriptSegmentRequest, WithCallId,
+    CallRecordPreview, CallRecordPreviewData, CallRecordSession, CallRecordTranscriptSegment,
+    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRepoArgs,
+    EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
 
@@ -336,9 +336,11 @@ impl CallRepository for PgCallRepo {
     async fn archive_call_if_program_only(
         &self,
         call_id: &Uuid,
+        room_name: &str,
     ) -> Result<Option<ArchivedCall>, CallError> {
         self.archive_session(
             call_id,
+            room_name,
             false,
             Some(Utc::now() - chrono::TimeDelta::seconds(60)),
         )
@@ -415,8 +417,9 @@ impl CallRepository for PgCallRepo {
         &self,
         meeting_id: &Uuid,
         candidate_call_id: &Uuid,
-    ) -> Result<(Call, bool), CallError> {
-        self.allocate_meeting_call(meeting_id, candidate_call_id)
+        resume_allowed: bool,
+    ) -> Result<MeetingCallAllocation, CallError> {
+        self.allocate_meeting_call(meeting_id, candidate_call_id, resume_allowed)
             .await
     }
     async fn add_guest(
@@ -1083,16 +1086,18 @@ impl CallRepository for PgCallRepo {
     async fn attach_meeting_recording(
         &self,
         call_id: &Uuid,
+        room_name: &str,
         egress_id: &str,
     ) -> Result<bool, Self::Err> {
         // This UPDATE takes the same row lock as archival. If it wins, archival
-        // copies the egress ID. If archival wins, the second statement sees the
-        // committed archived record under READ COMMITTED.
+        // copies the egress ID. If archival wins, the later statements see the
+        // committed archived session under READ COMMITTED. Each statement
+        // matches the room, so a recorder that started for an earlier session
+        // of a resumed meeting never takes over the live session's egress.
         let active = sqlx::query!(
-            r#"
-            UPDATE calls SET egress_id = $2 WHERE id = $1
-            "#,
+            "UPDATE calls SET egress_id = $3 WHERE id = $1 AND room_name = $2",
             call_id,
+            room_name,
             egress_id,
         )
         .execute(&self.pool)
@@ -1100,9 +1105,24 @@ impl CallRepository for PgCallRepo {
         if active.rows_affected() > 0 {
             return Ok(true);
         }
-        sqlx::query!(
-            "UPDATE call_records SET egress_id = $2 WHERE id = $1",
+
+        // The call's first session is the record's own row.
+        let first = sqlx::query!(
+            "UPDATE call_records SET egress_id = $3 WHERE id = $1 AND room_name = $2",
             call_id,
+            room_name,
+            egress_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        if first.rows_affected() > 0 {
+            return Ok(false);
+        }
+
+        sqlx::query!(
+            "UPDATE call_record_sessions SET egress_id = $3 WHERE room_name = $2 AND call_record_id = $1",
+            call_id,
+            room_name,
             egress_id,
         )
         .execute(&self.pool)
@@ -1135,50 +1155,80 @@ impl CallRepository for PgCallRepo {
         Ok((row.share_with_team, row.channel_id))
     }
 
-    async fn archive_call(&self, call_id: &Uuid) -> Result<ArchivedCall, CallError> {
-        self.archive_session(call_id, false, None)
+    async fn archive_call(
+        &self,
+        call_id: &Uuid,
+        room_name: &str,
+    ) -> Result<ArchivedCall, CallError> {
+        self.archive_session(call_id, room_name, false, None)
             .await?
             .ok_or_else(|| CallError::NotFound(call_id.to_string()))
     }
     async fn archive_call_if_empty(
         &self,
         call_id: &Uuid,
+        room_name: &str,
     ) -> Result<Option<ArchivedCall>, CallError> {
-        self.archive_session(call_id, true, None).await
+        self.archive_session(call_id, room_name, true, None).await
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn set_recording_key(
-        &self,
-        call_record_id: &Uuid,
-        recording_key: &str,
-    ) -> Result<(), Self::Err> {
-        sqlx::query!(
-            r#"
-            UPDATE call_records SET recording_key = $2 WHERE id = $1
-            "#,
-            call_record_id,
-            recording_key,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_call_record_by_egress_id(
+    async fn set_recording_key_by_egress_id(
         &self,
         egress_id: &str,
+        recording_key: &str,
     ) -> Result<Option<(Uuid, Option<Uuid>)>, Self::Err> {
-        let record = sqlx::query!(
+        let first = sqlx::query!(
             r#"
-            SELECT id, channel_id FROM call_records WHERE egress_id = $1
+            UPDATE call_records SET recording_key = $2 WHERE egress_id = $1
+            RETURNING id, channel_id
             "#,
             egress_id,
+            recording_key,
         )
         .fetch_optional(&self.pool)
         .await?;
-        Ok(record.map(|record| (record.id, record.channel_id)))
+        if let Some(record) = first {
+            return Ok(Some((record.id, record.channel_id)));
+        }
+
+        // A later session of a resumed meeting.
+        let later = sqlx::query!(
+            r#"
+            UPDATE call_record_sessions s SET recording_key = $2
+            FROM call_records r
+            WHERE s.egress_id = $1 AND r.id = s.call_record_id
+            RETURNING r.id, r.channel_id
+            "#,
+            egress_id,
+            recording_key,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(later.map(|record| (record.id, record.channel_id)))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_ended_session_call(&self, room_name: &str) -> Result<Option<Uuid>, Self::Err> {
+        // A call's first session ran in a room named after the call id; its
+        // later sessions are found by room name.
+        let first_session_call_id = Uuid::parse_str(room_name).ok();
+        sqlx::query_scalar!(
+            r#"
+            SELECT ended.id AS "id!"
+            FROM (
+                SELECT cr.id FROM call_records cr WHERE cr.id = $2 AND cr.room_name = $1
+                UNION ALL
+                SELECT s.call_record_id FROM call_record_sessions s WHERE s.room_name = $1
+            ) ended
+            WHERE NOT EXISTS (SELECT 1 FROM calls WHERE room_name = $1)
+            LIMIT 1
+            "#,
+            room_name,
+            first_session_call_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1235,24 +1285,46 @@ impl CallRepository for PgCallRepo {
         )
         .execute(&self.pool)
         .await?;
-        Ok(archived.rows_affected() > 0)
+        if archived.rows_affected() > 0 {
+            return Ok(true);
+        }
+
+        // A later session of a resumed meeting.
+        let later = sqlx::query!(
+            r#"
+            UPDATE call_record_sessions
+               SET recording_started_at = $2
+             WHERE egress_id = $1
+               AND recording_started_at IS NULL
+            "#,
+            egress_id,
+            started_at,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(later.rows_affected() > 0)
     }
 
     #[tracing::instrument(err, skip(self, segment))]
     async fn create_transcript_segment(
         &self,
         call_id: &Uuid,
+        room_name: &str,
         segment: &TranscriptSegmentRequest,
         voice_id: Option<Uuid>,
     ) -> Result<(), Self::Err> {
+        // Only while the session in this room is live: once it is archived
+        // (and perhaps resumed in another room) the line belongs to nothing.
         sqlx::query!(
             r#"
             INSERT INTO call_transcripts (call_id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, voice_id, sequence_num)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, (
+            SELECT $1, $2, $3, $4, $5, $6, $7, $8, (
                 SELECT COALESCE(MAX(sequence_num), 0) + 1
                 FROM call_transcripts
                 WHERE call_id = $1
-            ))
+            )
+            FROM calls
+            WHERE id = $1 AND room_name = $9
             ON CONFLICT (call_id, segment_id) DO NOTHING
             "#,
             call_id,
@@ -1263,6 +1335,7 @@ impl CallRepository for PgCallRepo {
             segment.started_at,
             segment.ended_at,
             voice_id,
+            room_name,
         )
         .execute(&self.pool)
         .await?;
@@ -1281,7 +1354,7 @@ impl CallRepository for PgCallRepo {
                 r#"
                 UPDATE calls
                 SET recording_started_at = $1
-                WHERE id = $2
+                WHERE id = $2 AND room_name = $3
                   AND (
                     recording_started_at IS NULL
                     OR recording_started_at = date_trunc('second', recording_started_at)
@@ -1290,21 +1363,23 @@ impl CallRepository for PgCallRepo {
                 "#,
                 stream_started_at,
                 call_id,
+                room_name,
             )
             .execute(&self.pool)
             .await?;
 
-            // Race fallback: if `archive_call` moved the row to `call_records`
-            // between transcript-ingest's lookup and now, the active UPDATE
-            // affects 0 rows. Apply the same conditional update to the
-            // archived row (same id is reused on archive). Mirrors
+            // Race fallback: if `archive_call` moved the session to the
+            // archive between transcript-ingest's lookup and now, the active
+            // UPDATE affects 0 rows. Apply the same conditional update to the
+            // archived session: the record's own row when it was the call's
+            // first session, else its `call_record_sessions` row. Mirrors
             // `set_recording_started_at_by_egress_id`.
             if active.rows_affected() == 0 {
-                sqlx::query!(
+                let first = sqlx::query!(
                     r#"
                     UPDATE call_records
                     SET recording_started_at = $1
-                    WHERE id = $2
+                    WHERE id = $2 AND room_name = $3
                       AND (
                         recording_started_at IS NULL
                         OR recording_started_at = date_trunc('second', recording_started_at)
@@ -1313,9 +1388,29 @@ impl CallRepository for PgCallRepo {
                     "#,
                     stream_started_at,
                     call_id,
+                    room_name,
                 )
                 .execute(&self.pool)
                 .await?;
+                if first.rows_affected() == 0 {
+                    sqlx::query!(
+                        r#"
+                        UPDATE call_record_sessions
+                        SET recording_started_at = $1
+                        WHERE room_name = $3 AND call_record_id = $2
+                          AND (
+                            recording_started_at IS NULL
+                            OR recording_started_at = date_trunc('second', recording_started_at)
+                            OR $1 < recording_started_at
+                          )
+                        "#,
+                        stream_started_at,
+                        call_id,
+                        room_name,
+                    )
+                    .execute(&self.pool)
+                    .await?;
+                }
             }
         }
 
@@ -1484,6 +1579,7 @@ impl CallRepository for PgCallRepo {
                 guests,
                 transcript,
                 source: None,
+                sessions: Vec::new(),
             }));
         }
 
@@ -1572,8 +1668,32 @@ impl CallRepository for PgCallRepo {
         })
         .collect();
 
+        // Sessions after the first; a call that was never resumed has none.
+        let later_sessions = sqlx::query!(
+            r#"
+            SELECT started_at, ended_at, recording_started_at, recording_key, preview_url
+            FROM call_record_sessions
+            WHERE call_record_id = $1
+            ORDER BY started_at ASC
+            "#,
+            call_id,
+        )
+        .fetch_all(&mut *tx)
+        .await?
+        .into_iter()
+        .map(|row| CallRecordSession {
+            started_at: row.started_at,
+            ended_at: row.ended_at,
+            recording_started_at: row.recording_started_at,
+            recording_key: row.recording_key,
+            preview_key: row.preview_url,
+            recording_url: None,
+            recording_preview_url: None,
+        })
+        .collect();
+
         tx.commit().await?;
-        Ok(Some(CallRecord {
+        let mut record = CallRecord {
             call_id: archived.id,
             user_access_level: None,
             channel_id: archived.channel_id,
@@ -1605,7 +1725,10 @@ impl CallRepository for PgCallRepo {
             guests,
             transcript,
             source: None,
-        }))
+            sessions: Vec::new(),
+        };
+        record.set_archived_sessions(later_sessions);
+        Ok(Some(record))
     }
 
     #[tracing::instrument(err, skip(self, call_ids), fields(num_call_ids = call_ids.len()))]
@@ -1627,8 +1750,8 @@ impl CallRepository for PgCallRepo {
             .collect();
 
         // Single query across both `calls` (active) and `call_records` (archived).
-        // An id in both tables should be impossible; if it somehow happens the
-        // active row wins by appearing first.
+        // A resumed scheduled meeting is in both while it is live again; the
+        // live row wins below.
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -1663,13 +1786,23 @@ impl CallRepository for PgCallRepo {
 
         let mut found: HashMap<Uuid, Found> = HashMap::with_capacity(rows.len());
         for row in rows {
-            // If the same id ever shows up twice, keep the first (active) hit.
-            found.entry(row.call_id).or_insert(Found {
+            let live = row.ended_at.is_none();
+            let hit = Found {
                 channel_id: row.channel_id,
                 started_at: row.started_at,
                 ended_at: row.ended_at,
                 custom_name: row.custom_name,
-            });
+            };
+            // An id found twice is live again: keep its live row.
+            match found.entry(row.call_id) {
+                std::collections::hash_map::Entry::Occupied(mut entry) if live => {
+                    entry.insert(hit);
+                }
+                std::collections::hash_map::Entry::Occupied(_) => {}
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(hit);
+                }
+            }
         }
 
         let unique_channel_ids: Vec<Uuid> = {
@@ -1794,9 +1927,41 @@ impl CallRepository for PgCallRepo {
     async fn delete_call_record(
         &self,
         call_record_id: &Uuid,
-    ) -> Result<Option<DeletedCallRecordStorageKeys>, Self::Err> {
+    ) -> Result<Option<Vec<DeletedCallRecordStorageKeys>>, CallError> {
         let mut tx = self.pool.begin().await?;
 
+        // Lock the record first: a resume locks it before inserting the live
+        // session, so either the resume sees no record and starts a new call,
+        // or this sees the live session and refuses.
+        sqlx::query_scalar!(
+            "SELECT id FROM call_records WHERE id = $1 FOR UPDATE",
+            call_record_id,
+        )
+        .fetch_optional(tx.as_mut())
+        .await?;
+        let live = sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM calls WHERE id = $1) AS "live!""#,
+            call_record_id,
+        )
+        .fetch_one(tx.as_mut())
+        .await?;
+        if live {
+            return Err(CallError::Conflict(format!(
+                "call {call_record_id} is live; delete it once it has ended"
+            )));
+        }
+
+        // Later sessions' objects; their rows go with the record.
+        let later_sessions = sqlx::query!(
+            r#"
+            SELECT recording_key, preview_url FROM call_record_sessions
+            WHERE call_record_id = $1
+            ORDER BY started_at ASC
+            "#,
+            call_record_id,
+        )
+        .fetch_all(tx.as_mut())
+        .await?;
         let row = sqlx::query!(
             r#"
             DELETE FROM call_records WHERE id = $1 RETURNING recording_key, preview_url
@@ -1814,9 +1979,20 @@ impl CallRepository for PgCallRepo {
         .await?;
 
         tx.commit().await?;
-        Ok(row.map(|r| DeletedCallRecordStorageKeys {
-            recording_key: r.recording_key,
-            preview_key: r.preview_url,
+        Ok(row.map(|first| {
+            std::iter::once(DeletedCallRecordStorageKeys {
+                recording_key: first.recording_key,
+                preview_key: first.preview_url,
+            })
+            .chain(
+                later_sessions
+                    .into_iter()
+                    .map(|later| DeletedCallRecordStorageKeys {
+                        recording_key: later.recording_key,
+                        preview_key: later.preview_url,
+                    }),
+            )
+            .collect()
         }))
     }
 
@@ -1997,14 +2173,21 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(skip(self, summary), err)]
-    async fn insert_call_summary(&self, call_id: &Uuid, summary: &str) -> Result<bool, Self::Err> {
-        // Tolerate missing rows: summarization can race with record deletion.
+    async fn insert_call_summary(
+        &self,
+        call_id: &Uuid,
+        ended_at: DateTime<Utc>,
+        summary: &str,
+    ) -> Result<bool, Self::Err> {
+        // Tolerate missing rows: summarization can race with record deletion,
+        // and with a resumed meeting's later session merging into the record.
         let result = sqlx::query!(
             r#"
-            UPDATE call_records SET summary = $2 WHERE id = $1
+            UPDATE call_records SET summary = $2 WHERE id = $1 AND ended_at = $3
             "#,
             call_id,
             summary,
+            ended_at,
         )
         .execute(&self.pool)
         .await?;

@@ -3,10 +3,11 @@
 use super::*;
 
 impl PgCallRepo {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self), fields(call.sessions = tracing::field::Empty))]
     pub(super) async fn archive_session(
         &self,
         call_id: &Uuid,
+        room_name: &str,
         require_empty: bool,
         program_only_before: Option<DateTime<Utc>>,
     ) -> Result<Option<ArchivedCall>, CallError> {
@@ -15,16 +16,19 @@ impl PgCallRepo {
         // sharing below, so take the shared guard before moving any rows.
         share_permission_db_utils::team_share::acquire_guard(&mut tx).await?;
 
-        // Fetch and lock the active call so concurrent archive_call callers serialize.
+        // Fetch and lock the live session so concurrent archive_call callers
+        // serialize. The room names the session: a caller still holding an
+        // earlier session of a resumed meeting finds nothing to archive.
         let call = sqlx::query!(
             r#"
             SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, meeting_id,
                    (SELECT title FROM call_meetings WHERE id = calls.meeting_id) AS meeting_title
             FROM calls
-            WHERE id = $1
+            WHERE id = $1 AND room_name = $2
             FOR UPDATE
             "#,
             call_id,
+            room_name,
         )
         .fetch_optional(tx.as_mut())
         .await?
@@ -69,69 +73,135 @@ impl PgCallRepo {
             .signed_duration_since(call.created_at)
             .num_milliseconds()
             .max(0);
-        let has_recording = call.egress_id.is_some();
         let share_with_team = crate::domain::models::permitted_team_memory_intent(
             call.channel_id,
             call.share_with_team,
         );
-        // Insert into call_records (including egress_id and any early recording keys).
-        // The record keeps the same id as the original call.
-        // The legacy column is still copied for older readers until it is
-        // dropped; new readers derive `share_with_team` from canonical state.
-        sqlx::query!(
-            r#"
-            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, meeting_id, custom_name)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-            "#,
+
+        // A record with this id means the session is a resumed meeting's
+        // later session: merge it into that record instead of inserting one.
+        let existing = sqlx::query!(
+            "SELECT started_at FROM call_records WHERE id = $1 FOR UPDATE",
             call_id,
-            call.channel_id,
-            call.room_name,
-            call.created_by,
-            call.created_at,
-            ended_at,
-            duration_ms,
-            call.egress_id,
-            call.recording_key,
-            call.preview_url,
-            call.recording_started_at,
-            &call.share_permission_id,
-            share_with_team,
-            call.meeting_id,
-            call.meeting_title,
         )
-        .execute(tx.as_mut())
+        .fetch_optional(tx.as_mut())
         .await?;
+        let (started_at, ended_at, duration_ms, sessions) = match existing {
+            None => {
+                // Insert into call_records (including egress_id and any early
+                // recording keys). The record keeps the same id as the
+                // original call. The legacy column is still copied for older
+                // readers until it is dropped; new readers derive
+                // `share_with_team` from canonical state.
+                sqlx::query!(
+                    r#"
+                    INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, meeting_id, custom_name)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                    "#,
+                    call_id,
+                    call.channel_id,
+                    call.room_name,
+                    call.created_by,
+                    call.created_at,
+                    ended_at,
+                    duration_ms,
+                    call.egress_id,
+                    call.recording_key,
+                    call.preview_url,
+                    call.recording_started_at,
+                    &call.share_permission_id,
+                    share_with_team,
+                    call.meeting_id,
+                    call.meeting_title,
+                )
+                .execute(tx.as_mut())
+                .await?;
+                (call.created_at, ended_at, duration_ms, 1)
+            }
+            Some(existing) => {
+                // The service and database clocks can disagree; a session
+                // never ends before it started.
+                let session_ended_at = ended_at.max(call.created_at);
+                sqlx::query!(
+                    r#"
+                    INSERT INTO call_record_sessions (room_name, call_record_id, started_at, ended_at, egress_id, recording_key, preview_url, recording_started_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    "#,
+                    call.room_name,
+                    call_id,
+                    call.created_at,
+                    session_ended_at,
+                    call.egress_id,
+                    call.recording_key,
+                    call.preview_url,
+                    call.recording_started_at,
+                )
+                .execute(tx.as_mut())
+                .await?;
+                // The record's own columns keep describing the first session;
+                // only the whole call's end and talk time move.
+                let merged = sqlx::query!(
+                    r#"
+                    UPDATE call_records
+                       SET ended_at = GREATEST(ended_at, $2), duration_ms = duration_ms + $3
+                     WHERE id = $1
+                    RETURNING ended_at, duration_ms,
+                              (SELECT COUNT(*) FROM call_record_sessions WHERE call_record_id = $1) AS "later_sessions!"
+                    "#,
+                    call_id,
+                    session_ended_at,
+                    duration_ms,
+                )
+                .fetch_one(tx.as_mut())
+                .await?;
+                (
+                    existing.started_at,
+                    merged.ended_at,
+                    merged.duration_ms,
+                    merged.later_sessions + 1,
+                )
+            }
+        };
+        tracing::Span::current().record("call.sessions", sessions);
 
         // Translate the live intent into canonical team sharing: View for the
         // creator's current team when the toggle was on, nothing otherwise.
         team_share::translate_live_share_with_team(&mut tx, call_id, share_with_team).await?;
 
         // Copy all lifetime-distinct participants (including soft-deleted) to
-        // call_record_participants. Each inserted row represents one participant.
-        let participants = sqlx::query_scalar!(
+        // call_record_participants, one row per user. A user who was in an
+        // earlier session keeps their first join and takes this session's
+        // leave.
+        sqlx::query!(
             r#"
             INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at)
             SELECT $1, user_id, joined_at, left_at
             FROM call_participants
-            WHERE call_id = $2
-            RETURNING user_id
+            WHERE call_id = $1
+            ON CONFLICT (call_record_id, user_id) DO UPDATE SET left_at = EXCLUDED.left_at
             "#,
             call_id,
+        )
+        .execute(tx.as_mut())
+        .await?;
+        let participants = sqlx::query_scalar!(
+            "SELECT user_id FROM call_record_participants WHERE call_record_id = $1",
             call_id,
         )
         .fetch_all(tx.as_mut())
         .await?;
 
         // Copy guests the same way; the archived rows keep the guest ids so
-        // transcript speaker ids remain resolvable to display names.
+        // transcript speaker ids remain resolvable to display names. Guest ids
+        // are minted per join, so an earlier session's guests never conflict.
         sqlx::query!(
             r#"
             INSERT INTO call_record_guests (call_record_id, id, display_name, joined_at, left_at)
             SELECT $1, id, display_name, joined_at, left_at
             FROM call_guests
-            WHERE call_id = $2
+            WHERE call_id = $1
+            ON CONFLICT (call_record_id, id) DO NOTHING
             "#,
-            call_id,
             call_id,
         )
         .execute(tx.as_mut())
@@ -141,6 +211,8 @@ impl PgCallRepo {
         // segments that share both speaker_id and diarized_speaker_id when the
         // gap between them (next.started_at - prev.ended_at) is <= 5 seconds.
         // voice_id must also match so the propagated value is unambiguous.
+        // A later session's lines number on from the earlier sessions', so
+        // `sequence_num` keeps following time across the whole call.
         sqlx::query!(
             r#"
             WITH ordered AS (
@@ -158,7 +230,7 @@ impl PgCallRepo {
                     LAG(voice_id) OVER w AS prev_voice_id,
                     LAG(ended_at) OVER w AS prev_ended_at
                 FROM call_transcripts
-                WHERE call_id = $2
+                WHERE call_id = $1
                 WINDOW w AS (ORDER BY sequence_num)
             ),
             marked AS (
@@ -195,6 +267,11 @@ impl PgCallRepo {
                     sequence_num,
                     SUM(is_new_group) OVER (ORDER BY sequence_num) AS group_id
                 FROM marked
+            ),
+            earlier AS (
+                SELECT COALESCE(MAX(sequence_num), 0) AS last_sequence_num
+                FROM call_record_transcripts
+                WHERE call_record_id = $1
             )
             INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, diarized_speaker_id, voice_id, content, started_at, ended_at, sequence_num)
             SELECT
@@ -207,11 +284,10 @@ impl PgCallRepo {
                 STRING_AGG(content, ' ' ORDER BY sequence_num),
                 MIN(started_at),
                 MAX(ended_at),
-                MIN(sequence_num)
+                MIN(sequence_num) + (SELECT last_sequence_num FROM earlier)
             FROM grouped
             GROUP BY group_id
             "#,
-            call_id,
             call_id,
         )
         .execute(tx.as_mut())
@@ -239,10 +315,10 @@ impl PgCallRepo {
             call_id: call.id,
             channel_id: call.channel_id,
             created_by: call.created_by,
-            started_at: call.created_at,
+            started_at,
             ended_at,
             duration_ms,
-            has_recording,
+            egress_id: call.egress_id,
             participants,
             channel_thread,
         };
@@ -261,3 +337,6 @@ pub(super) async fn lock_active_call(
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod test;

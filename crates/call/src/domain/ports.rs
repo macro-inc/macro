@@ -26,8 +26,8 @@ use crate::domain::models::{
 
 use super::meetings::{
     ActiveMeeting, CreateMeetingRequest, GuestId, GuestJoinRequest, InviteMeetingUsersRequest,
-    Meeting, MeetingInvitePermissions, MeetingParticipants, MeetingPreparation,
-    MeetingRtcParticipant, MeetingToken, UpdateMeetingRequest,
+    Meeting, MeetingCallAllocation, MeetingInvitePermissions, MeetingParticipants,
+    MeetingPreparation, MeetingRtcParticipant, MeetingToken, UpdateMeetingRequest,
 };
 
 use super::models::{
@@ -73,10 +73,12 @@ pub trait CallRepository: Send + Sync + 'static {
         client: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Atomically archive a call whose only active participants have been programs for 60 seconds.
+    /// Atomically archive a call session whose only active participants have been programs for 60 seconds.
+    /// `room_name` names the session; see [`CallRepository::archive_call`].
     fn archive_call_if_program_only(
         &self,
         call_id: &Uuid,
+        room_name: &str,
     ) -> impl Future<Output = Result<Option<ArchivedCall>, CallError>> + Send;
 
     /// Persist an owner-bound room reservation and discard expired reservation metadata.
@@ -155,13 +157,19 @@ pub trait CallRepository: Send + Sync + 'static {
         meeting_id: &Uuid,
         user_id: &str,
     ) -> impl Future<Output = Result<bool, CallError>> + Send;
-    /// Lock the invitation and allocate or reuse its active call, returning whether it was created.
-    /// New standalone sessions must have no team grant or pending team-share intent.
+    /// Lock the invitation and allocate or reuse its active call.
+    ///
+    /// With `resume_allowed`, a meeting whose latest call ended inside its
+    /// slot ([`Meeting::resumes_call`]) resumes that call: a new live session
+    /// in the candidate's room under the ended call's id, sharing and owner.
+    /// Otherwise a new call starts under the candidate id. New standalone
+    /// sessions must have no team grant or pending team-share intent.
     fn get_or_create_meeting_call(
         &self,
         meeting_id: &Uuid,
         candidate_call_id: &Uuid,
-    ) -> impl Future<Output = Result<(Call, bool), CallError>> + Send;
+        resume_allowed: bool,
+    ) -> impl Future<Output = Result<MeetingCallAllocation, CallError>> + Send;
     /// Persist a validated guest's participation and name.
     ///
     /// Must fail (not silently insert) when the call is no longer active, so
@@ -332,12 +340,14 @@ pub trait CallRepository: Send + Sync + 'static {
         egress_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Attach a recording started asynchronously. Persists on the active call,
-    /// or its archived record if the call ended during startup. Returns whether
-    /// it was attached to an active call; otherwise the caller must stop egress.
+    /// Attach a recording started asynchronously to the session in
+    /// `room_name`. Persists on the live session, or on the archived session
+    /// if it ended during startup. Returns whether it was attached to a live
+    /// session in that room; otherwise the caller must stop egress.
     fn attach_meeting_recording(
         &self,
         call_id: &Uuid,
+        room_name: &str,
         egress_id: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
@@ -364,31 +374,42 @@ pub trait CallRepository: Send + Sync + 'static {
     /// canonical team sharing (View for the creator's current team) in the same
     /// transaction. Calls without a channel must archive with team sharing off.
     /// Returns facts committed by the archive transaction.
+    ///
+    /// `room_name` names the live session to archive. A caller holding a
+    /// [`Call`] from before an archive and a resume would otherwise end the
+    /// next session; a live row in another room answers
+    /// [`CallError::NotFound`], as an already archived call does.
     fn archive_call(
         &self,
         call_id: &Uuid,
+        room_name: &str,
     ) -> impl Future<Output = Result<ArchivedCall, CallError>> + Send;
 
     /// Archive only if there are still no participants while holding the call lock.
+    /// `room_name` names the session; see [`CallRepository::archive_call`].
     fn archive_call_if_empty(
         &self,
         call_id: &Uuid,
+        room_name: &str,
     ) -> impl Future<Output = Result<Option<ArchivedCall>, CallError>> + Send;
 
-    /// Set the recording key on an archived call record.
-    fn set_recording_key(
-        &self,
-        call_record_id: &Uuid,
-        recording_key: &str,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Find a call record by its egress ID (for webhook handling).
+    /// Set the recording key on the archived session that recorded with this
+    /// egress: the call record's own (first) session, or a later one.
     ///
-    /// Returns the archived call record's `(call_id, channel_id)` context.
-    fn get_call_record_by_egress_id(
+    /// Returns the archived call record's `(call_id, channel_id)` context, or
+    /// `None` when no archived session has this egress.
+    fn set_recording_key_by_egress_id(
         &self,
         egress_id: &str,
+        recording_key: &str,
     ) -> impl Future<Output = Result<Option<(Uuid, Option<Uuid>)>, Self::Err>> + Send;
+
+    /// The call whose archived session ran in `room_name`, while no live
+    /// session uses that room: the room is left over from an ended session.
+    fn get_ended_session_call(
+        &self,
+        room_name: &str,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
     /// Set the recording key on an active call (by egress ID).
     ///
@@ -401,7 +422,8 @@ pub trait CallRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Set `recording_started_at` on whichever row currently owns the egress —
-    /// active `calls` first, then archived `call_records` — driven by the
+    /// active `calls` first, then archived `call_records`, then a later
+    /// archived session in `call_record_sessions` — driven by the
     /// `egress_started` webhook. Idempotent: only sets the column when it is
     /// still `NULL` so a duplicate or retried webhook can't overwrite a
     /// previously captured start time.
@@ -411,12 +433,14 @@ pub trait CallRepository: Send + Sync + 'static {
         started_at: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Insert a transcript segment for an active call. When `voice_id` is
-    /// `Some`, it's stored on the row so the call-finished pipeline can
-    /// resolve the speaker to a macro user.
+    /// Insert a transcript segment for the live session in `room_name`. When
+    /// `voice_id` is `Some`, it's stored on the row so the call-finished
+    /// pipeline can resolve the speaker to a macro user. A segment whose
+    /// session has ended is dropped.
     fn create_transcript_segment(
         &self,
         call_id: &Uuid,
+        room_name: &str,
         segment: &TranscriptSegmentRequest,
         voice_id: Option<Uuid>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
@@ -503,14 +527,18 @@ pub trait CallRepository: Send + Sync + 'static {
         viewer_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, String>, Self::Err>> + Send;
 
-    /// Delete a row from `call_records` by id. Participants and transcript
-    /// segments are removed via `ON DELETE CASCADE`. No-op if no row matches.
-    /// Returns the deleted row's storage object keys so the caller can clean
-    /// up the associated recording and preview objects.
+    /// Delete a row from `call_records` by id. Participants, transcript
+    /// segments and later sessions are removed via `ON DELETE CASCADE`. No-op
+    /// if no row matches. Returns the storage object keys of every session of
+    /// the deleted record so the caller can clean up the associated recording
+    /// and preview objects.
+    ///
+    /// Refuses with [`CallError::Conflict`] while the call has a live session
+    /// (a resumed scheduled meeting): its archive would bring the record back.
     fn delete_call_record(
         &self,
         call_record_id: &Uuid,
-    ) -> impl Future<Output = Result<Option<DeletedCallRecordStorageKeys>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<Vec<DeletedCallRecordStorageKeys>>, CallError>> + Send;
 
     /// Patches a call record (link/channel sharing, team sharing, display name)
     /// in one transaction.
@@ -572,14 +600,20 @@ pub trait CallRepository: Send + Sync + 'static {
         call_record_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<(Uuid, Uuid)>, Self::Err>> + Send;
 
-    /// Persist the AI-generated summary text on the archived call record.
+    /// Persist the AI-generated summary text on the archived call record, if
+    /// the record still ends at `ended_at`: the summary describes the record
+    /// as it was then.
     ///
     /// Tolerates unknown `call_id` (no row matches): the summarization flow
     /// can race with the record being deleted, so this is an idempotent no-op
-    /// when the target row is gone. Returns whether a row was updated.
+    /// when the target row is gone. A resumed scheduled meeting's later
+    /// session moves `ended_at` when it merges, so a summary of the earlier
+    /// sessions finishing after that is not written either. Returns whether a
+    /// row was updated.
     fn insert_call_summary(
         &self,
         call_id: &Uuid,
+        ended_at: DateTime<Utc>,
         summary: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
@@ -1141,9 +1175,12 @@ pub trait CallService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
 
     /// Stream a recording after checking the same access as the call record.
+    /// `session` is the 0-based index into the record's sessions; 0 is the
+    /// first session, and the only one a live call has.
     fn get_call_recording(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
+        session: u16,
     ) -> impl Future<Output = Result<RecordingDownload, CallError>> + Send;
 
     /// Delete a [`CallRecord`] the caller has channel-member access to.
@@ -1152,7 +1189,9 @@ pub trait CallService: Send + Sync + 'static {
     /// `CallAccessLevelExtractor`; the entity on the receipt must be
     /// `EntityType::Call` and its `entity_id` must be the call's UUID.
     /// Only `call_records` rows are affected — active calls in the `calls`
-    /// table are untouched. Idempotent.
+    /// table are untouched, and a call with a live session (including a
+    /// resumed scheduled meeting) is refused with [`CallError::Conflict`].
+    /// Idempotent.
     fn delete_call_record(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -1207,9 +1246,11 @@ pub trait CallService: Send + Sync + 'static {
     /// Loads the [`CallRecord`] for `call_id`, passes its finalized transcript
     /// to the configured [`CallSummarizer`], and persists the resulting
     /// summary via [`CallRepository::insert_call_summary`]. If no summarizer
-    /// is configured, this is a no-op. Missing records (e.g. deleted mid-flow)
-    /// and empty transcripts are also no-ops — no AI call is made in those
-    /// cases.
+    /// is configured, this is a no-op. Missing records (e.g. deleted mid-flow),
+    /// a resumed scheduled meeting that is live again (its next session's
+    /// archive summarizes the whole call) and empty transcripts are also
+    /// no-ops — no AI call is made in those cases. A summary is persisted only
+    /// if the record still ends where it did when read.
     fn summarize_call(&self, call_id: &Uuid) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// List the voice ids currently enrolled for `macro_user_id`.
@@ -1397,6 +1438,15 @@ impl VoiceRepository for NoOpVoiceRepository {
 pub trait ProgrammaticCallGate: Send + Sync + 'static {
     /// Return false when the flag is disabled or unavailable.
     async fn enabled_for(&self, caller: MacroUserIdStr<'_>) -> bool;
+}
+
+/// Per-owner switch for resuming a scheduled meeting's ended call when it is
+/// rejoined before its scheduled end. Object-safe (`async_trait`) because the
+/// service holds it as `Arc<dyn ScheduledCallResumeGate>`.
+#[async_trait::async_trait]
+pub trait ScheduledCallResumeGate: Send + Sync + 'static {
+    /// Return false when the flag is disabled or unavailable.
+    async fn enabled_for(&self, meeting_owner: MacroUserIdStr<'_>) -> bool;
 }
 
 /// Creates the channel thread a new channel call discusses in.

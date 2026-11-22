@@ -18,6 +18,7 @@ import type { CallRecordRecordingPreviewUrl } from './callRecordRecordingPreview
 import type { CallRecordRecordingStartedAt } from './callRecordRecordingStartedAt';
 import type { CallRecordRecordingUrl } from './callRecordRecordingUrl';
 import type { CallRecordRoomName } from './callRecordRoomName';
+import type { CallRecordSession } from './callRecordSession';
 import type { CallRecordSourceProperty } from './callRecordSourceProperty';
 import type { CallRecordStatus } from './callRecordStatus';
 import type { CallRecordSummary } from './callRecordSummary';
@@ -67,6 +68,11 @@ this value when present, falling back to `started_at` otherwise. */
   recordingUrl?: CallRecordRecordingUrl;
   /** The RTC room name. `None` for imported calls, which never had a room. */
   roomName?: CallRecordRoomName;
+  /** The call's RTC sessions in order, once archived. One, unless a
+scheduled meeting emptied and was rejoined before its end. Empty while
+the call is live, for imported calls, and in list contexts. The
+top-level recording fields describe the first session. */
+  sessions: CallRecordSession[];
   /** Whether the call is shared with the creator's team. While the call is
 live this is the pending toggle applied at archive; afterwards it
 mirrors `team_share_access_level`. */

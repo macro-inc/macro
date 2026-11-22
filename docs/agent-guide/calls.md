@@ -31,8 +31,11 @@ notification delivery. Verify that a second participant still receives the ring
 and can join, and that leaving immediately does not leave a recording running.
 Join actions target the selected live call ID. If that session ends, Join and
 recovery show an ended-call error instead of starting another session. Leaving
-while others remain and then joining keeps the same call history entry; after
-the last participant leaves, use Start call or Call again to start a new entry.
+while others remain and then joining keeps the same call history entry. After
+the last participant leaves, a scheduled call rejoined through its link before
+its scheduled end resumes as the same entry (with
+`enable-scheduled-call-resume`); otherwise, and for channel and instant calls,
+use Start call or Call again to start a new entry.
 Check a stale incoming notification and a disconnect during permission setup:
 neither may create or join a replacement call. These joins work for signed-in
 human sessions with `enable-programmatic-calls` off as well as on.
@@ -213,6 +216,22 @@ desktop and phone, except when already connected. This is separate from the live
 call controls. `call_transcript_id=<segmentId>` seeks the matching segment;
 `call_message_id=<messageId>` opens the phone Chat tab and highlights the message.
 
+A scheduled call that emptied and was rejoined before its scheduled end is one
+entry with several parts, one per room session. When the ended record has more
+than one session, a `Part 1`, `Part 2`, … switcher (the shared Tabs control, each
+tab's time range as its tooltip and accessible description) sits directly under
+the player. The player and the transcript show the selected part, with transcript
+times and chat jump chips relative to that part's recording, and the transcript
+interleaves only that part's messages; Summary, Call chat, participants and
+Details stay whole-call. When playback reaches the end of a part, it continues
+with the next part at the same speed; a paused seek to the end does not. A part
+without a recording shows only its tabs and transcript. A `call_transcript_id` link to a
+line in another part selects that part, then seeks. On phones the switcher sits
+between the player and the identity block, full width up to three parts and
+scrolling sideways beyond; the mini and pinned players play the selected part.
+While the call is live again the record shows the live call without parts; they
+return when it ends. A record with one session shows no switcher.
+
 Check a saved call with recording, transcript, summary, chat and attachments at
 1920x1080, 1440x900, 1280x800 and 1024x768, in splits on both sides of the 1108px
 call-column threshold, in 680px and 480px splits, and at 390x844 with touch emulation. Cover
@@ -227,6 +246,13 @@ return, a second split, and Back/Forward.
 Saved call route loading records `call.record` and `call.discussion` phases on the
 existing view trace. Reading-tab selections record `call.detail.tab`; attributes
 contain only the call ID and tab kind, never transcript or message contents.
+Part selections record `call.detail.part` with `call.id`, `call.part` (the 0-based
+session index), `call.parts` and `call.part.trigger` (`tab`, `ended` or
+`transcript_link`).
+
+Check that leaving and rejoining a scheduled call before its end keeps one entry
+with two parts (switch parts, play through the end of Part 1, open a transcript link
+into Part 2, and download each part), and that an instant call does not.
 
 ### Imported Granola meetings
 
@@ -397,7 +423,9 @@ that the failure is caused by an unsupported media format.
 Where a call shows the block header's "…" menu (Rename, Delete), that menu
 also offers **Download** when the call has a recording. It saves the recording
 under the call's name with the recording's extension (`<name>.mp4`), through the
-same download flow and confirmations as Drive files.
+same download flow and confirmations as Drive files. A call with several parts
+offers **Download part 1**, **Download part 2**, … instead, one per part with a
+recording, saved as `<name> (Part N).mp4`.
 
 ### Call links and guests — `/app/meet/join/:shareToken`
 

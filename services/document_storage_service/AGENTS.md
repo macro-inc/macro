@@ -135,7 +135,9 @@ threads, pins, recents, notifications, folders, activity.
 
 - Provision required `POSTHOG_API_KEY` before startup; the flag client
   evaluates `enable-programmatic-calls` per caller for the explicit call start,
-  join, and leave routes; failures disable those routes.
+  join, and leave routes; failures disable those routes. It also evaluates
+  `enable-scheduled-call-resume` for a scheduled meeting's owner when a join
+  finds no live session; failures start a new call. Local stacks always resume.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 

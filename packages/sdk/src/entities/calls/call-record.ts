@@ -128,12 +128,20 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
     );
   }
 
-  /** Download recording bytes through the Macro host. */
+  /**
+   * Download recording bytes through the Macro host. `session` is a 0-based
+   * index into {@link CallRecord.sessions} (default 0, the first); a scheduled
+   * meeting rejoined before its end has one recording per session.
+   */
   readonly recording = {
-    bytes: async (): Promise<Uint8Array> => {
+    bytes: async (options?: { session?: number }): Promise<Uint8Array> => {
       const blob = unwrap(
         await this.client.storage.getCallRecording({
           path: { call_id: this.id },
+          query:
+            options?.session === undefined
+              ? undefined
+              : { session: options.session },
           parseAs: 'blob',
         }),
       );
@@ -331,6 +339,15 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
 
   /** When the recording started, if it was recorded. */
   readonly recordingStartedAt = this.field('recordingStartedAt');
+
+  /**
+   * The call's RTC sessions in order, each with its own time window and
+   * recording, once archived. One, unless a scheduled meeting emptied and was
+   * rejoined before its end; empty while the call is live and for imported
+   * calls. The top-level recording fields describe the first session; read a
+   * later session's bytes with `recording.bytes({ session })`.
+   */
+  readonly sessions = this.field('sessions');
 
   /**
    * Rename the call or clear the custom name.

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE call_record_sessions\n        SET preview_url = $2\n        WHERE recording_key = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e769de1aabc81a6f3f3f00e1d2b2b4877a489d58771ce4968a1e36fccaf94720"
+}

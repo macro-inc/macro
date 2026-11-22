@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT started_at, ended_at, recording_started_at, recording_key, preview_url\n            FROM call_record_sessions\n            WHERE call_record_id = $1\n            ORDER BY started_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "recording_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "recording_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "preview_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "b02871364447c5859d1992b3f4d65a0afa5e8b1e753c2ddf1377593068ecde78"
+}

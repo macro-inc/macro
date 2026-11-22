@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::meetings::MeetingCallAllocation;
 use crate::domain::ports::CallRepository;
 use chrono::{Duration, Utc};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -53,11 +54,13 @@ async fn room_preparations_are_owner_bound_and_consumed_once(pool: PgPool) {
             .await
             .unwrap()
     );
-    let (call, created) = repo
-        .get_or_create_meeting_call(&meeting.id, &preparation.id)
+    let MeetingCallAllocation::Started(call) = repo
+        .get_or_create_meeting_call(&meeting.id, &preparation.id, false)
         .await
-        .unwrap();
-    assert!(created);
+        .unwrap()
+    else {
+        panic!("expected a new call");
+    };
     assert_eq!(call.id, preparation.id);
     assert!(
         repo.get_meeting_preparation(&meeting.id)
@@ -150,10 +153,12 @@ fn meeting() -> Meeting {
 
 async fn start_with_guest(repo: &PgCallRepo, meeting: Meeting) -> (Meeting, Uuid, GuestId) {
     let meeting = repo.create_meeting(meeting).await.unwrap();
-    let (call, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+    let call = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
         .await
-        .unwrap();
+        .unwrap()
+        .call()
+        .clone();
     let guest = GuestId::generate();
     repo.add_guest(&call.id, guest, "Guest").await.unwrap();
     (meeting, call.id, guest)
@@ -226,7 +231,7 @@ async fn active_meetings_exclude_empty_cancelled_scheduled_and_channel_calls(poo
 
     repo.create_meeting(meeting()).await.unwrap();
     let empty = repo.create_meeting(meeting()).await.unwrap();
-    repo.get_or_create_meeting_call(&empty.id, &Uuid::now_v7())
+    repo.get_or_create_meeting_call(&empty.id, &Uuid::now_v7(), false)
         .await
         .unwrap();
 
@@ -279,13 +284,17 @@ async fn active_meetings_do_not_grant_discovery_from_an_earlier_session(pool: Pg
         .await
         .unwrap();
     repo.reconcile_guest(&call_id, guest, false).await.unwrap();
-    repo.archive_call(&call_id).await.unwrap();
-    assert!(repo.list_active_meetings(OWNER).await.unwrap().is_empty());
-
-    let (next, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+    repo.archive_call(&call_id, &call_id.to_string())
         .await
         .unwrap();
+    assert!(repo.list_active_meetings(OWNER).await.unwrap().is_empty());
+
+    let next = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await
+        .unwrap()
+        .call()
+        .clone();
     repo.add_guest(&next.id, GuestId::generate(), "Next guest")
         .await
         .unwrap();
@@ -337,7 +346,9 @@ async fn invitees_discover_only_the_invited_session_without_becoming_participant
     );
 
     repo.reconcile_guest(&call_id, guest, false).await.unwrap();
-    repo.archive_call(&call_id).await.unwrap();
+    repo.archive_call(&call_id, &call_id.to_string())
+        .await
+        .unwrap();
     assert!(
         repo.list_active_meetings(invitee.as_ref())
             .await
@@ -354,10 +365,12 @@ async fn invitees_discover_only_the_invited_session_without_becoming_participant
         .unwrap(),
         Some(0)
     );
-    let (next, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+    let next = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
         .await
-        .unwrap();
+        .unwrap()
+        .call()
+        .clone();
     repo.add_guest(&next.id, GuestId::generate(), "Next guest")
         .await
         .unwrap();

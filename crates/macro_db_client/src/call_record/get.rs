@@ -123,8 +123,8 @@ async fn query_accessible_call_ids(
 /// row's `(started_at, id)` pair from the previous page (or `None` for
 /// the first page). call_records doesn't have an updated_at column so
 /// the cursor and `started_after` / `started_before` filters use
-/// started_at — functionally equivalent because calls are immutable
-/// after creation.
+/// started_at, which never changes once a record exists: a resumed
+/// scheduled meeting's later sessions extend its end, not its start.
 #[tracing::instrument(skip(db))]
 pub async fn get_call_records_for_search_backfill(
     db: &sqlx::Pool<sqlx::Postgres>,

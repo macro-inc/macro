@@ -21,7 +21,9 @@ type RecordingVideoOptions = {
     seconds: number,
     source: 'playback' | 'seeking' | 'seeked'
   ) => void;
-  setVideoRef?: (element: HTMLVideoElement) => void;
+  /** Playback reached the end; not called when a paused seek lands there. */
+  onEnded?: () => void;
+  setVideoRef?: (element: HTMLVideoElement | undefined) => void;
 };
 
 /** Coordinate readiness, poster resources and media/input events for one mounted video. */
@@ -114,8 +116,13 @@ export function createRecordingVideo(options: RecordingVideoOptions) {
   };
   const markReady = () =>
     setState({ loadedRevision: sourceRevision(), errorRevision: 0 });
+  // Browsers fire `pause` and then `ended` when playback reaches the end, but
+  // only `ended` when a paused seek lands there.
+  let pausedAtEnd = false;
   onMount(() => video?.load());
   onCleanup(stopTicking);
+  // Owners must not keep driving an element that left the page.
+  onCleanup(() => options.setVideoRef?.(undefined));
 
   return {
     controls,
@@ -173,7 +180,10 @@ export function createRecordingVideo(options: RecordingVideoOptions) {
         startTicking(event.currentTarget);
       },
       onPlay: (event: VideoEvent) => startTicking(event.currentTarget),
-      onPause: stopTicking,
+      onPause: (event: VideoEvent) => {
+        stopTicking();
+        pausedAtEnd = event.currentTarget.ended;
+      },
       onSeeking: (event: VideoEvent) =>
         options.onTimeUpdate?.(event.currentTarget.currentTime, 'seeking'),
       onSeeked: (event: VideoEvent) =>
@@ -181,6 +191,8 @@ export function createRecordingVideo(options: RecordingVideoOptions) {
       onEnded: (event: VideoEvent) => {
         stopTicking();
         options.onTimeUpdate?.(event.currentTarget.duration, 'playback');
+        if (pausedAtEnd) options.onEnded?.();
+        pausedAtEnd = false;
       },
       onTimeUpdate: (event: VideoEvent) =>
         options.onTimeUpdate?.(event.currentTarget.currentTime, 'playback'),

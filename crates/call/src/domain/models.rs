@@ -15,6 +15,9 @@ use models_permissions::share_permission::team_share::{
 };
 use uuid::Uuid;
 
+mod sessions;
+pub use sessions::CallRecordSession;
+
 /// Represents an active call in a channel.
 #[derive(Debug, Clone)]
 pub struct Call {
@@ -81,8 +84,10 @@ pub struct ArchivedCall {
     pub ended_at: DateTime<Utc>,
     /// Call duration in milliseconds.
     pub duration_ms: i64,
-    /// Whether a recording egress was started before the call was archived.
-    pub has_recording: bool,
+    /// The archived session's recorder, if one was attached before it was
+    /// archived. Teardown stops this one: a recorder attached later finds the
+    /// session ended and stops itself.
+    pub egress_id: Option<String>,
     /// Macro accounts that joined the call over its lifetime, once each.
     pub participants: Vec<String>,
     /// Whether the call's discussion is a thread in its channel.
@@ -743,6 +748,11 @@ pub struct CallRecord {
     /// External provenance for calls imported from another provider; `None`
     /// for calls recorded in Macro.
     pub source: Option<CallRecordSource>,
+    /// The call's RTC sessions in order, once archived. One, unless a
+    /// scheduled meeting emptied and was rejoined before its end. Empty while
+    /// the call is live, for imported calls, and in list contexts. The
+    /// top-level recording fields describe the first session.
+    pub sessions: Vec<CallRecordSession>,
 }
 
 /// Where an imported call came from.

@@ -1,6 +1,6 @@
 use std::{ops::Deref, sync::Arc, sync::LazyLock};
 
-use crate::domain::meetings::GuestId;
+use crate::domain::meetings::{GuestId, MeetingCallAllocation};
 use crate::domain::models::{
     AddParticipantError, CallRecord, CallRecordPage, CallRecordPreview, CustomSpeakerAssignment,
     EditCallRecordRepoArgs, TranscriptSegmentRequest,
@@ -58,21 +58,23 @@ pub(super) const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000
 pub(super) const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 pub(super) const CALL1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
 const CALL2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca220);
+/// The RTC room of `CALL1`'s live session in the `call_repo` fixture.
+pub(super) const CALL1_ROOM: &str = "00000000-0000-0000-0000-000000000c01";
 const LATEST_FIRST: CallRecordPage = CallRecordPage {
     by_start: false,
     after: None,
 };
 pub(super) const CALL_ARCHIVED: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca2ed);
 const MACRO_USER_A: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaaaa1);
-const MACRO_USER_B: Uuid = Uuid::from_u128(0xbbbbbbbb_bbbb_bbbb_bbbb_bbbbbbbbbbb2);
-const MACRO_USER_C: Uuid = Uuid::from_u128(0xcccccccc_cccc_cccc_cccc_ccccccccccc3);
+pub(super) const MACRO_USER_B: Uuid = Uuid::from_u128(0xbbbbbbbb_bbbb_bbbb_bbbb_bbbbbbbbbbb2);
+pub(super) const MACRO_USER_C: Uuid = Uuid::from_u128(0xcccccccc_cccc_cccc_cccc_ccccccccccc3);
 pub(super) static USER_A: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-a@test.com").unwrap());
 pub(super) static USER_B: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-b@test.com").unwrap());
-static USER_C: LazyLock<MacroUserIdStr<'static>> =
+pub(super) static USER_C: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-c@test.com").unwrap());
-static USER_D: LazyLock<MacroUserIdStr<'static>> =
+pub(super) static USER_D: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-d@test.com").unwrap());
 
 pub(super) fn repo(pool: Pool<Postgres>) -> PgCallRepo {
@@ -168,7 +170,7 @@ async fn a_calls_discussion_is_stored_with_it_and_outlives_archival(
         }
     );
 
-    let archived = repo.archive_call(&threaded).await?;
+    let archived = repo.archive_call(&threaded, "room-ch2").await?;
     assert!(archived.channel_thread);
     let record = repo.get_call_record_by_call_id(&threaded).await?.unwrap();
     assert_eq!(record.discussion, live.discussion);
@@ -680,7 +682,7 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
     let repo = repo(pool.clone());
     repo.set_egress_id(&CALL1, "egress-archive-test").await?;
 
-    let archived = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1, CALL1_ROOM).await?;
 
     // Ephemeral call should be gone.
     assert!(repo.get_call_by_channel_id(&CH1).await?.is_none());
@@ -704,7 +706,7 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
     assert_eq!(archived.started_at, record.started_at);
     assert_eq!(archived.ended_at, record.ended_at);
     assert_eq!(archived.duration_ms, record.duration_ms);
-    assert!(archived.has_recording);
+    assert!(archived.egress_id.is_some());
     assert_eq!(archived.participants.len(), 2);
 
     assert_eq!(record.channel_id, archived.channel_id);
@@ -756,11 +758,11 @@ async fn archive_call_preserves_soft_deleted_participants(
     assert_eq!(repo.get_participant_count(&CALL1).await?, 0);
 
     // Archive the call.
-    let archived = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1, CALL1_ROOM).await?;
     assert_eq!(archived.participants.len(), 2);
     assert!(archived.participants.contains(&USER_A.to_string()));
     assert!(archived.participants.contains(&USER_B.to_string()));
-    assert!(!archived.has_recording);
+    assert!(archived.egress_id.is_none());
 
     // call_record_participants should have both participants with left_at set.
     let rows = sqlx::query!(
@@ -794,7 +796,7 @@ async fn archive_call_returns_no_result_when_call_is_missing(
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
-    assert!(repo.archive_call(&CALL2).await.is_err());
+    assert!(repo.archive_call(&CALL2, &CALL2.to_string()).await.is_err());
     assert!(repo.get_call_record_by_call_id(&CALL2).await?.is_none());
 
     Ok(())
@@ -875,7 +877,7 @@ async fn archive_call_preserves_id_and_share_permission(
     .fetch_one(&pool)
     .await?;
 
-    let archived = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1, CALL1_ROOM).await?;
 
     // The call_record id should be the same as the original call id.
     assert_eq!(archived.call_id, CALL1);
@@ -893,18 +895,20 @@ async fn archive_call_preserves_id_and_share_permission(
     Ok(())
 }
 
-// -- get_call_record_by_egress_id --------------------------------------------
+// -- set_recording_key_by_egress_id -------------------------------------------
 
 #[sqlx::test(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn get_call_record_by_egress_id_returns_call_and_channel_context(
+async fn set_recording_key_by_egress_id_returns_call_and_channel_context(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool);
 
-    let context = repo.get_call_record_by_egress_id("egress-arch-1").await?;
+    let context = repo
+        .set_recording_key_by_egress_id("egress-arch-1", "recording.mp4")
+        .await?;
 
     assert_eq!(context, Some((CALL_ARCHIVED, Some(CH1))));
     Ok(())
@@ -914,13 +918,13 @@ async fn get_call_record_by_egress_id_returns_call_and_channel_context(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn get_call_record_by_egress_id_returns_none_for_unknown_id(
+async fn set_recording_key_by_egress_id_returns_none_for_unknown_id(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool);
 
     let context = repo
-        .get_call_record_by_egress_id("unknown-egress-id")
+        .set_recording_key_by_egress_id("unknown-egress-id", "recording.mp4")
         .await?;
 
     assert_eq!(context, None);
@@ -963,7 +967,7 @@ async fn set_active_call_recording_key_updates_matching_call(
     assert_eq!(call.egress_id.as_deref(), Some("egress-123"));
 
     // Now archive and verify recording_key and preview key carry forward.
-    let archived = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1, CALL1_ROOM).await?;
     let recording = sqlx::query!(
         r#"SELECT recording_key, preview_url FROM call_records WHERE id = $1"#,
         archived.call_id,
@@ -1031,11 +1035,14 @@ async fn create_transcript_segment_stores_and_increments_sequence(
         embedding: None,
     };
 
-    repo.create_transcript_segment(&CALL1, &seg1, None).await?;
-    repo.create_transcript_segment(&CALL1, &seg2, None).await?;
+    repo.create_transcript_segment(&CALL1, CALL1_ROOM, &seg1, None)
+        .await?;
+    repo.create_transcript_segment(&CALL1, CALL1_ROOM, &seg2, None)
+        .await?;
 
     // Duplicate segment_id should be ignored.
-    repo.create_transcript_segment(&CALL1, &seg1, None).await?;
+    repo.create_transcript_segment(&CALL1, CALL1_ROOM, &seg1, None)
+        .await?;
 
     let rows = sqlx::query!(
         r#"
@@ -1096,9 +1103,9 @@ async fn get_transcript_voice_id_for_speaker_uses_diarized_speaker_id(
         embedding: None,
     };
 
-    repo.create_transcript_segment(&CALL1, &seg_a, Some(voice_a))
+    repo.create_transcript_segment(&CALL1, CALL1_ROOM, &seg_a, Some(voice_a))
         .await?;
-    repo.create_transcript_segment(&CALL1, &seg_b, Some(voice_b))
+    repo.create_transcript_segment(&CALL1, CALL1_ROOM, &seg_b, Some(voice_b))
         .await?;
 
     assert_eq!(
@@ -1143,7 +1150,7 @@ async fn get_transcript_voice_id_for_speaker_falls_back_to_participant_id(
         embedding: None,
     };
 
-    repo.create_transcript_segment(&CALL1, &segment, Some(voice_id))
+    repo.create_transcript_segment(&CALL1, CALL1_ROOM, &segment, Some(voice_id))
         .await?;
 
     assert_eq!(
@@ -1181,10 +1188,11 @@ async fn archive_call_copies_transcripts(pool: Pool<Postgres>) -> anyhow::Result
         stream_started_at: None,
         embedding: None,
     };
-    repo.create_transcript_segment(&CALL1, &seg, None).await?;
+    repo.create_transcript_segment(&CALL1, CALL1_ROOM, &seg, None)
+        .await?;
 
     // Archive the call.
-    let archived = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1, CALL1_ROOM).await?;
 
     // Transcripts should be in call_record_transcripts.
     let transcripts = sqlx::query!(
@@ -1284,6 +1292,7 @@ async fn archive_call_rolls_up_consecutive_same_speaker_transcripts(
     for (segment_id, speaker_id, diar, content, started_at, ended_at) in segs {
         repo.create_transcript_segment(
             &CALL1,
+            CALL1_ROOM,
             &TranscriptSegmentRequest {
                 segment_id: segment_id.to_string(),
                 speaker_id,
@@ -1300,7 +1309,7 @@ async fn archive_call_rolls_up_consecutive_same_speaker_transcripts(
         .await?;
     }
 
-    let archived = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1, CALL1_ROOM).await?;
 
     let rows = sqlx::query!(
         r#"
@@ -1403,6 +1412,7 @@ async fn get_stable_speaker_voices_for_call_record_returns_all_voices_for_consis
         let started_at = now + Duration::seconds(idx as i64);
         repo.create_transcript_segment(
             &CALL1,
+            CALL1_ROOM,
             &TranscriptSegmentRequest {
                 segment_id: segment_id.to_string(),
                 speaker_id: speaker_id.to_string(),
@@ -1419,7 +1429,7 @@ async fn get_stable_speaker_voices_for_call_record_returns_all_voices_for_consis
         .await?;
     }
 
-    let archived = repo.archive_call(&CALL1).await?;
+    let archived = repo.archive_call(&CALL1, CALL1_ROOM).await?;
 
     let mut stable = repo
         .get_stable_speaker_voices_for_call_record(&archived.call_id)
@@ -1445,6 +1455,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
     // Ingest two transcript segments into the active call.
     repo.create_transcript_segment(
         &CALL1,
+        CALL1_ROOM,
         &TranscriptSegmentRequest {
             segment_id: "seg-live-1".to_string(),
             speaker_id: USER_A.to_string(),
@@ -1461,6 +1472,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
     .await?;
     repo.create_transcript_segment(
         &CALL1,
+        CALL1_ROOM,
         &TranscriptSegmentRequest {
             segment_id: "seg-live-2".to_string(),
             speaker_id: USER_B.to_string(),
@@ -2819,7 +2831,15 @@ async fn insert_call_summary_sets_summary_text(pool: Pool<Postgres>) -> anyhow::
     let repo = repo(pool.clone());
     let summary = "A short synopsis of the call.";
 
-    let persisted = repo.insert_call_summary(&CALL_ARCHIVED, summary).await?;
+    let ended_at = sqlx::query_scalar!(
+        "SELECT ended_at FROM call_records WHERE id = $1",
+        CALL_ARCHIVED
+    )
+    .fetch_one(&pool)
+    .await?;
+    let persisted = repo
+        .insert_call_summary(&CALL_ARCHIVED, ended_at, summary)
+        .await?;
 
     assert!(persisted);
     let stored = sqlx::query_scalar!(
@@ -2841,7 +2861,7 @@ async fn insert_call_summary_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow
     let repo = repo(pool.clone());
 
     let persisted = repo
-        .insert_call_summary(&Uuid::now_v7(), "irrelevant")
+        .insert_call_summary(&Uuid::now_v7(), Utc::now(), "irrelevant")
         .await?;
 
     assert!(!persisted);
@@ -3402,9 +3422,11 @@ async fn live_call_join_access_requires_membership_or_invitation(
     assert!(!repo.can_join_call(&CALL1, USER_D.as_ref()).await?);
 
     let meeting = repo.create_meeting(standalone_meeting()).await?;
-    let (call, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
+    let call = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+        .call()
+        .clone();
     assert!(repo.can_join_call(&call.id, USER_B.as_ref()).await?);
     assert!(!repo.can_join_call(&call.id, USER_C.as_ref()).await?);
     repo.add_meeting_participant(&call.id, USER_C.clone())
@@ -3426,10 +3448,18 @@ async fn program_only_call_waits_for_last_person_departure(
     let repo = repo(pool.clone());
     repo.set_participant_client(&CALL1, USER_B.as_ref(), "agent")
         .await?;
-    assert!(repo.archive_call_if_program_only(&CALL1).await?.is_none());
+    assert!(
+        repo.archive_call_if_program_only(&CALL1, CALL1_ROOM)
+            .await?
+            .is_none()
+    );
 
     repo.remove_participant(&CALL1, USER_A.clone()).await?;
-    assert!(repo.archive_call_if_program_only(&CALL1).await?.is_none());
+    assert!(
+        repo.archive_call_if_program_only(&CALL1, CALL1_ROOM)
+            .await?
+            .is_none()
+    );
 
     sqlx::query!(
         "UPDATE call_participants SET left_at = now() - interval '2 minutes' WHERE call_id = $1 AND user_id = $2",
@@ -3437,7 +3467,11 @@ async fn program_only_call_waits_for_last_person_departure(
     )
     .execute(&pool)
     .await?;
-    assert!(repo.archive_call_if_program_only(&CALL1).await?.is_some());
+    assert!(
+        repo.archive_call_if_program_only(&CALL1, CALL1_ROOM)
+            .await?
+            .is_some()
+    );
     Ok(())
 }
 
@@ -3451,18 +3485,24 @@ async fn standalone_meeting_archives_guest_names_and_preserves_invitation(
     insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
     let repo = repo(pool);
     let meeting = repo.create_meeting(standalone_meeting()).await?;
-    let (call, created) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
-    assert!(created);
+    let MeetingCallAllocation::Started(call) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+    else {
+        panic!("expected a new call");
+    };
     assert_eq!(call.channel_id, None);
     let guest_id = GuestId::generate();
     repo.add_guest(&call.id, guest_id, "Ada Guest").await?;
     assert_eq!(repo.get_participant_count(&call.id).await?, 1);
-    assert!(repo.archive_call_if_empty(&call.id).await?.is_none());
+    assert!(
+        repo.archive_call_if_empty(&call.id, &call.room_name)
+            .await?
+            .is_none()
+    );
     repo.reconcile_guest(&call.id, guest_id, false).await?;
     assert_eq!(repo.get_participant_count(&call.id).await?, 0);
-    repo.archive_call(&call.id).await?;
+    repo.archive_call(&call.id, &call.room_name).await?;
     let record = repo.get_call_record_by_call_id(&call.id).await?.unwrap();
     assert_eq!(record.channel_id, None);
     assert_eq!(record.custom_name.as_deref(), Some("Design review"));
@@ -3491,10 +3531,12 @@ async fn standalone_meeting_archives_guest_names_and_preserves_invitation(
             .id,
         meeting.id
     );
-    let (next, created) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
-    assert!(created);
+    let MeetingCallAllocation::Started(next) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+    else {
+        panic!("expected a new call");
+    };
     assert_ne!(next.id, call.id);
     assert_ne!(next.room_name, call.room_name);
     Ok(())
@@ -3510,10 +3552,12 @@ async fn guest_join_racing_archival_fails_instead_of_stranding_a_guest(
     insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
     let repo = repo(pool);
     let meeting = repo.create_meeting(standalone_meeting()).await?;
-    let (call, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
-    repo.archive_call(&call.id).await?;
+    let call = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+        .call()
+        .clone();
+    repo.archive_call(&call.id, &call.room_name).await?;
     // The calls row is gone; the guest insert must fail loudly rather than
     // write a row for a room that no longer exists.
     assert!(
@@ -3541,13 +3585,12 @@ async fn concurrent_meeting_joins_allocate_exactly_one_session(
     let first = Uuid::now_v7();
     let second = Uuid::now_v7();
     let (one, two) = tokio::join!(
-        repo.get_or_create_meeting_call(&meeting.id, &first),
-        repo.get_or_create_meeting_call(&meeting.id, &second)
+        repo.get_or_create_meeting_call(&meeting.id, &first, false),
+        repo.get_or_create_meeting_call(&meeting.id, &second, false)
     );
-    let (one, created_one) = one?;
-    let (two, created_two) = two?;
-    assert_eq!(one.id, two.id);
-    assert_ne!(created_one, created_two);
+    let (one, two) = (one?, two?);
+    assert_eq!(one.call().id, two.call().id);
+    assert_ne!(one.opened_session(), two.opened_session());
     Ok(())
 }
 
@@ -3610,7 +3653,7 @@ async fn meeting_cancellation_is_owner_only_and_revokes_join(
     assert!(repo.cancel_meeting(&meeting.id, USER_B.as_ref()).await?);
     assert!(repo.get_meeting(&meeting.share_token).await?.is_none());
     assert!(
-        repo.get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        repo.get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
             .await
             .is_err()
     );
@@ -3631,12 +3674,12 @@ async fn channel_invitation_is_pinned_to_original_session(
     meeting.channel_call_id = Some(CALL1);
     meeting.call_id = Some(CALL1);
     let meeting = repo.create_meeting(meeting).await?;
-    repo.archive_call(&CALL1).await?;
+    repo.archive_call(&CALL1, CALL1_ROOM).await?;
     let resolved = repo.get_meeting(&meeting.share_token).await?.unwrap();
     assert_eq!(resolved.call_id, None);
     assert_eq!(resolved.channel_call_id, Some(CALL1));
     assert!(
-        repo.get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        repo.get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
             .await
             .is_err()
     );
@@ -3655,9 +3698,11 @@ async fn authenticated_meeting_attendee_gets_only_call_access_and_owner_keeps_ow
     insert_user_mapping(&pool, &attendee, Uuid::now_v7()).await?;
     let repo = repo(pool.clone());
     let meeting = repo.create_meeting(standalone_meeting()).await?;
-    let (call, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
+    let call = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+        .call()
+        .clone();
     repo.add_meeting_participant(&call.id, attendee.copied())
         .await?;
     repo.remove_participant(&CALL1, USER_B.deref().copied())
@@ -3692,9 +3737,11 @@ async fn standalone_archive_never_translates_pending_intent_into_team_memory(
     give_user_a_team(&pool, USER_B.as_ref(), &Uuid::now_v7()).await?;
     let repo = repo(pool.clone());
     let meeting = repo.create_meeting(standalone_meeting()).await?;
-    let (call, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
+    let call = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+        .call()
+        .clone();
     assert!(
         !repo
             .get_call_record_by_call_id(&call.id)
@@ -3713,7 +3760,7 @@ async fn standalone_archive_never_translates_pending_intent_into_team_memory(
         },
     )
     .await?;
-    repo.archive_call(&call.id).await?;
+    repo.archive_call(&call.id, &call.room_name).await?;
 
     let record = repo.get_call_record_by_call_id(&call.id).await?.unwrap();
     assert!(!record.share_with_team);
@@ -3737,9 +3784,11 @@ async fn standalone_call_list_requires_individual_grants_live_and_archived(
     give_user_a_team(&pool, USER_C.deref().as_ref(), &team_id).await?;
     let repo = repo(pool.clone());
     let meeting = repo.create_meeting(standalone_meeting()).await?;
-    let (call, _) = repo
-        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
-        .await?;
+    let call = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7(), false)
+        .await?
+        .call()
+        .clone();
     repo.add_meeting_participant(&call.id, USER_D.deref().copied())
         .await?;
 
@@ -3764,7 +3813,7 @@ async fn standalone_call_list_requires_individual_grants_live_and_archived(
 
     for archived in [false, true] {
         if archived {
-            repo.archive_call(&call.id).await?;
+            repo.archive_call(&call.id, &call.room_name).await?;
         }
         for (user, expected) in [
             (USER_A.deref(), false),
@@ -3948,28 +3997,28 @@ async fn meeting_schedule_rejects_partial_or_reversed_ranges(
 async fn attach_meeting_recording_survives_archival(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     assert!(
-        repo.attach_meeting_recording(&CALL1, "early-recording")
+        repo.attach_meeting_recording(&CALL1, CALL1_ROOM, "early-recording")
             .await?
     );
-    repo.archive_call(&CALL1).await?;
+    repo.archive_call(&CALL1, CALL1_ROOM).await?;
     assert!(
-        repo.get_call_record_by_egress_id("early-recording")
-            .await?
-            .is_some()
-    );
-    assert!(
-        !repo
-            .attach_meeting_recording(&CALL1, "late-recording")
-            .await?
-    );
-    assert!(
-        repo.get_call_record_by_egress_id("late-recording")
+        repo.set_recording_key_by_egress_id("early-recording", "recording.mp4")
             .await?
             .is_some()
     );
     assert!(
         !repo
-            .attach_meeting_recording(&Uuid::now_v7(), "missing-recording")
+            .attach_meeting_recording(&CALL1, CALL1_ROOM, "late-recording")
+            .await?
+    );
+    assert!(
+        repo.set_recording_key_by_egress_id("late-recording", "recording.mp4")
+            .await?
+            .is_some()
+    );
+    assert!(
+        !repo
+            .attach_meeting_recording(&Uuid::now_v7(), "missing-room", "missing-recording")
             .await?
     );
     Ok(())
@@ -3984,13 +4033,13 @@ async fn attach_meeting_recording_racing_archival_keeps_the_recording(
 ) -> anyhow::Result<()> {
     let repo = repo(pool);
     let (attachment, archival) = tokio::join!(
-        repo.attach_meeting_recording(&CALL1, "racing-recording"),
-        repo.archive_call(&CALL1),
+        repo.attach_meeting_recording(&CALL1, CALL1_ROOM, "racing-recording"),
+        repo.archive_call(&CALL1, CALL1_ROOM),
     );
     attachment?;
     archival?;
     assert!(
-        repo.get_call_record_by_egress_id("racing-recording")
+        repo.set_recording_key_by_egress_id("racing-recording", "recording.mp4")
             .await?
             .is_some()
     );

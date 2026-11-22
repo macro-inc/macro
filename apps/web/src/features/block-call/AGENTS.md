@@ -14,6 +14,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - `component/CallTranscript.tsx`: composed Root, ScrollArea, Header, Content, Scrollbar and Sync parts sharing transcript state.
 - `component/sidepanel/CallSidePanelSections.tsx`: existing metadata, sharing and entity sections.
 - `primitives/recording-*.ts`: media playback, controls, layout, identity and recording timeline state/actions.
+- `primitives/recording-sessions.ts`: a resumed scheduled meeting's parts (`record.sessions`) and the record narrowed to the selected part.
 - `primitives/transcript-*.ts`: mixed transcript timeline and follow/scroll behavior.
 - `core/recording-chat.ts`: visible messages and valid recording offsets.
 
@@ -23,6 +24,8 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Read discussion through `CallDiscussionHistory`'s source slot; preserve channel authorization and canonical call-chat roots.
 - Fullscreen the recording workspace to retain its video and transcript; scope the panel toggle to that fullscreen session, and keep native iOS fullscreen video-only.
 - Keep one media element across summary, transcript, chat and pinned controls; preserve idle-control visibility, menu focus and native volume state.
+- `record.sessions` lists an archived call's RTC sessions in order (one for a normal call, more for a scheduled meeting rejoined before its end, none while live or for imported calls); the top-level recording fields mean the first. Show the Parts switcher only for more than one session on an ended call. Feed `playbackRecord()` to playback, the timeline and the transcript, and `record()` to everything whole-call (identity, summary, chat, details, Join, Call again).
+- Switch parts by changing the one mounted video's source, never by mounting a second element; seek or play only after the new source is applied (`afterPartSwitch` in `CallRecordingBody`), and keep the playback rate across the switch.
 - Animate each control surface by its own height with 240ms transform/opacity transitions; keep controls mounted and reduce motion to the fade only.
 - Render summary Markdown unchanged; do not infer sections, chapters, tasks or events.
 - Show the summary AI icon before its tab/heading label and put attribution in a shared hover/focus tooltip, not a separate line.

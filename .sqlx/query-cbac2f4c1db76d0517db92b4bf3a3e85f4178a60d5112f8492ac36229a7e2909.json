@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT recording_key, preview_url FROM call_record_sessions\n            WHERE call_record_id = $1\n            ORDER BY started_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recording_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "preview_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "cbac2f4c1db76d0517db92b4bf3a3e85f4178a60d5112f8492ac36229a7e2909"
+}

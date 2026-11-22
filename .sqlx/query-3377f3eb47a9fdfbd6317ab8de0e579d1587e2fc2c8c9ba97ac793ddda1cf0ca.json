@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        UPDATE call_record_sessions\n                        SET recording_started_at = $1\n                        WHERE room_name = $3 AND call_record_id = $2\n                          AND (\n                            recording_started_at IS NULL\n                            OR recording_started_at = date_trunc('second', recording_started_at)\n                            OR $1 < recording_started_at\n                          )\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3377f3eb47a9fdfbd6317ab8de0e579d1587e2fc2c8c9ba97ac793ddda1cf0ca"
+}

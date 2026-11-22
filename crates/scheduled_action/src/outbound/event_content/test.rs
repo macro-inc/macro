@@ -286,6 +286,7 @@ fn calls_show_who_joined_and_what_they_said() {
             sequence_num: 0,
         }],
         source: None,
+        sessions: Vec::new(),
     };
 
     let event = event("call.ended", None);

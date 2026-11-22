@@ -1212,6 +1212,7 @@ use email_policy::EmailPolicySchemas;
             call::domain::models::TranscriptSegmentRequest,
             call::domain::models::CallRecord,
             call::domain::models::CallRecordParticipant,
+            call::domain::models::CallRecordSession,
             call::domain::models::CallRecordTranscriptSegment,
             call::domain::models::EditCallRecordRequest,
             call::domain::models::EditCallTranscriptRequest,

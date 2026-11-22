@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, meeting_id,\n                   (SELECT title FROM call_meetings WHERE id = calls.meeting_id) AS meeting_title\n            FROM calls\n            WHERE id = $1\n            FOR UPDATE\n            ",
+  "query": "\n            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, meeting_id,\n                   (SELECT title FROM call_meetings WHERE id = calls.meeting_id) AS meeting_title\n            FROM calls\n            WHERE id = $1 AND room_name = $2\n            FOR UPDATE\n            ",
   "describe": {
     "columns": [
       {
@@ -71,7 +71,8 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text"
       ]
     },
     "nullable": [
@@ -90,5 +91,5 @@
       null
     ]
   },
-  "hash": "1107a52cef8f77f62717fe1e0b9834f0d7bb106eed211cf207881b917ccba36a"
+  "hash": "b174394e7ea0272ea40a09162a9e73d4a41d8486cd4fb5997954f63abd58914f"
 }

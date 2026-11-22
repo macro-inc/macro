@@ -14,3 +14,5 @@ pub mod pg_voice_repo;
 pub mod programmatic_calls;
 /// S3-backed recording storage implementing [`RecordingStorage`](crate::domain::ports::RecordingStorage).
 pub mod s3_recording_storage;
+/// Per-owner remote flag for resuming a rejoined scheduled meeting's call.
+pub mod scheduled_call_resume;

@@ -68,7 +68,7 @@ use super::models::{
 use super::ports::{
     CallRecordQueryService, CallRecordReader, CallRepository, CallRtcClient, CallService,
     CallStartLimiter, CallSummarizer, NoOpVoiceRepository, ProgrammaticCallGate, RecordingDownload,
-    RecordingStorage, VoiceRepository,
+    RecordingStorage, ScheduledCallResumeGate, VoiceRepository,
 };
 
 /// The concrete call service implementation.
@@ -101,6 +101,7 @@ pub struct CallServiceImpl<
     channel_threads: Option<Arc<dyn crate::domain::ports::ChannelThreads>>,
     start_limiter: Option<Arc<dyn CallStartLimiter>>,
     programmatic_call_gate: Option<Arc<dyn ProgrammaticCallGate>>,
+    scheduled_call_resume_gate: Option<Arc<dyn ScheduledCallResumeGate>>,
 }
 
 impl<
@@ -141,6 +142,7 @@ impl<
             channel_threads: None,
             start_limiter: None,
             programmatic_call_gate: None,
+            scheduled_call_resume_gate: None,
         }
     }
 }
@@ -176,6 +178,13 @@ impl<
     /// Attach the per-caller switch for explicit programmatic call routes.
     pub fn with_programmatic_call_gate(mut self, gate: impl ProgrammaticCallGate) -> Self {
         self.programmatic_call_gate = Some(Arc::new(gate));
+        self
+    }
+
+    /// Attach the per-owner switch for resuming a scheduled meeting's ended
+    /// call when it is rejoined before its end. Without one, meetings never resume.
+    pub fn with_scheduled_call_resume_gate(mut self, gate: impl ScheduledCallResumeGate) -> Self {
+        self.scheduled_call_resume_gate = Some(Arc::new(gate));
         self
     }
 
@@ -230,6 +239,7 @@ impl<
             channel_threads: self.channel_threads,
             start_limiter: self.start_limiter,
             programmatic_call_gate: self.programmatic_call_gate,
+            scheduled_call_resume_gate: self.scheduled_call_resume_gate,
         }
     }
 
@@ -256,6 +266,7 @@ impl<
             channel_threads: self.channel_threads,
             start_limiter: self.start_limiter,
             programmatic_call_gate: self.programmatic_call_gate,
+            scheduled_call_resume_gate: self.scheduled_call_resume_gate,
         }
     }
 
@@ -282,6 +293,7 @@ impl<
             channel_threads: self.channel_threads,
             start_limiter: self.start_limiter,
             programmatic_call_gate: self.programmatic_call_gate,
+            scheduled_call_resume_gate: self.scheduled_call_resume_gate,
         }
     }
 
@@ -291,6 +303,24 @@ impl<
 
     fn publish_call_notification(&self, event: CallNotificationEvent) {
         publish_call_notification(&self.event_broker, event);
+    }
+
+    /// Best-effort: a record still reads without its recording URL.
+    async fn presign_recording_url(&self, recording_key: Option<&str>) -> Option<String> {
+        self.recording_storage
+            .presign_recording_url(recording_key?)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to presign recording URL"))
+            .ok()
+    }
+
+    /// Best-effort: a record still reads without its preview URL.
+    async fn presign_recording_preview_url(&self, preview_key: Option<&str>) -> Option<String> {
+        self.recording_storage
+            .presign_recording_preview_url(preview_key?)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to presign recording preview URL"))
+            .ok()
     }
 
     /// Authorize an explicit (`teamShareAccessLevel`) or legacy (`shareWithTeam`)
@@ -371,7 +401,7 @@ impl<
                 duration_ms: Some(archived.duration_ms),
                 participant_count: archived.participants.len(),
                 participants,
-                has_recording: archived.has_recording,
+                has_recording: archived.egress_id.is_some(),
                 archive_reason,
                 channel_thread: archived.channel_thread,
             },
@@ -379,7 +409,7 @@ impl<
         self.publish_call_notification(CallNotificationEvent::Ended(
             CallNotificationMetadata::new(archived.call_id, archived.channel_id),
         ));
-        if archived.has_recording {
+        if archived.egress_id.is_some() {
             self.publish_call_notification(CallNotificationEvent::RecordingReady(
                 CallNotificationMetadata::new(archived.call_id, None),
             ));
@@ -1639,9 +1669,22 @@ impl<
         })
     }
 
-    #[tracing::instrument(err, skip(self, body, auth_token))]
+    #[tracing::instrument(
+        err,
+        skip(self, body, auth_token),
+        fields(
+            webhook.event = tracing::field::Empty,
+            call.room = tracing::field::Empty,
+            call.id = tracing::field::Empty,
+        )
+    )]
     async fn process_webhook_event(&self, body: &str, auth_token: &str) -> Result<(), CallError> {
         let event = self.rtc_client.receive_webhook(body, auth_token)?;
+        let span = tracing::Span::current();
+        span.record("webhook.event", event.event.as_str());
+        if let Some(room_name) = &event.room_name {
+            span.record("call.room", room_name.as_str());
+        }
         if matches!(event.event.as_str(), "egress_started" | "egress_ended") {
             self.link_meeting_recording_webhook(
                 event.room_name.as_deref(),
@@ -1682,8 +1725,9 @@ impl<
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?
                 {
+                    record_webhook_call(&call);
                     tracing::info!(call_id = %call.id, room_name, "archiving call on room_finished");
-                    let archived = self.repo.archive_call(&call.id).await?;
+                    let archived = self.repo.archive_call(&call.id, &call.room_name).await?;
                     self.publish_archived_call_event(&archived, CallArchiveReason::RoomFinished);
 
                     // Fire-and-forget summarization now that the
@@ -1728,6 +1772,7 @@ impl<
                         .map_err(|e| CallError::Internal(e.into()))?
                     {
                         Some(call) => {
+                            record_webhook_call(&call);
                             self.repo.reconcile_guest(&call.id, *identity, true).await?;
                             let mut metadata =
                                 CallNotificationMetadata::new(call.id, call.channel_id);
@@ -1769,6 +1814,7 @@ impl<
                         )
                         .await;
                 };
+                record_webhook_call(&call);
 
                 // Reconcile: idempotent upsert (handles reconnect/race conditions).
                 // UserAlreadyActive means our DB has the user active in
@@ -1834,6 +1880,7 @@ impl<
                     // Call already archived, nothing to do.
                     return Ok(());
                 };
+                record_webhook_call(&call);
 
                 if let Some(participant_identity) = &event.participant_identity {
                     self.repo
@@ -1901,17 +1948,13 @@ impl<
                 let recording_key = extract_recording_key(file_url);
                 tracing::info!(egress_id, recording_key, "egress recording completed");
 
-                // Find the archived call record by egress_id and update the recording key.
+                // Store the key on the archived session that recorded it.
                 if let Some((call_id, channel_id)) = self
                     .repo
-                    .get_call_record_by_egress_id(egress_id)
+                    .set_recording_key_by_egress_id(egress_id, recording_key)
                     .await
                     .map_err(|e| CallError::Internal(e.into()))?
                 {
-                    self.repo
-                        .set_recording_key(&call_id, recording_key)
-                        .await
-                        .map_err(|e| CallError::Internal(e.into()))?;
                     self.publish_call_event(&CallMacroEvent::recording_ready(
                         CallRecordingReadyMetadata {
                             call_id,
@@ -1955,24 +1998,28 @@ impl<
             .get_authenticated_user()
             .map_err(|_| CallError::Auth)?;
 
-        if let Some(recording_key) = &record.recording_key {
-            record.recording_url = self
-                .recording_storage
-                .presign_recording_url(recording_key)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, "failed to presign recording URL"))
-                .ok();
-        }
+        record.recording_url = self
+            .presign_recording_url(record.recording_key.as_deref())
+            .await;
+        record.recording_preview_url = self
+            .presign_recording_preview_url(record.preview_key.as_deref())
+            .await;
 
-        if let Some(preview_key) = &record.preview_key {
-            record.recording_preview_url = self
-                .recording_storage
-                .presign_recording_preview_url(preview_key)
-                .await
-                .inspect_err(
-                    |e| tracing::error!(error=?e, "failed to presign recording preview URL"),
-                )
-                .ok();
+        // The first session's media is the record's own; only later sessions
+        // need their own URLs.
+        for session in &mut record.sessions {
+            session.recording_url = if session.recording_key == record.recording_key {
+                record.recording_url.clone()
+            } else {
+                self.presign_recording_url(session.recording_key.as_deref())
+                    .await
+            };
+            session.recording_preview_url = if session.preview_key == record.preview_key {
+                record.recording_preview_url.clone()
+            } else {
+                self.presign_recording_preview_url(session.preview_key.as_deref())
+                    .await
+            };
         }
 
         // Only active calls keep decline rows; archived calls drop them with
@@ -1993,11 +2040,20 @@ impl<
     async fn get_call_recording(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
+        session: u16,
     ) -> Result<RecordingDownload, CallError> {
         let record = authorized_call_record(&self.repo, &receipt).await?;
-        let key = record
-            .recording_key
-            .ok_or_else(|| CallError::NotFound(record.call_id.to_string()))?;
+        // The record's own key is its first session's, and the only one a
+        // live call has.
+        let key = match session {
+            0 => record.recording_key,
+            later => record
+                .sessions
+                .into_iter()
+                .nth(usize::from(later))
+                .and_then(|session| session.recording_key),
+        }
+        .ok_or_else(|| CallError::NotFound(record.call_id.to_string()))?;
 
         self.recording_storage
             .open_recording(&key)
@@ -2030,11 +2086,7 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?
             .map(|r| r.channel_id);
 
-        let storage_keys = self
-            .repo
-            .delete_call_record(&call_id)
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?;
+        let storage_keys = self.repo.delete_call_record(&call_id).await?;
 
         if storage_keys.is_some()
             && let Some(channel_id) = channel_id
@@ -2046,7 +2098,7 @@ impl<
             }));
         }
 
-        if let Some(storage_keys) = storage_keys {
+        for storage_keys in storage_keys.into_iter().flatten() {
             if let Some(key) = storage_keys.recording_key.as_deref() {
                 self.recording_storage
                     .delete_recording(key)
@@ -2135,7 +2187,7 @@ impl<
         };
 
         self.repo
-            .create_transcript_segment(&call.id, &segment, voice_id)
+            .create_transcript_segment(&call.id, &call.room_name, &segment, voice_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
@@ -2392,6 +2444,10 @@ impl<
             return Ok(());
         };
 
+        let Some(ended_at) = summarizable_end(&record) else {
+            return Ok(());
+        };
+
         if record.transcript.is_empty() {
             tracing::info!(%call_id, "call has empty transcript; skipping summarization");
             return Ok(());
@@ -2413,12 +2469,16 @@ impl<
             return Ok(());
         };
 
-        let summary_persisted = self
+        let persisted = self
             .repo
-            .insert_call_summary(call_id, &summary)
+            .insert_call_summary(call_id, ended_at, &summary)
             .await
             .inspect_err(|e| tracing::error!(error=?e, %call_id, "failed to persist call summary"))
             .map_err(|e| CallError::Internal(e.into()))?;
+        if !persisted {
+            tracing::info!(%call_id, "call record changed or is gone; summary not persisted");
+            return Ok(());
+        }
 
         let ai_name_generated = generate_and_persist_call_name(
             &self.repo,
@@ -2429,18 +2489,16 @@ impl<
         )
         .await;
 
-        if summary_persisted {
-            self.publish_call_event(&CallMacroEvent::record_summarized(
-                CallRecordSummarizedMetadata {
-                    call_id: *call_id,
-                    channel_id: record.channel_id,
-                    ai_name_generated,
-                },
-            ));
-            self.publish_call_notification(CallNotificationEvent::Summarized(
-                CallNotificationMetadata::new(*call_id, None),
-            ));
-        }
+        self.publish_call_event(&CallMacroEvent::record_summarized(
+            CallRecordSummarizedMetadata {
+                call_id: *call_id,
+                channel_id: record.channel_id,
+                ai_name_generated,
+            },
+        ));
+        self.publish_call_notification(CallNotificationEvent::Summarized(
+            CallNotificationMetadata::new(*call_id, None),
+        ));
 
         Ok(())
     }
@@ -2516,6 +2574,10 @@ impl<
                 }
             };
 
+            let Some(ended_at) = summarizable_end(&record) else {
+                return;
+            };
+
             if record.transcript.is_empty() {
                 tracing::info!(%call_id, "call has empty transcript; skipping summarization");
                 return;
@@ -2542,13 +2604,17 @@ impl<
                 }
             };
 
-            let summary_persisted = match repo.insert_call_summary(&call_id, &summary).await {
-                Ok(persisted) => persisted,
+            match repo.insert_call_summary(&call_id, ended_at, &summary).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    tracing::info!(%call_id, "call record changed or is gone; summary not persisted");
+                    return;
+                }
                 Err(e) => {
                     tracing::error!(error=?e, %call_id, "failed to persist call summary");
                     return;
                 }
-            };
+            }
 
             let ai_name_generated = generate_and_persist_call_name(
                 &repo,
@@ -2559,20 +2625,18 @@ impl<
             )
             .await;
 
-            if summary_persisted {
-                publish_call_event(
-                    &event_broker,
-                    &CallMacroEvent::record_summarized(CallRecordSummarizedMetadata {
-                        call_id,
-                        channel_id: record.channel_id,
-                        ai_name_generated,
-                    }),
-                );
-                publish_call_notification(
-                    &event_broker,
-                    CallNotificationEvent::Summarized(CallNotificationMetadata::new(call_id, None)),
-                );
-            }
+            publish_call_event(
+                &event_broker,
+                &CallMacroEvent::record_summarized(CallRecordSummarizedMetadata {
+                    call_id,
+                    channel_id: record.channel_id,
+                    ai_name_generated,
+                }),
+            );
+            publish_call_notification(
+                &event_broker,
+                CallNotificationEvent::Summarized(CallNotificationMetadata::new(call_id, None)),
+            );
         });
     }
 
@@ -2772,6 +2836,26 @@ async fn enroll_stable_speaker_voices_for_call_record<R: CallRepository, Vr: Voi
         %call_record_id, linked, total,
         "stable speaker voice enrollment completed"
     );
+}
+
+/// The end of the archived record a summary is written for, or `None` when
+/// there is nothing to summarize yet. A record that reads as live is a resumed
+/// scheduled meeting: its next session's archive summarizes the whole call.
+fn summarizable_end(record: &CallRecord) -> Option<chrono::DateTime<chrono::Utc>> {
+    if record.is_active {
+        tracing::info!(call_id = %record.call_id, "call resumed; the next session's archive summarizes it");
+        return None;
+    }
+    let ended_at = record.ended_at;
+    if ended_at.is_none() {
+        tracing::info!(call_id = %record.call_id, "call record has no end; skipping summarization");
+    }
+    ended_at
+}
+
+/// Names the live call a webhook event acts on, on the event's span.
+fn record_webhook_call(call: &Call) {
+    tracing::Span::current().record("call.id", tracing::field::display(call.id));
 }
 
 /// Extract the recording key from a full S3 URL.

@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::domain::meetings::{
-    CreateMeetingRequest, GuestId, GuestJoinRequest, Meeting, MeetingToken,
+    CreateMeetingRequest, GuestId, GuestJoinRequest, Meeting, MeetingCallAllocation, MeetingToken,
 };
 use rootcause::compat::boxed_error::IntoBoxedError;
 use tracing::Instrument;
@@ -22,7 +22,8 @@ impl<
 > CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
     /// Webhooks can beat the startup API response, especially if a call ends
-    /// immediately. Correlate rooms whose UUID is their call ID, including channel sessions.
+    /// immediately. Correlate the egress with the session that ran in its
+    /// room, live or ended, including channel sessions.
     #[tracing::instrument(err, skip_all)]
     pub(super) async fn link_meeting_recording_webhook(
         &self,
@@ -32,19 +33,22 @@ impl<
         let (Some(room_name), Some(egress_id)) = (room_name, egress_id) else {
             return Ok(());
         };
-        let Ok(call_id) = Uuid::parse_str(room_name) else {
-            return Ok(());
-        };
-        let record = self
+        let live = self
             .repo
-            .get_call_record_by_call_id(&call_id)
+            .get_call_by_room_name(room_name)
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
-        if let Some(record) = record
-            && record.room_name.as_deref() == Some(room_name)
-        {
+        let call_id = match live {
+            Some(call) => Some(call.id),
+            None => self
+                .repo
+                .get_ended_session_call(room_name)
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?,
+        };
+        if let Some(call_id) = call_id {
             self.repo
-                .attach_meeting_recording(&call_id, egress_id)
+                .attach_meeting_recording(&call_id, room_name, egress_id)
                 .await
                 .map_err(|e| CallError::Internal(e.into()))?;
         }
@@ -297,11 +301,34 @@ impl<
         Ok(MeetingParticipants { participants })
     }
 
-    #[tracing::instrument(err, skip_all)]
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(
+            call.id = tracing::field::Empty,
+            call.room = tracing::field::Empty,
+            call.session = tracing::field::Empty,
+        )
+    )]
     pub(super) async fn prepare_meeting_call(
         &self,
         meeting: &Meeting,
-    ) -> Result<(Call, bool), CallError> {
+    ) -> Result<MeetingCallAllocation, CallError> {
+        let allocation = self.allocate_meeting_session(meeting).await?;
+        let call = allocation.call();
+        let span = tracing::Span::current();
+        span.record("call.id", tracing::field::display(call.id));
+        span.record("call.room", call.room_name.as_str());
+        span.record("call.session", allocation.kind());
+        Ok(allocation)
+    }
+
+    /// The live session a meeting join enters: the one already live, or a
+    /// new one that starts or resumes the meeting's call.
+    async fn allocate_meeting_session(
+        &self,
+        meeting: &Meeting,
+    ) -> Result<MeetingCallAllocation, CallError> {
         if let Some(call_id) = meeting.call_id
             && let Some(call) = self
                 .repo
@@ -309,8 +336,9 @@ impl<
                 .await
                 .map_err(|e| CallError::Internal(e.into()))?
         {
-            return Ok((call, false));
+            return Ok(MeetingCallAllocation::Joined(call));
         }
+        let resume_allowed = self.scheduled_call_resume_allowed(meeting).await;
         let preparation = self.repo.get_meeting_preparation(&meeting.id).await?;
         let candidate_id = preparation
             .as_ref()
@@ -324,9 +352,12 @@ impl<
         }
         let allocated = self
             .repo
-            .get_or_create_meeting_call(&meeting.id, &candidate_id)
+            .get_or_create_meeting_call(&meeting.id, &candidate_id, resume_allowed)
             .await;
-        if !matches!(&allocated, Ok((_, true))) && preparation.is_none() {
+        // The candidate room hosts the session this request opened; a join
+        // that lost the race, or failed, leaves it unused.
+        let opened = matches!(&allocated, Ok(allocation) if allocation.opened_session());
+        if !opened && preparation.is_none() {
             self.rtc_client
                 .delete_room(&candidate_room)
                 .await
@@ -335,8 +366,11 @@ impl<
                 )
                 .ok();
         }
-        let (call, created) = allocated?;
-        if created {
+        let allocation = allocated?;
+        let call = allocation.call();
+        if let MeetingCallAllocation::Started(call) = &allocation {
+            // A resumed call already started once: its consumers (activity,
+            // `call_started` routines) must not see a second start.
             let created_by = MacroUserIdStr::parse_from_str(&call.created_by)
                 .map_err(|error| CallError::Internal(error.into()))?
                 .into_owned();
@@ -347,6 +381,8 @@ impl<
                 created_at: call.created_at,
                 recording_enabled: self.egress_s3_config.is_some(),
             }));
+        }
+        if allocation.opened_session() {
             let mut metadata = CallNotificationMetadata::new(call.id, None);
             metadata.created_by = Some(call.created_by.clone());
             self.publish_call_notification(CallNotificationEvent::Started(metadata));
@@ -364,9 +400,29 @@ impl<
                 };
                 let recording = start_meeting_recording(&repo, rtc.as_ref(), call_id, &room_name, config.as_ref());
                 tokio::join!(transcription, recording);
-            }.instrument(tracing::info_span!("start_meeting_media", call_id = %call_id)));
+            }.instrument(tracing::info_span!("start_meeting_media", call_id = %call_id, call.room = %call.room_name)));
         }
-        Ok((call, created))
+        Ok(allocation)
+    }
+
+    /// Whether a join with no live session may resume the meeting's ended
+    /// call. Only a scheduled meeting can, so the owner's flag is read only then.
+    async fn scheduled_call_resume_allowed(&self, meeting: &Meeting) -> bool {
+        let scheduled = meeting.scheduled_start.is_some() && meeting.scheduled_end.is_some();
+        let Some(gate) = self
+            .scheduled_call_resume_gate
+            .as_ref()
+            .filter(|_| scheduled)
+        else {
+            return false;
+        };
+        match MacroUserIdStr::parse_from_str(&meeting.user_id) {
+            Ok(owner) => gate.enabled_for(owner).await,
+            Err(error) => {
+                tracing::warn!(error = ?error, "meeting owner is not a user id; not resuming");
+                false
+            }
+        }
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -405,7 +461,9 @@ impl<
                 ));
             }
         }
-        let (call, started) = self.prepare_meeting_call(&meeting).await?;
+        let allocation = self.prepare_meeting_call(&meeting).await?;
+        let started = allocation.opened_session();
+        let call = allocation.call().clone();
         if let Some((other_id, _)) = self
             .repo
             .find_active_call_for_user(actor.copied())
@@ -512,7 +570,9 @@ impl<
                 "Sign in to join this call".to_string(),
             ));
         }
-        let (call, started) = self.prepare_meeting_call(&meeting).await?;
+        let allocation = self.prepare_meeting_call(&meeting).await?;
+        let started = allocation.opened_session();
+        let call = allocation.call().clone();
         let guest_id = GuestId::generate();
         // Lock and persist before minting so a join racing archival fails here.
         self.repo.add_guest(&call.id, guest_id, &name).await?;
@@ -592,7 +652,7 @@ impl<
         Ok(())
     }
 
-    #[tracing::instrument(err, skip_all)]
+    #[tracing::instrument(err, skip_all, fields(call.id = %call.id, call.room = %call.room_name))]
     pub(super) async fn finish_empty_call(&self, call: &Call) -> Result<bool, CallError> {
         let remaining = self
             .repo
@@ -600,9 +660,13 @@ impl<
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
         let archive = if remaining == 0 {
-            self.repo.archive_call_if_empty(&call.id).await
+            self.repo
+                .archive_call_if_empty(&call.id, &call.room_name)
+                .await
         } else {
-            self.repo.archive_call_if_program_only(&call.id).await
+            self.repo
+                .archive_call_if_program_only(&call.id, &call.room_name)
+                .await
         };
         let archived = match archive {
             Ok(Some(archived)) => archived,
@@ -615,7 +679,9 @@ impl<
         self.spawn_process_voices_for_call(archived.call_id);
         let rtc = self.rtc_client.clone();
         let room_name = call.room_name.clone();
-        let egress_id = call.egress_id.clone();
+        // The archive read the session's recorder under its lock; `call` may
+        // predate the recorder's attachment.
+        let egress_id = archived.egress_id.clone();
         tokio::spawn(
             async move {
                 if let Some(egress_id) = egress_id {
@@ -629,7 +695,11 @@ impl<
                     .inspect_err(|error| tracing::error!(error=?error, "failed to delete RTC room"))
                     .ok();
             }
-            .instrument(tracing::info_span!("finish_meeting_media", call_id = %call.id)),
+            .instrument(tracing::info_span!(
+                "finish_meeting_media",
+                call_id = %call.id,
+                call.room = %call.room_name
+            )),
         );
         self.send_call_event(
             &archived.channel_id,
@@ -732,9 +802,14 @@ pub(super) async fn start_meeting_recording<R: CallRepository, C: CallRtcClient>
             return;
         }
     };
-    let active = match repo.attach_meeting_recording(&call_id, &egress_id).await {
+    // A live row in another room is a later session of a resumed meeting:
+    // this recorder's session has ended.
+    let active = match repo
+        .attach_meeting_recording(&call_id, room_name, &egress_id)
+        .await
+    {
         Ok(true) => match repo.get_call_by_id(&call_id).await {
-            Ok(call) => call.is_some(),
+            Ok(call) => call.is_some_and(|call| call.room_name == room_name),
             Err(error) => {
                 tracing::error!(error=?error, "failed to confirm meeting is still active");
                 false

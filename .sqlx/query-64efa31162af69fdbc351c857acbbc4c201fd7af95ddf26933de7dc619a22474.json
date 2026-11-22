@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at)\n            SELECT $1, user_id, joined_at, left_at\n            FROM call_participants\n            WHERE call_id = $1\n            ON CONFLICT (call_record_id, user_id) DO UPDATE SET left_at = EXCLUDED.left_at\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "64efa31162af69fdbc351c857acbbc4c201fd7af95ddf26933de7dc619a22474"
+}
