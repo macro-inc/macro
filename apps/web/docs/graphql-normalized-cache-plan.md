@@ -1010,7 +1010,7 @@ queued drafts, so an older OTA bundle cannot recover that data during rollback;
 authored variables and current-bundle draft recovery metadata remain intact.
 
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
-47 mutation documents and fails when a document has no declared strategy.
+58 mutation documents and fails when a document has no declared strategy.
 Because predictions are keyed by mutation field, it also checks that local
 resolver documents select only resolved fields, and that any other document
 reaching a field resolver is a listed exception the resolver declines.
@@ -1021,9 +1021,9 @@ every schema argument of its field with the schema's type:
 
 | Strategy | Operations |
 | --- | --- |
-| Local resolver (9) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, SetEmailThreadsArchived, UpdateNotifications, RenameEntities, MoveEntities, UpdateInitiative, DeleteEntityProperty |
-| Existing domain optimistic recipe (18) | SaveEmailDraft, DeleteEmailDraft, SendEmailMessage, CancelEmailSend, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, InviteCalendarEventGuests, MarkWorkFeedItemsDone, MarkNotificationInboxRowsDone, ClearNotificationInbox, MarkNotificationInboxNotificationDone, MarkNotificationInboxRowsSeen |
-| Authoritative outcome (14) | CreateSavedView, UpdateSavedView, DeleteSavedView, CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone, UndoNotificationInboxRowsDone |
+| Local resolver (12) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, SetEmailThreadsArchived, UpdateNotifications, RenameEntities, MoveEntities, UpdateInitiative, DeleteEntityProperty, UpdatePropertyOption, DeletePropertyOption, DeletePropertyDefinition |
+| Existing domain optimistic recipe (21) | SavedViewAppearanceCacheWrite, SaveEmailDraft, DeleteEmailDraft, SendEmailMessage, CancelEmailSend, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, InviteCalendarEventGuests, MarkWorkFeedItemsDone, MarkNotificationInboxRowsDone, ClearNotificationInbox, MarkNotificationInboxNotificationDone, MarkNotificationInboxRowsSeen, UndoNotificationInboxClear, AddPropertyOption |
+| Authoritative outcome (19) | CreateSavedView, UpdateSavedView, DeleteSavedView, ReorderSavedViews, CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone, UndoNotificationInboxRowsDone, CreatePropertyDefinition, EnsureTagSet, PromoteTag, MergeTag |
 | Authoritative entity mutation (5) | UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities |
 | Inactive (1) | SetEntityFavorite |
 
@@ -1034,6 +1034,12 @@ alias. Moves predict the destination folder (`projectId`, or `parentId` for a
 project), which folder lists filter on locally; a batch that moves a database or
 form waits for the server. Property removal unlinks only the assignment from its parent, retaining a
 rollbackable link until the server confirms deletion.
+Property catalog option edits and deletes, and definition deletes, are predicted.
+A new option takes a client identity linked into the cached option,
+definition-with-options and tag-set lists, and its call resolves once the
+server id replaces it. Creating a definition, provisioning a tag set, and
+sharing or replacing a tag wait for the server, then reload the mounted catalog
+lists they can change (`lib/queries/properties/catalog`).
 
 Server-generated identities, per-task permission outcomes, and exact notification
 IDs used by undo are not fabricated. A queued acknowledgement is not a completed
