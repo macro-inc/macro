@@ -357,6 +357,34 @@ fn a_session_overlay_can_tighten_but_never_loosen() {
     assert_eq!(to_always, removal);
 }
 
+fn view_of(catalog: &Catalog, saved: Vec<Rule>, overlay: Option<Vec<Rule>>) -> PermissionsView {
+    view(
+        catalog,
+        BotId::TEST_A,
+        PolicyKind::Agent,
+        ViewAccess {
+            can_edit: true,
+            can_tighten: true,
+        },
+        saved,
+        overlay,
+    )
+}
+
+/// `group`'s `action` in `view`, if the view lists it.
+fn pair<'a>(
+    view: &'a PermissionsView,
+    group: &str,
+    action: Action,
+) -> Option<&'a ToolPermissionAction> {
+    view.groups
+        .iter()
+        .find(|resolved| resolved.group == group)?
+        .actions
+        .iter()
+        .find(|resolved| resolved.action == action)
+}
+
 #[test]
 fn the_view_lists_overrides_and_counts_restricted_operations() {
     let saved = vec![
@@ -367,26 +395,15 @@ fn the_view_lists_overrides_and_counts_restricted_operations() {
     ];
     let overlay = vec![tool_rule("email", "send_email", Never)];
 
-    let view = view(
-        &catalog(),
-        BotId::TEST_A,
-        PolicyKind::Agent,
-        ViewAccess {
-            can_edit: true,
-            can_tighten: true,
-        },
-        saved.clone(),
-        Some(overlay.clone()),
-    );
+    let view = view_of(&catalog(), saved.clone(), Some(overlay.clone()));
 
     assert_eq!(view.restricted, 3);
     assert_eq!(view.rules, saved);
     assert_eq!(view.session_rules, Some(overlay));
     assert_eq!(view.version, "0123456789ab");
 
-    let documents = &view.groups[0];
-    assert_eq!(documents.group, "documents");
-    let destroy = &documents.actions[3];
+    assert_eq!(view.groups[0].group, "documents");
+    let destroy = pair(&view, "documents", Action::Destroy).unwrap();
     assert_eq!(
         (destroy.action, destroy.state, destroy.origin, destroy.tools),
         (Action::Destroy, Never, Origin::GroupAction, 2)
@@ -402,18 +419,97 @@ fn the_view_lists_overrides_and_counts_restricted_operations() {
         }]
     );
 
-    let send = &view.groups[1].actions[4];
+    let send = pair(&view, "email", Action::Send).unwrap();
     assert_eq!((send.state, send.origin), (Always, Origin::Default));
     assert_eq!(send.overrides.len(), 1);
     assert_eq!(send.overrides[0].origin, Origin::Session);
-    assert!(view.groups[1].actions[1].overrides.is_empty());
+    assert!(
+        pair(&view, "email", Action::Read)
+            .unwrap()
+            .overrides
+            .is_empty()
+    );
+}
 
-    // Every group with all five actions, in order.
-    assert_eq!(view.groups.len(), 3);
+#[test]
+fn the_view_hides_pairs_with_no_tool_but_keeps_their_rules() {
+    let mut catalog = catalog();
+    // A group with no operations at all.
+    catalog.groups.push(group("tasks"));
+    let saved = vec![
+        // On pairs no operation maps to: documents has no send, tasks nothing.
+        group_rule("documents", Action::Send, Never),
+        group_rule("tasks", Action::Send, Ask),
+        group_rule("documents", Action::Destroy, Ask),
+    ];
+
+    let view = view_of(&catalog, saved.clone(), Some(Vec::new()));
+
+    // Each group lists only the actions it has operations for, in order.
+    let listed: Vec<(&str, Vec<Action>)> = view
+        .groups
+        .iter()
+        .map(|group| {
+            (
+                group.group.as_str(),
+                group.actions.iter().map(|action| action.action).collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        listed,
+        vec![
+            ("documents", vec![Action::Create, Action::Destroy]),
+            ("email", vec![Action::Read, Action::Send]),
+            ("calendar", vec![Action::Create]),
+        ]
+    );
     assert!(
         view.groups
             .iter()
-            .all(|group| group.actions.iter().map(|a| a.action).eq(Action::ALL))
+            .all(|group| { group.actions.iter().all(|action| action.tools > 0) })
+    );
+    // The hidden rules stay saved and listed.
+    assert_eq!(view.rules, saved);
+    // Only operations count as restricted: the two documents deletions.
+    assert_eq!(view.restricted, 2);
+}
+
+#[test]
+fn a_rule_on_a_pair_with_no_tool_applies_once_a_tool_maps_there() {
+    let saved = vec![group_rule("documents", Action::Send, Ask)];
+    assert!(
+        pair(
+            &view_of(&catalog(), saved.clone(), None),
+            "documents",
+            Action::Send
+        )
+        .is_none()
+    );
+
+    // A later registry maps an operation to Documents · Send.
+    let mut catalog = catalog();
+    catalog.entries.push(entry(
+        "storage",
+        "share_document",
+        "documents",
+        Action::Send,
+    ));
+    let send = pair(
+        &view_of(&catalog, saved.clone(), None),
+        "documents",
+        Action::Send,
+    )
+    .cloned()
+    .unwrap();
+    assert_eq!(
+        (send.state, send.origin, send.tools),
+        (Ask, Origin::GroupAction, 1)
+    );
+    let entry = catalog.entry("storage", "share_document").unwrap();
+    assert_eq!(
+        effective(&Layer::new(&saved), &Layer::default(), entry),
+        (Ask, Origin::GroupAction)
     );
 }
 

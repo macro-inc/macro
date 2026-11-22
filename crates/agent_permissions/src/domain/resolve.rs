@@ -148,8 +148,11 @@ pub struct ViewAccess {
     pub can_tighten: bool,
 }
 
-/// Every catalog group with its five actions, resolved under `saved` and
-/// `overlay` (`None` for no session).
+/// Every catalog group with the actions it has operations for, resolved
+/// under `saved` and `overlay` (`None` for no session). A pair no operation
+/// maps to, and a group with none, is left out: no setting there can change
+/// what the agent does. Its saved rule stays in `rules` and applies as soon
+/// as an operation maps there, since resolution never looks at the view.
 pub fn view(
     catalog: &Catalog,
     agent_id: BotId,
@@ -166,18 +169,20 @@ pub fn view(
     for group in &catalog.groups {
         let mut actions = Vec::with_capacity(Action::ALL.len());
         for action in Action::ALL {
+            let entries: Vec<&CatalogEntry> = catalog
+                .entries
+                .iter()
+                .filter(|entry| entry.group == group.id && entry.action == action)
+                .collect();
+            if entries.is_empty() {
+                continue;
+            }
             let (state, origin) = action_state(&saved_layer, &overlay_layer, &group.id, action);
-            let mut tools: u32 = 0;
             let mut overrides = Vec::new();
 
             // An operation differs from its action only through its own
             // setting, saved or in the overlay.
-            for entry in catalog
-                .entries
-                .iter()
-                .filter(|entry| entry.group == group.id && entry.action == action)
-            {
-                tools += 1;
+            for entry in entries.iter().copied() {
                 let (tool_state, tool_origin) = effective(&saved_layer, &overlay_layer, entry);
                 if tool_state != PermissionState::Always {
                     restricted += 1;
@@ -197,9 +202,12 @@ pub fn view(
                 action,
                 state,
                 origin,
-                tools,
+                tools: u32::try_from(entries.len()).unwrap_or(u32::MAX),
                 overrides,
             });
+        }
+        if actions.is_empty() {
+            continue;
         }
         groups.push(ToolPermissionGroup {
             group: group.id.clone(),
