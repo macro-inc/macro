@@ -193,3 +193,50 @@ it('keeps a partly failed import listed however old, until dismissed', () => {
   ]);
   dispose();
 });
+
+it('hides an entry the review card dismissed, now and after a reload', () => {
+  const failed = {
+    source: 'notion' as const,
+    status: 'failed' as const,
+    error_kind: 'connection_unavailable' as const,
+    updated_at: '2026-11-06T11:00:00Z',
+  };
+  let stored: readonly string[] = [];
+  const listeners: (() => void)[] = [];
+  const dismissals = {
+    restore: () => stored,
+    save: (keys: readonly string[]) => {
+      stored = keys;
+    },
+    subscribe: (onChange: () => void) => {
+      listeners.push(onChange);
+      return () => {};
+    },
+  };
+  const tray = createRoot((dispose) => ({
+    dispose,
+    ...createImportJobs({
+      runs: { runs: () => [failed], slackChannelsImporting: () => 0 },
+      createReport: () => () => undefined,
+      dismissals,
+    }),
+  }));
+  expect(tray.jobs()).toHaveLength(1);
+
+  // The card records the dismissal and tells the tray.
+  stored = ['notion:failed:2026-11-06T11:00:00Z'];
+  for (const listener of listeners) listener();
+  expect(tray.jobs()).toEqual([]);
+  tray.dispose();
+
+  const reloaded = createRoot((dispose) => ({
+    dispose,
+    ...createImportJobs({
+      runs: { runs: () => [failed], slackChannelsImporting: () => 0 },
+      createReport: () => () => undefined,
+      dismissals,
+    }),
+  }));
+  expect(reloaded.jobs()).toEqual([]);
+  reloaded.dispose();
+});

@@ -1,5 +1,10 @@
 /** @vitest-environment jsdom */
-import type { ImportEntity, NotionImportReport } from '@queries/import';
+import { readDismissedRuns } from '@app/features/import-jobs/dismissed-runs';
+import type {
+  ImportEntity,
+  ImportRun,
+  NotionImportReport,
+} from '@queries/import';
 import {
   cleanup,
   fireEvent,
@@ -29,12 +34,14 @@ const imports = vi.hoisted(() => {
     cancel: Mock;
     open: Mock;
     connect: Mock;
+    runs: ImportRun[];
   } = {
     entities: [],
     report: undefined,
     cancel: vi.fn(),
     open: vi.fn(),
     connect: vi.fn(),
+    runs: [],
   };
   return state;
 });
@@ -42,6 +49,9 @@ vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: imports.open }),
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|owner@macro.local',
+}));
 // The real icon table loads every block, which opens app connections.
 vi.mock('@core/component/EntityIcon', () => ({
   EntityIcon: (props: { targetType: string }) => (
@@ -56,7 +66,9 @@ vi.mock('@queries/import', () => ({
   useImportQuery: () => ({
     isPending: false,
     isPlaceholderData: false,
-    data: { runs: [], entities: imports.entities },
+    get data() {
+      return { runs: imports.runs, entities: imports.entities };
+    },
   }),
   useWorkspaceImportReportQuery: () => ({
     get isPending() {
@@ -157,6 +169,8 @@ beforeEach(() => {
   imports.cancel.mockReset();
   imports.open.mockReset();
   imports.connect.mockReset();
+  imports.runs = [];
+  localStorage.clear();
   imports.connect.mockResolvedValue('connected');
   vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal(
@@ -471,6 +485,66 @@ describe('import review', () => {
     expect(
       screen.queryByText(/could not be reconnected|can’t be connected/)
     ).toBeNull();
+  });
+
+  it('dismissing a failed review dismisses its run in the imports tray too', async () => {
+    imports.report = { ...FAILED, errorKind: 'connection_unavailable' };
+    imports.runs = [
+      {
+        source: 'notion',
+        status: 'failed',
+        error_kind: 'connection_unavailable',
+        updated_at: '2026-11-22T10:00:00Z',
+      },
+    ];
+    const decide = setup();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(decide).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(readDismissedRuns('macro|owner@macro.local')).toEqual([
+        'notion:failed:2026-11-22T10:00:00Z',
+      ])
+    );
+  });
+
+  it('shows the object a partial import could not write, with why', () => {
+    imports.entities = [
+      entity(
+        'wiki',
+        null,
+        'Wiki',
+        { decision: 'copy' },
+        { status: 'imported' }
+      ),
+      entity(
+        'guide',
+        'wiki',
+        'Guide',
+        { decision: 'copy' },
+        { status: 'imported' }
+      ),
+      entity(
+        'onboarding',
+        'guide',
+        'Onboarding',
+        { decision: 'copy' },
+        { status: 'staged', last_error: "Notion couldn't be reached." }
+      ),
+    ];
+    imports.report = {
+      ...FAILED,
+      status: 'completed',
+      reviewId: 'review',
+      errorKind: null,
+      imported: 2,
+    };
+    setup({ item: { status: 'completed' } });
+
+    expect(
+      screen.getByLabelText("Failed: Notion couldn't be reached.")
+    ).toBeTruthy();
+    expect(screen.getByText('Onboarding')).toBeTruthy();
   });
 
   it('offers to reconnect only when the connection was lost', () => {

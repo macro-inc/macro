@@ -70,10 +70,14 @@ approval`, `Importing 31 of 124` with a percentage, then `Imported`, `Import
 failed` (with its reason from the run's failure kind, such as `Import failed:
 Notion no longer accepts Macro’s connection`) or `Import cancelled`. **Open the <Source> import** opens the agent
 session presenting the review, once one does; Slack rows have no session.
-A finished or cancelled run leaves after about five seconds, a failed one
-stays until **Dismiss the <Source> import**, and a plan waiting for approval
-stays for an hour after its last change; dismissing hides a run until it
-changes again. Phones
+A failed row offers **Reconnect <Source>** when the connection was revoked,
+expired or unusable, and **View details** (its review) otherwise; a partly
+failed import reads `Imported with some failures`. A finished or cancelled
+run leaves after about five seconds; a failed one stays until **Dismiss the
+<Source> import** or a week; a partly failed one stays until dismissed; a
+plan waiting for approval stays for an hour after its last change.
+Dismissals are kept per user on the device, and dismissing a failed review in
+the thread dismisses its run's tray entry too. Phones
 never show the tray. It reads `/import/state` (polling only while something
 is running, otherwise on `import_updated` pushes) and each listed workspace
 run's `/import/workspaces/{source}` report. `src/features/import-jobs/browser-test/`

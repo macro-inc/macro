@@ -45,6 +45,10 @@ const context: ImportJobsContext = {
     source === 'notion' ? notionReport() : undefined,
   openSession: (sessionId) => setOpened(sessionId),
   createDismissals: () => ({ restore: () => [], save: () => {} }),
+  reconnect: async (source) => {
+    setOpened(`reconnect:${source}`);
+    return 'connected';
+  },
 };
 
 function scanNotion() {

@@ -160,7 +160,16 @@ function RowStatus(props: { node: ImportPlanNode; excluded: boolean }) {
         </span>
       }
     >
-      <span class="shrink-0 text-xs text-failure">Failed</span>
+      {(error) => (
+        <Tooltip label={error()} as="span" tabIndex={0}>
+          <span
+            class="shrink-0 text-xs text-failure"
+            aria-label={`Failed: ${error()}`}
+          >
+            Failed
+          </span>
+        </Tooltip>
+      )}
     </Show>
   );
 }

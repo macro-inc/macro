@@ -238,9 +238,25 @@ export function visiblePlanNodes(
 
 /** Nodes with children below the top level start collapsed. */
 export function initiallyCollapsed(nodes: ImportPlanNode[]): Set<string> {
+  // A failed object is never hidden under a collapsed parent.
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const aboveFailures = new Set<string>();
+  for (const node of nodes) {
+    if (!node.error) continue;
+    let parent = node.parentId;
+    while (parent !== null && !aboveFailures.has(parent)) {
+      aboveFailures.add(parent);
+      parent = byId.get(parent)?.parentId ?? null;
+    }
+  }
   return new Set(
     nodes
-      .filter((node) => node.depth > 0 && node.childIds.length > 0)
+      .filter(
+        (node) =>
+          node.depth > 0 &&
+          node.childIds.length > 0 &&
+          !aboveFailures.has(node.id)
+      )
       .map((node) => node.id)
   );
 }

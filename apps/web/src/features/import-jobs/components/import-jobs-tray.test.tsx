@@ -1,19 +1,29 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ImportJob } from '../core/import-job';
 import { ImportJobsTray } from './import-jobs-tray';
 
 afterEach(cleanup);
 
-function tray(jobs: ImportJob[]) {
+function tray(
+  jobs: ImportJob[],
+  handlers: { onOpen?: () => void; onReconnect?: () => void } = {}
+) {
   render(() => (
     <ImportJobsTray
       jobs={jobs}
       expanded
       onExpandedChange={vi.fn()}
-      onOpen={vi.fn()}
+      onOpen={handlers.onOpen ?? vi.fn()}
       onDismiss={vi.fn()}
+      onReconnect={handlers.onReconnect ?? vi.fn()}
     />
   ));
 }
@@ -58,5 +68,45 @@ describe('import jobs tray', () => {
       },
     ]);
     expect(screen.getByText('Import failed')).toBeTruthy();
+  });
+});
+
+describe('a failed import offers what to do next', () => {
+  it('offers to reconnect a lost connection', () => {
+    const onReconnect = vi.fn();
+    tray(
+      [
+        {
+          key: 'notion:failed:1',
+          source: 'notion',
+          phase: { kind: 'failed', errorKind: 'access_lost' },
+          sessionId: 'session-1',
+          dismissable: true,
+        },
+      ],
+      { onReconnect }
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Notion' }));
+    expect(onReconnect).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'View details' })).toBeNull();
+  });
+
+  it('opens the review for any other failure', () => {
+    const onOpen = vi.fn();
+    tray(
+      [
+        {
+          key: 'jira:failed:1',
+          source: 'jira',
+          phase: { kind: 'failed', errorKind: 'rate_limited' },
+          sessionId: 'session-1',
+          dismissable: true,
+        },
+      ],
+      { onOpen }
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /Reconnect/ })).toBeNull();
   });
 });

@@ -33,6 +33,11 @@ export function createImportJobs(sources: {
   const [dismissed, setDismissed] = createSignal<readonly string[]>(
     sources.dismissals.restore()
   );
+  // A dismissal recorded elsewhere (the review card) hides the entry here too.
+  const unsubscribe = sources.dismissals.subscribe?.(() =>
+    setDismissed(sources.dismissals.restore())
+  );
+  if (unsubscribe) onCleanup(unsubscribe);
   const [now, setNow] = createSignal(Date.now());
 
   const visible = createMemo(() =>

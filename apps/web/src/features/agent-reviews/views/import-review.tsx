@@ -1,6 +1,8 @@
+import { dismissImportRun } from '@app/features/import-jobs/dismissed-runs';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { buildSimpleEntityUrl } from '@core/util/url';
@@ -97,6 +99,18 @@ export function ImportReview(props: {
     setReconnected(result);
     setReconnecting(false);
   }
+  // Dismissing a failed review also dismisses its run in the imports tray.
+  const userId = useUserId();
+  async function dismiss() {
+    const dismissed = await review.dismiss();
+    const user = userId();
+    const run = queryReadyGate(state)
+      ? state.data.runs.find(
+          (run) => run.source === source() && run.status === 'failed'
+        )
+      : undefined;
+    if (dismissed && user && run) dismissImportRun(user, run);
+  }
   const alert = () =>
     match(reconnected())
       .with('connected', () => undefined)
@@ -170,7 +184,7 @@ export function ImportReview(props: {
         onIncludedChange={review.setIncluded}
         onSharedChange={review.setShared}
         onApprove={() => fireAndForget(review.approve(), 'agent-reviews')}
-        onDismiss={() => fireAndForget(review.dismiss(), 'agent-reviews')}
+        onDismiss={() => fireAndForget(dismiss(), 'agent-reviews')}
         onStop={() => fireAndForget(review.stop(), 'agent-reviews')}
         onReconnect={
           props.canAct

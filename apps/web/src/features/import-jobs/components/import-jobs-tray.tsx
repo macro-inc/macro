@@ -104,10 +104,21 @@ function overallFraction(jobs: readonly ImportJob[]): number | null {
   return sum / fractions.length;
 }
 
+/** What a failed job offers: reconnecting a lost connection, or its review. */
+function failedAction(job: ImportJob): 'reconnect' | 'details' | null {
+  if (job.phase.kind !== 'failed') return null;
+  const lost =
+    job.phase.errorKind === 'access_lost' ||
+    job.phase.errorKind === 'connection_unavailable';
+  if (lost && job.source !== 'slack') return 'reconnect';
+  return job.sessionId ? 'details' : null;
+}
+
 function ImportJobRow(props: {
   job: ImportJob;
   onOpen: (job: ImportJob) => void;
   onDismiss: (job: ImportJob) => void;
+  onReconnect: (job: ImportJob) => void;
 }) {
   const source = () => SOURCES[props.job.source];
   const label = () => phaseLabel(props.job.source, props.job.phase);
@@ -139,7 +150,25 @@ function ImportJobRow(props: {
             <Show when={percent() !== undefined}>{percent()}%</Show>
           </span>
         </Show>
-        <Show when={props.job.sessionId}>
+        <Show when={failedAction(props.job) === 'reconnect'}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => props.onReconnect(props.job)}
+          >
+            {t('importJobs.reconnect', { source: source().name })}
+          </Button>
+        </Show>
+        <Show when={failedAction(props.job) === 'details'}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => props.onOpen(props.job)}
+          >
+            {t('importJobs.viewDetails')}
+          </Button>
+        </Show>
+        <Show when={props.job.sessionId && props.job.phase.kind !== 'failed'}>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -180,6 +209,7 @@ export function ImportJobsTray(props: {
   onExpandedChange: (expanded: boolean) => void;
   onOpen: (job: ImportJob) => void;
   onDismiss: (job: ImportJob) => void;
+  onReconnect: (job: ImportJob) => void;
 }) {
   return (
     <Show when={props.jobs.length > 0}>
@@ -199,6 +229,7 @@ export function ImportJobsTray(props: {
                   job={job()}
                   onOpen={props.onOpen}
                   onDismiss={props.onDismiss}
+                  onReconnect={props.onReconnect}
                 />
               )}
             </Index>

@@ -6,7 +6,12 @@ import type { WorkspaceSource } from '../core/import-job';
 export type ImportDismissals = {
   restore(): readonly string[];
   save(keys: readonly string[]): void;
+  /** Calls back when a dismissal is recorded elsewhere (the review card). */
+  subscribe?(onChange: () => void): () => void;
 };
+
+/** How a connect flow ended, as the app's connect flow reports it. */
+export type ReconnectOutcome = 'connected' | 'closed' | 'unsupported';
 
 /** The user's import runs and the Slack channels being imported now. */
 export type ImportRunsSource = {
@@ -25,4 +30,6 @@ export type ImportJobsContext = {
   openSession(sessionId: string): void;
   /** Called once by the mounted tray. */
   createDismissals(): ImportDismissals;
+  /** Run the source's connect flow again; rejects when it failed. */
+  reconnect(source: WorkspaceSource): Promise<ReconnectOutcome>;
 };

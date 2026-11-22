@@ -554,3 +554,23 @@ it('counts tracker issues as tasks independently of their projects', () => {
     { label: 'Tasks', value: '1' },
   ]);
 });
+
+describe('initiallyCollapsed', () => {
+  it('never hides a failed object under a collapsed parent', () => {
+    const tree = buildPlanTree([
+      { ...entries[0], id: 'home', parentId: null },
+      { ...entries[0], id: 'handbook', parentId: 'home' },
+      {
+        ...entries[0],
+        id: 'onboarding',
+        parentId: 'handbook',
+        error: "Notion couldn't be reached.",
+      },
+      { ...entries[0], id: 'notes', parentId: 'home' },
+      { ...entries[0], id: 'draft', parentId: 'notes' },
+    ]);
+    const collapsed = initiallyCollapsed(tree);
+    expect(collapsed.has('handbook')).toBe(false);
+    expect(collapsed.has('notes')).toBe(true);
+  });
+});
