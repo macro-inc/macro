@@ -206,7 +206,7 @@ async fn an_xvnc_that_never_answers_gives_up_the_injector_in_time() {
 
     let connected = tokio::time::timeout(
         INJECTOR_HANDSHAKE_TIMEOUT * 2,
-        connect_injector(&SilentXvnc, computer),
+        connect_injector(Arc::new(SilentXvnc), computer),
     )
     .await
     .expect("the handshake waited forever");
@@ -971,6 +971,116 @@ mod over_the_wire {
         }
     }
 
+    /// A guest whose first tunnel (the media's) greets at once, and whose
+    /// later ones (the injector's) say they opened and greet only once
+    /// told to; it records what reaches those.
+    #[derive(Default)]
+    struct HeldInjector {
+        opens: std::sync::atomic::AtomicUsize,
+        opened: Notify,
+        answer: Notify,
+        received: Mutex<Vec<u8>>,
+    }
+
+    struct HeldInjectorTunnel(Arc<HeldInjector>);
+
+    impl GuestTunnel for HeldInjectorTunnel {
+        fn open(
+            &self,
+            _computer: ComputerId,
+            _port: GuestPort,
+        ) -> Pin<Box<dyn Future<Output = Result<GuestStream, TunnelError>> + Send + '_>> {
+            let guest = Arc::clone(&self.0);
+            Box::pin(async move {
+                let held = guest.opens.fetch_add(1, Ordering::SeqCst) > 0;
+                let (harness_end, guest_end) = tokio::io::duplex(1 << 16);
+                let (mut guest_reader, mut guest_writer) = tokio::io::split(guest_end);
+                let answering = Arc::clone(&guest);
+                tokio::spawn(async move {
+                    if held {
+                        answering.opened.notify_one();
+                        answering.answer.notified().await;
+                    }
+                    guest_writer.write_all(&greeting()).await.unwrap();
+                    std::future::pending::<()>().await;
+                    drop(guest_writer);
+                });
+                tokio::spawn(async move {
+                    let mut buffer = [0u8; 4096];
+                    while let Ok(read) = guest_reader.read(&mut buffer).await {
+                        if read == 0 {
+                            return;
+                        }
+                        if held {
+                            guest
+                                .received
+                                .lock()
+                                .unwrap()
+                                .extend_from_slice(&buffer[..read]);
+                        }
+                    }
+                });
+                let (reader, writer) = tokio::io::split(harness_end);
+                let reader: Pin<Box<dyn tokio::io::AsyncRead + Send>> = Box::pin(reader);
+                let writer: Pin<Box<dyn tokio::io::AsyncWrite + Send>> = Box::pin(writer);
+                Ok(tokio::io::join(reader, writer))
+            })
+        }
+    }
+
+    /// A drive that ends unpaused while the first typed input's injector
+    /// connects: the socket reads the lease again, says how the drive ended,
+    /// and drops the input; the key never reaches the guest.
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_drive_lost_while_the_injector_connects_is_reported_and_types_nothing(pool: PgPool) {
+        let guest = Arc::new(HeldInjector::default());
+        let rig = rig_with(
+            pool,
+            grant("alice", Mode::Drive),
+            Options {
+                tunnel: Some(Arc::new(HeldInjectorTunnel(Arc::clone(&guest)))),
+                ..Options::default()
+            },
+        )
+        .await;
+        let mut client = connect(&rig).await;
+        control_of(&mut client, "state").await;
+        send(&mut client, serde_json::json!({ "type": "takeOver" })).await;
+        assert_eq!(control_of(&mut client, "state").await["drivingHere"], true);
+        let drive = rig
+            .screens
+            .lease(COMPUTER)
+            .await
+            .unwrap()
+            .unwrap()
+            .drive_id();
+
+        send(
+            &mut client,
+            serde_json::json!({ "type": "input", "event": { "kind": "key", "keysym": 97, "down": true } }),
+        )
+        .await;
+        guest.opened.notified().await;
+        rig.screens.freeze_lost(COMPUTER, &drive).await.unwrap();
+        guest.answer.notify_one();
+
+        let first = tokio::time::timeout(Duration::from_secs(5), control_of(&mut client, "error"))
+            .await
+            .expect("the socket never said the drive ended");
+        assert_eq!(first["code"], "agentNotPausable");
+        assert_eq!(control_of(&mut client, "error").await["code"], "notDriver");
+        let key = [4u8, 1, 0, 0, 0, 0, 0, 97];
+        assert!(
+            !guest
+                .received
+                .lock()
+                .unwrap()
+                .windows(key.len())
+                .any(|window| window == key),
+            "the key reached the guest"
+        );
+    }
+
     /// Alice's live drive from a socket of her own.
     async fn alice_drives(screens: &Screens) -> (SessionId, Lease) {
         let alice = grant("alice", Mode::Drive);
@@ -991,6 +1101,7 @@ mod over_the_wire {
             tokio::time::Instant::now() + Duration::from_millis(300),
         )));
         let display = HeldDisplay(Arc::new(Notify::new()));
+        let display: Arc<dyn GuestTunnel> = Arc::new(display);
         let typing = Typing {
             tunnel: &display,
             screens: &rig.screens,
@@ -1023,6 +1134,7 @@ mod over_the_wire {
         let (_drive, driving) = watch::channel(DrivingUntil(Some(lapses_at(&lease))));
         let answer = Arc::new(Notify::new());
         let display = HeldDisplay(Arc::clone(&answer));
+        let display: Arc<dyn GuestTunnel> = Arc::new(display);
         let typing = Typing {
             tunnel: &display,
             screens: &rig.screens,

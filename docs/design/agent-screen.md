@@ -88,7 +88,9 @@ guest: Xvnc on 127.0.0.1:5901 (the agent's display :1)
   gets an advisory file (`~/agent/state/screen-driver`), and the agent's main
   loop (requests its runtime marks `x-macro-agent-loop: main` that offer tools)
   gets a notice on take-over and on hand-back, with the note, each claimed by
-  one request at a time and kept until the agent read a finished answer. An
+  one request at a time and kept until a finished answer was handed whole
+  to the agent's connection (a notice can be delivered twice; it carries the
+  same id each time). An
   agent on its owner's own Claude plan calls
   Anthropic directly, so it never gets the notices; it is still frozen.
 - **Robustness:** sockets are capped per person and per computer, tickets are

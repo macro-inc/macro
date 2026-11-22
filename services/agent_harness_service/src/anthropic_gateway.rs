@@ -428,10 +428,11 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
         .await
         .inspect_err(|error| tracing::warn!(error = ?error, "anthropic request failed"));
 
-    // The agent has the notices only once it read a finished answer to its
-    // end: a refused or failed request, a stream that broke or ended in an
+    // The notices count as delivered only once a finished answer was handed
+    // whole to the caller's connection (not necessarily read by the agent):
+    // a refused or failed request, a stream that broke or ended in an
     // `error` event after its 200, a body that broke, or a caller that hung
-    // up gives them to the next request.
+    // up first gives them to the next request.
     let notices = state
         .screens
         .as_ref()
@@ -566,15 +567,16 @@ async fn settle(notices: Option<CarriedNotices>, finished: bool) {
 }
 
 /// The end of an answer that carried notices: the body's last part, which
-/// resolves only once the caller read everything before it.
+/// resolves only once the caller's connection took everything before it.
 type NoticeTail = Pin<
     Box<dyn futures::Stream<Item = Result<axum::body::Bytes, std::io::Error>> + Send + 'static>,
 >;
 
-/// Carried notices waiting for the caller to read the answer to its end.
+/// Carried notices waiting for the caller's connection to take the whole
+/// answer.
 struct NoticeWatch {
     notices: CarriedNotices,
-    /// Sent by the body's tail once the caller read everything before it,
+    /// Sent by the body's tail once the connection took everything before it,
     /// with a way to hold the body's end until the notices are settled;
     /// dropped unsent when the caller hung up first.
     read: tokio::sync::oneshot::Receiver<tokio::sync::oneshot::Sender<()>>,
@@ -595,7 +597,7 @@ impl NoticeWatch {
         (Self { notices, read }, Box::pin(tail))
     }
 
-    /// Settle once the caller read the answer to its end: delivered when the
+    /// Settle once the connection took the whole answer: delivered when the
     /// answer `finished`, given back when it didn't or the caller hung up.
     async fn settle(self, finished: bool) {
         let Self { notices, read } = self;
@@ -613,7 +615,7 @@ impl NoticeWatch {
 /// up, its notices go back at once (it never had the answer), and the rest
 /// is still read (for at most [`DRAIN_TIMEOUT`]) so the final usage is
 /// recorded: an abort must not skip output billing. Otherwise the notices
-/// settle once the caller read the stream to its end: delivered only when
+/// settle once the connection took the whole stream: delivered only when
 /// the message stopped and no chunk broke.
 async fn pump(
     mut upstream: UpstreamChunks,

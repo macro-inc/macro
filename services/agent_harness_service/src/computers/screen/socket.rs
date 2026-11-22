@@ -892,7 +892,7 @@ impl Connection {
                             } else {
                                 visible_at = tokio::time::Instant::now();
                                 let typing = Typing {
-                                    tunnel: self.deps.tunnel.as_ref(),
+                                    tunnel: &self.deps.tunnel,
                                     screens: &self.deps.screens,
                                     computer,
                                     session: self.session,
@@ -1060,7 +1060,7 @@ enum Injection {
 
 /// Where a socket's typed input goes, and what it is checked against.
 struct Typing<'a> {
-    tunnel: &'a dyn GuestTunnel,
+    tunnel: &'a Arc<dyn GuestTunnel>,
     screens: &'a Screens,
     computer: ComputerId,
     session: SessionId,
@@ -1087,11 +1087,13 @@ async fn inject(
         return Err(Injection::NotDriving);
     };
     if injector.is_none() {
-        let connected =
-            tokio::time::timeout_at(until, connect_injector(typing.tunnel, typing.computer))
-                .await
-                .map_err(|_| Injection::NotDriving)?
-                .map_err(Injection::Failed)?;
+        let connected = tokio::time::timeout_at(
+            until,
+            connect_injector(Arc::clone(typing.tunnel), typing.computer),
+        )
+        .await
+        .map_err(|_| Injection::NotDriving)?
+        .map_err(Injection::Failed)?;
         *injector = Some(connected);
         let current = typing.screens.lease(typing.computer).await.inspect_err(
             |error| tracing::warn!(error = ?error, "could not check the drive before typed input"),
@@ -1125,20 +1127,23 @@ async fn inject(
     }
 }
 
-/// The injector's own RFB connection to `computer`'s Xvnc. A tunnel that
-/// doesn't open, or an Xvnc that accepts but never speaks, must not stall
-/// the socket's loop: each gets [`INJECTOR_HANDSHAKE_TIMEOUT`].
-async fn connect_injector(
-    tunnel: &dyn GuestTunnel,
+/// The injector's own RFB connection to `computer`'s Xvnc. The tunnel
+/// opens in a task of its own, bounded by the tunnel's own ready timeout:
+/// a caller that stops waiting (the lease ended) never cancels it halfway,
+/// before its guest program has the reaper that ends it, so a late tunnel
+/// is closed and reaped like any other. An Xvnc that accepts but never
+/// speaks must not stall the socket's loop: the handshake gets
+/// [`INJECTOR_HANDSHAKE_TIMEOUT`].
+pub(super) async fn connect_injector(
+    tunnel: Arc<dyn GuestTunnel>,
     computer: ComputerId,
 ) -> Result<RfbInjector, String> {
-    let stream = tokio::time::timeout(
-        INJECTOR_HANDSHAKE_TIMEOUT,
-        tunnel.open(computer, GuestPort::Rfb),
-    )
-    .await
-    .map_err(|_| "the computer's display did not open".to_owned())?
-    .map_err(|error| error.to_string())?;
+    let opening =
+        tokio::spawn(async move { tunnel.open(computer, GuestPort::Rfb).await }.in_current_span());
+    let stream = opening
+        .await
+        .map_err(|_| "the computer's display did not open".to_owned())?
+        .map_err(|error| error.to_string())?;
     tokio::time::timeout(INJECTOR_HANDSHAKE_TIMEOUT, RfbInjector::connect(stream))
         .await
         .map_err(|_| "the computer's display did not answer".to_owned())?
