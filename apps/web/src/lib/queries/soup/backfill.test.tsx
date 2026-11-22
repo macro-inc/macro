@@ -5,6 +5,7 @@ import * as Fiber from 'effect/Fiber';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CHANNEL_SOUP_BACKFILL_LANE,
   DEFAULT_SOUP_BACKFILL_LANES,
   loadSoupBackfillCheckpoint,
   NOISE_EMAIL_FILTER_BACKFILL_LANE,
@@ -18,6 +19,7 @@ import {
   type SoupBackfillParams,
   useSoupBackfills,
 } from './backfill';
+import { soupBackfillCheckpointKey } from './backfill-contract';
 
 type FetchInput = Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0];
 
@@ -93,6 +95,11 @@ const lane = (
   },
 });
 
+/** A test lane's checkpoint key depends on its id and contract, not on the
+ * function that fetches its pages. */
+const testLane = (checkpointId: string) =>
+  lane(checkpointId, async () => ({ nextCursor: null }));
+
 function seedCheckpoint(overrides: Partial<SoupBackfillCheckpoint> = {}) {
   const checkpoint: SoupBackfillCheckpoint = {
     userId: 'user-1',
@@ -106,7 +113,7 @@ function seedCheckpoint(overrides: Partial<SoupBackfillCheckpoint> = {}) {
     ...overrides,
   };
   localStorage.setItem(
-    'graphql-soup-backfill:v19:user-1:core-entities',
+    soupBackfillCheckpointKey('user-1', testLane('core-entities')),
     JSON.stringify(checkpoint)
   );
 }
@@ -176,7 +183,9 @@ describe('runSoupBackfills', () => {
           ? { continuation: { cursor: 'saved-cursor' } }
           : { initial: { limit: 1 } }
       );
-      expect(loadSoupBackfillCheckpoint('user-1')).toMatchObject({
+      expect(
+        loadSoupBackfillCheckpoint('user-1', testLane('core-entities'))
+      ).toMatchObject({
         storageGeneration: 'storage-1',
         pagesFetched: resumes ? 13 : 1,
         completed: true,
@@ -199,16 +208,18 @@ describe('runSoupBackfills', () => {
       expect(mockCacheHost.currentStorageGeneration).toHaveBeenCalledOnce()
     );
     expect(fetchPage).not.toHaveBeenCalled();
-    expect(loadSoupBackfillCheckpoint('user-1').nextCursor).toBe(
-      'saved-cursor'
-    );
+    expect(
+      loadSoupBackfillCheckpoint('user-1', testLane('core-entities')).nextCursor
+    ).toBe('saved-cursor');
 
     resolveGeneration('recreated-storage');
     await running;
     expect(fetchPage.mock.calls[0]?.[0]).toMatchObject({
       initial: { limit: 1 },
     });
-    expect(loadSoupBackfillCheckpoint('user-1')).toMatchObject({
+    expect(
+      loadSoupBackfillCheckpoint('user-1', testLane('core-entities'))
+    ).toMatchObject({
       storageGeneration: 'recreated-storage',
       pagesFetched: 1,
       completed: true,
@@ -232,7 +243,10 @@ describe('runSoupBackfills', () => {
     expect(fetchPage.mock.calls[0]?.[0]).toEqual({
       initial: { limit: 1, expand: true, sortMethod: 'VIEWED_UPDATED' },
     });
-    expect(loadSoupBackfillCheckpoint('user-1').pagesFetched).toBe(1);
+    expect(
+      loadSoupBackfillCheckpoint('user-1', testLane('core-entities'))
+        .pagesFetched
+    ).toBe(1);
   });
 
   it('restarts after storage changes during hydration without a generation event', async () => {
@@ -266,7 +280,9 @@ describe('runSoupBackfills', () => {
         pagesFetched: 1,
       })
     );
-    expect(loadSoupBackfillCheckpoint('user-1')).toMatchObject({
+    expect(
+      loadSoupBackfillCheckpoint('user-1', testLane('core-entities'))
+    ).toMatchObject({
       storageGeneration: 'storage-2',
       nextCursor: null,
       completed: true,
@@ -296,7 +312,9 @@ describe('runSoupBackfills', () => {
     for (const [input] of fetchPage.mock.calls) {
       expect(input).toMatchObject({ initial: { limit: 1 } });
     }
-    expect(loadSoupBackfillCheckpoint('user-1')).toMatchObject({
+    expect(
+      loadSoupBackfillCheckpoint('user-1', testLane('core-entities'))
+    ).toMatchObject({
       storageGeneration: 'storage-2',
       completed: true,
       pagesFetched: 1,
@@ -494,12 +512,12 @@ describe('runSoupBackfills', () => {
     await running;
 
     expect(order).toEqual(['first:start', 'first:end', 'second']);
-    expect(loadSoupBackfillCheckpoint('user-1', 'first-lane').completed).toBe(
-      true
-    );
-    expect(loadSoupBackfillCheckpoint('user-1', 'second-lane').completed).toBe(
-      true
-    );
+    expect(
+      loadSoupBackfillCheckpoint('user-1', testLane('first-lane')).completed
+    ).toBe(true);
+    expect(
+      loadSoupBackfillCheckpoint('user-1', testLane('second-lane')).completed
+    ).toBe(true);
   });
 
   it('immediately catches up email changes that moved ahead of the initial cursor', async () => {
@@ -550,7 +568,10 @@ describe('runSoupBackfills', () => {
       },
     });
     expect(
-      loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
+      loadSoupBackfillCheckpoint('user-1', {
+        ...testLane('email-thread-pages'),
+        catchUpAfterInitialPass: true,
+      })
     ).toMatchObject({
       completed: true,
       scanStartedAt: null,
@@ -605,7 +626,10 @@ describe('runSoupBackfills', () => {
     await catchUpStarted;
 
     expect(
-      loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
+      loadSoupBackfillCheckpoint('user-1', {
+        ...testLane('email-thread-pages'),
+        catchUpAfterInitialPass: true,
+      })
     ).toMatchObject({
       nextCursor: null,
       pagesFetched: 1,
@@ -643,7 +667,10 @@ describe('runSoupBackfills', () => {
       },
     });
     expect(
-      loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
+      loadSoupBackfillCheckpoint('user-1', {
+        ...testLane('email-thread-pages'),
+        catchUpAfterInitialPass: true,
+      })
     ).toMatchObject({
       pagesFetched: 2,
       completed: true,
@@ -671,13 +698,13 @@ describe('runSoupBackfills', () => {
     ).rejects.toMatchObject({ cause: projectionFailure });
 
     expect(fetchPage).toHaveBeenCalledOnce();
-    expect(loadSoupBackfillCheckpoint('user-1', 'projection-v2')).toMatchObject(
-      {
-        nextCursor: null,
-        pagesFetched: 0,
-        completed: false,
-      }
-    );
+    expect(
+      loadSoupBackfillCheckpoint('user-1', testLane('projection-v2'))
+    ).toMatchObject({
+      nextCursor: null,
+      pagesFetched: 0,
+      completed: false,
+    });
   });
 
   it('retries cache readiness failures before fetching a lane', async () => {
@@ -694,7 +721,9 @@ describe('runSoupBackfills', () => {
     await vi.advanceTimersByTimeAsync(1_000);
     await running;
     expect(fetchPage).toHaveBeenCalledOnce();
-    expect(loadSoupBackfillCheckpoint('user-1')).toMatchObject({
+    expect(
+      loadSoupBackfillCheckpoint('user-1', testLane('core-entities'))
+    ).toMatchObject({
       storageGeneration: 'storage-1',
       completed: true,
     });
@@ -720,12 +749,12 @@ describe('runSoupBackfills', () => {
 
     expect(failedFetch).toHaveBeenCalledTimes(6);
     expect(laterFetch).toHaveBeenCalledOnce();
-    expect(loadSoupBackfillCheckpoint('user-1', 'failed-lane').completed).toBe(
-      false
-    );
-    expect(loadSoupBackfillCheckpoint('user-1', 'later-lane').completed).toBe(
-      true
-    );
+    expect(
+      loadSoupBackfillCheckpoint('user-1', testLane('failed-lane')).completed
+    ).toBe(false);
+    expect(
+      loadSoupBackfillCheckpoint('user-1', testLane('later-lane')).completed
+    ).toBe(true);
     expect(warn).toHaveBeenCalledWith(
       '[graphql-soup-backfill] lane failed after retries',
       expect.objectContaining({ checkpointId: 'failed-lane' })
@@ -773,11 +802,11 @@ describe('runSoupBackfills', () => {
     rendered.unmount();
   });
 
-  it.each([13, 14, 15, 16])(
+  it.each([13, 14, 15, 16, 17, 18])(
     'does not reuse v%i backfill checkpoints',
     (version) => {
       localStorage.setItem(
-        `graphql-soup-backfill:v${version}:user-1:email-filter-metadata`,
+        `graphql-soup-backfill:v${version}:user-1:email-signal-filter-metadata`,
         JSON.stringify({
           userId: 'user-1',
           nextCursor: 'old-page',
@@ -789,7 +818,7 @@ describe('runSoupBackfills', () => {
         })
       );
       expect(
-        loadSoupBackfillCheckpoint('user-1', 'email-filter-metadata')
+        loadSoupBackfillCheckpoint('user-1', SIGNAL_EMAIL_FILTER_BACKFILL_LANE)
       ).toMatchObject({
         nextCursor: null,
         pagesFetched: 0,
@@ -858,14 +887,14 @@ describe('runSoupBackfills', () => {
         storage === 'preserved'
           ? { nextCursor: 'stale-cursor', pagesFetched: 12 }
           : { nextCursor: null, pagesFetched: 0 };
-      expect(loadSoupBackfillCheckpoint('user-1', 'channels')).toMatchObject(
-        expected
-      );
+      expect(
+        loadSoupBackfillCheckpoint('user-1', CHANNEL_SOUP_BACKFILL_LANE)
+      ).toMatchObject(expected);
       finishPages[0]({ nextCursor: 'obsolete-cursor' });
       await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(loadSoupBackfillCheckpoint('user-1', 'channels')).toMatchObject(
-        expected
-      );
+      expect(
+        loadSoupBackfillCheckpoint('user-1', CHANNEL_SOUP_BACKFILL_LANE)
+      ).toMatchObject(expected);
       rendered.unmount();
     }
   );
@@ -874,9 +903,12 @@ describe('runSoupBackfills', () => {
     'resumes completed lane watermarks only for %s storage',
     async (storage) => {
       const watermark = '2026-09-01T00:00:00.000Z';
-      for (const checkpointId of ['channels', 'email-thread-pages']) {
+      for (const key of [
+        'graphql-soup-backfill:v19:user-1:channels',
+        soupBackfillCheckpointKey('user-1', testLane('email-thread-pages')),
+      ]) {
         localStorage.setItem(
-          `graphql-soup-backfill:v19:user-1:${checkpointId}`,
+          key,
           JSON.stringify({
             userId: 'user-1',
             storageGeneration: 'storage-1',
@@ -915,7 +947,7 @@ describe('runSoupBackfills', () => {
         // Notifications restart the active runner. Other lane checkpoints keep
         // their generation and are validated when that lane starts.
         expect(
-          loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
+          loadSoupBackfillCheckpoint('user-1', testLane('email-thread-pages'))
         ).toMatchObject({
           storageGeneration: 'storage-1',
           completed: true,
@@ -942,7 +974,7 @@ describe('runSoupBackfills', () => {
           });
         }
         expect(
-          loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
+          loadSoupBackfillCheckpoint('user-1', testLane('email-thread-pages'))
         ).toMatchObject({
           storageGeneration:
             storage === 'preserved' ? 'storage-1' : 'storage-2',
@@ -968,7 +1000,9 @@ describe('runSoupBackfills', () => {
     const second = render(() => <BackfillRunner userId="user-1" />);
     try {
       await vi.waitFor(() =>
-        expect(loadSoupBackfillCheckpoint('user-1', 'channels')).toMatchObject({
+        expect(
+          loadSoupBackfillCheckpoint('user-1', CHANNEL_SOUP_BACKFILL_LANE)
+        ).toMatchObject({
           nextCursor: 'committed-page-cursor',
           pagesFetched: 1,
         })
@@ -1018,7 +1052,8 @@ describe('runSoupBackfills', () => {
       expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce()
     );
     expect(
-      loadSoupBackfillCheckpoint('user-1', 'channels').scanStartedAt
+      loadSoupBackfillCheckpoint('user-1', CHANNEL_SOUP_BACKFILL_LANE)
+        .scanStartedAt
     ).not.toBeNull();
 
     setUserId('user-2');
@@ -1029,7 +1064,8 @@ describe('runSoupBackfills', () => {
     expect(fetchSignals[0]?.aborted).toBe(true);
     expect(fetchSignals[1]?.aborted).toBe(false);
     expect(
-      loadSoupBackfillCheckpoint('user-2', 'channels').scanStartedAt
+      loadSoupBackfillCheckpoint('user-2', CHANNEL_SOUP_BACKFILL_LANE)
+        .scanStartedAt
     ).not.toBeNull();
 
     rendered.unmount();

@@ -1331,8 +1331,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Gate task-template controls and workflow recovery with `enable-task-templates` on desktop and touch; inject availability from `ComposeTask` and retain paused template edits without blocking ordinary tasks or property pins.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
-- Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
-  bump its checkpoint version when changing the hydration input contract.
+- Keep CRM contacts explicitly included in the auxiliary GraphQL backfill.
+- Soup backfill checkpoints are keyed by each lane's contract
+  (`queries/soup/backfill-contract.ts`): changing a lane's input or pass flags
+  restarts that lane alone. Bump the lane's `contractVersion` when it must
+  refetch for a reason its input does not show (a new operation, a projection
+  that needs fields the cache lacks); bump `BACKFILL_VERSION` only for a runner
+  change every lane shares. Never edit `V19_CONTRACTS`.
 - Refresh the channel list's bounded unread and mention edges when opening a
   conversation, including an empty unread result after a read on another
   device. Include off-page favorites in unread presence without adding them to

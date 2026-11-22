@@ -24,11 +24,13 @@ import { useContactBackfill } from '../contacts/backfill';
 import { useContactTopUp } from '../contacts/top-up';
 import { useContactContextPublisher } from '../contacts/use-context-publisher';
 import { useMailAccountsQuery } from '../email/mail-accounts';
+import {
+  BACKFILL_VERSION,
+  soupBackfillCheckpointKey,
+  soupBackfillCoordinatorKey,
+  soupBackfillLaneContract,
+} from './backfill-contract';
 
-// Bump when a default backfill input or completion guarantee changes so
-// persisted cursors cannot retain an older hydration contract.
-// Restart old cursors whose core lane still included channels.
-const BACKFILL_VERSION = 19;
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
@@ -80,6 +82,10 @@ export type SoupBackfillParams = {
   /** Email threads matching any window. The cutoff is fixed when a pass starts;
    * resumed cursors keep the cutoff they were issued with. */
   emailRecency?: readonly EmailRecencyWindow[];
+  /** Bump when what this lane must refetch changes in a way its input and
+   * flags do not show, such as a different operation or a new completion
+   * guarantee: only this lane restarts. See `soupBackfillLaneContract`. */
+  contractVersion?: number;
 };
 
 /**
@@ -303,10 +309,6 @@ type StoredSoupBackfillCheckpoint = Omit<
     >
   >;
 
-function checkpointKey(userId: string, checkpointId: string): string {
-  return `graphql-soup-backfill:v${BACKFILL_VERSION}:${userId}:${checkpointId}`;
-}
-
 function initialCheckpoint(
   userId: string,
   storageGeneration: string | null = null
@@ -349,10 +351,10 @@ function isCheckpoint(
 
 export function loadSoupBackfillCheckpoint(
   userId: string,
-  checkpointId = CORE_SOUP_BACKFILL_LANE.checkpointId
+  lane: SoupBackfillParams = CORE_SOUP_BACKFILL_LANE
 ): SoupBackfillCheckpoint {
   try {
-    const saved = localStorage.getItem(checkpointKey(userId, checkpointId));
+    const saved = localStorage.getItem(soupBackfillCheckpointKey(userId, lane));
     if (!saved) return initialCheckpoint(userId);
 
     const parsed: unknown = JSON.parse(saved);
@@ -374,11 +376,11 @@ export function loadSoupBackfillCheckpoint(
 
 function saveSoupBackfillCheckpoint(
   checkpoint: SoupBackfillCheckpoint,
-  checkpointId: string
+  lane: SoupBackfillParams
 ): void {
   try {
     localStorage.setItem(
-      checkpointKey(checkpoint.userId, checkpointId),
+      soupBackfillCheckpointKey(checkpoint.userId, lane),
       JSON.stringify(checkpoint)
     );
   } catch {
@@ -394,7 +396,7 @@ type SoupBackfillTelemetryState =
   | 'failed';
 
 function recordSoupBackfillTelemetry(input: {
-  checkpointId: string;
+  lane: SoupBackfillParams;
   durationMs?: number;
   pagesFetched: number;
   state: SoupBackfillTelemetryState;
@@ -402,8 +404,12 @@ function recordSoupBackfillTelemetry(input: {
 }): void {
   try {
     const span = Telemetry.anonymousSpan('graphql_cache.backfill');
-    span.setAttr('cache.backfill_lane', input.checkpointId);
+    span.setAttr('cache.backfill_lane', input.lane.checkpointId);
     span.setAttr('cache.backfill_version', BACKFILL_VERSION);
+    span.setAttr(
+      'cache.backfill_contract',
+      soupBackfillLaneContract(input.lane)
+    );
     span.setAttr('cache.backfill_state', input.state);
     span.setAttr('cache.backfill_pages_fetched', input.pagesFetched);
     span.setAttr('cache.backfill_total_pages_fetched', input.totalPagesFetched);
@@ -520,7 +526,7 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
     host.currentStorageGeneration()
   );
   let checkpoint = yield* Effect.sync(() =>
-    loadSoupBackfillCheckpoint(userId, params.checkpointId)
+    loadSoupBackfillCheckpoint(userId, params)
   );
   if (checkpoint.storageGeneration !== storageGeneration) {
     checkpoint = initialCheckpoint(userId, storageGeneration);
@@ -541,7 +547,7 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
       completed: false,
       scanStartedAt: new Date().toISOString(),
     };
-    saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
+    saveSoupBackfillCheckpoint(checkpoint, params);
   };
   const restartForGeneration = (generation: string) => {
     checkpoint = initialCheckpoint(userId, generation);
@@ -631,7 +637,7 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
         : {}),
     };
     yield* Effect.sync(() => {
-      saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
+      saveSoupBackfillCheckpoint(checkpoint, params);
       onCheckpoint?.(checkpoint);
     });
 
@@ -655,12 +661,12 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
       Effect.gen(function* () {
         const startedAt = Date.now();
         const initialCheckpoint = yield* Effect.sync(() =>
-          loadSoupBackfillCheckpoint(userId, lane.checkpointId)
+          loadSoupBackfillCheckpoint(userId, lane)
         );
         let pagesFetched = 0;
         yield* Effect.sync(() =>
           recordSoupBackfillTelemetry({
-            checkpointId: lane.checkpointId,
+            lane,
             pagesFetched: 0,
             state: 'started',
             totalPagesFetched: initialCheckpoint.pagesFetched,
@@ -674,7 +680,7 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
             pagesFetched % BACKFILL_PROGRESS_PAGE_INTERVAL === 0
           ) {
             recordSoupBackfillTelemetry({
-              checkpointId: lane.checkpointId,
+              lane,
               durationMs: Date.now() - startedAt,
               pagesFetched,
               state: 'progress',
@@ -689,12 +695,9 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
           Effect.matchEffect({
             onFailure: (error) =>
               Effect.sync(() => {
-                const checkpoint = loadSoupBackfillCheckpoint(
-                  userId,
-                  lane.checkpointId
-                );
+                const checkpoint = loadSoupBackfillCheckpoint(userId, lane);
                 recordSoupBackfillTelemetry({
-                  checkpointId: lane.checkpointId,
+                  lane,
                   durationMs: Date.now() - startedAt,
                   pagesFetched,
                   state: 'failed',
@@ -707,12 +710,9 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
               }),
             onSuccess: () =>
               Effect.sync(() => {
-                const checkpoint = loadSoupBackfillCheckpoint(
-                  userId,
-                  lane.checkpointId
-                );
+                const checkpoint = loadSoupBackfillCheckpoint(userId, lane);
                 recordSoupBackfillTelemetry({
-                  checkpointId: lane.checkpointId,
+                  lane,
                   durationMs: Date.now() - startedAt,
                   pagesFetched,
                   state: 'completed',
@@ -747,7 +747,7 @@ const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
 /** Runs the signed-in user's soup backfills; waits while `userId` is unknown. */
 export function useSoupBackfills(userId: Accessor<string | undefined>): void {
   const isLeader = createTabLeaderSignal(
-    `graphql-soup-backfill:v${BACKFILL_VERSION}:coordinator`
+    soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES)
   );
   // Sender metadata must be durable before the first composer is opened.
   // This small catalog runs alongside the paged backfill, never behind it.

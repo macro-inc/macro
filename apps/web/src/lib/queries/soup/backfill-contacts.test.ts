@@ -93,7 +93,7 @@ describe('CRM contact backfill', () => {
         { signal: expect.any(AbortSignal) }
       );
       expect(
-        loadSoupBackfillCheckpoint('user-1', 'auxiliary-entities')
+        loadSoupBackfillCheckpoint('user-1', AUXILIARY_SOUP_BACKFILL_LANE)
       ).toMatchObject({
         pagesFetched: 2,
         nextCursor: null,
