@@ -1,0 +1,29 @@
+crates/connectors/src/domain/ports.rs
+  s_be29728584c444::t_1cfac29df716a8 197-205
+crates/connectors/src/domain/service.rs
+  s_5faa08f8289b93::t_416511a87b069a 44-54,596-608
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "aeae31425d96105fd112b88be1093cc87d2d8740",
+  "prompts": {},
+  "sessions": {
+    "s_5faa08f8289b93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "330dc6ae-49e7-41ad-8e5c-2f64a9351413",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_be29728584c444": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5746c7bf-29e9-4305-95dc-24b74d8dccb4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
