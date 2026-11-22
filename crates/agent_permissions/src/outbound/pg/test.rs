@@ -1,3 +1,5 @@
+mod sources;
+
 use agent_permission_registry::Action;
 use bot_id::{BotId, MACRO_NEW_BOT_ID};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -16,6 +18,15 @@ const SESSION: Uuid = Uuid::from_u128(0x91000000_0000_0000_0000_000000000031);
 /// Writes that apply `changes` as given, as the service's plans do once
 /// they pass.
 impl PgPermissionStore {
+    /// A policy's own saved settings; none for no such policy.
+    async fn rules(&self, policy: PolicyId) -> Result<Vec<Rule>, PgPermissionStoreError> {
+        Ok(self
+            .chain(policy)
+            .await?
+            .map(|chain| chain.rules().to_vec())
+            .unwrap_or_default())
+    }
+
     async fn apply(
         &self,
         policy: PolicyId,
@@ -498,7 +509,7 @@ async fn a_write_reads_both_layers_and_a_refused_plan_writes_nothing(pool: PgPoo
     };
     let refused = store
         .write(write, |saved, overlay| {
-            assert_eq!((saved.len(), overlay.len()), (1, 1));
+            assert_eq!((saved.rules().len(), overlay.len()), (1, 1));
             Err(PermissionError::Forbidden)
         })
         .await
@@ -530,7 +541,8 @@ async fn a_gate_reads_the_policy_and_overlay_as_one_snapshot(pool: PgPool) {
         .unwrap();
 
     let mut gate = pool.begin_with(SNAPSHOT).await.unwrap();
-    assert!(policy_rules(&mut gate, owner).await.unwrap().is_empty());
+    let chain = read_chain(&mut gate, owner).await.unwrap().unwrap();
+    assert!(chain.rules().is_empty());
 
     store
         .apply(
@@ -557,9 +569,13 @@ async fn a_gate_reads_the_policy_and_overlay_as_one_snapshot(pool: PgPool) {
     );
     gate.commit().await.unwrap();
 
-    let (saved, overlay) = store.rules_with_session(owner, session).await.unwrap();
+    let (chain, overlay) = store
+        .chain_with_session(owner, session)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(
-        states(&saved),
+        states(chain.rules()),
         vec![(
             "static-files.delete_file".to_owned(),
             PermissionState::Never,

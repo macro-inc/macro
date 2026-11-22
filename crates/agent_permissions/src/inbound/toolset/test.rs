@@ -6,7 +6,7 @@ use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 
 use super::*;
 use crate::domain::model::{
-    Change, OperationKey, PolicyId, PolicyKind, ResolvedCall, Rule, SessionPolicy, Tightened,
+    Change, OperationKey, PolicyChain, PolicyId, PolicyKind, PolicyOwner, ResolvedCall, Rule, SessionPolicy, Tightened,
     ToolPermissionCatalog,
 };
 use crate::domain::resolve::{self, ViewAccess};
@@ -32,13 +32,16 @@ impl AgentPermissions for Viewer {
         Ok(resolve::view(
             &crate::outbound::registry::registry_catalog(),
             agent,
-            PolicyId::from_uuid(macro_uuid::Uuid::nil()),
             PolicyKind::Agent,
             ViewAccess {
                 can_edit: false,
                 can_tighten: true,
             },
-            self.rules.clone(),
+            &PolicyChain::own(
+                PolicyId::from_uuid(macro_uuid::Uuid::nil()),
+                PolicyOwner::Agent(agent),
+                self.rules.clone(),
+            ),
             Some(Vec::new()),
         ))
     }

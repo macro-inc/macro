@@ -89,6 +89,13 @@ impl IntoResponse for ToolPermissionApiError {
                 Some(operations),
                 None,
             ),
+            PermissionError::SourceCycle => (StatusCode::CONFLICT, "source_cycle", None, None),
+            PermissionError::SourceTooDeep => {
+                (StatusCode::CONFLICT, "source_too_deep", None, None)
+            }
+            PermissionError::SourceNotAllowed => {
+                (StatusCode::FORBIDDEN, "source_not_allowed", None, None)
+            }
             PermissionError::Internal(report) => {
                 tracing::error!(error = ?report, "agent permissions request failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal", None, None)
