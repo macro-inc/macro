@@ -11,6 +11,7 @@ import CursorIcon from '@icon/system/regular/cursor.svg';
 import LockIcon from '@icon/system/regular/lock.svg';
 import StopIcon from '@icon/system/regular/stop.svg';
 import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { ControlLostBanner } from '../components/control-lost-banner';
 import { HandBackDialog } from '../components/hand-back-dialog';
@@ -49,6 +50,62 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
     );
     panel?.handle.close();
   };
+
+  /**
+   * The header pill says who drives; this one says what the agent does
+   * meanwhile and, for the driver, how to let go. One line: the hints
+   * shorten, then drop, with the width (`@container/screen`). Over the
+   * picture in a split; popped out, where the picture reaches the top of the
+   * stage and the guest's own tab strip, in the heading row instead.
+   */
+  const drivingPill = (placement: 'overlay' | 'header') => (
+    <Show when={live() && driver()}>
+      <div
+        data-screen-driving-pill=""
+        class={cn(
+          'flex w-max items-center gap-2 whitespace-nowrap rounded-full border border-amber bg-panel px-3 py-1 text-xs font-medium text-amber-ink',
+          placement === 'overlay'
+            ? 'absolute top-2 left-1/2 z-10 max-w-[calc(100%-1rem)] -translate-x-1/2 shadow'
+            : 'min-w-0 max-w-full'
+        )}
+      >
+        <CursorIcon class="size-3.5 shrink-0" />
+        <span class="min-w-0 truncate">
+          {agentWhileDriven(
+            session.store.server?.agentHeld ?? false,
+            props.model.agentName()
+          )}
+        </span>
+        <Show when={session.drivingMe()}>
+          <span
+            class="shrink-0 border-l border-current pl-2"
+            classList={{
+              'animate-pulse': props.model.input.escapeHeld(),
+            }}
+          >
+            <span class="hidden @min-[30rem]/screen:inline">
+              {t('agentScreen.holdEscToHandBack')}
+            </span>
+            <span class="@min-[30rem]/screen:hidden">
+              {t('agentScreen.holdEscToHandBackShort')}
+            </span>
+          </span>
+          <span class="hidden shrink-0 border-l border-current pl-2 @min-[34rem]/screen:inline">
+            <span class="hidden @min-[44rem]/screen:inline">
+              {IS_MAC
+                ? t('agentScreen.leaveKeyboardHintMac')
+                : t('agentScreen.leaveKeyboardHint')}
+            </span>
+            <span class="@min-[44rem]/screen:hidden">
+              {IS_MAC
+                ? t('agentScreen.leaveKeyboardHintShortMac')
+                : t('agentScreen.leaveKeyboardHintShort')}
+            </span>
+          </span>
+        </Show>
+      </div>
+    </Show>
+  );
 
   const heading = () => (
     <div
@@ -95,7 +152,12 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
           </>
         }
       >
-        <div class="px-3 pt-3">{heading()}</div>
+        <div class="@container/screen flex min-w-0 items-center gap-3 px-3 pt-3">
+          {heading()}
+          <div class="flex min-w-0 flex-1 justify-end">
+            {drivingPill('header')}
+          </div>
+        </div>
       </Show>
 
       <div class="flex min-h-0 flex-1 flex-col gap-2 p-3">
@@ -122,52 +184,7 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
               onFit={() => props.model.input.fit()}
             />
           </Show>
-          {/*
-            The header pill says who drives; this one says what the agent
-            does meanwhile and, for the driver, how to let go. One line:
-            the hints shorten, then drop, as the split narrows.
-          */}
-          <Show when={live() && driver()}>
-            <div
-              data-screen-driving-pill=""
-              class="absolute top-2 left-1/2 z-10 flex w-max max-w-[calc(100%-1rem)] -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-amber bg-panel px-3 py-1 text-xs font-medium text-amber-ink shadow"
-            >
-              <CursorIcon class="size-3.5 shrink-0" />
-              <span class="min-w-0 truncate">
-                {agentWhileDriven(
-                  session.store.server?.agentHeld ?? false,
-                  props.model.agentName()
-                )}
-              </span>
-              <Show when={session.drivingMe()}>
-                <span
-                  class="shrink-0 border-l border-current pl-2"
-                  classList={{
-                    'animate-pulse': props.model.input.escapeHeld(),
-                  }}
-                >
-                  <span class="hidden @min-[30rem]/screen:inline">
-                    {t('agentScreen.holdEscToHandBack')}
-                  </span>
-                  <span class="@min-[30rem]/screen:hidden">
-                    {t('agentScreen.holdEscToHandBackShort')}
-                  </span>
-                </span>
-                <span class="hidden shrink-0 border-l border-current pl-2 @min-[34rem]/screen:inline">
-                  <span class="hidden @min-[44rem]/screen:inline">
-                    {IS_MAC
-                      ? t('agentScreen.leaveKeyboardHintMac')
-                      : t('agentScreen.leaveKeyboardHint')}
-                  </span>
-                  <span class="@min-[44rem]/screen:hidden">
-                    {IS_MAC
-                      ? t('agentScreen.leaveKeyboardHintShortMac')
-                      : t('agentScreen.leaveKeyboardHintShort')}
-                  </span>
-                </span>
-              </Show>
-            </div>
-          </Show>
+          <Show when={!isPopover()}>{drivingPill('overlay')}</Show>
         </ScreenPicture>
 
         <div class="flex flex-wrap items-center gap-2">
