@@ -6,7 +6,11 @@ import { useUnifiedModelSelector } from '../../components/unified-model-selector
 import { speedTier } from '../../core/model-selection';
 import { MACRO_PERSONA_ID } from '../../core/roster';
 
-export function UnifiedModelTrigger(props: { children: JSX.Element }) {
+export function UnifiedModelTrigger(props: {
+  children: JSX.Element;
+  /** The menu is open: its tooltip would cover the menu's search field. */
+  menuOpen?: boolean;
+}) {
   const state = useUnifiedModelSelector();
   const custom = () => state.agent && state.agent.id !== MACRO_PERSONA_ID;
   const name = () =>
@@ -29,7 +33,7 @@ export function UnifiedModelTrigger(props: { children: JSX.Element }) {
       .filter(Boolean)
       .join(', ');
   return (
-    <Tooltip.Root>
+    <Tooltip.Root disabled={props.menuOpen}>
       <Tooltip.Trigger as="span" class="min-w-0 max-w-full">
         {props.children}
       </Tooltip.Trigger>
