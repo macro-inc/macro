@@ -159,8 +159,8 @@ struct Routes {
     upstreams: HashMap<String, String>,
     /// The run's trace context, each request's parent.
     run: opentelemetry::Context,
-    /// What the run's requests are held to.
     counts: Arc<Counts>,
+    /// What the run's requests are held to.
     policy: RunPolicy,
 }
 

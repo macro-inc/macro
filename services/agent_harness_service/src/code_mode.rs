@@ -86,9 +86,7 @@ impl<Flags> EgressRollout<Flags> {
 impl<Flags: FeatureFlags> EgressRollout<Flags> {
     /// The egress for a run acting as `user` under `scope`. An allowlisted
     /// scope always enforces, regardless of either rollout flag; other
-    /// scopes follow the flags (see `SessionScope::enforces_egress`). The
-    /// forwarder is then a hard dependency of an allowlisted run: if it can't
-    /// start, the run fails (`FailureCode::Egress`) and never goes direct.
+    /// scopes follow the flags (see `SessionScope::enforces_egress`).
     pub async fn egress_for(
         &self,
         user: &MacroUserIdStr<'_>,
