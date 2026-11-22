@@ -63,6 +63,7 @@ what it shows and how to run it at the top:
 | `session-rename.ts` | When each side's Quick Access sessions list shows a rename, with the app's spans per phase. |
 | `reload-blank.ts` | How often pages reloaded together come up blank, and what a blank one waits on. |
 | `replay.ts` | One reader on both apps as an existing synthetic user, with every failed response. |
+| `replay-rows.ts` | One fuzz case's generic list on both apps, run after run: row counts, errors and transport. |
 | `session-harness.ts` | The PR links panel's opener lookup on both apps: each row's tag, data keys and `harness`, raw and as the panel maps it. |
 | `qa-rename-refresh.ts` | What an in-app rename does to the rest of each side's Quick Access skills or snippets, against a fresh load. |
 | `boot-window.ts` | Whether a write from another device right after a reload reaches a generic Soup list, and where each side's cache engine started. |
@@ -86,6 +87,7 @@ what it shows and how to run it at the top:
 | `netns.sh` | Runs a command in its own network namespace with the given localhost ports forwarded. |
 | `summarize.ts` | Folds result files into one summary. |
 | `against-aa.ts` | Each run's failure buckets against the A/A control's rates. |
+| `fixed-reasons.ts` | Checks that each fuzz reason difference is the PR's change to fixed reason text and nothing else. |
 
 Only synthetic data: every user is under `*.difftest.dev`. The auth service
 allows 50 new users per address per hour, so `run.sh` resets that counter in the
