@@ -968,3 +968,56 @@ async fn suggestions_brief_programs_type_check() {
     }
     service.shutdown().await;
 }
+
+/// A disabled rollout must not send mention credentials directly to anonymous
+/// gateway routes. The cached OFF decision avoids a remote flag service.
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn a_mention_uses_the_forwarder_even_when_the_egress_flag_is_off(pool: sqlx::PgPool) {
+    use agent_code_mode::domain::MentionExecutionCredentials;
+    use macro_auth::middleware::decode_jwt::{JwtToken, JwtValidationArgs, handler};
+    sqlx::raw_sql(
+        r#"
+        INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        VALUES ('00000000-0000-4000-8000-000000000001', 'owner@example.com', 'owner@example.com', 'stripe_owner');
+        INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ('macro|owner@example.com', 'owner@example.com', '00000000-0000-4000-8000-000000000001');
+        "#,
+    ).execute(&pool).await.unwrap();
+    let owner = MacroUserIdStr::try_from_email("owner@example.com").unwrap();
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        "http://127.0.0.1:1",
+        "fixture-public-key".into(),
+        std::time::Duration::from_millis(10),
+        macro_env::Environment::Local,
+    )
+    .unwrap();
+    let rollout = EgressRollout::new(Some(flags));
+    rollout.cached.lock().unwrap().insert(
+        owner.as_ref().to_owned(),
+        (
+            tokio::time::Instant::now() + EGRESS_FLAG_TTL,
+            Egress::Direct,
+        ),
+    );
+    assert_eq!(rollout.egress(&owner).await, Egress::Direct);
+    let mention = uuid::Uuid::from_u128(907);
+    let credentials = MentionRunCredentials {
+        egress: rollout,
+        signer: MacroApiTokenSigner::new(pool, "fixture", PRIVATE),
+        endpoints: SdkEndpoints::default(),
+    }
+    .issue(&owner, mention)
+    .await
+    .unwrap();
+    assert_eq!(credentials.egress, Egress::Proxied);
+    assert_eq!(credentials.session_id, None);
+    let JwtToken::MacroApiToken(token) = handler(
+        &JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        &credentials.token,
+    )
+    .unwrap() else {
+        panic!("expected signed mention token")
+    };
+    assert_eq!(token.channel_mention_id, Some(mention));
+    assert_eq!(token.agent_scope.as_deref(), Some("channel_mention"));
+}
