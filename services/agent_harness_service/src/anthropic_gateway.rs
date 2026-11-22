@@ -428,9 +428,10 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
         .await
         .inspect_err(|error| tracing::warn!(error = ?error, "anthropic request failed"));
 
-    // The model has the notices only once its answer finished: a refused or
-    // failed request, a stream that broke or ended in an `error` event after
-    // its 200, or a body that broke gives them to the next request.
+    // The agent has the notices only once it read a finished answer to its
+    // end: a refused or failed request, a stream that broke or ended in an
+    // `error` event after its 200, a body that broke, or a caller that hung
+    // up gives them to the next request.
     let notices = state
         .screens
         .as_ref()
@@ -480,22 +481,36 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
 
     let body = if streaming {
         let (caller, chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
-        let metering = meter.map(|meter| (meter, SseUsage::default()));
+        let chunks = tokio_stream::wrappers::ReceiverStream::new(chunks);
+        let (watch, body) = match notices.map(NoticeWatch::new) {
+            Some((watch, tail)) => (Some(watch), Body::from_stream(chunks.chain(tail))),
+            None => (None, Body::from_stream(chunks)),
+        };
         tokio::spawn(
-            pump(Box::pin(upstream.bytes_stream()), metering, notices, caller)
-                .instrument(span.clone()),
+            pump(Box::pin(upstream.bytes_stream()), meter, watch, caller).instrument(span.clone()),
         );
-        Body::from_stream(tokio_stream::wrappers::ReceiverStream::new(chunks))
+        body
     } else {
-        let read = read_limited(upstream).await;
-        settle(notices, read.is_ok()).await;
-        let bytes = read?;
+        let bytes = match read_limited(upstream).await {
+            Ok(bytes) => bytes,
+            Err(rejection) => {
+                settle(notices, false).await;
+                return Err(rejection);
+            }
+        };
         if let Some(mut meter) = meter
             && let Some(usage) = usage::from_json_body(&bytes)
         {
             meter.usage = usage;
         }
-        Body::from(bytes)
+        match notices.map(NoticeWatch::new) {
+            Some((watch, tail)) => {
+                tokio::spawn(watch.settle(true).instrument(span.clone()));
+                let whole = futures::stream::once(std::future::ready(Ok(bytes)));
+                Body::from_stream(whole.chain(tail))
+            }
+            None => Body::from(bytes),
+        }
     };
 
     let mut response = Response::new(body);
@@ -550,64 +565,112 @@ async fn settle(notices: Option<CarriedNotices>, finished: bool) {
     }
 }
 
+/// The end of an answer that carried notices: the body's last part, which
+/// resolves only once the caller read everything before it.
+type NoticeTail = Pin<
+    Box<dyn futures::Stream<Item = Result<axum::body::Bytes, std::io::Error>> + Send + 'static>,
+>;
+
+/// Carried notices waiting for the caller to read the answer to its end.
+struct NoticeWatch {
+    notices: CarriedNotices,
+    /// Sent by the body's tail once the caller read everything before it,
+    /// with a way to hold the body's end until the notices are settled;
+    /// dropped unsent when the caller hung up first.
+    read: tokio::sync::oneshot::Receiver<tokio::sync::oneshot::Sender<()>>,
+}
+
+impl NoticeWatch {
+    /// The watch, and the tail to put last in the answer's body.
+    fn new(notices: CarriedNotices) -> (Self, NoticeTail) {
+        let (read_to_end, read) = tokio::sync::oneshot::channel();
+        let tail = futures::stream::once(async move {
+            let (settled, settling) = tokio::sync::oneshot::channel();
+            if read_to_end.send(settled).is_ok() {
+                // The body ends once the notices are settled.
+                let _ = settling.await;
+            }
+        })
+        .filter_map(|()| std::future::ready(None::<Result<axum::body::Bytes, std::io::Error>>));
+        (Self { notices, read }, Box::pin(tail))
+    }
+
+    /// Settle once the caller read the answer to its end: delivered when the
+    /// answer `finished`, given back when it didn't or the caller hung up.
+    async fn settle(self, finished: bool) {
+        let Self { notices, read } = self;
+        match read.await {
+            Ok(settled) => {
+                settle(Some(notices), finished).await;
+                let _ = settled.send(());
+            }
+            Err(_) => settle(Some(notices), false).await,
+        }
+    }
+}
+
 /// Streams `upstream` to the caller while metering it. When the caller hangs
-/// up, keeps reading (for at most [`DRAIN_TIMEOUT`]) so the final usage is
-/// still recorded: an abort must not skip output billing. The carried
-/// notices are settled once the stream ends, before the caller sees its end:
-/// delivered only when the message stopped and no chunk broke.
+/// up, its notices go back at once (it never had the answer), and the rest
+/// is still read (for at most [`DRAIN_TIMEOUT`]) so the final usage is
+/// recorded: an abort must not skip output billing. Otherwise the notices
+/// settle once the caller read the stream to its end: delivered only when
+/// the message stopped and no chunk broke.
 async fn pump(
     mut upstream: UpstreamChunks,
-    mut metering: Option<(UsageMeter, SseUsage)>,
-    notices: Option<CarriedNotices>,
+    mut meter: Option<UsageMeter>,
+    notices: Option<NoticeWatch>,
     caller: tokio::sync::mpsc::Sender<Result<axum::body::Bytes, std::io::Error>>,
 ) {
+    let mut parser = SseUsage::default();
     let mut broke = false;
-    let mut drained = true;
     while let Some(chunk) = upstream.next().await {
         broke |= chunk.is_err();
-        observe(&mut metering, &chunk);
+        observe(&mut meter, &mut parser, &chunk);
         if caller
             .send(chunk.map_err(std::io::Error::other))
             .await
             .is_err()
         {
+            if let Some(NoticeWatch { notices, .. }) = notices {
+                settle(Some(notices), false).await;
+            }
             let drain = async {
                 while let Some(chunk) = upstream.next().await {
-                    broke |= chunk.is_err();
-                    observe(&mut metering, &chunk);
+                    observe(&mut meter, &mut parser, &chunk);
                 }
             };
             if tokio::time::timeout(DRAIN_TIMEOUT, drain).await.is_err() {
-                drained = false;
                 tracing::warn!("anthropic stream outlived its drain after the caller hung up");
             }
-            break;
+            return;
         }
     }
-    let stopped = metering
-        .as_ref()
-        .is_some_and(|(_, parser)| parser.stopped());
-    settle(notices, stopped && drained && !broke).await;
+    // The caller's stream ends here; its tail waits for the notices.
+    drop(caller);
+    if let Some(notices) = notices {
+        notices.settle(parser.stopped() && !broke).await;
+    }
 }
 
 fn observe(
-    metering: &mut Option<(UsageMeter, SseUsage)>,
+    meter: &mut Option<UsageMeter>,
+    parser: &mut SseUsage,
     chunk: &reqwest::Result<axum::body::Bytes>,
 ) {
-    let Some((meter, parser)) = metering.as_mut() else {
-        return;
-    };
     match chunk {
         Ok(bytes) => {
             parser.observe(bytes);
-            meter.usage = parser.usage();
+            if let Some(meter) = meter.as_mut() {
+                meter.usage = parser.usage();
+            }
         }
         Err(error) => {
-            tracing::warn!(parent: &meter.span, error = ?error, "anthropic stream broke");
-            meter
-                .span
-                .record("anthropic_gateway.outcome", "stream_error");
-            meter.span.record("otel.status_code", "ERROR");
+            let span = meter
+                .as_ref()
+                .map_or_else(Span::current, |meter| meter.span.clone());
+            tracing::warn!(parent: &span, error = ?error, "anthropic stream broke");
+            span.record("anthropic_gateway.outcome", "stream_error");
+            span.record("otel.status_code", "ERROR");
         }
     }
 }
