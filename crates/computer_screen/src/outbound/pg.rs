@@ -10,8 +10,8 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::domain::models::{
-    AgentNotice, DriveEnd, DriveId, Driver, EndReason, Lease, NoticeName, OwedThaw, PendingNotice,
-    RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver, ThawSettled,
+    AgentNotice, DriveEnd, DriveId, Driver, EndReason, Lease, NoticeClaim, NoticeName, OwedThaw,
+    PendingNotice, RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver, ThawSettled,
 };
 use crate::domain::ports::{ScreenRepo, TicketHash};
 
@@ -223,8 +223,8 @@ impl ScreenRepo for PgScreenRepo {
     }
 
     #[tracing::instrument(skip_all, fields(screen.session.id = %id), err)]
-    async fn touch_session(&self, id: SessionId) -> Result<(), PgScreenError> {
-        sqlx::query!(
+    async fn touch_session(&self, id: SessionId) -> Result<bool, PgScreenError> {
+        let touched = sqlx::query!(
             r#"
             UPDATE computer_screen_sessions SET seen_at = now()
             WHERE id = $1 AND ended_at IS NULL
@@ -233,7 +233,7 @@ impl ScreenRepo for PgScreenRepo {
         )
         .execute(&self.pool)
         .await?;
-        Ok(())
+        Ok(touched.rows_affected() > 0)
     }
 
     #[tracing::instrument(skip_all, fields(computers = computers.len()), err)]
@@ -305,7 +305,10 @@ impl ScreenRepo for PgScreenRepo {
         // lease row exists yet, two first take-overs race on the insert and
         // the second one's guard sees the first's lease. A driver who hands
         // back between the upsert and the read of who drives leaves the
-        // lease free: the upsert runs again.
+        // lease free: the upsert runs again. The guard and the new lease
+        // read the clock when they run, after any wait on the lease row:
+        // `now()` is the transaction's start, so a lease that lapsed while
+        // this one waited would still count as live.
         let mut attempts = 0;
         let row = loop {
             attempts += 1;
@@ -322,11 +325,11 @@ impl ScreenRepo for PgScreenRepo {
                     driver_name = EXCLUDED.driver_name,
                     agent_user_id = EXCLUDED.agent_user_id,
                     started_at = CASE
-                        WHEN lease.user_id = EXCLUDED.user_id AND lease.expires_at > now() THEN lease.started_at
-                        ELSE now()
+                        WHEN lease.user_id = EXCLUDED.user_id AND lease.expires_at > clock_timestamp() THEN lease.started_at
+                        ELSE clock_timestamp()
                     END,
-                    expires_at = EXCLUDED.expires_at
-                WHERE lease.user_id = EXCLUDED.user_id OR lease.expires_at <= now()
+                    expires_at = clock_timestamp() + make_interval(secs => $7)
+                WHERE lease.user_id = EXCLUDED.user_id OR lease.expires_at <= clock_timestamp()
                 RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at
                 "#,
                 grant.computer_id.as_uuid(),
@@ -437,12 +440,13 @@ impl ScreenRepo for PgScreenRepo {
         ttl: Duration,
     ) -> Result<Option<Lease>, PgScreenError> {
         // A lapsed lease is not revived: it is released by whoever reads it.
+        // The clock is read after any wait on the row, as in `take_over`.
         let row = sqlx::query_as!(
             LeaseRow,
             r#"
             UPDATE computer_screen_driver_leases
-            SET expires_at = now() + make_interval(secs => $3)
-            WHERE computer_id = $1 AND session_id = $2 AND expires_at > now()
+            SET expires_at = clock_timestamp() + make_interval(secs => $3)
+            WHERE computer_id = $1 AND session_id = $2 AND expires_at > clock_timestamp()
             RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at
             "#,
             computer.as_uuid(),
@@ -463,7 +467,32 @@ impl ScreenRepo for PgScreenRepo {
         let mut tx = self.pool.begin().await?;
         let end = DriveEnd::from(&release);
         let (row, note) = match release {
-            Release::HandBack { user_id, note } => {
+            Release::HandBack {
+                user_id,
+                note,
+                drive,
+            } => {
+                // A hand-back for a drive that is no longer the one under
+                // way (its tab missed a newer take-over) ends nothing. The
+                // row is locked so no take-over moves it between the check
+                // and the delete.
+                if let Some(drive) = drive {
+                    let started_at = sqlx::query_scalar!(
+                        r#"
+                        SELECT started_at FROM computer_screen_driver_leases
+                        WHERE computer_id = $1 AND user_id = $2
+                        FOR UPDATE
+                        "#,
+                        computer.as_uuid(),
+                        user_id.as_ref(),
+                    )
+                    .fetch_optional(&mut *tx)
+                    .await?;
+                    let current = started_at.map(|started_at| DriveId::of(computer, started_at));
+                    if current.as_ref() != Some(&drive) {
+                        return Ok(None);
+                    }
+                }
                 let row = sqlx::query_as!(
                     LeaseRow,
                     r#"
@@ -483,7 +512,7 @@ impl ScreenRepo for PgScreenRepo {
                     LeaseRow,
                     r#"
                     DELETE FROM computer_screen_driver_leases
-                    WHERE computer_id = $1 AND expires_at <= now()
+                    WHERE computer_id = $1 AND expires_at <= clock_timestamp()
                     RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at
                     "#,
                     computer.as_uuid(),
@@ -630,7 +659,7 @@ impl ScreenRepo for PgScreenRepo {
                 LIMIT 20
                 FOR UPDATE SKIP LOCKED
             )
-            RETURNING id, payload, created_at
+            RETURNING id, payload, created_at, claimed_until AS "claimed_until!"
             "#,
             agent.as_ref(),
             ttl_seconds(kept),
@@ -642,7 +671,10 @@ impl ScreenRepo for PgScreenRepo {
         rows.into_iter()
             .map(|row| {
                 Ok(PendingNotice {
-                    id: row.id,
+                    claim: NoticeClaim {
+                        id: row.id,
+                        until: row.claimed_until,
+                    },
                     notice: serde_json::from_value(row.payload)?,
                 })
             })
@@ -749,22 +781,32 @@ impl ScreenRepo for PgScreenRepo {
             .transpose()
     }
 
-    #[tracing::instrument(skip_all, fields(notices = ids.len()), err)]
-    async fn unclaim_notices(&self, ids: &[Uuid]) -> Result<(), PgScreenError> {
+    #[tracing::instrument(skip_all, fields(notices = claims.len()), err)]
+    async fn unclaim_notices(&self, claims: &[NoticeClaim]) -> Result<(), PgScreenError> {
+        // Only the claim given back: a later claim of the same notice, made
+        // after this one ran out, has a later `claimed_until` and stays.
+        let ids: Vec<Uuid> = claims.iter().map(|claim| claim.id).collect();
+        let until: Vec<DateTime<Utc>> = claims.iter().map(|claim| claim.until).collect();
         sqlx::query!(
-            "UPDATE computer_screen_agent_notices SET claimed_until = NULL WHERE id = ANY($1)",
-            ids,
+            r#"
+            UPDATE computer_screen_agent_notices notice SET claimed_until = NULL
+            FROM unnest($1::uuid[], $2::timestamptz[]) AS claim(id, until)
+            WHERE notice.id = claim.id AND notice.claimed_until = claim.until
+            "#,
+            &ids,
+            &until,
         )
         .execute(&self.pool)
         .await?;
         Ok(())
     }
 
-    #[tracing::instrument(skip_all, fields(notices = ids.len()), err)]
-    async fn delete_notices(&self, ids: &[Uuid]) -> Result<(), PgScreenError> {
+    #[tracing::instrument(skip_all, fields(notices = claims.len()), err)]
+    async fn delete_notices(&self, claims: &[NoticeClaim]) -> Result<(), PgScreenError> {
+        let ids: Vec<Uuid> = claims.iter().map(|claim| claim.id).collect();
         sqlx::query!(
             "DELETE FROM computer_screen_agent_notices WHERE id = ANY($1)",
-            ids,
+            &ids,
         )
         .execute(&self.pool)
         .await?;

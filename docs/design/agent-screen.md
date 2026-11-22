@@ -56,9 +56,14 @@ guest: Xvnc on 127.0.0.1:5901 (the agent's display :1)
   only ask for Raw, CopyRect and ZRLE (plus pseudo-encodings that carry no
   pixel data); Xvnc doesn't send the primary selection at all.
 - **One driver:** a lease row per computer, taken by a guarded upsert, so two
-  people taking over at once never both drive. Each socket learns whether it is
-  the one driving. The lease lapses two minutes after the driver's last input or
-  when their access is revoked. Every take-over is an audit row, ended by hand
+  people taking over at once never both hold the lease. Each socket learns
+  whether it is the one driving from the lease changes' Postgres
+  notification, and drops input past its lease's expiry on its own clock. A
+  lease that ends early (a hand-back from the driver's other tab, a lost
+  freeze) is seen only once that notification arrives, so until then, a
+  matter of milliseconds normally, the former driver's input can still reach
+  the guest, even after someone else took over. The lease lapses two minutes
+  after the driver's last input or when their access is revoked. Every take-over is an audit row, ended by hand
   back or lapse.
 - **Pausing the agent:** a take-over first freezes the agent's unit
   (`systemctl freeze`, through a root-owned helper on a socket in a directory
@@ -78,11 +83,14 @@ guest: Xvnc on 127.0.0.1:5901 (the agent's display :1)
   gets an advisory file (`~/agent/state/screen-driver`), and the agent's main
   loop (requests its runtime marks `x-macro-agent-loop: main` that offer tools)
   gets a notice on take-over and on hand-back, with the note, each claimed by
-  one request at a time. An agent on its owner's own Claude plan calls
+  one request at a time and kept until the model's answer finished. An
+  agent on its owner's own Claude plan calls
   Anthropic directly, so it never gets the notices; it is still frozen.
 - **Robustness:** sockets are capped per person and per computer, tickets are
   rate limited, a slow viewer can't stall the socket, a sleeping computer is
-  woken first, an open screen keeps the computer from hibernating, and the
+  woken first, an open screen keeps the computer from hibernating (one
+  opened while memory relief is already suspending it sees the computer go
+  off, and opening it again wakes it), and the
   guest's `socat` is ended when its session ends. A socket whose viewer hasn't
   said its tab is visible (a `visibility` message the viewer repeats) or
   driven for 10 minutes, or 2 minutes after its tab was hidden, ends as

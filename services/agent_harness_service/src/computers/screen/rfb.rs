@@ -47,6 +47,11 @@ pub enum GateError {
     /// A pixel format other than 32 bits per pixel, true colour.
     #[error("only 32-bit true-colour pixels are allowed")]
     PixelFormat,
+    /// The drive ended while the guest's clipboard was on its way to the
+    /// driver: the rest of it must not pass, and the viewer already has its
+    /// start, so the stream can't go on.
+    #[error("the drive ended in the middle of a clipboard")]
+    ClipboardCut,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -314,6 +319,8 @@ enum ServerState {
     Body {
         remaining: u64,
         keep: bool,
+        /// Kept only while the viewer drives: a clipboard.
+        while_driving: bool,
         then: AfterBody,
     },
 }
@@ -342,6 +349,8 @@ enum Header {
     /// Pass (or drop) the header, then a body of `body` bytes, then go on.
     Decided {
         keep: bool,
+        /// The body passes only while the viewer drives.
+        while_driving: bool,
         body: u64,
         then: ServerState,
     },
@@ -381,9 +390,13 @@ impl RfbServerFilter {
             if let ServerState::Body {
                 remaining,
                 keep,
+                while_driving,
                 then,
             } = self.state
             {
+                if keep && while_driving && !driving {
+                    return Err(GateError::ClipboardCut);
+                }
                 let available = u64::try_from(input.len()).unwrap_or(u64::MAX);
                 let taken = remaining.min(available);
                 let split = usize::try_from(taken).unwrap_or(input.len());
@@ -396,6 +409,7 @@ impl RfbServerFilter {
                     self.state = ServerState::Body {
                         remaining: remaining - taken,
                         keep,
+                        while_driving,
                         then,
                     };
                     return Ok(forward);
@@ -419,7 +433,12 @@ impl RfbServerFilter {
                         return Ok(forward);
                     }
                 }
-                Header::Decided { keep, body, then } => {
+                Header::Decided {
+                    keep,
+                    while_driving,
+                    body,
+                    then,
+                } => {
                     if keep {
                         forward.extend_from_slice(&self.header);
                     }
@@ -434,6 +453,7 @@ impl RfbServerFilter {
                         ServerState::Body {
                             remaining: body,
                             keep,
+                            while_driving,
                             then: after,
                         }
                     };
@@ -447,6 +467,7 @@ impl RfbServerFilter {
         let header = self.header.as_slice();
         let pass = |body: u64, then: ServerState| Header::Decided {
             keep: true,
+            while_driving: false,
             body,
             then,
         };
@@ -511,6 +532,7 @@ impl RfbServerFilter {
                     None => Header::Needs(8),
                     Some(length) => Header::Decided {
                         keep: driving,
+                        while_driving: true,
                         body: u64::from(
                             i32::from_be_bytes([length[0], length[1], length[2], length[3]])
                                 .unsigned_abs(),

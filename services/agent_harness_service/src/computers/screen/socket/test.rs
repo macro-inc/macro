@@ -401,6 +401,8 @@ mod over_the_wire {
         script: Vec<u8>,
         reauthorize_every: Duration,
         idle: Idle,
+        /// The guest in place of the fake Xvnc.
+        tunnel: Option<Arc<dyn GuestTunnel>>,
     }
 
     impl Default for Options {
@@ -409,6 +411,7 @@ mod over_the_wire {
                 script: Vec::new(),
                 reauthorize_every: Duration::from_millis(100),
                 idle: IDLE,
+                tunnel: None,
             }
         }
     }
@@ -418,6 +421,7 @@ mod over_the_wire {
             script,
             reauthorize_every,
             idle,
+            tunnel,
         } = options;
         let tasks = TaskTracker::new();
         let shutdown = CancellationToken::new();
@@ -450,9 +454,13 @@ mod over_the_wire {
             move |upgrade: WebSocketUpgrade| {
                 let allowed = Arc::clone(&allowed);
                 let lookups_fail = Arc::clone(&lookups_fail);
+                let tunnel: Arc<dyn GuestTunnel> = match &tunnel {
+                    Some(tunnel) => Arc::clone(tunnel),
+                    None => Arc::new(FakeTunnel(Arc::clone(&xvnc))),
+                };
                 let deps = SocketDeps {
                     screens: Arc::clone(&screens),
-                    tunnel: Arc::new(FakeTunnel(Arc::clone(&xvnc))),
+                    tunnel,
                     waker: Arc::new(AwakeComputer),
                     media: Arc::new(VncMedia),
                     viewers: Arc::clone(&viewers),
@@ -557,6 +565,59 @@ mod over_the_wire {
             .unwrap();
         assert_eq!(notices.len(), 2);
         assert_eq!(notices[1].notice.note.as_deref(), Some("signed you in"));
+    }
+
+    /// The next `state` naming a driver, skipping the take-over's own
+    /// lease notifications and states without one.
+    async fn driven_state(client: &mut Client) -> serde_json::Value {
+        loop {
+            let state = control_of(client, "state").await;
+            if !state["driver"].is_null() {
+                return state;
+            }
+        }
+    }
+
+    /// A tab that missed a newer drive of the same person, and hands back
+    /// the drive it knew, ends nothing: the newer drive goes on.
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_stale_tab_cannot_hand_back_a_newer_drive(pool: PgPool) {
+        let rig = rig(pool, grant("alice", Mode::Drive)).await;
+        let mut stale = connect(&rig).await;
+        control_of(&mut stale, "state").await;
+        send(&mut stale, serde_json::json!({ "type": "takeOver" })).await;
+        let first_lease = driven_state(&mut stale).await["leaseId"].clone();
+        rig.screens
+            .hand_back(COMPUTER, grant("alice", Mode::Drive).user_id, None, None)
+            .await
+            .unwrap();
+        let mut newer = connect(&rig).await;
+        control_of(&mut newer, "state").await;
+        send(&mut newer, serde_json::json!({ "type": "takeOver" })).await;
+        let second_lease = driven_state(&mut newer).await["leaseId"].clone();
+        assert_ne!(first_lease, second_lease);
+        // The stale tab has seen the newer drive, so it may hand back.
+        loop {
+            if driven_state(&mut stale).await["leaseId"] == second_lease {
+                break;
+            }
+        }
+
+        send(
+            &mut stale,
+            serde_json::json!({ "type": "handBack", "leaseId": first_lease }),
+        )
+        .await;
+
+        let refused = tokio::time::timeout(Duration::from_secs(5), control_of(&mut stale, "error"))
+            .await
+            .expect("the stale hand-back was taken");
+        assert_eq!(refused["code"], "staleHandBack");
+        let still = rig.screens.lease(COMPUTER).await.unwrap().unwrap();
+        assert_eq!(
+            serde_json::Value::String(still.drive_id().as_str().to_owned()),
+            second_lease
+        );
     }
 
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -797,6 +858,133 @@ mod over_the_wire {
             control_of(&mut client, "ended").await["reason"],
             "accessRevoked"
         );
+    }
+
+    /// A guest that greets and then never reads what the viewer sends.
+    struct DeafGuest;
+
+    impl GuestTunnel for DeafGuest {
+        fn open(
+            &self,
+            _computer: ComputerId,
+            _port: GuestPort,
+        ) -> Pin<Box<dyn Future<Output = Result<GuestStream, TunnelError>> + Send + '_>> {
+            Box::pin(async move {
+                let (harness_end, mut guest_end) = tokio::io::duplex(64);
+                tokio::spawn(async move {
+                    guest_end.write_all(&greeting()).await.unwrap();
+                    // Held open, never read.
+                    std::future::pending::<()>().await;
+                    drop(guest_end);
+                });
+                let (reader, writer) = tokio::io::split(harness_end);
+                let reader: Pin<Box<dyn tokio::io::AsyncRead + Send>> = Box::pin(reader);
+                let writer: Pin<Box<dyn tokio::io::AsyncWrite + Send>> = Box::pin(writer);
+                Ok(tokio::io::join(reader, writer))
+            })
+        }
+    }
+
+    /// A viewer whose bytes fill the media's queue, because the guest stopped
+    /// reading them, never stops the socket's own loop: access is still
+    /// rechecked, well before the guest counts as stuck.
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_full_input_queue_never_stalls_the_socket(pool: PgPool) {
+        let rig = rig_with(
+            pool,
+            grant("alice", Mode::View),
+            Options {
+                tunnel: Some(Arc::new(DeafGuest)),
+                ..Options::default()
+            },
+        )
+        .await;
+        let mut client = connect(&rig).await;
+        control_of(&mut client, "state").await;
+        let mut hello: Vec<u8> = b"RFB 003.008\n".to_vec();
+        hello.extend([1, 1]);
+        client.send(ClientFrame::binary(hello)).await.unwrap();
+        for _ in 0..100 {
+            client
+                .send(ClientFrame::binary(vec![3u8, 1, 0, 0, 0, 0, 0, 10, 0, 10]))
+                .await
+                .unwrap();
+        }
+
+        rig.allowed.store(false, Ordering::SeqCst);
+
+        let ended = tokio::time::timeout(SEND_TIMEOUT / 2, control_of(&mut client, "ended"))
+            .await
+            .expect("the socket's loop waited on the full input queue");
+        assert_eq!(ended["reason"], "accessRevoked");
+    }
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_socket_whose_row_was_ended_as_lost_ends(pool: PgPool) {
+        let rig = rig(pool.clone(), grant("alice", Mode::View)).await;
+        let mut client = connect(&rig).await;
+        control_of(&mut client, "state").await;
+
+        sqlx::query!("UPDATE computer_screen_sessions SET ended_at = now(), end_reason = 'lost'")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let ended = tokio::time::timeout(Duration::from_secs(5), control_of(&mut client, "ended"))
+            .await
+            .expect("the socket kept streaming after its row was ended");
+        assert_eq!(ended["reason"], "error");
+    }
+
+    /// A guest whose display takes 5 s to answer the injector.
+    struct SlowDisplay;
+
+    impl GuestTunnel for SlowDisplay {
+        fn open(
+            &self,
+            _computer: ComputerId,
+            _port: GuestPort,
+        ) -> Pin<Box<dyn Future<Output = Result<GuestStream, TunnelError>> + Send + '_>> {
+            Box::pin(async move {
+                let (harness_end, guest_end) = tokio::io::duplex(1 << 16);
+                let (mut guest_reader, mut guest_writer) = tokio::io::split(guest_end);
+                tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    guest_writer.write_all(&greeting()).await.unwrap();
+                    std::future::pending::<()>().await;
+                    drop(guest_writer);
+                });
+                tokio::spawn(async move {
+                    let mut sink = [0u8; 4096];
+                    while let Ok(read) = guest_reader.read(&mut sink).await {
+                        if read == 0 {
+                            return;
+                        }
+                    }
+                });
+                let (reader, writer) = tokio::io::split(harness_end);
+                let reader: Pin<Box<dyn tokio::io::AsyncRead + Send>> = Box::pin(reader);
+                let writer: Pin<Box<dyn tokio::io::AsyncWrite + Send>> = Box::pin(writer);
+                Ok(tokio::io::join(reader, writer))
+            })
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn typed_input_waits_for_the_injector_only_within_the_drive() {
+        let (_drive, driving) = watch::channel(DrivingUntil(Some(
+            tokio::time::Instant::now() + Duration::from_secs(2),
+        )));
+        let mut injector = None;
+        let key = InputEvent::Key {
+            keysym: 0x61,
+            down: true,
+        };
+
+        let typed = inject(&SlowDisplay, COMPUTER, &mut injector, &key, &driving).await;
+
+        assert!(matches!(typed, Err(Injection::NotDriving)), "{typed:?}");
+        assert!(injector.is_some(), "the connected injector is kept");
     }
 
     /// Idle limits short enough for a test.
@@ -1054,6 +1242,27 @@ async fn a_viewer_that_takes_nothing_for_the_send_timeout_counts_as_gone() {
     tokio::time::timeout(SEND_TIMEOUT * 2, outbox.stalled.cancelled())
         .await
         .expect("a viewer that took nothing was never given up");
+}
+
+/// A viewer that stopped reading, then reads again.
+#[tokio::test(start_paused = true)]
+async fn media_resumes_as_soon_as_a_stalled_viewer_reads_again() {
+    use futures::{SinkExt as _, StreamExt as _};
+
+    let (viewer, mut reads) = futures::channel::mpsc::channel::<Message>(0);
+    let (outbox, _writer) = Outbox::start(viewer.sink_map_err(axum::Error::new));
+    while outbox.has_room_for_media() {
+        outbox
+            .push_media(Message::Binary(axum::body::Bytes::from_static(b"frame")))
+            .unwrap();
+    }
+
+    reads.next().await.unwrap();
+
+    tokio::time::timeout(Duration::from_secs(1), outbox.room.notified())
+        .await
+        .expect("the media branch was never told the outbox has room");
+    assert!(outbox.has_room_for_media());
 }
 
 #[tokio::test(start_paused = true)]

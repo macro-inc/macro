@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE computer_screen_agent_notices\n            SET claimed_until = now() + make_interval(secs => $3)\n            WHERE id IN (\n                SELECT id FROM computer_screen_agent_notices\n                WHERE agent_user_id = $1\n                  AND created_at > now() - make_interval(secs => $2)\n                  AND (claimed_until IS NULL OR claimed_until <= now())\n                ORDER BY created_at, id\n                LIMIT 20\n                FOR UPDATE SKIP LOCKED\n            )\n            RETURNING id, payload, created_at, claimed_until AS \"claimed_until!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "claimed_until!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "61967080afdbf54c4b32f30573924f31800642ae66fce6cf2277562df5468198"
+}

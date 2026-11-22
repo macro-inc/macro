@@ -208,14 +208,25 @@ impl Lease {
     }
 }
 
-/// A notice not yet delivered: acknowledged by its id once the request that
-/// carried it succeeded.
+/// A notice not yet delivered, claimed for one request: acknowledged by its
+/// claim once that request succeeded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingNotice {
-    /// Its row.
-    pub id: Uuid,
+    /// Its row and the claim on it.
+    pub claim: NoticeClaim,
     /// The notice.
     pub notice: AgentNotice,
+}
+
+/// One request's claim on a notice: given back or acknowledged by it, so a
+/// request whose claim ran out never gives back a later request's claim.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NoticeClaim {
+    /// The notice's row.
+    pub id: Uuid,
+    /// When the claim runs out; a later claim of the same notice always
+    /// runs out later.
+    pub until: DateTime<Utc>,
 }
 
 /// What the screen needs to know about a person.
@@ -349,6 +360,9 @@ pub enum Release {
         user_id: MacroUserIdStr<'static>,
         /// The note for the agent.
         note: Option<String>,
+        /// The drive the hand-back is for, when the driver's tab named one:
+        /// a tab that missed a newer drive of theirs never ends it.
+        drive: Option<DriveId>,
     },
     /// Nobody touched it for the idle limit, or its socket closed and the
     /// grace ran out.
@@ -432,6 +446,15 @@ impl DriveId {
     /// Its hex.
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// A drive id a viewer sent back, if it has a drive id's shape.
+    pub fn parse(value: &str) -> Option<Self> {
+        let hex = value.len() == 24
+            && value
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'));
+        hex.then(|| Self(value.to_owned()))
     }
 }
 

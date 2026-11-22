@@ -2,7 +2,9 @@
 //! or drives its screen, or any agent bound to its harness has a session
 //! with work under way (a turn not yet ended, or prompts queued). Asked only
 //! for quiet guests on a host under memory pressure, so a handful of reads
-//! per pass at most.
+//! per pass at most. It is a snapshot: relief takes no lock against a
+//! screen opening between it and the suspend, so a screen opened in that
+//! window sees the computer go off, and opening it again wakes it.
 
 use std::collections::HashSet;
 

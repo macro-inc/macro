@@ -11,9 +11,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    Access, AgentNotPaused, DriveEnd, DriveId, EndReason, Lease, Mode, OwedThaw, PendingNotice,
-    Person, RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver, ThawFailed, ThawSettled,
-    Thawed,
+    Access, AgentNotPaused, DriveEnd, DriveId, EndReason, Lease, Mode, NoticeClaim, OwedThaw,
+    PendingNotice, Person, RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver, ThawFailed,
+    ThawSettled, Thawed,
 };
 
 /// The SHA-256 of a ticket secret: all storage ever sees of it.
@@ -106,8 +106,9 @@ pub trait ScreenRepo: Send + Sync + 'static {
         fresh: Duration,
     ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
 
-    /// Mark an open socket as still there.
-    fn touch_session(&self, id: SessionId) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Mark an open socket as still there; false when its row was ended
+    /// (as lost, by another socket that found it stale).
+    fn touch_session(&self, id: SessionId) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Which of `computers` someone watches (an open socket seen within
     /// `fresh`) or drives (a live lease).
@@ -171,10 +172,18 @@ pub trait ScreenRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<DriveEnd>, Self::Err>> + Send;
 
     /// Forget notices that reached the agent.
-    fn delete_notices(&self, ids: &[Uuid]) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn delete_notices(
+        &self,
+        claims: &[NoticeClaim],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Give claimed notices back: the request carrying them failed.
-    fn unclaim_notices(&self, ids: &[Uuid]) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Give claimed notices back: the request carrying them failed. A
+    /// notice claimed again since, after these claims ran out, keeps its
+    /// new claim.
+    fn unclaim_notices(
+        &self,
+        claims: &[NoticeClaim],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Who may use a harness's screen: the harness's permissions and the

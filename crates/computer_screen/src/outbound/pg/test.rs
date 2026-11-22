@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use super::{PgScreenError, PgScreenRepo};
 use crate::domain::models::{
-    AgentNotice, Driver, EndReason, Mode, NoticeName, Release, ScreenGrant, SessionId, Surface,
-    TakeOver, Transport,
+    AgentNotice, Driver, EndReason, Mode, NoticeClaim, NoticeName, Release, ScreenGrant, SessionId,
+    Surface, TakeOver, Transport,
 };
 use crate::domain::ports::ScreenRepo;
 
@@ -41,8 +41,8 @@ async fn take_notices(
     let pending = repo
         .claim_notices(agent, Duration::from_secs(3600), Duration::from_secs(60))
         .await?;
-    let ids: Vec<Uuid> = pending.iter().map(|pending| pending.id).collect();
-    repo.delete_notices(&ids).await?;
+    let claims: Vec<NoticeClaim> = pending.iter().map(|pending| pending.claim).collect();
+    repo.delete_notices(&claims).await?;
     Ok(pending.into_iter().map(|pending| pending.notice).collect())
 }
 
@@ -126,6 +126,7 @@ async fn one_user_drives_until_hand_back(pool: PgPool) {
             Release::HandBack {
                 user_id: bob.user_id.clone(),
                 note: None,
+                drive: None,
             },
         )
         .await
@@ -137,6 +138,7 @@ async fn one_user_drives_until_hand_back(pool: PgPool) {
             Release::HandBack {
                 user_id: alice.user_id.clone(),
                 note: Some("signed in for you".to_owned()),
+                drive: None,
             },
         )
         .await
@@ -231,6 +233,7 @@ async fn the_same_user_moves_the_lease_to_a_new_tab(pool: PgPool) {
             Release::HandBack {
                 user_id: alice.user_id.clone(),
                 note: Some("from the first tab".to_owned()),
+                drive: None,
             },
         )
         .await
@@ -493,21 +496,64 @@ async fn a_notice_stays_pending_until_it_is_delivered(pool: PgPool) {
         .unwrap();
     assert_eq!(read.len(), 1);
     assert_eq!(read[0].notice.driver_name.as_deref(), Some("Alice"));
-    repo.unclaim_notices(&[read[0].id]).await.unwrap();
+    repo.unclaim_notices(&[read[0].claim]).await.unwrap();
     let again = repo
         .claim_notices(&agent, TWO_MINUTES, TWO_MINUTES)
         .await
         .unwrap();
-    assert_eq!(again, read);
+    assert_eq!(again.len(), 1);
+    assert_eq!(again[0].claim.id, read[0].claim.id);
+    assert_eq!(again[0].notice, read[0].notice);
 
-    repo.delete_notices(&[read[0].id]).await.unwrap();
-    repo.unclaim_notices(&[read[0].id]).await.unwrap();
+    repo.delete_notices(&[again[0].claim]).await.unwrap();
+    repo.unclaim_notices(&[again[0].claim]).await.unwrap();
     assert!(
         repo.claim_notices(&agent, TWO_MINUTES, TWO_MINUTES)
             .await
             .unwrap()
             .is_empty()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_hand_back_for_an_older_drive_ends_nothing(pool: PgPool) {
+    let repo = PgScreenRepo::new(pool);
+    let alice = grant("alice", Mode::Drive);
+    let first = session(&repo, &alice).await;
+    let TakeOver::Taken(older) = repo
+        .take_over(&alice, first, None, TWO_MINUTES)
+        .await
+        .unwrap()
+    else {
+        panic!("alice could not take over");
+    };
+    let hand_back = |drive| Release::HandBack {
+        user_id: alice.user_id.clone(),
+        note: None,
+        drive,
+    };
+    repo.release(COMPUTER, hand_back(None)).await.unwrap();
+    let second = session(&repo, &alice).await;
+    let TakeOver::Taken(newer) = repo
+        .take_over(&alice, second, None, TWO_MINUTES)
+        .await
+        .unwrap()
+    else {
+        panic!("alice could not take over again");
+    };
+
+    let stale = repo
+        .release(COMPUTER, hand_back(Some(older.drive_id())))
+        .await
+        .unwrap();
+
+    assert_eq!(stale, None);
+    assert_eq!(repo.lease(COMPUTER).await.unwrap(), Some(newer.clone()));
+    let current = repo
+        .release(COMPUTER, hand_back(Some(newer.drive_id())))
+        .await
+        .unwrap();
+    assert_eq!(current, Some(newer));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -588,10 +634,10 @@ async fn a_notice_is_claimed_by_one_request_at_a_time(pool: PgPool) {
     let (first, second) = (first.unwrap(), second.unwrap());
 
     assert_eq!(first.len() + second.len(), 1, "{first:?} {second:?}");
-    let claimed: Vec<Uuid> = first
+    let claimed: Vec<NoticeClaim> = first
         .iter()
         .chain(&second)
-        .map(|pending| pending.id)
+        .map(|pending| pending.claim)
         .collect();
     assert!(
         repo.claim_notices(&agent, kept, claim)
@@ -602,7 +648,71 @@ async fn a_notice_is_claimed_by_one_request_at_a_time(pool: PgPool) {
     repo.unclaim_notices(&claimed).await.unwrap();
     let again = repo.claim_notices(&agent, kept, claim).await.unwrap();
     assert_eq!(
-        again.iter().map(|pending| pending.id).collect::<Vec<_>>(),
-        claimed
+        again
+            .iter()
+            .map(|pending| pending.claim.id)
+            .collect::<Vec<_>>(),
+        claimed.iter().map(|claim| claim.id).collect::<Vec<_>>()
     );
+}
+
+/// A request whose claim ran out, and whose notice another request claimed
+/// since, gives back only its own claim: the notice stays with the other.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_lapsed_claim_never_gives_back_a_later_one(pool: PgPool) {
+    let repo = PgScreenRepo::new(pool.clone());
+    let alice = grant("alice", Mode::Drive);
+    let agent = alice.agent_user_id.clone().unwrap();
+    let alice_session = session(&repo, &alice).await;
+    repo.take_over(&alice, alice_session, None, TWO_MINUTES)
+        .await
+        .unwrap();
+    let kept = Duration::from_secs(3600);
+    let first = repo
+        .claim_notices(&agent, kept, Duration::from_secs(60))
+        .await
+        .unwrap();
+    assert_eq!(first.len(), 1);
+    sqlx::query!(
+        "UPDATE computer_screen_agent_notices SET claimed_until = now() - interval '1 second'"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let lapsed = NoticeClaim {
+        until: sqlx::query_scalar!(
+            r#"SELECT claimed_until AS "claimed_until!" FROM computer_screen_agent_notices"#
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        ..first[0].claim
+    };
+    let second = repo
+        .claim_notices(&agent, kept, Duration::from_secs(60))
+        .await
+        .unwrap();
+    assert_eq!(second.len(), 1);
+
+    repo.unclaim_notices(&[lapsed]).await.unwrap();
+
+    assert!(
+        repo.claim_notices(&agent, kept, Duration::from_secs(60))
+            .await
+            .unwrap()
+            .is_empty(),
+        "the second request's claim was given back by the first"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_touch_says_whether_the_socket_is_still_open(pool: PgPool) {
+    let repo = PgScreenRepo::new(pool);
+    let watching = session(&repo, &grant("alice", Mode::View)).await;
+
+    assert!(repo.touch_session(watching).await.unwrap());
+    repo.end_session(watching, EndReason::Lost, 0, 0)
+        .await
+        .unwrap();
+    assert!(!repo.touch_session(watching).await.unwrap());
 }
