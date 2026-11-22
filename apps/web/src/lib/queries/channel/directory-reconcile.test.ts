@@ -1006,7 +1006,8 @@ describe('removing channels the primary shows gone', () => {
     host: ReturnType<typeof reconcileHost>['host'],
     names: string[],
     read: ReadFromPrimary,
-    session: () => string = () => 's1'
+    session: () => string = () => 's1',
+    signal?: AbortSignal
   ) =>
     removeChannelsGoneOnPrimary({
       host,
@@ -1015,8 +1016,10 @@ describe('removing channels the primary shows gone', () => {
       ids: names.map(channelUuid),
       session,
       readFromPrimary: read,
-      signal: undefined,
+      signal,
     });
+
+  const NOTHING = { removed: [], unconfirmed: [] };
 
   it('deletes the ones the primary shows gone, under the session it read them in, and looks once more', async () => {
     const { host } = reconcileHost(['gone', 'kept']);
@@ -1026,9 +1029,10 @@ describe('removing channels the primary shows gone', () => {
       return id === channelUuid('gone') ? 'unreadable' : 'readable';
     });
 
-    const removed = await remove(host, ['gone', 'kept'], read, () => session);
+    const result = await remove(host, ['gone', 'kept'], read, () => session);
 
-    expect(removed.map(channelName)).toEqual(['gone']);
+    expect(result.removed.map(channelName)).toEqual(['gone']);
+    expect(result.unconfirmed).toEqual([]);
     expect(deleted(host)).toEqual(['GraphqlSoupChannel:gone']);
     expect(host.deleteRecords.mock.calls[0]?.[1]).toBe('s1');
     // The look after the delete.
@@ -1040,11 +1044,28 @@ describe('removing channels the primary shows gone', () => {
     expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
   });
 
+  it('owes the look after the delete before it deletes', async () => {
+    const { host } = reconcileHost(['gone']);
+    let owedAtDelete: string[] = [];
+    host.deleteRecords.mockImplementationOnce(async () => {
+      owedAtDelete = pendingChannelRereads('viewer', 'g1');
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
+    });
+
+    await remove(
+      host,
+      ['gone'],
+      vi.fn<ReadFromPrimary>(async () => 'unreadable')
+    );
+
+    expect(owedAtDelete).toEqual([channelUuid('gone')]);
+  });
+
   it('reads nothing for a channel the cache no longer holds', async () => {
     const { host } = reconcileHost([]);
     const read = vi.fn<ReadFromPrimary>(async () => 'unreadable');
 
-    expect(await remove(host, ['gone'], read)).toEqual([]);
+    expect(await remove(host, ['gone'], read)).toEqual(NOTHING);
     expect(read).not.toHaveBeenCalled();
     expect(host.deleteRecords).not.toHaveBeenCalled();
   });
@@ -1056,18 +1077,44 @@ describe('removing channels the primary shows gone', () => {
       return 'unreadable';
     });
 
-    expect(await remove(host, ['gone'], read)).toEqual([]);
+    expect(await remove(host, ['gone'], read)).toEqual(NOTHING);
     expect(host.deleteRecords).not.toHaveBeenCalled();
   });
 
-  it("leaves the lane's owed second looks to the lane", async () => {
+  it('deletes nothing, and owes nothing, once its caller stopped after the second look', async () => {
+    const { host } = reconcileHost(['gone']);
+    const controller = new AbortController();
+    // The second look at the record is the last read before the delete.
+    let looks = 0;
+    const search = host.search;
+    host.search = vi.fn(async (...args: Parameters<typeof search>) => {
+      looks += 1;
+      const found = await search(...args);
+      if (looks === 2) controller.abort(new Error('stopped'));
+      return found;
+    }) as typeof search;
+
+    await expect(
+      remove(
+        host,
+        ['gone'],
+        vi.fn<ReadFromPrimary>(async () => 'unreadable'),
+        () => 's1',
+        controller.signal
+      )
+    ).rejects.toThrow('stopped');
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
+  });
+
+  it("settles its own look and leaves the lane's owed ones to the lane", async () => {
     const { host } = reconcileHost(['gone']);
     addChannelRereads('viewer', 'g1', [channelUuid('owed')]);
     const read = vi.fn<ReadFromPrimary>(async () => 'unreadable');
 
-    expect((await remove(host, ['gone'], read)).map(channelName)).toEqual([
-      'gone',
-    ]);
+    expect(
+      (await remove(host, ['gone'], read)).removed.map(channelName)
+    ).toEqual(['gone']);
     // Only its own channel read, twice; the lane's owed one is untouched.
     expect(read.mock.calls.map(([id]) => channelName(id))).toEqual([
       'gone',
@@ -1078,8 +1125,25 @@ describe('removing channels the primary shows gone', () => {
     ]);
   });
 
-  it('keeps the delete when the look after it fails, and does not throw', async () => {
+  it('keeps a channel owed when the lane owed it again while its look was out', async () => {
     const { host } = reconcileHost(['gone']);
+    let reads = 0;
+    const read = vi.fn<ReadFromPrimary>(async () => {
+      reads += 1;
+      // The lane deletes the same channel while the look is out.
+      if (reads === 2) addChannelRereads('viewer', 'g1', [channelUuid('gone')]);
+      return 'unreadable';
+    });
+
+    await remove(host, ['gone'], read);
+
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([
+      channelUuid('gone'),
+    ]);
+  });
+
+  it("keeps the delete owed when the look after it fails, for the lane's next pass to read", async () => {
+    const { cache, host } = reconcileHost(['gone']);
     let reads = 0;
     const read = vi.fn<ReadFromPrimary>(async () => {
       reads += 1;
@@ -1087,27 +1151,47 @@ describe('removing channels the primary shows gone', () => {
       return 'unreadable';
     });
 
-    expect((await remove(host, ['gone'], read)).map(channelName)).toEqual([
-      'gone',
-    ]);
+    const result = await remove(host, ['gone'], read);
+    expect(result.removed.map(channelName)).toEqual(['gone']);
+    expect(result.unconfirmed.map(channelName)).toEqual(['gone']);
     expect(deleted(host)).toEqual(['GraphqlSoupChannel:gone']);
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([
+      channelUuid('gone'),
+    ]);
+
+    // The viewer was let back in; the lane's next pass, from any tab, reads
+    // what is still owed though nothing it lists names it.
+    cache.records.delete(`GraphqlSoupChannel:${channelUuid('gone')}`);
+    const lane = primary(cache, () => ['gone']);
+    const fetchPage = await fetcher(
+      host,
+      server([{ nextCursor: null, entityIds: [] }]),
+      undefined,
+      lane
+    );
+    await fetchPage(FIRST);
+
+    expect(askedPrimary(lane)).toContain('gone');
+    expect(cache.records.has(`GraphqlSoupChannel:${channelUuid('gone')}`)).toBe(
+      true
+    );
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
   });
 
-  it('works without browser storage', async () => {
+  it('deletes nothing when storage refuses the look it owes', async () => {
     const { host } = reconcileHost(['gone']);
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('full', 'QuotaExceededError');
     });
 
     expect(
-      (
-        await remove(
-          host,
-          ['gone'],
-          vi.fn<ReadFromPrimary>(async () => 'unreadable')
-        )
-      ).map(channelName)
-    ).toEqual(['gone']);
+      await remove(
+        host,
+        ['gone'],
+        vi.fn<ReadFromPrimary>(async () => 'unreadable')
+      )
+    ).toEqual(NOTHING);
+    expect(host.deleteRecords).not.toHaveBeenCalled();
   });
 
   it('deletes nothing once the storage generation changed', async () => {
@@ -1117,7 +1201,7 @@ describe('removing channels the primary shows gone', () => {
       return 'unreadable';
     });
 
-    expect(await remove(host, ['gone'], read)).toEqual([]);
+    expect(await remove(host, ['gone'], read)).toEqual(NOTHING);
     expect(host.deleteRecords).not.toHaveBeenCalled();
   });
 

@@ -32,7 +32,7 @@ import {
 } from './directory-cache';
 import {
   addChannelRereads,
-  pendingChannelRereads,
+  owedChannelRereads,
   settleChannelRereads,
 } from './directory-rereads';
 
@@ -291,16 +291,17 @@ async function settleRereads(
   input: RereadInput,
   trace: TraceContext
 ): Promise<number> {
-  const owed = pendingChannelRereads(input.userId, input.generation);
-  if (owed.length === 0) return 0;
+  const owed = owedChannelRereads(input.userId, input.generation);
+  const ids = Object.keys(owed);
+  if (ids.length === 0) return 0;
   const gone = await unreadableOnPrimary(
-    owed,
+    ids,
     input.readFromPrimary,
     input.signal,
     trace
   );
   settleChannelRereads(input.userId, input.generation, owed);
-  return owed.filter((id) => !gone.has(id)).length;
+  return ids.filter((id) => !gone.has(id)).length;
 }
 
 /** `settleRereads` in its own span, for a fetcher outside reconciliation. */
@@ -424,7 +425,9 @@ async function removeUnreadableChannels(
         // them again. Storage that refuses them would leave a channel the
         // viewer was added back to deleted for good, so the pass stops
         // unproven and the directory reads the network instead.
-        if (!addChannelRereads(input.userId, input.generation, batch))
+        if (
+          addChannelRereads(input.userId, input.generation, batch) === undefined
+        )
           return finish('unsaved');
         await span.run(() => input.host.deleteRecords(keys, session));
       }
@@ -448,27 +451,45 @@ export type RemoveGoneInput = {
   signal: AbortSignal | undefined;
 };
 
+export type RemoveGoneResult = {
+  /** Channels whose cached records were deleted. */
+  removed: string[];
+  /** Deleted channels the read after the delete did not reach: still owed
+   * in the journal, so the lane's next pass reads them, and worth reading
+   * again sooner by whoever asked. */
+  unconfirmed: string[];
+};
+
 /**
  * Deletes the cached records of `ids` the primary shows the viewer can no
- * longer read, with the checks reconciliation makes: the record the read
- * decided on is the one deleted (a record rewritten since is kept), only for
- * the viewer and storage generation it was read for, and each deleted
- * channel is read on the primary once more after the delete, which writes
- * back one the viewer can read again. Returns the ids deleted. A failed read
- * before the delete throws; one after it leaves the lane's next pass to
- * restore the channel.
+ * longer read, with the checks reconciliation makes: only for the viewer and
+ * storage generation it was read for, and not for a record rewritten between
+ * the two looks at it. The cache has no compare-and-delete, so a write that
+ * lands after the second look is deleted too; each deleted channel is
+ * therefore owed in the rereads journal before the delete and read on the
+ * primary once more after it, which writes back one the viewer can read
+ * again. A read that succeeds settles only the entries this call owed; one
+ * that fails leaves them for the lane's next pass, which reads whatever the
+ * journal still owes. Storage that refuses the journal entry means nothing
+ * would read them again, so nothing is deleted. A failed read before the
+ * delete throws.
  */
 export async function removeChannelsGoneOnPrimary(
   input: RemoveGoneInput
-): Promise<string[]> {
+): Promise<RemoveGoneResult> {
   const read = input.readFromPrimary ?? readChannelOnPrimary;
   const sessionOf = input.session ?? cacheSessionGeneration.capture;
   return Telemetry.span('channel_directory.remove_gone', async (span) => {
     span.setAttr('channel_directory.candidates', input.ids.length);
-    const finish = (removed: readonly string[], outcome: string) => {
+    const finish = (
+      removed: readonly string[],
+      outcome: string,
+      unconfirmed: readonly string[] = []
+    ): RemoveGoneResult => {
       span.setAttr('channel_directory.removed', removed.length);
+      span.setAttr('channel_directory.unconfirmed', unconfirmed.length);
       span.setAttr('channel_directory.remove_gone_outcome', outcome);
-      return [...removed];
+      return { removed: [...removed], unconfirmed: [...unconfirmed] };
     };
     // Taken before the evidence, so the cache refuses the delete once the
     // session it was read in has ended.
@@ -488,15 +509,16 @@ export async function removeChannelsGoneOnPrimary(
     );
     const stale = decided.filter((id) => after.get(id) === before.get(id));
     if (stale.length === 0) return finish([], 'rewritten');
+    // Nothing is written for a caller that has stopped.
+    input.signal?.throwIfAborted();
+    const owed = addChannelRereads(input.userId, input.generation, stale);
+    if (owed === undefined) return finish([], 'unsaved');
     await span.run(() =>
       input.host.deleteRecords(
         stale.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`),
         session
       )
     );
-    // Read once more, which writes back one the viewer was let into between
-    // the check and the delete. Kept in memory: the lane's journal is the
-    // lane's, and its next pass lists any channel this read misses.
     try {
       const still = await unreadableOnPrimary(stale, read, input.signal, span);
       span.setAttr(
@@ -505,8 +527,9 @@ export async function removeChannelsGoneOnPrimary(
       );
     } catch (error) {
       if (input.signal?.aborted) throw error;
-      return finish(stale, 'removed_unconfirmed');
+      return finish(stale, 'removed_unconfirmed', stale);
     }
+    settleChannelRereads(input.userId, input.generation, owed);
     return finish(stale, 'removed');
   });
 }
