@@ -1,94 +1,100 @@
 import type {
-  AgentToolPermissions,
   PermissionAction,
-  ToolPermissionAction,
   ToolPermissionCatalog,
   ToolPermissionCatalogGroup,
   ToolPermissionCatalogTool,
-  ToolPermissionChange,
-  ToolPermissionGroup,
-  ToolPermissionRule,
   ToolPermissionState,
-  ToolPermissionTarget,
 } from '@service-agent-harness/generated/schemas';
+import type {
+  PermissionChange,
+  PermissionGroup,
+  PermissionPair,
+  PermissionRule,
+  PermissionsView,
+  PermissionTarget,
+} from '../queries/permissions-view';
 
 /**
- * The permissions page's pure logic. The server resolves every state; the only
- * resolution done here is a tool's state inside its group's custom view: its
- * override when it has one, else its action's state.
- *
- * Only targets some tool maps to are shown or counted: a group's action with
- * no tool, and a group with none, can't change what the agent does. The view
- * leaves them out; a rule saved on one stays in `rules` and applies once a
- * tool maps there.
+ * The permissions' pure logic. The server resolves every state; this only
+ * picks out what the settings show (visible pairs, exceptions, counts) and
+ * builds the changes they send.
  */
 
+/** Actions in display order: Read, Create, Edit, Send, Delete. */
 export const ACTION_ORDER: readonly PermissionAction[] = [
-  'create',
   'read',
+  'create',
   'update',
-  'destroy',
   'send',
+  'destroy',
 ];
 
 /** A tool, as the catalog and the overrides both name it. */
 export type ToolRef = { service: string; operation: string };
 
+/** A row to open, scroll to and focus, e.g. from a link in chat. */
+export type PermissionFocus = {
+  group: string;
+  action?: PermissionAction;
+  tool?: ToolRef;
+};
+
 /** A stable string for a target, for pending state and lookups. */
-export function targetKey(target: ToolPermissionTarget): string {
+export function targetKey(target: PermissionTarget): string {
   if (target.kind === 'tool')
     return `tool:${target.service}.${target.operation}`;
   if (target.kind === 'action') return `action:${target.action}`;
   return `group_action:${target.group}.${target.action}`;
 }
 
-export function toolTarget(tool: ToolRef): ToolPermissionTarget {
+export function toolTarget(tool: ToolRef): PermissionTarget {
   return { kind: 'tool', service: tool.service, operation: tool.operation };
 }
 
 export function groupActionTarget(
   group: string,
   action: PermissionAction
-): ToolPermissionTarget {
+): PermissionTarget {
   return { kind: 'group_action', group, action };
+}
+
+export function actionTarget(action: PermissionAction): PermissionTarget {
+  return { kind: 'action', action };
 }
 
 function sameTool(a: ToolRef, b: ToolRef): boolean {
   return a.service === b.service && a.operation === b.operation;
 }
 
-/** The tool's override in its action, when its state differs from the action's. */
-export function toolOverride(action: ToolPermissionAction, tool: ToolRef) {
-  return action.overrides.find((override) => sameTool(override, tool));
+export function toolKey(tool: ToolRef): string {
+  return `${tool.service}.${tool.operation}`;
 }
 
-/** A tool's state in its group's custom view. */
-export function toolState(
-  action: ToolPermissionAction,
-  tool: ToolRef
-): ToolPermissionState {
-  return toolOverride(action, tool)?.state ?? action.state;
+/** The tool's override in its action, when its state differs from the action's. */
+export function toolOverride(action: PermissionPair, tool: ToolRef) {
+  return action.overrides.find((override) => sameTool(override, tool));
 }
 
 /** The saved rule for a target, if there is one. */
 export function ruleFor(
-  rules: readonly ToolPermissionRule[],
-  target: ToolPermissionTarget
-): ToolPermissionRule | undefined {
+  rules: readonly PermissionRule[],
+  target: PermissionTarget
+): PermissionRule | undefined {
   const key = targetKey(target);
   return rules.find((rule) => targetKey(rule.target) === key);
 }
 
 /**
  * The change that sets a tool to `state`, given the state its action is
- * saved in (once the action's own change, if any, has saved). Setting it to that state
- * clears its own rule (`null`), so a saved tool rule always means "differs".
+ * saved in (once the action's own change, if any, has saved). Setting it to
+ * that state clears its own rule (`null`), so a saved tool rule always means
+ * "differs".
  */
 export function changeForTool(
   actionState: ToolPermissionState,
   tool: ToolRef,
   state: ToolPermissionState
-): ToolPermissionChange {
+): PermissionChange {
   return {
     target: toolTarget(tool),
     state: state === actionState ? null : state,
@@ -96,20 +102,44 @@ export function changeForTool(
 }
 
 /**
- * The change that sets a group's action. This page sets no action defaults,
- * so every default is Always allow: choosing it clears the group's rule
- * (`null`, follow the default) rather than saving an explicit Allow
- * exception, which the server would keep.
+ * The change a chat card's control makes to a group's action: setting it to
+ * the action's default follows the default (`null`); any other state saves
+ * an exception. The settings' own exception menus keep an explicit choice
+ * instead (`changeForException`).
  */
 export function changeForAction(
   group: string,
   action: PermissionAction,
-  state: ToolPermissionState
-): ToolPermissionChange {
+  state: ToolPermissionState,
+  defaultState: ToolPermissionState
+): PermissionChange {
   return {
     target: groupActionTarget(group, action),
-    state: state === 'always' ? null : state,
+    state: state === defaultState ? null : state,
   };
+}
+
+/** The view's permissions for one group, if the view lists it. */
+export function groupPermissions(
+  view: PermissionsView,
+  group: string
+): PermissionGroup | undefined {
+  return view.groups.find((entry) => entry.group === group);
+}
+
+export function actionPermission(
+  group: PermissionGroup | undefined,
+  action: PermissionAction
+): PermissionPair | undefined {
+  return group?.actions.find((entry) => entry.action === action);
+}
+
+/** The catalog's tools for one action of a group, in catalog order. */
+function actionTools(
+  catalogGroup: ToolPermissionCatalogGroup,
+  action: PermissionAction
+): ToolPermissionCatalogTool[] {
+  return catalogGroup.tools.filter((tool) => tool.action === action);
 }
 
 /** Whether the group has a tool for `action`. */
@@ -127,258 +157,185 @@ export function visibleActions(
   return ACTION_ORDER.filter((action) => hasTools(catalogGroup, action));
 }
 
-/** The groups with any tool, in catalog order. */
-export function visibleGroups(
-  catalog: ToolPermissionCatalog
-): ToolPermissionCatalogGroup[] {
-  return catalog.groups.filter((group) => group.tools.length > 0);
+// Action defaults and entity exceptions. A pair (entity type × action) is
+// visible when at least one catalog tool maps to it; rules on hidden pairs
+// stay saved and enforced but are never shown or counted.
+
+export type EntityPair = { group: string; action: PermissionAction };
+
+/** Every (entity, action) pair with at least one tool, in catalog then display order. */
+export function visiblePairs(catalog: ToolPermissionCatalog): EntityPair[] {
+  return catalog.groups.flatMap((group) =>
+    visibleActions(group).map((action) => ({ group: group.id, action }))
+  );
 }
 
-/** Whether the page shows `target`: an action's default, a group's action some tool has, or a tool in the catalog. */
-export function isVisibleTarget(
+/** The entities (catalog groups) that have tools for `action`, in catalog order. */
+export function entitiesFor(
   catalog: ToolPermissionCatalog,
-  target: ToolPermissionTarget
+  action: PermissionAction
+): ToolPermissionCatalogGroup[] {
+  return catalog.groups.filter((group) => hasTools(group, action));
+}
+
+/** The action's default; no saved default is Allow. */
+export function defaultFor(
+  view: PermissionsView,
+  action: PermissionAction
+): ToolPermissionState {
+  return (
+    view.defaults.find((entry) => entry.action === action)?.state ?? 'always'
+  );
+}
+
+export type Exception = {
+  group: ToolPermissionCatalogGroup;
+  state: ToolPermissionState;
+};
+
+/** A control's state while its change saves, if one is saving. */
+export type PendingLookup = (
+  target: PermissionTarget
+) => ToolPermissionState | undefined;
+
+const NOTHING_PENDING: PendingLookup = () => undefined;
+
+/**
+ * The action's visible exceptions, in catalog order: the saved ones, and
+ * ones being added, each in the state it shows (`pending` while saving).
+ */
+export function exceptionsFor(
+  catalog: ToolPermissionCatalog,
+  view: PermissionsView,
+  action: PermissionAction,
+  pending: PendingLookup = NOTHING_PENDING
+): Exception[] {
+  return entitiesFor(catalog, action).flatMap((group) => {
+    const saving = pending(groupActionTarget(group.id, action));
+    if (saving !== undefined) return [{ group, state: saving }];
+    const pair = actionPermission(groupPermissions(view, group.id), action);
+    if (!pair?.exception) return [];
+    return [{ group, state: pair.state }];
+  });
+}
+
+/** How many entities with tools for `action` follow its default. */
+export function followingCount(
+  catalog: ToolPermissionCatalog,
+  action: PermissionAction,
+  exceptions: readonly Exception[]
+): number {
+  return entitiesFor(catalog, action).length - exceptions.length;
+}
+
+/** The entities an exception can be added for: tools for the action, no exception yet. */
+export function addableEntities(
+  catalog: ToolPermissionCatalog,
+  action: PermissionAction,
+  exceptions: readonly Exception[]
+): ToolPermissionCatalogGroup[] {
+  const taken = exceptions.map((entry) => entry.group.id);
+  return entitiesFor(catalog, action).filter(
+    (group) => !taken.includes(group.id)
+  );
+}
+
+export type ToolSetting = {
+  tool: ToolPermissionCatalogTool;
+  group: ToolPermissionCatalogGroup;
+  rule: PermissionRule;
+};
+
+/** Saved rules on individual tools of `action`, for catalog tools only. */
+export function toolSettingsFor(
+  catalog: ToolPermissionCatalog,
+  view: PermissionsView,
+  action: PermissionAction
+): ToolSetting[] {
+  return catalog.groups.flatMap((group) =>
+    actionTools(group, action).flatMap((tool) => {
+      const rule = ruleFor(view.rules, toolTarget(tool));
+      return rule ? [{ tool, group, rule }] : [];
+    })
+  );
+}
+
+/** Sets an action's default. Allow clears it, since no default is Allow. */
+export function changeForDefault(
+  action: PermissionAction,
+  state: ToolPermissionState
+): PermissionChange {
+  return {
+    target: actionTarget(action),
+    state: state === 'always' ? null : state,
+  };
+}
+
+/**
+ * Sets an entity's exception for an action; `null` removes it, so the
+ * entity follows the default. An exception equal to the default is kept.
+ */
+export function changeForException(
+  group: string,
+  action: PermissionAction,
+  state: ToolPermissionState | null
+): PermissionChange {
+  return { target: groupActionTarget(group, action), state };
+}
+
+/**
+ * The states an exception's menu offers: every state but the default, plus
+ * the row's own state when it equals the default (an explicit choice is
+ * kept).
+ */
+export function exceptionStates(
+  defaultState: ToolPermissionState,
+  current?: ToolPermissionState
+): ToolPermissionState[] {
+  const states: readonly ToolPermissionState[] = ['always', 'ask', 'never'];
+  return states.filter((state) => state !== defaultState || state === current);
+}
+
+/** Whether a rule is shown: defaults always, an exception on a visible pair, a tool in the catalog. */
+function ruleVisible(
+  catalog: ToolPermissionCatalog,
+  rule: PermissionRule
 ): boolean {
+  const target = rule.target;
   if (target.kind === 'action') return true;
   if (target.kind === 'group_action') {
-    const group = catalog.groups.find((entry) => entry.id === target.group);
-    return group !== undefined && hasTools(group, target.action);
+    return entitiesFor(catalog, target.action).some(
+      (group) => group.id === target.group
+    );
   }
   return catalog.groups.some((group) =>
     group.tools.some((tool) => sameTool(tool, target))
   );
 }
 
-/** The view's permissions for one group, if the view lists it. */
-export function groupPermissions(
-  view: AgentToolPermissions,
-  group: string
-): ToolPermissionGroup | undefined {
-  return view.groups.find((entry) => entry.group === group);
-}
-
-export function actionPermission(
-  group: ToolPermissionGroup | undefined,
-  action: PermissionAction
-): ToolPermissionAction | undefined {
-  return group?.actions.find((entry) => entry.action === action);
-}
-
-export type GroupSummary = {
-  toolCount: number;
-  /**
-   * The state every action the group has tools for is in, when they all
-   * agree ("Asks for everything").
-   */
-  everything?: ToolPermissionState;
-  asks: PermissionAction[];
-  nevers: PermissionAction[];
-  /** Tools in the group with their own saved rule. */
-  customTools: number;
-  /** Any rule in the group the agent set on itself. */
-  byAgent: boolean;
-  /** Any action limited for the current session only. */
-  sessionLimited: boolean;
-};
-
-function ruleGroup(
-  rule: ToolPermissionRule,
-  catalogGroup: ToolPermissionCatalogGroup
-): boolean {
-  const target = rule.target;
-  if (target.kind === 'action') return false;
-  if (target.kind === 'group_action')
-    return (
-      target.group === catalogGroup.id && hasTools(catalogGroup, target.action)
-    );
-  return catalogGroup.tools.some((tool) => sameTool(tool, target));
-}
-
-/** What a collapsed group row says about the group. */
-export function groupSummary(
-  catalogGroup: ToolPermissionCatalogGroup,
-  group: ToolPermissionGroup | undefined,
-  rules: readonly ToolPermissionRule[]
-): GroupSummary {
-  // Only the actions the group has tools for: an action with none can't
-  // make the agent do anything.
-  const actions = visibleActions(catalogGroup).flatMap((action) => {
-    const permission = actionPermission(group, action);
-    return permission ? [permission] : [];
-  });
-  const groupRules = rules.filter((rule) => ruleGroup(rule, catalogGroup));
-  const states = new Set(actions.map((permission) => permission.state));
-  const [agreed] = states;
-
-  return {
-    toolCount: catalogGroup.tools.length,
-    ...(states.size === 1 && agreed ? { everything: agreed } : {}),
-    asks: actions
-      .filter((permission) => permission.state === 'ask')
-      .map((permission) => permission.action),
-    nevers: actions
-      .filter((permission) => permission.state === 'never')
-      .map((permission) => permission.action),
-    customTools: groupRules.filter((rule) => rule.target.kind === 'tool')
-      .length,
-    byAgent: groupRules.some((rule) => rule.viaAgent),
-    sessionLimited: actions.some(
-      (permission) =>
-        permission.origin === 'session' ||
-        permission.overrides.some((override) => override.origin === 'session')
-    ),
-  };
-}
-
-/**
- * Saved settings the page shows. Reset clears every saved setting, the
- * hidden ones too, so whether there is anything to reset is `saved`.
- */
+/** Visible saved settings, for the "N settings changed" line. */
 export function settingCounts(
   catalog: ToolPermissionCatalog,
-  rules: readonly ToolPermissionRule[]
+  rules: readonly PermissionRule[]
 ) {
-  const shown = rules.filter((rule) => isVisibleTarget(catalog, rule.target));
+  const visible = rules.filter((rule) => ruleVisible(catalog, rule));
   return {
-    /** Every saved setting, including ones on targets no tool has. */
-    saved: rules.length,
-    total: shown.length,
+    total: visible.length,
     /** Set by a person, not by the agent restricting itself. */
-    byPerson: shown.filter((rule) => !rule.viaAgent).length,
-    byAgent: shown.filter((rule) => rule.viaAgent).length,
-    tools: shown.filter((rule) => rule.target.kind === 'tool').length,
-    /** What Reset clears, hidden settings included. */
-    reset: {
-      byAgent: rules.filter((rule) => rule.viaAgent).length,
-      tools: rules.filter((rule) => rule.target.kind === 'tool').length,
-    },
+    byPerson: visible.filter((rule) => !rule.viaAgent).length,
+    byAgent: visible.filter((rule) => rule.viaAgent).length,
   };
 }
 
-/** One group-and-action that isn't Always allow, for the editor's summary. */
-export type Restriction = {
-  group: string;
-  action: PermissionAction;
-  state: Exclude<ToolPermissionState, 'always'>;
-};
-
-/** Every restricted group action, in catalog then action order. */
-export function restrictions(
+/** The action a focus points at: its own, or its tool's. */
+export function focusedAction(
   catalog: ToolPermissionCatalog,
-  view: AgentToolPermissions
-): Restriction[] {
-  return catalog.groups.flatMap((catalogGroup) => {
-    const group = groupPermissions(view, catalogGroup.id);
-    return visibleActions(catalogGroup).flatMap((action): Restriction[] => {
-      const state = actionPermission(group, action)?.state;
-      if (state === undefined || state === 'always') return [];
-      return [{ group: catalogGroup.id, action, state }];
-    });
-  });
-}
-
-/**
- * Restricted group actions plus individual tools restricted on their own,
- * over the actions some tool has.
- */
-export function restrictionCount(view: AgentToolPermissions): number {
-  return view.groups.reduce(
-    (count, group) =>
-      count +
-      group.actions.reduce(
-        (actionCount, action) =>
-          action.tools === 0
-            ? actionCount
-            : actionCount +
-              (action.state === 'always' ? 0 : 1) +
-              // A tool allowed under a stricter action loosens, not restricts.
-              action.overrides.filter((override) => override.state !== 'always')
-                .length,
-        0
-      ),
-    0
-  );
-}
-
-/** The catalog's tools for one action of a group, in catalog order. */
-export function actionTools(
-  catalogGroup: ToolPermissionCatalogGroup,
-  action: PermissionAction
-): ToolPermissionCatalogTool[] {
-  return catalogGroup.tools.filter((tool) => tool.action === action);
-}
-
-export function toolKey(tool: ToolRef): string {
-  return `${tool.service}.${tool.operation}`;
-}
-
-/** What a search shows of one group. */
-export type GroupMatch = {
-  /** The group's name matched: show it whole. */
-  all: boolean;
-  actions: PermissionAction[];
-  /** `toolKey`s of matching tools. */
-  tools: string[];
-};
-
-export type PermissionSearch = {
-  groups: Record<string, GroupMatch>;
-  groupCount: number;
-  toolCount: number;
-};
-
-/**
- * Case-insensitive substring search over group names, action names, tool
- * labels and `service.operation`. Only matching groups are listed. A group
- * whose name matched shows everything; otherwise it shows the matching
- * actions and tools.
- */
-export function searchPermissions(
-  catalog: ToolPermissionCatalog,
-  query: string
-): PermissionSearch {
-  const needle = query.trim().toLocaleLowerCase();
-  const matches = (text: string) => text.toLocaleLowerCase().includes(needle);
-  const actionNames = new Map(
-    catalog.actions.map((action) => [action.action, action.name])
-  );
-
-  const groups: Record<string, GroupMatch> = {};
-  let toolCount = 0;
-
-  for (const group of visibleGroups(catalog)) {
-    if (matches(group.name)) {
-      groups[group.id] = { all: true, actions: [], tools: [] };
-      toolCount += group.tools.length;
-      continue;
-    }
-
-    // An action name ("Send") matches only where the group has tools for
-    // it, or every group would match every action.
-    const actions = ACTION_ORDER.filter(
-      (action) =>
-        matches(actionNames.get(action) ?? action) && hasTools(group, action)
-    );
-    const tools = group.tools
-      .filter((tool) => matches(tool.label) || matches(toolKey(tool)))
-      .map(toolKey);
-    if (actions.length === 0 && tools.length === 0) continue;
-
-    groups[group.id] = { all: false, actions, tools };
-    toolCount += tools.length;
-  }
-
-  return { groups, groupCount: Object.keys(groups).length, toolCount };
-}
-
-/** Where `query` occurs in `text`, for highlighting. */
-export function matchRange(
-  text: string,
-  query: string
-): { start: number; end: number } | undefined {
-  const needle = query.trim().toLocaleLowerCase();
-  if (!needle) return undefined;
-  const start = text.toLocaleLowerCase().indexOf(needle);
-  if (start < 0) return undefined;
-  return { start, end: start + needle.length };
+  focus: PermissionFocus
+): PermissionAction | undefined {
+  if (focus.action) return focus.action;
+  const tool = focus.tool;
+  if (!tool) return undefined;
+  return catalog.groups
+    .flatMap((group) => group.tools)
+    .find((candidate) => sameTool(candidate, tool))?.action;
 }

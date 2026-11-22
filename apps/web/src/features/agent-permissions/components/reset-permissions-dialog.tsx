@@ -2,11 +2,15 @@ import { t } from '@app/lib/i18n';
 import { ConfirmDialog } from '@ui';
 import { Show } from 'solid-js';
 
-/** Confirms putting every saved setting back to Always allow. */
+/**
+ * Confirms putting every saved setting back to Allow, including rules on
+ * actions no tool uses yet.
+ */
 export function ResetPermissionsDialog(props: {
   open: boolean;
   agent: string;
-  counts: { byAgent: number; tools: number };
+  /** Settings the agent made restricting itself. */
+  byAgent: number;
   pending: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
@@ -24,17 +28,11 @@ export function ResetPermissionsDialog(props: {
       body={
         <p>
           {t('agentPermissions.resetBody')}
-          <Show when={props.counts.byAgent > 0}>
+          <Show when={props.byAgent > 0}>
             {' '}
             {t('agentPermissions.resetBodyAgent', {
-              count: props.counts.byAgent,
+              count: props.byAgent,
               agent: props.agent,
-            })}
-          </Show>
-          <Show when={props.counts.tools > 0}>
-            {' '}
-            {t('agentPermissions.resetBodyTools', {
-              count: props.counts.tools,
             })}
           </Show>{' '}
           {t('agentPermissions.resetBodyEnd', { agent: props.agent })}

@@ -1,0 +1,218 @@
+import { t } from '@app/lib/i18n';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import type {
+  PermissionAction,
+  ToolPermissionCatalogGroup,
+  ToolPermissionState,
+} from '@service-agent-harness/generated/schemas';
+import { createSignal, createUniqueId, For, Show } from 'solid-js';
+import type { Exception, ToolSetting } from '../core/model';
+import { EntityPicker } from './entity-picker';
+import { ExceptionRow } from './exception-row';
+import { defaultOptions, PermissionStateMenu } from './permission-state-menu';
+import { ToolSettingsList } from './tool-settings-list';
+
+/**
+ * One action of the Tool permissions table: its name, how many exceptions
+ * and tool settings it has, and its default. Expanded, it lists the
+ * exceptions, the entities following the default, "+ Add exception", and
+ * any saved tool settings.
+ */
+export function ActionAccordion(props: {
+  action: PermissionAction;
+  /** Read, Create, Edit, Send or Delete. */
+  name: string;
+  defaultState: ToolPermissionState;
+  exceptions: Exception[];
+  /** Entities with tools for the action and no exception. */
+  addable: ToolPermissionCatalogGroup[];
+  /** How many entities with tools for the action follow its default. */
+  following: number;
+  toolSettings: ToolSetting[];
+  editable: boolean;
+  open: boolean;
+  onToggle: () => void;
+  onDefault: (state: ToolPermissionState) => void;
+  onException: (group: string, state: ToolPermissionState | null) => void;
+  onRemoveTool: (setting: ToolSetting) => void;
+  removingTool: (setting: ToolSetting) => boolean;
+}) {
+  const panelId = createUniqueId();
+  // An entity picked from "+ Add exception" whose state isn't chosen yet.
+  const [adding, setAdding] = createSignal<ToolPermissionCatalogGroup>();
+
+  const addable = () =>
+    props.addable.filter((group) => group.id !== adding()?.id);
+
+  const pick = (groupId: string) => {
+    setAdding(props.addable.find((group) => group.id === groupId));
+  };
+
+  const chooseNew = (state: ToolPermissionState | null) => {
+    const group = adding();
+    setAdding(undefined);
+    // "Use default" on a new exception just cancels it.
+    if (group && state !== null) props.onException(group.id, state);
+  };
+
+  const followLine = () => {
+    const action = props.name;
+    if (props.following === 0) return undefined;
+    if (props.exceptions.length === 0) {
+      return t('agentPermissions.allFollow', {
+        count: props.following,
+        action,
+      });
+    }
+    return t('agentPermissions.othersFollow', {
+      count: props.following,
+      action,
+    });
+  };
+
+  return (
+    <div class="flex flex-col">
+      <div class="flex min-h-12 items-center gap-3">
+        <button
+          type="button"
+          class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-0.5 self-stretch rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          aria-expanded={props.open}
+          aria-controls={panelId}
+          onClick={() => props.onToggle()}
+        >
+          <CaretRightIcon
+            aria-hidden="true"
+            class="size-3.5 shrink-0 text-ink-muted transition-transform"
+            classList={{ 'rotate-90': props.open }}
+          />
+          <span class="text-sm font-medium text-ink">{props.name}</span>
+          <Show
+            when={props.exceptions.length > 0 || props.toolSettings.length > 0}
+          >
+            <span class="ml-1 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-muted">
+              <Show when={props.exceptions.length > 0}>
+                <span>
+                  {t('agentPermissions.exceptionCount', {
+                    count: props.exceptions.length,
+                  })}
+                </span>
+              </Show>
+              <Show
+                when={
+                  props.exceptions.length > 0 && props.toolSettings.length > 0
+                }
+              >
+                <span aria-hidden="true">·</span>
+              </Show>
+              <Show when={props.toolSettings.length > 0}>
+                <span>
+                  {t('agentPermissions.toolSettingCount', {
+                    count: props.toolSettings.length,
+                  })}
+                </span>
+              </Show>
+            </span>
+          </Show>
+        </button>
+        <PermissionStateMenu
+          label={t('agentPermissions.defaultMenu', { action: props.name })}
+          value={props.defaultState}
+          options={defaultOptions()}
+          disabled={!props.editable}
+          onSelect={(state) => {
+            if (state !== null && state !== props.defaultState) {
+              props.onDefault(state);
+            }
+          }}
+        />
+      </div>
+      <Show when={props.open}>
+        <section
+          id={panelId}
+          aria-label={t('agentPermissions.exceptionsTitle', {
+            action: props.name,
+          })}
+          class="flex flex-col border-t border-edge-muted pt-2.5 pb-3.5 pl-6 @max-md:pl-2"
+        >
+          <div class="flex min-h-8 items-center justify-between gap-2">
+            <h4 class="text-[13px] font-medium text-ink">
+              {t('agentPermissions.exceptionsTitle', { action: props.name })}
+            </h4>
+            <Show when={props.editable}>
+              <EntityPicker
+                label={t('agentPermissions.addExceptionFor', {
+                  action: props.name,
+                })}
+                entities={addable()}
+                onPick={pick}
+              />
+            </Show>
+          </div>
+          <For each={props.exceptions}>
+            {(exception) => (
+              <ExceptionRow
+                group={exception.group.id}
+                name={exception.group.name}
+                label={t('agentPermissions.controlLabel', {
+                  group: exception.group.name,
+                  action: props.name,
+                })}
+                state={exception.state}
+                defaultState={props.defaultState}
+                editable={props.editable}
+                onSelect={(state) => {
+                  if (state !== exception.state) {
+                    props.onException(exception.group.id, state);
+                  }
+                }}
+              />
+            )}
+          </For>
+          <Show when={adding()} keyed>
+            {(group) => (
+              <ExceptionRow
+                group={group.id}
+                name={group.name}
+                label={t('agentPermissions.controlLabel', {
+                  group: group.name,
+                  action: props.name,
+                })}
+                defaultState={props.defaultState}
+                editable={props.editable}
+                open
+                onOpenChange={(open) => {
+                  if (!open) setAdding(undefined);
+                }}
+                onSelect={chooseNew}
+              />
+            )}
+          </Show>
+          <Show when={followLine()}>
+            {(line) => (
+              <p class="mt-1.5 text-[13px] text-ink-muted">{line()}</p>
+            )}
+          </Show>
+          <Show
+            when={
+              props.exceptions.length === 0 &&
+              props.following === 0 &&
+              !adding()
+            }
+          >
+            <p class="mt-1.5 text-[13px] text-ink-muted">
+              {t('agentPermissions.noTools')}
+            </p>
+          </Show>
+          <Show when={props.toolSettings.length > 0}>
+            <ToolSettingsList
+              settings={props.toolSettings}
+              editable={props.editable}
+              removing={props.removingTool}
+              onRemove={props.onRemoveTool}
+            />
+          </Show>
+        </section>
+      </Show>
+    </div>
+  );
+}

@@ -2,7 +2,6 @@ import { t } from '@app/lib/i18n';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import LockIcon from '@icon/system/regular/lock-simple.svg';
-import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui';
 import { type Component, type ComponentProps, type JSX, Show } from 'solid-js';
@@ -75,29 +74,6 @@ export function PermissionsLoadError(props: { onRetry: () => void }) {
         >
           <ArrowCounterClockwiseIcon class="size-3.5 shrink-0 pointer-events-none" />
           {t('agentPermissions.tryAgain')}
-        </Button>
-      }
-    />
-  );
-}
-
-export function PermissionsNoMatch(props: {
-  query: string;
-  onClear: () => void;
-}) {
-  return (
-    <CardMessage
-      icon={MagnifyingGlassIcon}
-      title={t('agentPermissions.noMatch', { query: props.query })}
-      body={t('agentPermissions.noMatchBody')}
-      action={
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => props.onClear()}
-        >
-          {t('agentPermissions.clearSearch')}
         </Button>
       }
     />

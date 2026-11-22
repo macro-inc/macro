@@ -1,8 +1,4 @@
-import type {
-  ToolPermissionChange,
-  ToolPermissionState,
-  ToolPermissionTarget,
-} from '@service-agent-harness/generated/schemas';
+import type { ToolPermissionState } from '@service-agent-harness/generated/schemas';
 import { ResultAsync } from 'neverthrow';
 import { createStore, produce } from 'solid-js/store';
 import {
@@ -11,6 +7,10 @@ import {
   targetKey,
   toolTarget,
 } from '../core/model';
+import type {
+  PermissionChange,
+  PermissionTarget,
+} from '../queries/permissions-view';
 
 /**
  * Saves one change at a time per click and shows each control's chosen
@@ -21,8 +21,8 @@ import {
  */
 export function createPendingChanges(capabilities: {
   /** Persists `change`; rejects when the server refused or was unreachable. */
-  save: (change: ToolPermissionChange) => Promise<unknown>;
-  onFailure: (change: ToolPermissionChange, error: unknown) => void;
+  save: (change: PermissionChange) => Promise<unknown>;
+  onFailure: (change: PermissionChange, error: unknown) => void;
 }) {
   // Keyed by `targetKey`: the state the control should show meanwhile.
   const [pending, setPending] = createStore<
@@ -32,7 +32,7 @@ export function createPendingChanges(capabilities: {
   // click on the same control supersedes an earlier one's cleanup.
   const latest: Record<string, Promise<boolean>> = {};
 
-  const send = async (change: ToolPermissionChange) => {
+  const send = async (change: PermissionChange) => {
     const saved = await ResultAsync.fromPromise(
       capabilities.save(change),
       (error) => error
@@ -41,7 +41,7 @@ export function createPendingChanges(capabilities: {
     return saved.isOk();
   };
 
-  const sendOnceDecided = async (change: Promise<ToolPermissionChange>) =>
+  const sendOnceDecided = async (change: Promise<PermissionChange>) =>
     send(await change);
 
   const settle = (key: string, outcome: Promise<boolean>) => {
@@ -60,9 +60,9 @@ export function createPendingChanges(capabilities: {
    * another is passed as a promise and sent once decided.
    */
   const apply = async (
-    target: ToolPermissionTarget,
+    target: PermissionTarget,
     shown: ToolPermissionState,
-    change: ToolPermissionChange | Promise<ToolPermissionChange>
+    change: PermissionChange | Promise<PermissionChange>
   ) => {
     const key = targetKey(target);
     setPending(key, shown);
@@ -96,7 +96,7 @@ export function createPendingChanges(capabilities: {
      * can't leave the tool following the wrong state.
      */
     setTool(
-      action: ToolPermissionTarget,
+      action: PermissionTarget,
       saved: ToolPermissionState,
       tool: ToolRef,
       state: ToolPermissionState

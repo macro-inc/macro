@@ -1,5 +1,6 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
+import type { ObjectLike } from '@core/util/result';
 import { type ErrorResponseHandler, statusError } from '@core/util/safeFetch';
 import type { TraceContext } from '@macro-inc/observability';
 import type {
@@ -42,7 +43,13 @@ function agentPath(agentId: string) {
   return `${host}/agents/${encodeURIComponent(agentId)}/tool-permissions`;
 }
 
-/** An agent's tool permissions (agent harness, `agent-tool-permissions`). */
+/**
+ * An agent's tool permissions (agent harness, `agent-tool-permissions`).
+ *
+ * The view and change type parameters let the permissions feature read and
+ * send action defaults before this client's generated types have them.
+ * TODO(agent-permissions defaults): drop them once the OpenAPI does.
+ */
 export const toolPermissionsClient = {
   /** Every group, its tools and the five actions, in display order. */
   catalog() {
@@ -53,8 +60,8 @@ export const toolPermissionsClient = {
   },
 
   /** The agent's saved rules and every group action's resolved state. */
-  get(agentId: string) {
-    return fetchWithToken<AgentToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
+  get<View extends ObjectLike = AgentToolPermissions>(agentId: string) {
+    return fetchWithToken<View, typeof TOOL_PERMISSION_REFUSED>(
       agentPath(agentId),
       {
         errorResponseHandler: toolPermissionError,
@@ -67,8 +74,8 @@ export const toolPermissionsClient = {
    * The permissions that apply in an agent session: its agent's, with the
    * agent's limits on itself for this session.
    */
-  session(sessionId: string) {
-    return fetchWithToken<AgentToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
+  session<View extends ObjectLike = AgentToolPermissions>(sessionId: string) {
+    return fetchWithToken<View, typeof TOOL_PERMISSION_REFUSED>(
       `${host}/agent-sessions/${encodeURIComponent(sessionId)}/tool-permissions`,
       {
         errorResponseHandler: toolPermissionError,
@@ -78,12 +85,11 @@ export const toolPermissionsClient = {
   },
 
   /** Applies the changes in order and answers the new view. */
-  set(
-    agentId: string,
-    changes: ToolPermissionChanges,
-    parentSpan?: TraceContext
-  ) {
-    return fetchWithToken<AgentToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
+  set<
+    View extends ObjectLike = AgentToolPermissions,
+    Changes = ToolPermissionChanges,
+  >(agentId: string, changes: Changes, parentSpan?: TraceContext) {
+    return fetchWithToken<View, typeof TOOL_PERMISSION_REFUSED>(
       agentPath(agentId),
       {
         method: 'PUT',
@@ -95,9 +101,12 @@ export const toolPermissionsClient = {
     );
   },
 
-  /** Puts every saved setting back to Always allow. */
-  reset(agentId: string, parentSpan?: TraceContext) {
-    return fetchWithToken<AgentToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
+  /** Puts every saved setting back to Allow. */
+  reset<View extends ObjectLike = AgentToolPermissions>(
+    agentId: string,
+    parentSpan?: TraceContext
+  ) {
+    return fetchWithToken<View, typeof TOOL_PERMISSION_REFUSED>(
       agentPath(agentId),
       {
         method: 'DELETE',

@@ -8,7 +8,6 @@ import LockIcon from '@icon/system/regular/lock-simple.svg';
 import ShieldCheckIcon from '@icon/system/regular/shield-check.svg';
 import { queryReadyGate } from '@queries/gate';
 import type {
-  AgentToolPermissions,
   PermissionAction,
   ShowPermissionsSelection,
   ToolPermissionCatalog,
@@ -24,9 +23,11 @@ import {
   PermissionToolRow,
   type ToolRowStatus,
 } from '../components/permission-tool-row';
+import type { PermissionFocus } from '../core/model';
 import {
   actionPermission,
   changeForAction,
+  defaultFor,
   groupActionTarget,
   groupPermissions,
   ruleFor,
@@ -40,7 +41,7 @@ import {
   useSessionToolPermissionsQuery,
   useToolPermissionCatalogQuery,
 } from '../queries/permissions';
-import type { PermissionFocus } from './agent-permissions-list';
+import type { PermissionsView } from '../queries/permissions-view';
 import { useOpenAgentPermissions } from './open-agent-permissions';
 import { usePermissionChanges } from './permission-changes';
 
@@ -51,7 +52,7 @@ type CardData =
   | {
       kind: 'ready';
       catalog: ToolPermissionCatalog;
-      view: AgentToolPermissions;
+      view: PermissionsView;
     };
 
 /**
@@ -225,7 +226,12 @@ export function ShowPermissionsCard(props: {
                                   changes.apply(
                                     groupActionTarget(group, action),
                                     state,
-                                    changeForAction(group, action, state)
+                                    changeForAction(
+                                      group,
+                                      action,
+                                      state,
+                                      defaultFor(loaded().view, action)
+                                    )
                                   ),
                                   'agent-permissions'
                                 )
@@ -288,7 +294,7 @@ export function ShowPermissionsCard(props: {
 function SelectionGroup(props: {
   block: SelectionBlock;
   catalog: ToolPermissionCatalog;
-  view: AgentToolPermissions;
+  view: PermissionsView;
   agentName: string;
   canEdit: boolean;
   pendingState: (key: string) => ToolPermissionState | undefined;

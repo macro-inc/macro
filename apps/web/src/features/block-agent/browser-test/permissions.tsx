@@ -4,10 +4,15 @@
 // permission routes answer from memory. `?viewer=other` shows it to someone
 // who can't edit the agent and isn't the approver; `?theme=light` lights it.
 // The programs are JS tools ones (opencode's JavaScript dialect), with saved
-// records; `?view=page` shows the agent's permissions page instead of the
-// session.
+// records; `?view=page` shows the agent's tool permissions (action defaults
+// and entity exceptions) instead of the session.
 
-import { AgentPermissionsPage } from '@app/features/agent-permissions';
+import { AgentPermissionsPanel } from '@app/features/agent-permissions';
+import type {
+  PermissionChange,
+  PermissionRule,
+  PermissionsWireView,
+} from '@app/features/agent-permissions/queries/permissions-view';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
@@ -19,13 +24,11 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
-  AgentToolPermissions,
   ExecutionPermission,
   ExecutionRecord,
   GatedOperation,
   PermissionAction,
   ToolPermissionCatalog,
-  ToolPermissionChanges,
   ToolPermissionState,
 } from '@service-agent-harness/generated/schemas';
 import { toolPermissionsClient } from '@service-agent-harness/tool-permissions';
@@ -126,11 +129,83 @@ const CATALOG: ToolPermissionCatalog = {
         },
       ],
     },
+    {
+      id: 'tasks',
+      name: 'Tasks',
+      description: 'Tasks',
+      tools: [
+        {
+          service: 'storage',
+          operation: 'list_tasks',
+          action: 'read',
+          label: 'List tasks',
+        },
+      ],
+    },
+    {
+      id: 'calendar',
+      name: 'Calendar',
+      description: 'Calendar',
+      tools: [
+        {
+          service: 'calendar',
+          operation: 'list_events',
+          action: 'read',
+          label: 'List events',
+        },
+      ],
+    },
+    {
+      id: 'channels',
+      name: 'Channels & messages',
+      description: 'Channels & messages',
+      tools: [
+        {
+          service: 'storage',
+          operation: 'get_messages',
+          action: 'read',
+          label: 'Read messages',
+        },
+        {
+          service: 'storage',
+          operation: 'entity_message_create',
+          action: 'send',
+          label: 'Send a message',
+        },
+      ],
+    },
+    {
+      id: 'external_chats',
+      name: 'Outside chats',
+      description: 'Outside chats',
+      tools: [
+        {
+          service: 'external',
+          operation: 'list_chats',
+          action: 'read',
+          label: 'List chats',
+        },
+      ],
+    },
+    {
+      id: 'contacts',
+      name: 'Contacts & CRM',
+      description: 'Contacts & CRM',
+      tools: [
+        {
+          service: 'crm',
+          operation: 'search_contacts',
+          action: 'read',
+          label: 'Search contacts',
+        },
+      ],
+    },
   ],
 };
 
-// Saved group action settings; everything else is Always allow. Documents
-// asks for every action it has tools for, so its summary says so once.
+// Saved entity exceptions; everything else follows its action's default.
+// Documents asks for every action it has tools for, so its summary says so
+// once.
 const saved: Record<string, ToolPermissionState> = {
   'email.send': 'ask',
   'email.destroy': 'never',
@@ -138,7 +213,42 @@ const saved: Record<string, ToolPermissionState> = {
   'documents.destroy': 'ask',
 };
 
-function view(): AgentToolPermissions {
+// Action defaults; none saved is Allow. The settings page (`?view=page`)
+// starts from the designs' defaults and two Read exceptions.
+const defaults: Partial<Record<PermissionAction, ToolPermissionState>> = {};
+if (params.get('view') === 'page') {
+  Object.assign(defaults, {
+    create: 'ask',
+    update: 'ask',
+    send: 'ask',
+    destroy: 'never',
+  });
+  Object.assign(saved, {
+    'contacts.read': 'ask',
+    'external_chats.read': 'never',
+  });
+}
+
+const UPDATED_AT = '2026-11-18T10:00:00Z';
+
+function view(): PermissionsWireView {
+  const rules: PermissionRule[] = [
+    ...Object.entries(defaults).map(([action, state]) => ({
+      target: { kind: 'action' as const, action: action as PermissionAction },
+      state,
+      viaAgent: false,
+      updatedAt: UPDATED_AT,
+    })),
+    ...Object.entries(saved).map(([key, state]) => {
+      const [group, action] = key.split('.') as [string, PermissionAction];
+      return {
+        target: { kind: 'group_action' as const, group, action },
+        state,
+        viaAgent: false,
+        updatedAt: UPDATED_AT,
+      };
+    }),
+  ];
   return {
     agentId: 'agent-1',
     policyId: '0195dbd2-6539-7000-8000-0000000000a1',
@@ -149,18 +259,10 @@ function view(): AgentToolPermissions {
     restricted: Object.keys(saved).length,
     defaults: ACTIONS.map((action) => ({
       action,
-      state: 'always',
-      origin: 'default',
+      state: defaults[action] ?? 'always',
+      origin: defaults[action] ? 'action' : 'default',
     })),
-    rules: Object.entries(saved).map(([key, state]) => {
-      const [group, action] = key.split('.') as [string, PermissionAction];
-      return {
-        target: { kind: 'group_action', group, action },
-        state,
-        viaAgent: false,
-        updatedAt: '2026-11-18T10:00:00Z',
-      };
-    }),
+    rules,
     // As the server: only the actions a tool has, and groups with one.
     groups: CATALOG.groups
       .filter((group) => group.tools.length > 0)
@@ -175,7 +277,7 @@ function view(): AgentToolPermissions {
           return [
             {
               action,
-              state: state ?? 'always',
+              state: state ?? defaults[action] ?? 'always',
               origin: state ? 'group_action' : 'default',
               exception: state !== undefined,
               tools,
@@ -191,15 +293,23 @@ Object.assign(toolPermissionsClient, {
   catalog: async () => ok(CATALOG),
   session: async () => ok(view()),
   get: async () => ok(view()),
-  set: async (_agent: string, body: ToolPermissionChanges) => {
+  set: async (_agent: string, body: { changes: PermissionChange[] }) => {
     await new Promise((resolve) => setTimeout(resolve, 250));
     for (const change of body.changes) {
-      if (change.target.kind !== 'group_action') continue;
-      const key = `${change.target.group}.${change.target.action}`;
-      if (!change.state || change.state === 'always') delete saved[key];
+      const target = change.target;
+      if (target.kind === 'action') {
+        if (!change.state || change.state === 'always')
+          delete defaults[target.action];
+        else defaults[target.action] = change.state;
+        continue;
+      }
+      if (target.kind !== 'group_action') continue;
+      const key = `${target.group}.${target.action}`;
+      if (!change.state) delete saved[key];
       else saved[key] = change.state;
     }
     document.body.dataset.saved = JSON.stringify(saved);
+    document.body.dataset.defaults = JSON.stringify(defaults);
     return ok(view());
   },
 });
@@ -407,17 +517,12 @@ showSession(
       ]
 );
 
-/** The agent's permissions page, as Settings → Agents opens it. */
+/** The agent's tool permissions, as Settings → Agents shows them inline. */
 function PageFixture() {
   return (
     <main class="h-dvh overflow-y-auto px-4 py-6">
       <div class="mx-auto max-w-3xl">
-        <AgentPermissionsPage
-          agentId="agent-1"
-          agentName="Scout"
-          backLabel="Agents"
-          onBack={() => {}}
-        />
+        <AgentPermissionsPanel agentId="agent-1" agentName="Scout" heading />
       </div>
     </main>
   );

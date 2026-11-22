@@ -58,7 +58,7 @@ describe('gated phrases', () => {
       { ...SEND_MESSAGE, group: 'calendar', groupName: 'Calendar' },
     ];
     expect(describeGatedThings(things)).toBe(
-      'delete email, send email, edit documents, and 2 more things'
+      'send email, delete email, edit documents, and 2 more things'
     );
   });
 });

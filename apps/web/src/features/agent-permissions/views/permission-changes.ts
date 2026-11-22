@@ -2,17 +2,23 @@ import { t } from '@app/lib/i18n';
 import { beginInteraction } from '@app/observability/flow';
 import { toast } from '@core/component/Toast/Toast';
 import { ThrownResultError } from '@core/util/result';
-import type {
-  AgentToolPermissions,
-  ToolPermissionCatalog,
-  ToolPermissionChange,
-} from '@service-agent-harness/generated/schemas';
+import type { ToolPermissionCatalog } from '@service-agent-harness/generated/schemas';
 import { TOOL_PERMISSION_REFUSED } from '@service-agent-harness/tool-permissions';
 import type { Accessor } from 'solid-js';
-import { stateName } from '../components/labels';
-import { actionPermission, groupPermissions, toolKey } from '../core/model';
+import { match } from 'ts-pattern';
+import { actionLabel, stateName } from '../components/labels';
+import {
+  actionPermission,
+  defaultFor,
+  groupPermissions,
+  toolKey,
+} from '../core/model';
 import { createPendingChanges } from '../primitives/pending-changes';
 import { useSetAgentToolPermissionsMutation } from '../queries/permissions';
+import type {
+  PermissionChange,
+  PermissionsView,
+} from '../queries/permissions-view';
 
 /** The server's own explanation of a refusal, when it gave one. */
 export function refusalMessage(error: unknown): string | undefined {
@@ -21,12 +27,17 @@ export function refusalMessage(error: unknown): string | undefined {
     ?.message;
 }
 
-/** "Email · Send", or the tool's label, for the failure toast. */
+/** "Email: Send", "Send default", or the tool's label, for the failure toast. */
 function changeName(
   catalog: ToolPermissionCatalog,
-  change: ToolPermissionChange
+  change: PermissionChange
 ): string {
   const target = change.target;
+  if (target.kind === 'action') {
+    return t('agentPermissions.defaultLabel', {
+      action: actionLabel(target.action),
+    });
+  }
   if (target.kind === 'tool') {
     for (const group of catalog.groups) {
       const tool = group.tools.find(
@@ -36,31 +47,22 @@ function changeName(
     }
     return toolKey(target);
   }
-  const action = catalog.actions.find(
-    (entry) => entry.action === target.action
-  );
-  if (target.kind === 'action') return action?.name ?? target.action;
   const group = catalog.groups.find((entry) => entry.id === target.group);
   return t('agentPermissions.controlLabel', {
     group: group?.name ?? target.group,
-    action: action?.name ?? target.action,
+    action: actionLabel(target.action),
   });
 }
 
 /** The saved state the failed control goes back to. */
 function savedState(
-  view: AgentToolPermissions | undefined,
+  view: PermissionsView | undefined,
   catalog: ToolPermissionCatalog,
-  change: ToolPermissionChange
+  change: PermissionChange
 ) {
   const target = change.target;
   if (!view) return 'always';
-  if (target.kind === 'action') {
-    return (
-      view.defaults.find((entry) => entry.action === target.action)?.state ??
-      'always'
-    );
-  }
+  if (target.kind === 'action') return defaultFor(view, target.action);
   if (target.kind === 'group_action') {
     return (
       actionPermission(groupPermissions(view, target.group), target.action)
@@ -84,20 +86,30 @@ function savedState(
   return 'always';
 }
 
+/** A default and an exception each have their own interaction. */
+function interactionName(change: PermissionChange) {
+  return match(change.target.kind)
+    .with('action', () => 'agent_permissions.set_default')
+    .with('group_action', () => 'agent_permissions.set_exception')
+    .with('tool', () => 'agent_permissions.set')
+    .exhaustive();
+}
+
 /**
- * Saving for the permissions list: one PUT per click, queued per agent, each
- * in its own `agent_permissions.set` trace, with a toast naming what didn't
+ * Saving permission controls: one PUT per click, queued per agent, each in
+ * its own trace (`agent_permissions.set_default`, `.set_exception`, `.set`
+ * for a tool), with a toast naming what didn't
  * save and the state it went back to.
  */
 export function usePermissionChanges(options: {
   agentId: Accessor<string>;
   catalog: Accessor<ToolPermissionCatalog>;
-  view: Accessor<AgentToolPermissions | undefined>;
+  view: Accessor<PermissionsView | undefined>;
 }) {
   const mutation = useSetAgentToolPermissionsMutation(options.agentId);
 
-  const save = async (change: ToolPermissionChange) => {
-    const interaction = beginInteraction('agent_permissions.set', {
+  const save = async (change: PermissionChange) => {
+    const interaction = beginInteraction(interactionName(change), {
       attributes: {
         'agent_permissions.target_kind': change.target.kind,
         'agent_permissions.state': change.state ?? 'inherit',
