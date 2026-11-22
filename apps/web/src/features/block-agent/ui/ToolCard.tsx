@@ -61,7 +61,11 @@ export function ToolCard(props: ToolCardProps) {
       {/* The detail gives way first: it shrinks a hundredfold faster, so a
           label truncates only once its detail is gone. */}
       <span class={props.fixedTitle ? 'shrink-0' : 'min-w-0 truncate'}>
-        {typeof props.title === 'string' ? (
+        {/* A fixed title never truncates, so a tooltip would only repeat it
+            (and cover the transcript under a row that just settled). */}
+        {typeof props.title === 'string' && props.fixedTitle ? (
+          <TextShimmer text={props.title} active={active()} />
+        ) : typeof props.title === 'string' ? (
           <Tooltip
             label={props.title}
             as="span"

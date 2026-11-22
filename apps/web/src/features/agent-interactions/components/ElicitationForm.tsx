@@ -50,10 +50,12 @@ function TextInput(props: {
   max?: number;
   onInput: (text: string) => void;
 }) {
+  // The card's filled surface swallows edge-muted, so the field takes the
+  // same ink border as the radios, over a faint fill.
   return (
     <input
       type={props.type}
-      class="h-8 w-full rounded-md border border-edge-muted bg-transparent px-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-placeholder hover:border-edge focus:border-accent disabled:opacity-50"
+      class="h-8 w-full rounded-md border border-ink-extra-muted bg-ink/3 px-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-placeholder hover:border-ink-muted focus:border-accent disabled:opacity-50"
       disabled={props.disabled}
       step={props.step}
       min={props.min}
