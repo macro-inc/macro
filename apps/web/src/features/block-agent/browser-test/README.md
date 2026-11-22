@@ -8,6 +8,12 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome \
 bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts
 ```
 
+`session-layout.html` lays out the real transcript with a composer in a
+session's composer region (floating on touch, a stand-in box for the composer
+itself); `session-layout.browser.e2e.ts` checks on desktop and phone that the
+transcript's scroll area ends at the composer, so no text shows behind or
+below it, and on phone that jump-to-latest sits above the composer.
+
 `queued.html` renders the queued-message rows over the real composer
 (`?count=N` entries, `?light` for the light theme) with an in-page log of
 edits, removals and steers; `queued.browser.e2e.ts` checks that an open row
