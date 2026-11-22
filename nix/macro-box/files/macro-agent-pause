@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# Freezes or thaws the agent teammate's unit while a person drives its screen.
+#
+# One request per run, `<verb> <drive>`: on stdin from the pause socket (the
+# harness, over the fleet's exec), or as arguments from the dead-man timer.
+# It answers one word. Every request takes the same lock, and a thaw names
+# the drive it ends, so a late thaw never undoes a newer take-over's freeze.
+#
+#   freeze <drive>  freeze the unit for this drive and arm the dead-man timer
+#                   -> frozen | idle (the agent isn't running) | failed
+#   keep <drive>    the drive goes on: re-arm the timer -> frozen | superseded
+#   thaw <drive>    the drive ended: thaw, unless a newer drive froze it
+#                   -> running | superseded | failed
+#   autothaw <drive> the timer ran out without a keep: thaw as above
+#
+# The timer bounds a freeze whatever happens to the harness: it thaws the
+# unit when no keep came for MACRO_AGENT_PAUSE_AUTOTHAW_AFTER seconds of the
+# guest's monotonic clock, which stops while the computer hibernates.
+set -euo pipefail
+
+unit=macro-agent.service
+timer=macro-agent-autothaw
+dir=${MACRO_AGENT_PAUSE_DIR:-/run/macro-agent-pause}
+systemctl=${MACRO_AGENT_PAUSE_SYSTEMCTL:-systemctl}
+systemd_run=${MACRO_AGENT_PAUSE_SYSTEMD_RUN:-systemd-run}
+self=${MACRO_AGENT_PAUSE_SELF:-$0}
+after=${MACRO_AGENT_PAUSE_AUTOTHAW_AFTER:-180}
+
+if [ $# -ge 2 ]; then
+  verb=$1
+  drive=$2
+else
+  IFS=' ' read -r -t 5 verb drive || exit 0
+fi
+case "$drive" in
+  '' | *[!0-9a-f]*)
+    echo refused
+    exit 0
+    ;;
+esac
+
+exec 9>"$dir/lock"
+flock 9
+
+state() { "$systemctl" show -P "$1" "$unit" 2>/dev/null || true; }
+paused_by() { cat "$dir/paused" 2>/dev/null || true; }
+arm() {
+  "$systemctl" stop "$timer.timer" "$timer.service" >/dev/null 2>&1 || true
+  "$systemd_run" --quiet --collect --unit="$timer" --on-active="$after" \
+    "$self" autothaw "$drive" >/dev/null 2>&1 || true
+}
+
+case "$verb" in
+  freeze)
+    printf '%s\n' "$drive" >"$dir/paused"
+    arm
+    case "$(state ActiveState)" in
+      active | activating | reloading) ;;
+      *)
+        echo idle
+        exit 0
+        ;;
+    esac
+    "$systemctl" freeze "$unit" >/dev/null 2>&1 || true
+    if [ "$(state FreezerState)" = frozen ]; then echo frozen; else echo failed; fi
+    ;;
+  keep)
+    if [ "$(paused_by)" = "$drive" ]; then
+      arm
+      echo frozen
+    else
+      echo superseded
+    fi
+    ;;
+  thaw | autothaw)
+    current=$(paused_by)
+    if [ -n "$current" ] && [ "$current" != "$drive" ]; then
+      echo superseded
+      exit 0
+    fi
+    rm -f "$dir/paused"
+    if [ "$verb" = thaw ]; then
+      "$systemctl" stop "$timer.timer" >/dev/null 2>&1 || true
+    fi
+    "$systemctl" thaw "$unit" >/dev/null 2>&1 || true
+    if [ "$(state FreezerState)" = frozen ]; then
+      echo failed
+      exit 0
+    fi
+    # A restart asked for while it was frozen.
+    if [ -e "$dir/restart" ]; then
+      rm -f "$dir/restart"
+      "$systemctl" restart --no-block "$unit" >/dev/null 2>&1 || true
+    fi
+    echo running
+    ;;
+  *) echo refused ;;
+esac

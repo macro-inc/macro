@@ -1477,7 +1477,12 @@ pub async fn run() -> anyhow::Result<()> {
         Arc::new(computer_screen::domain::service::ScreenService::new(
             computer_screen::outbound::pg::PgScreenRepo::new(pool.clone()),
             computers::screen::guest_files::GuestFiles::new(
-                computer_operator.clone().map(|operator| operator as _),
+                computer_operator
+                    .clone()
+                    .map(|operator| computers::screen::guest_files::Guest {
+                        exec: operator.clone(),
+                        power: operator,
+                    }),
                 &computer_tasks,
                 service_shutdown.clone(),
             ),

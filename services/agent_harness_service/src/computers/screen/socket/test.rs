@@ -753,11 +753,13 @@ mod over_the_wire {
 
         let ended = tokio::time::timeout(Duration::from_secs(20), async {
             loop {
+                // The socket's row may not be written yet on a busy machine.
                 let reason =
                     sqlx::query_scalar!(r#"SELECT end_reason FROM computer_screen_sessions"#)
-                        .fetch_one(&pool)
+                        .fetch_optional(&pool)
                         .await
-                        .unwrap();
+                        .unwrap()
+                        .flatten();
                 if let Some(reason) = reason {
                     return reason;
                 }
@@ -893,6 +895,33 @@ mod over_the_wire {
             "accessRevoked"
         );
         assert_eq!(rig.screens.lease(COMPUTER).await.unwrap(), None);
+    }
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_take_over_whose_access_cannot_be_checked_is_refused(pool: PgPool) {
+        let rig = rig_with(
+            pool,
+            grant("alice", Mode::Drive),
+            Options {
+                reauthorize_every: Duration::from_secs(3600),
+                ..Options::default()
+            },
+        )
+        .await;
+        let mut client = connect(&rig).await;
+        control_of(&mut client, "state").await;
+        rig.lookups_fail.store(true, Ordering::SeqCst);
+
+        send(&mut client, serde_json::json!({ "type": "takeOver" })).await;
+
+        assert_eq!(
+            control_of(&mut client, "error").await["code"],
+            "takeOverUnavailable"
+        );
+        assert_eq!(rig.screens.lease(COMPUTER).await.unwrap(), None);
+        rig.lookups_fail.store(false, Ordering::SeqCst);
+        send(&mut client, serde_json::json!({ "type": "takeOver" })).await;
+        assert_eq!(control_of(&mut client, "state").await["drivingHere"], true);
     }
 
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

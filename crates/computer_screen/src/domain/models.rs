@@ -196,19 +196,10 @@ pub struct Lease {
 }
 
 impl Lease {
-    /// An opaque id for the drive this lease belongs to: a take-over starts
-    /// the lease anew, a renewal or a move to another tab of the driver
-    /// keeps its start.
-    pub fn drive_id(&self) -> String {
-        use sha2::Digest as _;
-        let mut hash = sha2::Sha256::new();
-        hash.update(self.computer_id.as_uuid().as_bytes());
-        hash.update(self.started_at.timestamp_micros().to_be_bytes());
-        hash.finalize()
-            .iter()
-            .take(12)
-            .map(|byte| format!("{byte:02x}"))
-            .collect()
+    /// The drive this lease belongs to: a take-over starts the lease anew,
+    /// a renewal or a move to another tab of the driver keeps its start.
+    pub fn drive_id(&self) -> DriveId {
+        DriveId::of(self.computer_id, self.started_at)
     }
 
     /// Whether it still holds at `now`.
@@ -390,6 +381,67 @@ impl From<&Release> for DriveEnd {
             Release::Refused { .. } => Self::Refused,
         }
     }
+}
+
+/// An opaque id for one drive of a computer, from its start: what viewers
+/// see as `leaseId`, and what fences the guest's freeze and thaw. Lowercase
+/// hex.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DriveId(String);
+
+impl DriveId {
+    /// The drive of `computer` that started at `started_at`.
+    pub fn of(computer: ComputerId, started_at: DateTime<Utc>) -> Self {
+        use sha2::Digest as _;
+        let mut hash = sha2::Sha256::new();
+        hash.update(computer.as_uuid().as_bytes());
+        hash.update(started_at.timestamp_micros().to_be_bytes());
+        Self(
+            hash.finalize()
+                .iter()
+                .take(12)
+                .map(|byte| format!("{byte:02x}"))
+                .collect(),
+        )
+    }
+
+    /// Its hex.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// A drive whose agent was not yet confirmed thawed: ended, refused or
+/// lapsed, and the guest hasn't answered a thaw for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwedThaw {
+    /// The drive's audit row.
+    pub row: Uuid,
+    /// The computer.
+    pub computer_id: ComputerId,
+    /// Which drive it was.
+    pub drive: DriveId,
+}
+
+/// How a thaw the guest answered came out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Thawed {
+    /// The agent runs (or wasn't running).
+    Running,
+    /// A newer drive froze it since: this one owes nothing.
+    Superseded,
+}
+
+/// Why a thaw didn't land.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum ThawFailed {
+    /// The computer is asleep or off: it is thawed once it runs (and its own
+    /// timer thaws it on resume).
+    #[error("the computer isn't running")]
+    NotRunning,
+    /// The guest didn't answer, or couldn't thaw.
+    #[error("the agent couldn't be thawed")]
+    Failed,
 }
 
 /// The agent on a computer couldn't be frozen for a take-over.

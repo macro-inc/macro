@@ -57,12 +57,16 @@ CREATE TABLE computer_screen_drives (
     user_id     TEXT        NOT NULL,
     started_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     ended_at    TIMESTAMPTZ,
-    end_reason  TEXT CHECK (end_reason IN ('handBack', 'lapsed', 'refused'))
+    end_reason  TEXT CHECK (end_reason IN ('handBack', 'lapsed', 'refused')),
+    -- When the guest answered a thaw for it; until then the harness retries,
+    -- and the computer counts as in use.
+    thawed_at   TIMESTAMPTZ
 );
 
--- Recently ended drives, whose agents the harness makes sure are thawed.
-CREATE INDEX computer_screen_drives_ended ON computer_screen_drives (ended_at)
-    WHERE ended_at IS NOT NULL;
+-- Ended drives whose agent no thaw was confirmed for: the harness retries
+-- them, and they keep their computer in use.
+CREATE INDEX computer_screen_drives_thaw_owed ON computer_screen_drives (computer_id, ended_at)
+    WHERE ended_at IS NOT NULL AND thawed_at IS NULL;
 
 -- At most one open drive per computer, the one its lease belongs to.
 CREATE UNIQUE INDEX computer_screen_drives_open ON computer_screen_drives (computer_id)

@@ -217,7 +217,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   through `rfb.rs` `RfbGate`, which drops input unless this socket drives
   before its lease's expiry, keeps SetEncodings to what `RfbServerFilter` can
   frame (Raw, CopyRect, ZRLE and pixel-free pseudo-encodings; no
-  ExtendedClipboard, so the clipboard is plain Latin-1), speaks RFB 3.8 only,
+  ExtendedClipboard, so the clipboard is plain Latin-1), speaks RFB 3.8 and
+  32-bit true-colour pixels only (any other SetPixelFormat closes it),
   and fails closed on anything it can't parse; `RfbServerFilter` frames
   Xvnc's side without decoding pixels and drops ServerCutText unless this
   socket drives (Xvnc runs with `-SendPrimary=0`); typed `input` goes through
@@ -230,17 +231,22 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   media stops short, the operator says whether the computer runs, which
   picks `computerOff` or a named error (`tunnelFailed`, `sourceUnavailable`).
   Screens count as in use for hibernation (`in_use.rs`). `guest_files.rs`
-  freezes the agent before a take-over counts (`printf freeze | socat` to
-  the guest's root-owned `/run/macro-agent-pause.sock`, from
-  `nix/macro-box/_agent.nix`; `frozen`/`idle` let it start, anything else
-  refuses it with `agentNotPausable`) and thaws it after (retried, off the
-  request path; one lock per computer, so a late thaw never undoes a newer
-  freeze). An agent computer whose image has no helper answers `failed`. It
+  freezes the agent for a drive before a take-over counts (`freeze <drive>`
+  through `socat` to the guest's root-owned `/run/macro-agent-pause/sock`,
+  `nix/macro-box/files/macro-agent-pause`; `frozen`/`idle` let it start,
+  anything else refuses it with `agentNotPausable`), sends `keep <drive>` on
+  each lease renewal (the guest thaws the agent itself 3 minutes after the
+  last), and `thaw <drive>` after (a few tries off the request path, then
+  `ScreenService::reap` until the guest confirms; `superseded` means a newer
+  drive froze it). A computer that isn't running is never exec'd into: its
+  thaw stays owed. An agent computer whose image has no helper answers
+  `failed`. A take-over whose access check fails answers
+  `takeOverUnavailable` and keeps the socket. It
   keeps `/home/macro/agent/state/screen-driver` (`human` while someone
   drives; only each computer's latest change, written a few computers at a
   time by one worker, never on a request path) and `state/harness-id`
   (written from `sign_in_ahead.rs`). Each replica runs `ScreenService::reap`
-  every minute (lapsed leases, re-thaws).
+  every minute (lapsed leases, owed thaws).
   Spans: `computer.screen.ticket`/`.session`/`.wake`/`.tunnel`/`.driver_file`/
   `.freeze`/`.thaw`, and `ScreenService::reap`'s per round.
 - `src/computers/claude_expiry.rs`: the notices of the operator's

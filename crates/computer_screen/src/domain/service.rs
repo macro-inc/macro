@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 use super::models::{
     Access, Caller, EndReason, IssuedTicket, Lease, Mode, PendingNotice, RedeemedTicket, Release,
-    ScreenGrant, SessionId, TakeOver, TicketRequest, TicketSecret,
+    ScreenGrant, SessionId, TakeOver, ThawFailed, TicketRequest, TicketSecret,
 };
 use super::ports::{DriverSignal, LeaseChanges, People, ScreenAccess, ScreenRepo, TicketHash};
 
@@ -42,9 +42,6 @@ pub const SESSION_FRESH_FOR: Duration = Duration::from_secs(120);
 pub const NOTICE_KEPT_FOR: Duration = Duration::from_secs(24 * 60 * 60);
 /// How often each replica runs [`ScreenService::reap`].
 pub const REAP_EVERY: Duration = Duration::from_secs(60);
-/// How long after a drive ended its agent is thawed again by
-/// [`ScreenService::reap`].
-pub const THAW_CHECKED_FOR: Duration = Duration::from_secs(10 * 60);
 /// How long a brain request holds the notices it carries: past a long
 /// streamed turn, so only a crash leaves them for the next one.
 pub const NOTICE_CLAIMED_FOR: Duration = Duration::from_secs(15 * 60);
@@ -319,7 +316,7 @@ where
 
         // A lapsed lease is released first, so its driver's hand-back is
         // recorded before the next one starts.
-        self.lease(grant.computer_id).await?;
+        let before = self.lease(grant.computer_id).await?;
         let name = self
             .directory
             .person(&grant.user_id)
@@ -336,18 +333,33 @@ where
         match &outcome {
             TakeOver::Taken(lease) => {
                 if self.signal.driving(lease).await.is_err() {
-                    span.record("screen.take_over", "refused");
+                    // The same driver moving to another tab keeps a drive
+                    // the agent already heard of: it ends as a hand-back.
+                    // A new drive never started.
+                    let continues = before.as_ref().is_some_and(|before| {
+                        before.driver.user_id.as_ref() == lease.driver.user_id.as_ref()
+                            && before.started_at == lease.started_at
+                    });
+                    let release = if continues {
+                        span.record("screen.take_over", "lost_freeze");
+                        Release::HandBack {
+                            user_id: grant.user_id.clone(),
+                            note: None,
+                        }
+                    } else {
+                        span.record("screen.take_over", "refused");
+                        Release::Refused {
+                            session_id: session,
+                        }
+                    };
                     self.repo
-                        .release(
-                            grant.computer_id,
-                            Release::Refused {
-                                session_id: session,
-                            },
-                        )
+                        .release(grant.computer_id, release)
                         .await
                         .map_err(ScreenError::internal)?;
                     // Thaw whatever part of the freeze took.
-                    self.signal.released(grant.computer_id).await;
+                    self.signal
+                        .released(grant.computer_id, lease.drive_id())
+                        .await;
                     return Err(ScreenError::AgentNotPausable);
                 }
                 span.record("screen.take_over", "taken");
@@ -366,10 +378,15 @@ where
         computer: ComputerId,
         session: SessionId,
     ) -> Result<Option<Lease>, ScreenError> {
-        self.repo
+        let renewed = self
+            .repo
             .renew(computer, session, LEASE_TTL)
             .await
-            .map_err(ScreenError::internal)
+            .map_err(ScreenError::internal)?;
+        if let Some(lease) = &renewed {
+            self.signal.renewed(lease).await;
+        }
+        Ok(renewed)
     }
 
     /// Hand the computer back to the agent, if `user` drives it, from
@@ -393,8 +410,8 @@ where
             .await
             .map_err(ScreenError::internal)?;
         tracing::Span::current().record("screen.handed_back", released.is_some());
-        if released.is_some() {
-            self.signal.released(computer).await;
+        if let Some(lease) = &released {
+            self.signal.released(computer, lease.drive_id()).await;
         }
         Ok(released)
     }
@@ -468,31 +485,47 @@ where
         }
     }
 
-    /// One round of keeping agents right after a crash or a lost
-    /// notification: lapsed leases are released (which thaws their agents),
-    /// and agents on computers a drive ended on within [`THAW_CHECKED_FOR`]
-    /// are thawed again, in case the process that released them died first.
+    /// One round of keeping agents right after a crash, a lost
+    /// notification or a computer that was asleep: lapsed leases are
+    /// released, and every ended drive whose thaw the guest hasn't confirmed
+    /// is thawed again, however long ago it ended. A computer that isn't
+    /// running is left for a later round (its own timer thaws it on resume).
     /// Due every [`REAP_EVERY`] on each replica.
-    #[tracing::instrument(skip_all, fields(screen.lapsed = tracing::field::Empty, screen.thawed = tracing::field::Empty), err)]
+    #[tracing::instrument(skip_all, fields(screen.lapsed = tracing::field::Empty, screen.owed = tracing::field::Empty, screen.thawed = tracing::field::Empty, screen.asleep = tracing::field::Empty, screen.failed = tracing::field::Empty), err)]
     pub async fn reap(&self) -> Result<(), ScreenError> {
+        let span = tracing::Span::current();
         let lapsed = self
             .repo
             .lapsed_leases()
             .await
             .map_err(ScreenError::internal)?;
-        tracing::Span::current().record("screen.lapsed", lapsed.len());
+        span.record("screen.lapsed", lapsed.len());
         for computer in lapsed {
             self.lease(computer).await?;
         }
-        let released = self
+        let owed = self
             .repo
-            .released_within(THAW_CHECKED_FOR)
+            .owed_thaws()
             .await
             .map_err(ScreenError::internal)?;
-        tracing::Span::current().record("screen.thawed", released.len());
-        for computer in released {
-            self.signal.released(computer).await;
+        span.record("screen.owed", owed.len());
+        let (mut thawed, mut asleep, mut failed) = (0usize, 0usize, 0usize);
+        for owed in owed {
+            match self.signal.thaw(owed.computer_id, &owed.drive).await {
+                Ok(_) => {
+                    self.repo
+                        .mark_thawed(owed.row)
+                        .await
+                        .map_err(ScreenError::internal)?;
+                    thawed += 1;
+                }
+                Err(ThawFailed::NotRunning) => asleep += 1,
+                Err(ThawFailed::Failed) => failed += 1,
+            }
         }
+        span.record("screen.thawed", thawed);
+        span.record("screen.asleep", asleep);
+        span.record("screen.failed", failed);
         Ok(())
     }
 
@@ -554,8 +587,10 @@ where
             .release(lease.computer_id, Release::Lapsed)
             .await
             .map_err(ScreenError::internal)?;
-        if released.is_some() {
-            self.signal.released(lease.computer_id).await;
+        if let Some(released) = &released {
+            self.signal
+                .released(released.computer_id, released.drive_id())
+                .await;
         }
         Ok(None)
     }

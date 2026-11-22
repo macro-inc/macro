@@ -61,13 +61,18 @@ guest: Xvnc on 127.0.0.1:5901 (the agent's display :1)
   when their access is revoked. Every take-over is an audit row, ended by hand
   back or lapse.
 - **Pausing the agent:** a take-over first freezes the agent's unit
-  (`systemctl freeze`, through a root-owned helper on a socket only the
-  harness's exec user may open and the agent's sandbox hides), so a step
-  already under way stops too, whichever account its Claude uses. When it
-  can't be frozen, Take over is refused with `agentNotPausable` and nothing
-  claims the agent is paused. A hand-back or lapse thaws it; each replica also
-  re-thaws recently released agents every minute, in case the process that
-  released one died. While a person drives, every `/brain/*` request from that
+  (`systemctl freeze`, through a root-owned helper on a socket in a directory
+  only the harness's exec user may enter and the agent's sandbox hides), so a
+  step already under way stops too, whichever account its Claude uses. When
+  it can't be frozen, Take over is refused with `agentNotPausable` and nothing
+  claims the agent is paused. Every request names its drive and takes one
+  lock in the guest, so a late thaw never undoes a newer take-over's freeze.
+  The guest thaws the agent itself 3 minutes after the last renewal (its
+  clock stops while the computer sleeps); a hand-back or lapse thaws it at
+  once, and each replica retries every thaw the guest hasn't confirmed, for
+  as long as it takes, once the computer runs. An owed thaw keeps the
+  computer awake. Freezing the unit also freezes a call the agent is on;
+  the call resumes at the hand-back. While a person drives, every `/brain/*` request from that
   agent also waits (woken by a Postgres notification when the lease ends,
   bounded, then 503 with Retry-After; at once on a harness shutdown). The guest
   gets an advisory file (`~/agent/state/screen-driver`), and the agent's main
