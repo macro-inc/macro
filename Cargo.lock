@@ -367,6 +367,7 @@ dependencies = [
  "nom 8.0.0",
  "nutype",
  "pipedream_mcp",
+ "prompt",
  "rootcause",
  "schemars 1.2.1",
  "serde",

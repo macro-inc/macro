@@ -425,9 +425,10 @@ async fn every_documented_example_type_checks() {
     service.shutdown().await;
 }
 
-/// What a TypeScript turn sees of its code-mode tools: today's tools, byte
-/// for byte. `UPDATE_TOOLSET_SNAPSHOT=1` rewrites it; a change to it must be
-/// one meant for sessions without agent permissions.
+/// What a TypeScript turn sees of its code-mode tools, the prompt's
+/// code-mode sections and the discovery guides: today's, byte for byte.
+/// `UPDATE_TOOLSET_SNAPSHOT=1` rewrites it; a change to it must be one meant
+/// for sessions without agent permissions.
 #[tokio::test]
 async fn sessions_without_javascript_tools_see_todays_tools() {
     // Each distinct set of tools once, and which one each kind sees.
@@ -464,7 +465,34 @@ async fn sessions_without_javascript_tools_see_todays_tools() {
             index.into(),
         );
     }
-    let snapshot = serde_json::json!({ "sessions": sessions, "toolsets": toolsets });
+    // The code-mode texts a TypeScript session reads beside the tools: the
+    // prompt's code-mode sections and the discovery tools' hand-written
+    // guides. (The search topic is the SDK's generated guidance.)
+    let describe = DescribeCodeTools {
+        task: None,
+        names: Vec::new(),
+        topics: vec![
+            CodeGuideTopic::Ai,
+            CodeGuideTopic::Templates,
+            CodeGuideTopic::Examples,
+        ],
+    }
+    .describe(CodeHost::Session, &user(), None, &CancellationToken::new())
+    .await
+    .unwrap();
+    let texts = serde_json::json!({
+        "prompt": [
+            prompt::code_mode::PROMPT.to_string(),
+            prompt::user_tools::CODE_MODE_SESSION_PROMPT.to_string(),
+        ],
+        "describe_code_tools": {
+            "sdk_guide": describe.sdk_guide,
+            "instructions": describe.instructions,
+            "guides": describe.guides,
+        },
+    });
+    let snapshot =
+        serde_json::json!({ "sessions": sessions, "toolsets": toolsets, "texts": texts });
     let actual = serde_json::to_string_pretty(&snapshot).unwrap() + "\n";
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),

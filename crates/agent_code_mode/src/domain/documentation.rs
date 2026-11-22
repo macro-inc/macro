@@ -1,4 +1,5 @@
 //! Bounded SDK documentation selection through the shared cognition service.
+use super::CodeModeKind;
 use cognition::domain::{Answer, BatchedOutcome, Cognition, RoutingRequest, decide_in_batches};
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
@@ -325,15 +326,20 @@ async fn rank_entities<'a>(
 /// indexes, and with [`Guidance::Selected`] their guidance too, each guide
 /// followed by its attached skill. Failures retain the compact catalog. The
 /// byte cap bounds prompt growth and leaves out an attached skill; it is not
-/// an exact tokenizer count.
-#[tracing::instrument(skip_all, fields(guidance = ?guidance, batches = tracing::field::Empty, selected = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
+/// an exact tokenizer count. The SDK documentation teaches TypeScript, so a
+/// turn taught the dialect gets none and asks Jev nothing.
+#[tracing::instrument(skip_all, fields(kind = ?kind, guidance = ?guidance, batches = tracing::field::Empty, selected = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
 pub async fn select_documentation(
+    kind: CodeModeKind,
     user: &MacroUserIdStr<'static>,
     request: RoutingRequest<'_>,
     cognition: Option<&Arc<dyn Cognition>>,
     guidance: Guidance,
     cancel: &CancellationToken,
 ) -> String {
+    if kind == CodeModeKind::Dialect {
+        return String::new();
+    }
     let docs = sdk_documentation();
     let mut output = String::from(
         "\n<macro_sdk>\nUse the real Macro SDK in ExecuteCode. Entity indexes below list each class, method and type by symbol, with method signatures. Read the symbols a program needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context. Use DescribeCodeTools for the index of an entity not loaded here.\nAvailable entities:\n",

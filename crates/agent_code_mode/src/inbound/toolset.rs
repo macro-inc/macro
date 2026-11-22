@@ -21,6 +21,12 @@ use tokio_util::sync::CancellationToken;
 #[cfg(test)]
 mod test;
 
+mod dialect;
+pub use dialect::{
+    DescribeDialect, DialectDescription, DialectGuide, DialectGuidePage, DialectGuides,
+    ReadDialectDocs,
+};
+
 /// Session facts supplied by the authenticated MCP adapter.
 #[derive(Clone)]
 pub struct CodeModeToolContext {
@@ -46,11 +52,14 @@ pub fn toolset() -> AsyncToolCollection<CodeModeToolContext> {
 
 /// [`toolset`] for a turn of [`CodeModeKind::Dialect`], whose programs the
 /// agent's permissions always gate: its `ExecuteCode` says how.
+///
+/// Its `DescribeCodeTools` and `ReadCodeDocs` serve the dialect's guides
+/// ([`DescribeDialect`], [`ReadDialectDocs`]), never the TypeScript SDK's.
 pub fn toolset_with_js_tools() -> AsyncToolCollection<CodeModeToolContext> {
     AsyncToolCollection::new()
         .add_tool::<ExecuteCodeWithJsTools, CodeModeToolContext>()
-        .add_tool::<DescribeCodeTools, CodeModeToolContext>()
-        .add_tool::<ReadCodeDocs, CodeModeToolContext>()
+        .add_tool::<DescribeDialect, CodeModeToolContext>()
+        .add_tool::<ReadDialectDocs, CodeModeToolContext>()
 }
 
 /// The code-mode tools of a turn of `kind`.

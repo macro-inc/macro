@@ -722,6 +722,7 @@ async fn drive_turn(
                 return String::new();
             }
             agent_code_mode::domain::select_documentation(
+                code_mode_kind,
                 &owner,
                 request,
                 base_context.cognition_tool_context.service.as_ref(),

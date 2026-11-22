@@ -126,11 +126,21 @@ stacks. Process isolation belongs to
   `sdkFingerprint` (`code_mode_assets::JS_TOOLS_FINGERPRINT`), all in the
   `agent_code_execution.record` JSON, so no migration. The public MCP's
   `UserExecuteCode` stays TypeScript only.
+- Dialect docs sit beside the TypeScript ones and never replace them. A
+  dialect turn's `DescribeCodeTools`/`ReadCodeDocs` (in
+  `toolset_with_js_tools`, from `src/inbound/toolset/dialect.rs`) serve the
+  hand-written guides in `src/inbound/toolset/dialect/` (program,
+  results, permissions, module, search, examples); `select_documentation`
+  returns nothing for a dialect turn. Each kind's texts must never teach the
+  other (`each_kind_teaches_only_its_own_code`), every `tools.*` call in them
+  must be in the catalog, and every `js` example must pass the analyzer
+  (`every_dialect_example_is_analyzed`, Deno).
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `toolset_with_js_tools()`
   for a dialect turn (`session_toolset(kind)` picks;
   `ExecuteCodeWithJsTools` adds `toolset/session/js_tools.md` and
   `js_tools_permissions.md`), `user_toolset()` for the public MCP. With JS
-  tools off, the session tools are pinned byte for byte by
+  tools off, the session tools, the prompt's code-mode sections and the
+  discovery guides are pinned byte for byte by
   `toolset/test/without_js_tools.json` (`UPDATE_TOOLSET_SNAPSHOT=1` rewrites
   it; only for a change meant for everyone).
   Tool texts are composed: host-specific parts in `toolset/session/`
