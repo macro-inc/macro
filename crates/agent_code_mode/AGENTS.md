@@ -25,6 +25,8 @@ stacks. Process isolation belongs to
   harness's `suggestions_brief_programs_type_check`.
 - `src/domain/service.rs`: execution admission, identity and persistence; tool
   receipts include observed SDK activity for inline conversation snapshots.
+  Pre-start cancellation saves are best effort, bounded to one second; the
+  caller receives a cancelled receipt even if the journal update fails.
   Session and user runs type-check the program (`check_program`) before
   credentials are issued, so a program with type errors never asks the owner
   for approval or gets a token.
@@ -61,7 +63,19 @@ stacks. Process isolation belongs to
 - `src/domain/connected_apps.rs`: a running execution's connected apps
   (`macro.connectedApps`). `GET|POST /agent-sessions/{id}/code-executions/{execution}/connected-apps…`
   admits only a running execution of the session's current turn, called by
-  the account that execution was approved to act as; the harness adapter
+  the account that execution was approved to act as and the exact verified
+  correlation issued for it. The credential issuer returns that correlation
+  to the execution service, which persists `credential_correlation_id` in
+  the journal before starting the runner. Missing bindings (including old
+  records), uncorrelated credentials, other sessions or executions, and
+  every scoped credential (including unknown signed scopes) are refused.
+  Routine and public-MCP provenance alone do not refuse a matching own run;
+  the same binding and account checks apply. The binding is journal-only:
+  `GET code-executions/{id}` projects an explicit public DTO, which is the
+  public schema source and excludes the internal field. Expected refusals
+  are WARN with a closed `refusal` classification; backend failures are ERROR
+  with span error status. All six methods share `admit`;
+  the harness adapter
   (`agent_harness_service/src/code_mode/connected_apps.rs`) lists the apps the
   session's agent was given (`EgressProvisioner::advertised_all`) and calls
   them through `agent_egress`'s `SessionMcpExchange`, so credentials never
@@ -74,11 +88,15 @@ stacks. Process isolation belongs to
   a call egress's budget (`agent_egress::outbound::budgeted_mcp`) could not
   get through; it did not run.
 - `src/domain/ui_commands.rs`: a running execution's `macro.ui.open`.
-  `POST /agent-sessions/{id}/ui-commands` admits the same way connected apps
-  do, then sends only for a turn a person prompted from an app tab
-  (`TurnPrompter.client`); system turns, routines, triggers, channel
-  mentions and prompts typed on mobile (the web app sends no tab there)
-  answer `no_client`. The path must match `navigable_routes.json`,
+  Unscoped `POST /agent-sessions/{id}/ui-commands` calls use the same exact
+  credential binding, session, approved-account and active-turn checks as
+  connected apps, then send only for a turn a person prompted from an app tab
+  (`TurnPrompter.client`). Admitted turns without a tab (system turns,
+  routines, triggers and mobile prompts) answer `no_client`; scoped callers
+  also answer `no_client` without reading the journal or delivering a command;
+  uncorrelated and foreign unscoped callers are refused before navigation.
+  Dispatch failures record ERROR and span error status.
+  The path must match `navigable_routes.json`,
   generated from the web route table by
   `apps/web/src/features/agent-navigation/core/navigable-routes.test.tsx`
   (`UPDATE_AGENT_ROUTE_TABLE=1` rewrites it; never edit it by hand). The
@@ -140,6 +158,9 @@ drafts and outcomes. Legacy notificationId/notificationAttemptAt fields are no
 longer delivery state.
 
 ## Checks
+
+- `SQLX_OFFLINE=true cargo test -p agent_code_mode --test connected_app_credentials`
+  exercises issuance ordering and signed HTTP propagation without a database.
 
 - `cargo test -p agent_code_mode --lib` from the repository root, with live local
   database configuration and `SQLX_OFFLINE` unset.

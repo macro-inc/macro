@@ -80,7 +80,7 @@ Native tools that use nobody's access (`WebSearch`, `WebFetch`) take no
 gate refuses them in suggestion generations and runs that send nothing.
 
 Session tool schemas require `acting_as: requester | owner` for tools using
-account access, including deferred tools. The gate resolves the selected account
+account access. The gate resolves the selected account
 through `TurnPrompter::acting_user()` and requests owner approval only when that
 account differs from the turn's requester. System invocations have no requester.
 Billing, memory, and session lifecycle remain owner-scoped. Model-context replay
@@ -97,13 +97,18 @@ instructions, so every session of its kind reads them back from the prompt
 cache. It gets no picked documentation (`routes_documentation`), opener,
 skills or `<agent_session>` block, runs at low effort where its model takes
 one (`unseen_effort`), and has only code mode's three tools plus
-`ReadToolResult` (`unseen::CodeModeOnly`), `ExecuteCode` without its reviews
+`ReadToolResult` (`unseen::code_mode_only`), `ExecuteCode` without its reviews
 and views.
 
 Every conversation turn of a user's session runs code mode
 (`tools_for_agent_code_mode`); there is no direct-tools fallback. A turn whose
 MCP catalog lacks any `mcp__macro_internal__` code tool fails
 (`code_tools_listed` in `src/rig_engine.rs`). Summaries advertise no tools.
+A watched turn gets only Macro's own MCP tools, eagerly (`EAGER_INTERNAL_MCP_TOOLS`
+through `mcp_allowlist::McpAllowlist`): no connected app's tool, and no
+`SearchTools` or `LoadTools`; nothing is deferred. Programs reach connected apps
+through `macro.connectedApps`, and an unknown tool call's retry feedback says so
+(`mcp_allowlist::CONNECTED_APPS_FROM_CODE_HINT`).
 
 - Owner memory is composed by the memory domain on each read; daily generation is hosted by cognition, not agent turns.
 

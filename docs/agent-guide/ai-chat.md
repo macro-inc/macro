@@ -1392,14 +1392,18 @@ and applies edit batches; `ReadSpreadsheet`, `CalculateSpreadsheet` and
 `EditSpreadsheet` are hidden in code mode), and
 results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
-routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
+routed through the SDK are absent from direct schemas;
 they remain discoverable through `DescribeCodeTools`. The only native tools a
-session keeps are the ones a program cannot replace: the Notion, Linear and Jira import planners,
-`AskUser`, and tool loading
-for connected apps. Connector discovery is `macro.connectedApps.discover`; a
+session keeps are the ones a program cannot replace: the Notion, Linear and Jira import planners
+and `AskUser`. Nothing is deferred, so there is no `SearchTools` or `LoadTools`.
+Connector discovery is `macro.connectedApps.discover`; a
 `botCredential` view presents the bot token card, and `DescribeCodeTools`'
 `about_macro` topic replaces `SelfKnowledge`.
-Connected third-party MCP tools remain available.
+Connected third-party MCP tools are not advertised to the model: a program finds
+and calls them with `macro.connectedApps.searchTools(execution, keywords)` or
+`macro.connectedApps.list(execution)`, `app.tools()` and `tool.call(args)`, through the
+egress proxy. Of the session's MCP tools the model sees only `macro_internal`'s
+code and review tools.
 
 Sessions without a user owner can't run in-process turns at all.
 Summary/compaction calls advertise no tools. The mode

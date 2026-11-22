@@ -1,7 +1,7 @@
 //! Measures Anthropic prompt-cache reads and writes per model call, against
 //! the real API, with Macro's real tools and system prompt routed through the
-//! production agent loop. Tool calls other than `LoadTools` answer `ok`
-//! without running, so nothing touches a workspace.
+//! production agent loop. Tool calls answer `ok` without running, so
+//! nothing touches a workspace.
 //!
 //! ```text
 //! doppler run --project agent-harness-service --config dev -- \
@@ -32,37 +32,20 @@ impl UsageTracking for RecordedUsage {
     }
 }
 
-/// The agent session's tools as production defers them; `LoadTools` loads,
-/// every other call answers without running.
+/// The agent session's tools; every call answers without running.
 struct InertTools(Arc<dyn AiToolSet<InMemToolContext> + Send + Sync>);
 
 impl AiToolSet<()> for InertTools {
     fn dispatch_tool_call<'a>(
         &'a self,
         _: (),
-        request_context: ai_toolset::RequestContext,
-        tool_name: &'a str,
-        json: &'a serde_json::Value,
+        _: ai_toolset::RequestContext,
+        _: &'a str,
+        _: &'a serde_json::Value,
     ) -> Pin<
         Box<dyn Future<Output = Result<ToolResult<serde_json::Value>, ToolSetError>> + 'a + Send>,
     > {
-        Box::pin(async move {
-            if tool_name == "LoadTools" {
-                let names: Vec<String> =
-                    serde_json::from_value(json["names"].clone()).unwrap_or_default();
-                let loaded: Vec<SearchableTool> = request_context
-                    .searchable_tools
-                    .iter()
-                    .filter(|tool| names.contains(&tool.name))
-                    .cloned()
-                    .collect();
-                if let Some(loader) = &request_context.tool_loader {
-                    loader.load(loaded);
-                }
-                return Ok(Ok(serde_json::json!({ "loaded": names })));
-            }
-            Ok(Ok(serde_json::json!({ "ok": true })))
-        })
+        Box::pin(async { Ok(Ok(serde_json::json!({ "ok": true }))) })
     }
 
     fn request_schemas(&self) -> Option<Vec<RequestSchema>> {
@@ -117,10 +100,7 @@ async fn send(
     Vec<(u64, u64, u64)>,
     Vec<agent::types::AssistantMessagePart>,
 ) {
-    let tools: Arc<dyn AiToolSet<InMemToolContext> + Send + Sync> = Arc::new(DeferredToolSet::new(
-        native.for_turn(false),
-        Arc::clone(&native.deferred),
-    ));
+    let tools: Arc<dyn AiToolSet<InMemToolContext> + Send + Sync> = native.for_turn(false);
     let user = MacroUserIdStr::try_from_email("cache-measure@macro.com").unwrap();
     let usage = UsageContext::new(AiFeature::AgentSession, user);
     let recorded = Arc::new(RecordedUsage::default());
@@ -186,16 +166,6 @@ async fn measure_prompt_cache() {
              <m-document-mention>{{\"documentId\":\"{id}\",\"documentName\":\"Original assigned task\"}}</m-document-mention>"
         )
     };
-
-    let load = turn(
-        &native,
-        &format!("{run}-load"),
-        &task("01a11170-ddae-7975-8fa5-9cf207fd77a6"),
-        "Call LoadTools to load ListReminders. Do not call ListReminders or any other tool. \
-         After LoadTools answers, reply with the single word done.",
-    )
-    .await;
-    print("LoadTools run", &load);
 
     let first = turn(
         &native,

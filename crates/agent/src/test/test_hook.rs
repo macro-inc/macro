@@ -42,6 +42,7 @@ fn inputs(loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>, register: RegisterFn) 
         tool_loads: ToolLoads::default(),
         stream_tool_calls: false,
         result_limit: None,
+        unknown_tool_hint: Arc::from(crate::hook::SEARCH_TOOLS_HINT),
     }
 }
 
@@ -203,6 +204,31 @@ async fn invalid_call_to_unknown_tool_retries_with_feedback_without_loading() {
         panic!("expected retry, got {action:?}");
     };
     assert!(feedback.contains("mcp__nope__hallucinated"));
+}
+
+/// A host without `SearchTools` names its own way to connected apps in the
+/// feedback for an unknown tool.
+#[tokio::test]
+async fn invalid_call_to_unknown_tool_gives_the_hosts_hint() {
+    let (register, _registered) = recording_register();
+    let (bridge, _rx) = StreamBridge::channel(
+        BridgeInputs {
+            unknown_tool_hint: Arc::from("Reach connected apps from code."),
+            ..inputs(Arc::new(Mutex::new(Vec::new())), register)
+        },
+        Arc::new(vec![]),
+        CancellationToken::new(),
+    );
+
+    let action = bridge
+        .handle_invalid_tool_call("mcp__linear__create_issue", Some("toolu_1"))
+        .await;
+
+    let Some(InvalidToolCallAction::Retry { feedback }) = action else {
+        panic!("expected retry, got {action:?}");
+    };
+    assert!(feedback.ends_with("Reach connected apps from code."));
+    assert!(!feedback.contains("SearchTools"));
 }
 
 /// Chat leaves pending user-tool results for its composer to finish later.

@@ -107,9 +107,12 @@ pub enum RecordedCallStatus {
 
 /// Durable source and final outcome, with historical bridge calls when present.
 /// The full journal is not included in the model's tool result.
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionRecord {
+    /// Verified invocation issued for this execution; absent on historical records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_correlation_id: Option<Uuid>,
     /// Execution identity.
     pub execution_id: ExecutionId,
     /// Account choice bound to this saved execution; absent on historical records.

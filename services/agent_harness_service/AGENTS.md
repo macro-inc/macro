@@ -382,8 +382,10 @@ produce events, independently of public session control.
   `GITHUB_TOKEN` in the environment or a local `.env`.
 
 Code-mode credentials sign the session bot for SDK attribution and the selected
-user for API authorization; owner approval is required only for cross-account
-access. Lifecycle, runtime provider connections, billing, and memory stay owner-scoped.
+user for API authorization. The issuer returns its fresh correlation to the
+execution service to journal before the runner starts; connected-app requests
+must match that execution and its verified session and carry no scope.
+Owner approval is required only for cross-account access. Lifecycle, runtime provider connections, billing, and memory stay owner-scoped.
 
 ## Configuration and lifecycle
 

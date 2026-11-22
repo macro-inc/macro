@@ -151,17 +151,12 @@ async fn scope_of(
 }
 
 /// Native tools a scoped session may call: code mode's, which reach the API
-/// through its scoped credential, and finding and reading tools.
+/// through its scoped credential, and the pager for cut results.
 fn native_tool_allowed(scope: SessionScope, tool: &str) -> bool {
     match scope {
         SessionScope::Generation | SessionScope::NoSend | SessionScope::DryRun => matches!(
             tool,
-            "ExecuteCode"
-                | "DescribeCodeTools"
-                | "ReadCodeDocs"
-                | "SearchTools"
-                | "LoadTools"
-                | "ReadToolResult"
+            "ExecuteCode" | "DescribeCodeTools" | "ReadCodeDocs" | "ReadToolResult"
         ),
     }
 }
@@ -265,6 +260,7 @@ impl ExecutionCredentials for RunCredentials {
                 CodeModeError::Unavailable
             })?;
         Ok(IssuedRun {
+            correlation_id: correlation,
             environment: RunEnvironment {
                 token,
                 trace_headers: trace_headers(),

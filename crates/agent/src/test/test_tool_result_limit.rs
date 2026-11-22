@@ -32,6 +32,7 @@ fn limited_bridge(
             tool_loads: ToolLoads::default(),
             stream_tool_calls: false,
             result_limit: Some(limit.clone()),
+            unknown_tool_hint: Arc::from(crate::hook::SEARCH_TOOLS_HINT),
         },
         Arc::new(vec![]),
         CancellationToken::new(),

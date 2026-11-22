@@ -32,6 +32,8 @@ pub trait ExecutionCredentials: Send + Sync + 'static {
 
 /// A run credential and the account it acts as.
 pub struct IssuedRun {
+    /// Fresh verified invocation signed into this run credential. Persist before starting it.
+    pub correlation_id: macro_uuid::Uuid,
     /// What the program runs with.
     pub environment: RunEnvironment,
     /// The account the credential was minted for.

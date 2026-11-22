@@ -1311,7 +1311,7 @@ where
     S: ConnectorSelect,
     C: EntityCreator,
 {
-    #[tracing::instrument(skip(self, user, content_markdown), err)]
+    #[tracing::instrument(skip(self, user, name, content_markdown, properties), fields(properties = properties.values.len(), tags = properties.tags.len()), err)]
     async fn finalize_document(
         &self,
         user: &MacroUserIdStr<'static>,

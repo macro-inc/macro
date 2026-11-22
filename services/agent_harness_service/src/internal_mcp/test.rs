@@ -233,7 +233,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         .await;
         assert_eq!(status, StatusCode::OK, "{initialized}");
         let instructions = initialized["result"]["instructions"].as_str().unwrap();
-        assert!(instructions.contains("macro_internal.set_pull_request"));
+        assert!(instructions.contains("session.linkPullRequest(url)"));
         assert!(instructions.contains("register its URL"));
         assert!(instructions.contains(prompt::pull_requests::READY_PULL_REQUEST));
         assert!(instructions.contains("submit it with macro_internal.DecideReview"));
