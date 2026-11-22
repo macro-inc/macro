@@ -80,6 +80,12 @@ fn replies_are_told_never_to_show_how_the_bot_works() {
 
 fn code_mode_tools() -> CodeModeTools {
     CodeModeTools {
+        attribution: agent_correlation::context::Attribution {
+            channel_mention_id: Some(mention().message_id),
+            channel_mention_channel_id: mention().channel_id,
+            scope: Some(agent_correlation::scope::SessionScope::ChannelMention),
+            ..Default::default()
+        },
         direct: ai_tools::tools_for_channel_bot_code_mode().toolset,
         code: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
         context: UserCodeModeToolContext {

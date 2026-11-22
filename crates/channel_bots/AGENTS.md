@@ -25,7 +25,8 @@ decides whether to trigger, authorizes, and delivers a reply.
   user attributed to Macro AI, the same identity as the direct tools, with a
   signed allowlisted ChannelMention scope, original mention claim and trusted
   origin channel. The whole responder also runs under mention attribution
-  so in-process guards apply.
+  so in-process guards apply. Each bound tool dispatch reinstates it too:
+  the model stream driver polls tools on a separate task.
   Channel/message reads are bound to that signed origin channel and its
   threads; a missing origin fails closed. Email, private chats and unified
   search are unavailable. Programs make only explicitly listed workspace reads; they cannot write,

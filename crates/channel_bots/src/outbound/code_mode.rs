@@ -61,6 +61,12 @@ impl ChannelBotTools {
         cognition: Option<Arc<dyn cognition::domain::Cognition>>,
     ) -> Arc<dyn ToolSet<ToolServiceContext> + Send + Sync> {
         Arc::new(CodeModeTools {
+            attribution: agent_correlation::context::Attribution {
+                channel_mention_id: Some(mention.message_id),
+                channel_mention_channel_id: mention.channel_id,
+                scope: Some(agent_correlation::scope::SessionScope::ChannelMention),
+                ..Default::default()
+            },
             direct: self.direct.clone(),
             code: self.code.clone(),
             context: UserCodeModeToolContext {
@@ -107,6 +113,7 @@ impl UserCodeMode for MentionPrograms {
 /// The direct tools plus the user-scoped code tools, which run with their own
 /// per-reply context.
 struct CodeModeTools {
+    attribution: agent_correlation::context::Attribution,
     direct: Arc<AiToolSet>,
     code: Arc<AsyncToolCollection<UserCodeModeToolContext>>,
     context: UserCodeModeToolContext,
@@ -150,22 +157,34 @@ impl ToolSet<ToolServiceContext> for CodeModeTools {
         tool_name: &'a str,
         json: &'a serde_json::Value,
     ) -> ToolCallFuture<'a> {
-        match self.route(tool_name) {
-            Route::Code => {
-                self.code
-                    .dispatch_tool_call(self.context.clone(), request_context, tool_name, json)
-            }
-            Route::Direct => {
-                self.direct
-                    .dispatch_tool_call(context, request_context, tool_name, json)
-            }
-            // Hidden means not callable: a name the reply was not offered is
-            // refused here, never dispatched.
-            Route::Refused => {
-                let refusal = hidden_tool_refusal(tool_name);
-                Box::pin(async move { Ok(Err(refusal)) })
-            }
-        }
+        // The stream driver polls tools on its own task. Bind the trusted
+        // mention here as well as around the responder, so in-process guards
+        // cannot lose attribution across that task boundary.
+        Box::pin(agent_correlation::context::scope_attribution(
+            self.attribution,
+            async move {
+                match self.route(tool_name) {
+                    Route::Code => {
+                        self.code
+                            .dispatch_tool_call(
+                                self.context.clone(),
+                                request_context,
+                                tool_name,
+                                json,
+                            )
+                            .await
+                    }
+                    Route::Direct => {
+                        self.direct
+                            .dispatch_tool_call(context, request_context, tool_name, json)
+                            .await
+                    }
+                    // Hidden means not callable: a name the reply was not offered
+                    // is refused here, never dispatched.
+                    Route::Refused => Ok(Err(hidden_tool_refusal(tool_name))),
+                }
+            },
+        ))
     }
 
     fn request_schemas(&self) -> Option<Vec<RequestSchema>> {
