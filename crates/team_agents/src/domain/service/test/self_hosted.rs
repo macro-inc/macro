@@ -1497,3 +1497,142 @@ async fn one_hanging_revoke_doesnt_keep_the_machines_other_agents_running() {
     assert!(!sam.revoke_pending, "Sam's credentials revoked");
     assert!(ada.revoke_pending, "Ada's left for the sweep");
 }
+
+#[tokio::test]
+async fn an_unpair_of_a_moves_target_stops_the_agent_on_the_machine_it_was_leaving() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    service
+        .move_install(
+            receipt(),
+            &agent.user_id,
+            MoveTeammate {
+                harness_id: DESKTOP,
+            },
+        )
+        .await
+        .unwrap();
+    // The desktop is unpaired mid-move; the laptop still runs the agent.
+    service.installs.unentitled.lock().unwrap().push(DESKTOP);
+    let before = journal.entries().len();
+
+    assert_eq!(service.offboard_host(DESKTOP).await.unwrap(), 1);
+
+    let install = install_of(&service, &agent);
+    assert!(install.parked(), "{install:?}");
+    assert_eq!(install.harness_id, LAPTOP);
+    assert!(
+        journal.entries()[before..].contains(&format!("runtimes.changed {LAPTOP}")),
+        "the laptop is told to stop it: {:?}",
+        &journal.entries()[before..]
+    );
+}
+
+/// Repositories whose token issue takes `delay`, and never comes back for
+/// the agent named `hangs`.
+struct SlowRepos {
+    journal: Journal,
+    hangs: &'static str,
+    delay: std::time::Duration,
+}
+
+impl AgentRepos for SlowRepos {
+    async fn create(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: Uuid,
+        seed: &PersonaSeed,
+    ) -> Result<AgentRepo, TeamAgentError> {
+        if seed.name == self.hangs {
+            std::future::pending::<()>().await;
+        }
+        tokio::time::sleep(self.delay).await;
+        self.journal.record(format!("repo.create {}", seed.name));
+        Ok(AgentRepo {
+            url: "https://git.example.com/ada.git".to_owned(),
+            token: RepoToken::generate(),
+        })
+    }
+
+    async fn delete(&self, _: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        unreachable!("sweeps delete no repository")
+    }
+
+    async fn voice(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: Uuid,
+    ) -> Result<Option<VoiceModel>, TeamAgentError> {
+        unreachable!("sweeps read no voice")
+    }
+
+    async fn set_voice(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: Uuid,
+        _: &VoiceModel,
+    ) -> Result<(), TeamAgentError> {
+        unreachable!("sweeps set no voice")
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_sweep_offboards_agents_side_by_side_so_one_hanging_revoke_costs_one_budget() {
+    let (service, journal, _) = self_hosted_service();
+    let mut agents = Vec::new();
+    for (key, name) in [
+        ("invite-a", "Ada"),
+        ("invite-b", "Bo"),
+        ("invite-c", "Cy"),
+        ("invite-d", "Di"),
+    ] {
+        agents.push(
+            service
+                .create(
+                    receipt(),
+                    CreateTeamAgent {
+                        purchase_key: key.to_owned(),
+                        name: name.to_owned(),
+                        ..own(LAPTOP)
+                    },
+                )
+                .await
+                .unwrap(),
+        );
+    }
+    // The laptop's owner lost the right to host (a removal or demotion).
+    service.installs.unentitled.lock().unwrap().push(LAPTOP);
+    // Ada's revoke hangs; each of the others takes 3 s.
+    let repos = SlowRepos {
+        journal: journal.clone(),
+        hangs: "Ada",
+        delay: std::time::Duration::from_secs(3),
+    };
+    let keys = FakeApiKeys(journal.clone(), Arc::default());
+    let runtimes = FakeRuntimes(journal.clone());
+    let offboarding = crate::domain::service::self_hosted::Offboarding {
+        repository: &service.repository,
+        api_keys: &keys,
+        repos: &repos,
+        installs: &service.installs,
+        runtimes: &runtimes,
+    };
+
+    // One after another: 5 s for Ada plus 3 s for each of the others.
+    let one_budget = std::time::Duration::from_secs(6);
+    let (offboarded, _) = tokio::time::timeout(one_budget, offboarding.offboard_unentitled())
+        .await
+        .expect("the agents are offboarded side by side")
+        .unwrap();
+    assert_eq!(offboarded, 3);
+
+    for agent in &agents {
+        let install = install_of(&service, agent);
+        assert!(install.parked(), "{install:?}");
+        assert_eq!(
+            install.revoke_pending,
+            agent.name == "Ada",
+            "only Ada's left for the next sweep: {install:?}"
+        );
+    }
+}

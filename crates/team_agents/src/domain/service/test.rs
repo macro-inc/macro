@@ -727,7 +727,12 @@ impl TeammateInstalls for FakeInstalls {
             .unwrap()
             .iter()
             .filter(|row| {
-                unentitled.contains(&row.harness_id)
+                let moving_to = match row.checkpoint {
+                    Some((Checkpoint::Moving { to }, _)) => Some(to),
+                    _ => None,
+                };
+                (unentitled.contains(&row.harness_id)
+                    || moving_to.is_some_and(|to| unentitled.contains(&to)))
                     && row.parked_at.is_none()
                     && !matches!(row.checkpoint, Some((Checkpoint::Removing, _)))
             })

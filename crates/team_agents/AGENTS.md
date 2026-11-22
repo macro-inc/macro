@@ -149,10 +149,15 @@ removal or demotion (`teams::domain::member_access`), and by the internal
 `POST /internal/teammate_hosts/{harness_id}/offboard` (`offboard_host`, only
 that machine's installs) that document_storage_service calls after an unpair
 (`harnesses::domain::retired`, a 10 s client timeout). `offboard_host` parks
-every agent on the machine first and only then revokes each (5 s each), so a
-slow revoke or the caller giving up leaves the rest parked, the slow one
-`revoke_pending`; authentication_service's 60 s
-sweep (`offboard_unentitled_hosts`) backs both. Parking: `park` waits for a
+every agent on (or moving to) the machine first, tells it and the machine a
+parked mid-move agent was leaving (which still runs it), and only then
+revokes, so a slow revoke or the caller giving up leaves the rest parked, the
+slow one `revoke_pending`; authentication_service's 60 s
+sweep (`offboard_unentitled_hosts`) backs both. The sweep, the removal and
+demotion hook and an unpair offboard and
+revokes `OFFBOARD_CONCURRENCY` (4) agents at once, each within its 5 s, so
+one hanging revoke costs a round one budget, not one per agent; a revoke that
+failed in a round waits for the next. Parking: `park` waits for a
 delivery in flight and sets `parked_at` and `revoke_pending`, then the
 credentials are revoked; `installs_on` leaves a parked install out, so its
 machine stops it. A parked agent keeps its account, seat, DMs and repository,

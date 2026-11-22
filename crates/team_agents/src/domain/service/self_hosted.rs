@@ -1,10 +1,16 @@
 //! The service's half for agents on their owners' own machines: invite,
 //! move, removal and credential issuance for installs.
 
+use futures::StreamExt;
+
 use super::*;
 
 /// Installs offboarded per sweep round.
 const OFFBOARD_PAGE: u32 = 100;
+
+/// Installs a round offboards at once, each revoke with its own
+/// [`REVOKE_TIMEOUT`], so one that hangs holds up only its own slot.
+const OFFBOARD_CONCURRENCY: usize = 4;
 
 /// How long one agent's pending revoke may take (its keys, then a
 /// repository token from agent_git) while it holds the install's row lock.
@@ -626,43 +632,90 @@ where
                 parked = parked.len(),
                 "parked the agent teammates of an unpaired machine"
             );
-            // It stops them as no longer its own.
-            self.runtimes.installs_changed(harness).await;
-        }
-        for install in &parked {
-            if let Err(error) = self.finish_revoke(install).await {
-                tracing::error!(install_id = %install.install_id, error = ?error, "could not revoke an agent's credentials; the sweep retries");
+            // They stop them as no longer their own: this machine, and the
+            // one an agent moving here still runs on (parking ended the
+            // move, so its install is back there).
+            let mut machines = vec![harness];
+            for install in &parked {
+                if !machines.contains(&install.harness_id) {
+                    machines.push(install.harness_id);
+                }
+            }
+            for machine in machines {
+                self.runtimes.installs_changed(machine).await;
             }
         }
+        self.revoke_each(&parked).await;
         Ok(parked.len())
     }
 
     /// Offboard every install on a machine that may no longer host it, and
-    /// retry every revoke that failed, a page at a time; one failure doesn't
-    /// stop the rest. How many were offboarded and revoked.
+    /// retry every revoke that failed before this round, a page at a time,
+    /// [`OFFBOARD_CONCURRENCY`] at once; one failure doesn't stop the rest.
+    /// How many were offboarded and revoked.
     pub(super) async fn offboard_unentitled(&self) -> Result<(usize, usize), TeamAgentError> {
         let installs = self.installs.unentitled_installs(OFFBOARD_PAGE).await?;
-        let mut offboarded = 0;
-        for install in &installs {
-            match self.offboard(install).await {
-                Ok(()) => offboarded += 1,
-                Err(error) => {
-                    tracing::error!(install_id = %install.install_id, error = ?error, "could not take an agent off its machine");
-                }
-            }
-        }
-        let pending = self.installs.revoke_pending(OFFBOARD_PAGE).await?;
-        let mut revoked = 0;
-        for install in &pending {
-            match self.finish_revoke(install).await {
-                Ok(()) => revoked += 1,
-                Err(error) => {
-                    tracing::error!(install_id = %install.install_id, error = ?error, "could not revoke an agent's credentials");
-                }
-            }
-        }
-        Ok((offboarded, revoked))
+        // Collected first: a closure in the stream's type trips the `Send`
+        // check of the service's futures.
+        let offboards: Vec<_> = installs
+            .iter()
+            .map(|install| self.try_offboard(install))
+            .collect();
+        let offboarded: Vec<bool> = futures::stream::iter(offboards)
+            .buffer_unordered(OFFBOARD_CONCURRENCY)
+            .collect()
+            .await;
+        // One that just failed waits for the next round rather than taking
+        // a second budget in this one.
+        let mut pending = self.installs.revoke_pending(OFFBOARD_PAGE).await?;
+        pending.retain(|pending| {
+            !installs
+                .iter()
+                .any(|tried| tried.install_id == pending.install_id)
+        });
+        let revoked = self.revoke_each(&pending).await;
+        Ok((count(&offboarded), revoked))
     }
+
+    /// [`Self::offboard`], logging a failure. Whether it worked.
+    async fn try_offboard(&self, install: &TeammateInstallRecord) -> bool {
+        self.offboard(install)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(install_id = %install.install_id, error = ?error, "could not take an agent off its machine");
+            })
+            .is_ok()
+    }
+
+    /// [`Self::finish_revoke`], logging a failure (it stays pending for the
+    /// sweep). Whether it worked.
+    async fn try_revoke(&self, install: &TeammateInstallRecord) -> bool {
+        self.finish_revoke(install)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(install_id = %install.install_id, error = ?error, "could not revoke an agent's credentials; the sweep retries");
+            })
+            .is_ok()
+    }
+
+    /// Revoke each install's pending credentials, [`OFFBOARD_CONCURRENCY`]
+    /// at once. How many were revoked.
+    async fn revoke_each(&self, installs: &[TeammateInstallRecord]) -> usize {
+        let revokes: Vec<_> = installs
+            .iter()
+            .map(|install| self.try_revoke(install))
+            .collect();
+        let revoked: Vec<bool> = futures::stream::iter(revokes)
+            .buffer_unordered(OFFBOARD_CONCURRENCY)
+            .collect()
+            .await;
+        count(&revoked)
+    }
+}
+
+/// How many of `outcomes` worked.
+fn count(outcomes: &[bool]) -> usize {
+    outcomes.iter().filter(|worked| **worked).count()
 }
 
 /// Void every credential an agent's machine holds: its API keys, and its
