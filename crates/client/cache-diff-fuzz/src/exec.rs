@@ -142,10 +142,10 @@ impl<'a> Exec<'a> {
         // browser host's prepared hydrate belongs to its engine.
         #[cfg(staged_hydrate)]
         self.staged.clear();
-        self.interrupt_open()?;
+        let opened = self.interrupt_open()?;
         let database =
             cache_turso::TursoFileDatabase::new(&self.path).map_err(|error| error.to_string())?;
-        let storage = match database.open(SCOPE) {
+        let storage = match opened.unwrap_or_else(|| database.open(SCOPE)) {
             Ok(storage) => storage,
             Err(error) if error.requires_physical_reset() => {
                 self.record(index, "open.reset", Err(error.to_string()));
@@ -166,14 +166,18 @@ impl<'a> Exec<'a> {
 
     /// With `--interrupt-migration-after K`, the first open runs with the
     /// storage told to fail right after committing migration step K, as a
-    /// process killed there would, and is dropped; the open after it runs the
-    /// rest. Not traced, since a file with nothing to migrate opens whole and
-    /// the other side's run need not migrate: counted as
-    /// `migration.interrupted` or `migration.not-interrupted`. A failed open
-    /// the hook did not stop, or one that asks for a reset, fails the run.
-    fn interrupt_open(&mut self) -> Result<(), String> {
+    /// process killed there would; the open after it runs the rest. Not
+    /// traced, since a file with nothing to migrate opens whole and the other
+    /// side's run need not migrate: counted as `migration.interrupted` or
+    /// `migration.not-interrupted`. An open the hook did not stop is returned
+    /// as the open itself, so a run where it never fires opens as one without
+    /// the flag. A stopped open that succeeded or asks for a reset fails the run.
+    fn interrupt_open(
+        &mut self,
+    ) -> Result<Option<Result<cache_turso::TursoStorage, cache_turso::TursoStorageError>>, String>
+    {
         let Some(steps) = self.interrupt_migration.take() else {
-            return Ok(());
+            return Ok(None);
         };
         #[cfg(migration_hooks)]
         {
@@ -183,29 +187,26 @@ impl<'a> Exec<'a> {
             interrupt_after_steps(Some(steps));
             let opened = database.open(SCOPE);
             interrupt_after_steps(None);
-            let interrupted = take_interrupted();
+            if !take_interrupted() {
+                self.count("migration.not-interrupted");
+                return Ok(Some(opened));
+            }
             match opened {
-                Ok(storage) if !interrupted => {
-                    drop(storage);
-                    self.count("migration.not-interrupted");
+                Ok(_) => Err("the migration hook stopped an open that succeeded".into()),
+                Err(error) if error.requires_physical_reset() => Err(format!(
+                    "migration interrupted after step {steps} asked for a reset: {error}"
+                )),
+                Err(_) => {
+                    self.count("migration.interrupted");
+                    Ok(None)
                 }
-                Ok(_) => return Err("the migration hook stopped an open that succeeded".into()),
-                Err(error) if error.requires_physical_reset() => {
-                    return Err(format!(
-                        "migration interrupted after step {steps} asked for a reset: {error}"
-                    ));
-                }
-                Err(error) if !interrupted => {
-                    return Err(format!(
-                        "the open with --interrupt-migration-after {steps} failed without the hook stopping it: {error}"
-                    ));
-                }
-                Err(_) => self.count("migration.interrupted"),
             }
         }
         #[cfg(not(migration_hooks))]
-        let _ = steps;
-        Ok(())
+        {
+            let _ = steps;
+            Ok(None)
+        }
     }
 
     fn handle(&self) -> &EngineHandle {

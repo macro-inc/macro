@@ -91,13 +91,16 @@ disk after a reopen must come out the same.
   `--mask-source-hashes` when the builds hash records differently.
 - A migrated file against a fresh one: `CHAIN_A="b b" CHAIN_B="a b"` with SIDE_A the older
   build and SIDE_B the newer: side a is NEW from an empty file, side b is OLD's file migrated
-  by NEW, each then running the case again.
+  by NEW, each then running the case again. Every segment is compared, so add
+  `FUZZ_ARGS=--decoded-facts` when the builds' storage schema versions differ: it masks the
+  version `meta` holds. A chain's stats are its segments' counters summed.
 - Interrupted migration: build NEW with `MIGRATION_HOOKS=1` (its `cache-turso` needs the
-  `migration-test-hooks` feature) and give it `FUZZ_ARGS_B="--interrupt-migration-after K"`:
-  its first open fails right after committing step K, as a killed process would (the hook must
-  report it stopped that open), and the open
-  after it finishes the migration. Stats count `migration.interrupted` (only opens that had
-  that step to run are interrupted, so count them before trusting a clean run).
+  `migration-test-hooks` feature) and give it `FUZZ_ARGS_B="--interrupt-migration-after K"`
+  (K from 1): its first open fails right after committing step K, as a killed process would
+  (the hook must report it stopped that open), and the open after it finishes the migration.
+  An open the hook did not stop is used as the engine's open. Stats count
+  `migration.interrupted` (only opens that had that step to run are interrupted, so count
+  them before trusting a clean run).
 - Rerun one seed: `bin/SIDE --seed N --schema static_assets/schema.graphql --assets
   crates/client/cache-diff-fuzz/assets --out D --work D/w --full`. Use
   `--emit-case` and `--case FILE` to save a case and rerun it. A seed's case

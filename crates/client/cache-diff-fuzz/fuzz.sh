@@ -159,7 +159,14 @@ one() {
           break
         fi
         { echo "segment $segment"; cat "$seg/$seed.trace"; } >> "$up/$side.trace"
-        [ "$segment" -eq 0 ] && cp "$seg/$seed.stats.json" "$out/$side/$seed.stats.json"
+        # The side's counters are its segments' summed: a migration counts in a later segment.
+        if [ "$segment" -eq 0 ]; then
+          cp "$seg/$seed.stats.json" "$out/$side/$seed.stats.json"
+        else
+          jq -s '.[0] + {counters: (reduce (.[].counters | to_entries[]) as $e ({}; .[$e.key] += $e.value))}' \
+            "$out/$side/$seed.stats.json" "$seg/$seed.stats.json" > "$up/$side.stats" \
+            && mv "$up/$side.stats" "$out/$side/$seed.stats.json"
+        fi
         # A crash moves the engine to the next copy: the last is what the segment left.
         last=0
         while [ -d "$seg/w/$seed/db-$((last + 1))" ]; do last=$((last + 1)); done

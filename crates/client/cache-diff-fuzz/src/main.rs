@@ -101,7 +101,7 @@ struct Args {
     /// process killed there would, then open again (a side built with
     /// MIGRATION_HOOKS=1). Meant for a run that starts from an older build's
     /// file (`--start-from`, `UPGRADE`, a `CHAIN_*` segment).
-    #[arg(long, value_name = "K")]
+    #[arg(long, value_name = "K", value_parser = clap::value_parser!(u32).range(1..))]
     interrupt_migration_after: Option<u32>,
 }
 
