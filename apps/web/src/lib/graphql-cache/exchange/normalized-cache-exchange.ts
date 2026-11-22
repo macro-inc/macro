@@ -2,11 +2,7 @@ import { perfMark } from '@app/observability/perf-marks';
 import { StaleCacheAuthorityError } from '../authority';
 import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import { cacheSessionGeneration } from '../session-generation';
-import {
-  externalWriteVersion,
-  predatesExternalWrite,
-  recordExternalDeletion,
-} from './external-writes';
+import { externalWriteVersion, predatesExternalWrite } from './external-writes';
 /**
  * urql exchange backed by the normalized wasm cache (via a `CacheHost`).
  *
@@ -1401,8 +1397,6 @@ export function normalizedCacheExchange(
                 data: effect.data,
               });
             } else {
-              // A read sent before this deletion must not write it back.
-              recordExternalDeletion(host, [effect.key]);
               await host.deleteRecords([effect.key], generation);
             }
           } catch (error) {
@@ -1596,7 +1590,6 @@ export function normalizedCacheExchange(
           const keys = options.deletedRecordKeys?.(result) ?? [];
           if (keys.length === 0)
             return { attempted: false, revision: undefined };
-          recordExternalDeletion(host, keys);
           const deletion = await host.deleteRecords(
             keys,
             typeof op.context.cacheSessionGeneration === 'string'

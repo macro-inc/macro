@@ -1,6 +1,5 @@
 import { firstOrAborted } from '@core/util/abort-signal';
 import { sleep } from '@core/util/sleep';
-import { recordExternalDeletion } from '@graphql-cache/exchange/external-writes';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
@@ -423,8 +422,6 @@ async function removeUnreadableChannels(
         // unproven and the directory reads the network instead.
         if (!addChannelRereads(input.userId, input.generation, batch))
           return finish('unsaved');
-        // A read sent before this deletion must not write the channel back.
-        recordExternalDeletion(input.host, keys);
         await span.run(() => input.host.deleteRecords(keys, session));
       }
       removed += stale.length;
