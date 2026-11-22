@@ -19,7 +19,8 @@ fn recipient_refusal_json() -> String {
 fn browser_refusal_fixture_matches_the_real_serializer() {
     assert_eq!(
         recipient_refusal_json(),
-        include_str!("fixtures/recipient-refusal.json")
+        include_str!("fixtures/recipient-refusal.json"),
+        "Regenerate with cargo test -p models_email --test submission_refusal_fixture regenerate_browser_refusal_fixture -- --ignored"
     );
 }
 

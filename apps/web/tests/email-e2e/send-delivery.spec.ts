@@ -3,7 +3,9 @@
 // from an alias and a reply on a thread someone else shared. The same on a
 // Gmail and an Outlook inbox (an alias is a Gmail thing).
 
-import recipientRefusal from '../../../../crates/models_email/tests/fixtures/recipient-refusal.json';
+import recipientRefusal from '../../../../crates/models_email/tests/fixtures/recipient-refusal.json' with {
+  type: 'json',
+};
 import {
   body,
   composeNew,
