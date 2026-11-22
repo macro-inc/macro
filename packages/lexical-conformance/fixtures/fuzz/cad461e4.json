@@ -1,0 +1,2547 @@
+{
+  "schema": 1,
+  "source": {
+    "repo": "fuzz",
+    "seed": 1592639710,
+    "path": "0",
+    "profile": "upstream"
+  },
+  "commands": [
+    {
+      "kind": "InsertRawText",
+      "text": "😀\nZ"
+    },
+    {
+      "kind": "InsertText",
+      "text": " "
+    },
+    {
+      "kind": "Select",
+      "anchor": {
+        "path": [
+          0,
+          0
+        ],
+        "offset": 2,
+        "type": "text"
+      },
+      "focus": {
+        "path": [],
+        "offset": 1,
+        "type": "element"
+      }
+    },
+    {
+      "kind": "InsertParagraph"
+    },
+    {
+      "kind": "TextFromView",
+      "path": [
+        0,
+        0
+      ],
+      "text": "😀é",
+      "anchor": 4,
+      "focus": 4,
+      "compositionEnd": false
+    },
+    {
+      "kind": "Select",
+      "anchor": {
+        "path": [
+          0,
+          0
+        ],
+        "offset": 2,
+        "type": "text"
+      },
+      "focus": {
+        "path": [
+          0
+        ],
+        "offset": 0,
+        "type": "element"
+      }
+    },
+    {
+      "kind": "InsertParagraph"
+    },
+    {
+      "kind": "InsertText",
+      "text": "\t a"
+    },
+    {
+      "kind": "Select",
+      "anchor": {
+        "path": [
+          1,
+          0
+        ],
+        "offset": 0,
+        "type": "text"
+      },
+      "focus": {
+        "path": [
+          0
+        ],
+        "offset": 0,
+        "type": "element"
+      }
+    },
+    {
+      "kind": "InsertRawText",
+      "text": "א"
+    },
+    {
+      "kind": "TextFromView",
+      "path": [
+        0,
+        0
+      ],
+      "text": "א\t ﻿ Zaé",
+      "anchor": 6,
+      "focus": 6,
+      "compositionEnd": false
+    },
+    {
+      "kind": "Select",
+      "anchor": {
+        "path": [
+          0
+        ],
+        "offset": 1,
+        "type": "element"
+      },
+      "focus": {
+        "path": [
+          0
+        ],
+        "offset": 0,
+        "type": "element"
+      }
+    },
+    {
+      "kind": "InsertText",
+      "text": " ﻿ "
+    },
+    {
+      "kind": "InsertRawText",
+      "text": "\n"
+    },
+    {
+      "kind": "Select",
+      "anchor": {
+        "path": [
+          0
+        ],
+        "offset": 2,
+        "type": "element"
+      },
+      "focus": {
+        "path": [],
+        "offset": 2,
+        "type": "element"
+      }
+    },
+    {
+      "kind": "InsertTab"
+    },
+    {
+      "kind": "Select",
+      "anchor": {
+        "path": [
+          0
+        ],
+        "offset": 1,
+        "type": "element"
+      },
+      "focus": {
+        "path": [
+          0,
+          0
+        ],
+        "offset": 3,
+        "type": "text"
+      }
+    },
+    {
+      "kind": "InsertText",
+      "text": "\n\n"
+    }
+  ],
+  "expected": [
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "😀",
+                  "type": "text",
+                  "version": 1
+                },
+                {
+                  "type": "linebreak",
+                  "version": 1
+                },
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Z",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            2
+          ],
+          "offset": 1,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0,
+            2
+          ],
+          "offset": 1,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "😀\nZ",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "2"
+        },
+        {
+          "path": [
+            0,
+            1
+          ],
+          "key": "3"
+        },
+        {
+          "path": [
+            0,
+            2
+          ],
+          "key": "4"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "2",
+          "3",
+          "4"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            true
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "1",
+            "updated"
+          ],
+          [
+            "2",
+            "created"
+          ],
+          [
+            "3",
+            "created"
+          ],
+          [
+            "4",
+            "created"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "😀",
+                  "type": "text",
+                  "version": 1
+                },
+                {
+                  "type": "linebreak",
+                  "version": 1
+                },
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Z ",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            2
+          ],
+          "offset": 2,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0,
+            2
+          ],
+          "offset": 2,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "😀\nZ ",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "2"
+        },
+        {
+          "path": [
+            0,
+            1
+          ],
+          "key": "3"
+        },
+        {
+          "path": [
+            0,
+            2
+          ],
+          "key": "4"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "4"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            false
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "4",
+            "updated"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "😀",
+                  "type": "text",
+                  "version": 1
+                },
+                {
+                  "type": "linebreak",
+                  "version": 1
+                },
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Z ",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 2,
+          "type": "text"
+        },
+        "focus": {
+          "path": [],
+          "offset": 1,
+          "type": "element"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "😀\nZ ",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "2"
+        },
+        {
+          "path": [
+            0,
+            1
+          ],
+          "key": "3"
+        },
+        {
+          "path": [
+            0,
+            2
+          ],
+          "key": "4"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [],
+        "dirtyElements": [],
+        "normalized": [],
+        "mutations": [],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "😀",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            1
+          ],
+          "offset": 0,
+          "type": "element"
+        },
+        "focus": {
+          "path": [
+            1
+          ],
+          "offset": 0,
+          "type": "element"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "😀\n\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "2"
+        },
+        {
+          "path": [
+            1
+          ],
+          "key": "5"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "3",
+          "2",
+          "4"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            true
+          ],
+          [
+            "5",
+            true
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "root",
+            "updated"
+          ],
+          [
+            "1",
+            "updated"
+          ],
+          [
+            "2",
+            "updated"
+          ],
+          [
+            "5",
+            "created"
+          ],
+          [
+            "3",
+            "destroyed"
+          ],
+          [
+            "4",
+            "destroyed"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "😀é",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 4,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 4,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "😀é\n\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "2"
+        },
+        {
+          "path": [
+            1
+          ],
+          "key": "5"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "2"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            false
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "2",
+            "updated"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "😀é",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 2,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0
+          ],
+          "offset": 0,
+          "type": "element"
+        },
+        "format": 0,
+        "style": "",
+        "backward": true
+      },
+      "text": "😀é\n\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "2"
+        },
+        {
+          "path": [
+            1
+          ],
+          "key": "5"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [],
+        "dirtyElements": [],
+        "normalized": [],
+        "mutations": [],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "é",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            1,
+            0
+          ],
+          "offset": 0,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            1,
+            0
+          ],
+          "offset": 0,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "\n\né\n\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            1
+          ],
+          "key": "6"
+        },
+        {
+          "path": [
+            1,
+            0
+          ],
+          "key": "2"
+        },
+        {
+          "path": [
+            2
+          ],
+          "key": "5"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "2"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            true
+          ],
+          [
+            "6",
+            true
+          ],
+          [
+            "5",
+            true
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "root",
+            "updated"
+          ],
+          [
+            "1",
+            "updated"
+          ],
+          [
+            "2",
+            "updated"
+          ],
+          [
+            "5",
+            "updated"
+          ],
+          [
+            "6",
+            "created"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "\t aé",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            1,
+            0
+          ],
+          "offset": 3,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            1,
+            0
+          ],
+          "offset": 3,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "\n\n\t aé\n\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            1
+          ],
+          "key": "6"
+        },
+        {
+          "path": [
+            1,
+            0
+          ],
+          "key": "2"
+        },
+        {
+          "path": [
+            2
+          ],
+          "key": "5"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "2"
+        ],
+        "dirtyElements": [
+          [
+            "6",
+            false
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "2",
+            "updated"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "\t aé",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            1,
+            0
+          ],
+          "offset": 0,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0
+          ],
+          "offset": 0,
+          "type": "element"
+        },
+        "format": 0,
+        "style": "",
+        "backward": true
+      },
+      "text": "\n\n\t aé\n\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            1
+          ],
+          "key": "6"
+        },
+        {
+          "path": [
+            1,
+            0
+          ],
+          "key": "2"
+        },
+        {
+          "path": [
+            2
+          ],
+          "key": "5"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [],
+        "dirtyElements": [],
+        "normalized": [],
+        "mutations": [],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "א\t aé",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 1,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 1,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "א\t aé\n\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "7"
+        },
+        {
+          "path": [
+            1
+          ],
+          "key": "5"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "7",
+          "2"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            true
+          ],
+          [
+            "6",
+            true
+          ],
+          [
+            "5",
+            true
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [
+          "7",
+          "2"
+        ],
+        "mutations": [
+          [
+            "root",
+            "updated"
+          ],
+          [
+            "1",
+            "updated"
+          ],
+          [
+            "5",
+            "updated"
+          ],
+          [
+            "7",
+            "created"
+          ],
+          [
+            "2",
+            "destroyed"
+          ],
+          [
+            "6",
+            "destroyed"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "א\t ﻿ Zaé",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 6,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 6,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "א\t ﻿ Zaé\n\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "7"
+        },
+        {
+          "path": [
+            1
+          ],
+          "key": "5"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "7"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            false
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "7",
+            "updated"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "א\t ﻿ Zaé",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0
+          ],
+          "offset": 1,
+          "type": "element"
+        },
+        "focus": {
+          "path": [
+            0
+          ],
+          "offset": 0,
+          "type": "element"
+        },
+        "format": 0,
+        "style": "",
+        "backward": true
+      },
+      "text": "א\t ﻿ Zaé\n\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "7"
+        },
+        {
+          "path": [
+            1
+          ],
+          "key": "5"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [],
+        "dirtyElements": [],
+        "normalized": [],
+        "mutations": [],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": " ﻿ ",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 3,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 3,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": " ﻿ \n\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "8"
+        },
+        {
+          "path": [
+            1
+          ],
+          "key": "5"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "8",
+          "7"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            true
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "1",
+            "updated"
+          ],
+          [
+            "8",
+            "created"
+          ],
+          [
+            "7",
+            "destroyed"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": " ﻿ ",
+                  "type": "text",
+                  "version": 1
+                },
+                {
+                  "type": "linebreak",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0
+          ],
+          "offset": 2,
+          "type": "element"
+        },
+        "focus": {
+          "path": [
+            0
+          ],
+          "offset": 2,
+          "type": "element"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": " ﻿ \n\n\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "8"
+        },
+        {
+          "path": [
+            0,
+            1
+          ],
+          "key": "9"
+        },
+        {
+          "path": [
+            1
+          ],
+          "key": "5"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "9",
+          "8"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            true
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "1",
+            "updated"
+          ],
+          [
+            "8",
+            "updated"
+          ],
+          [
+            "9",
+            "created"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": " ﻿ ",
+                  "type": "text",
+                  "version": 1
+                },
+                {
+                  "type": "linebreak",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0
+          ],
+          "offset": 2,
+          "type": "element"
+        },
+        "focus": {
+          "path": [],
+          "offset": 2,
+          "type": "element"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": " ﻿ \n\n\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "8"
+        },
+        {
+          "path": [
+            0,
+            1
+          ],
+          "key": "9"
+        },
+        {
+          "path": [
+            1
+          ],
+          "key": "5"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [],
+        "dirtyElements": [],
+        "normalized": [],
+        "mutations": [],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": " ﻿ ",
+                  "type": "text",
+                  "version": 1
+                },
+                {
+                  "type": "linebreak",
+                  "version": 1
+                },
+                {
+                  "detail": 2,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "\t",
+                  "type": "tab",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            2
+          ],
+          "offset": 1,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0,
+            2
+          ],
+          "offset": 1,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": " ﻿ \n\t",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "8"
+        },
+        {
+          "path": [
+            0,
+            1
+          ],
+          "key": "9"
+        },
+        {
+          "path": [
+            0,
+            2
+          ],
+          "key": "10"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "10",
+          "9"
+        ],
+        "dirtyElements": [
+          [
+            "5",
+            true
+          ],
+          [
+            "1",
+            true
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "root",
+            "updated"
+          ],
+          [
+            "1",
+            "updated"
+          ],
+          [
+            "9",
+            "updated"
+          ],
+          [
+            "10",
+            "created"
+          ],
+          [
+            "5",
+            "destroyed"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": " ﻿ ",
+                  "type": "text",
+                  "version": 1
+                },
+                {
+                  "type": "linebreak",
+                  "version": 1
+                },
+                {
+                  "detail": 2,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "\t",
+                  "type": "tab",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0
+          ],
+          "offset": 1,
+          "type": "element"
+        },
+        "focus": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 3,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": " ﻿ \n\t",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "8"
+        },
+        {
+          "path": [
+            0,
+            1
+          ],
+          "key": "9"
+        },
+        {
+          "path": [
+            0,
+            2
+          ],
+          "key": "10"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [],
+        "dirtyElements": [],
+        "normalized": [],
+        "mutations": [],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "\n\n",
+                  "type": "text",
+                  "version": 1
+                },
+                {
+                  "type": "linebreak",
+                  "version": 1
+                },
+                {
+                  "detail": 2,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "\t",
+                  "type": "tab",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 2,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 2,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "\n\n\n\t",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "8"
+        },
+        {
+          "path": [
+            0,
+            1
+          ],
+          "key": "9"
+        },
+        {
+          "path": [
+            0,
+            2
+          ],
+          "key": "10"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "9",
+          "8"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            true
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "1",
+            "updated"
+          ],
+          [
+            "8",
+            "updated"
+          ],
+          [
+            "9",
+            "updated"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    }
+  ],
+  "actual": {
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " ﻿ \n\n",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "type": "linebreak",
+                "version": 1
+              },
+              {
+                "detail": 2,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "\t",
+                "type": "tab",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "range",
+      "anchor": {
+        "path": [
+          0,
+          0
+        ],
+        "offset": 5,
+        "type": "text"
+      },
+      "focus": {
+        "path": [
+          0,
+          0
+        ],
+        "offset": 5,
+        "type": "text"
+      },
+      "format": 0,
+      "style": "",
+      "backward": false
+    },
+    "text": " ﻿ \n\n\n\t",
+    "keys": [
+      {
+        "path": [],
+        "key": "root"
+      },
+      {
+        "path": [
+          0
+        ],
+        "key": "1"
+      },
+      {
+        "path": [
+          0,
+          0
+        ],
+        "key": "8"
+      },
+      {
+        "path": [
+          0,
+          1
+        ],
+        "key": "9"
+      },
+      {
+        "path": [
+          0,
+          2
+        ],
+        "key": "10"
+      }
+    ],
+    "commit": {
+      "dirtyLeaves": [
+        "8",
+        "9"
+      ],
+      "dirtyElements": [
+        [
+          "1",
+          true
+        ],
+        [
+          "root",
+          true
+        ]
+      ],
+      "normalized": [],
+      "mutations": [
+        [
+          "8",
+          "updated"
+        ],
+        [
+          "9",
+          "updated"
+        ],
+        [
+          "1",
+          "updated"
+        ]
+      ],
+      "tags": []
+    },
+    "error": null
+  }
+}

@@ -1,7 +1,6 @@
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { Hotkey, Surface } from '@ui';
-import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
   For,
@@ -20,7 +19,7 @@ export type InlineFollowupMenuOption = {
 };
 
 export function InlineFollowupMenu(props: {
-  editor: LexicalEditor;
+  root: HTMLElement | null;
   open: boolean;
   selection?: Selection | null;
   options: readonly InlineFollowupMenuOption[];
@@ -115,7 +114,7 @@ export function InlineFollowupMenu(props: {
           ref={(el) => {
             floatWithSelection(el, () => ({
               selection: props.selection,
-              reactiveOnContainer: props.editor.getRootElement(),
+              reactiveOnContainer: props.root,
               useBlockBoundary: props.useBlockBoundary,
             }));
             clickOutside(el, () => () => props.onClose());

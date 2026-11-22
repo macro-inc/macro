@@ -17,7 +17,15 @@ import {
 import { Portal } from 'solid-js/web';
 import { createEmailTheme } from '../../../../../../features/email-message/theme';
 
-export const HtmlRender: Component<HtmlRenderDecoratorProps> = (props) => {
+/** Source `importJSON` keeps a stored null hint; like undefined it means "decide from content". */
+export type HtmlRenderUIProps = Omit<
+  HtmlRenderDecoratorProps,
+  'adaptColors'
+> & {
+  adaptColors?: boolean | null;
+};
+
+export const HtmlRender: Component<HtmlRenderUIProps> = (props) => {
   const theme = createEmailTheme();
   let marker: HTMLDivElement | undefined;
   const [shadowContainer, setShadowContainer] = createSignal<HTMLElement>();

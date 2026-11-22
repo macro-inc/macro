@@ -1,3 +1,4 @@
+import { rustEditorModel } from '@core/constant/featureFlags';
 import type * as PlatformModule from '@core/util/platform';
 import 'fake-indexeddb/auto';
 import { render } from '@solidjs/testing-library';
@@ -22,6 +23,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   native: true,
+  rustEngine: false,
   login: true,
   restore: vi.fn(),
   userInfo: vi.fn(),
@@ -35,6 +37,11 @@ vi.mock('@core/util/platform', async (importOriginal) => ({
 }));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => mocks.native,
+}));
+vi.mock('@core/document-session/engine-selection', () => ({
+  get RUST_EDITOR_ENGINE() {
+    return mocks.rustEngine;
+  },
 }));
 vi.mock('@core/util/cookies', () => ({ hasLoginCookie: () => mocks.login }));
 vi.mock('@core/auth/push-registration-lifecycle', () => ({
@@ -109,6 +116,7 @@ const entry: PersistedQueryEntry = {
 beforeEach(async () => {
   vi.resetAllMocks();
   mocks.native = true;
+  mocks.rustEngine = false;
   mocks.login = true;
   queryClient.clear();
   await clearOfflineDocumentContexts();
@@ -125,6 +133,26 @@ afterEach(async () => {
   queryClient.clear();
   await clearOfflineDocumentContexts();
 });
+
+async function storedContextCount(): Promise<number> {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open('native-document-open-persist-v1');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  try {
+    return await new Promise<number>((resolve, reject) => {
+      const request = db
+        .transaction('queries', 'readonly')
+        .objectStore('queries')
+        .count();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    db.close();
+  }
+}
 
 const expectCachedOpen = async (
   opening: ReturnType<typeof fetchSyncDocumentOpenContext>
@@ -410,5 +438,98 @@ describe('stored-file document open context', () => {
     expect(invalidated).toHaveBeenCalled();
     expect(authorization.isCurrent()).toBe(false);
     expect(authorization.canWrite()).toBe(false);
+  });
+});
+
+describe('flagged browser offline document ownership', () => {
+  it('reopens the cached browser body without a remote load', async () => {
+    mocks.rustEngine = true;
+    mocks.native = false;
+    mocks.restore.mockResolvedValue(entry);
+    await expectCachedOpen(fetchSyncDocumentOpenContext('doc-1'));
+    expect(mocks.bundle).not.toHaveBeenCalled();
+  });
+
+  it('does not reuse another account cache when reopening offline', async () => {
+    mocks.rustEngine = true;
+    mocks.native = false;
+    queryClient.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'viewer-b',
+      authenticated: true,
+    });
+    mocks.bundle.mockRejectedValue(new Error('Offline'));
+    const result = await fetchSyncDocumentOpenContext('doc-1');
+    expect(result.isErr()).toBe(true);
+    expect(mocks.bundle).toHaveBeenCalledTimes(1);
+    expect(mocks.snapshot).not.toHaveBeenCalled();
+  });
+});
+
+describe('engine choice after boot', () => {
+  it('keeps the boot engine choice when the rollout turns on later', async () => {
+    const previous = rustEditorModel.override;
+    rustEditorModel.override = true;
+    mocks.native = false;
+    mocks.restore.mockResolvedValue(entry);
+    mocks.bundle.mockResolvedValue({});
+    try {
+      await fetchSyncDocumentOpenContext('doc-1');
+      expect(mocks.restore).not.toHaveBeenCalled();
+      expect(mocks.bundle).toHaveBeenCalledTimes(1);
+    } finally {
+      rustEditorModel.override = previous;
+    }
+  });
+});
+
+describe('unflagged browser logout', () => {
+  it('stores nothing a later flag-off logout could miss when the epoch cannot be recorded', async () => {
+    await clearOfflineDocumentContexts();
+    localStorage.removeItem('document-open-context:epoch');
+    mocks.native = false;
+    mocks.rustEngine = true;
+    queryClient.setQueryData(authKeys.userInfo.queryKey, identity);
+    const setItem = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      });
+    try {
+      const session = offlineDocumentContextCache.capture();
+      if (session)
+        await offlineDocumentContextCache.write(session, documentContext);
+    } finally {
+      setItem.mockRestore();
+    }
+
+    mocks.rustEngine = false;
+    await clearOfflineDocumentContexts();
+
+    expect(await storedContextCount()).toBe(0);
+  });
+
+  it('clears contexts an earlier flag-on load left behind', async () => {
+    // beforeEach wrote a context and its epoch, as a flag-on load does.
+    expect(await storedContextCount()).toBe(1);
+    mocks.native = false;
+    const epoch = localStorage.getItem('document-open-context:epoch');
+
+    await clearOfflineDocumentContexts();
+
+    expect(await storedContextCount()).toBe(0);
+    expect(localStorage.getItem('document-open-context:epoch')).not.toBe(epoch);
+  });
+
+  it('leaves the native document context storage untouched', async () => {
+    mocks.native = false;
+    localStorage.removeItem('document-open-context:epoch');
+    const opened = vi.spyOn(indexedDB, 'open');
+    try {
+      await clearOfflineDocumentContexts();
+      expect(localStorage.getItem('document-open-context:epoch')).toBeNull();
+      expect(opened).not.toHaveBeenCalled();
+    } finally {
+      opened.mockRestore();
+    }
   });
 });

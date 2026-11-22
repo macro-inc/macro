@@ -1,5 +1,5 @@
 //! `cloud storage code check` — cargo fmt/clippy/test for the cloud-storage
-//! workspace on pull requests. Generated into `code-check-cloud-storage.yml`.
+//! workspace on pull requests. Generated into `code_check_cloud_storage.yml`.
 //!
 //! Ported from the hand-written workflow, with two infra changes: the runners
 //! moved to Namespace profiles, and compiled objects moved off the S3/local
@@ -29,6 +29,8 @@ mod test;
 struct PathCheckOutputs {
     /// Whether the cloud storage checks should run at all.
     should_run: JobOutput<Flag>,
+    /// Whether deployment-selection inputs require both Loro guards.
+    loro_guards: JobOutput<Flag>,
     /// Whether a change could affect a service's Doppler config contract.
     doppler_candidates: JobOutput<Flag>,
     /// Whether the GraphQL schema or its compat check changed.
@@ -45,6 +47,7 @@ const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
     "path-check",
     PathCheckOutputs {
         should_run: JobOutput::new("path-check", "should_run"),
+        loro_guards: JobOutput::new("path-check", "loro_guards"),
         doppler_candidates: JobOutput::new("path-check", "doppler_candidates"),
         graphql_schema: JobOutput::new("path-check", "graphql_schema"),
         rust_packages: JobOutput::new("path-check", "rust_packages"),
@@ -62,6 +65,7 @@ const GRAPHQL_SCHEMA_COMPAT: JobHandle<()> = JobHandle::new("graphql-schema-comp
 struct FilterOutputs {
     /// The `should_run` filter's match.
     should_run: StepOutput<Flag>,
+    loro_guards: StepOutput<Flag>,
     /// The `doppler_candidates` filter's match.
     doppler_candidates: StepOutput<Flag>,
     /// The `graphql_schema` filter's match.
@@ -74,6 +78,7 @@ const FILTER: StepHandle<FilterOutputs> = StepHandle::new(
     "filter",
     FilterOutputs {
         should_run: StepOutput::new("filter", "should_run"),
+        loro_guards: StepOutput::new("filter", "loro_guards"),
         doppler_candidates: StepOutput::new("filter", "doppler_candidates"),
         graphql_schema: StepOutput::new("filter", "graphql_schema"),
         query_data: StepOutput::new("filter", "query_data"),
@@ -120,6 +125,36 @@ pub fn code_check_cloud_storage() -> Workflow {
         .add_job(GRAPHQL_SCHEMA_COMPAT, graphql_schema_compat())
 }
 
+const CHECK_TIMEOUT_MINUTES: u32 = 20;
+const LORO_CHECK_TIMEOUT_MINUTES: u32 = 30;
+
+// These are selection-defining inputs and every literal caller namespace the
+// checker discovers. YAML discovery is structural, so filenames cannot narrow it.
+const LORO_GUARD_PATHS: &[&str] = &[
+    "vendor/loro-editor/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "**/Cargo.toml",
+    "rust-toolchain.toml",
+    ".cargo/**",
+    ".config/hakari.toml",
+    "crates/workspace-hack/**",
+    "tooling/xtask/**",
+    "**/*.sh",
+    "justfile",
+    "**/justfile",
+    "**/*.yml",
+    "**/*.yaml",
+    "**/*Dockerfile*",
+    "nix/**",
+    "flake.nix",
+    "flake.lock",
+    ".github/services-config.json",
+    ".github/workspace-dep-closures.json",
+    "infra/stacks/**/*.ts",
+    "infra/packages/service/**",
+];
+
 /// Where `path-check` keeps the release `xtask_nextest_filter` binary (keyed by
 /// its source trees and `Cargo.lock`) and the target dir that builds it.
 const FILTER_CACHE_DIR: RuntimePath<'static> =
@@ -136,6 +171,10 @@ fn path_check() -> Job {
         .add_output(
             PATH_CHECK.outputs.should_run.name(),
             FILTER.outputs.should_run.read(),
+        )
+        .add_output(
+            PATH_CHECK.outputs.loro_guards.name(),
+            FILTER.outputs.loro_guards.read(),
         )
         .add_output(
             PATH_CHECK.outputs.doppler_candidates.name(),
@@ -193,7 +232,10 @@ fn rebuild_all_reason() -> Expr<Str> {
 /// fmt + unused dependencies + clippy.
 fn check() -> Job {
     steps::gated_job(&PATH_CHECK.outputs.should_run)
-        .timeout_minutes(20u32)
+        .timeout_minutes(PATH_CHECK.outputs.loro_guards.read().is_set().then_else(
+            i64::from(LORO_CHECK_TIMEOUT_MINUTES),
+            i64::from(CHECK_TIMEOUT_MINUTES),
+        ))
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env(("CARGO_TARGET_REBUILD_ALL", rebuild_all_reason()))
         .map(with_check_env)
@@ -203,6 +245,16 @@ fn check() -> Job {
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+        .add_step(
+            Step::new("Check vendored Loro against upstream")
+                .run("just check-loro-editor-vendor")
+                .if_condition(PATH_CHECK.outputs.loro_guards.read().is_set()),
+        )
+        .add_step(
+            Step::new("Check deployed server Loro feature isolation")
+                .run("just check-loro-native-editor-features")
+                .if_condition(PATH_CHECK.outputs.loro_guards.read().is_set()),
+        )
         .add_step(steps::code_mode_assets())
         .add_step(cargo_fmt())
         .add_step(cargo_shear())
@@ -314,6 +366,10 @@ fn test() -> Job {
         .add_step(steps::start_sccache_server())
         .add_step(steps::code_mode_assets())
         .add_step(configure_postgres())
+        // The lexical_loro differential tests run the real JS mirror through Bun.
+        .add_step(steps::install_workspace_js_dependencies())
+        // The lexical_conformance and document_session_ffi replays export HTML through jsdom.
+        .add_step(steps::install_conformance_dependencies())
         .add_step(prepare_tests())
         .add_step(run_tests())
         .add_step(setup_execution_runtime())
@@ -431,54 +487,70 @@ fn test_execution_runtime() -> Step<Run> {
 /// change could affect a service's Doppler config contract (a superset of
 /// what `xtask doppler-bins` checks, so the gate never hides a bin).
 fn paths_filter() -> Step<gh_workflow::Use> {
-    DornyPathsFilter::new(
-        "Filter changed paths",
+    let mut should_run = vec![
+        "Cargo.toml",
+        "Cargo.lock",
+        "Cross.toml",
+        "clippy.toml",
+        "deny.toml",
+        "rust-toolchain.toml",
+        ".cargo/**",
+        ".config/**",
+        ".sqlx/**",
+        "crates/**",
+        "services/**",
+        "tooling/xtask/**",
+        "static_assets/**",
+        "nix/**",
+        "nix-support/node_modules*",
+        "flake.nix",
+        "flake.lock",
+        "bun.lock",
+        "packages/sdk/**",
+        "packages/sdk-docs/**",
+        "packages/code-mode-sdk/**",
+        ".github/actions/setup-nix/**",
+        ".github/actions/setup-nix-dev-shell/**",
+        ".github/actions/teardown-nix/**",
+        ".github/actions/setup-sccache/**",
+        ".github/services-config.json",
+        ".github/workflows/code_check_cloud_storage.yml",
+    ];
+    for path in LORO_GUARD_PATHS {
+        if !should_run.contains(path) {
+            should_run.push(path);
+        }
+    }
+    let path_list = |paths: &[&str]| {
+        paths
+            .iter()
+            .map(|path| format!("  - '{path}'"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let filters = format!(
+        "should_run:\n{}\nloro_guards:\n{}\n{}",
+        path_list(&should_run),
+        path_list(LORO_GUARD_PATHS),
         indoc::indoc! {r#"
-                should_run:
-                  - 'Cargo.toml'
-                  - 'Cargo.lock'
-                  - 'Cross.toml'
-                  - 'clippy.toml'
-                  - 'deny.toml'
-                  - 'rust-toolchain.toml'
-                  - '.cargo/**'
-                  - '.config/**'
-                  - '.sqlx/**'
-                  - 'crates/**'
-                  - 'services/**'
-                  - 'tooling/xtask/**'
-                  - 'static_assets/**'
-                  - 'nix/**'
-                  - 'nix-support/node_modules*'
-                  - 'flake.nix'
-                  - 'flake.lock'
-                  - 'bun.lock'
-                  - 'packages/sdk/**'
-                  - 'packages/sdk-docs/**'
-                  - 'packages/code-mode-sdk/**'
-                  - '.github/actions/setup-nix/**'
-                  - '.github/actions/setup-nix-dev-shell/**'
-                  - '.github/actions/teardown-nix/**'
-                  - '.github/actions/setup-sccache/**'
-                  - '.github/services-config.json'
-                  - .github/workflows/code_check_cloud_storage.yml
-                doppler_candidates:
-                  - '.github/services-config.json'
-                  - '**/src/config.rs'
-                  - '**/src/doppler_config.rs'
-                  - '**/Cargo.toml'
-                  - 'tooling/xtask/crates/xtask_doppler_bins/**'
-                  - .github/workflows/code_check_cloud_storage.yml
-                graphql_schema:
-                  - 'static_assets/schema.graphql'
-                  - 'tooling/xtask/crates/xtask_graphql_schema_compat/**'
-                  - .github/workflows/code_check_cloud_storage.yml
-                query_data:
-                  - '**/.sqlx/**'
-            "#},
-    )
-    .step()
-    .id(FILTER.id())
+        doppler_candidates:
+          - '.github/services-config.json'
+          - '**/src/config.rs'
+          - '**/src/doppler_config.rs'
+          - '**/Cargo.toml'
+          - 'tooling/xtask/crates/xtask_doppler_bins/**'
+          - .github/workflows/code_check_cloud_storage.yml
+        graphql_schema:
+          - 'static_assets/schema.graphql'
+          - 'tooling/xtask/crates/xtask_graphql_schema_compat/**'
+          - .github/workflows/code_check_cloud_storage.yml
+        query_data:
+          - '**/.sqlx/**'
+    "#}
+    );
+    DornyPathsFilter::new("Filter changed paths", filters)
+        .step()
+        .id(FILTER.id())
 }
 
 /// Compute the changed-file set and write it to `/tmp/changed-files`. Stacked

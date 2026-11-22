@@ -4,6 +4,7 @@ import {
   ADD_PINNED_PROPERTY_COMMAND,
   pinnedPropertiesPlugin,
 } from '@core/component/LexicalMarkdown/plugins/pinned-properties/pinnedPropertiesPlugin';
+import { lexicalPinnedPropertyStore } from '@core/component/LexicalMarkdown/plugins/pinned-properties/store';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   PropertiesProvider,
@@ -288,7 +289,7 @@ function setupPins(
   return createRoot((dispose) => {
     disposers.push(dispose);
     return createPinnedProperties(
-      () => editor,
+      () => lexicalPinnedPropertyStore(editor),
       () => defaults
     );
   });

@@ -1,0 +1,280 @@
+--- a/packages/lexical-history/src/index.ts
++++ b/packages/lexical-history/src/index.ts
+@@ -360,6 +360,8 @@
+   historyState: HistoryState,
+   onChange?: (state: HistoryState) => void,
+ ): void {
++  const __lexExit = globalThis.__lexRec?.enter("history");
++  try {
+   const redoStack = historyState.redoStack;
+   const undoStack = historyState.undoStack;
+ 
+@@ -389,6 +391,8 @@
+       });
+     }
+   }
++
++  } finally { __lexExit?.(); }
+ }
+ 
+ function undo(
+@@ -396,6 +400,8 @@
+   historyState: HistoryState,
+   onChange?: (state: HistoryState) => void,
+ ): void {
++  const __lexExit = globalThis.__lexRec?.enter("history");
++  try {
+   const redoStack = historyState.redoStack;
+   const undoStack = historyState.undoStack;
+   const undoStackLength = undoStack.length;
+@@ -425,6 +431,8 @@
+       });
+     }
+   }
++
++  } finally { __lexExit?.(); }
+ }
+ 
+ function clearHistory(
+--- a/packages/lexical/src/LexicalEditor.ts
++++ b/packages/lexical/src/LexicalEditor.ts
+@@ -906,6 +906,7 @@
+   }
+ 
+   registerDefaultCommandHandlers(editor);
++  globalThis.__lexRec?.created(editor, editorConfig);
+ 
+   return editor;
+ }
+@@ -1535,6 +1536,8 @@
+    * @param options - options for the update.
+    */
+   setEditorState(editorState: EditorState, options?: EditorSetOptions): void {
++  const __lexExit = globalThis.__lexRec?.enter("setEditorState");
++  try {
+     if (editorState.isEmpty()) {
+       invariant(
+         false,
+@@ -1579,7 +1582,9 @@
+     if (!this._updating) {
+       $commitPendingUpdates(this);
+     }
+-  }
++  
++  } finally { __lexExit?.(); }
++}
+ 
+   /**
+    * Parses a SerializedEditorState (usually produced by {@link EditorState.toJSON}) and returns
+@@ -1609,6 +1614,7 @@
+    * @param callbackFn - A function that has access to read-only editor state.
+    */
+   read<T>(callbackFn: () => T): T {
++    if (this._pendingEditorState !== null) globalThis.__lexRec?.tick('read-flush');
+     $commitPendingUpdates(this);
+     return this.getEditorState().read(callbackFn, {editor: this});
+   }
+--- a/packages/lexical/src/LexicalEvents.ts
++++ b/packages/lexical/src/LexicalEvents.ts
+@@ -1459,6 +1459,8 @@
+ const activeNestedEditorsMap: Map<string, LexicalEditor> = new Map();
+ 
+ function onDocumentSelectionChange(event: Event): void {
++  const __lexExit = globalThis.__lexRec?.enter("dom-event");
++  try {
+   const domSelection = getDOMSelectionFromTarget(event.target);
+   if (domSelection === null) {
+     return;
+@@ -1510,6 +1512,8 @@
+   } else if (activeNestedEditor) {
+     activeNestedEditorsMap.delete(rootEditorKey);
+   }
++
++  } finally { __lexExit?.(); }
+ }
+ 
+ /** @internal */
+@@ -1627,9 +1631,13 @@
+                 );
+             }
+           };
+-    rootElement.addEventListener(eventName, eventHandler);
++    const guardedHandler = (event: Event) => {
++      const exit = globalThis.__lexRec?.enter('dom-event');
++      try { return eventHandler(event); } finally { exit?.(); }
++    };
++    rootElement.addEventListener(eventName, guardedHandler);
+     removeHandles.push(() => {
+-      rootElement.removeEventListener(eventName, eventHandler);
++      rootElement.removeEventListener(eventName, guardedHandler);
+     });
+   }
+ }
+--- a/packages/lexical/src/LexicalMutations.ts
++++ b/packages/lexical/src/LexicalMutations.ts
+@@ -320,7 +320,8 @@
+   initTextEntryListener(editor);
+   editor._observer = new MutationObserver(
+     (mutations: Array<MutationRecord>, observer: MutationObserver) => {
+-      flushMutations(editor, mutations, observer);
++      const exit = globalThis.__lexRec?.enter('dom-event');
++      try { flushMutations(editor, mutations, observer); } finally { exit?.(); }
+     },
+   );
+ }
+--- a/packages/lexical/src/LexicalUpdates.ts
++++ b/packages/lexical/src/LexicalUpdates.ts
+@@ -189,6 +189,8 @@
+   node: LexicalNode,
+   transformsCache: Map<string, Array<Transform<LexicalNode>>>,
+ ) {
++  const __lexExit = globalThis.__lexRec?.enter("transform");
++  try {
+   const type = node.__type;
+   const registeredNode = getRegisteredNodeOrThrow(editor, type);
+   let transformsArr = transformsCache.get(type);
+@@ -207,6 +209,8 @@
+       break;
+     }
+   }
++
++  } finally { __lexExit?.(); }
+ }
+ 
+ function $isNodeValidForTransform(
+@@ -457,7 +461,8 @@
+     }
+   } catch (error) {
+     if (error instanceof Error) {
+-      editor._onError(error);
++      globalThis.__lexRec?.error(editor, error, 'update');
++        editor._onError(error);
+     }
+   } finally {
+     editor._dirtyElements = previousDirtyElements;
+@@ -522,6 +527,8 @@
+   editor: LexicalEditor,
+   recoveryEditorState?: EditorState,
+ ): void {
++  const __lexExit = globalThis.__lexRec?.enter("commit");
++  try {
+   const pendingEditorState = editor._pendingEditorState;
+   const rootElement = editor._rootElement;
+   const shouldSkipDOM = editor._headless || rootElement === null;
+@@ -577,6 +584,7 @@
+     } catch (error) {
+       // Report errors
+       if (error instanceof Error) {
++        globalThis.__lexRec?.error(editor, error, 'commit');
+         editor._onError(error);
+       }
+ 
+@@ -718,6 +726,7 @@
+     recoveryEditorState || currentEditorState,
+     pendingEditorState,
+   );
++  globalThis.__lexRec?.commit(editor, tags, dirtyLeaves, dirtyElements, normalizedNodes);
+   triggerListeners('update', editor, true, {
+     dirtyElements,
+     dirtyLeaves,
+@@ -729,6 +738,8 @@
+   });
+   triggerDeferredUpdateCallbacks(editor, deferred);
+   $triggerEnqueuedUpdates(editor);
++
++  } finally { __lexExit?.(); }
+ }
+ 
+ function triggerTextContentListeners(
+@@ -856,6 +867,8 @@
+ }
+ 
+ function $triggerEnqueuedUpdates(editor: LexicalEditor): void {
++  const __lexExit = globalThis.__lexRec?.enter("listener-enqueued");
++  try {
+   const queuedUpdates = editor._updates;
+ 
+   if (queuedUpdates.length === 0) {
+@@ -872,6 +885,7 @@
+       );
+     } catch (error) {
+       if (error instanceof Error) {
++        globalThis.__lexRec?.error(editor, error, 'listener');
+         editor._onError(error);
+       }
+     }
+@@ -882,6 +896,8 @@
+     const [updateFn, options] = queuedUpdate;
+     $beginUpdate(editor, updateFn, options);
+   }
++
++  } finally { __lexExit?.(); }
+ }
+ 
+ function triggerDeferredUpdateCallbacks(
+@@ -896,6 +912,7 @@
+ 
+     try {
+       for (let i = 0; i < deferred.length; i++) {
++        globalThis.__lexRec?.tick('onUpdate');
+         deferred[i]();
+       }
+     } finally {
+@@ -959,6 +976,7 @@
+   updateFn: () => void,
+   options?: EditorUpdateOptions,
+ ): void {
++  globalThis.__lexRec?.begin(editor, options);
+   const updateTags = editor._updateTags;
+   let onUpdate;
+   let skipTransforms = false;
+@@ -1066,7 +1084,8 @@
+   } catch (error) {
+     // Report errors
+     if (error instanceof Error) {
+-      editor._onError(error);
++      globalThis.__lexRec?.error(editor, error, 'update');
++        editor._onError(error);
+     }
+ 
+     // Restore existing editor state to the DOM
+@@ -1100,6 +1119,7 @@
+       $commitPendingUpdates(editor);
+     } else if (editorStateWasCloned) {
+       scheduleMicroTask(() => {
++        globalThis.__lexRec?.tick();
+         $commitPendingUpdates(editor);
+       });
+     }
+--- a/packages/lexical/src/LexicalUtils.ts
++++ b/packages/lexical/src/LexicalUtils.ts
+@@ -116,6 +116,11 @@
+ 
+ let keyCounter = 1;
+ 
++export function getRecorderKeyCounter(): number {
++  return keyCounter;
++}
++export function setRecorderKeyCounter(next: number): void { keyCounter = next; }
++
+ export function resetRandomKey(): void {
+   keyCounter = 1;
+ }
+@@ -151,7 +156,7 @@
+ export const isArray = Array.isArray;
+ 
+ /** @internal */
+-export const scheduleMicroTask: (fn: () => void) => void =
++const nativeScheduleMicroTask: (fn: () => void) => void =
+   typeof queueMicrotask === 'function'
+     ? queueMicrotask
+     : fn => {
+@@ -2496,3 +2501,8 @@
+   }
+   return children;
+ }
++
++export const scheduleMicroTask = (fn: () => void): void => nativeScheduleMicroTask(() => {
++ const exit = globalThis.__lexRec?.enter("microtask");
++ try { fn(); } finally { exit?.(); }
++});

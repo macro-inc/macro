@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { setVirtualKeyboardHeight } from '@core/mobile/virtualKeyboard';
 import { computePosition } from '@floating-ui/dom';
+import { Telemetry } from '@macro-inc/observability';
 import {
   cleanup,
   fireEvent,
@@ -649,6 +650,39 @@ it('uploads once before inserting, even when Enter repeats during the upload', a
     )
   );
   expect(discardUpload).not.toHaveBeenCalled();
+});
+
+it('retains the uploaded file when a real listener throws after insertion commits', async () => {
+  const failure = { reason: 'postcommit-listener' };
+  const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+  const { editor, open } = mountPicker();
+  open();
+  insertGif.mockImplementationOnce(() => {
+    $getRoot().append(
+      $createParagraphNode().append($createTextNode('Committed upload'))
+    );
+  });
+  const unregister = editor.registerUpdateListener(({ editorState }) => {
+    if (
+      editorState
+        .read(() => $getRoot().getTextContent())
+        .includes('Committed upload')
+    ) {
+      throw failure;
+    }
+  });
+  try {
+    fireEvent.click(await screen.findByRole('button', { name: 'Audit GIF' }));
+    await waitFor(() =>
+      expect(report).toHaveBeenCalledWith(failure, { surface: 'gif-picker' })
+    );
+    expect(editor.read(() => $getRoot().getTextContent())).toContain(
+      'Committed upload'
+    );
+    expect(discardUpload).not.toHaveBeenCalled();
+  } finally {
+    unregister();
+  }
 });
 
 it('keeps the picker and caret for retry after upload failure', async () => {

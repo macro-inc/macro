@@ -83,6 +83,7 @@ export class ConnectionGateway extends pulumi.ComponentResource {
         dockerfile: 'docker/Dockerfile',
         buildArgs: {
           SERVICE_NAME: 'connection_gateway_service',
+          PACKAGE_NAME: 'connection_gateway',
         },
         platform,
         tags: this.tags,

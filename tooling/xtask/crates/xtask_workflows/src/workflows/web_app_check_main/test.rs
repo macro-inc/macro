@@ -152,6 +152,18 @@ fn typecheck_runs_lexical_service_check_and_tests() {
 }
 
 #[test]
+fn typecheck_excludes_the_deferred_lexical_facade() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let typescript = job(&yaml, "typescript", "generated-code");
+    assert!(!typescript.contains("lexical-wasm-shim"));
+    assert!(!typescript.contains("lexical-export-surface"));
+    assert!(!typescript.contains("check:lexical-exceptions"));
+    let (should_run, _) = filters(&yaml);
+    assert!(should_run.contains("apps/web/**"));
+    assert!(should_run.contains("packages/**"));
+}
+
+#[test]
 fn sdk_and_documentation_changes_run_their_checks() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let (should_run, _) = filters(&yaml);
@@ -439,7 +451,11 @@ fn test_job_shards_vitest_after_building_its_wasm() {
     let vitest = test_job
         .find(r#"bun run test --shard="${SHARD}/6""#)
         .expect("vitest step runs one shard");
-    for build in ["just build-agent-fold-wasm", "just build-natural-time-wasm"] {
+    for build in [
+        "just build-agent-fold-wasm",
+        "just build-natural-time-wasm",
+        "just build-document-session-wasm",
+    ] {
         let wasm = test_job
             .find(build)
             .unwrap_or_else(|| panic!("{build} runs before the test setup hook"));
@@ -524,6 +540,81 @@ fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
             && step.contains("just test-calendar-details-browser"),
         "the step runs the suite when calendar details change: {step}"
     );
+}
+
+/// The native editor view's browser suite runs real document-session wasm and
+/// app modules, so any web artifact input runs it, including Rust-only, lockfile,
+/// protocol and patched-vendor changes, in the job that builds that wasm.
+#[test]
+fn native_editor_view_browser_tests_run_for_every_web_artifact_input() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let filters = yaml
+        .split("filters: |")
+        .nth(1)
+        .and_then(|rest| rest.split("id: filter").next())
+        .expect("path-check filters");
+    let artifact = filters
+        .split("web_artifact_changed:")
+        .nth(1)
+        .and_then(|rest| rest.split("codegen_inputs:").next())
+        .expect("web_artifact_changed filter");
+    let should_run = filters
+        .split("should_run:")
+        .nth(1)
+        .and_then(|rest| rest.split("web_artifact_changed:").next())
+        .expect("should_run filter");
+    for path in [
+        "packages/**",
+        "apps/web/**",
+        "crates/client/mention_date/**",
+        "crates/cowlike/**",
+        "crates/document_id/**",
+        "crates/lexical_node_id/**",
+        "crates/macro_user_id/**",
+        "crates/sync_doc_id/**",
+        "crates/client/document_session/**",
+        "crates/client/document_session_wasm/**",
+        "crates/client/doc_sync_core/**",
+        "crates/client/lexical/**",
+        "crates/sync_protocol/**",
+        "vendor/loro-editor/**",
+        "vendor/regress/**",
+        "vendor/chrono-tz/**",
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain.toml",
+        "package.json",
+        "bun.lock",
+    ] {
+        let line = format!("- '{path}'\n");
+        assert!(
+            artifact.contains(&line),
+            "{path} runs the suite: {artifact}"
+        );
+        assert!(
+            should_run.contains(&line),
+            "{path} starts the job: {should_run}"
+        );
+    }
+    let job = browser_job(&yaml);
+    let step = job
+        .split("- name: Native Editor View Browser Tests")
+        .nth(1)
+        .and_then(|rest| rest.split("- name:").next())
+        .expect("native editor view browser step");
+    assert!(
+        step.contains("needs.path-check.outputs.web_artifact_changed == 'true'")
+            && step.contains("env -u LD_LIBRARY_PATH -u BASH_ENV bun run test:browser")
+            && step.contains("working-directory: packages/lexical-wasm-view"),
+        "the step runs both configs from the package: {step}"
+    );
+    let build = job
+        .find("- name: Build document-session WASM for tests")
+        .expect("the job builds the document-session wasm");
+    let run = job
+        .find("- name: Native Editor View Browser Tests")
+        .expect("native editor view browser step");
+    assert!(build < run, "the suite runs after the wasm build");
 }
 
 #[test]

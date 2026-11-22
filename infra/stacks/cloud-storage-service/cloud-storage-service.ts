@@ -297,6 +297,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
         dockerfile: 'docker/Dockerfile',
         buildArgs: {
           SERVICE_NAME: 'document_storage_service',
+          PACKAGE_NAME: 'document_storage_service',
         },
         platform,
         tags: this.tags,

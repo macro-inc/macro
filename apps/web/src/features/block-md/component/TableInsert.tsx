@@ -107,6 +107,7 @@ const TableGrid = ({
 export function TableInsert(
   props: ParentProps<{
     onMenuClose?: () => void;
+    onInsert?: (rows: number, cols: number) => void;
   }>
 ) {
   const { state } = useMarkdownDocument();
@@ -119,11 +120,13 @@ export function TableInsert(
 
     const clampedCols = Math.min(cols, MAX_NUMBER_OF_COLS);
     const clampedRows = Math.min(rows, MAX_NUMBER_OF_ROWS);
-    state.editor.md.editor?.dispatchCommand(INSERT_TABLE_COMMAND, {
-      columns: `${clampedCols}`,
-      rows: `${clampedRows}`,
-      includeHeaders: false,
-    });
+    if (props.onInsert) props.onInsert(clampedRows, clampedCols);
+    else
+      state.editor.md.editor?.dispatchCommand(INSERT_TABLE_COMMAND, {
+        columns: `${clampedCols}`,
+        rows: `${clampedRows}`,
+        includeHeaders: false,
+      });
     setRows(undefined);
     setCols(undefined);
     if (props.onMenuClose) {

@@ -115,3 +115,5 @@ On `/pricing`, verify Free ($0), Pro ($40), and Max ($200) prices, signup links,
 Agent API hosting: chat, routines, preview control, and public MCP share the
 agent harness service; browser gateway paths remain unchanged. See the
 [service consolidation guide](../guides/consolidate-agent-services.md).
+
+Native markdown media picker checks live in `apps/web/src/lib/core/component/LexicalMarkdown/decorator-host/image-browser-test/picker.browser.e2e.ts`. Exercise multiple image/video files, cancellation, selection changes while the chooser is open, local read-only changes and editor disposal through the shared upload controller.

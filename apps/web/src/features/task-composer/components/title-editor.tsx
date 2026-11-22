@@ -1,6 +1,7 @@
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { createLexicalTagsMenuHost } from '@core/component/LexicalMarkdown/editing/overlay-hosts/lexical-tags';
 import {
   autoRegister,
   emojisPlugin,
@@ -299,7 +300,7 @@ export function ComposeTaskTitleEditor(props: {
       />
       <Show when={props.onTagSelected}>
         <TagsMenu
-          editor={editor}
+          host={createLexicalTagsMenuHost(() => editor)}
           menu={tagMenuOperations}
           useBlockBoundary={true}
           portalScope={props.portalScope}

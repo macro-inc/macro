@@ -13,6 +13,7 @@ import {
   uploadFiles,
 } from '@core/util/upload';
 import { Telemetry } from '@macro-inc/observability';
+import type { HistoryItem as Item } from '@queries/history/history';
 import { fileExtension } from '@service-storage/util/filename';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -132,8 +133,38 @@ async function onFilesReady(
 
   if (!editor.isEditable() || filesToUpload.length === 0) return;
 
+  await uploadEntriesAsItems(
+    filesToUpload,
+    () => editor.isEditable(),
+    (item) =>
+      fireAndForget(
+        handleBasicMention(item, {
+          editor,
+          blockName: parentBlockName,
+          blockId,
+          onDocumentMention: () => {},
+          disableMentionTracking: false,
+        }),
+        'file-upload'
+      ),
+    afterFileUpload
+  );
+}
+
+/**
+ * Upload non-media entries, report each uploaded DSS document or folder item
+ * in order, then call `onDone` with their ids in the same continuation (Source
+ * onFilesReady's afterFileUpload). Stops without `onDone` when `editable()`
+ * turns false.
+ */
+export async function uploadEntriesAsItems(
+  filesToUpload: UploadInput[],
+  editable: () => boolean,
+  onItem: (item: Item) => void,
+  onDone?: (uploadedItemIds: string[]) => void
+): Promise<void> {
   const results = await uploadFiles(filesToUpload, forceDssRuleset);
-  if (!editor.isEditable()) return;
+  if (!editable()) return;
 
   let uploadedItemIds: string[] = [];
 
@@ -146,47 +177,29 @@ async function onFilesReady(
       const blockName = fileTypeToBlockName(result.fileType, true);
       if (blockName) {
         const item = await documentUploadToItem(result);
-        if (!editor.isEditable()) return;
+        if (!editable()) return;
         if (!item) {
           toast.failure('Document upload failed or timed out');
           Telemetry.error(new Error('Document upload failed or timed out'));
           continue;
         }
         uploadedItemIds.push(item.id);
-        fireAndForget(
-          handleBasicMention(item, {
-            editor,
-            blockName: parentBlockName,
-            blockId,
-            onDocumentMention: () => {},
-            disableMentionTracking: false,
-          }),
-          'file-upload'
-        );
+        onItem(item);
       }
     } else if (result.type === 'folder') {
       const item = await documentUploadToItem(result);
-      if (!editor.isEditable()) return;
+      if (!editable()) return;
       if (!item) {
         toast.failure('Folder upload failed or timed out');
         Telemetry.error(new Error('Folder upload failed or timed out'));
         continue;
       }
       uploadedItemIds.push(item.id);
-      fireAndForget(
-        handleBasicMention(item, {
-          editor,
-          blockName: parentBlockName,
-          blockId,
-          onDocumentMention: () => {},
-          disableMentionTracking: false,
-        }),
-        'file-upload'
-      );
+      onItem(item);
     }
   }
 
-  afterFileUpload?.(uploadedItemIds);
+  onDone?.(uploadedItemIds);
 }
 
 /**

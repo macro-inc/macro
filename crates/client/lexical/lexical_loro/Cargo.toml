@@ -1,0 +1,33 @@
+[package]
+name = "lexical_loro"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+# Preview/test probes; the production feature graph excludes this opt-in.
+dev-probes = []
+# Simulation-only projection write faults; never ship enabled.
+test-faults = []
+# Event-suppressed local commits on the editor's patched loro-internal. Only
+# document_session enables it; servers must keep it off (check-loro-native-editor-features.sh).
+native-editor = ["dep:loro-internal", "loro-internal/native-editor"]
+
+[dependencies]
+lexical_model = { workspace = true }
+loro = { workspace = true }
+loro-internal = { workspace = true, optional = true }
+serde_json = { workspace = true }
+indexmap = { workspace = true }
+rustc-hash = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+lexical_model = { workspace = true, features = ["model-segmentation"] }
+proptest = { workspace = true }
+lexical_rich_nodes = { workspace = true }
+
+[package.metadata.cargo-shear]
+# Present only to forward native-editor; the code reaches it through loro.
+ignored = ["loro-internal"]

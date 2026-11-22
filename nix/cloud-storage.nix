@@ -78,15 +78,18 @@
       # for the Deno bootstrap and timer shims; `.lua` for the Redis scripts
       # `crates/rate_limit` embeds;
       # `.proto` for the protobuf files the `whatsmeow_proto` and
-      # `whatsmeow_signal` build scripts compile.
+      # `whatsmeow_signal` build scripts compile; `.bop` for schema copies
+      # embedded by sync_protocol tests.
       assetFilter =
         path: _type:
-        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto|lua)$" path != null;
+        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto|lua|bop)$" path
+        != null;
       # `crates/routine_program` embeds its catalog programs with `include_str!`.
       # Only these `.ts` files: matching every `.ts` would pull the web app into
       # the Rust source hash.
       routineCatalogFilter =
-        path: _type: builtins.match ".*/crates/routine_program/src/catalog/[^/]*\\.ts$" (toString path) != null;
+        path: _type:
+        builtins.match ".*/crates/routine_program/src/catalog/[^/]*\\.ts$" (toString path) != null;
       # Rust templates (askama, minijinja) include their stylesheets, such as
       # `services/mcp_auth_proxy/templates/broker_page.css`. Only `templates/`
       # stylesheets under Rust crates and services: matching every `.css` would
@@ -150,6 +153,16 @@
       # pruned sources; only changes when a manifest or the lock changes.
       deployDummySrc = craneLib.mkDummySrc { inherit src; };
 
+      # Dependency-only builds compile registry crates against the
+      # [patch.crates-io] crates under vendor/ (loro against the patched
+      # loro-internal), so those must keep their real sources, not stubs.
+      depsDummySrc = pkgs.runCommand "cloud-storage-deps-dummy-src" { } ''
+        cp -rT ${deployDummySrc} $out
+        chmod -R +w $out
+        rm -rf $out/vendor
+        cp -rT ${rootDepsSrc}/vendor $out/vendor
+      '';
+
       # Real sources of one workspace crate dir, same filter as the full tree
       # (keeps per-crate assets: pdfium blobs, .sql migrations, templates).
       crateDirSrc =
@@ -163,7 +176,7 @@
       # Workspace-root files that crates read across crate boundaries: the
       # .sqlx offline cache (sqlx macros resolve it from the workspace root),
       # shared assets under static_assets/ (include_bytes!-ed from workspace
-      # crates), and the [patch.crates-io] crates under vendor/, which
+      # crates), and vendored path dependencies (including [patch.crates-io]), which
       # mkDummySrc would otherwise stub out. Included in every pruned source, so a
       # sqlx prepare still invalidates all leaves — coarser than ideal, but
       # the query-to-crate mapping is not recoverable from the file names.
@@ -184,10 +197,13 @@
           || (rel == "static_assets")
           || (pkgs.lib.hasPrefix "static_assets/" rel)
           || (rel == "vendor")
-          || (rel == "vendor/utoipa-swagger-ui")
-          || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
-          || (rel == "vendor/chrono-tz")
-          || (pkgs.lib.hasPrefix "vendor/chrono-tz/" rel)
+          || (pkgs.lib.any (directory: rel == directory || pkgs.lib.hasPrefix "${directory}/" rel) [
+            "vendor/utoipa-swagger-ui"
+            "vendor/chrono-tz"
+            "vendor/regress"
+            "vendor/loro-editor"
+            "vendor/loro-test-utils"
+          ])
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -287,6 +303,7 @@
 
       commonArgs = {
         inherit src;
+        dummySrc = depsDummySrc;
         pname = "cloud-storage";
         version = "0.1.0";
         strictDeps = true;
@@ -454,28 +471,34 @@
       # metadata into a single tar.zst. CI fetches this archive and runs
       # `cargo nextest run --archive-file` outside the sandbox so tests can hit
       # postgres/redis services. Built in Nix and cached by Namespace.
-      nextestArchive = craneLib.mkCargoDerivation (
-        commonArgs
-        // codeModeAssetsEnv
-        // {
-          cargoArtifacts = workspaceArtifacts;
-          pname = "cloud-storage-nextest-archive";
-          doCheck = false;
-          nativeBuildInputs = commonArgs.nativeBuildInputs or [ ] ++ [ pkgs.cargo-nextest ];
-          buildPhaseCargoCommand = ''
-            cargo nextest archive \
-              --cargo-profile dev \
-              --locked --all-features \
-              --workspace --lib --bins --tests \
-              --exclude sync_service \
-              --archive-file nextest-archive.tar.zst
-          '';
-          installPhaseCommand = ''
-            mkdir -p $out
-            cp nextest-archive.tar.zst $out/
-          '';
-        }
-      );
+      nextestArchive =
+        assert pkgs.lib.assertMsg (builtins.all (path: builtins.pathExists "${src}/${path}") [
+          "crates/sync_protocol/bebop/schema.bop"
+          "services/sync-service/bebop/schema.bop"
+          "services/sync-service/bebop-schema/src/generated.rs"
+        ]) "nextest archive source must retain both sync schema copies";
+        craneLib.mkCargoDerivation (
+          commonArgs
+          // codeModeAssetsEnv
+          // {
+            cargoArtifacts = workspaceArtifacts;
+            pname = "cloud-storage-nextest-archive";
+            doCheck = false;
+            nativeBuildInputs = commonArgs.nativeBuildInputs or [ ] ++ [ pkgs.cargo-nextest ];
+            buildPhaseCargoCommand = ''
+              cargo nextest archive \
+                --cargo-profile dev \
+                --locked --all-features \
+                --workspace --lib --bins --tests \
+                --exclude sync_service \
+                --archive-file nextest-archive.tar.zst
+            '';
+            installPhaseCommand = ''
+              mkdir -p $out
+              cp nextest-archive.tar.zst $out/
+            '';
+          }
+        );
 
       deployServiceBinaryDefinitions = [
         {
@@ -947,9 +970,12 @@
       # One shared dep closure for all lambda handlers. Build it with the same
       # cargo-zigbuild target used by the final packages; Cargo fingerprints the
       # `.2.26` target separately from the plain triple, so warming the plain
-      # target does not help the deploy builds. Select with --bin, as
-      # deployLambdaPackage does: without --package cargo resolves features across
-      # the workspace, and any other selection gives units the handlers can't reuse.
+      # target does not help the deploy builds. Select each handler with
+      # --package and --bin, as deployLambdaPackage does: without --package cargo
+      # resolves features across the whole workspace, so a handler would link
+      # crates with features only other members enable (such as loro-internal's
+      # native-editor, which only the document session may turn on).
+      # check-loro-native-editor-features.sh resolves these exact commands.
       lambdaDeployCargoArtifacts = craneLib.buildDepsOnly (
         lambdaCommonArgs
         // {
@@ -961,7 +987,7 @@
           cargoBuildCommand = "cargo zigbuild --release";
           cargoExtraArgs =
             "--locked --target ${lambdaZigTarget} "
-            + pkgs.lib.concatMapStringsSep " " (n: "--bin ${n}") lambdaNames;
+            + pkgs.lib.concatMapStringsSep " " (n: "--package ${n} --bin ${n}") lambdaNames;
         }
       );
 
@@ -980,7 +1006,7 @@
             # cargo-zigbuild links the final binary against the pinned Lambda
             # glibc, selected via the `.2.26` target suffix.
             cargoBuildCommand = "cargo zigbuild --release";
-            cargoExtraArgs = "--locked --target ${lambdaZigTarget} --bin ${lambdaName}";
+            cargoExtraArgs = "--locked --target ${lambdaZigTarget} --package ${lambdaName} --bin ${lambdaName}";
             # Emit the Lambda custom-runtime artifact: a zip whose single entry
             # is named `bootstrap`, mirroring cargo-lambda's
             # target/lambda/<name>/bootstrap.zip layout. zigbuild writes to
@@ -1244,15 +1270,19 @@
         # Deploy builds compile [patch.crates-io] crates from the pruned
         # source, so their real code (not mkDummySrc's stubs) must be there.
         pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
-          grep -q "fn write_embed_code" \
-            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
-          grep -q "IANA_TZDB_VERSION" \
-            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/chrono-tz/src/prebuilt/directory.rs
+          pruned_src=${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}
+          grep -q "fn write_embed_code" "$pruned_src/vendor/utoipa-swagger-ui/build.rs"
+          grep -q "pub struct Regex" "$pruned_src/vendor/regress/src/api.rs"
+          grep -q "pub mod oplog" "$pruned_src/vendor/loro-editor/loro-internal/src/lib.rs"
+          grep -q "fn update_many" "$pruned_src/vendor/loro-editor/loro-internal/src/container/richtext/tracker/id_to_cursor.rs"
+          test -f "$pruned_src/vendor/loro-test-utils/Cargo.toml"
+          grep -q "IANA_TZDB_VERSION" "$pruned_src/vendor/chrono-tz/src/prebuilt/directory.rs"
+          # Dependency-only builds compile loro against the real patched loro-internal.
+          grep -q "pub mod handler" "${depsDummySrc}/vendor/loro-editor/loro-internal/src/lib.rs"
           touch $out
         '';
         pruned-deploy-src-starter-agent =
-          pkgs.runCommand "cloud-storage-pruned-starter-agent"
-            { nativeBuildInputs = [ pkgs.diffutils ]; }
+          pkgs.runCommand "cloud-storage-pruned-starter-agent" { nativeBuildInputs = [ pkgs.diffutils ]; }
             ''
               diff -r ${starterAgentSrc} ${src}/packages/starter-agent
               diff -r ${starterAgentSrc} \

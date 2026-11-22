@@ -273,7 +273,6 @@ fn schema_changes_run_the_compatibility_check() {
 fn rust_jobs_have_timeouts() {
     for job in [
         path_check(),
-        check(),
         doppler_config(),
         graphql_schema_compat(),
         test(),
@@ -281,6 +280,11 @@ fn rust_jobs_have_timeouts() {
         let job = serde_json::to_value(job).unwrap();
         assert!(job["timeout-minutes"].is_u64(), "{job}");
     }
+    let guarded_check = serde_json::to_value(check()).unwrap();
+    assert_eq!(
+        guarded_check["timeout-minutes"],
+        "${{ needs.path-check.outputs.loro_guards == 'true' && 30 || 20 }}"
+    );
     for job in [check(), doppler_config(), test()] {
         let job = serde_json::to_value(job).unwrap();
         let shell = job["steps"]
@@ -458,5 +462,82 @@ fn the_content_search_step_runs_its_target_on_every_selection() {
             "{packages}: {command}"
         );
         assert!(!command.contains("--tests"), "{packages}: {command}");
+    }
+}
+
+#[test]
+fn loro_guards_are_required_and_share_the_path_check_gate() {
+    let job = serde_json::to_value(check()).unwrap();
+    assert_eq!(job["needs"], serde_json::json!(["path-check"]));
+    let steps = job["steps"].as_array().unwrap();
+    let setup = steps
+        .iter()
+        .position(|step| step["name"] == "Configure Namespace remote sccache")
+        .unwrap();
+    let assets = steps
+        .iter()
+        .position(|step| step["name"] == "Build code-mode assets")
+        .unwrap();
+    for command in [
+        "just check-loro-editor-vendor",
+        "just check-loro-native-editor-features",
+    ] {
+        let matches = steps
+            .iter()
+            .enumerate()
+            .filter(|(_, step)| step["run"] == command)
+            .collect::<Vec<_>>();
+        assert_eq!(matches.len(), 1, "{command}");
+        let (index, step) = matches[0];
+        assert!(
+            setup < index && index < assets,
+            "{command} must follow setup and fail before other work"
+        );
+        assert_eq!(step["if"], "needs.path-check.outputs.loro_guards == 'true'");
+        assert_ne!(step["continue-on-error"], true);
+    }
+    let path_job = serde_json::to_value(path_check()).unwrap();
+    assert_eq!(
+        path_job["outputs"]["loro_guards"],
+        "${{ steps.filter.outputs.loro_guards }}"
+    );
+}
+
+#[test]
+fn every_loro_guard_input_also_opens_the_existing_job_gate() {
+    let with = serde_json::to_value(paths_filter().value.with).unwrap();
+    let filters: serde_yaml::Value =
+        serde_yaml::from_str(with["filters"].as_str().unwrap()).unwrap();
+    let outer = filters["should_run"].as_sequence().unwrap();
+    for path in filters["loro_guards"].as_sequence().unwrap() {
+        assert!(
+            outer.contains(path),
+            "guard input must not be hidden by outer gate: {path:?}"
+        );
+    }
+}
+
+#[test]
+fn rendered_guard_budget_is_thirty_minutes_only_when_requested_otherwise_twenty() {
+    let rendered = code_check_cloud_storage().to_string().unwrap();
+    let workflow: serde_yaml::Value = serde_yaml::from_str(&rendered).unwrap();
+    assert_eq!(workflow["jobs"].as_mapping().unwrap().len(), 6);
+    assert_eq!(
+        workflow["jobs"]["check"]["timeout-minutes"]
+            .as_str()
+            .unwrap(),
+        "${{ needs.path-check.outputs.loro_guards == 'true' && 30 || 20 }}"
+    );
+    for job in [
+        "test",
+        "doppler-config",
+        "build-service-bins",
+        "graphql-schema-compat",
+    ] {
+        let original = serde_yaml::to_value(code_check_cloud_storage()).unwrap();
+        assert_eq!(
+            workflow["jobs"][job], original["jobs"][job],
+            "unrelated job {job} changed"
+        );
     }
 }

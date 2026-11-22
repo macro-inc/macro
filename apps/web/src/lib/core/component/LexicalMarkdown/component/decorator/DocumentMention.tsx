@@ -1,15 +1,7 @@
-import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
-import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { externalChatContent } from '@app/features/external-view/hosted-content';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import {
-  type BlockAlias,
-  type BlockName,
-  useMaybeBlockId,
-  useMaybeBlockName,
-} from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import {
   type DocumentPreviewContentProps,
   getMentionsIcon,
@@ -22,31 +14,18 @@ import { HoverCard } from '@core/component/HoverCard';
 import { InlineTaskProperties } from '@core/component/InlineTaskProperties';
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
-import {
-  itemToBlockName,
-  resolveBlockAlias,
-  verifyBlockName,
-} from '@core/constant/allBlocks';
-import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
+import { verifyBlockName } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { canNestBlock } from '@core/orchestrator';
 import { formatDate } from '@core/util/date';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { parseLocalDate } from '@core/util/local-date';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { ThrownResultError } from '@core/util/result';
-import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import ArrowsOut from '@icon/system/regular/arrows-out-simple.svg';
 import EyeSlashDuo from '@icon/system/regular/eye-slash.svg';
 import TrashSimple from '@icon/system/regular/trash-simple.svg';
-import {
-  $convertMentionToCard,
-  $isDocumentMentionNode,
-  DocumentCardNode,
-  type DocumentMentionDecoratorProps,
-} from '@macro-inc/lexical-core';
+import type { DocumentMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { useExternalChatDetailQuery } from '@queries/external-chats';
 import {
   type AccessiblePreviewItem,
@@ -60,16 +39,9 @@ import {
 import { useDatabaseDetailQuery } from '@queries/storage/databases';
 import { useFormDetailQuery } from '@queries/storage/forms';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
-import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, Tooltip } from '@ui';
-import {
-  $createTextNode,
-  $getNodeByKey,
-  COMMAND_PRIORITY_NORMAL,
-  type EditorThemeClasses,
-  KEY_ENTER_COMMAND,
-} from 'lexical';
+import type { EditorThemeClasses } from 'lexical';
 import type { Accessor, JSX } from 'solid-js';
 import {
   createEffect,
@@ -83,15 +55,17 @@ import {
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { useMarkdownHost } from '../../context/MarkdownHostContext';
-import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
+import type { DocumentMentionHost } from '../../decorator-host/document-mention-host';
+import { createLexicalDocumentMentionHost } from '../../decorator-host/lexical-document-mention';
+import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
-import { MentionTooltip } from './MentionTooltip';
+import { DocumentMentionInner } from './DocumentMentionInner';
 
 // Time threshold for showing fallback state for recently created mentions (1 minute)
 const RECENT_MENTION_THRESHOLD_MS = 1 * 60 * 1000;
 
-type DocumentMentionProps = DocumentMentionDecoratorProps & {
+export type DocumentMentionProps = DocumentMentionDecoratorProps & {
+  readonly host?: DocumentMentionHost;
   /** Dismiss a hosting dialog or sheet after the reference opens a split. */
   onOpened?: () => void;
   /** Host-authorized display data; hover previews still load through the shared query. */
@@ -103,7 +77,7 @@ type DocumentMentionProps = DocumentMentionDecoratorProps & {
  * This happens when a mention is very recent and the preview API returns does_not_exist
  * (likely due to cache staleness rather than actual deletion).
  */
-function shouldUseFallbackForRecentMention(
+export function shouldUseFallbackForRecentMention(
   previewItem: { loading: boolean; access?: string },
   isRecent: boolean
 ): boolean {
@@ -216,7 +190,7 @@ function MentionAccessories(props: {
   );
 }
 
-function InlinePreview(props: {
+export function InlinePreview(props: {
   previewData: ReturnType<typeof useItemPreviewData>;
   entity: ItemEntity;
   blockName: BlockName | BlockAlias;
@@ -429,7 +403,7 @@ export function DocumentMention(props: DocumentMentionProps) {
     return <RoutineMention {...props} />;
   }
   const lexicalWrapper = useContext(LexicalWrapperContext);
-  if (lexicalWrapper?.skipPreviewFetch) {
+  if (props.host?.skipPreviewFetch ?? lexicalWrapper?.skipPreviewFetch) {
     return <DocumentMentionStatic {...props} />;
   }
   // Only skill mentions need to distinguish built-ins from stored documents.
@@ -459,7 +433,7 @@ export function DocumentMention(props: DocumentMentionProps) {
 }
 
 /** Whether a mention was made in the last minute; it stops being recent while mounted. */
-function createRecentMention(createdAt: number | undefined) {
+export function createRecentMention(createdAt: number | undefined) {
   const recentForMs = createdAt
     ? createdAt + RECENT_MENTION_THRESHOLD_MS - Date.now()
     : 0;
@@ -624,7 +598,8 @@ function detailUnavailable(detail: {
 
 function RoutineMention(props: DocumentMentionProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
-  if (lexicalWrapper?.skipPreviewFetch) return <RoutineLink {...props} />;
+  if (props.host?.skipPreviewFetch ?? lexicalWrapper?.skipPreviewFetch)
+    return <RoutineLink {...props} />;
   return <PreviewedRoutineMention {...props} />;
 }
 
@@ -724,26 +699,20 @@ function RoutineLink(props: DocumentMentionProps & { resolvedName?: string }) {
 /** Databases have their own permission-checked metadata, not a document preview. */
 function DatabaseMention(props: DocumentMentionProps) {
   const wrapper = useContext(LexicalWrapperContext);
-  const [editable, setEditable] = createSignal(
-    wrapper?.editor.isEditable() ?? false
-  );
-  if (wrapper)
-    onCleanup(
-      wrapper.editor.registerEditableListener((value) => {
-        setEditable(value);
-      })
-    );
+  const host = props.host ?? createLexicalDocumentMentionHost(wrapper);
+  const [editable, setEditable] = createSignal(host.isEditable());
+  const release = host.registerEditableListener((value) => {
+    setEditable(value);
+  });
+  if (release) onCleanup(release);
   const detail = useDatabaseDetailQuery(() => props.documentId);
   const name = () =>
     detail.isSuccess ? detail.data.database.name : props.documentName;
   const expand = (event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!wrapper?.editor.isEditable() || !wrapper.isInteractable()) return;
-    wrapper.editor.update(() => {
-      const node = $getNodeByKey(props.key);
-      if ($isDocumentMentionNode(node)) $convertMentionToCard(node);
-    });
+    if (!host.isEditable() || !host.isInteractable()) return;
+    host.convertToCard(props.key);
   };
   return (
     <Show
@@ -774,7 +743,7 @@ function DatabaseMention(props: DocumentMentionProps) {
               if (result && result.status !== 'unavailable') props.onOpened?.();
             }}
           />
-          <Show when={editable() && wrapper?.isInteractable()}>
+          <Show when={editable() && host.isInteractable()}>
             <Button
               variant="ghost"
               size="icon-xs"
@@ -986,352 +955,5 @@ export function DocumentMentionStatic(props: DocumentMentionProps) {
         </span>
       }
     />
-  );
-}
-
-function DocumentMentionInner(props: DocumentMentionProps) {
-  const currentBlockId = useMaybeBlockId();
-  const currentBlockName = useMarkdownHost() ?? useMaybeBlockName();
-
-  const lexicalWrapper = useContext(LexicalWrapperContext);
-  const editor = lexicalWrapper?.editor;
-  const selection = () => lexicalWrapper?.selection;
-
-  const [isCollapsed, setIsCollapsed] = createSignal<boolean>(
-    props.collapsed ?? false
-  );
-
-  const isCollapsable = createMemo(() => {
-    return lexicalWrapper?.isInteractable() ?? false;
-  });
-
-  // Check if this is a recently created mention that we should show fallback for.
-  // It stops being recent while mounted, so a chip for an event deleted in the
-  // meantime then reads and opens as deleted without a remount.
-  const isRecentMention = createRecentMention(props.createdAt);
-
-  const showEmbedOption = createMemo(() => {
-    if (!lexicalWrapper?.isInteractable()) return false;
-    if (!lexicalWrapper?.editor.hasNode(DocumentCardNode)) return false;
-    return true;
-  });
-
-  const isEmbeddable = createMemo(() => {
-    if (!ENABLE_BLOCK_IN_BLOCK) return false;
-    const blockName = verifyBlockName(props.blockName);
-    return canNestBlock(resolveBlockAlias(blockName), currentBlockName);
-  });
-
-  const itemEntity = (): ItemEntity => {
-    const previewType = blockNameToItemType(verifyBlockName(props.blockName));
-    const baseEntity = {
-      id: props.documentId,
-      type: previewType,
-    };
-    if (
-      previewType === 'channel' &&
-      props.blockParams &&
-      CHANNEL_PARAMS.message in props.blockParams
-    ) {
-      return {
-        ...baseEntity,
-        messageId: props.blockParams[CHANNEL_PARAMS.message],
-      };
-    }
-    return baseEntity;
-  };
-
-  const previewData = useItemPreviewData(itemEntity, props.inlinePreview);
-  const { item } = previewData;
-
-  const isSelectedAsNode = createMemo(() => {
-    const sel = selection();
-    if (!sel) return false;
-    return sel.type === 'node' && sel.nodeKeys.has(props.key);
-  });
-
-  const resolvedBlockName = createMemo(() => {
-    const i = item();
-    if (!i.loading && i.access === 'access') {
-      // NOTE: this is a hack around invalid "unknown" fallback
-      const resolved = itemToBlockName(i);
-      if (resolved && resolved !== 'unknown') return resolved;
-    }
-    return props.blockName;
-  });
-
-  const [previewCardOpen, setPreviewCardOpen] = createSignal(false);
-  const [previewTrigger, setPreviewTrigger] = createSignal<HTMLElement>();
-  const [previewSheetOpen, setPreviewSheetOpen] = createSignal(false);
-
-  const calendarOpen = createMemo(() =>
-    verifyBlockName(props.blockName) === 'calendar'
-      ? calendarMentionOpen(
-          item(),
-          props.documentId,
-          props.blockParams?.occurrenceKey
-        )
-      : undefined
-  );
-
-  // A deleted or inaccessible item has nothing to open. A just-created
-  // mention can briefly preview as missing; it still opens rather than
-  // reading as deleted.
-  const isUnavailable = () => {
-    const i = item();
-    if (i.loading) return false;
-    return (
-      i.access === 'no_access' ||
-      (i.access === 'does_not_exist' && !isRecentMention())
-    );
-  };
-  const showsPreviewOnOpen = () =>
-    calendarOpen()?.kind === 'read_only' || isUnavailable();
-
-  const open = createCallback((e: MouseEvent | KeyboardEvent | null) => {
-    // The calendar is a singleton block: open it aimed at the viewer's own
-    // copy of the meeting. A meeting shared through the channel but absent
-    // from the viewer's calendars, like any item that is gone or hidden from
-    // the viewer, has nothing to open, so its preview card is shown instead,
-    // as a sheet on touch devices.
-    if (showsPreviewOnOpen()) {
-      if (isTouchDevice()) setPreviewSheetOpen(true);
-      else setPreviewCardOpen(true);
-      return;
-    }
-    const target = calendarOpen();
-    if (target?.kind === 'calendar') {
-      fireAndForget(
-        (async () => {
-          const opened = await openCalendarEventSplit({
-            ...target.target,
-            openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
-          });
-          if (opened) props.onOpened?.();
-        })(),
-        'document-mention'
-      );
-      return;
-    }
-    const result = openDocument(
-      resolvedBlockName(),
-      props.documentId,
-      props.blockParams,
-      openInNewSplitForMention(e?.shiftKey, e != null)
-    );
-    if (result && result.status !== 'unavailable') props.onOpened?.();
-  });
-
-  if (editor) {
-    autoRegister(
-      editor.registerCommand(
-        KEY_ENTER_COMMAND,
-        (e) => {
-          if (isSelectedAsNode()) {
-            open(e);
-            return true;
-          }
-          return false;
-        },
-        COMMAND_PRIORITY_NORMAL
-      )
-    );
-  }
-
-  // The internal model of the LexicalNode needs the fresh state of the document
-  // name for serialization.
-  createEffect(() => {
-    const i = item();
-    if (i.loading) return;
-    if (i.access === 'access') {
-      setTimeout(() => {
-        editor?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
-          [props.documentId]: i.name,
-        });
-      });
-    } else if (i.access === 'no_access') {
-      setTimeout(() => {
-        editor?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
-          [props.documentId]: 'No Access',
-        });
-      });
-    } else if (i.access === 'does_not_exist') {
-      // Don't update to "Deleted" if this is a recent mention
-      if (!isRecentMention()) {
-        setTimeout(() => {
-          editor?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
-            [props.documentId]: 'Deleted',
-          });
-        });
-      }
-    }
-  });
-
-  const deleteMention = () => {
-    editor?.update(() => {
-      const node = $getNodeByKey(props.key);
-      if (!$isDocumentMentionNode(node)) return false;
-      node.remove();
-      return true;
-    });
-  };
-
-  const convertToText = (link: string) => {
-    editor?.update(() => {
-      const node = $getNodeByKey(props.key);
-      if (!$isDocumentMentionNode(node)) return;
-      node.replace($createTextNode(link));
-    });
-  };
-
-  const convertToCard = () => {
-    if (!editor) return;
-    editor.update(() => {
-      const node = $getNodeByKey(props.key);
-      if (!$isDocumentMentionNode(node)) return false;
-      $convertMentionToCard(node);
-      return true;
-    });
-  };
-
-  // Native listeners: inside an editable editor (the agent and chat
-  // composers) the shell stops click propagation before Solid's delegated
-  // handlers run, which left the chip inert there.
-  const openIfReady = (e: MouseEvent | KeyboardEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const i = item();
-    if (
-      isUnavailable() ||
-      (!i.loading &&
-        (i.access === 'access' ||
-          shouldUseFallbackForRecentMention(i, isRecentMention())))
-    ) {
-      open(e);
-    }
-  };
-  const navHandlers =
-    useNativeSplitNavigationHandler<HTMLSpanElement>(openIfReady);
-
-  // One set of preview props for the hover card and the touch sheet.
-  const previewContentProps: DocumentPreviewContentProps = {
-    onOpened: () => props.onOpened?.(),
-    get delete() {
-      return editor?.isEditable() ? deleteMention : undefined;
-    },
-    get convertToText() {
-      return editor?.isEditable() ? convertToText : undefined;
-    },
-    get collapseInfo() {
-      return {
-        isCollapsed: isCollapsed(),
-        isCollapsable: isCollapsable(),
-        handleCollapse: () => {
-          const state = !isCollapsed();
-          setIsCollapsed(state);
-          editor?.update(() => {
-            const node = $getNodeByKey(props.key);
-            if ($isDocumentMentionNode(node)) {
-              node.setCollapsed(state);
-            }
-          });
-        },
-      };
-    },
-    get documentInfo() {
-      return {
-        id: props.documentId,
-        name: shouldUseFallbackForRecentMention(item(), isRecentMention())
-          ? props.documentName
-          : undefined,
-        type: verifyBlockName(props.blockName),
-        params: props.blockParams ?? {},
-        isOpenable: currentBlockId !== props.documentId,
-      };
-    },
-    get previewInfo() {
-      return {
-        isPreviewable: isEmbeddable(),
-        showPreview: showEmbedOption(),
-        handlePreviewToggle: convertToCard,
-      };
-    },
-    get useFallbackData() {
-      return shouldUseFallbackForRecentMention(item(), isRecentMention());
-    },
-  };
-
-  return (
-    <>
-      {/* The sheet stays up once open, so a share the viewer adds or is
-          invited to meanwhile shows it is on their calendar in place. */}
-      <Show
-        when={isTouchDevice() && (showsPreviewOnOpen() || previewSheetOpen())}
-      >
-        <DocumentPreviewSheet
-          open={previewSheetOpen()}
-          onOpenChange={setPreviewSheetOpen}
-          {...previewContentProps}
-        />
-      </Show>
-      <HoverCard
-        open={previewCardOpen()}
-        onOpenChange={setPreviewCardOpen}
-        keepOpenOnTriggerPress={showsPreviewOnOpen()}
-        triggerRef={setPreviewTrigger}
-        triggerOnClick={editor ? undefined : openIfReady}
-        // A modal makes previews outside its content inert.
-        portalMount={
-          previewTrigger()?.closest<HTMLElement>('[role="dialog"]') ?? undefined
-        }
-        triggerOnKeyDown={
-          editor
-            ? undefined
-            : (event) => {
-                if (event.key === 'Enter') openIfReady(event);
-              }
-        }
-        triggerClass={editor ? undefined : 'rounded-xs focus-visible:bg-active'}
-        trigger={
-          <span class="relative">
-            <span
-              class="size-full py-[0.125em] cursor-default rounded-xs hover:bg-hover focus:bg-active"
-              classList={{
-                'bg-active text-ink': isSelectedAsNode(),
-              }}
-              style={{
-                'user-select': 'inherit',
-              }}
-              {...navHandlers}
-            >
-              <Switch>
-                <Match when={item()}>
-                  <InlinePreview
-                    previewData={previewData}
-                    entity={itemEntity()}
-                    blockName={verifyBlockName(props.blockName)}
-                    blockParams={props.blockParams || {}}
-                    theme={props.theme}
-                    collapsed={isCollapsed()}
-                    documentName={props.documentName}
-                    createdAt={props.createdAt}
-                    isRecentMention={isRecentMention}
-                    onOpened={props.onOpened}
-                  />
-                </Match>
-              </Switch>
-            </span>
-            <MentionTooltip show={isSelectedAsNode()} text="Open" />
-          </span>
-        }
-        content={
-          <PopupPreview
-            mouseEnter={() => {}}
-            mouseLeave={() => {}}
-            {...previewContentProps}
-          />
-        }
-      />
-    </>
   );
 }

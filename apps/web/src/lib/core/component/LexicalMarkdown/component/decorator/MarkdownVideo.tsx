@@ -4,19 +4,9 @@ import VideoIcon from '@icon/system/regular/file-video.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import { mergeRegister } from '@lexical/utils';
-import {
-  $isVideoNode,
-  type VideoDecoratorProps,
-} from '@macro-inc/lexical-core';
+import type { VideoDecoratorProps } from '@macro-inc/lexical-core';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
-import {
-  $createNodeSelection,
-  $getNodeByKey,
-  $setSelection,
-  COMMAND_PRIORITY_LOW,
-} from 'lexical';
 import {
   createEffect,
   createSignal,
@@ -24,19 +14,9 @@ import {
   onCleanup,
   onMount,
   Show,
-  useContext,
 } from 'solid-js';
-import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import {
-  $upgradeDSSMediaUrl,
-  getMediaUrl,
-  ON_MEDIA_COMPONENT_MOUNT_COMMAND,
-  UPDATE_MEDIA_SIZE_COMMAND,
-  UPLOAD_MEDIA_FAILURE_COMMAND,
-  UPLOAD_MEDIA_START_COMMAND,
-  UPLOAD_MEDIA_SUCCESS_COMMAND,
-} from '../../plugins';
-import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
+import { useVideoHost, type VideoHost } from '../../decorator-host/video-host';
+import { resolveStoredMediaUrl } from '../../plugins/media';
 import { MediaButtons } from './MediaButtons';
 import {
   MediaLoadingPlaceholder,
@@ -62,14 +42,42 @@ function Spinner() {
   );
 }
 
-export function MarkdownVideo(props: VideoDecoratorProps) {
+/**
+ * Source `MediaNode.updateFromJSON` sets the stored source type, id and
+ * dimensions unchanged, so null or omitted values reach this component. Its
+ * reads tolerate them: dimensions fall back with `|| 0`, and the source type
+ * and id only select a media url branch or interpolate into its request.
+ * The url is kept as stored too: a local or public url, null or omitted, goes
+ * into the video src signal, where Solid drops a null or undefined src alike,
+ * and the file-name helper converts it with String() as the URL constructor
+ * does. Static-file and document-service sources always resolve to text.
+ */
+export type MarkdownVideoProps = Omit<
+  VideoDecoratorProps,
+  | 'srcType'
+  | 'id'
+  | 'url'
+  | 'width'
+  | 'height'
+  | 'constrainedWidth'
+  | 'constrainedHeight'
+> & {
+  srcType?: string | null;
+  id?: string | null;
+  url?: string | null;
+  width?: number | null;
+  height?: number | null;
+  constrainedWidth?: number | null;
+  constrainedHeight?: number | null;
+  host?: VideoHost;
+};
+
+export function MarkdownVideo(props: MarkdownVideoProps) {
   let videoRef!: HTMLVideoElement;
   let containerRef!: HTMLDivElement;
 
-  const lexicalWrapper = useContext(LexicalWrapperContext);
-  const selection = () => lexicalWrapper?.selection;
-  const editor = () => lexicalWrapper?.editor;
-  const interactable = () => lexicalWrapper?.isInteractable() ?? false;
+  const host = useVideoHost(props.host);
+  const interactable = host.isInteractable;
 
   const [viewerOpen, setViewerOpen] = createSignal(false);
   const [videoHover, setVideoHover] = createSignal(false);
@@ -78,7 +86,9 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
     props.width || 0,
     props.height || 0,
   ]);
-  const [videoUrl, setVideoUrl] = createSignal('');
+  const [videoUrl, setVideoUrl] = createSignal<string | null | undefined>('');
+  // Solid removes a null or undefined src alike, as Source's null url does.
+  const videoSrc = () => videoUrl() ?? undefined;
   const [state, setState] = createSignal<VideoState>('loading');
   const [videoError, setVideoError] = createSignal<VideoError | undefined>();
 
@@ -93,8 +103,9 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
       setVideoUrl(props.url);
       return;
     }
+    // Local and public sources returned above, so the rest resolve to text.
     fireAndForget(
-      getMediaUrl({
+      resolveStoredMediaUrl({
         type: props.srcType,
         id: props.id,
         url: props.url,
@@ -118,42 +129,15 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         }
         const url = maybeUrl.value;
         setVideoUrl(url);
-        if (props.srcType === 'dss') {
-          editor()?.update(
-            () => {
-              $upgradeDSSMediaUrl(props.key, url, 'video');
-            },
-            { discrete: true, tag: 'historic' }
-          );
-        }
+        if (props.srcType === 'dss') host.video.upgradeUrl(props.key, url);
       }),
       'markdown-media'
     );
   });
 
-  const isSelectedAsNode = () => {
-    const sel = selection();
-    if (!sel) return false;
-    return sel.type === 'node' && sel.nodeKeys.has(props.key);
-  };
-
-  const clickVideoHandler = () => {
-    const currentEditor = editor();
-    if (currentEditor === undefined) return;
-    if (!currentEditor.isEditable()) return;
-    if (isSelectedAsNode()) return;
-    currentEditor.update(() => {
-      const sel = $createNodeSelection();
-      sel.add(props.key);
-      $setSelection(sel);
-    });
-  };
-
-  const deleteVideo = () => {
-    const currentEditor = editor();
-    if (currentEditor === undefined) return;
-    removeNodeAndRestoreSelection(currentEditor, props.key, $isVideoNode);
-  };
+  const isSelectedAsNode = () => host.isSelected(props.key);
+  const clickVideoHandler = () => host.video.select(props.key);
+  const deleteVideo = () => host.video.remove(props.key);
 
   const viewFull = () => {
     if (state() === 'ok') {
@@ -164,14 +148,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
   const loadVideo = () => {
     setState('ok');
     setVideoDims([videoRef.videoWidth, videoRef.videoHeight]);
-    editor()?.dispatchCommand(UPDATE_MEDIA_SIZE_COMMAND, [
-      props.key,
-      {
-        width: videoRef.videoWidth,
-        height: videoRef.videoHeight,
-      },
-      'video',
-    ]);
+    host.video.resize(props.key, videoRef.videoWidth, videoRef.videoHeight);
   };
 
   const onVideoError = () => {
@@ -186,46 +163,16 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
   onMount(() => {
     videoRef.addEventListener('loadeddata', loadVideo);
     videoRef.addEventListener('error', onVideoError);
-    const e = editor();
-    if (e) {
-      cleanupListners = mergeRegister(
-        e.registerCommand(
-          UPLOAD_MEDIA_START_COMMAND,
-          ([key]) => {
-            if (key !== props.key) return false;
-            setUploading(true);
-            return true;
-          },
-          COMMAND_PRIORITY_LOW
-        ),
-        e.registerCommand(
-          UPLOAD_MEDIA_SUCCESS_COMMAND,
-          ([key]) => {
-            if (key !== props.key) return false;
-            setUploading(false);
-            return true;
-          },
-          COMMAND_PRIORITY_LOW
-        ),
-        e.registerCommand(
-          UPLOAD_MEDIA_FAILURE_COMMAND,
-          ([key]) => {
-            if (key !== props.key) return false;
-            setUploading(false);
-            toast.failure('Failed to upload video');
-            return true;
-          },
-          COMMAND_PRIORITY_LOW
-        )
-      );
-
-      setTimeout(() => {
-        e.dispatchCommand(ON_MEDIA_COMPONENT_MOUNT_COMMAND, [
-          props.key,
-          'video',
-        ]);
-      }, 10);
-    }
+    cleanupListners = host.video.subscribeUploads(props.key, {
+      start: () => setUploading(true),
+      success: () => setUploading(false),
+      cancelled: () => setUploading(false),
+      failure: () => {
+        setUploading(false);
+        toast.failure('Failed to upload video');
+      },
+    });
+    host.video.mounted(props.key);
   });
 
   onCleanup(() => {
@@ -235,22 +182,13 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
   });
 
   const persistScale = debounce((value: number) => {
-    const currentEditor = editor();
-    if (!interactable() || !currentEditor?.isEditable()) return;
-    currentEditor.update(() => {
-      if (!currentEditor.isEditable()) return;
-      const node = $getNodeByKey(props.key);
-      if (node && $isVideoNode(node)) node.setScale(value, false);
-    });
+    host.video.persistScale(props.key, value);
   }, 60);
   createEffect(on(scale, persistScale));
   createEffect(() => {
     if (!interactable()) {
       persistScale.clear();
-      const committedScale = editor()?.read(() => {
-        const node = $getNodeByKey(props.key);
-        return node && $isVideoNode(node) ? node.getScale() : props.scale;
-      });
+      const committedScale = host.video.readScale(props.key, props.scale);
       setScale(committedScale ?? props.scale);
     }
   });
@@ -298,7 +236,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
           <ResizeHandle
             scale={scale}
             setScale={(value) => {
-              if (interactable() && editor()?.isEditable()) setScale(value);
+              if (interactable() && host.isEditable()) setScale(value);
             }}
             side="left"
             imageDims={videoDims}
@@ -307,7 +245,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
           <ResizeHandle
             scale={scale}
             setScale={(value) => {
-              if (interactable() && editor()?.isEditable()) setScale(value);
+              if (interactable() && host.isEditable()) setScale(value);
             }}
             side="right"
             imageDims={videoDims}
@@ -325,7 +263,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
           )}
           draggable={true}
           ref={videoRef}
-          src={videoUrl()}
+          src={videoSrc()}
           controls={state() === 'ok'}
           style={{
             width: `${videoDims()[0] ? videoDims()[0] * scale() : 'auto'}px`,
@@ -375,7 +313,10 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
             newTab={
               state() === 'ok'
                 ? () => {
-                    window.open(videoUrl(), '_blank');
+                    // window.open converts a null url to "null" and treats an
+                    // omitted one as its default, as Source passes the url.
+                    const url = videoUrl();
+                    window.open(url === null ? String(url) : url, '_blank');
                   }
                 : undefined
             }
@@ -399,7 +340,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
               crossorigin="anonymous"
               class="max-w-full max-h-[80vh] size-auto object-contain"
               controls
-              src={videoUrl()}
+              src={videoSrc()}
             />
           </Dialog.Content>
         </div>

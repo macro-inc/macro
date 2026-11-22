@@ -18,6 +18,7 @@ comment/markdown rendering. Production runs on ECS behind the gateway at
   `comment-only-change.ts`,
   `image-markdown.ts`, `agent-context.ts`, `agent-announcement.ts`,
   `extract-reply.ts`, `mentions.ts`).
+- `src/lib/comment-only-change.ts`: exports the existing normalization for the dev corpus observer; keep the production gate comparison unchanged.
 - `src/lib/`: conversion logic the endpoints call into (`editor.ts`,
   `markdown.ts`, `html.ts`, `comment-only-change.ts`, `comment-mark.ts`,
   `sync-service.ts` client, `schemas.ts`).

@@ -1,29 +1,48 @@
 import {
-  $getStoredPinnedProperties,
-  ADD_PINNED_PROPERTY_COMMAND,
-  REMOVE_PINNED_PROPERTY_COMMAND,
-} from '@core/component/LexicalMarkdown/plugins/pinned-properties/pinnedPropertiesPlugin';
+  lexicalPinnedPropertyStore,
+  type PinnedPropertyStore,
+} from '@core/component/LexicalMarkdown/plugins/pinned-properties/store';
 import { resolvePinnedPropertyIds } from '@property/core/pinned-property-ids';
 import type { Property } from '@property/types';
 import type { LexicalEditor } from 'lexical';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
+
+/**
+ * The pin store of whichever engine mounted the document body. The native
+ * runtime brings its own store, so this shared module imports no native code.
+ */
+export function createDocumentPinnedPropertyStore(body: {
+  readonly editor: Accessor<LexicalEditor | undefined>;
+  readonly native: Accessor<PinnedPropertyStore | undefined>;
+}): Accessor<PinnedPropertyStore | undefined> {
+  return createMemo(() => {
+    const editor = body.editor();
+    return editor ? lexicalPinnedPropertyStore(editor) : body.native();
+  });
+}
 
 /** Observe and update the pins persisted in the collaborative document. */
 export function createPinnedProperties(
-  editor: Accessor<LexicalEditor | undefined>,
+  store: Accessor<PinnedPropertyStore | undefined>,
   defaultDefinitionIds: Accessor<readonly string[]> = () => []
 ) {
   const [ids, setIds] = createSignal<string[] | undefined>();
   createEffect(() => {
-    const current = editor();
+    const current = store();
     if (!current) {
       setIds(undefined);
       return;
     }
-    current.getEditorState().read(() => setIds($getStoredPinnedProperties()));
+    setIds(current.read());
     onCleanup(
-      current.registerUpdateListener(({ editorState }) => {
-        editorState.read(() => setIds($getStoredPinnedProperties()));
+      current.subscribe(() => {
+        setIds(current.read());
       })
     );
   });
@@ -33,45 +52,42 @@ export function createPinnedProperties(
     pin: boolean,
     propertyDefinitionId?: string
   ) => {
-    const current = editor();
+    const current = store();
     if (!current) return;
     const defaults = defaultDefinitionIds();
     const definitionId =
       propertyDefinitionId ??
       properties.find((property) => property.propertyId === id)
         ?.propertyDefinitionId;
-    current.update(() => {
-      const storedIds = $getStoredPinnedProperties();
+    current.update((storedIds) => {
       const selected = resolvePinnedPropertyIds(
         properties,
         storedIds,
         defaults
       );
+      const operations: { id: string; pin: boolean }[] = [];
       // Materialize defaults and resolve placeholder IDs using the existing commands.
       for (const propertyId of selected) {
         if (!storedIds?.includes(propertyId)) {
-          current.dispatchCommand(ADD_PINNED_PROPERTY_COMMAND, propertyId);
+          operations.push({ id: propertyId, pin: true });
         }
       }
       for (const propertyId of storedIds ?? []) {
         if (!selected.includes(propertyId)) {
-          current.dispatchCommand(REMOVE_PINNED_PROPERTY_COMMAND, propertyId);
+          operations.push({ id: propertyId, pin: false });
         }
       }
-      current.dispatchCommand(
-        pin ? ADD_PINNED_PROPERTY_COMMAND : REMOVE_PINNED_PROPERTY_COMMAND,
-        id
-      );
+      operations.push({ id, pin });
       if (!pin && definitionId) {
-        current.dispatchCommand(
-          REMOVE_PINNED_PROPERTY_COMMAND,
-          `pending:${definitionId}`
-        );
+        operations.push({ id: `pending:${definitionId}`, pin: false });
       }
+      return operations;
     });
   };
   return {
     ids,
+    /** Whether a document body is mounted to read and store pins. */
+    ready: () => store() !== undefined,
     pin: (id: string, properties: readonly Property[] = []) =>
       update(id, properties, true),
     unpin: (

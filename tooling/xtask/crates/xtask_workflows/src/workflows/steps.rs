@@ -130,6 +130,20 @@ pub(crate) const GOOGLE_PLAY_AUTH: StepHandle<GooglePlayAuthOutputs> = StepHandl
     },
 );
 
+/// The pinned root workspace JS dependencies (loro-crdt, loro-mirror,
+/// lexical-core), which Rust differential tests load through Bun runners.
+pub fn install_workspace_js_dependencies() -> Step<Run> {
+    Step::new("Install workspace JS dependencies")
+        .run("bun install --frozen-lockfile --ignore-scripts")
+}
+
+/// The pinned JS dependencies of `packages/lexical-conformance`, which the
+/// Rust fixture replays load through their jsdom HTML host.
+pub fn install_conformance_dependencies() -> Step<Run> {
+    Step::new("Install conformance dependencies")
+        .run("bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts")
+}
+
 /// Keyless Google Play access (Workload Identity Federation through the
 /// repository variables `GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER` /
 /// `GOOGLE_PLAY_SERVICE_ACCOUNT`), as step `auth`: an `androidpublisher`

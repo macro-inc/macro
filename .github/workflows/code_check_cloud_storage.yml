@@ -15,6 +15,7 @@ jobs:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=sccache-ci
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
+      loro_guards: ${{ steps.filter.outputs.loro_guards }}
       doppler_candidates: ${{ steps.filter.outputs.doppler_candidates }}
       query_data: ${{ steps.filter.outputs.query_data }}
       graphql_schema: ${{ steps.filter.outputs.graphql_schema }}
@@ -68,7 +69,43 @@ jobs:
               - '.github/actions/teardown-nix/**'
               - '.github/actions/setup-sccache/**'
               - '.github/services-config.json'
-              - .github/workflows/code_check_cloud_storage.yml
+              - '.github/workflows/code_check_cloud_storage.yml'
+              - 'vendor/loro-editor/**'
+              - '**/Cargo.toml'
+              - '.config/hakari.toml'
+              - 'crates/workspace-hack/**'
+              - '**/*.sh'
+              - 'justfile'
+              - '**/justfile'
+              - '**/*.yml'
+              - '**/*.yaml'
+              - '**/*Dockerfile*'
+              - '.github/workspace-dep-closures.json'
+              - 'infra/stacks/**/*.ts'
+              - 'infra/packages/service/**'
+            loro_guards:
+              - 'vendor/loro-editor/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '**/Cargo.toml'
+              - 'rust-toolchain.toml'
+              - '.cargo/**'
+              - '.config/hakari.toml'
+              - 'crates/workspace-hack/**'
+              - 'tooling/xtask/**'
+              - '**/*.sh'
+              - 'justfile'
+              - '**/justfile'
+              - '**/*.yml'
+              - '**/*.yaml'
+              - '**/*Dockerfile*'
+              - 'nix/**'
+              - 'flake.nix'
+              - 'flake.lock'
+              - '.github/services-config.json'
+              - '.github/workspace-dep-closures.json'
+              - 'infra/stacks/**/*.ts'
+              - 'infra/packages/service/**'
             doppler_candidates:
               - '.github/services-config.json'
               - '**/src/config.rs'
@@ -328,7 +365,7 @@ jobs:
       RUSTFLAGS: -Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold
       RUSTDOCFLAGS: -Dwarnings
       SQLX_OFFLINE: 'true'
-    timeout-minutes: 20
+    timeout-minutes: ${{ needs.path-check.outputs.loro_guards == 'true' && 30 || 20 }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -685,6 +722,12 @@ jobs:
           else
             echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
           fi
+      - name: Check vendored Loro against upstream
+        if: needs.path-check.outputs.loro_guards == 'true'
+        run: just check-loro-editor-vendor
+      - name: Check deployed server Loro feature isolation
+        if: needs.path-check.outputs.loro_guards == 'true'
+        run: just check-loro-native-editor-features
       - name: Build code-mode assets
         run: |
           set -euo pipefail
@@ -2443,6 +2486,10 @@ jobs:
             sleep 1
           done
           docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
+      - name: Install workspace JS dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install conformance dependencies
+        run: bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts
       - name: prepare tests
         run: |-
           just setup_test_envs

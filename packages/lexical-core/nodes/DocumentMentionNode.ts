@@ -34,7 +34,12 @@ export type SerializedDocumentMentionNode = Spread<
   SerializedLexicalNode
 >;
 
-export type DocumentMentionDecoratorProps = DocumentMentionInfo & {
+export type DocumentMentionDecoratorProps = Omit<
+  DocumentMentionInfo,
+  'mentionUuid' | 'channelType'
+> & {
+  mentionUuid?: string | null;
+  channelType?: string | null;
   key: NodeKey;
   theme: EditorThemeClasses;
 };

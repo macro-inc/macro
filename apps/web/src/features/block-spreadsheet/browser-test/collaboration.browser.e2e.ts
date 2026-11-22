@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page, test } from '@playwright/test';
 import { Miniflare } from 'miniflare';
-import { InitializeFromSnapshotRequest } from '../../../../../../services/sync-service/bebop/generated/schema';
+import { InitializeFromSnapshotRequest } from '../../../../../../crates/sync_protocol/bebop/generated/schema';
 
 const root = fileURLToPath(new URL('../../../../../../', import.meta.url));
 let server: Miniflare;

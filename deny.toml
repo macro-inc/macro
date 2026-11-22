@@ -94,6 +94,7 @@ ignore = [
   { id = "RUSTSEC-2026-0441", reason = "pin-utils is unmaintained, not unsound; transitive via aws-smithy-http, -runtime and -types, no release without it yet" },
   # 0.26.11 only re-exports webpki-roots 1.x; the bans below require patched roots.
   # Remove this exception when SQLx and the remaining callers stop using the wrapper.
+  { id = "RUSTSEC-2026-0374", reason = "basic-toml is unmaintained, not vulnerable; it reaches only document_session_ffi via uniffi 0.32 -> askama 0.16 -> askama_derive, at binding-generation time" },
   { id = "RUSTSEC-2026-0381", reason = "webpki-roots 0.26.11 contains no certificates and re-exports patched 1.0.10; bans reject every other version below 1.0.10" },
   { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5.5 has no patched release; it is reached only through aws-sigv4's optional SigV4a (ECDSA) signing. 0.7 is updated to the patched 0.7.6" },
   { id = "RUSTSEC-2026-0441", reason = "pin-utils is unmaintained; reached only through the aws-smithy-http, aws-smithy-runtime and aws-smithy-types versions we lock. Their latest releases drop it, so remove this after the next AWS SDK upgrade" },
@@ -260,6 +261,7 @@ deny = [
     "import",                    # Route span no-email tests only (dev-dependency)
     "initiative",                # initiative.read span field tests only (dev-dependency)
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
+    "lexical_client",            # Route span tests and the explicit test-utils trace collector only
     "loom",                      # External concurrency testing dependency
     "macro_entrypoint",
     "macro_authorization",      # Credential-redaction span tests only

@@ -9,14 +9,23 @@ export function DragInsertIndicator(props: {
   state: Store<DragInsertState>;
   active: boolean;
   editor?: LexicalEditor;
+  /** A non-Lexical body (the native editor) resolves its own keys and root. */
+  host?: {
+    element(key: string): HTMLElement | null;
+    root(): HTMLElement | null;
+  };
 }) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = () => props.editor ?? lexicalWrapper?.editor;
+  const elementByKey = (key: string) =>
+    props.host ? props.host.element(key) : editor()?.getElementByKey(key);
+  const rootElement = () =>
+    props.host ? props.host.root() : editor()?.getRootElement();
 
   const elementRect = () => {
     const key = props.state.nodeKey;
     if (key !== null) {
-      const element = editor()?.getElementByKey(key);
+      const element = elementByKey(key);
       if (element) {
         return element.getBoundingClientRect();
       }
@@ -26,7 +35,7 @@ export function DragInsertIndicator(props: {
   const derivedRect = () => {
     const padding = props.state.visible ? 6 : 0;
     const r = elementRect() ?? { top: 0, left: 0, width: 0, height: 0 };
-    const rootRect = editor()?.getRootElement()?.getBoundingClientRect();
+    const rootRect = rootElement()?.getBoundingClientRect();
     return {
       top:
         (props.state.position === 'before'

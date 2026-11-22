@@ -3,6 +3,7 @@ import { $createParagraphNode, $createTextNode, $getRoot } from 'lexical';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MarkdownDocumentProvider } from '../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
+import { desktopBodyFormatPopup } from '../views/body-format-popup';
 import { MarkdownNameProvider } from './MarkdownNameProvider';
 import { TitleEditor } from './TitleEditor';
 
@@ -49,6 +50,7 @@ it('saves a title edited just before the document closes', () => {
         },
         persistedName: () => 'Old title',
         fallbackName: () => 'New Document',
+        bodyFormatPopup: () => desktopBodyFormatPopup,
         state,
         element: () => undefined,
       }}

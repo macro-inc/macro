@@ -1,0 +1,157 @@
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import ts from 'typescript';
+
+const root = resolve(import.meta.dirname, '../../..');
+const upstream = join(root, 'target/lexical-upstream');
+const pin: { version: string; sha256: string } = JSON.parse(
+  readFileSync(join(root, 'packages/lexical-conformance/upstream.lock'), 'utf8')
+);
+const patchHash = createHash('sha256')
+  .update(
+    readFileSync(join(root, 'packages/lexical-conformance/record/hooks.patch'))
+  )
+  .digest('hex');
+if (
+  pin.version !== '0.45.0' ||
+  readFileSync(join(upstream, '.recorder-pin'), 'utf8') !==
+    pin.sha256 + patchHash
+)
+  throw new Error(
+    'Prepare the checksum-pinned Lexical sources before deriving prototypes'
+  );
+
+// Explicit source paths disambiguate package and application classes with the
+// same names. IDs are append-only; the AST, rather than a serialized type name,
+// establishes the exact prototype and its declared parent.
+const declarations = [
+  ['LexicalNode', 'LexicalNode', 'lexical/src/LexicalNode.ts'],
+  ['ElementNode', 'ElementNode', 'lexical/src/nodes/LexicalElementNode.ts'],
+  [
+    'DecoratorNode',
+    'DecoratorNode',
+    'lexical/src/nodes/LexicalDecoratorNode.ts',
+  ],
+  ['TextNode', 'TextNode', 'lexical/src/nodes/LexicalTextNode.ts'],
+  ['TabNode', 'TabNode', 'lexical/src/nodes/LexicalTabNode.ts'],
+  [
+    'ParagraphNode',
+    'ParagraphNode',
+    'lexical/src/nodes/LexicalParagraphNode.ts',
+  ],
+  ['RootNode', 'RootNode', 'lexical/src/nodes/LexicalRootNode.ts'],
+  [
+    'LineBreakNode',
+    'LineBreakNode',
+    'lexical/src/nodes/LexicalLineBreakNode.ts',
+  ],
+  ['HeadingNode', 'HeadingNode', 'lexical-rich-text/src/index.ts'],
+  ['QuoteNode', 'QuoteNode', 'lexical-rich-text/src/index.ts'],
+  ['CodeNode', 'CodeNode', 'lexical-code-core/src/CodeNode.ts'],
+  [
+    'CodeHighlightNode',
+    'CodeHighlightNode',
+    'lexical-code-core/src/CodeHighlightNode.ts',
+  ],
+  ['ListNode', 'ListNode', 'lexical-list/src/LexicalListNode.ts'],
+  ['ListItemNode', 'ListItemNode', 'lexical-list/src/LexicalListItemNode.ts'],
+  ['LinkNode', 'LinkNode', 'lexical-link/src/LexicalLinkNode.ts'],
+  ['AutoLinkNode', 'AutoLinkNode', 'lexical-link/src/LexicalLinkNode.ts'],
+  ['MarkNode', 'MarkNode', 'lexical-mark/src/MarkNode.ts'],
+  ['TableNode', 'TableNode', 'lexical-table/src/LexicalTableNode.ts'],
+  ['TableRowNode', 'TableRowNode', 'lexical-table/src/LexicalTableRowNode.ts'],
+  [
+    'TableCellNode',
+    'TableCellNode',
+    'lexical-table/src/LexicalTableCellNode.ts',
+  ],
+  ['HashtagNode', 'HashtagNode', 'lexical-hashtag/src/LexicalHashtagNode.ts'],
+  ['OverflowNode', 'OverflowNode', 'lexical-overflow/src/index.ts'],
+  [
+    'ArtificialNode',
+    'ArtificialNode__DO_NOT_USE',
+    'lexical/src/nodes/ArtificialNode.ts',
+  ],
+  [
+    'HorizontalRuleNode',
+    'HorizontalRuleNode',
+    'lexical-extension/src/HorizontalRuleExtension.ts',
+  ],
+] as const;
+const schemaPath = join(
+  root,
+  'crates/client/document_session_wasm/abi/compatibility-prototypes.bop'
+);
+const previous = existsSync(schemaPath) ? readFileSync(schemaPath, 'utf8') : '';
+const ids = new Map(
+  [...previous.matchAll(/^\s+(\w+) = (\d+);/gm)]
+    .filter((entry) => entry[1] !== 'Unknown')
+    .map((entry) => [entry[1], Number(entry[2])])
+);
+let next = Math.max(0, ...ids.values()) + 1;
+const records = declarations.map(([name, className, file]) => {
+  const path = `packages/${file}`;
+  const sourceText = readFileSync(join(upstream, path), 'utf8');
+  const source = ts.createSourceFile(
+    path,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true
+  );
+  const found = source.statements.filter(
+    (node) => ts.isClassDeclaration(node) && node.name?.text === className
+  );
+  if (found.length !== 1 || !ts.isClassDeclaration(found[0]))
+    throw new Error(`Expected one pinned class ${className} in ${path}`);
+  const declaration = found[0];
+  const parents =
+    declaration.heritageClauses
+      ?.filter((clause) => clause.token === ts.SyntaxKind.ExtendsKeyword)
+      .flatMap((clause) => clause.types) ?? [];
+  if (parents.length > 1)
+    throw new Error(`Unexpected prototype ancestry for ${className}`);
+  return {
+    id: ids.get(name) ?? next++,
+    name,
+    className,
+    source: path,
+    parent: parents[0]?.expression.getText(source) ?? null,
+    sourceHash: createHash('sha256').update(sourceText).digest('hex'),
+  };
+});
+for (const name of ids.keys())
+  if (!records.some((record) => record.name === name))
+    throw new Error(`Removed native prototype ${name}`);
+for (const record of records)
+  if (!Number.isInteger(record.id) || record.id < 1 || record.id > 65535)
+    throw new Error(`Native prototype ID out of uint16 range: ${record.name}`);
+records.sort((left, right) => left.id - right.id);
+if (new Set(records.map((record) => record.id)).size !== records.length)
+  throw new Error('Native prototype IDs must be unique');
+const schema =
+  '// Generated by scripts/generate-compatibility-prototypes.ts; do not edit.\n' +
+  `// Checksum-pinned Lexical ${pin.version}: ${pin.sha256}\n` +
+  'enum CompatNativePrototype : uint16 {\n  Unknown = 0;\n' +
+  records
+    .map(
+      (record) =>
+        `  // ${record.source}: ${record.className} extends ${record.parent ?? '(none)'}\n  // Source SHA-256: ${record.sourceHash}\n  ${record.name} = ${record.id};`
+    )
+    .join('\n') +
+  '\n}\n';
+const metadataPath = join(
+  root,
+  'packages/collaboration/src/session/compatibility-prototypes.generated.json'
+);
+const metadata = `${JSON.stringify({ upstreamVersion: pin.version, upstreamSha256: pin.sha256, prototypes: records }, null, 2)}\n`;
+for (const [path, output] of [
+  [schemaPath, schema],
+  [metadataPath, metadata],
+]) {
+  if (process.argv.includes('--check')) {
+    if (!existsSync(path) || readFileSync(path, 'utf8') !== output)
+      throw new Error(`Stale native prototype metadata: ${path}`);
+  } else writeFileSync(path, output);
+}
+console.log(`Derived ${records.length} exact pinned native prototypes`);

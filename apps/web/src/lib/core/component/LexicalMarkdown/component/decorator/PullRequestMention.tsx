@@ -20,12 +20,8 @@ import GitMerge from '@icon/system/regular/git-merge.svg';
 import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import {
-  $isPullRequestMentionNode,
-  HISTORIC_TAG,
   isGithubPullRequestUrl,
   type PullRequestMentionDecoratorProps,
-  SKIP_DOM_SELECTION_TAG,
-  SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { queryReadyGate } from '@queries/gate';
@@ -39,11 +35,6 @@ import type {
   GithubPullRequestComment,
 } from '@service-storage/generated/schemas';
 import { buttonClasses, CopyButton, cn, Surface } from '@ui';
-import {
-  $getNodeByKey,
-  COMMAND_PRIORITY_NORMAL,
-  KEY_ENTER_COMMAND,
-} from 'lexical';
 import { ResultAsync } from 'neverthrow';
 import {
   type Accessor,
@@ -52,11 +43,23 @@ import {
   type JSX,
   Show,
   Suspense,
-  useContext,
 } from 'solid-js';
-import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import {
+  type PullRequestMentionHostProp,
+  usePullRequestMentionHost,
+} from '../../decorator-host/pr-mention-host';
 import { autoRegister } from '../../plugins';
 import { MentionTooltip } from './MentionTooltip';
+
+export type PullRequestMentionUIProps = Omit<
+  PullRequestMentionDecoratorProps,
+  'id' | 'label' | 'mentionUuid'
+> & {
+  /** Source keeps a stored null or omitted id; the mention then resolves from its URL. */
+  id?: string | null;
+  label?: string | null;
+  mentionUuid?: string | null;
+} & PullRequestMentionHostProp;
 
 const GITHUB_PULL_REQUEST_SOURCE = 'github_pull_request';
 const STATUS_ICON_CLASS: Record<string, string> = {
@@ -460,7 +463,7 @@ function githubKeyFromUrl(url: string | undefined): string | undefined {
 
 /** The label to show before a mention's entity resolves. */
 function mentionFallbackLabel(
-  props: Pick<PullRequestMentionDecoratorProps, 'label' | 'url'>
+  props: Pick<PullRequestMentionUIProps, 'label' | 'url'>
 ): string | undefined {
   if (props.label) return props.label;
   const ref = props.url ? parseGithubPrUrl(props.url) : null;
@@ -473,7 +476,7 @@ function mentionFallbackLabel(
  * Macro has not synced the PR, without suspending.
  */
 function useGithubUrlMentionEntity(
-  props: Pick<PullRequestMentionDecoratorProps, 'id' | 'url'>,
+  props: Pick<PullRequestMentionUIProps, 'id' | 'url'>,
   enabled: Accessor<boolean>
 ): Accessor<ForeignEntity | undefined> {
   const query = usePullRequestByGithubKeyQuery(
@@ -507,10 +510,9 @@ export function UnsyncedPullRequestPreviewCard(props: {
   );
 }
 
-function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
-  const lexicalWrapper = useContext(LexicalWrapperContext);
-  const editor = lexicalWrapper?.editor;
-  const fetchEnabled = () => !lexicalWrapper?.skipPreviewFetch;
+function PullRequestMentionContent(props: PullRequestMentionUIProps) {
+  const host = usePullRequestMentionHost(props.host);
+  const fetchEnabled = host.previewFetchEnabled;
 
   const query = usePrMentionQuery(() => props.id, fetchEnabled);
   const urlEntity = useGithubUrlMentionEntity(props, fetchEnabled);
@@ -539,21 +541,8 @@ function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
     const nextLabel = pullRequestLabel(resolved);
     const nextUrl = props.url ? undefined : pullRequestUrl(resolved);
     const labelChanged = !!nextLabel && nextLabel !== props.label;
-    if (!editor || (!labelChanged && !nextUrl)) return;
-
-    editor.update(
-      () => {
-        const node = $getNodeByKey(props.key);
-        if ($isPullRequestMentionNode(node)) {
-          if (labelChanged) node.setLabel(nextLabel);
-          if (nextUrl) node.setUrl(nextUrl);
-        }
-      },
-      {
-        tag: [HISTORIC_TAG, SKIP_DOM_SELECTION_TAG, SKIP_SCROLL_INTO_VIEW_TAG],
-        discrete: true,
-      }
-    );
+    if (!labelChanged && !nextUrl) return;
+    host.enrich(props.key, labelChanged ? nextLabel : undefined, nextUrl);
   });
 
   // A sent message must not change height when the PR resolves after it
@@ -587,27 +576,20 @@ function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
   );
 }
 
-export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
-  const lexicalWrapper = useContext(LexicalWrapperContext);
-  const editor = lexicalWrapper?.editor;
-  const selection = () => lexicalWrapper?.selection;
+export function PullRequestMention(props: PullRequestMentionUIProps) {
+  const host = usePullRequestMentionHost(props.host);
   const { openWithSplit } = useSplitLayout()!;
 
   const githubLinkQuery = useGithubLinkStatusQuery({
-    enabled: () => !lexicalWrapper?.skipPreviewFetch,
+    enabled: host.previewFetchEnabled,
     // Virtualized rows remount while scrolling; they should not retry failures.
     retryOnMount: false,
   });
 
-  const isSelectedAsNode = () => {
-    const sel = selection();
-    if (!sel) return false;
-    return sel.type === 'node' && sel.nodeKeys.has(props.key);
-  };
+  const isSelectedAsNode = () => host.isSelected(props.key);
 
-  const fetchEnabled = () => !lexicalWrapper?.skipPreviewFetch;
-  const urlEntity = useGithubUrlMentionEntity(props, fetchEnabled);
-  const idQuery = usePrMentionQuery(() => props.id, fetchEnabled);
+  const urlEntity = useGithubUrlMentionEntity(props, host.previewFetchEnabled);
+  const idQuery = usePrMentionQuery(() => props.id, host.previewFetchEnabled);
   const entityId = () => props.id || urlEntity()?.id;
   const githubUrl = () =>
     (props.url && isGithubPullRequestUrl(props.url) ? props.url : undefined) ??
@@ -617,7 +599,7 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
 
   // When GitHub is not linked, render as a plain link instead of the fancy mention UI
   const shouldRenderAsPlainLink = () => {
-    if (lexicalWrapper?.skipPreviewFetch) return false;
+    if (!host.previewFetchEnabled()) return false;
     // An initial failure has no resource value and reading it during a retry
     // suspends the surrounding surface. Refetch errors retain confirmed data;
     // Solid Query exposes that value without suspending.
@@ -645,21 +627,14 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
     );
   };
 
-  if (editor) {
-    autoRegister(
-      editor.registerCommand(
-        KEY_ENTER_COMMAND,
-        (e) => {
-          if (isSelectedAsNode()) {
-            open(e);
-            return true;
-          }
-          return false;
-        },
-        COMMAND_PRIORITY_NORMAL
-      )
-    );
-  }
+  const unregister = host.registerNormalEnter((event) => {
+    if (isSelectedAsNode()) {
+      open(event);
+      return true;
+    }
+    return false;
+  });
+  if (unregister) autoRegister(unregister);
 
   const navHandlers = useNativeSplitNavigationHandler<HTMLSpanElement>((e) => {
     e.stopPropagation();

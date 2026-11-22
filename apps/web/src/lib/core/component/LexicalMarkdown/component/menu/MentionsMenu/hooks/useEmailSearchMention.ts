@@ -51,6 +51,8 @@ type UseEmailSearchMentionOptions = {
 };
 
 type UseEmailSearchMentionResult = {
+  isLoading: Accessor<boolean>;
+  error: Accessor<unknown>;
   emails: Accessor<EntityItem[]>;
   totalCount: Accessor<number>;
   hasMore: Accessor<boolean>;
@@ -161,6 +163,21 @@ export function useEmailSearchMention(
   );
 
   return {
+    isLoading: () =>
+      listEnabled() &&
+      match(source())
+        .with('quickAccess', () => cachedEmails.isLoading())
+        .with('recentThreads', () => recentThreadsQuery.isLoading)
+        .with('search', () => emailSearchQuery.isLoading)
+        .exhaustive(),
+    error: (): unknown =>
+      listEnabled()
+        ? match(source())
+            .with('quickAccess', () => cachedEmails.error())
+            .with('recentThreads', () => recentThreadsQuery.error)
+            .with('search', () => emailSearchQuery.error)
+            .exhaustive()
+        : undefined,
     emails,
     totalCount: () =>
       match(source())

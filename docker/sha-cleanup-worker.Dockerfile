@@ -10,7 +10,7 @@ COPY ./Cargo.lock Cargo.lock
 COPY ./Cargo.toml Cargo.toml
 COPY . .
 
-RUN --mount=type=cache,id=cargo_build,target=/usr/local/cargo/registry cargo build --release --bin sha_cleanup_worker
+RUN --mount=type=cache,id=cargo_build,target=/usr/local/cargo/registry cargo build --release --package sha_cleanup_worker --bin sha_cleanup_worker
 
 FROM debian:bookworm-slim AS runner
 

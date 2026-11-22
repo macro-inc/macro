@@ -4,29 +4,31 @@ import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHa
 import OpenIcon from '@icon/system/regular/arrows-out.svg';
 import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
 import {
-  $isBookingLinkMentionNode,
   type BookingLinkMentionDecoratorProps,
-  HISTORIC_TAG,
   parseBookingUrl,
-  SKIP_DOM_SELECTION_TAG,
-  SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
 import { cn, Surface } from '@ui';
+import { createEffect, createMemo, Show } from 'solid-js';
 import {
-  $getNodeByKey,
-  COMMAND_PRIORITY_NORMAL,
-  KEY_ENTER_COMMAND,
-} from 'lexical';
-import { createEffect, createMemo, Show, useContext } from 'solid-js';
-import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+  type BookingLinkMentionHostProp,
+  useBookingLinkMentionHost,
+} from '../../decorator-host/booking-host';
 import { autoRegister } from '../../plugins';
 import { MentionTooltip } from './MentionTooltip';
+
+export type BookingLinkMentionUIProps = Omit<
+  BookingLinkMentionDecoratorProps,
+  'slug' | 'label'
+> & {
+  slug?: string | null;
+  label?: string | null;
+} & BookingLinkMentionHostProp;
 
 function BookingLinkIcon(props: { class?: string }) {
   return <CalendarBlank class={cn('size-full text-accent', props.class)} />;
 }
 
-function fallbackLabel(props: BookingLinkMentionDecoratorProps): string {
+function fallbackLabel(props: BookingLinkMentionUIProps): string {
   if (props.label) return props.label;
   if (props.slug) return props.slug;
   const parsed = parseBookingUrl(props.url);
@@ -38,7 +40,7 @@ function BookingLinkPreviewCard(props: {
   label: string;
   url: string;
   profileId: string;
-  slug?: string;
+  slug?: string | null;
 }) {
   return (
     <div class="select-none w-72 text-ink">
@@ -72,29 +74,16 @@ function BookingLinkPreviewCard(props: {
   );
 }
 
-function BookingLinkMentionContent(props: BookingLinkMentionDecoratorProps) {
-  const lexicalWrapper = useContext(LexicalWrapperContext);
-  const editor = lexicalWrapper?.editor;
+function BookingLinkMentionContent(props: BookingLinkMentionUIProps) {
+  const host = useBookingLinkMentionHost(props.host);
 
   const label = createMemo(() => fallbackLabel(props));
 
   createEffect(() => {
     const nextLabel = label();
     const labelChanged = !!nextLabel && nextLabel !== props.label;
-    if (!editor || !labelChanged) return;
-
-    editor.update(
-      () => {
-        const node = $getNodeByKey(props.key);
-        if ($isBookingLinkMentionNode(node)) {
-          node.setLabel(nextLabel);
-        }
-      },
-      {
-        tag: [HISTORIC_TAG, SKIP_DOM_SELECTION_TAG, SKIP_SCROLL_INTO_VIEW_TAG],
-        discrete: true,
-      }
-    );
+    if (!host || !labelChanged) return;
+    host.setLabel(props.key, nextLabel);
   });
 
   return (
@@ -119,16 +108,9 @@ function BookingLinkMentionContent(props: BookingLinkMentionDecoratorProps) {
   );
 }
 
-export function BookingLinkMention(props: BookingLinkMentionDecoratorProps) {
-  const lexicalWrapper = useContext(LexicalWrapperContext);
-  const editor = lexicalWrapper?.editor;
-  const selection = () => lexicalWrapper?.selection;
-
-  const isSelectedAsNode = () => {
-    const sel = selection();
-    if (!sel) return false;
-    return sel.type === 'node' && sel.nodeKeys.has(props.key);
-  };
+export function BookingLinkMention(props: BookingLinkMentionUIProps) {
+  const host = useBookingLinkMentionHost(props.host);
+  const isSelectedAsNode = () => host?.isSelected(props.key) ?? false;
 
   // Booking pages are full-page public routes outside the split layout, so
   // open the shareable URL the same way an unsynced PR falls back to GitHub.
@@ -136,19 +118,15 @@ export function BookingLinkMention(props: BookingLinkMentionDecoratorProps) {
     openExternalUrl(props.url);
   };
 
-  if (editor) {
+  if (host) {
     autoRegister(
-      editor.registerCommand(
-        KEY_ENTER_COMMAND,
-        (e) => {
-          if (isSelectedAsNode()) {
-            open(e);
-            return true;
-          }
-          return false;
-        },
-        COMMAND_PRIORITY_NORMAL
-      )
+      host.registerNormalEnter((e) => {
+        if (isSelectedAsNode()) {
+          open(e);
+          return true;
+        }
+        return false;
+      })
     );
   }
 

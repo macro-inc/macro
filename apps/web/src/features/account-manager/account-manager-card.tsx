@@ -20,7 +20,10 @@ import { AccountManagerCardFrame } from './account-manager-card-frame';
  * viewer can do next. Its own Suspense keeps the frame on screen while the grant
  * loads; without it, reading the query suspends the whole message.
  */
-export function AccountManagerCard(props: { grantId: string }) {
+export function AccountManagerCard(props: {
+  /** Source passes a stored null or omitted id on; its request is refused and reads as unavailable. */
+  grantId: string | null | undefined;
+}) {
   const grantQuery = useAccountManagerGrantQuery(() => props.grantId);
 
   return (

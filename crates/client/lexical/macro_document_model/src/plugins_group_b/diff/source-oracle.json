@@ -1,0 +1,761 @@
+{
+  "accept-insert-and-delete": {
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "before",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          },
+          {
+            "type": "diff",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "userId": "macro|viewer@example.com",
+            "label": "AI Suggestion",
+            "children": [
+              {
+                "type": "diff-delete",
+                "version": 1,
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "children": [
+                  {
+                    "type": "paragraph",
+                    "version": 1,
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "textFormat": 0,
+                    "textStyle": "",
+                    "children": [
+                      {
+                        "type": "text",
+                        "version": 1,
+                        "text": "old one",
+                        "format": 0,
+                        "detail": 0,
+                        "mode": "normal",
+                        "style": ""
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "version": 1,
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "textFormat": 0,
+                    "textStyle": "",
+                    "children": [
+                      {
+                        "type": "text",
+                        "version": 1,
+                        "text": "old two",
+                        "format": 0,
+                        "detail": 0,
+                        "mode": "normal",
+                        "style": ""
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "diff-insert",
+                "version": 1,
+                "markdown": "**New** text\n\n- a\n- b"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "after",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "output": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "before",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "New",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " text",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 1,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "a",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "b",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "after",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "anchor": [
+        1,
+        "text",
+        "text",
+        "b"
+      ],
+      "focus": [
+        1,
+        "text"
+      ],
+      "collapsed": true
+    },
+    "tags": [
+      []
+    ]
+  },
+  "accept-without-insert": {
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "children": [
+          {
+            "type": "diff",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "userId": "macro|viewer@example.com",
+            "label": "AI Suggestion",
+            "children": [
+              {
+                "type": "diff-delete",
+                "version": 1,
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "children": [
+                  {
+                    "type": "paragraph",
+                    "version": 1,
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "textFormat": 0,
+                    "textStyle": "",
+                    "children": [
+                      {
+                        "type": "text",
+                        "version": 1,
+                        "text": "old",
+                        "format": 0,
+                        "detail": 0,
+                        "mode": "normal",
+                        "style": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "after",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "output": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "old",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "paragraph",
+                    "version": 1,
+                    "textFormat": 0,
+                    "textStyle": ""
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "diff-delete",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "diff",
+            "version": 1,
+            "userId": "macro|viewer@example.com",
+            "label": "AI Suggestion"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "after",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "tags": []
+  },
+  "reject-with-delete": {
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "before",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          },
+          {
+            "type": "diff",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "userId": "macro|viewer@example.com",
+            "label": "AI Suggestion",
+            "children": [
+              {
+                "type": "diff-delete",
+                "version": 1,
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "children": [
+                  {
+                    "type": "paragraph",
+                    "version": 1,
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "textFormat": 0,
+                    "textStyle": "",
+                    "children": [
+                      {
+                        "type": "text",
+                        "version": 1,
+                        "text": "old one",
+                        "format": 0,
+                        "detail": 0,
+                        "mode": "normal",
+                        "style": ""
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "version": 1,
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "textFormat": 0,
+                    "textStyle": "",
+                    "children": [
+                      {
+                        "type": "text",
+                        "version": 1,
+                        "text": "old two",
+                        "format": 0,
+                        "detail": 0,
+                        "mode": "normal",
+                        "style": ""
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "diff-insert",
+                "version": 1,
+                "markdown": "new"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "after",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "output": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "before",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "old one",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "old two",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "after",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "anchor": [
+        7,
+        "text",
+        "text",
+        "old two"
+      ],
+      "focus": [
+        7,
+        "text"
+      ],
+      "collapsed": true
+    },
+    "tags": [
+      []
+    ]
+  },
+  "reject-without-delete": {
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "before",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          },
+          {
+            "type": "diff",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "userId": "macro|viewer@example.com",
+            "label": "AI Suggestion",
+            "children": [
+              {
+                "type": "diff-insert",
+                "version": 1,
+                "markdown": "new"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "after",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "output": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "before",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "after",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "tags": [
+      []
+    ]
+  }
+}

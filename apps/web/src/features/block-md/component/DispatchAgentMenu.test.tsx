@@ -1,4 +1,11 @@
+import { behaviorEditor } from '@core/component/LexicalMarkdown/behavior-inventory/editor';
 import { render } from '@solidjs/testing-library';
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  type LexicalEditor,
+} from 'lexical';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useDispatchAgentAction } from './DispatchAgentMenu';
 
@@ -11,18 +18,12 @@ const mocks = vi.hoisted(() => ({
   success: vi.fn(),
   failure: vi.fn(),
 }));
+let sourceEditor: LexicalEditor | undefined;
 vi.mock('@app/features/integrations/mcp-setup/MacroMcpSetupModal', () => ({
   openMacroMcpSetupModal: vi.fn(),
 }));
-vi.mock('@core/component/LexicalMarkdown/utils', () => ({
-  editorStateAsMarkdown: () => 'Document body',
-}));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: mocks.success, failure: mocks.failure },
-}));
-vi.mock('@core/user', () => ({
-  tryMacroId: () => undefined,
-  macroIdToEmail: (id: string) => id,
 }));
 vi.mock('@core/util/branchName', () => ({
   copyBranchNameToClipboard: vi.fn(),
@@ -40,7 +41,7 @@ vi.mock('../context/markdown-document-context', () => ({
   useMarkdownDocument: () => ({
     documentId: () => 'document-id',
     kind: () => mocks.kind,
-    state: { editor: { md: { editor: {} } } },
+    state: { editor: { md: { editor: sourceEditor } } },
   }),
 }));
 vi.mock('./MarkdownNameProvider', () => ({
@@ -49,6 +50,17 @@ vi.mock('./MarkdownNameProvider', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sourceEditor = behaviorEditor().editor;
+  sourceEditor.update(
+    () => {
+      $getRoot()
+        .clear()
+        .append(
+          $createParagraphNode().append($createTextNode('Document body'))
+        );
+    },
+    { discrete: true }
+  );
   mocks.kind = 'document';
   mocks.shortId.mockResolvedValue({ isOk: () => true, value: 'DOC-1' });
   mocks.branchName.mockResolvedValue({
@@ -105,4 +117,28 @@ it('reports clipboard failure instead of triggering copy success feedback', asyn
   expect(mocks.success).not.toHaveBeenCalled();
   dispose();
   error.mockRestore();
+});
+
+it('builds the prompt with empty content before the body editor exists', async () => {
+  sourceEditor = undefined;
+  const { result, dispose } = actions();
+  expect(await result.executeLastUsed()).toBe(true);
+  expect(mocks.copy).toHaveBeenCalledWith(
+    expect.stringContaining('<document identifier="DOC-1">')
+  );
+  expect(mocks.copy).not.toHaveBeenCalledWith(
+    expect.stringContaining('Document body')
+  );
+  expect(mocks.failure).not.toHaveBeenCalled();
+  dispose();
+});
+
+it('reads the body editor whether or not its root is attached', async () => {
+  sourceEditor?.setRootElement(null);
+  const { result, dispose } = actions();
+  expect(await result.executeLastUsed()).toBe(true);
+  expect(mocks.copy).toHaveBeenCalledWith(
+    expect.stringContaining('Document body')
+  );
+  dispose();
 });

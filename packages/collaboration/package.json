@@ -10,6 +10,13 @@
     "./sync-service/*": "./src/sync-service/*.ts",
     "./websocket": "./src/websocket/index.ts",
     "./websocket/*": "./src/websocket/*.ts",
+    "./session/*": "./src/session/*.ts",
+    "./session/wasm": {
+      "types": "./src/session/wasm.generated.d.ts"
+    },
+    "./session/wasm-compat": {
+      "types": "./src/session/wasm-compat.generated.d.ts"
+    },
     "./forms/*": "./src/forms/*.ts"
   },
   "scripts": {

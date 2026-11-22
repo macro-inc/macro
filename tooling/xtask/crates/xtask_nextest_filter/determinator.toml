@@ -1,5 +1,14 @@
 use-default-rules = false
 
+# sync_protocol tests embed deployed schema copies across crate boundaries.
+[[path-rule]]
+globs = [
+  "services/sync-service/bebop/**",
+  "services/sync-service/bebop-schema/**",
+]
+mark-changed = ["sync_protocol"]
+post-rule = "skip-rules"
+
 [[path-rule]]
 globs = ["static_assets/**"]
 mark-changed = [
@@ -8,6 +17,7 @@ mark-changed = [
   "complete_graph",
   "documents",
   "graphql_calendar",
+  "lexical_loro",
   "seed_cli",
   "xtask_email_coverage",
   "xtask_graphql_schema_compat",

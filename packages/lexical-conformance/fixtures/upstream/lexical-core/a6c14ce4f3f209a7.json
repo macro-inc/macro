@@ -1,0 +1,37 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/github-markdown.test.ts",
+    "test": [
+      "normalizeGithubMarkdown",
+      "drops marker comments, wrapper tags and decorative icons"
+    ],
+    "recordedWith": "lexical-conformance@a9cdd366bfcb8ceb435bb252033e328861fd8b0d6c8c62ea7acdf2869ff6f65c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/github-markdown.normalizeGithubMarkdown",
+      "args": [
+        "<!-- coderabbit-ai-generated:v1 -->\n\n**<picture><img src=\"https://storage.googleapis.com/coderabbit_public_assets/review-comment-icons-v1/bot.svg\" width=\"16\" height=\"16\" align=\"absmiddle\" alt=\"\"></picture> Minor** · **Functional Correctness**\n\n**Load later pages when the visible entries are fewer than the limit.**\n\n<details>\n<summary><picture><source media=\"(prefers-color-scheme: dark)\" srcset=\"https://storage.googleapis.com/coderabbit_public_assets/review-comment-icons-v1/bot.svg\"><img src=\"https://storage.googleapis.com/coderabbit_public_assets/review-comment-icons-v1/bot.svg\" width=\"16\" height=\"16\" alt=\"\"></picture> Prompt for AI Agents</summary>\n<dl>\n<dd>\n<br>\n\n```\nReview comment at <details> around lines 113 - 118\n```\n\n</dd>\n</dl>\n</details>\n\n<h6>\n<details>\n<summary>Review info</summary>\n<dl>\n<dd>\n\n- **Repository**: [org/repo](<https://github.com/org/repo>)\n\n<details>\n<summary><strong>Merge Risk:</strong> <strong><picture><img src=\"https://storage.googleapis.com/coderabbit_public_assets/review-comment-icons-v1/bot.svg\" width=\"16\" height=\"16\" alt=\"\"></picture> Low</strong> · up to <code>b215c</code></summary>\n\nNested body.\n\n</details>\n\n</dd>\n</dl>\n</details>\n</h6>\n\n- [ ] <!-- {\"checkboxId\":\"1\"} --> Fix comments\n\n<!-- This is an auto-generated comment by CodeRabbit -->"
+      ],
+      "ret": "**Minor** · **Functional Correctness**\n\n**Load later pages when the visible entries are fewer than the limit.**\n\n<details>\n\n<summary>Prompt for AI Agents</summary>\n\n```\nReview comment at <details> around lines 113 - 118\n```\n\n</details>\n\n<details>\n\n<summary>Review info</summary>\n\n- **Repository**: [org/repo](https://github.com/org/repo)\n\n<details>\n\n<summary>**Merge Risk:** **Low** · up to `b215c`</summary>\n\nNested body.\n\n</details>\n\n</details>\n\n- [ ] Fix comments"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

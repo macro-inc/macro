@@ -64,10 +64,21 @@ fn every_job_the_gate_waits_for_has_a_timeout() {
                 continue;
             }
             let id = id.as_str().unwrap_or_default();
-            let limit = job
-                .get("timeout-minutes")
-                .and_then(serde_yaml::Value::as_u64)
-                .unwrap_or_else(|| panic!("{file} job {id} has no numeric timeout-minutes"));
+            let timeout = &job["timeout-minutes"];
+            let limit =
+                if file == "./.github/workflows/code_check_cloud_storage.yml" && id == "check" {
+                    assert_eq!(
+                        timeout.as_str(),
+                        Some("${{ needs.path-check.outputs.loro_guards == 'true' && 30 || 20 }}"),
+                        "the guarded Rust job must retain its exact 30/20-minute policy"
+                    );
+                    // Both branches must leave the same margin above step limits.
+                    20
+                } else {
+                    timeout
+                        .as_u64()
+                        .unwrap_or_else(|| panic!("{file} job {id} has no numeric timeout-minutes"))
+                };
             let longest_step = job["steps"]
                 .as_sequence()
                 .into_iter()

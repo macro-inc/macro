@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Document formatting component contracts</title>
+    <!-- No /favicon.ico request: vite preview has none and would answer 404. -->
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <script>
+      // C-TOUCH-CARET-WEBKIT-01 packet B: with ?ios, the Tauri-iOS RUNTIME
+      // BOUNDARY only, installed before any module runs (platform detection
+      // caches on first read). The real platform.ts, plugin-os and
+      // nativeEditMenu.ts run unchanged over it. JS wiring only; the real
+      // plugins, UIKit, keyboard and insets stay unproven. Every IPC call is
+      // recorded; only the three commands reachable on the caret path
+      // (static allowlist, see the packet) are answered, anything else rejects.
+      if (new URLSearchParams(location.search).has('ios')) {
+        const log = [];
+        let callbackId = 0;
+        const answers = {
+          'plugin:network-status|watch_status': () => null,
+          'plugin:edit-menu|set_native_menu_suppressed': () => null,
+          'plugin:pasteboard|read_pasteboard_text': () => ({ text: 'PB' }),
+        };
+        window.__TAURI_CARET_IPC_LOG__ = log;
+        window.isTauri = true;
+        window.__TAURI_OS_PLUGIN_INTERNALS__ = {
+          os_type: 'ios',
+          platform: 'ios',
+          family: 'unix',
+          version: '18.0',
+          arch: 'aarch64',
+          exe_extension: '',
+          eol: '\n',
+        };
+        window.__TAURI_INTERNALS__ = {
+          invoke(cmd, args, options) {
+            log.push({
+              kind: 'invoke',
+              cmd,
+              args: JSON.parse(JSON.stringify(args ?? null)),
+              options: options === undefined ? null : String(options),
+            });
+            const answer = answers[cmd];
+            if (!answer) {
+              log.push({ kind: 'unlisted', cmd });
+              return Promise.reject(new Error('caret-ios: unlisted ' + cmd));
+            }
+            return Promise.resolve(answer());
+          },
+          transformCallback(_callback, once) {
+            callbackId += 1;
+            log.push({ kind: 'transformCallback', id: callbackId, once: !!once });
+            return callbackId;
+          },
+          unregisterCallback(id) {
+            log.push({ kind: 'unregisterCallback', id });
+          },
+          convertFileSrc() {
+            log.push({ kind: 'unlisted', cmd: 'convertFileSrc' });
+            throw new Error('caret-ios: unlisted convertFileSrc');
+          },
+        };
+      }
+    </script>
+    <div id="app"></div>
+    <script type="module" src="./fixture.tsx"></script>
+  </body>
+</html>

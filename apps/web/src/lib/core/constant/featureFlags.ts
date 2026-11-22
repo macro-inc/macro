@@ -993,6 +993,12 @@ export const enableWhatsappLinked = defineFlag({
   env: 'ENABLE_WHATSAPP_LINKED',
 });
 
+/** First editor-model integration stays opt-in until browser acceptance passes. */
+export const rustEditorModel = defineFlag({
+  key: 'rust-editor-model',
+  env: 'ENABLE_RUST_EDITOR_MODEL',
+});
+
 /**
  * Passwords v1: the `/passwords` route and its rail and dock entries (which
  * also need a team). The backend evaluates the same key. On only for local

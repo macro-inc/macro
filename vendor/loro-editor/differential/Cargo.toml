@@ -1,0 +1,20 @@
+# Differential property test: the editor's patched loro-internal against the
+# unmodified crates.io loro-internal 1.17.1, side by side in one process.
+# Outside the root workspace (vendor/ is excluded); run from this directory.
+[package]
+name = "loro-editor-differential"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+loro_patched = { package = "loro-internal", path = "../loro-internal", features = ["native-editor"] }
+loro_upstream = { package = "loro-internal", version = "=1.17.1" }
+serde_json = "1"
+
+[profile.test]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true

@@ -76,6 +76,7 @@ export class UnfurlService extends pulumi.ComponentResource {
         platform,
         buildArgs: {
           SERVICE_NAME: 'unfurl_service',
+          PACKAGE_NAME: 'unfurl_service',
         },
         tags: this.tags,
       },

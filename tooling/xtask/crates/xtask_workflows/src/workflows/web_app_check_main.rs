@@ -191,14 +191,16 @@ fn typescript() -> Job {
                 .run("bun run build")
                 .working_directory(xtask_paths::repo_dir!("packages/sdk")),
         )
+        .add_step(document_session_types())
         .add_step(typecheck_in_parallel())
         .add_step(steps::teardown_nix())
 }
 
 /// Typecheck's checks, each `(name, directory, command)`. They read the same
-/// installed tree and write nothing, so they run at once: in sequence they took
-/// about 106 s of a 179 s job. The SDK is built first, for the agent runtime.
-const TYPECHECKS: [(&str, &str, &str); 14] = [
+/// installed tree and write only separate diagnostic outputs, so they run at
+/// once: in sequence they took about 106 s of a 179 s job. The SDK is built
+/// first, for the agent runtime.
+const TYPECHECKS: [(&str, &str, &str); 15] = [
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
@@ -216,7 +218,13 @@ const TYPECHECKS: [(&str, &str, &str); 14] = [
     (
         "Check Collaboration Package Types",
         "packages/collaboration",
-        "bun run type-check",
+        "bun run type-check && bun scripts/generate-session-schema.ts --check",
+    ),
+    // Reads the document-session types installed above.
+    (
+        "Check Native Editor View Types",
+        "packages/lexical-wasm-view",
+        "bun run check",
     ),
     (
         "Check Observability Package",
@@ -394,6 +402,7 @@ fn test() -> Job {
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build_agent_fold_for_tests())
         .add_step(build_natural_time_for_tests())
+        .add_step(build_document_session_for_tests())
         .add_step(run_tests())
         .add_step(steps::teardown_nix())
 }
@@ -411,6 +420,8 @@ fn functional() -> Job {
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
         .add_step(build_wasm_for_functional_tests())
+        .add_step(run_decorator_browser_typecheck())
+        .add_step(run_session_tests())
         .add_step(run_functional_tests())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
@@ -429,10 +440,12 @@ fn browser() -> Job {
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build_agent_fold_for_tests())
+        .add_step(build_document_session_for_tests())
         .add_step(run_signup_browser_tests())
         .add_step(run_i18n_browser_tests())
         .add_step(run_database_browser_tests())
         .add_step(run_calendar_details_browser_tests())
+        .add_step(run_lexical_wasm_view_browser_tests())
         .add_step(steps::teardown_nix())
 }
 
@@ -467,7 +480,12 @@ fn build() -> Job {
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
+        .add_step(Step::new("Clear previous bundle output").run("rm -rf apps/web/dist"))
         .add_step(run_build())
+        .add_step(
+            Step::new("Exclude development oracle from production bundle")
+                .run("bun packages/lexical-conformance/coverage/boundaries.ts --bundle-only"),
+        )
         .add_step(steps::show_sccache_stats())
         .add_step(preview_credentials);
     preview_steps
@@ -677,6 +695,25 @@ fn check_platform_rules() -> Step<Run> {
     )
 }
 
+/// Check artifact-dependent fixtures only after this job builds their canonical WASM.
+fn run_decorator_browser_typecheck() -> Step<Run> {
+    Step::new("Check decorator browser fixture types")
+        .run(indoc::indoc! {r#"
+            git diff --exit-code -- ../../packages/collaboration/src/session/wasm.generated.d.ts && \
+            bun scripts/check-decorator-browser-wasm.ts && \
+            bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tsconfig.decorator-browser-tests.json
+        "#})
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+fn run_session_tests() -> Step<Run> {
+    Step::new("Check document session executor and storage")
+        // The devshell's LD_LIBRARY_PATH breaks Playwright's downloaded Chromium, as in
+        // the sign-up browser tests.
+        .run("git diff --exit-code -- src/session/wasm.generated.d.ts && bun run test && bunx playwright install --with-deps chromium && env -u LD_LIBRARY_PATH bunx playwright test --config src/session/browser-test/playwright.config.ts")
+        .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
+}
+
 fn run_collaboration_biome() -> Step<Run> {
     Step::new("Run Collaboration Package Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
@@ -697,6 +734,25 @@ fn build_natural_time_for_tests() -> Step<Run> {
     with_wasm_pkg_cache(
         Step::new("Build natural-time WASM for tests")
             .run("just build-natural-time-wasm")
+            .working_directory(xtask_paths::repo_dir!("apps/web"))
+            .timeout_minutes(15u32),
+    )
+}
+
+/// Native editor modules import the generated document-session package, which
+/// tsc resolves to its `.d.ts`. Types only: the committed copy is checked
+/// against the build in the decorator-browser and session test steps, so
+/// Typecheck compiles no Rust.
+fn document_session_types() -> Step<Run> {
+    Step::new("Install document-session types")
+        .run("mkdir -p src/lib/core/document-session/wasm && cp ../../packages/collaboration/src/session/wasm.generated.d.ts src/lib/core/document-session/wasm/document_session_wasm.d.ts")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+fn build_document_session_for_tests() -> Step<Run> {
+    with_wasm_pkg_cache(
+        Step::new("Build document-session WASM for tests")
+            .run("just build-document-session-wasm")
             .working_directory(xtask_paths::repo_dir!("apps/web"))
             .timeout_minutes(15u32),
     )
@@ -774,6 +830,20 @@ fn run_calendar_details_browser_tests() -> Step<Run> {
         .run("bunx playwright install-deps chromium\njust test-calendar-details-browser")
         .if_condition(PATH_CHECK.outputs.calendar_details_changed.read().is_set())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// The native editor view's browser suite (both Playwright configs) against the
+/// document-session wasm the job built. Its fixtures run that wasm and import
+/// the session executor and app modules from `apps/web/src`, so every input of
+/// the web artifact (including lockfiles and patched vendor crates) can change
+/// what it tests; a narrower list would miss real inputs.
+fn run_lexical_wasm_view_browser_tests() -> Step<Run> {
+    Step::new("Native Editor View Browser Tests")
+        // Same LD_LIBRARY_PATH caveat as the sign-up browser tests. The script chains
+        // shells, and BASH_ENV would re-source the dev shell's libraries in each one.
+        .run("bunx playwright install-deps chromium\nenv -u LD_LIBRARY_PATH -u BASH_ENV bun run test:browser")
+        .if_condition(PATH_CHECK.outputs.web_artifact_changed.read().is_set())
+        .working_directory(xtask_paths::repo_dir!("packages/lexical-wasm-view"))
 }
 
 fn cycles_import_check() -> Step<Run> {

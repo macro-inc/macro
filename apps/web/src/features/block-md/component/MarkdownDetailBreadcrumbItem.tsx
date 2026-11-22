@@ -68,7 +68,22 @@ export function MarkdownDetailBreadcrumbItem(props: {
         })
       : undefined;
   useSplitDisplayName(documentName);
-  const focusDocument = () => state.editor.md.editor?.focus();
+  const focusDocument = () => {
+    const editor = state.editor.md.editor;
+    if (editor) return editor.focus();
+    const view = state.editor.md.nativeRuntime?.view;
+    if (!view) return;
+    view.focus();
+    // Lexical focus() without a selection selects the root end; the native
+    // view adopts the browser caret through selectionchange.
+    if (view.selection().selection.kind !== 'none') return;
+    const range = document.createRange();
+    range.selectNodeContents(view.root);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  };
 
   const menuPermissions = () => {
     if (permissions.isOwner()) return Permissions.OWNER;

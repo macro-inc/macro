@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "../../../..",
+    "paths": {
+      "@upstream/*": ["node_modules/lexical/src/*"]
+    }
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["./tests", "./*.spec.ts", "./test-setup.ts", "./browser"]
+}

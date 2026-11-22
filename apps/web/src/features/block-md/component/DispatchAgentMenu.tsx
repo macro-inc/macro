@@ -1,7 +1,6 @@
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import type { CustomFileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import type { SplitFileMenuAction } from '@components/app/split-layout/context';
-import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
@@ -24,6 +23,7 @@ import { ButtonGroup, CopyButton, Dropdown } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { readDocumentMarkdown } from '../primitives/read-document-markdown';
 import { useMarkdownName } from './MarkdownNameProvider';
 
 const LAST_USED_KEY = 'dispatch-agent-last-used';
@@ -253,8 +253,7 @@ export function useDispatchAgentAction() {
 
   const buildPrompt = createCallback(async () => {
     const docName = name() ?? '';
-    const editor = state.editor.md.editor;
-    const content = editor ? editorStateAsMarkdown(editor, 'external') : '';
+    const content = readDocumentMarkdown(state.editor.md);
     const threads = await fetchMessagePromptThreads(blockId);
     const generate = isTask() ? generateTaskPrompt : generateDocumentPrompt;
     return generate(blockId, docName, content, threads);

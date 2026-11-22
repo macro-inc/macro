@@ -25,7 +25,7 @@ import {
   registerMutationListener,
 } from '../../plugins/shared/utils';
 
-type PaddingValue =
+export type PaddingValue =
   | number
   | [number, number]
   | [number, number, number, number];
@@ -123,7 +123,7 @@ function getUniqueRects(rects: DOMRect[]): DOMRect[] {
  * @param overlapMargin Vertical margin to determine if rects are on the same line
  * @returns Array of DOM rectangles representing the selection
  */
-function createRectsFromDOMRange(
+export function createRectsFromDOMRange(
   range: Range,
   overlapMargin = 10,
   rootWidth?: number
@@ -293,18 +293,26 @@ export function HighlightLayer(props: {
   );
   return (
     <Show when={editorRootParent()}>
-      {(parent) => (
-        <Portal mount={parent()}>
-          <div
-            class="__highlight-layer absolute top-0 left-0 opacity-35"
-            ref={props.ref}
-            style={{
-              'z-index': MarkdownStackingContext.Highlights,
-            }}
-          />
-        </Portal>
-      )}
+      {(parent) => <HighlightLayerMount parent={parent()} ref={props.ref} />}
     </Show>
+  );
+}
+
+/** The highlight layer portaled into an editor root's parent, for either engine. */
+export function HighlightLayerMount(props: {
+  parent: HTMLElement;
+  ref: (el: HTMLElement) => void;
+}) {
+  return (
+    <Portal mount={props.parent}>
+      <div
+        class="__highlight-layer absolute top-0 left-0 opacity-35"
+        ref={props.ref}
+        style={{
+          'z-index': MarkdownStackingContext.Highlights,
+        }}
+      />
+    </Portal>
   );
 }
 
@@ -389,12 +397,6 @@ export const LocationHighlight: {
     return getLocationRects(props.editor, props.location, props.mapping);
   });
 
-  const styles = () => {
-    return rects().map((r) => {
-      return getHighlightStyle(r, props.mountRef, props.padding ?? 0);
-    });
-  };
-
   createEffect(() => {
     if (props.captureBoundingDomRect) {
       const bounds = boundingRect(rects());
@@ -403,20 +405,39 @@ export const LocationHighlight: {
   });
 
   return (
+    <HighlightRects
+      rects={rects()}
+      mountRef={props.mountRef}
+      class={props.class}
+      padding={props.padding}
+    />
+  );
+};
+
+/** Highlight boxes for viewport rects, positioned inside a highlight layer. */
+export function HighlightRects(props: {
+  rects: DOMRect[];
+  mountRef: HTMLElement;
+  class?: string;
+  padding?: PaddingValue;
+}) {
+  const styles = () =>
+    props.rects.map((r) =>
+      getHighlightStyle(r, props.mountRef, props.padding ?? 0)
+    );
+  return (
     <Portal mount={props.mountRef}>
       <For each={styles()}>
-        {(style) => {
-          return (
-            <div
-              class={cn(
-                'absolute top-0 left-0 m-0 select-none pointer-events-none',
-                props.class
-              )}
-              style={style}
-            />
-          );
-        }}
+        {(style) => (
+          <div
+            class={cn(
+              'absolute top-0 left-0 m-0 select-none pointer-events-none',
+              props.class
+            )}
+            style={style}
+          />
+        )}
       </For>
     </Portal>
   );
-};
+}

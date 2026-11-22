@@ -30,7 +30,9 @@ import {
 } from 'lexical';
 import type { SetStoreFunction } from 'solid-js/store';
 import { CodeBoxAccessory } from '../../component/accessory/CodeBoxAccessory';
+import { createLexicalCodeAccessoryHost } from '../../component/accessory/code-accessory-host';
 import { type AccessoryStore, nodeAccessoryPlugin } from '../node-accessory';
+import { registerEditorMutationObserver } from '../shared/utils';
 
 enum CodeCaretPosition {
   First = 'first',
@@ -178,7 +180,12 @@ function registerCodePlugin(editor: LexicalEditor, props: CodePluginProps) {
       store: props.accessories,
       setStore: props.setAccessories,
       component: ({ ref, key }) => {
-        return CodeBoxAccessory({ floatRef: ref, editor, nodeKey: key });
+        return CodeBoxAccessory({
+          floatRef: ref,
+          host: createLexicalCodeAccessoryHost(editor, key, (onMutation) =>
+            registerEditorMutationObserver(editor, onMutation)
+          ),
+        });
       },
     });
     cleanups.push(codeAccessory(editor));
@@ -188,7 +195,12 @@ function registerCodePlugin(editor: LexicalEditor, props: CodePluginProps) {
       store: props.accessories,
       setStore: props.setAccessories,
       component: ({ ref, key }) =>
-        CodeBoxAccessory({ floatRef: ref, editor, nodeKey: key }),
+        CodeBoxAccessory({
+          floatRef: ref,
+          host: createLexicalCodeAccessoryHost(editor, key, (onMutation) =>
+            registerEditorMutationObserver(editor, onMutation)
+          ),
+        }),
     });
     cleanups.push(codeAccessory(editor));
   }

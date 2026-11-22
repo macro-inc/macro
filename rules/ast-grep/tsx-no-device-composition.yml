@@ -45,6 +45,7 @@ ignores:
   - apps/web/src/features/block-video/component/Block.tsx
   - apps/web/src/features/block-write/DocxBlock.tsx
   - apps/web/src/features/crm/add-to-pipeline.tsx
+  - apps/web/src/features/drive-view/MarkdownDetail.tsx
   - apps/web/src/features/email-view/components/EmailComposeRouteView.tsx
   - apps/web/src/features/email-view/components/EmailDetailView.tsx
   - apps/web/src/features/entity-appearance/appearance-menu.tsx

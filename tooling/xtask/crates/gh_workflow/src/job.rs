@@ -11,6 +11,29 @@ use crate::step::Input;
 use crate::step::{Step, StepType, StepValue};
 use crate::{Container, Defaults, Env, Expression, Permissions, Strategy};
 
+#[cfg(test)]
+mod timeout_test;
+
+/// A numeric job budget, either fixed or selected by a typed numeric expression.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum TimeoutMinutes {
+    Minutes(u32),
+    Expression(Expression),
+}
+
+impl From<u32> for TimeoutMinutes {
+    fn from(minutes: u32) -> Self {
+        Self::Minutes(minutes)
+    }
+}
+
+impl From<crate::expr::typed::Expr<crate::expr::typed::Num>> for TimeoutMinutes {
+    fn from(expression: crate::expr::typed::Expr<crate::expr::typed::Num>) -> Self {
+        Self::Expression(Expression::new(expression))
+    }
+}
+
 /// Represents the environment in which a job runs.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 #[serde(transparent)]
@@ -77,7 +100,7 @@ pub struct Job {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub defaults: Option<Defaults>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub timeout_minutes: Option<u32>,
+    pub timeout_minutes: Option<TimeoutMinutes>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub continue_on_error: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]

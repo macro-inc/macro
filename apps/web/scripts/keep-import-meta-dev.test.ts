@@ -32,6 +32,40 @@ describe('keepImportMetaDev', () => {
     ).toBe(false);
   });
 
+  it('keeps DEV false for an explicit production local proxy build', () => {
+    expect(
+      keepImportMetaDev({
+        command: 'build',
+        mode: 'production',
+        localBackendOrigin: 'same-origin',
+        localServers: 'ALL',
+      })
+    ).toBe(false);
+  });
+
+  it('keeps hosted production builds unchanged without a proxy', () => {
+    expect(
+      keepImportMetaDev({
+        command: 'build',
+        mode: 'production',
+        localBackendOrigin: undefined,
+        localServers: 'ALL',
+      })
+    ).toBe(false);
+  });
+
+  it.each([
+    { command: 'serve', mode: 'production', localServers: 'ALL' },
+    { command: 'build', mode: 'staging', localServers: 'ALL' },
+    { command: 'build', mode: 'production', localServers: 'auth-service:8110' },
+    { command: 'build', mode: 'production', localServers: '' },
+    { command: 'build', mode: 'production', localServers: 'all' },
+  ])('refuses unsupported proxy configurations: $command/$mode/$localServers', (options) => {
+    expect(() =>
+      keepImportMetaDev({ ...options, localBackendOrigin: 'same-origin' })
+    ).toThrow(/refusing to keep import.meta.env.DEV/);
+  });
+
   it('refuses a local-backend origin on a non-development MODE', () => {
     expect(() =>
       keepImportMetaDev({

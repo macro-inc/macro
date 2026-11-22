@@ -1,10 +1,23 @@
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
+import { seedMockDisplayNames } from '@core/user/displayName';
 import { PENDING_REPLY_TEXT } from '@macro-inc/lexical-core';
 import { composeAgentChatReply } from '@macro-inc/lexical-core/utils/agent-chat-reply';
+import { authKeys } from '@queries/auth/keys';
+import { queryClient } from '@queries/client';
 import { render, waitFor } from '@solidjs/testing-library';
+import { QueryClientProvider } from '@tanstack/solid-query';
+import { COMMAND_PRIORITY_CRITICAL } from 'lexical';
 import { createSignal, type JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { replaceCitations } from '../../citationsUtils';
+import { DecoratorHostContext } from '../../context/DecoratorHostContext';
+import {
+  createLexicalWrapper,
+  LexicalWrapperContext,
+} from '../../context/LexicalWrapperContext';
+import { createNativeSelectionDecoratorContext } from '../../decorator-host/native-selection-host';
+import { UPDATE_USER_DISPLAY_NAME_COMMAND } from '../../plugins/mentions/mentionsPlugin';
+import { theme } from '../../theme';
 import {
   StaticLexical,
   StaticMarkdown,
@@ -79,6 +92,13 @@ vi.mock('../decorator/DocumentMention', () => ({
   DocumentMentionStatic: (props: { blockName: string }) => (
     <span data-mention={props.blockName} />
   ),
+}));
+vi.mock('@queries/preview', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/preview')>()),
+  useItemPreview: () => [
+    () => ({ loading: false, access: 'access', id: 'doc-3', type: 'document' }),
+  ],
+  isAccessiblePreviewItem: () => true,
 }));
 vi.mock('../decorator/LazyDecorator', () => ({
   LazyDecorator: (props: { render: () => JSX.Element }) => props.render(),
@@ -269,6 +289,22 @@ describe('static pull request mentions', () => {
   });
 });
 
+describe('static snapshot chips', () => {
+  it('renders a snapshot chip without an editor host', () => {
+    const rendered = render(() => (
+      <StaticMarkdownContext lazy={false}>
+        <StaticMarkdown
+          markdown={
+            '<m-snapshot>{"documentId":"doc-3","documentName":"Spec","blockName":"md","content":"ignored","snapshotDate":"2025-01-01"}</m-snapshot>'
+          }
+        />
+      </StaticMarkdownContext>
+    ));
+    expect(rendered.container.textContent).toContain('Spec');
+    rendered.unmount();
+  });
+});
+
 describe('static markdown citations', () => {
   it('keeps the rendered DOM for markdown without citations', async () => {
     vi.mocked(replaceCitations).mockClear();
@@ -453,4 +489,70 @@ describe('StaticMarkdown GitHub details', () => {
     summary.closest('summary')?.click();
     await waitFor(() => expect(details?.open).toBe(true));
   });
+});
+
+it('keeps static preview name updates on the inherited Source wrapper under a native selection host', async () => {
+  const wrapper = createLexicalWrapper({
+    type: 'markdown-sync',
+    namespace: 'static-source-host',
+    withIds: false,
+    theme,
+    isInteractable: () => true,
+  });
+  const native = createNativeSelectionDecoratorContext(theme);
+  const previousIdentity = queryClient.getQueryData(authKeys.userInfo.queryKey);
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    id: 'macro|static-viewer@example.com',
+    authenticated: true,
+  });
+  seedMockDisplayNames([
+    { id: 'macro|static-preview@example.com', firstName: 'Preview' },
+  ]);
+  const updates: Record<string, string>[] = [];
+  const release = wrapper.editor.registerCommand(
+    UPDATE_USER_DISPLAY_NAME_COMMAND,
+    (payload) => {
+      updates.push(payload);
+      return true;
+    },
+    COMMAND_PRIORITY_CRITICAL
+  );
+  let unmount: (() => void) | undefined;
+  try {
+    const rendered = render(() => (
+      <QueryClientProvider client={queryClient}>
+        <LexicalWrapperContext.Provider value={wrapper}>
+          <DecoratorHostContext.Provider value={native.host}>
+            <StaticMarkdownContext lazy={false}>
+              <StaticMarkdown
+                markdown={
+                  '<m-user-mention>{"userId":"macro|static-preview@example.com","email":"static-preview@example.com","displayName":"Old"}</m-user-mention>'
+                }
+              />
+            </StaticMarkdownContext>
+          </DecoratorHostContext.Provider>
+        </LexicalWrapperContext.Provider>
+      </QueryClientProvider>
+    ));
+    unmount = () => rendered.unmount();
+    await waitFor(() => {
+      expect(
+        rendered.container.querySelector('[data-user-mention]')?.textContent
+      ).toBe('@Preview');
+      expect(updates).toEqual([
+        { 'macro|static-preview@example.com': 'Preview' },
+      ]);
+    });
+  } finally {
+    unmount?.();
+    release();
+    native.dispose();
+    wrapper.cleanup();
+    queryClient.removeQueries({
+      queryKey: authKeys.userInfo.queryKey,
+      exact: true,
+    });
+    if (previousIdentity !== undefined)
+      queryClient.setQueryData(authKeys.userInfo.queryKey, previousIdentity);
+  }
 });

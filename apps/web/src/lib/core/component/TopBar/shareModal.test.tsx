@@ -1,6 +1,7 @@
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { AppProviders } from '@components/app/AppProviders';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { EditorEngineProvider } from '@core/document-session/editor-engine';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { render, screen } from '@solidjs/testing-library';
 import { ImperativeDialogHost } from '@ui';
@@ -222,11 +223,13 @@ describe('useShareModal', () => {
     const view = render(() => (
       <Show when={showApp()}>
         <PosthogProvider>
-          <AppProviders>
-            <Show when={showMenu()}>
-              <Menu />
-            </Show>
-          </AppProviders>
+          <EditorEngineProvider>
+            <AppProviders>
+              <Show when={showMenu()}>
+                <Menu />
+              </Show>
+            </AppProviders>
+          </EditorEngineProvider>
         </PosthogProvider>
       </Show>
     ));

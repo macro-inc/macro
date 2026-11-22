@@ -25,6 +25,7 @@ import {
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import type { DatabaseQueryHostProp } from '../../decorator-host/database-query-host';
 import { LazyDecorator } from './LazyDecorator';
 
 /** Presses on these do their own thing instead of selecting the block. */
@@ -36,25 +37,42 @@ const LiveQuestion = lazy(async () => {
   return { default: module.DatabaseLiveQuestion };
 });
 
-export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
+export function DatabaseQuery(
+  props: DatabaseQueryDecoratorProps & DatabaseQueryHostProp
+) {
   const wrapper = useContext(LexicalWrapperContext);
   const [editable, setEditable] = createSignal(
-    wrapper?.editor.isEditable() ?? false
+    props.host
+      ? props.host.isEditable()
+      : (wrapper?.editor.isEditable() ?? false)
   );
   // Lexical calls a listener's return value as its cleanup, so the setter's
   // returned boolean must not leak out.
-  if (wrapper)
+  if (props.host)
+    onCleanup(
+      props.host.registerEditableListener((value) => {
+        setEditable(value);
+      })
+    );
+  else if (wrapper)
     onCleanup(
       wrapper.editor.registerEditableListener((value) => {
         setEditable(value);
       })
     );
-  const canEdit = () => editable() && !!wrapper?.isInteractable();
+  const canEdit = () =>
+    editable() &&
+    (props.host ? props.host.isInteractable() : !!wrapper?.isInteractable());
   const isSelectedAsNode = () => {
+    if (props.host) return props.host.isSelected(props.key);
     const selection = wrapper?.selection;
     return selection?.type === 'node' && selection.nodeKeys.has(props.key);
   };
   const selectBlock = () => {
+    if (props.host) {
+      props.host.selectBlock(props.key);
+      return;
+    }
     if (!wrapper) return;
     const root = wrapper.editor.getRootElement();
     if (root && document.activeElement !== root)
@@ -74,7 +92,8 @@ export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
   };
   /** A press on the block itself, not on one of its controls or on anything portaled out of it. */
   const isBlockPress = (event: MouseEvent & { currentTarget: Element }) => {
-    if (event.button !== 0 || !wrapper || !editable()) return false;
+    if (event.button !== 0 || !(props.host || wrapper) || !editable())
+      return false;
     const target = event.target;
     if (!(target instanceof Element) || !event.currentTarget.contains(target))
       return false;
@@ -104,9 +123,14 @@ export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
       return;
     selectBlock();
   };
-  const [, source] = splitProps(props, ['key', 'theme']);
+  const [, source] = splitProps(props, ['key', 'theme', 'host']);
   const save = (data: DatabaseQueryData) => {
-    if (!canEdit() || !wrapper) return;
+    if (!canEdit()) return;
+    if (props.host) {
+      props.host.save(props.key, data);
+      return;
+    }
+    if (!wrapper) return;
     wrapper.editor.update(() => {
       const node = $getNodeByKey(props.key);
       if (!$isDatabaseQueryNode(node)) return;
@@ -130,7 +154,12 @@ export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
   // An answer inserted from the actions menu and never asked is left behind as
   // an empty block when its editor closes; take it out again.
   const discard = () => {
-    if (!canEdit() || !wrapper) return;
+    if (!canEdit()) return;
+    if (props.host) {
+      props.host.discard(props.key);
+      return;
+    }
+    if (!wrapper) return;
     wrapper.editor.update(() => {
       const node = $getNodeByKey(props.key);
       if (!$isDatabaseQueryNode(node)) return;
@@ -175,7 +204,14 @@ export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
     </span>
   );
   return (
-    <Show when={!wrapper?.skipPreviewFetch} fallback={placeholder()}>
+    <Show
+      when={
+        props.host
+          ? props.host.previewFetchEnabled()
+          : !wrapper?.skipPreviewFetch
+      }
+      fallback={placeholder()}
+    >
       <Show
         when={props.displayMode !== 'scalar'}
         fallback={

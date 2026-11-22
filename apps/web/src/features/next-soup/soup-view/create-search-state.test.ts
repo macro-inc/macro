@@ -2,7 +2,12 @@ import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 
 const pool = vi.hoisted(() => vi.fn((): unknown[] => []));
-vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
+vi.mock('@app/lib/analytics', () => ({
+  analytics: {
+    track: vi.fn(),
+    posthog: { isFeatureEnabled: () => false },
+  },
+}));
 vi.mock('@app/features/soup/search', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/features/soup/search')>()),
   useSearchContext: () => ({ entityPool: () => pool, routinePool: () => [] }),

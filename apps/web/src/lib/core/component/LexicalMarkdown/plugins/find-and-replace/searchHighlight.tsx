@@ -32,10 +32,42 @@ function registerEventListener(
   return () => target.removeEventListener(type, listener);
 }
 
-type SearchHighlightItem = {
+export type SearchHighlightItem = {
   style: FloatingStyle;
   idx: number | undefined;
 };
+
+/** Match count and one floating rect per rendered piece; 4px-wide rects are skipped. */
+export function measureSearchHighlights(
+  listOffset: NodekeyOffset[],
+  getElementByKey: (key: string) => HTMLElement | null,
+  anchorElem: HTMLElement
+): { styles: SearchHighlightItem[]; matches: number } {
+  const styles: SearchHighlightItem[] = [];
+  const matches = listOffset.reduce(
+    (max, offset) => Math.max(max, offset.pairKey ?? 0),
+    0
+  );
+  for (const offset of listOffset) {
+    const element = getElementByKey(offset.key);
+    if (!element) continue;
+    try {
+      const rects = getSearchHighlightClientRects(element, offset.offset);
+      for (const rect of rects) {
+        const style = getFloatingSearchHighlightPosition(rect, anchorElem);
+        const styleWidth = style.width;
+        if (
+          Number.parseInt(styleWidth.substring(0, styleWidth.length - 2)) !== 4
+        ) {
+          styles.push({ style, idx: offset.pairKey });
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  return { styles, matches };
+}
 
 export function SearchHighlight(props: {
   anchorElem?: HTMLElement;
@@ -51,39 +83,14 @@ export function SearchHighlight(props: {
 
   const updateTextFormatFloatingToolbar = createCallback(
     (listOffset: NodekeyOffset[]) => {
-      const newStyles: { style: FloatingStyle; idx: number | undefined }[] = [];
-      const matches = listOffset.reduce(
-        (max, offset) => Math.max(max, offset.pairKey ?? 0),
-        0
+      const editorInstance = editor();
+      const measured = measureSearchHighlights(
+        listOffset,
+        (key) => editorInstance?.getElementByKey(key) ?? null,
+        anchorElem()
       );
-      listOffset.map((offset: NodekeyOffset) => {
-        const editorInstance = editor();
-        if (!editorInstance) return;
-        const element = editorInstance.getElementByKey(offset.key);
-        if (!element) return;
-        try {
-          const rects = getSearchHighlightClientRects(element, offset.offset);
-          [...rects].map((rect) => {
-            const newStyle = getFloatingSearchHighlightPosition(
-              rect,
-              anchorElem()
-            );
-            const styleWidth = newStyle.width;
-            if (
-              Number.parseInt(
-                styleWidth.substring(0, styleWidth.length - 2)
-              ) !== 4
-            ) {
-              newStyles.push({ style: newStyle, idx: offset.pairKey });
-            }
-          });
-        } catch (error) {
-          console.error(error);
-        }
-      });
-
-      props.onStylesChange(newStyles);
-      props.onMatchesChange(matches);
+      props.onStylesChange(measured.styles);
+      props.onMatchesChange(measured.matches);
     }
   );
 

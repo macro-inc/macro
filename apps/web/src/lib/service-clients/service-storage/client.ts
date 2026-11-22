@@ -1032,9 +1032,10 @@ export const storageServiceClient = {
     ).map((result) => result.grants);
   },
 
-  async getAccountManagerGrant(args: { id: string }) {
+  async getAccountManagerGrant(args: { id: string | null | undefined }) {
+    // String() is the conversion encodeURIComponent applies to a stored null id.
     return await dssFetch<AccountManagerGrant>(
-      `/account-managers/${encodeURIComponent(args.id)}`,
+      `/account-managers/${encodeURIComponent(String(args.id))}`,
       { method: 'GET' }
     );
   },
@@ -2014,10 +2015,11 @@ export const storageServiceClient = {
   async getForeignEntity({
     id,
   }: {
-    id: string;
+    id: string | null | undefined;
   }): Promise<Result<ForeignEntity, ResultError<FetchWithTokenErrorCode>[]>> {
+    // String() is the conversion encodeURIComponent applies to a stored null id.
     return await dssFetch<ForeignEntity>(
-      `/foreign_entity/${encodeURIComponent(id)}`,
+      `/foreign_entity/${encodeURIComponent(String(id))}`,
       {
         method: 'GET',
       }

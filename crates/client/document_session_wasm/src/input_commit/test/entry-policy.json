@@ -1,0 +1,226 @@
+{
+  "authorization": {
+    "policy": "invalidate-before-decode",
+    "jsName": "authorization"
+  },
+  "chatter": {
+    "policy": "invalidate-before-decode",
+    "jsName": "chatter"
+  },
+  "clipboard": {
+    "policy": "preserve-readonly",
+    "jsName": "clipboard"
+  },
+  "clipboard_dom": {
+    "policy": "preserve-readonly",
+    "jsName": "clipboardDom"
+  },
+  "code_token_causes_dropped": {
+    "policy": "preserve-readonly",
+    "jsName": "codeTokenCausesDropped"
+  },
+  "command": {
+    "policy": "invalidate-before-decode",
+    "jsName": "command"
+  },
+  "composition": {
+    "policy": "invalidate-before-decode",
+    "jsName": "composition"
+  },
+  "composition_end": {
+    "policy": "invalidate-before-decode",
+    "jsName": "compositionEnd"
+  },
+  "composition_start": {
+    "policy": "invalidate-before-decode",
+    "jsName": "compositionStart"
+  },
+  "create": {
+    "policy": "construct-new",
+    "jsName": "create"
+  },
+  "create_macro": {
+    "policy": "construct-new",
+    "jsName": "createMacro"
+  },
+  "create_macro_with_namespace": {
+    "policy": "construct-new",
+    "jsName": "createMacroWithNamespace"
+  },
+  "debug_insertion": {
+    "policy": "preserve-readonly",
+    "jsName": "debugInsertion"
+  },
+  "debug_should_prevent_default": {
+    "policy": "preserve-readonly",
+    "jsName": "debugShouldPreventDefault"
+  },
+  "debug_view_checksum": {
+    "policy": "preserve-readonly",
+    "jsName": "debugViewChecksum"
+  },
+  "effective_access": {
+    "policy": "preserve-readonly",
+    "jsName": "effectiveAccess"
+  },
+  "enable_view_listener_metadata": {
+    "policy": "preserve-output-or-observation-only",
+    "jsName": "enableViewListenerMetadata"
+  },
+  "host": {
+    "policy": "invalidate-before-decode",
+    "jsName": "host"
+  },
+  "initialize": {
+    "policy": "preserve-output-or-observation-only",
+    "jsName": "initialize"
+  },
+  "input": {
+    "policy": "invalidate-before-decode",
+    "jsName": "input"
+  },
+  "input_observed": {
+    "policy": "observed-entry",
+    "jsName": "inputObserved"
+  },
+  "key_down": {
+    "policy": "invalidate-before-decode",
+    "jsName": "keyDown"
+  },
+  "listener_table": {
+    "policy": "preserve-readonly",
+    "jsName": "listenerTable"
+  },
+  "markdown": {
+    "policy": "preserve-readonly",
+    "jsName": "markdown"
+  },
+  "node_text": {
+    "policy": "preserve-readonly",
+    "jsName": "nodeText"
+  },
+  "query": {
+    "policy": "preserve-readonly",
+    "jsName": "query"
+  },
+  "read_input_commit_receipt": {
+    "policy": "preserve-receipt-read",
+    "jsName": "readInputCommitReceipt"
+  },
+  "register_view_block_navigation": {
+    "policy": "preserve-registration-only",
+    "jsName": "registerViewBlockNavigation"
+  },
+  "register_view_enter": {
+    "policy": "preserve-registration-only",
+    "jsName": "registerViewEnter"
+  },
+  "register_view_escape": {
+    "policy": "preserve-registration-only",
+    "jsName": "registerViewEscape"
+  },
+  "retire_view_observation": {
+    "policy": "preserve-output-or-observation-only",
+    "jsName": "retireViewObservation"
+  },
+  "saved_state": {
+    "policy": "preserve-readonly",
+    "jsName": "savedState"
+  },
+  "selection_from_view": {
+    "policy": "invalidate-before-decode",
+    "jsName": "selectionFromView"
+  },
+  "serialized_state": {
+    "policy": "preserve-readonly",
+    "jsName": "serializedState"
+  },
+  "socket_closed": {
+    "policy": "invalidate-before-decode",
+    "jsName": "socketClosed"
+  },
+  "socket_frame": {
+    "policy": "invalidate-before-decode",
+    "jsName": "socketFrame"
+  },
+  "socket_opened": {
+    "policy": "invalidate-before-decode",
+    "jsName": "socketOpened"
+  },
+  "socket_text": {
+    "policy": "invalidate-before-decode",
+    "jsName": "socketText"
+  },
+  "storage_adopted": {
+    "policy": "invalidate-before-decode",
+    "jsName": "storageAdopted"
+  },
+  "storage_done": {
+    "policy": "invalidate-before-decode",
+    "jsName": "storageDone"
+  },
+  "storage_loaded": {
+    "policy": "invalidate-before-decode",
+    "jsName": "storageLoaded"
+  },
+  "take_code_token_cause": {
+    "policy": "preserve-registration-only",
+    "jsName": "takeCodeTokenCause"
+  },
+  "take_code_token_failure": {
+    "policy": "preserve-registration-only",
+    "jsName": "takeCodeTokenFailure"
+  },
+  "take_output": {
+    "policy": "preserve-output-or-observation-only",
+    "jsName": "takeOutput"
+  },
+  "take_view_command_failure": {
+    "policy": "preserve-registration-only",
+    "jsName": "takeViewCommandFailure"
+  },
+  "text_content": {
+    "policy": "preserve-readonly",
+    "jsName": "textContent"
+  },
+  "text_from_view": {
+    "policy": "invalidate-before-decode",
+    "jsName": "textFromView"
+  },
+  "tick": {
+    "policy": "invalidate-before-decode",
+    "jsName": "tick"
+  },
+  "token_fetched": {
+    "policy": "invalidate-before-decode",
+    "jsName": "tokenFetched"
+  },
+  "type_table": {
+    "policy": "preserve-readonly",
+    "jsName": "typeTable"
+  },
+  "unregister_view_enter": {
+    "policy": "preserve-registration-only",
+    "jsName": "unregisterViewEnter"
+  },
+  "unregister_view_escape": {
+    "policy": "preserve-registration-only",
+    "jsName": "unregisterViewEscape"
+  },
+  "view_command_enter": {
+    "policy": "invalidate-before-decode",
+    "jsName": "viewCommandEnter"
+  },
+  "view_command_escape": {
+    "policy": "invalidate-before-decode",
+    "jsName": "viewCommandEscape"
+  },
+  "view_command_owner": {
+    "policy": "preserve-registration-only",
+    "jsName": "viewCommandOwner"
+  },
+  "wake_at": {
+    "policy": "preserve-readonly",
+    "jsName": "wakeAt"
+  }
+}

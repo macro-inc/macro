@@ -78,6 +78,22 @@ describe('formatMentionLabel', () => {
     ).not.toMatch(/\d:\d\d/);
   });
 
+  it('keeps missing labels on the day-only path', () => {
+    const today = new Date(2026, 8, 24, 15, 15).toISOString();
+
+    expect(formatMentionLabel(today, null)).toBe('Today');
+    expect(formatMentionLabel(today, undefined)).toBe('Today');
+  });
+
+  it('preserves the parsed day fallback for null and omitted dates', () => {
+    expect(formatMentionLabel(null, '3:15 PM')).toBe(
+      formatRelativeDay(parseMentionDate(null))
+    );
+    expect(formatMentionLabel(undefined, '3:15 PM')).toBe(
+      formatRelativeDay(parseMentionDate(undefined))
+    );
+  });
+
   it('keeps a bare day a day whatever its label says', () => {
     expect(formatMentionLabel('2026-09-24', '3:15 PM')).toBe('Today');
   });

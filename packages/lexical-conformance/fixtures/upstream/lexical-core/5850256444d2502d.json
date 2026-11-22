@@ -1,0 +1,470 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-context.test.ts",
+    "test": [
+      "composeAgentContextPrompt",
+      "tells the agent its own name before the session block"
+    ],
+    "recordedWith": "lexical-conformance@a9cdd366bfcb8ceb435bb252033e328861fd8b0d6c8c62ea7acdf2869ff6f65c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-context.composeAgentContextPrompt",
+      "args": [
+        {
+          "promptMarkdown": "pickle, can you take this?",
+          "agent": {
+            "id": "bot|00000000-0000-0000-0000-00000000c5c5",
+            "name": "pickle",
+            "handle": "pickle"
+          },
+          "owner": {
+            "id": "macro|wolf@macro.com",
+            "name": "wolf@macro.com"
+          }
+        }
+      ],
+      "ret": "<m-agent-context>{\"version\":1,\"text\":\"\\u003cyou name=\\\"pickle\\\" handle=\\\"pickle\\\" id=\\\"bot|00000000-0000-0000-0000-00000000c5c5\\\">\\n  \\u003cnote>You are pickle, an agent in Macro. People address you as pickle or @pickle. A message that names another person or agent is meant for them, not you.\\u003c/note>\\n\\u003c/you>\\n\\u003csession owner=\\\"wolf@macro.com\\\" owner_id=\\\"macro|wolf@macro.com\\\">\\n  \\u003cprompted_by is_owner=\\\"false\\\"/>\\n  \\u003cnote>A bot acting for nobody sent this prompt. wolf@macro.com owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for wolf@macro.com&apos;s access; when someone else prompted this turn, those calls wait for wolf@macro.com&apos;s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person&apos;s earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.\\u003c/note>\\n\\u003c/session>\"}</m-agent-context>\n\npickle, can you take this?"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-context>{\"version\":1,\"text\":\"\\u003cyou name=\\\"pickle\\\" handle=\\\"pickle\\\" id=\\\"bot|00000000-0000-0000-0000-00000000c5c5\\\">\\n  \\u003cnote>You are pickle, an agent in Macro. People address you as pickle or @pickle. A message that names another person or agent is meant for them, not you.\\u003c/note>\\n\\u003c/you>\\n\\u003csession owner=\\\"wolf@macro.com\\\" owner_id=\\\"macro|wolf@macro.com\\\">\\n  \\u003cprompted_by is_owner=\\\"false\\\"/>\\n  \\u003cnote>A bot acting for nobody sent this prompt. wolf@macro.com owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for wolf@macro.com&apos;s access; when someone else prompted this turn, those calls wait for wolf@macro.com&apos;s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person&apos;s earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.\\u003c/note>\\n\\u003c/session>\"}</m-agent-context>\n\npickle, can you take this?"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-context",
+              "version": 1,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "text": "<you name=\"pickle\" handle=\"pickle\" id=\"bot|00000000-0000-0000-0000-00000000c5c5\">\n  <note>You are pickle, an agent in Macro. People address you as pickle or @pickle. A message that names another person or agent is meant for them, not you.</note>\n</you>\n<session owner=\"wolf@macro.com\" owner_id=\"macro|wolf@macro.com\">\n  <prompted_by is_owner=\"false\"/>\n  <note>A bot acting for nobody sent this prompt. wolf@macro.com owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for wolf@macro.com&apos;s access; when someone else prompted this turn, those calls wait for wolf@macro.com&apos;s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person&apos;s earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.</note>\n</session>"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "pickle, can you take this?",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "1Dz5GQua"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5042420323006809
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7048832636792213
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        12,
+        94,
+        198,
+        142,
+        4,
+        163,
+        64,
+        108
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        151,
+        214,
+        60,
+        251,
+        220,
+        83,
+        174,
+        136
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        55,
+        26,
+        18,
+        81,
+        33,
+        181,
+        149,
+        97
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        67,
+        192,
+        238,
+        45,
+        85,
+        251,
+        99,
+        140
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-context",
+              "version": 1,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "text": "<you name=\"pickle\" handle=\"pickle\" id=\"bot|00000000-0000-0000-0000-00000000c5c5\">\n  <note>You are pickle, an agent in Macro. People address you as pickle or @pickle. A message that names another person or agent is meant for them, not you.</note>\n</you>\n<session owner=\"wolf@macro.com\" owner_id=\"macro|wolf@macro.com\">\n  <prompted_by is_owner=\"false\"/>\n  <note>A bot acting for nobody sent this prompt. wolf@macro.com owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for wolf@macro.com&apos;s access; when someone else prompted this turn, those calls wait for wolf@macro.com&apos;s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person&apos;s earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.</note>\n</session>"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "pickle, can you take this?",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "1Dz5GQua"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "agent-context",
+            "version": 1,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "text": "<you name=\"pickle\" handle=\"pickle\" id=\"bot|00000000-0000-0000-0000-00000000c5c5\">\n  <note>You are pickle, an agent in Macro. People address you as pickle or @pickle. A message that names another person or agent is meant for them, not you.</note>\n</you>\n<session owner=\"wolf@macro.com\" owner_id=\"macro|wolf@macro.com\">\n  <prompted_by is_owner=\"false\"/>\n  <note>A bot acting for nobody sent this prompt. wolf@macro.com owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for wolf@macro.com&apos;s access; when someone else prompted this turn, those calls wait for wolf@macro.com&apos;s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person&apos;s earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.</note>\n</session>"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "pickle, can you take this?",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "1Dz5GQua"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "agent-context",
+            "version": 1,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "text": "<you name=\"pickle\" handle=\"pickle\" id=\"bot|00000000-0000-0000-0000-00000000c5c5\">\n  <note>You are pickle, an agent in Macro. People address you as pickle or @pickle. A message that names another person or agent is meant for them, not you.</note>\n</you>\n<session owner=\"wolf@macro.com\" owner_id=\"macro|wolf@macro.com\">\n  <prompted_by is_owner=\"false\"/>\n  <note>A bot acting for nobody sent this prompt. wolf@macro.com owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for wolf@macro.com&apos;s access; when someone else prompted this turn, those calls wait for wolf@macro.com&apos;s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person&apos;s earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.</note>\n</session>"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "pickle, can you take this?",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "1Dz5GQua"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<you name=\"pickle\" handle=\"pickle\" id=\"bot|00000000-0000-0000-0000-00000000c5c5\">\n  <note>You are pickle, an agent in Macro. People address you as pickle or @pickle. A message that names another person or agent is meant for them, not you.</note>\n</you>\n<session owner=\"wolf@macro.com\" owner_id=\"macro|wolf@macro.com\">\n  <prompted_by is_owner=\"false\"/>\n  <note>A bot acting for nobody sent this prompt. wolf@macro.com owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for wolf@macro.com&apos;s access; when someone else prompted this turn, those calls wait for wolf@macro.com&apos;s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person&apos;s earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.</note>\n</session>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "pickle, can you take this?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "iter",
+      "this": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<you name=\"pickle\" handle=\"pickle\" id=\"bot|00000000-0000-0000-0000-00000000c5c5\">\n  <note>You are pickle, an agent in Macro. People address you as pickle or @pickle. A message that names another person or agent is meant for them, not you.</note>\n</you>\n<session owner=\"wolf@macro.com\" owner_id=\"macro|wolf@macro.com\">\n  <prompted_by is_owner=\"false\"/>\n  <note>A bot acting for nobody sent this prompt. wolf@macro.com owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for wolf@macro.com&apos;s access; when someone else prompted this turn, those calls wait for wolf@macro.com&apos;s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person&apos;s earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.</note>\n</session>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "pickle, can you take this?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ],
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<you name=\"pickle\" handle=\"pickle\" id=\"bot|00000000-0000-0000-0000-00000000c5c5\">\n  <note>You are pickle, an agent in Macro. People address you as pickle or @pickle. A message that names another person or agent is meant for them, not you.</note>\n</you>\n<session owner=\"wolf@macro.com\" owner_id=\"macro|wolf@macro.com\">\n  <prompted_by is_owner=\"false\"/>\n  <note>A bot acting for nobody sent this prompt. wolf@macro.com owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for wolf@macro.com&apos;s access; when someone else prompted this turn, those calls wait for wolf@macro.com&apos;s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person&apos;s earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.</note>\n</session>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "pickle, can you take this?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-context",
+        "version": 1,
+        "$": {
+          "id": "-QXVzrpx"
+        },
+        "text": "<you name=\"pickle\" handle=\"pickle\" id=\"bot|00000000-0000-0000-0000-00000000c5c5\">\n  <note>You are pickle, an agent in Macro. People address you as pickle or @pickle. A message that names another person or agent is meant for them, not you.</note>\n</you>\n<session owner=\"wolf@macro.com\" owner_id=\"macro|wolf@macro.com\">\n  <prompted_by is_owner=\"false\"/>\n  <note>A bot acting for nobody sent this prompt. wolf@macro.com owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for wolf@macro.com&apos;s access; when someone else prompted this turn, those calls wait for wolf@macro.com&apos;s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person&apos;s earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.</note>\n</session>"
+      },
+      "args": [],
+      "ret": "agent-context"
+    },
+    {
+      "op": "call",
+      "fn": "get:text",
+      "this": {
+        "type": "agent-context",
+        "version": 1,
+        "$": {
+          "id": "-QXVzrpx"
+        },
+        "text": "<you name=\"pickle\" handle=\"pickle\" id=\"bot|00000000-0000-0000-0000-00000000c5c5\">\n  <note>You are pickle, an agent in Macro. People address you as pickle or @pickle. A message that names another person or agent is meant for them, not you.</note>\n</you>\n<session owner=\"wolf@macro.com\" owner_id=\"macro|wolf@macro.com\">\n  <prompted_by is_owner=\"false\"/>\n  <note>A bot acting for nobody sent this prompt. wolf@macro.com owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for wolf@macro.com&apos;s access; when someone else prompted this turn, those calls wait for wolf@macro.com&apos;s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person&apos;s earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.</note>\n</session>"
+      },
+      "args": [],
+      "ret": "<you name=\"pickle\" handle=\"pickle\" id=\"bot|00000000-0000-0000-0000-00000000c5c5\">\n  <note>You are pickle, an agent in Macro. People address you as pickle or @pickle. A message that names another person or agent is meant for them, not you.</note>\n</you>\n<session owner=\"wolf@macro.com\" owner_id=\"macro|wolf@macro.com\">\n  <prompted_by is_owner=\"false\"/>\n  <note>A bot acting for nobody sent this prompt. wolf@macro.com owns this session. Choose acting_as explicitly on each tool that accepts it. Prefer requester: this uses the access and connected apps of the person who sent this prompt, without an extra account approval. Choose owner only when the request calls for wolf@macro.com&apos;s access; when someone else prompted this turn, those calls wait for wolf@macro.com&apos;s approval. Public web lookups need no account selection. A bot or system event with no authenticated acting user has no requester account. If the selected account lacks a connection, offer the connect action returned by the tool; never silently switch accounts. Do not repeat private information from another person&apos;s earlier tool results. If a call is declined or not approved, say so and do not try another way to perform it. Existing email/calendar draft confirmations still apply.</note>\n</session>"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

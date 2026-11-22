@@ -15,9 +15,9 @@ export type WALEntry<T> = {
   createdAt: number;
 };
 
-function hasId<T>(
-  entry: Omit<WALEntry<T>, 'id'> & { id?: number }
-): entry is WALEntry<T> {
+function hasId<T extends { id?: number }>(
+  entry: T
+): entry is T & { id: number } {
   return entry.id !== undefined;
 }
 
@@ -56,6 +56,8 @@ interface WALSchema<T> extends DBSchema {
       update: T;
       delivered: boolean;
       createdAt: number;
+      quarantined?: boolean;
+      foreign?: boolean;
     };
     indexes: { scopeId: string };
   };
@@ -138,9 +140,10 @@ export class BrowserWALStore<T> implements WALStore<T> {
 
   public async getAll(): Promise<WALEntry<T>[]> {
     const tx = await this.database.transaction('updates', 'readonly');
-    return tx.store.index('scopeId').getAll(this.scopeId) as Promise<
-      WALEntry<T>[]
-    >;
+    const rows = await tx.store.index('scopeId').getAll(this.scopeId);
+    return rows
+      .filter((row) => row.quarantined !== true && row.foreign !== true)
+      .filter(hasId);
   }
 
   public async markDelivered(ids: number[]): Promise<void> {
@@ -155,8 +158,8 @@ export class BrowserWALStore<T> implements WALStore<T> {
   }
 
   public async pruneDelivered(): Promise<void> {
-    const entries = await this.getAll();
     const tx = await this.database.transaction('updates', 'readwrite');
+    const entries = await tx.store.index('scopeId').getAll(this.scopeId);
     const store = tx.objectStore('updates');
     for (const row of entries) {
       if (row.delivered && row.id !== undefined) {
@@ -167,9 +170,9 @@ export class BrowserWALStore<T> implements WALStore<T> {
   }
 
   public async pruneExpired(ttlMs: number): Promise<number> {
-    const entries = await this.getAll();
     const cutoff = Date.now() - ttlMs;
     const tx = await this.database.transaction('updates', 'readwrite');
+    const entries = await tx.store.index('scopeId').getAll(this.scopeId);
     const store = tx.objectStore('updates');
     let deleted = 0;
     for (const row of entries) {

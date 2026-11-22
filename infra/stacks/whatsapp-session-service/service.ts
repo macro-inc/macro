@@ -223,7 +223,10 @@ export class WhatsappSessionService extends pulumi.ComponentResource {
         imagePath: REPO_ROOT,
         dockerfile: 'docker/Dockerfile',
         platform: { family: 'linux', architecture: 'amd64' },
-        buildArgs: { SERVICE_NAME: 'whatsapp_session_service' },
+        buildArgs: {
+          SERVICE_NAME: 'whatsapp_session_service',
+          PACKAGE_NAME: 'whatsapp_session_service',
+        },
         tags,
       },
       child

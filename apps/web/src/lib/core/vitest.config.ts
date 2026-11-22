@@ -58,6 +58,7 @@ export default defineConfig({
         // after each vi.resetModules().
         external: [/[\\/]node_modules[\\/]solid-js[\\/]/],
         inline: [
+          '@solidjs/router',
           'solid-transition-group',
           '@solid-primitives/refs',
           '@solid-primitives/transition-group',

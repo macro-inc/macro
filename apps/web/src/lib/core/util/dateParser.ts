@@ -375,7 +375,10 @@ export function formatDate(date: Date): string {
  * `new Date` would read it as UTC midnight, the previous day west of
  * Greenwich. Anything else is a timestamp.
  */
-export function parseMentionDate(value: string): Date {
+export function parseMentionDate(value: string | null | undefined): Date {
+  // A stored null or omitted date: what new Date(value) gives for each.
+  if (value === null) return new Date(0);
+  if (value === undefined) return new Date(Number.NaN);
   const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!day) return new Date(value);
   const [year, month, date] = day.slice(1).map(Number);
@@ -396,11 +399,13 @@ const TIME_OF_DAY = /\d{1,2}:\d{2}|\b\d{1,2}\s?[ap]\.?m\b/i;
  * its author's midnight with a day label, so it stays a day for every viewer.
  */
 export function formatMentionLabel(
-  date: string,
-  displayFormat: string
+  date: string | null | undefined,
+  displayFormat: string | null | undefined
 ): string {
   const parsed = parseMentionDate(date);
   const namesTime =
+    typeof date === 'string' &&
+    typeof displayFormat === 'string' &&
     !BARE_DAY.test(date) &&
     TIME_OF_DAY.test(displayFormat) &&
     !Number.isNaN(parsed.getTime());

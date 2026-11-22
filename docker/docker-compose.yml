@@ -151,6 +151,7 @@ services:
       dockerfile: docker/Dockerfile
       args:
         SERVICE_NAME: slack_import_worker
+        PACKAGE_NAME: slack_import_worker
     stop_grace_period: 120s
     depends_on:
       - postgres

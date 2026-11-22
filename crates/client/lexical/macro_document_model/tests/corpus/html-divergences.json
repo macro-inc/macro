@@ -1,0 +1,24 @@
+[
+  {
+    "name": "equation:equation-unicode:export",
+    "source_sha256": "c513df633e81fe83784a28d5064eae45b7ab03a81cb107c6c7572107d9725961",
+    "reason": "S3 3.9 / Q7 requires UTF-8 fallback where source btoa throws",
+    "rust": {
+      "value": {
+        "html": "<p dir=\"rtl\" data-lexical-indent=\"2\" style=\"padding-inline-start:80px;text-align:right\"><div data-lexical-inline=\"false\" data-lexical-equation=\"w6kg8J+YgCA8Jj4gIg==\"></div></p>",
+        "text": "é 😀 <&> \""
+      }
+    }
+  },
+  {
+    "name": "equation:equation-unicode:headless",
+    "source_sha256": "c80666c9fca7073c6582552186a0703967dc15cb2d629a5ba4aee3ef899c78c1",
+    "reason": "S3 3.9 / Q7 requires UTF-8 fallback where source btoa throws",
+    "rust": {
+      "value": {
+        "html": "<p dir=\"rtl\" data-lexical-indent=\"2\" style=\"padding-inline-start:80px;text-align:right\"><div data-lexical-inline=\"false\" data-lexical-equation=\"w6kg8J+YgCA8Jj4gIg==\"></div></p>",
+        "text": "é 😀 <&> \""
+      }
+    }
+  }
+]

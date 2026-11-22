@@ -1,13 +1,20 @@
+import type { EntityItem } from '@core/context/quickAccess';
 import type { IUser } from '@core/user';
+import {
+  initializeNativeSurfaceTests,
+  nativeSurface,
+} from '@macro-inc/lexical-wasm-view/view/test/native-surface';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createEditor, type LexicalEditor } from 'lexical';
 import { batch, createSignal, type ParentProps } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, expect, it, vi } from 'vitest';
+import { NativeUserMentionsOverlay } from '../../../editing/NativeUserMentionsOverlay';
 import { createMenuOperations } from '../../../shared/inlineMenu';
 import type { MentionItem } from '../../../utils/mentionsUtils';
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import { MentionsMenu } from './MentionsMenu';
 import type { MentionBucketId } from './MentionsMenuController';
+import type { NativeMentionPresentation } from './native-presentation';
 import { createItemHandler } from './utils/mentionHandlers';
 import * as mobileSort from './utils/mobileSort';
 
@@ -221,6 +228,8 @@ const originalScrollIntoView = Element.prototype.scrollIntoView;
 const mockNoEmails = () =>
   vi.mocked(useEmailSearchMention).mockReturnValue({
     emails: () => [],
+    isLoading: () => false,
+    error: () => undefined,
     totalCount: () => 0,
     hasMore: () => false,
     isLoadingMore: () => false,
@@ -481,6 +490,8 @@ it('only paginates an open mobile menu and resumes on reopen', async () => {
   Element.prototype.scrollIntoView = vi.fn();
   vi.mocked(useEmailSearchMention).mockReturnValue({
     emails: () => [],
+    isLoading: () => false,
+    error: () => undefined,
     totalCount: () => 0,
     hasMore: () => false,
     isLoadingMore: () => false,
@@ -516,6 +527,8 @@ it('offers CRM companies and contacts', () => {
   mocks.crmEnabled = true;
   vi.mocked(useEmailSearchMention).mockReturnValue({
     emails: () => [],
+    isLoading: () => false,
+    error: () => undefined,
     totalCount: () => 0,
     hasMore: () => false,
     isLoadingMore: () => false,
@@ -584,6 +597,8 @@ it('offers calendar events and picks one', () => {
   Element.prototype.scrollIntoView = vi.fn();
   vi.mocked(useEmailSearchMention).mockReturnValue({
     emails: () => [],
+    isLoading: () => false,
+    error: () => undefined,
     totalCount: () => 0,
     hasMore: () => false,
     isLoadingMore: () => false,
@@ -633,6 +648,8 @@ it('opens cell pickers without replaying the menu entrance animation', () => {
 it('records mentions against the editing source outside a legacy block', () => {
   vi.mocked(useEmailSearchMention).mockReturnValue({
     emails: () => [],
+    isLoading: () => false,
+    error: () => undefined,
     totalCount: () => 0,
     hasMore: () => false,
     isLoadingMore: () => false,
@@ -660,6 +677,8 @@ it("offers the viewer's own WhatsApp chats to share by mention, only in channel 
   Element.prototype.scrollIntoView = vi.fn();
   vi.mocked(useEmailSearchMention).mockReturnValue({
     emails: () => [],
+    isLoading: () => false,
+    error: () => undefined,
     totalCount: () => 0,
     hasMore: () => false,
     isLoadingMore: () => false,
@@ -700,6 +719,8 @@ it("offers the viewer's routines to share by mention, only in channel composers"
   Element.prototype.scrollIntoView = vi.fn();
   vi.mocked(useEmailSearchMention).mockReturnValue({
     emails: () => [],
+    isLoading: () => false,
+    error: () => undefined,
     totalCount: () => 0,
     hasMore: () => false,
     isLoadingMore: () => false,
@@ -757,6 +778,151 @@ it('marks an offline agent and refuses to mention it', () => {
   fireEvent.click(screen.getByTitle('Dev box agent — offline'));
   expect(onPick).not.toHaveBeenCalled();
   expect(menu.isOpen()).toBe(true);
+});
+
+it('feeds the native presentation from the same live providers without DOM keyboard ownership', async () => {
+  mocks.mobile = true;
+  mockNoEmails();
+  const person: IUser = {
+    id: 'fixture-user',
+    name: 'Person',
+    email: 'user@example.com',
+  };
+  const [users, setUsers] = createSignal([person]);
+  const menu = createMenuOperations();
+  const [selection, setSelection] =
+    createSignal<ReturnType<NativeMentionPresentation['selection']>>();
+  const publish = vi.fn<NativeMentionPresentation['publish']>();
+  const onPick = vi.fn();
+  const { container } = render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={users}
+      entities={() => []}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+      nativePresentation={{ selection, more: () => undefined, publish }}
+    />
+  ));
+  menu.openMenu();
+  expect(container.children).toHaveLength(0);
+  expect(publish.mock.lastCall?.[0].items).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: person.id, kind: 'user', data: person }),
+    ])
+  );
+  fireEvent.keyDown(document, { key: 'Enter' });
+  expect(onPick).not.toHaveBeenCalled();
+  expect(menu.isOpen()).toBe(true);
+  setSelection({ id: person.id, sequence: 1 });
+  await Promise.resolve();
+  expect(onPick).toHaveBeenCalledWith(
+    expect.objectContaining({ id: person.id, data: person })
+  );
+  setUsers([{ ...person, name: 'Updated' }]);
+  expect(publish.mock.lastCall?.[0].items).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: person.id,
+        data: expect.objectContaining({ name: 'Updated' }),
+      }),
+    ])
+  );
+  expect(onPick).toHaveBeenCalledTimes(1);
+  menu.closeMenu();
+  expect(publish.mock.lastCall?.[0].items).toEqual([]);
+});
+
+// This composition control supplies identical provider inputs to the real shared
+// UI. The native view is actual; no insertion or live-service result is inferred.
+beforeAll(initializeNativeSurfaceTests);
+it('native body exposes the same document/task/channel rows and View all ordering as Source', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  const entities: EntityItem[] = Array.from({ length: 10 }, (_, index) => ({
+    kind: 'entity',
+    bucket: index === 0 ? 'task' : 'note',
+    id: `reference-${index}`,
+    sortTimestamp: 10 - index,
+    searchText: `Reference ${index}`,
+    timestamps: {},
+    data: {
+      type: 'document',
+      id: `reference-${index}`,
+      name: `Reference ${index}`,
+      ownerId: 'fixture-owner',
+      fileType: 'md',
+      ...(index === 0 ? { subType: { type: 'task' } } : {}),
+    },
+  }));
+  entities.push({
+    kind: 'entity',
+    bucket: 'channel',
+    id: 'channel-reference',
+    sortTimestamp: 0,
+    searchText: 'Fixture channel',
+    timestamps: {},
+    data: {
+      type: 'channel',
+      id: 'channel-reference',
+      name: 'Fixture channel',
+      ownerId: 'fixture-owner',
+      channelType: 'public',
+    },
+  });
+  const users: IUser[] = [
+    { id: 'fixture-user', name: 'Fixture user', email: 'fixture@example.com' },
+  ];
+  const labels = ['People', 'Documents, Agents, & Tasks', 'Channels'];
+  const capture = () => ({
+    headings: [...document.querySelectorAll('span')]
+      .map((el) => el.textContent)
+      .filter((text) => labels.includes(text ?? '')),
+    rows: [...document.querySelectorAll('[title]')].map((el) =>
+      el.getAttribute('title')
+    ),
+    more: [...document.querySelectorAll('button')]
+      .map((el) => el.textContent)
+      .filter((text) => text?.includes('View all')),
+  });
+  const sourceMenu = createMenuOperations();
+  sourceMenu.openMenu();
+  const source = render(() => (
+    <MentionsMenu
+      menu={sourceMenu}
+      users={() => users}
+      entities={() => entities}
+      anchor={document.createElement('div')}
+      onPick={() => {}}
+      showOpenTabs
+    />
+  ));
+  const expected = capture();
+  expect(expected.headings).toEqual(labels);
+  expect(expected.more.length).toBeGreaterThan(0);
+  source.unmount();
+  const fixture = nativeSurface();
+  const menu = createMenuOperations();
+  menu.openMenu();
+  const native = render(() => (
+    <NativeUserMentionsOverlay
+      view={fixture.view}
+      menu={menu}
+      source={{
+        sourceDocumentId: 'source-document',
+        users: () => users,
+        entities: () => entities,
+        disableMentionTracking: true,
+      }}
+      alive={() => true}
+    />
+  ));
+  try {
+    expect(capture()).toEqual(expected);
+  } finally {
+    native.unmount();
+    fixture.close();
+  }
 });
 
 it('says it is searching only for a slow search, and never that there are no results before sources answer', async () => {
@@ -928,6 +1094,36 @@ const placeholderRows = (label: string) =>
     .queryByRole('status', { name: label })
     ?.querySelectorAll('.skeleton-shimmer').length ?? 0) / 2;
 const contactRows = () => screen.queryAllByText(/^Acme contact \d$/).length;
+
+it.each([false, true])(
+  'holds People row space before drawing the delayed loading skeleton on phone=%s',
+  async (phone) => {
+    vi.useFakeTimers();
+    mocks.mobile = phone;
+    if (phone) {
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(
+        256
+      );
+      vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(
+        384
+      );
+    }
+    const people = openWhilePeopleLoad({ agents: [macroAgent], phone });
+    const skeleton = screen.getByRole('status', {
+      name: phone ? 'Loading…' : 'Loading people',
+    });
+    const bars = skeleton.querySelectorAll('.skeleton-shimmer').length;
+    expect(bars).toBeGreaterThan(0);
+    expect(skeleton.classList.contains('invisible')).toBe(true);
+    await vi.advanceTimersByTimeAsync(499);
+    expect(skeleton.classList.contains('invisible')).toBe(true);
+    expect(skeleton.querySelectorAll('.skeleton-shimmer')).toHaveLength(bars);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(skeleton.classList.contains('invisible')).toBe(false);
+    people.land();
+    expect(skeleton.isConnected).toBe(false);
+  }
+);
 
 it.each([
   ['Macro and Codex', [codex, macroAgent]],

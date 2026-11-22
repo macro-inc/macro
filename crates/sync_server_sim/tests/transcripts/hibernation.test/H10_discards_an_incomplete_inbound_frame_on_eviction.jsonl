@@ -1,0 +1,104 @@
+{"in":"seed","room":"@harness","callback":0,"binding":"USER_PEER_MAPPING","method":"run","args":["CREATE TABLE peer_user_map (\n    document_id TEXT NOT NULL,\n    -- peer_id should be BIGINT, but d1 doesn't support this\n    peer_id     TEXT NOT NULL,\n    user_id     TEXT NOT NULL,\n    PRIMARY KEY (document_id, peer_id)\n)",[]],"unix_ms":1794019595473,"monotonic_ms":47772.303147}
+{"in":"seed","room":"@harness","callback":1,"binding":"USER_PEER_MAPPING","method":"run","args":["CREATE INDEX idx_peer_user_map_user_doc ON peer_user_map (document_id, user_id)",[]],"unix_ms":1794019595517,"monotonic_ms":47817.181992}
+{"in":"seed","room":"@harness","callback":2,"binding":"USER_PEER_MAPPING","method":"run","args":["CREATE INDEX idx_document_id ON peer_user_map (document_id)",[]],"unix_ms":1794019595527,"monotonic_ms":47826.67043}
+{"in":"seed","room":"@harness","callback":3,"binding":"USER_PEER_MAPPING","method":"run","args":["CREATE TABLE blame (\n    document_id  TEXT NOT NULL,\n    node_id      TEXT NOT NULL,\n    peer_id      TEXT NOT NULL,\n    timestamp_ms INTEGER NOT NULL,\n    PRIMARY KEY (document_id, node_id)\n)",[]],"unix_ms":1794019595542,"monotonic_ms":47841.608893}
+{"in":"seed","room":"@harness","callback":4,"binding":"USER_PEER_MAPPING","method":"run","args":["-- The signed agent actor (e.g. `bot|<uuid>`) a peer edited as, NULL for humans.\nALTER TABLE peer_user_map ADD COLUMN actor TEXT",[]],"unix_ms":1794019595553,"monotonic_ms":47852.552218}
+{"room":"@worker","callback":0,"in":"new","unix_ms":1794019595561,"monotonic_ms":1794019595561}
+{"room":"@worker","callback":1,"in":"fetch","boundary":"worker","method":"GET","path":"/document/hibernate-h10/connect","query":"?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidGVzdC11c2VyIiwiZG9jdW1lbnRfaWQiOiJoaWJlcm5hdGUtaDEwIiwiYWNjZXNzX2xldmVsIjoib3duZXIiLCJleHAiOjE3OTQwMTk2NTUsImlhdCI6MTc5NDAxOTU5NX0.JV22MaZ0qOg6begBymM9xaihUCwYzpsmenOYnTFTWzI","headers":{},"body_b64":"","unix_ms":1794019595562,"monotonic_ms":1794019595562}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":0,"in":"new","unix_ms":1794019595577,"monotonic_ms":1794019595577}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"in":"fetch","method":"GET","path":"/document/hibernate-h10/connect","query":"?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidGVzdC11c2VyIiwiZG9jdW1lbnRfaWQiOiJoaWJlcm5hdGUtaDEwIiwiYWNjZXNzX2xldmVsIjoib3duZXIiLCJleHAiOjE3OTQwMTk2NTUsImlhdCI6MTc5NDAxOTU5NX0.JV22MaZ0qOg6begBymM9xaihUCwYzpsmenOYnTFTWzI","headers":{},"body_b64":"","unix_ms":1794019595578,"monotonic_ms":1794019595578}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"storage.get","args":["SURFACE_MIGRATION_SOURCE"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"return":"storage.get","value":{"undefined":true}}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"storage.put","args":["DOCUMENT_ID","hibernate-h10"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"return":"storage.put","value":{"undefined":true}}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"connections.list","args":[],"ws_ids":[]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"out":"accept","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"storage.put","args":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d",{"user_id":"test-user","access_level":"owner","peer_ids":[],"session_kind":"document"}]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"return":"storage.put","value":{"undefined":true}}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"sql.exec","args":["CREATE TABLE IF NOT EXISTS kv_store (\n                    id TEXT NOT NULL,\n                    chunk INTEGER NOT NULL,\n                    data BLOB,\n                    PRIMARY KEY (id, chunk)\n                )"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"sql.exec","args":["SELECT 1 FROM kv_store WHERE id = ?1 LIMIT 1","hibernate-h10"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"SNAPSHOT_STORE_KV.get","args":["hibernate-h10/hibernate-h10.snapshot",{"type":"arrayBuffer"}]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"return":"SNAPSHOT_STORE_KV.get","value":null}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"sql.exec","args":["DELETE FROM kv_store WHERE id = ?1","hibernate-h10"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"sql.exec","args":["INSERT INTO kv_store (id, chunk, data) VALUES (?1, ?2, ?3)","hibernate-h10",0,{"bytes_b64":"bG9ybwAAAAAAAAAAAAAAAFMuDPwAAy8AAABMT1JPAAAAAgB2dgAAAAEAAgDnYslsAQAAAAUAAAACAGZyAAIAdnbb2MnIFgAAAAAAAAAAAAAA"}]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"storage.put","args":["LAST_VERSION_VECTOR",[0]]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"return":"storage.put","value":{"undefined":true}}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"storage.get","args":["LAST_VERSION_VECTOR"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"return":"storage.get","value":[0]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"storage.list","args":[{"prefix":"o/"}]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"return":"storage.list","value":[]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"out":"send","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","frame_b64":"AZIAAAABiQAAAGxvcm8AAAAAAAAAAAAAAACKrLicAAM/AAAATE9STwAAAAIAc2YAAAIAc3YAAAIAdnYAAAABAAcADQAEAKHrtekBAAAABQAAAAIAZnIAAgB2dtvYycgmAAAAAQAAAEUnAAAATE9STwAAAAABAExF2xMBAAAABQAAAAIAZnIAAgBmco4PJVAOAAAAAQAAAAA="}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"wait_until"}
+{"body_b64":"eyJyZWFzb24iOiJmaXJzdF9qb2luIn0=","callback":1,"out":"fetch_body","room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69"}
+{"callback":1,"port":"fetch","room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","url":"https://dss.test/internal/documents/hibernate-h10/interaction"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"out":"response","status":101,"headers":{"access-control-allow-credentials":"true","access-control-allow-headers":"authorization,content-type,traceparent,tracestate","access-control-allow-methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS"},"body_b64":""}
+{"room":"@worker","callback":1,"out":"response","status":101,"headers":{"access-control-allow-credentials":"true","access-control-allow-headers":"authorization,content-type,traceparent,tracestate","access-control-allow-methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS"},"body_b64":""}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"in":"message","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","binary_b64":"AQgAAAAFl9Y71Il7rZ8=","unix_ms":1794019595634,"monotonic_ms":1794019595634}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"port":"connections.tags","tags":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"port":"connections.tags","tags":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"port":"connections.tags","tags":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"port":"storage.put","args":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d",{"user_id":"test-user","access_level":"owner","peer_ids":["11505988454902912663"],"session_kind":"document"}]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"return":"storage.put","value":{"undefined":true}}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"port":"d1.run","sql":"INSERT INTO peer_user_map (document_id, peer_id, user_id, actor) VALUES (?, ?, ?, ?) ON CONFLICT(document_id, peer_id) DO UPDATE SET user_id = excluded.user_id, actor = excluded.actor WHERE peer_user_map.user_id = ?;","params":["hibernate-h10","11505988454902912663","test-user",null,"system"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"in":"message","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"ping","unix_ms":1794019595643,"monotonic_ms":1794019595643}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"port":"storage.getAlarm","args":[null]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"return":"storage.getAlarm","value":null}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"clock":"alarm_set_ms","value":"1794019595647"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"port":"storage.setAlarm","args":[{"date_ms":1794019600647},null]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"return":"storage.setAlarm","value":{"undefined":true}}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"out":"send_text","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"pong"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":4,"in":"message","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"ping","unix_ms":1794019595653,"monotonic_ms":1794019595653}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":4,"out":"send_text","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"pong"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":5,"in":"message","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"ping","unix_ms":1794019595654,"monotonic_ms":1794019595654}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":5,"out":"send_text","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"pong"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":6,"in":"message","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","binary_b64":"AAAA","unix_ms":1794019595656,"monotonic_ms":1794019595656}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":6,"port":"connections.tags","tags":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":7,"in":"message","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"ping","unix_ms":1794019595656,"monotonic_ms":1794019595656}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":7,"out":"send_text","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"pong"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":0,"in":"new","unix_ms":1794019600100,"monotonic_ms":1794019600100}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"in":"message","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","binary_b64":"AQAABA==","unix_ms":1794019600100,"monotonic_ms":1794019600100}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"storage.get","args":["SURFACE_MIGRATION_SOURCE"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"return":"storage.get","value":{"undefined":true}}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"storage.get","args":["DOCUMENT_ID"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"return":"storage.get","value":"hibernate-h10"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"connections.tags","tags":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":1,"port":"connections.tags","tags":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"in":"message","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"ping","unix_ms":1794019600101,"monotonic_ms":1794019600101}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":2,"out":"send_text","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"pong"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"in":"message","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","binary_b64":"AQAAAAAE","unix_ms":1794019600102,"monotonic_ms":1794019600102}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"port":"connections.tags","tags":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"port":"connections.tags","tags":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"port":"sql.exec","args":["CREATE TABLE IF NOT EXISTS kv_store (\n                    id TEXT NOT NULL,\n                    chunk INTEGER NOT NULL,\n                    data BLOB,\n                    PRIMARY KEY (id, chunk)\n                )"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"port":"sql.exec","args":["SELECT 1 FROM kv_store WHERE id = ?1 LIMIT 1","hibernate-h10"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"port":"sql.exec","args":["SELECT chunk, data FROM kv_store WHERE id = ?1 ORDER BY chunk","hibernate-h10"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"port":"storage.get","args":["LAST_VERSION_VECTOR"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"return":"storage.get","value":[0]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"port":"storage.list","args":[{"prefix":"o/"}]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"return":"storage.list","value":[]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"out":"send","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","frame_b64":"AY0AAAAEiQAAAGxvcm8AAAAAAAAAAAAAAACKrLicAAM/AAAATE9STwAAAAIAc2YAAAIAc3YAAAIAdnYAAAABAAcADQAEAKHrtekBAAAABQAAAAIAZnIAAgB2dtvYycgmAAAAAQAAAEUnAAAATE9STwAAAAABAExF2xMBAAAABQAAAAIAZnIAAgBmco4PJVAOAAAA"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"port":"storage.getAlarm","args":[null]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"return":"storage.getAlarm","value":1794019600647}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":3,"clock":"alarm_compare_ms","value":"1794019600108"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":4,"in":"message","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"ping","unix_ms":1794019600109,"monotonic_ms":1794019600109}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":4,"out":"send_text","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"pong"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":5,"in":"message","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"ping","unix_ms":1794019600110,"monotonic_ms":1794019600110}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":5,"out":"send_text","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","text":"pong"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":6,"in":"close","ws_id":"ws_ida14af79a-8f26-44ce-a486-a04d752aed0d","code":1000,"reason":"transcript scenario complete","clean":true,"unix_ms":1794019600111,"monotonic_ms":1794019600111}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":6,"port":"connections.tags","tags":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":6,"port":"storage.get","args":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":6,"return":"storage.get","value":{"user_id":"test-user","access_level":"owner","peer_ids":["11505988454902912663"],"session_kind":"document"}}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":6,"port":"connections.list","args":[],"ws_ids":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":6,"port":"connections.list","args":[],"ws_ids":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":6,"port":"wait_until"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":6,"port":"connections.tags","tags":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":6,"port":"storage.delete","args":["ws_ida14af79a-8f26-44ce-a486-a04d752aed0d"]}
+{"body_b64":"bG9ybwAAAAAAAAAAAAAAAIqsuJwAAz8AAABMT1JPAAAAAgBzZgAAAgBzdgAAAgB2dgAAAAEABwANAAQAoeu16QEAAAAFAAAAAgBmcgACAHZ229jJyCYAAAABAAAARScAAABMT1JPAAAAAAEATEXbEwEAAAAFAAAAAgBmcgACAGZyjg8lUA4AAAA=","callback":6,"out":"fetch_body","room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69"}
+{"callback":6,"port":"fetch","room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","url":"https://dss.test/internal/documents/hibernate-h10/snapshot"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":6,"return":"storage.delete","value":true}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":7,"in":"alarm","unix_ms":1794019600118,"monotonic_ms":1794019600118}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":7,"port":"connections.list","args":[],"ws_ids":[]}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":7,"out":"alarm","status":200,"body_b64":"b2s="}
+{"body":{},"callback":6,"port":"fetch","room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","url":"https://dss.test/internal/documents/hibernate-h10/sync-content-updated"}
+{"body_b64":"eyJyZWFzb24iOiJsYXN0X2xlYXZlIn0=","callback":6,"out":"fetch_body","room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69"}
+{"callback":6,"port":"fetch","room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","url":"https://dss.test/internal/documents/hibernate-h10/interaction"}
+{"room":"54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69","callback":7,"out":"dump","accepted":0,"kv":[["DOCUMENT_ID","hibernate-h10"],["LAST_VERSION_VECTOR",[0]]],"kv_bytes":[["DOCUMENT_ID",{"bytes_b64":""}],["LAST_VERSION_VECTOR",{"bytes_b64":"AA=="}]],"sql":[{"id":"hibernate-h10","chunk":0,"data":{"bytes_b64":"bG9ybwAAAAAAAAAAAAAAAFMuDPwAAy8AAABMT1JPAAAAAgB2dgAAAAEAAgDnYslsAQAAAAUAAAACAGZyAAIAdnbb2MnIFgAAAAAAAAAAAAAA"}}],"d1":{"peer_user_map":[{"document_id":"hibernate-h10","peer_id":"11505988454902912663","user_id":"test-user","actor":null}],"blame":[]},"snapshots":[],"alarm":null,"marker":"103:54edb99b01b1b31e431947f19ffb259504ac9174fe5dbbde917d9421ebe6fd69"}

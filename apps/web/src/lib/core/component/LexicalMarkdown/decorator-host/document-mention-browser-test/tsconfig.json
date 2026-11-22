@@ -1,0 +1,24 @@
+{
+  "extends": "../../../../../../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": [
+      "node",
+      "vite-plugin-solid-svg/types-component-solid",
+      "vite/client",
+      "vite-plugin-solid-svg/types",
+      "wicg-file-system-access",
+      "@types/gtag.js",
+      "@types/facebook-pixel"
+    ]
+  },
+  "include": [
+    "*.ts",
+    "*.tsx",
+    "../native-document-card-host.test.ts",
+    "../../../../../../../src/**/*.d.ts",
+    "../../../../../../../../../packages/lexical-core/tests/document-reference-render-props.test.ts",
+    "../../component/core/StaticMarkdown.test.tsx"
+  ],
+  "exclude": []
+}

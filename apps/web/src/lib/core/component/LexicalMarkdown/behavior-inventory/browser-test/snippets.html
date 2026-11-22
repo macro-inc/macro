@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Source snippet host fixture</title>
+    <style>
+      body { margin: 0; padding: 24px; }
+      [role="textbox"] { border: 1px solid #777; min-height: 80px; padding: 12px; }
+      button { min-height: 44px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="body" role="textbox" aria-label="Body" aria-multiline="true" class="md"></div>
+      <button id="save">Save state</button>
+      <output id="live-state" hidden></output>
+      <output id="saved" hidden></output>
+      <div id="menus"></div>
+    </main>
+    <script type="module" src="./snippets-fixture.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,601 @@
+{
+  "schema": 1,
+  "source": {
+    "repo": "fuzz",
+    "seed": 19088743,
+    "path": "0",
+    "profile": "upstream"
+  },
+  "commands": [
+    {
+      "kind": "InsertLineBreak"
+    },
+    {
+      "kind": "InsertRawText",
+      "text": " 👩‍👩‍👧 "
+    },
+    {
+      "kind": "TextFromView",
+      "path": [
+        0,
+        1
+      ],
+      "text": " 👩‍👩‍👧aب ",
+      "anchor": 11,
+      "focus": 11,
+      "compositionEnd": false
+    },
+    {
+      "kind": "InsertRawText",
+      "text": "👩‍👩‍👧ب"
+    }
+  ],
+  "expected": [
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "linebreak",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0
+          ],
+          "offset": 1,
+          "type": "element"
+        },
+        "focus": {
+          "path": [
+            0
+          ],
+          "offset": 1,
+          "type": "element"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "\n",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "2"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "2"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            true
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "1",
+            "updated"
+          ],
+          [
+            "2",
+            "created"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "linebreak",
+                  "version": 1
+                },
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": " 👩‍👩‍👧 ",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            1
+          ],
+          "offset": 10,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0,
+            1
+          ],
+          "offset": 10,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "\n 👩‍👩‍👧 ",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "2"
+        },
+        {
+          "path": [
+            0,
+            1
+          ],
+          "key": "3"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "3",
+          "2"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            true
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "1",
+            "updated"
+          ],
+          [
+            "2",
+            "updated"
+          ],
+          [
+            "3",
+            "created"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "linebreak",
+                  "version": 1
+                },
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": " 👩‍👩‍👧aب ",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            1
+          ],
+          "offset": 11,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0,
+            1
+          ],
+          "offset": 11,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "\n 👩‍👩‍👧aب ",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "2"
+        },
+        {
+          "path": [
+            0,
+            1
+          ],
+          "key": "3"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "3"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            false
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [],
+        "mutations": [
+          [
+            "3",
+            "updated"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    },
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "linebreak",
+                  "version": 1
+                },
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": " 👩‍👩‍👧aب👩‍👩‍👧ب ",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0,
+            1
+          ],
+          "offset": 20,
+          "type": "text"
+        },
+        "focus": {
+          "path": [
+            0,
+            1
+          ],
+          "offset": 20,
+          "type": "text"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "\n 👩‍👩‍👧aب👩‍👩‍👧ب ",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        },
+        {
+          "path": [
+            0,
+            0
+          ],
+          "key": "2"
+        },
+        {
+          "path": [
+            0,
+            1
+          ],
+          "key": "3"
+        }
+      ],
+      "commit": {
+        "dirtyLeaves": [
+          "3",
+          "2"
+        ],
+        "dirtyElements": [
+          [
+            "1",
+            true
+          ],
+          [
+            "root",
+            true
+          ]
+        ],
+        "normalized": [
+          "3",
+          "4",
+          "5"
+        ],
+        "mutations": [
+          [
+            "1",
+            "updated"
+          ],
+          [
+            "2",
+            "updated"
+          ],
+          [
+            "3",
+            "updated"
+          ]
+        ],
+        "tags": []
+      },
+      "error": null
+    }
+  ],
+  "actual": {
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "linebreak",
+                "version": 1
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " 👩‍👩‍👧aب👩‍👩‍👧ب ",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "range",
+      "anchor": {
+        "path": [
+          0,
+          1
+        ],
+        "offset": 20,
+        "type": "text"
+      },
+      "focus": {
+        "path": [
+          0,
+          1
+        ],
+        "offset": 20,
+        "type": "text"
+      },
+      "format": 0,
+      "style": "",
+      "backward": false
+    },
+    "text": "\n 👩‍👩‍👧aب👩‍👩‍👧ب ",
+    "keys": [
+      {
+        "path": [],
+        "key": "root"
+      },
+      {
+        "path": [
+          0
+        ],
+        "key": "1"
+      },
+      {
+        "path": [
+          0,
+          0
+        ],
+        "key": "2"
+      },
+      {
+        "path": [
+          0,
+          1
+        ],
+        "key": "3"
+      }
+    ],
+    "commit": {
+      "dirtyLeaves": [
+        "3"
+      ],
+      "dirtyElements": [
+        [
+          "1",
+          true
+        ],
+        [
+          "root",
+          true
+        ]
+      ],
+      "normalized": [
+        "3",
+        "4",
+        "5"
+      ],
+      "mutations": [
+        [
+          "3",
+          "updated"
+        ],
+        [
+          "1",
+          "updated"
+        ]
+      ],
+      "tags": []
+    },
+    "error": null
+  }
+}

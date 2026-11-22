@@ -1,0 +1,38 @@
+//! Deterministic client synchronization. Hosts execute effects and supply both clocks.
+#![deny(missing_docs)]
+
+pub use sync_doc_id::SyncDocId;
+
+mod values;
+pub use values::*;
+mod config;
+pub use config::*;
+mod document;
+pub use document::*;
+mod snapshot_stats;
+pub use snapshot_stats::SnapshotStats;
+mod input;
+pub use input::*;
+mod output;
+pub use output::*;
+mod storage;
+pub use storage::*;
+mod wal;
+pub use wal::*;
+
+#[cfg(test)]
+mod test;
+
+mod connection;
+pub use connection::{Connection, Heartbeat};
+mod peers;
+pub use peers::*;
+
+mod core;
+pub use core::{BusyReason, Phase, SyncCore};
+
+mod presence;
+pub use presence::*;
+
+mod router;
+pub use router::*;

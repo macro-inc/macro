@@ -66,3 +66,28 @@ export function getMentionItemName(item: MentionItem): string {
       return item.data.name;
   }
 }
+
+export function getMentionItemLabelParts(item: MentionItem) {
+  return match(item)
+    .with({ kind: 'user' }, ({ data: { name, email } }) => ({
+      name: name || email,
+      detail: name && name !== email ? email : undefined,
+    }))
+    .with({ kind: 'entity', data: { type: 'crm_contact' } }, ({ data }) => ({
+      name: data.name || data.email,
+      detail: data.name && data.name !== data.email ? data.email : undefined,
+    }))
+    .with({ kind: 'agentSession' }, ({ data }) => ({
+      name: data.name || 'Agent session',
+      detail: data.bot?.name ? `@${data.bot.name}` : undefined,
+    }))
+    .with({ kind: 'bookingLink' }, ({ data }) => ({
+      name: data.title,
+      detail: `${data.durationMinutes} min · ${data.owner}`,
+    }))
+    .with({ kind: 'calendarEvent' }, ({ data }) => ({
+      name: data.title,
+      detail: data.when,
+    }))
+    .otherwise(() => ({ name: getMentionItemName(item), detail: undefined }));
+}

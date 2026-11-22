@@ -16,13 +16,28 @@ import {
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import type { DateMentionHostProp } from '../../decorator-host/date-mention-host';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { autoRegister } from '../../plugins';
 import { MentionTooltip } from './MentionTooltip';
 
 false && floatWithElement;
 
-export function DateMention(props: DateMentionDecoratorProps) {
+/**
+ * Source `importJSON` and `exportComponentProps` hand stored values over
+ * unchanged, so null or omitted fields reach this component. The shared
+ * formatter reads both fields and preserves the day fallback for absent labels.
+ */
+export type DateMentionUIProps = Omit<
+  DateMentionDecoratorProps,
+  'date' | 'displayFormat'
+> & {
+  date?: string | null;
+  displayFormat?: string | null;
+  mentionUuid?: string | null;
+} & DateMentionHostProp;
+
+export function DateMention(props: DateMentionUIProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
@@ -36,12 +51,22 @@ export function DateMention(props: DateMentionDecoratorProps) {
   );
 
   const isSelectedAsNode = () => {
+    if (props.host) return props.host.isSelected(props.key);
     const sel = selection();
     if (!sel) return false;
     return sel.type === 'node' && sel.nodeKeys.has(props.key);
   };
 
   const handleDateChange = (newDate: Date) => {
+    if (props.host) {
+      props.host.setDate(
+        props.key,
+        newDate.toISOString(),
+        formatRelativeDay(newDate)
+      );
+      setDatePickerOpen(false);
+      return;
+    }
     const editor = lexicalWrapper?.editor;
     if (!editor) return;
 
@@ -56,24 +81,31 @@ export function DateMention(props: DateMentionDecoratorProps) {
     setDatePickerOpen(false);
   };
 
-  if (editor) {
+  const onEnter = () => {
+    if (isSelectedAsNode()) {
+      setDatePickerOpen(true);
+      return true;
+    }
+    return false;
+  };
+  const onUpdate = () => {
+    if (!isSelectedAsNode()) {
+      setDatePickerOpen(false);
+    }
+  };
+  if (props.host) {
+    autoRegister(
+      props.host.registerNormalEnter(onEnter),
+      props.host.registerUpdateListener(onUpdate)
+    );
+  } else if (editor) {
     autoRegister(
       editor.registerCommand(
         KEY_ENTER_COMMAND,
-        () => {
-          if (isSelectedAsNode()) {
-            setDatePickerOpen(true);
-            return true;
-          }
-          return false;
-        },
+        onEnter,
         COMMAND_PRIORITY_NORMAL
       ),
-      editor.registerUpdateListener(() => {
-        if (!isSelectedAsNode()) {
-          setDatePickerOpen(false);
-        }
-      })
+      editor.registerUpdateListener(onUpdate)
     );
   }
 

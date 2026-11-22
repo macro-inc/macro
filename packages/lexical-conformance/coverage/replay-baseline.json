@@ -1,0 +1,621 @@
+{
+  "scope": "Historical replay output; CI still requires fresh runtime evidence",
+  "base": "b8a348d9015ad91292e3bd6d83a34244cb3cd3dd",
+  "inputs": "bd4b1a02d8775f3968880d3c41c89d999327d2e1b25e0b4e2b1f97b138161be6",
+  "logSHA256": "99557f2099b105817dd367badc9d986375b01915c49a0fffd0079d24709e7f5e",
+  "counts": {
+    "pass": 1367,
+    "fail": 0,
+    "ledger": 54
+  },
+  "before": 1803,
+  "pending": 1702,
+  "removed": [
+    {
+      "id": "S2:@lexical/code-core:$createCodeNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/code-core:CodeHighlightNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/code-core:CodeNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/hashtag:$createHashtagNode",
+      "fixture": "upstream/lexical-hashtag/18107136e9a3026c.json",
+      "test": "upstream::lexical-hashtag::LexicalHashtagNode tests > HashtagNode.exportJSON() should return and object conforming to the expected schema",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/hashtag:HashtagNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/internal/invariant:default",
+      "fixture": "upstream/lexical/1bcb536c66649d76.json",
+      "test": "upstream::lexical::Element-anchored selection on old parent (#6031) > cross-parent move > 'insertAfter' does not shift offset at removed index (boundary)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/link:$createAutoLinkNode",
+      "fixture": "upstream/lexical-core/e54617b5d9913a5b.json",
+      "test": "upstream::lexical-core::explicitly removed links > keeps an unlinked autolink URL inert after save and reload",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/link:$createLinkNode",
+      "fixture": "upstream/lexical-core/ecc71433055be23f.json",
+      "test": "upstream::lexical-core::$convertMentionToCard > splits a paragraph around a mention nested in an inline parent",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/link:$isLinkNode",
+      "fixture": "upstream/lexical-core/3afaa1d148e333ca.json",
+      "test": "upstream::lexical-core::explicitly removed links > exports literal text to external Markdown without internal tags or links",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/link:$toggleLink",
+      "fixture": "upstream/lexical-link/baafd2436692f00c.json",
+      "test": "upstream::lexical-link::LexicalLinkNode tests > $toggleLink adds link with embedded LineBreakNode",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/link:AutoLinkNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/link:LinkNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/link:formatUrl",
+      "fixture": "upstream/lexical-link/988f05f78862cc80.json",
+      "test": "upstream::lexical-link::formatUrl > should add https:// to URLs without protocols",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/list:$createListItemNode",
+      "fixture": "upstream/lexical-core/507b830ca55b28d2.json",
+      "test": "upstream::lexical-core::$convertMentionToCard > keeps list-item text before and after the converted mention in lists",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/list:$createListNode",
+      "fixture": "upstream/lexical-core/507b830ca55b28d2.json",
+      "test": "upstream::lexical-core::$convertMentionToCard > keeps list-item text before and after the converted mention in lists",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/list:$insertList",
+      "fixture": "upstream/lexical-list/422e167768b7a46c.json",
+      "test": "upstream::lexical-list::insertList > formatting empty list items",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/list:$isListItemNode",
+      "fixture": "upstream/lexical-core/5c1272d1439d0817.json",
+      "test": "upstream::lexical-core::images inside list items > keeps a numbered list in one list with its numbering",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/list:$isListNode",
+      "fixture": "upstream/lexical-core/507b830ca55b28d2.json",
+      "test": "upstream::lexical-core::$convertMentionToCard > keeps list-item text before and after the converted mention in lists",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/list:ListItemNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/list:ListNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/mark:$createMarkNode",
+      "fixture": "upstream/lexical-core/4c4fc3b5bd8604db.json",
+      "test": "upstream::lexical-core::xml serialization > highlight (mark) drops the comment-thread ids",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/mark:$isMarkNode",
+      "fixture": "upstream/lexical-link/d24c6c497142175e.json",
+      "test": "upstream::lexical-link::LexicalLinkNode tests > $toggleLink correctly removes link when textnode has children(like marknode)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/mark:$wrapSelectionInMarkNode",
+      "fixture": "upstream/lexical-mark/4ec1e591e7456bc2.json",
+      "test": "upstream::lexical-mark::LexicalMarkNode tests > $wrapSelectionInMarkNode > does not include block element nodes",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/mark:MarkNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/markdown:$convertFromMarkdownString",
+      "fixture": "upstream/lexical-core/acd1c54bfe679298.json",
+      "test": "upstream::lexical-core::account manager request card > falls back to an unknown mention for a payload that is not a grant id",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/markdown:$convertSelectionToMarkdownString",
+      "fixture": "upstream/lexical-core/192c795e59d041d0.json",
+      "test": "upstream::lexical-core::HTML text format Markdown transformers > serializes only the selected part of formatted text",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/markdown:$convertToMarkdownString",
+      "fixture": "upstream/lexical-core/b6cb8274f3a79c30.json",
+      "test": "upstream::lexical-core::account manager request card > round-trips the tag through a node holding only the grant id",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/overflow:OverflowNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/rich-text:$createHeadingNode",
+      "fixture": "upstream/lexical-core/6d97ef6ec4e17df6.json",
+      "test": "upstream::lexical-core::xml serialization > heading",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/rich-text:$createQuoteNode",
+      "fixture": "upstream/lexical-core/839334429fca9a6b.json",
+      "test": "upstream::lexical-core::xml serialization > blockquote",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/rich-text:$isHeadingNode",
+      "fixture": "upstream/lexical-rich-text/028019742fe36a34.json",
+      "test": "upstream::lexical-rich-text::Backspace at start of heading (#4359) > 'legacy merge still applies when previ…'",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/rich-text:$isQuoteNode",
+      "fixture": "upstream/lexical-core/038dce950ab6880d.json",
+      "test": "upstream::lexical-core::HTML blockquote transformer > imports multiline html blockquotes as quote nodes",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/rich-text:HeadingNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/rich-text:QuoteNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/table:$createTableCellNode",
+      "fixture": "upstream/lexical-core/de01726c1773cf2f.json",
+      "test": "upstream::lexical-core::date mentions inside table cells > round-trips a date mention appended to a cell",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/table:$createTableNode",
+      "fixture": "upstream/lexical-core/de01726c1773cf2f.json",
+      "test": "upstream::lexical-core::date mentions inside table cells > round-trips a date mention appended to a cell",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/table:$createTableRowNode",
+      "fixture": "upstream/lexical-core/de01726c1773cf2f.json",
+      "test": "upstream::lexical-core::date mentions inside table cells > round-trips a date mention appended to a cell",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/table:$isTableNode",
+      "fixture": "upstream/lexical-core/28ff952dbef8e998.json",
+      "test": "upstream::lexical-core::date mentions inside table cells > imports an internal date mention tag from a pipe-table cell",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/table:TableCellNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/table:TableNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/table:TableRowNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/utils:$dfs",
+      "fixture": "upstream/lexical-utils/48b7aec7de554ba8.json",
+      "test": "upstream::lexical-utils::LexicalNodeHelpers tests > DFS of empty ParagraphNode returns only itself",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/utils:$firstToLastIterator",
+      "fixture": "upstream/lexical-utils/3fb01df388bcbc15.json",
+      "test": "upstream::lexical-utils::LexicalNodeHelpers tests > dfs order > DFS from middle leaf node should only include that node",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/utils:$getNextSiblingOrParentSibling",
+      "fixture": "upstream/lexical-utils/2488e510b3fadee5.json",
+      "test": "upstream::lexical-utils::LexicalNodeHelpers tests > $getNextSiblingOrParentSibling",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/utils:$insertNodeIntoLeaf",
+      "fixture": "upstream/lexical-mark/de7f12f8ac2eb13b.json",
+      "test": "upstream::lexical-mark::LexicalMarkNode tests > $wrapSelectionInMarkNode > keeps decorator nodes inside an existing mark",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/utils:$lastToFirstIterator",
+      "fixture": "upstream/lexical-utils/3fb01df388bcbc15.json",
+      "test": "upstream::lexical-utils::LexicalNodeHelpers tests > dfs order > DFS from middle leaf node should only include that node",
+      "status": "pass"
+    },
+    {
+      "id": "S2:@lexical/utils:$reverseDfs",
+      "fixture": "upstream/lexical-utils/d1dcbf042f780e88.json",
+      "test": "upstream::lexical-utils::LexicalNodeHelpers tests > dfs order > Reverse DFS node order",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$addUpdateTag",
+      "fixture": "upstream/lexical/01009c7d7171cd66.json",
+      "test": "upstream::lexical::LexicalUpdateTags tests > $addUpdateTag and $hasUpdateTag work correctly",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$caretRangeFromSelection",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$comparePointCaretNext",
+      "fixture": "upstream/lexical/3f82a0e2fc50b135.json",
+      "test": "upstream::lexical::Regression #3181 > Point.isBefore edge case with mixed TextNode & ElementNode and matching descendants",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$createLineBreakNode",
+      "fixture": "upstream/lexical-core/778d1874d2f076b0.json",
+      "test": "upstream::lexical-core::xml serialization > paragraph with line break",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$createNodeSelection",
+      "fixture": "upstream/lexical/b6377053b5c5e574.json",
+      "test": "upstream::lexical::LexicalEditor tests > parseEditorState() > node selection > Parses the nodes of a stringified editor state",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$createParagraphNode",
+      "fixture": "upstream/lexical-core/f199da080b98bc3b.json",
+      "test": "upstream::lexical-core::expands between text into a block and collapses back into an inline paragraph",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$createRangeSelection",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$createTabNode",
+      "fixture": "upstream/lexical-core/d107c080d8b21520.json",
+      "test": "upstream::lexical-core::xml serialization > tab serializes minimally",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$createTextNode",
+      "fixture": "upstream/lexical-core/f199da080b98bc3b.json",
+      "test": "upstream::lexical-core::expands between text into a block and collapses back into an inline paragraph",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$getCaretInDirection",
+      "fixture": "upstream/lexical/3f82a0e2fc50b135.json",
+      "test": "upstream::lexical::Regression #3181 > Point.isBefore edge case with mixed TextNode & ElementNode and matching descendants",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$getCaretRange",
+      "fixture": "upstream/lexical-markdown/e3ef4e79557a5009.json",
+      "test": "upstream::lexical-markdown::$convertSelectionToMarkdownString > converts multi-paragraph selection to markdown",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$getCaretRangeInDirection",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$getChildCaret",
+      "fixture": "upstream/lexical/0864d99f170f4cc5.json",
+      "test": "upstream::lexical::traversals.md > Traversal Strategies > Adjacent Caret Traversals > $iterSiblings",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$getCommonAncestor",
+      "fixture": "upstream/lexical/58b4b6ecc3db7f09.json",
+      "test": "upstream::lexical::LexicalCaret > Ordering > $getCommonAncestor > listItem1 and listItem2->listItemText2 are siblings in listNode",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$getNodeByKey",
+      "fixture": "upstream/lexical-core/f199da080b98bc3b.json",
+      "test": "upstream::lexical-core::expands between text into a block and collapses back into an inline paragraph",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$getRoot",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$getSelection",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$getSiblingCaret",
+      "fixture": "upstream/lexical/0864d99f170f4cc5.json",
+      "test": "upstream::lexical::traversals.md > Traversal Strategies > Adjacent Caret Traversals > $iterSiblings",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$getTextPointCaret",
+      "fixture": "upstream/lexical-markdown/e3ef4e79557a5009.json",
+      "test": "upstream::lexical-markdown::$convertSelectionToMarkdownString > converts multi-paragraph selection to markdown",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$hasUpdateTag",
+      "fixture": "upstream/lexical/01009c7d7171cd66.json",
+      "test": "upstream::lexical::LexicalUpdateTags tests > $addUpdateTag and $hasUpdateTag work correctly",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$isChildCaret",
+      "fixture": "upstream/lexical/571004d62d9d2b0f.json",
+      "test": "upstream::lexical::traversals.md > Traversal Strategies > Depth First Caret Traversals > $iterNodesDepthFirst > includes only wholly included nodes",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$isElementNode",
+      "fixture": "upstream/lexical-core/3afaa1d148e333ca.json",
+      "test": "upstream::lexical-core::explicitly removed links > exports literal text to external Markdown without internal tags or links",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$isLineBreakNode",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$isNodeSelection",
+      "fixture": "upstream/lexical/e7b1bbdd631901da.json",
+      "test": "upstream::lexical::LexicalTextNode tests > selectNext()",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$isParagraphNode",
+      "fixture": "upstream/lexical-core/acd1c54bfe679298.json",
+      "test": "upstream::lexical-core::account manager request card > falls back to an unknown mention for a payload that is not a grant id",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$isRangeSelection",
+      "fixture": "upstream/lexical-link/d5b29cefb2feb7d6.json",
+      "test": "upstream::lexical-link::LexicalLinkNode tests > $toggleLink applies the title attribute when creating",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$isSiblingCaret",
+      "fixture": "upstream/lexical/c28bcc57e0adfd17.json",
+      "test": "upstream::lexical::LexicalCaret > Ordering > $getCommonAncestor > trivial node checks",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$isTabNode",
+      "fixture": "upstream/lexical-rich-text/18ab5b575b3c7062.json",
+      "test": "upstream::lexical-rich-text::LexicalTabNode tests > INSERT_TAB_COMMAND applies selection format and style to TabNode",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$isTextNode",
+      "fixture": "upstream/lexical-link/baafd2436692f00c.json",
+      "test": "upstream::lexical-link::LexicalLinkNode tests > $toggleLink adds link with embedded LineBreakNode",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$isTextPointCaret",
+      "fixture": "upstream/lexical/80b0ff5b8f78132a.json",
+      "test": "upstream::lexical::LexicalCaret > $caretRangeFromSelection > collapsed text point selection",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$isTokenOrSegmented",
+      "fixture": "upstream/lexical/5f49906e3d6726fa.json",
+      "test": "upstream::lexical::LexicalUtils tests > isTokenOrSegmented()",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$nodesOfType",
+      "fixture": "upstream/lexical-core/95ba3a5105aa5b39.json",
+      "test": "upstream::lexical-core::generated channel images > retains dimensions through parsing and message editing before image download",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$removeTextFromCaretRange",
+      "fixture": "upstream/lexical/b46086ea853d498e.json",
+      "test": "upstream::lexical::LexicalCaret > $removeTextFromCaretRange > multiple blocks > multiple text node selection > next first endOfNode second endOfNode",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$rewindSiblingCaret",
+      "fixture": "upstream/lexical/d7b6f744ff2e4ee4.json",
+      "test": "upstream::lexical::LexicalCaret > $removeTextFromCaretRange > single block > full text node biased selection > first node (next outside inside)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$selectAll",
+      "fixture": "upstream/lexical-link/baafd2436692f00c.json",
+      "test": "upstream::lexical-link::LexicalLinkNode tests > $toggleLink adds link with embedded LineBreakNode",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$setPointFromCaret",
+      "fixture": "upstream/lexical/8810a9361e62c691.json",
+      "test": "upstream::lexical::LexicalCaret > $removeTextFromCaretRange > single block > full text node biased selection > first node (next inside outside)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$setSelection",
+      "fixture": "upstream/lexical-link/a62c5b6af445d632.json",
+      "test": "upstream::lexical-link::LexicalLinkNode tests > $toggleLink removes link when selection is collapsed",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$setSelectionFromCaretRange",
+      "fixture": "upstream/lexical-code-prism/a419561323c8e9ec.json",
+      "test": "upstream::lexical-code-prism::LexicalCodeNode tests > Tabs > testing indent: >-li|ne1 => >--li|ne1 (backwards)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:$splitAtPointCaretNext",
+      "fixture": "upstream/lexical/bf1633203af89368.json",
+      "test": "upstream::lexical::$splitAtPointCaretNext > Does not split a TextNode at the beginning",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:ArtificialNode__DO_NOT_USE",
+      "fixture": "upstream/lexical-headless/96008bc6aae76f67.json",
+      "test": "upstream::lexical-headless::LexicalHeadlessEditor > can preserve selection for pending editor state (within update loop)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:LineBreakNode",
+      "fixture": "upstream/lexical-headless/96008bc6aae76f67.json",
+      "test": "upstream::lexical-headless::LexicalHeadlessEditor > can preserve selection for pending editor state (within update loop)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:ParagraphNode",
+      "fixture": "upstream/lexical-headless/96008bc6aae76f67.json",
+      "test": "upstream::lexical-headless::LexicalHeadlessEditor > can preserve selection for pending editor state (within update loop)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:RootNode",
+      "fixture": "upstream/lexical-headless/96008bc6aae76f67.json",
+      "test": "upstream::lexical-headless::LexicalHeadlessEditor > can preserve selection for pending editor state (within update loop)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:TabNode",
+      "fixture": "upstream/lexical-headless/96008bc6aae76f67.json",
+      "test": "upstream::lexical-headless::LexicalHeadlessEditor > can preserve selection for pending editor state (within update loop)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:TextNode",
+      "fixture": "upstream/lexical-headless/96008bc6aae76f67.json",
+      "test": "upstream::lexical-headless::LexicalHeadlessEditor > can preserve selection for pending editor state (within update loop)",
+      "status": "pass"
+    },
+    {
+      "id": "S2:lexical:getStyleObjectFromCSS",
+      "fixture": "upstream/lexical/292025b3710159c4.json",
+      "test": "upstream::lexical::setDOMStyle > parses CSS text into a style object",
+      "status": "pass"
+    },
+    {
+      "id": "S3:tf:CHECK_LIST",
+      "fixture": "upstream/lexical-core/ba10aa4cb8d30391.json",
+      "test": "upstream::lexical-core::lists inside table cells > round-trips a bullet list in a cell through internal markdown",
+      "status": "pass"
+    },
+    {
+      "id": "S3:tf:CODE",
+      "fixture": "upstream/lexical-core/781c77a9810d471e.json",
+      "test": "upstream::lexical-core::Markdown URL imports > keeps protected content inert: ```text\\nhttps://example.com\\n```",
+      "status": "pass"
+    },
+    {
+      "id": "S3:tf:HEADING",
+      "fixture": "upstream/lexical-core/038dce950ab6880d.json",
+      "test": "upstream::lexical-core::HTML blockquote transformer > imports multiline html blockquotes as quote nodes",
+      "status": "pass"
+    },
+    {
+      "id": "S3:tf:LINK",
+      "fixture": "upstream/lexical-core/1956e5a95c5824c3.json",
+      "test": "upstream::lexical-core::Markdown URL imports > does not nest links inside explicit Markdown or internal links",
+      "status": "pass"
+    },
+    {
+      "id": "S3:tf:ORDERED_LIST",
+      "fixture": "upstream/lexical-core/5c1272d1439d0817.json",
+      "test": "upstream::lexical-core::images inside list items > keeps a numbered list in one list with its numbering",
+      "status": "pass"
+    },
+    {
+      "id": "S3:tf:PRESERVE_LINES",
+      "fixture": "upstream/lexical-core/4dc56275d27ece72.json",
+      "test": "upstream::lexical-core::empty paragraphs in internal markdown > survives an export and import round trip: between paragraphs",
+      "status": "pass"
+    },
+    {
+      "id": "S3:tf:QUOTE",
+      "fixture": "upstream/lexical-core/5a3a0ff885df9ce3.json",
+      "test": "upstream::lexical-core::HTML blockquote transformer > exports imported html blockquotes as markdown blockquotes",
+      "status": "pass"
+    },
+    {
+      "id": "S3:tf:UNORDERED_LIST",
+      "fixture": "upstream/lexical-core/2a30346807da8c8e.json",
+      "test": "upstream::lexical-core::images inside list items > keeps an unindented image after a list outside the list",
+      "status": "pass"
+    }
+  ]
+}

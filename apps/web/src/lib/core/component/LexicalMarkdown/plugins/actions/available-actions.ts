@@ -1,5 +1,19 @@
 import type { Action } from './types';
 
+/** Source order is retained when an additional action replaces an existing ID. */
+export function mergeActions(
+  actions: readonly Action[],
+  additional: readonly Action[] = []
+): Action[] {
+  const merged = [...actions];
+  for (const override of additional) {
+    const index = merged.findIndex((action) => action.id === override.id);
+    if (index >= 0) merged[index] = override;
+    else merged.push(override);
+  }
+  return merged;
+}
+
 /** The slash-menu entries this editor offers, in their listed order. */
 export function availableActions(
   actions: readonly Action[],

@@ -15,7 +15,8 @@ External chats: [architecture](architecture/external-chats.md), its WhatsApp
 provider ([linked devices](architecture/whatsapp-linked-devices.md)) and the
 [External view walkthrough](agent-guide/external.md).
 
-Document sync: [DSS sync router](architecture/sync-router.md).
+Document sync: [client document sessions](architecture/document-session.md),
+[DSS sync router](architecture/sync-router.md).
 
 Email: [frontend architecture](architecture/email.md) and
 [backend composition and boundaries](architecture/email-backend.md).

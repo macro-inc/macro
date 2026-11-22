@@ -110,6 +110,7 @@ export class StaticFileService extends pulumi.ComponentResource {
         platform: args.platform,
         buildArgs: {
           SERVICE_NAME: 'static_file_service',
+          PACKAGE_NAME: 'static_file_service',
         },
         tags: this.tags,
       },

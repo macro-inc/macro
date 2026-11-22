@@ -175,6 +175,7 @@ describe('Slack import Fargate worker', () => {
   test('uses the worker binary and its own Doppler sync, not the DSS image/config', () => {
     expect(resource('awsx:ecr:Image').inputs.args).toEqual({
       SERVICE_NAME: 'slack_import_worker',
+      PACKAGE_NAME: 'slack_import_worker',
     });
     expect(resource('awsx:ecr:Repository').inputs.name).toBe(
       'slack-import-worker-dev'

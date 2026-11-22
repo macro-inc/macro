@@ -41,6 +41,10 @@ We own it now: change it here instead of patching rendered YAML in
 
 ## Gotchas
 
+- Select conditional job budgets with typed numeric expressions through
+  `Job::timeout_minutes`; literal budgets remain numbers, and expressions
+  still pass the ordinary reference and context checks.
+
 - Keep `LICENSE` and `NOTICE`; Apache-2.0 requires them for the derived code.
 - Every serialized field must be a real GitHub key; anything else renders YAML
   GitHub rejects.

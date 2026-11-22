@@ -1,0 +1,17 @@
+[package]
+description = "Checks that a vendored crate with its local feature off compiles from the same source tokens as its upstream release"
+edition = "2024"
+name = "xtask_loro_vendor"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "xtask_loro_vendor"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+quote = { workspace = true }
+rootcause = { workspace = true }
+syn = { workspace = true, features = ["full", "visit-mut", "extra-traits"] }
+toml = { workspace = true }

@@ -8,28 +8,37 @@ import {
 import { $createNodeSelection, $getNodeByKey, $setSelection } from 'lexical';
 import { useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../../context/LexicalWrapperContext';
+import type { PasteNodeHostProp } from '../../../decorator-host/paste-node-host';
 import { removeNodeAndRestoreSelection } from '../../../plugins/shared/removeNodeAndRestoreSelection';
 
 /**
  * Editor plumbing shared by the paste-node decorators: node selection and
  * the copy / convert / delete actions, independent of how the chip looks.
  */
-export function usePasteNode(props: PasteNodeDecoratorProps) {
+export function usePasteNode(
+  props: PasteNodeDecoratorProps & PasteNodeHostProp
+) {
   const wrapper = useContext(LexicalWrapperContext);
   const editor = () => wrapper?.editor;
   const selection = () => wrapper?.selection;
 
   const origin = (): PasteOrigin => props.origin ?? 'pasted';
 
-  const isEditable = () => editor()?.isEditable() ?? false;
+  const isEditable = () =>
+    props.host ? props.host.isEditable() : (editor()?.isEditable() ?? false);
 
   const isSelectedAsNode = () => {
+    if (props.host) return props.host.isSelected(props.key);
     const sel = selection();
     if (!sel) return false;
     return sel.type === 'node' && sel.nodeKeys.has(props.key);
   };
 
   const selectNode = () => {
+    if (props.host) {
+      props.host.selectNode(props.key);
+      return;
+    }
     const e = editor();
     if (!e?.isEditable()) return;
     e.update(() => {
@@ -40,6 +49,10 @@ export function usePasteNode(props: PasteNodeDecoratorProps) {
   };
 
   const convertToText = () => {
+    if (props.host) {
+      props.host.convertToText(props.key);
+      return;
+    }
     editor()?.update(() => {
       const node = $getNodeByKey(props.key);
       if (!$isPasteNode(node)) return false;
@@ -59,6 +72,10 @@ export function usePasteNode(props: PasteNodeDecoratorProps) {
   };
 
   const deleteNode = () => {
+    if (props.host) {
+      props.host.deleteNode(props.key);
+      return;
+    }
     const currentEditor = editor();
     if (!currentEditor) return;
     removeNodeAndRestoreSelection(currentEditor, props.key, $isPasteNode);

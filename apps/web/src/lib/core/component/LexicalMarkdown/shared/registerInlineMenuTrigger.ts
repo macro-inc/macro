@@ -6,6 +6,16 @@ export function registerInlineMenuTrigger(
   symbol: string,
   onTrigger: () => void
 ) {
+  return editor.registerRootListener(
+    createInlineMenuTriggerListener(symbol, onTrigger)
+  );
+}
+
+/** Shared DOM trigger state; model eligibility remains in each actual host. */
+export function createInlineMenuTriggerListener(
+  symbol: string,
+  onTrigger: () => void
+): (root: HTMLElement | null, previous: HTMLElement | null) => void {
   let handledKeyDown = false;
   const keyDown = (event: KeyboardEvent) => {
     handledKeyDown = event.key === symbol;
@@ -28,7 +38,7 @@ export function registerInlineMenuTrigger(
     }
   };
 
-  return editor.registerRootListener((root, previous) => {
+  return (root, previous) => {
     reset();
     if (previous) {
       previous.removeEventListener('keydown', keyDown);
@@ -41,5 +51,5 @@ export function registerInlineMenuTrigger(
       // Validate the caret before Lexical inserts the trigger character.
       root.addEventListener('beforeinput', beforeInput, true);
     }
-  });
+  };
 }

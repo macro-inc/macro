@@ -1,0 +1,24 @@
+[package]
+# Generated code (bebop) predates edition-2024 match ergonomics — `ref` binding
+# modifiers in inherited-reference patterns are a hard error there.
+edition = "2021"
+name = "sync_protocol"
+version = "0.1.0"
+publish = false
+
+[features]
+default = ["presence"]
+presence = ["dep:loro", "dep:loro-internal", "dep:rustc-hash", "dep:serde", "dep:postcard"]
+owned = []
+
+[dependencies]
+bebop.workspace = true
+thiserror.workspace = true
+loro = { workspace = true, optional = true }
+loro-internal = { workspace = true, optional = true }
+rustc-hash = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+postcard = { workspace = true, optional = true }
+
+[dev-dependencies]
+flate2.workspace = true

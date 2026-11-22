@@ -208,6 +208,7 @@ export class NotificationService extends pulumi.ComponentResource {
         platform,
         buildArgs: {
           SERVICE_NAME: 'notification_service',
+          PACKAGE_NAME: 'notification_service',
         },
         tags: this.tags,
       },

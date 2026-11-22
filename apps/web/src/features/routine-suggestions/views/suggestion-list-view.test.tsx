@@ -19,7 +19,18 @@ import {
   suggestionListView,
 } from './suggestion-list-view';
 
-vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
+vi.mock('@app/lib/analytics', () => ({
+  analytics: {
+    track: vi.fn(),
+    posthog: {
+      isFeatureEnabled: (key: string) => {
+        if (key !== 'rust-editor-model')
+          throw new Error('Unexpected analytics flag in this fixture');
+        return false;
+      },
+    },
+  },
+}));
 vi.mock(
   '@property/identifiers',
   async () => await vi.importActual('@property/identifiers')

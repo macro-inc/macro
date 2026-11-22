@@ -22,7 +22,7 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
     --mount=type=cache,target=/usr/local/cargo/git/db,sharing=shared \
     --mount=type=cache,target=/app/target,id=rust-target-dev-release,sharing=locked \
-    cargo build --release --bin convert_service \
+    cargo build --release --package convert_service --bin convert_service \
     && cargo strip \
     && cp /app/target/release/convert_service /app/svc
 

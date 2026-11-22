@@ -16,7 +16,18 @@ const device = vi.hoisted(() => ({ touch: false }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => device.touch,
 }));
-vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
+vi.mock('@app/lib/analytics', () => ({
+  analytics: {
+    track: vi.fn(),
+    posthog: {
+      isFeatureEnabled: (key: string) => {
+        if (key !== 'rust-editor-model')
+          throw new Error('Unexpected analytics flag in this fixture');
+        return false;
+      },
+    },
+  },
+}));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: true }),
 }));

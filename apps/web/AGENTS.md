@@ -1,7 +1,45 @@
 ## Development Commands
 
+- Keep decorator browser fixtures in `tsconfig.decorator-browser-tests.json`, outside the main web typecheck; check them after their actual WASM package has been built.
+
+- Read document action markdown from the body's model, preferring its native runtime when present; preserve external-export bytes, and keep Source's prompt builder behaviour: no body editor yet reads as empty, and a model is read whether or not its view is attached.
+
+- Grant `local-network-access` in fresh Chromium contexts for the local HTTPS preview before waiting for document initialization; a blocked WebSocket is a harness failure.
+
+- Install the native Markdown Tab route with the body overlay lifecycle so the shared Key(Tab) indentation policy runs instead of the portable InsertTab fallback; retain Code and table key priorities.
+
+- Share checklist bar markup through TaskListBar and real contact/task queries through task-list-facts; keep planning in the Source renderer or native producer and pass only raw Date observations across the native facts boundary. Keep the native metadata host session-owned across visual remounts, reject a second host for that session, and defer facts inputs until after the construction-time observer returns and the actual Initialize readiness fence opens.
+
+- Match the native body Apple/Other view OS to Macro IS_MAC while retaining the separate iOS/Android composition priorities; generic history and Select All shortcuts use Lexical navigator.platform detection.
+
+- Share native inline-search subscriptions across menus while preserving each controller kind, ordered equal callbacks, local UI resets, generation readiness and the actual CRITICAL Enter scope. Hide action rows until their native handler or document-owned request callback is installed, and check that capability before removing search text.
+- Anchor native Database creation to the entry-correlated Database result; recheck its original generation and Await across service calls, and untrack failed insertions without deleting the created entity. Validate slash insertion with `editing/database-browser-test`.
+- Subscribe to native Root-transform version errors through the body overlay lifecycle; retain newer document content read-only for every access level without sync readiness, and show the shared Source error description without closing its selection/copy runtime.
+- Keep native creation callbacks in a per-popover operation FIFO bound to their originating view/session generation; retain main-commit evidence separately from logical placeholder state, keep mention tracking outside the queue, and gate app activation on actual owner-local Await delivery and matched native artifacts.
+- Install block-decorator arrow stopping through registerNativeBlockNavigation and its fixed native role; measure only its issued block and current DOM caret, preserving generic Code KeyDown before arrow-specific handlers and Core fallthrough afterward.
+- Share floating-format markup through FormatMenuHost; retain actual Source wrapper/plugin registrations and require a qualified published-state observation before native metadata drives the menu.
+
+- Wait for an acknowledged native view generation before initial overlay queries; retire and report an unavailable optional overlay without failing document startup.
+
+- Dispatch native application commands a reader can reach (menu search close, mention preview collapse, diff accept/reject, checklist filters) through `dispatchApplicationCommandIfSessionEdit` or `dispatchApplicationCommandSettledIfSessionEdit`: it checks actual Session access at admission, and a ReadOnly refusal is a fatal session error that closes the editor.
+
+- Validate native mention provider wiring with the shared menu and real settled input; preserve Source section/row order and View all, REMOVE before tracking, and current model selection after tracking. Build date payloads only inside admitted SessionEdit factories after search removal; retain generation, access and retirement fences. Keep remaining kinds and live-service browser coverage explicit.
+
+- Preserve Source call-expression order at overlay host seams: capture initial dependencies inside the async action and use lazy payload builders when a callee getter must run before payload getters.
+
+- Install native body pointer capabilities through the additive `installOverlays` hook with the live canEdit accessor; verify checkbox, list-swipe, block-gap and long-press gestures with `LexicalMarkdown/editing/browser-test`, and shared block handles with `editing/drag-browser-test`, including current Session admission and listener remount.
+- Validate native table border controls with `LexicalMarkdown/editing/table-hover-browser-test`; keep picker, resize/touch and history epochs separate, and retire only the table scope when a later authoritative facts query fails.
+
+- Keep dev response middleware single-install per response across reloads, and parse terminal inline source-map comments without a regular expression over the complete generated module.
+
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
+- Keep generated Gradle/Tauri output directories out of Vite file watching to avoid exhausting host watchers.
+- Keep installs, dependency-cache cleanup, and additional Vite/Vitest instances out of a worktree with a live preview; use a disposable copy with independent node_modules and caches.
+- Build performance bundles with `MODE=production` and `DEV=false`; select local static transport with both `VITE_LOCAL_SERVERS=ALL` and `VITE_LOCAL_BACKEND_ORIGIN`, and retain rejection controls for partial-service and non-build proxy configurations.
+- Pin the disposable checkout path in build and validation wrappers before launching tools so a working-directory mistake cannot target the live preview.
+- Build missing document-session WASM from source in the isolated checkout with `just -f apps/web/justfile build-document-session-wasm` before treating web checks as blocked; preserve the task's Cargo job limit and keep the artifact stable while tests read it.
+- Keep native document sessions in `wasm/` without compatibility/foreign-node features; use the explicit `build-document-session-compat-wasm` output in `wasm-compat/` for the compatibility host, and never mix their glue or declarations.
 - `bun run test` keeps a module cache in `.cache/vitest-modules` that keeps resolved import paths across a rename: delete that directory when tests fail with `Cannot find module` naming a file's old path.
 - `bun run check`: check generated entity catalogs, cache contracts, TypeScript, and Biome; `bun run check-entity-icons` runs the catalog guard and generator regression tests.
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
@@ -179,6 +217,23 @@ several people in separate browser profiles: `just test-channels-e2e <instance>`
 not on pull requests; run it on a branch by hand
 (`gh workflow run channels_e2e.yml --ref <branch>`).
 
+- Keep native document editing and the public runtime unavailable until the actual Initialize projection; retain private cleanup ownership during loading and surface initialization errors through the existing error chrome.
+
+Require the maintained [six-step native preview install check](scripts/editor-live-check/README.md) before and after every native preview installation, including committed delivery and fresh-context common-block JSON/ID/DOM equality.
+
+Verify Await ownership with the actual peer plugin and parsed stored state in `LexicalMarkdown/decorator-host/peer-ownership-source.test.ts`; distinguish the Created listener from the root-sensitive initialization command and preserve the ownerless fallback.
+
+Only the document body selects the native engine. Titles, comment editors,
+composers and `StaticMarkdown` remain upstream Lexical. Native body hosts share
+`EditorEngineProvider` and `EditorEngineBoundary`
+from `src/lib/core/document-session/editor-engine.tsx`. Wrap only native editor
+constructors in the readiness boundary, never shell chrome or routes, and retain the cached boot engine choice; construct synchronous handles only after the shared
+module is ready. See that directory's README for state and browser checks.
+Shared and flag-off code never statically imports `@macro-inc/lexical-wasm-view`
+or the session ABI: the native runtime brings native capabilities (such as its pin
+store), and `SessionMarkdownEditor` is the one lazy boundary. `vite.base.ts`'s
+`native-editor-stays-lazy` fails a production build that breaks this.
+
 `just test-functional` builds a production-like bundle of its fixtures and runs
 Playwright against it, not a dev server: each page otherwise fetches thousands of
 modules through the test's own routes, which limits how many tests can run at
@@ -196,6 +251,15 @@ Call `initializeLexical()` before mounting isolated editor fixtures so decorator
 ID-only user mention rendering, name lookup failure, and composer save/reopen
 are covered on desktop/tablet/phone by `user-mentions.browser.e2e.ts` in the
 LexicalMarkdown core browser suite (see its README).
+
+Run document engine parity from an independent checkout using
+`src/features/block-md/browser-test/parity/README.md`; missing compat, saved-state
+or full accessibility comparisons must remain blocked.
+
+Source inventory and real-plugin editor regressions live in
+`src/lib/core/component/LexicalMarkdown/behavior-inventory/README.md`; its static
+browser fixture owns its build and browser. Source-site counts and directly
+importing tests do not establish complete behavioral or engine parity coverage.
 
 During iterative visual tweaks, use focused browser verification; defer full typechecks and CI checks until the batch is ready or the user requests them.
 
@@ -309,6 +373,64 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Keep shared mention, image, equation and horizontal-rule components on
+`DecoratorHost`; preserve the source host's command order, transaction boundaries
+and cached media props.
+Bind image and video actions to the mounted node generation and decorator revision. Route notifications from the real upload owner by media kind, generation and local URL.
+Open native image/video file dialogs through the surface upload controller; recheck the mounted generation and editability on file selection, use the eventual model selection, and retire pending dialogs on disposal.
+Classify native inline image and video clipboard files by the same extension lists as Source. Send them through the shared static-file provider. Publish completion only after native admission matches the local source and keep the loaded preview mounted.
+Equation decorators request selection and equation capabilities. Bind the actual view before opening an insertion menu, preserve retained menu callbacks after local editability changes, and route updates and insertions through ordinary SessionEdit admission.
+Establish a real Source decorator host before StaticMarkdown builds its eager
+DOM tree; preserve its inherited Lexical wrapper instead of native host keys.
+Keep the floating link controller and markup on `LinkMenuHost`; its Source
+adapter retains PluginManager ownership and HIGH Escape/CRITICAL Enter order.
+Keep the table size picker on `TablePickerHost`; its Source adapter retains
+PluginManager ownership, string dimensions and no-header insertion.
+Open task/document composers through the actual split manager and typed creation callbacks; retain the Source editor, synchronous start/failure dispatch, mention-tracking order and lazy replacement construction. Verify completed raw editor stages in `decorator-host/creation-browser-test`; an open request is not native insertion evidence.
+Keep the GIF Source commit synchronous; await only native commit promises, check the originating upload request before closing a menu, and mark uploaded-file ownership from actual main commit evidence before consume can throw.
+Keep GIF upload state in the shared `GifMenuHost` controller and preserve its
+Source capture, dirty cancellation, root identity and synchronous commit result.
+Assemble mention hosts at the shared controller's original initialization point;
+capture Source selection handlers once while root/close reads stay dynamic.
+Keep the tags menu on `TagsMenuHost` (Lexical and native adapters); native insertion settles search removal before `group-a.insert-tag-mention`, and a second `#` while open closes the search as Source does.
+Keep emoji insertion as Source REMOVE then INSERT_TEXT after usage recording;
+preserve the existing enclosed-shortcode transform's editor lifetime. The native
+emoji host settles `group-a.search-remove` before `group-b.insert-text`.
+Keep snippet fetching lazy in the real Source command payload; shared analytics
+runs before host dispatch and the snippet plugin retains async insertion policy.
+The native snippet host sends `group-a.snippet-insert`, fetches on the model's
+`group-a.snippet-request` and answers `group-a.snippet-resolve-source` (null clears).
+Give every mention kind a `handle*WithInsertion` in `mentionHandlers.ts`, so the
+Source and native `@` hosts share tracking, routine sharing and payloads; Source
+inserts return void, so its handlers add no await.
+Run the behavior-inventory link browser checks and compare raw DOM/JSON before
+and after a host extraction; Source preservation alone does not establish native acceptance.
+Register attached Source roots through `createLexicalWrapper`'s actual root
+listener so native selection projection preserves nested editor ownership.
+The mention/image/equation backend-free source interaction check is
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/decorator-host/browser-test/playwright.config.ts`.
+Compare its raw model and DOM captures before and after host refactors in all
+three engines; source results do not establish native binding acceptance.
+Bind native decorators through the initialized component registry and typed props projectors in `decorator-host/native-adapter.ts`; supply only real host capabilities and reject incomplete full-host requests, keeping model nodes and observer lifetime metadata authoritative.
+Publish a fresh Source component closure for each uncached native view-node update inside the retained Provider and Portal; let actual native render revisions preserve cached captured props before the adapter runs.
+Bind user mentions through `native-user-mention-views` with the real generation-bound `native-user-mention-host`, committed selection and current queued SessionEdit admission; dispose its context with the view and use `decorator-host/mention-browser-test` for raw Source/native controls.
+Merge the actual horizontal-rule leaf into the complete `registerMacroViews`
+record; preserve its missing-component checks rather than supplying placeholders.
+Run `native-horizontal-rule.test.ts` against an own-source document-session WASM
+build for selection, admitted deletion and sibling component disposal checks;
+this focused host check does not establish complete Macro registry acceptance.
+Assert the rule's selected outline and remove control after selection-only
+commits without hover, including after a sibling component is disposed.
+
+Keep document-reference Source UI behind the actual narrow mention/card hosts; preserve published selection, Normal Enter timing, preview owner/cache and Source transaction tags when binding native views.
+
+Booking decorators preserve their Source fallback through a narrow host; use published selection, real Normal Enter and generation-bound queued label updates, and qualify Source bytes in `decorator-host/booking-browser-test` when changing the native binding.
+
+Contact decorators use a narrow published-selection/Normal-Enter host; preserve synchronous null-command dispatch, pending-versus-published timing and disposal, and keep raw metadata failures separate from explicit Source-export reimport cohorts in `decorator-host/contact-browser-test`.
+Preserve Snapshot’s captured Source editor, Normal Enter cleanup and Snapshot-only removal predicate through its narrow host; compare literal before/after captures with `decorator-host/interactive-browser-test/playwright.config.ts` when changing the native binding.
+Route PR query enrichment through its narrow host with the Source history, DOM-selection and scroll tags; preserve the public node payload and query/preview UI. Verify PR and Snapshot raw pairs in `decorator-host/reference-browser-test`.
+Selection-only chips may receive a narrow `DecoratorSelectionHost`; preserve their actual LexicalWrapper selection fallback when it is absent. Verify OFF bytes, import-matched native DOM/JSON and actual selection with `decorator-host/selection-browser-test/playwright.config.ts` in all three engines; this fixture is not the complete application registry.
+Prove Source-admitted decorator values through actual parse and mounted controls before widening real UI inputs; keep public node props unchanged and never coerce inputs through an unchecked registry type. The Magic control lives in `decorator-host/magic-source-browser-test`.
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: while loading, the card draws its
 header with the question (the card's name, so it wraps as it will) above a body
@@ -676,6 +798,7 @@ empty quotes and selections within a quote on desktop, tablet, and phone.
 Selections across adjacent quotes stay quoted; ranges containing unquoted blocks
 retain normal paste behavior.
 Keep pasted paragraphs quoted through the shared clipboard insertion command.
+Keep native file-paste facts limited to file work; the view captures Shift for typed paste intent without changing rich MIME precedence.
 
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
@@ -1658,6 +1781,22 @@ and checks that both appear in the output. Without them, Vite leaves the
 loader's relative imports unchanged and Tauri serves HTML for the missing
 module, so that file type fails to open on desktop.
 
+The optional document-session package uses the document-session-wasm Cargo profile
+and a Binaryen convergence pass. Treat 2,200,000 Brotli bytes as a soft ceiling;
+retain measured speed gains and make size reductions only without speed loss.
+When the immutable engine flag is ON, start the shared streaming preload at app
+boot without blocking first paint; gate only editor-building subtrees.
+Require startup p95 <50ms and document-open p95 no slower than the current app.
+Flag-off builds keep the Loro preload.
+
+Use the cached boot engine selection for editor construction; require an app
+reload to change engines and do not reread a later flag value in document loaders.
+With the flag on, only the document body mounts the native editor
+(`RustMarkdownEditor`); `lexical`/`@lexical/*` imports always resolve to upstream,
+so every other editor keeps upstream Lexical. Reuse
+account/epoch-fenced metadata for offline opens; fetch fresh reconnect credentials
+and invalidate that epoch before logout clearing.
+
 ## Videos stay out of native bundles
 
 Vite writes imported videos (`.mp4`, `.webm`, `.mov`) to `dist/web-hosted/`,
@@ -2046,6 +2185,8 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
 
 ### Tracing
 
+- Keep native document loading active while its sync core schedules reconnects; only a terminal connection failure or attach error may end initial-projection readiness. Do not race its retry budget with a separate host deadline. Route document cached snapshots through the ordinary native CachedS3 seed input and let native recovery choose the winning source; never hydrate cached JSON with SetState.
+
 - Instrument loading with the flow API in the `instrumentation` skill; read the
   traces with the [observability guide](../../docs/agent-guide/observability.md#web-performance-traces).
   Tracing observes readiness; never drive app behavior from trace callbacks.
@@ -2065,7 +2206,7 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   (the universal-input browser suite checks the exported traces).
 - Cancel the form-submit measurement on teardown but let its in-flight save
   finish; late completion must not scroll or measure another view.
-- Runtime resource samples and typing bursts use the `perf` class decision
+- Runtime resource samples, editor performance and typing bursts use the `perf` class decision
   (`Telemetry.config.sampled('perf')`) and the shared UI-operation observer: no
   second observer, no per-key frame sampling, no listeners for unsampled users. Typing surfaces come from
   static `data-input-surface` categories on editor/field owners, never caller
@@ -2078,6 +2219,8 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   dynamic object spread); a spread makes a selection change revisit every
   unrelated layout input. Profile with the
   [entity collection fixture](src/features/entity/browser-test/README.md).
+
+Keep `dev-probes` out of production native feature graphs; opt into it only for preview/test seals and run `scripts/native-editor-features.test.ts` when changing that guard.
 
 ### Passwords
 

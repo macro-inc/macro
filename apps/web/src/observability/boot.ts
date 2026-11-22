@@ -1,5 +1,6 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { beginInteraction } from './flow';
+import { perfMark } from './perf-marks';
 import type { UiOperationOutcome } from './ui-operation';
 
 let started = false;
@@ -156,4 +157,5 @@ function reconstructBoot(
       boot.setAttr(`boot.resource.${kind}.${metric}`, value);
   }
   boot.setAttr('boot.outcome', outcome);
+  perfMark('boot.interactive', { outcome }, end);
 }

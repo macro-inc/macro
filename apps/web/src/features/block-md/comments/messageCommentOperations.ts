@@ -79,6 +79,8 @@ export function useCreateMessageComment(): MessageCommentOperations['createComme
     editor?.dispatchCommand(COMMIT_COMMENT_MARK_COMMAND, {
       markId: anchorId,
     });
+    if (!editor && state.editor.md.commentDraft?.current() === anchorId)
+      state.editor.md.commentDraft.commit(anchorId);
     deleteNewComments();
     return response;
   });

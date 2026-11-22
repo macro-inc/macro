@@ -1,18 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
-import {
-  $computeTableMap,
-  $isTableCellNode,
-  $isTableRowNode,
-  getDOMCellFromTarget,
-} from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
-import {
-  $getNearestNodeFromDOMNode,
-  isHTMLElement,
-  type LexicalEditor,
-} from 'lexical';
 import {
   createEffect,
   createSignal,
@@ -21,14 +10,17 @@ import {
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import {
-  $deleteTableAtHover,
-  $selectionDeleteExtent,
-} from '../../plugins/tables/tableDelete';
+import { createLexicalTableDeleteHost } from '../../editing/overlay-hosts/lexical-table-delete';
+import type {
+  TableDeleteAxis,
+  TableDeleteHost,
+  TableDeletePixels,
+} from '../../editing/overlay-hosts/table-delete';
+import type { TableInsertHit } from '../../editing/overlay-hosts/table-insert';
 import { tableColumnResizeEdge } from './TableCellResizer';
 
-type DeleteTarget = {
-  cellElem: HTMLElement;
+type DeleteTarget<Hit> = TableDeletePixels & {
+  cell: Hit;
   cellLeft: number;
   cellRight: number;
   cellTop: number;
@@ -41,13 +33,6 @@ type DeleteTarget = {
   // Pointer proximity to the border each button sits on.
   nearTop: boolean;
   nearLeft: boolean;
-  // Expanded to the table selection when it covers the hovered row/column.
-  deleteRowTop: number;
-  deleteRowBottom: number;
-  deleteColLeft: number;
-  deleteColRight: number;
-  selectedRowCount: number;
-  selectedColumnCount: number;
 };
 
 // How far (px) inside the table's top/left border the pointer still counts
@@ -57,76 +42,18 @@ const EDGE_PROXIMITY_PX = 20;
 const BUTTON_CLASS =
   'fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-failure hover:bg-failure hover:text-surface';
 
-function readSelectionDeletePixels(
-  editor: LexicalEditor,
-  cellElem: HTMLElement,
-  cellRect: DOMRect
-): Pick<
-  DeleteTarget,
-  | 'deleteRowTop'
-  | 'deleteRowBottom'
-  | 'deleteColLeft'
-  | 'deleteColRight'
-  | 'selectedRowCount'
-  | 'selectedColumnCount'
-> {
-  const fallback = {
-    deleteRowTop: cellRect.top,
-    deleteRowBottom: cellRect.bottom,
-    deleteColLeft: cellRect.left,
-    deleteColRight: cellRect.right,
-    selectedRowCount: 1,
-    selectedColumnCount: 1,
-  };
-  return editor.read(() => {
-    const cellNode = $getNearestNodeFromDOMNode(cellElem);
-    if (!$isTableCellNode(cellNode) || !cellNode.isAttached()) return fallback;
-    const extent = $selectionDeleteExtent(cellNode);
-    if (!extent) return fallback;
-
-    const next = { ...fallback };
-    if (extent.expandRows) {
-      const minRowNode = extent.table.getChildAtIndex(extent.minRow);
-      const maxRowNode = extent.table.getChildAtIndex(extent.maxRow);
-      const minEl =
-        minRowNode && $isTableRowNode(minRowNode)
-          ? editor.getElementByKey(minRowNode.getKey())
-          : null;
-      const maxEl =
-        maxRowNode && $isTableRowNode(maxRowNode)
-          ? editor.getElementByKey(maxRowNode.getKey())
-          : null;
-      if (minEl && maxEl) {
-        const minR = minEl.getBoundingClientRect();
-        const maxR = maxEl.getBoundingClientRect();
-        next.deleteRowTop = Math.min(minR.top, maxR.top);
-        next.deleteRowBottom = Math.max(minR.bottom, maxR.bottom);
-        next.selectedRowCount = extent.maxRow - extent.minRow + 1;
-      }
-    }
-    if (extent.expandColumns) {
-      const [map, pos] = $computeTableMap(extent.table, cellNode, cellNode);
-      const minCell = map[pos.startRow]?.[extent.minColumn]?.cell;
-      const maxCell = map[pos.startRow]?.[extent.maxColumn]?.cell;
-      const minEl = minCell ? editor.getElementByKey(minCell.getKey()) : null;
-      const maxEl = maxCell ? editor.getElementByKey(maxCell.getKey()) : null;
-      if (minEl && maxEl) {
-        const minR = minEl.getBoundingClientRect();
-        const maxR = maxEl.getBoundingClientRect();
-        next.deleteColLeft = Math.min(minR.left, maxR.left);
-        next.deleteColRight = Math.max(minR.right, maxR.right);
-        next.selectedColumnCount = extent.maxColumn - extent.minColumn + 1;
-      }
-    }
-    return next;
-  });
-}
-
 export function TableDeleteButtons() {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = () => lexicalWrapper?.editor;
+  return (
+    <HostedTableDeleteButtons host={createLexicalTableDeleteHost(editor)} />
+  );
+}
 
-  const [target, setTarget] = createSignal<DeleteTarget>();
+export function HostedTableDeleteButtons<Hit extends TableInsertHit>(props: {
+  host: TableDeleteHost<Hit>;
+}) {
+  const [target, setTarget] = createSignal<DeleteTarget<Hit>>();
   const [hovered, setHovered] = createSignal<'row' | 'column' | 'table'>();
 
   const clear = () => {
@@ -144,16 +71,14 @@ export function TableDeleteButtons() {
 
   const onPointerMove = createCallback((event: PointerEvent) => {
     if (tableColumnResizeEdge()) return;
-    const eventTarget = event.target;
-    if (!editor() || !isHTMLElement(eventTarget)) return;
+    const cell = props.host.cellFromTarget(event.target);
+    if (cell === null) return;
+    if (!cell) return clear();
 
-    const domCell = getDOMCellFromTarget(eventTarget);
-    if (!domCell) return clear();
-
-    const tableElem = domCell.elem.closest('table');
+    const tableElem = cell.element.closest('table');
     if (!tableElem) return clear();
 
-    const rect = domCell.elem.getBoundingClientRect();
+    const rect = cell.element.getBoundingClientRect();
     const tableRect = tableElem.getBoundingClientRect();
     const wrapperRect = tableElem
       .closest('.md-table-scrollable-wrapper')
@@ -164,20 +89,10 @@ export function TableDeleteButtons() {
     const nearLeft = event.clientX - tableLeft <= EDGE_PROXIMITY_PX;
     if (!nearTop && !nearLeft) return clear();
 
-    const currentEditor = editor();
-    const selectionPixels = currentEditor
-      ? readSelectionDeletePixels(currentEditor, domCell.elem, rect)
-      : {
-          deleteRowTop: rect.top,
-          deleteRowBottom: rect.bottom,
-          deleteColLeft: rect.left,
-          deleteColRight: rect.right,
-          selectedRowCount: 1,
-          selectedColumnCount: 1,
-        };
+    const selectionPixels = props.host.selectionPixels(cell, rect);
 
     setTarget({
-      cellElem: domCell.elem,
+      cell,
       cellLeft: rect.left,
       cellRight: rect.right,
       cellTop: rect.top,
@@ -192,41 +107,26 @@ export function TableDeleteButtons() {
     });
   });
 
-  const deleteAt = createCallback((type: 'row' | 'column' | 'table') => {
-    const currentTarget = target();
-    const currentEditor = editor();
-    if (!currentTarget || !currentEditor) return;
-
-    currentEditor.update(() => {
-      const cellNode = $getNearestNodeFromDOMNode(currentTarget.cellElem);
-      if (!$isTableCellNode(cellNode) || !cellNode.isAttached()) return;
-      $deleteTableAtHover(cellNode, type);
-    });
-
+  const deleteAt = createCallback((type: TableDeleteAxis) => {
+    const current = target();
+    if (!current || props.host.deleteAt(current.cell, type) === 'keep-target')
+      return;
     setHovered(undefined);
     setTarget(undefined);
   });
 
-  const removeRootListener = editor()?.registerRootListener(
-    (rootElement, prevRootElement) => {
-      prevRootElement?.removeEventListener('pointermove', onPointerMove);
-      rootElement?.addEventListener('pointermove', onPointerMove);
-    }
-  );
+  const removeRootListener = props.host.registerRoot(onPointerMove);
 
   // Positions go stale on any scroll; just hide.
   const onScroll = () => {
     setTarget(undefined);
     setHovered(undefined);
   };
-  document.addEventListener('scroll', onScroll, {
-    capture: true,
-    passive: true,
-  });
+  const removeScrollListener = props.host.registerScroll(onScroll);
 
   onCleanup(() => {
     removeRootListener?.();
-    document.removeEventListener('scroll', onScroll, { capture: true });
+    removeScrollListener();
   });
 
   const onButtonLeave = () => {

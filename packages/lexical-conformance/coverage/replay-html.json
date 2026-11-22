@@ -1,0 +1,21 @@
+{
+  "scope": "Historical replay output; CI still requires fresh runtime evidence",
+  "base": "958540be17c",
+  "inputs": "411c38c37bd04500ca03cf5629d892ff3f692fb981f760723b0dbe7135d67358",
+  "logSHA256": "9efa568d9f0a6953cdfd6df8dd75e1761a444e6268a7f4f38b742e74bbaea4b8",
+  "counts": {
+    "pass": 1371,
+    "fail": 0,
+    "ledger": 50
+  },
+  "before": 1702,
+  "pending": 1701,
+  "removed": [
+    {
+      "id": "S2:@lexical/html:$generateHtmlFromNodes",
+      "fixture": "upstream/lexical-html/9a1db01ccb21deac.json",
+      "test": "upstream::lexical-html::HTML > [Lexical -> HTML]: Default selection (undefined) should serialize entire editor state",
+      "status": "pass"
+    }
+  ]
+}

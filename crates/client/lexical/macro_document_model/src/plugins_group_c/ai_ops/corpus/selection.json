@@ -1,0 +1,800 @@
+{
+  "evidence": "w-ai-generate/source-controls/ai-table-20261112T1901/ai-table.json sha256 0504e75ae6d4a2ebd713fe01f169c00bdab4a332630190e3da3bf6a5e9bd789d",
+  "seed": {
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Alpha beta gamma",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "JQtE8fpd"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "7c_pnujF"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Second line",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "qwMP3FVK"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "K3gaRNnw"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "detail": 0,
+                          "format": 0,
+                          "mode": "normal",
+                          "style": "",
+                          "text": "h1",
+                          "type": "text",
+                          "version": 1,
+                          "$": {
+                            "id": "9R_2gePZ"
+                          }
+                        }
+                      ],
+                      "direction": null,
+                      "format": "",
+                      "indent": 0,
+                      "type": "paragraph",
+                      "version": 1,
+                      "$": {
+                        "id": "-Bifn7hp"
+                      },
+                      "textFormat": 0,
+                      "textStyle": ""
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "tablecell",
+                  "version": 1,
+                  "$": {
+                    "id": "N-uBJP6Q"
+                  },
+                  "backgroundColor": null,
+                  "colSpan": 1,
+                  "headerState": 1,
+                  "rowSpan": 1
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "detail": 0,
+                          "format": 0,
+                          "mode": "normal",
+                          "style": "",
+                          "text": "h2",
+                          "type": "text",
+                          "version": 1,
+                          "$": {
+                            "id": "7HnBnb8H"
+                          }
+                        }
+                      ],
+                      "direction": null,
+                      "format": "",
+                      "indent": 0,
+                      "type": "paragraph",
+                      "version": 1,
+                      "$": {
+                        "id": "szpmCbCG"
+                      },
+                      "textFormat": 0,
+                      "textStyle": ""
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "tablecell",
+                  "version": 1,
+                  "$": {
+                    "id": "JInnkf1Z"
+                  },
+                  "backgroundColor": null,
+                  "colSpan": 1,
+                  "headerState": 1,
+                  "rowSpan": 1
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "detail": 0,
+                          "format": 0,
+                          "mode": "normal",
+                          "style": "",
+                          "text": "h3",
+                          "type": "text",
+                          "version": 1,
+                          "$": {
+                            "id": "YKDogryC"
+                          }
+                        }
+                      ],
+                      "direction": null,
+                      "format": "",
+                      "indent": 0,
+                      "type": "paragraph",
+                      "version": 1,
+                      "$": {
+                        "id": "6t8pigb9"
+                      },
+                      "textFormat": 0,
+                      "textStyle": ""
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "tablecell",
+                  "version": 1,
+                  "$": {
+                    "id": "SpImyQ-G"
+                  },
+                  "backgroundColor": null,
+                  "colSpan": 1,
+                  "headerState": 1,
+                  "rowSpan": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "tablerow",
+              "version": 1,
+              "$": {
+                "id": "wJno3oaN"
+              }
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "detail": 0,
+                          "format": 0,
+                          "mode": "normal",
+                          "style": "",
+                          "text": "c1",
+                          "type": "text",
+                          "version": 1,
+                          "$": {
+                            "id": "MqR1HKjh"
+                          }
+                        }
+                      ],
+                      "direction": null,
+                      "format": "",
+                      "indent": 0,
+                      "type": "paragraph",
+                      "version": 1,
+                      "$": {
+                        "id": "MwXNuOyF"
+                      },
+                      "textFormat": 0,
+                      "textStyle": ""
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "tablecell",
+                  "version": 1,
+                  "$": {
+                    "id": "wNTGbdCl"
+                  },
+                  "backgroundColor": null,
+                  "colSpan": 1,
+                  "headerState": 0,
+                  "rowSpan": 1
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "detail": 0,
+                          "format": 0,
+                          "mode": "normal",
+                          "style": "",
+                          "text": "c2",
+                          "type": "text",
+                          "version": 1,
+                          "$": {
+                            "id": "kIojjt5V"
+                          }
+                        }
+                      ],
+                      "direction": null,
+                      "format": "",
+                      "indent": 0,
+                      "type": "paragraph",
+                      "version": 1,
+                      "$": {
+                        "id": "xx2R0RMw"
+                      },
+                      "textFormat": 0,
+                      "textStyle": ""
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "tablecell",
+                  "version": 1,
+                  "$": {
+                    "id": "1CvdKGQ4"
+                  },
+                  "backgroundColor": null,
+                  "colSpan": 1,
+                  "headerState": 0,
+                  "rowSpan": 1
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "detail": 0,
+                          "format": 0,
+                          "mode": "normal",
+                          "style": "",
+                          "text": "c3",
+                          "type": "text",
+                          "version": 1,
+                          "$": {
+                            "id": "qnOyPVjx"
+                          }
+                        }
+                      ],
+                      "direction": null,
+                      "format": "",
+                      "indent": 0,
+                      "type": "paragraph",
+                      "version": 1,
+                      "$": {
+                        "id": "2_BqDAhr"
+                      },
+                      "textFormat": 0,
+                      "textStyle": ""
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "tablecell",
+                  "version": 1,
+                  "$": {
+                    "id": "21qFQhyi"
+                  },
+                  "backgroundColor": null,
+                  "colSpan": 1,
+                  "headerState": 0,
+                  "rowSpan": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "tablerow",
+              "version": 1,
+              "$": {
+                "id": "4qO7-FkM"
+              }
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "detail": 0,
+                          "format": 0,
+                          "mode": "normal",
+                          "style": "",
+                          "text": "d1",
+                          "type": "text",
+                          "version": 1,
+                          "$": {
+                            "id": "vIX1E7Xk"
+                          }
+                        }
+                      ],
+                      "direction": null,
+                      "format": "",
+                      "indent": 0,
+                      "type": "paragraph",
+                      "version": 1,
+                      "$": {
+                        "id": "3jCdAfMj"
+                      },
+                      "textFormat": 0,
+                      "textStyle": ""
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "tablecell",
+                  "version": 1,
+                  "$": {
+                    "id": "Kcmy8X90"
+                  },
+                  "backgroundColor": null,
+                  "colSpan": 1,
+                  "headerState": 0,
+                  "rowSpan": 1
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "detail": 0,
+                          "format": 0,
+                          "mode": "normal",
+                          "style": "",
+                          "text": "d2",
+                          "type": "text",
+                          "version": 1,
+                          "$": {
+                            "id": "iMWQJjKr"
+                          }
+                        }
+                      ],
+                      "direction": null,
+                      "format": "",
+                      "indent": 0,
+                      "type": "paragraph",
+                      "version": 1,
+                      "$": {
+                        "id": "b-TT1oDe"
+                      },
+                      "textFormat": 0,
+                      "textStyle": ""
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "tablecell",
+                  "version": 1,
+                  "$": {
+                    "id": "3MDUJxG2"
+                  },
+                  "backgroundColor": null,
+                  "colSpan": 1,
+                  "headerState": 0,
+                  "rowSpan": 1
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "detail": 0,
+                          "format": 0,
+                          "mode": "normal",
+                          "style": "",
+                          "text": "d3",
+                          "type": "text",
+                          "version": 1,
+                          "$": {
+                            "id": "feOj5IN6"
+                          }
+                        }
+                      ],
+                      "direction": null,
+                      "format": "",
+                      "indent": 0,
+                      "type": "paragraph",
+                      "version": 1,
+                      "$": {
+                        "id": "LWLvV3T2"
+                      },
+                      "textFormat": 0,
+                      "textStyle": ""
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "tablecell",
+                  "version": 1,
+                  "$": {
+                    "id": "OVcnwfgt"
+                  },
+                  "backgroundColor": null,
+                  "colSpan": 1,
+                  "headerState": 0,
+                  "rowSpan": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "tablerow",
+              "version": 1,
+              "$": {
+                "id": "K-Al9eUw"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "table",
+          "version": 1,
+          "$": {
+            "id": "ZT4Rfccw"
+          }
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Tail para",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "9svwjw4a"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "wh8dsyZr"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ],
+      "direction": null,
+      "format": "",
+      "indent": 0,
+      "type": "root",
+      "version": 1,
+      "$": {
+        "id": "MdZ12UwK"
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "cell range c1 to c2 (one row)",
+      "selection": {
+        "kind": "table",
+        "anchor": [
+          2,
+          1,
+          0
+        ],
+        "focus": [
+          2,
+          1,
+          1
+        ]
+      },
+      "expected": [
+        [
+          2
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          2,
+          1,
+          0
+        ],
+        [
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          2,
+          1,
+          1
+        ],
+        [
+          2,
+          1,
+          1,
+          0
+        ]
+      ]
+    },
+    {
+      "name": "cell range c1 to d2 (2x2)",
+      "selection": {
+        "kind": "table",
+        "anchor": [
+          2,
+          1,
+          0
+        ],
+        "focus": [
+          2,
+          2,
+          1
+        ]
+      },
+      "expected": [
+        [
+          2
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          2,
+          1,
+          0
+        ],
+        [
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          2,
+          1,
+          1
+        ],
+        [
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          2,
+          0
+        ],
+        [
+          2,
+          2,
+          0,
+          0
+        ],
+        [
+          2,
+          2,
+          1
+        ],
+        [
+          2,
+          2,
+          1,
+          0
+        ]
+      ]
+    },
+    {
+      "name": "cell range d3 to c1 (backward 2x3) keeps document order",
+      "selection": {
+        "kind": "table",
+        "anchor": [
+          2,
+          2,
+          2
+        ],
+        "focus": [
+          2,
+          1,
+          0
+        ]
+      },
+      "expected": [
+        [
+          2
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          2,
+          1,
+          0
+        ],
+        [
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          2,
+          1,
+          1
+        ],
+        [
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          2,
+          1,
+          2
+        ],
+        [
+          2,
+          1,
+          2,
+          0
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          2,
+          0
+        ],
+        [
+          2,
+          2,
+          0,
+          0
+        ],
+        [
+          2,
+          2,
+          1
+        ],
+        [
+          2,
+          2,
+          1,
+          0
+        ],
+        [
+          2,
+          2,
+          2
+        ],
+        [
+          2,
+          2,
+          2,
+          0
+        ]
+      ]
+    },
+    {
+      "name": "text inside one cell resolves to the cell paragraph",
+      "selection": {
+        "kind": "range",
+        "anchor": {
+          "path": [
+            2,
+            1,
+            1,
+            0,
+            0
+          ],
+          "offset": 0
+        },
+        "focus": {
+          "path": [
+            2,
+            1,
+            1,
+            0,
+            0
+          ],
+          "offset": 2
+        }
+      },
+      "expected": [
+        [
+          2,
+          1,
+          1,
+          0
+        ]
+      ]
+    },
+    {
+      "name": "range across two paragraphs",
+      "selection": {
+        "kind": "range",
+        "anchor": {
+          "path": [
+            0,
+            0
+          ],
+          "offset": 0
+        },
+        "focus": {
+          "path": [
+            1,
+            0
+          ],
+          "offset": 6
+        }
+      },
+      "expected": [
+        [
+          0
+        ],
+        [
+          1
+        ]
+      ]
+    }
+  ]
+}
