@@ -21,8 +21,8 @@ impl Engine {
             .repository
             .read_scoped(binding, StateSelection::Recent(limit))
             .await?;
-        if account.state.needs_reauth {
-            return Err(Error::CredentialsRejected);
+        if let Some(error) = account.state.credential_issue() {
+            return Err(error);
         }
         let mut selected = account
             .state

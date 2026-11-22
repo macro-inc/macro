@@ -189,3 +189,67 @@ async fn reservation_serializes_provider_collisions_and_abandons_only_inactive_p
         Err(ImapConnectionError::ProviderConflict)
     ));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn verified_reconnect_clears_old_health_without_replacing_the_link(db: PgPool) {
+    let actor = owner(&db).await;
+    let repo = PgImapConnections(db.clone());
+    let verification = Verification {
+        id: Uuid::from_u128(3),
+        expires_at: chrono::Utc::now() + chrono::Duration::minutes(15),
+    };
+    let first = repo
+        .reserve(&actor, "owner", &input(2), &verification)
+        .await
+        .unwrap();
+    repo.activate(&first).await.unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            needs_reauth = true,
+            mailbox_issue = 'credentials_unreadable',
+            mailbox_retry_at = now() + interval '1 hour'
+        WHERE
+            id = $1
+        "#,
+        first.binding.link_id,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let mut request = input(4);
+    request.link_id = Some(first.binding.link_id);
+    let attempt = repo
+        .reserve(&actor, "owner", &request, &verification)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.activate(&attempt).await.unwrap(),
+        first.binding.link_id
+    );
+    let state = sqlx::query!(
+        r#"
+        SELECT
+            needs_reauth,
+            mailbox_issue,
+            mailbox_retry_at,
+            sync_generation,
+            grant_generation
+        FROM
+            email_links
+        WHERE
+            id = $1
+        "#,
+        first.binding.link_id,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(!state.needs_reauth);
+    assert!(state.mailbox_issue.is_none());
+    assert!(state.mailbox_retry_at.is_none());
+    assert_eq!(state.sync_generation, first.binding.sync_generation + 1);
+    assert_eq!(state.grant_generation, first.binding.grant_generation + 1);
+}

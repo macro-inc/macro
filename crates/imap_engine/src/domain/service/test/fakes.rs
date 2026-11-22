@@ -87,8 +87,9 @@ impl Repository for MemoryRepository {
         if !self.owner_available.load(Ordering::Acquire) {
             return Err(Error::Conflict);
         }
-        if self.state.lock().unwrap().needs_reauth {
-            return Err(Error::CredentialsRejected);
+        let state = self.state.lock().unwrap();
+        if let Some(error) = state.credential_issue() {
+            return Err(error);
         }
         Ok(())
     }

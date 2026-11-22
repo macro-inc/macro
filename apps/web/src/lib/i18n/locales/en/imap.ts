@@ -73,6 +73,9 @@ export default {
   folders: 'Folders',
   foldersPending: 'Folders will appear after the first sync.',
   outsideSync: 'Outside the latest sync',
+  credentialsUnreadableTitle: 'Reconnect your inbox',
+  credentialsUnreadableDetails:
+    "Macro can't read this mailbox's saved password. Reconnect to continue.",
   mailboxTooLargeTitle: 'Mailbox too large to sync yet',
   mailboxSizeRetry:
     'Unselect large folders in Mail settings, or Macro will retry at {{time}}. Previously synced messages remain available.',

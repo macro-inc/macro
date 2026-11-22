@@ -129,3 +129,20 @@ it('does not claim an oversized selected inbox is caught up and recovers without
   setIssue(undefined);
   expect(await screen.findByText('Inbox zero')).toBeDefined();
 });
+
+it('keeps an unreadable saved password visible as reconnect health, not Inbox zero', () => {
+  fixture.links = [
+    {
+      id: 'selected',
+      is_sync_active: true,
+      needs_reauth: true,
+      sync_status: 'ERROR',
+      mailbox_issue: 'credentials_unreadable',
+    },
+  ];
+  render(() => <EmailEmptyState />);
+  expect(screen.getByRole('status').textContent).toContain(
+    "Macro can't read this mailbox's saved password"
+  );
+  expect(screen.queryByText('Inbox zero')).toBeNull();
+});

@@ -80,6 +80,9 @@ impl IntoResponse for ConnectionError {
             ImapConnectionError::Provider(Error::CredentialsRejected) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, "credentials_rejected")
             }
+            ImapConnectionError::Provider(Error::CredentialsUnreadable) => {
+                (StatusCode::SERVICE_UNAVAILABLE, "credentials_unreadable")
+            }
             ImapConnectionError::Provider(Error::CredentialsUnavailable) => {
                 (StatusCode::SERVICE_UNAVAILABLE, "credentials_unavailable")
             }

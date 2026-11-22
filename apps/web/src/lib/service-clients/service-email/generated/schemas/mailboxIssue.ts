@@ -13,5 +13,6 @@ export type MailboxIssue = (typeof MailboxIssue)[keyof typeof MailboxIssue];
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const MailboxIssue = {
   snapshot_too_large: 'snapshot_too_large',
+  credentials_unreadable: 'credentials_unreadable',
   unknown: 'unknown',
 } as const;

@@ -104,7 +104,8 @@ export function EmailEmptyState() {
     return links.data.links.find(
       (link) =>
         link.is_sync_active &&
-        !link.needs_reauth &&
+        (!link.needs_reauth ||
+          link.mailbox_issue === 'credentials_unreadable') &&
         link.mailbox_issue &&
         (state.inboxIds === undefined || state.inboxIds.includes(link.id)) &&
         (!state.aliasFilter || state.aliasFilter.inboxId === link.id)
@@ -190,11 +191,17 @@ export function EmailEmptyState() {
               centered
               graphic={EmptyStateInboxTrayGraphic}
               title={match(inbox().mailbox_issue)
+                .with('credentials_unreadable', () =>
+                  t('imap.credentialsUnreadableTitle')
+                )
                 .with('snapshot_too_large', () =>
                   t('imap.mailboxTooLargeTitle')
                 )
                 .otherwise(() => t('imap.mailboxIssue'))}
               description={match(inbox().mailbox_issue)
+                .with('credentials_unreadable', () =>
+                  t('imap.credentialsUnreadableDetails')
+                )
                 .with('snapshot_too_large', () =>
                   mailboxSizeGuidance(inbox().mailbox_retry_at)
                 )

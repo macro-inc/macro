@@ -538,10 +538,19 @@ function InboxRow(props: {
               <OutlookBetaBadge />
             </span>
           </Show>
-          <Show when={!props.link.needs_reauth && props.link.mailbox_issue}>
+          <Show
+            when={
+              props.link.mailbox_issue &&
+              (!props.link.needs_reauth ||
+                props.link.mailbox_issue === 'credentials_unreadable')
+            }
+          >
             {(issue) => (
               <span class="text-xs text-failure">
                 {match(issue())
+                  .with('credentials_unreadable', () =>
+                    t('imap.credentialsUnreadableDetails')
+                  )
                   .with('snapshot_too_large', () => (
                     <>
                       <span class="block">

@@ -728,3 +728,95 @@ async fn size_health_is_fenced_edge_triggered_and_cleared_without_reauth(db: PgP
     assert!(cleared.mailbox_retry_at.is_none());
     assert!(!cleared.needs_reauth);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unreadable_credentials_require_reconnect_without_claiming_a_provider_refusal(db: PgPool) {
+    use crate::domain::mailbox::imap_notifications::ImapNotificationService;
+    use imap_engine::domain::models::{Binding, Notification};
+    use models_email::service::link::MailboxIssue;
+    let (_, link) = fixture(&db).await;
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP',
+            sync_generation = 2
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let service = ImapNotificationService(
+        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap),
+    );
+    let binding = Binding {
+        link_id: link,
+        sync_generation: 2,
+        grant_generation: 1,
+    };
+    for _ in 0..2 {
+        service
+            .receive(Notification {
+                binding,
+                credentials_rejected: false,
+                mailbox_issue: Some(MailboxIssue::CredentialsUnreadable),
+                sync_retry_at: None,
+            })
+            .await
+            .unwrap();
+    }
+    // An old actor cannot replace the current reconnect reason.
+    service
+        .receive(Notification {
+            binding: Binding {
+                sync_generation: 1,
+                ..binding
+            },
+            credentials_rejected: true,
+            mailbox_issue: None,
+            sync_retry_at: None,
+        })
+        .await
+        .unwrap();
+    let current = sqlx::query!(
+        r#"
+        SELECT
+            mailbox_issue,
+            needs_reauth,
+            last_sync_error_at
+        FROM
+            email_links
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(current.needs_reauth);
+    assert_eq!(
+        current.mailbox_issue.as_deref(),
+        Some("credentials_unreadable")
+    );
+    assert!(current.last_sync_error_at.is_none());
+    let events = sqlx::query_scalar!(
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_projection_outbox
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(events, 2);
+}

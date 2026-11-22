@@ -301,6 +301,10 @@ impl MailboxAttachmentAccess for ImapMailboxGateway {
 pub(crate) fn error(error: models::Error) -> EmailApiError {
     match error {
         models::Error::CredentialsRejected => EmailApiError::AuthRequired,
+        models::Error::CredentialsUnreadable => EmailApiError::CredentialsUnavailable {
+            message: "Macro cannot read this mailbox's saved password; reconnect to continue"
+                .into(),
+        },
         models::Error::CredentialsUnavailable => EmailApiError::CredentialsUnavailable {
             message: "IMAP credentials are temporarily unavailable".into(),
         },

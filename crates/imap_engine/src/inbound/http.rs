@@ -98,6 +98,7 @@ impl IntoResponse for ApiError {
             Error::CursorOutdated => StatusCode::GONE,
             Error::CredentialsRejected => StatusCode::UNAUTHORIZED,
             Error::CredentialsUnavailable
+            | Error::CredentialsUnreadable
             | Error::ConnectionUnavailable
             | Error::DnsUnavailable
             | Error::TcpUnavailable

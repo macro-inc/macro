@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            needs_reauth,\n            mailbox_issue,\n            mailbox_retry_at,\n            sync_generation,\n            grant_generation\n        FROM\n            email_links\n        WHERE\n            id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "needs_reauth",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "mailbox_issue",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "mailbox_retry_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "aae6268fe826ea1fdeead45ea566584e0c875658bfb20e27361cc8f98cfcc906"
+}

@@ -502,6 +502,7 @@
           "cursor_outdated",
           "credentials_rejected",
           "credentials_unavailable",
+          "credentials_unreadable",
           "connection_unavailable",
           "dns_unavailable",
           "tcp_unavailable",

@@ -3,6 +3,7 @@ use chrono::TimeZone;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 mod admission;
+mod credential_health;
 mod fakes;
 mod ownership;
 mod reads;

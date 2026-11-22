@@ -488,8 +488,8 @@ impl Repository for PgRepository {
         if current.user_id != account.user_id {
             return Err(Error::Conflict);
         }
-        if current.state.needs_reauth {
-            return Err(Error::CredentialsRejected);
+        if let Some(error) = current.state.credential_issue() {
+            return Err(error);
         }
         Ok(())
     }
@@ -599,8 +599,9 @@ impl Repository for PgRepository {
                     AND l.is_sync_active
                     AND NOT l.needs_reauth
                     AND (
-                        a.state ->> 'needs_reauth'
-            ) IS DISTINCT FROM 'true'
+                        (a.state ->> 'needs_reauth') IS DISTINCT FROM 'true'
+                        OR a.state ->> 'notification_pending' = 'true'
+                    )
                     AND a.sync_generation = l.sync_generation
                     AND a.grant_generation = l.grant_generation
                 ORDER BY
@@ -623,7 +624,10 @@ impl Repository for PgRepository {
                     AND l.provider = 'IMAP'
                     AND l.is_sync_active
                     AND NOT l.needs_reauth
-                    AND (a.state ->> 'needs_reauth') IS DISTINCT FROM 'true'
+                    AND (
+                        (a.state ->> 'needs_reauth') IS DISTINCT FROM 'true'
+                        OR a.state ->> 'notification_pending' = 'true'
+                    )
                     AND a.sync_generation = l.sync_generation
                     AND a.grant_generation = l.grant_generation
                     AND NOT EXISTS (

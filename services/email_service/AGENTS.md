@@ -444,3 +444,5 @@ message/settings errors use the same content-limit response; keep sign-in and
 mailbox health classifications separate.
 
 The inbox catalog exposes mailbox_issue independently of needs_reauth. Oversized sync is visible as sync health; do not map it to a rejected password.
+
+Successful verified IMAP reconnect clears the old projected mailbox issue and retry deadline while advancing the same link generations. Preserve CredentialsUnreadable as saved-credential unavailability, never AuthRequired or definite SendUnavailable.

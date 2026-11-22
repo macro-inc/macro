@@ -325,3 +325,42 @@ plans with stale and analyzed statistics use selective indexes, including real
 conflict updates. The largest measured owned inbox set is 32; the fixture does
 not claim an unbounded inbox catalog is paginated. PostgreSQL 18 results do not
 replace compatibility checks on the production database version.
+
+### Saved credential recovery
+
+IncorrectKey, missing/disabled keys, service/policy failures and decrypted documents
+that cannot be parsed remain transient. This includes key/alias configuration
+mistakes and rollback to a binary that does not understand a newer document.
+InvalidCiphertext qualifies as `credentials_unreadable` only if this process has
+recently decrypted this binding with the identical context and a known-good
+ciphertext still decrypts through the current alias to the same returned key ARN.
+The cached proof contains ciphertext only, never plaintext, and is bounded to
+2048 accounts with a ten-minute lifetime.
+
+A process-local fleet guard counts distinct successfully decrypted permanent accounts in that window (verification-only ids are excluded) and permits
+parking only at or below five percent verified unreadable. Replicas observing
+fewer than twenty accounts never auto-park; the user's **Change login details**
+action remains available. A damaged credential must qualify repeatedly across
+thirty seconds before parking. Cold starts, an expired proof, a failed canary,
+or an active fleet guard retain ordinary backoff. Never mass-reconnect accounts
+in response to a KMS configuration incident.
+
+The existing `needs_reauth` lifecycle gate requires reconnect; the optional mailbox
+issue explains why. Unreadable saved credentials never set `credentials_rejected`,
+which remains reserved for provider authentication refusals, and do not stamp
+the provider-refusal timestamp. Pending fenced health callbacks survive restarts:
+the scheduler admits parked pending bindings, the actor delivers before decrypt
+or provider work, and completed parking is excluded. Verified reconnect preserves
+the link, advances generations and clears the old issue/deadline.
+
+Decrypt spans contain only `available`, `unreadable` or `unavailable` outcomes.
+Each bounded `imap.credentials.classification` span is one counter sample;
+`monitors/imap-credentials.ts` declares unreadable/fleet-guard SpansMetrics,
+a dashboard, and non-paging spike/guard monitors. No mailbox/key/context dimensions
+are exported. These definitions are code only and require a separately approved
+deployment. On a spike, check KMS availability, alias/ARN and context/configuration
+changes before recommending reconnect; never replay user credentials.
+
+The changed reconnect-health and scheduler queries have measured plans on
+110,000 synthetic links/accounts and 22,000 live owners:
+[credential-health query plans](../design/imap-credential-health-query-plans.json).

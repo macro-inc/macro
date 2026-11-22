@@ -398,6 +398,8 @@ impl ImapConnectionRepository for PgImapConnections {
                 sync_generation = $2,
                 grant_generation = $3,
                 last_sync_error_at = NULL,
+                mailbox_issue = NULL,
+                mailbox_retry_at = NULL,
                 updated_at = now()
             WHERE
                 id = $1

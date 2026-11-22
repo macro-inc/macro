@@ -38,19 +38,26 @@ impl ImapNotificationRepository for PgMailboxSync {
         let Some(current) = current else {
             return Ok(());
         };
-        if credentials_rejected && !current.needs_reauth {
+        let requires_reconnect = credentials_rejected
+            || mailbox_issue
+                == Some(models_email::service::link::MailboxIssue::CredentialsUnreadable);
+        if requires_reconnect && !current.needs_reauth {
             sqlx::query!(
                 r#"
                 UPDATE
                     email_links
                 SET
                     needs_reauth = true,
-                    last_sync_error_at = now(),
+                    last_sync_error_at = CASE
+                        WHEN $2 THEN now()
+                        ELSE last_sync_error_at
+                    END,
                     updated_at = now()
                 WHERE
                     id = $1
                 "#,
                 mailbox.link_id,
+                credentials_rejected,
             )
             .execute(&mut *tx)
             .await
@@ -112,7 +119,7 @@ impl ImapNotificationRepository for PgMailboxSync {
             .await
             .map_err(db_error)?;
         }
-        if !credentials_rejected {
+        if !requires_reconnect {
             sqlx::query!(
                 r#"
                 UPDATE

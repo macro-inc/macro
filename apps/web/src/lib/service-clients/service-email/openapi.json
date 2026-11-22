@@ -7536,7 +7536,7 @@
       "MailboxIssue": {
         "type": "string",
         "description": "Sanitized mailbox health independent of provider authentication.",
-        "enum": ["snapshot_too_large", "unknown"]
+        "enum": ["snapshot_too_large", "credentials_unreadable", "unknown"]
       },
       "MailboxOperation": {
         "type": "object",
@@ -7820,7 +7820,7 @@
           },
           "credentialsRejected": {
             "type": "boolean",
-            "description": "A confirmed credential refusal; false is a normal journal wakeup."
+            "description": "A confirmed provider refusal; never inferred from a saved-password or KMS failure."
           },
           "mailboxIssue": {
             "oneOf": [

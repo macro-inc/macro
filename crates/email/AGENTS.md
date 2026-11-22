@@ -855,3 +855,5 @@ Preserve ContentTooLarge through message-source and attachment ports; unsupporte
 content is a client limit, never an infrastructure outage or automatic retry.
 
 IMAP notifications project optional mailbox health and retry time under the existing active-link and two-generation fence. Emit LinkChanged only on a health edge; sync limits never imply rejected credentials.
+
+An IMAP credentials_unreadable issue requires reconnect but is not a provider password rejection. Project needs_reauth under the same active-binding fence without stamping last_sync_error_at; emit the existing reauthorization event and preserve the separate reason.

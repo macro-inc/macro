@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            mailbox_issue,\n            needs_reauth,\n            last_sync_error_at\n        FROM\n            email_links\n        WHERE\n            id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mailbox_issue",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "needs_reauth",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_sync_error_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "b258ae4b65fa5fd4c91a5840e80629829a60c60478fe529169f769801c241bc0"
+}

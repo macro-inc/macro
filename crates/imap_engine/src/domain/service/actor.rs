@@ -4,6 +4,8 @@ use std::time::Duration;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument;
 
+const UNREADABLE_CONFIRMATION: Duration = Duration::from_secs(30);
+
 struct AccountWatchers {
     tasks: TaskTracker,
     stopped: CancellationToken,
@@ -73,6 +75,8 @@ impl Engine {
     ) -> Result<(), Error> {
         let mut failures = 0u32;
         let mut credential_refusals = 0u8;
+        let mut unreadable_since = None;
+        let mut unreadable_attempts = 0u8;
         let mut healthy_since = tokio::time::Instant::now();
         loop {
             if cancellation.is_cancelled() {
@@ -202,6 +206,10 @@ impl Engine {
             if cancellation.is_cancelled() {
                 return Ok(());
             }
+            if !matches!(outcome, Err(Error::CredentialsUnreadable)) {
+                unreadable_since = None;
+                unreadable_attempts = 0;
+            }
             match outcome {
                 Ok(()) => {
                     credential_refusals = 0;
@@ -239,17 +247,25 @@ impl Engine {
                             .acquire_scoped(binding, StateSelection::Catalog)
                             .await
                         {
-                            account.state.needs_reauth = true;
-                            account.state.notification_pending = true;
-                            let saved = self.repository.save_health(&mut account).await;
-                            if saved.is_ok() {
-                                let _ = self.notify(&mut account).await;
-                            }
+                            let saved = self.record_reconnect(&mut account, None).await;
                             let released = self.repository.release(&account).await;
                             saved?;
                             released?;
                         }
                         return Err(Error::CredentialsRejected);
+                    }
+                    failures = failures.saturating_add(1);
+                    healthy_since = tokio::time::Instant::now();
+                }
+                Err(Error::CredentialsUnreadable) => {
+                    let first = unreadable_since.get_or_insert_with(tokio::time::Instant::now);
+                    unreadable_attempts = unreadable_attempts.saturating_add(1);
+                    if unreadable_attempts >= 2 && first.elapsed() >= UNREADABLE_CONFIRMATION {
+                        return match self.deliver_unreadable(binding, owner, cancellation).await {
+                            Ok(()) => Err(Error::CredentialsUnreadable),
+                            Err(Error::Conflict | Error::Forbidden | Error::NotFound) => Ok(()),
+                            Err(error) => Err(error),
+                        };
                     }
                     failures = failures.saturating_add(1);
                     healthy_since = tokio::time::Instant::now();
@@ -278,5 +294,70 @@ impl Engine {
                 }
             }
         }
+    }
+
+    /// Parking is separate from a provider rejection. Keep notification delivery
+    /// retryable when the email host is still starting, without reopening mail sockets.
+    async fn deliver_unreadable(
+        &self,
+        binding: Binding,
+        owner: Uuid,
+        cancellation: &CancellationToken,
+    ) -> Result<(), Error> {
+        let mut attempts = 0u32;
+        loop {
+            let delivery = async {
+                if !self.repository.claim_owner(binding, owner).await? {
+                    return Err(Error::Conflict);
+                }
+                let mut account = self
+                    .repository
+                    .acquire_scoped(binding, StateSelection::Catalog)
+                    .await?;
+                let result = self
+                    .record_reconnect(
+                        &mut account,
+                        Some(models_email::service::link::MailboxIssue::CredentialsUnreadable),
+                    )
+                    .await;
+                let released = self.repository.release(&account).await;
+                let delivered = result?;
+                released?;
+                Ok(delivered)
+            }
+            .instrument(tracing::info_span!("imap.credentials.reconnect", link_id = %binding.link_id, retry_count = attempts))
+            .await;
+            match delivery {
+                Ok(true) => return Ok(()),
+                Err(Error::Conflict | Error::Forbidden | Error::NotFound) => {
+                    return Err(Error::Conflict);
+                }
+                Err(error) => tracing::warn!(?error, "Mailbox reconnect health remains pending"),
+                Ok(false) => {}
+            }
+            attempts = attempts.saturating_add(1);
+            let delay = Duration::from_secs((5 * u64::from(attempts)).min(60));
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => return Err(Error::Conflict),
+                _ = tokio::time::sleep(delay) => {},
+            }
+        }
+    }
+
+    async fn record_reconnect(
+        &self,
+        account: &mut Account,
+        issue: Option<models_email::service::link::MailboxIssue>,
+    ) -> Result<bool, Error> {
+        if !account.state.needs_reauth || account.state.mailbox_issue != issue {
+            account.state.needs_reauth = true;
+            account.state.mailbox_issue = issue;
+            account.state.sync_retry_at = None;
+            account.state.notification_pending = true;
+            self.repository.save_health(account).await?;
+        }
+        self.notify(account).await?;
+        Ok(!account.state.notification_pending || self.notifier.is_none())
     }
 }

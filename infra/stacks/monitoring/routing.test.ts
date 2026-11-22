@@ -192,6 +192,8 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'firecracker-reconcile-drift',
     'firecracker-restore-latency',
     'firecracker-wake-failures',
+    'imap-credentials-fleet-guard',
+    'imap-credentials-unreadable-spike',
     'kafka-consumer-lag-high',
     'kafka-consumer-not-caught-up',
     'macrodb-blocked-connections',

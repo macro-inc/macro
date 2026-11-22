@@ -173,3 +173,15 @@ exponential retry deadline from one hour to twenty-four hours. Check it before
 provider work across wakeups/restarts; successful sync or manual reconnect clears
 it. Fenced folder-preference changes clear only the deadline, allowing one fresh
 attempt without forgetting repeated failures. Folder parking belongs to the stacked paging work and must budget old indexes.
+
+Treat IncorrectKey, missing/disabled/configured-key errors, service failures and
+unparseable decrypted documents as transient. InvalidCiphertext qualifies as
+CredentialsUnreadable only with this process's recent same-context known-good
+ciphertext, still decryptable through the current alias to the same key ARN.
+Exclude verification-only ids from the account sample. Keep proof and distinct-account observations bounded to 2048 accounts/ten
+minutes. Auto-parking requires at most five percent verified unreadable accounts;
+fewer than twenty observed accounts therefore never auto-park. Emit the bounded
+classification counter and fleet-guard error; never log credentials/key/context.
+Confirm qualified failures across thirty seconds before parking with the separate
+mailbox issue. Re-admit parked pending notifications after restart and deliver
+before credential/provider work; completed parking remains excluded.

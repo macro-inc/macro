@@ -38,10 +38,9 @@ on a production-size local database before the commit.
   guide](../../../docs/development/database.md).
 - Format handwritten SQL as readable multiline clauses and put each SQLx bound
   argument on its own line; Rust formatting does not format SQL inside macros.
-- **CS-09** The `.sqlx` cache lives at the workspace root — run `nix develop
-  --command just prepare_db` from the repository root; never commit a `.sqlx`
-  directory inside an individual crate. See the [database
-  guide](../../../docs/development/database.md).
+- **CS-09** Keep `.sqlx` at the workspace root and follow the owned-URL,
+  dry-run and cache-snapshot workflow in the [database guide](../../../docs/development/database.md);
+  never commit a `.sqlx` directory inside an individual crate.
 - **CS-70** Migrations survive a rolling deploy: new `NOT NULL` columns get a
   default, and changes to large tables set `lock_timeout` and use `NOT VALID` +
   `VALIDATE` or `CREATE INDEX CONCURRENTLY` instead of a full rewrite.

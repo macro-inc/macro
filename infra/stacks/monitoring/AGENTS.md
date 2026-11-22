@@ -131,3 +131,5 @@ From `infra/`:
   span's stable snake_case `source`. Its header and the Firecracker runbook are
   the contract; the local Datadog hostname must equal fleet `host`. Only the
   readiness gauge alerts on missing data; an idle host has no failure events.
+
+`monitors/imap-credentials.ts` counts bounded `imap.credentials.classification` spans from imap-service. Preserve the unreadable-count and fleet-guard field contract; dimensions are env only, never mailbox/key/context. The new metrics and monitors are code-only until an approved deployment.

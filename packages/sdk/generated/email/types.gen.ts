@@ -1846,7 +1846,7 @@ export type MailboxAction = {
 /**
  * Sanitized mailbox health independent of provider authentication.
  */
-export type MailboxIssue = 'snapshot_too_large' | 'unknown';
+export type MailboxIssue = 'snapshot_too_large' | 'credentials_unreadable' | 'unknown';
 
 /**
  * Durable outcome of an accepted organization action.
@@ -1959,7 +1959,7 @@ export type Notification = {
      */
     binding: Binding;
     /**
-     * A confirmed credential refusal; false is a normal journal wakeup.
+     * A confirmed provider refusal; never inferred from a saved-password or KMS failure.
      */
     credentialsRejected: boolean;
     mailboxIssue?: null | MailboxIssue;

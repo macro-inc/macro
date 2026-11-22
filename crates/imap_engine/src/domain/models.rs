@@ -348,6 +348,9 @@ pub enum Error {
     /// Password decryption temporarily unavailable.
     #[error("credentials unavailable")]
     CredentialsUnavailable,
+    /// The saved credential document cannot be decrypted with the configured key.
+    #[error("saved credentials cannot be read")]
+    CredentialsUnreadable,
     /// Transient provider or database failure.
     #[error("connection unavailable")]
     ConnectionUnavailable,
@@ -490,7 +493,7 @@ pub struct Upload {
 /// Durable per-link state. Passwords are stored in a separate KMS ciphertext column.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AccountState {
-    /// Parked after a permanent provider credential refusal.
+    /// Parked until reconnect after provider refusal or unreadable saved credentials.
     #[serde(default)]
     pub needs_reauth: bool,
     /// Sync health independent of authentication.
@@ -799,7 +802,7 @@ pub enum SyncTier {
 pub struct Notification {
     /// Exact mailbox binding that produced the change.
     pub binding: Binding,
-    /// A confirmed credential refusal; false is a normal journal wakeup.
+    /// A confirmed provider refusal; never inferred from a saved-password or KMS failure.
     pub credentials_rejected: bool,
     /// Separate sync health, cleared after a complete successful snapshot.
     #[serde(default)]
@@ -810,6 +813,19 @@ pub struct Notification {
 }
 
 impl AccountState {
+    /// A reconnect requirement is not necessarily a provider authentication refusal.
+    pub fn credential_issue(&self) -> Option<Error> {
+        self.needs_reauth.then_some(
+            if self.mailbox_issue
+                == Some(models_email::service::link::MailboxIssue::CredentialsUnreadable)
+            {
+                Error::CredentialsUnreadable
+            } else {
+                Error::CredentialsRejected
+            },
+        )
+    }
+
     /// Persist account health/admission counters without cloning the normalized index collections.
     pub fn small_state(&self) -> Self {
         Self {

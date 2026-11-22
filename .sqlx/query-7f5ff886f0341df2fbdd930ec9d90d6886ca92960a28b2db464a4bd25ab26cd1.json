@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH retained AS MATERIALIZED (\n                SELECT\n                    a.link_id,\n                    a.sync_generation,\n                    a.grant_generation,\n                    a.updated_at\n                FROM\n                    imap_accounts a\n                    JOIN email_links l ON l.id = a.link_id\n                WHERE\n                    a.link_id = ANY (\n                        $2\n            )\n                    AND l.macro_id = a.user_id\n                    AND l.provider = 'IMAP'\n                    AND l.is_sync_active\n                    AND NOT l.needs_reauth\n                    AND (\n                        (a.state ->> 'needs_reauth') IS DISTINCT FROM 'true'\n                        OR a.state ->> 'notification_pending' = 'true'\n                    )\n                    AND a.sync_generation = l.sync_generation\n                    AND a.grant_generation = l.grant_generation\n                ORDER BY\n                    a.updated_at,\n                    a.link_id\n                LIMIT $1\n            ),\n            candidates AS (\n                SELECT\n                    a.link_id,\n                    a.sync_generation,\n                    a.grant_generation,\n                    a.updated_at\n                FROM\n                    imap_accounts a\n                    JOIN email_links l ON l.id = a.link_id\n                WHERE\n                    NOT (a.link_id = ANY ($2))\n                    AND l.macro_id = a.user_id\n                    AND l.provider = 'IMAP'\n                    AND l.is_sync_active\n                    AND NOT l.needs_reauth\n                    AND (\n                        (a.state ->> 'needs_reauth') IS DISTINCT FROM 'true'\n                        OR a.state ->> 'notification_pending' = 'true'\n                    )\n                    AND a.sync_generation = l.sync_generation\n                    AND a.grant_generation = l.grant_generation\n                    AND NOT EXISTS (\n                        SELECT\n                            1\n                        FROM\n                            imap_account_owners o\n                        WHERE\n                            o.link_id = a.link_id\n                            AND o.lease_until > now())\n                ORDER BY\n                    a.updated_at,\n                    a.link_id\n                LIMIT greatest ($1 - (\n                        SELECT\n                            count(*)\n                        FROM retained), 0)\n            )\n            SELECT\n                link_id AS \"link_id!\",\n                sync_generation AS \"sync_generation!\",\n                grant_generation AS \"grant_generation!\"\n            FROM (\n                SELECT\n                    retained.*,\n                    0 AS priority\n                FROM\n                    retained\n                UNION ALL\n                SELECT\n                    candidates.*,\n                    1 AS priority\n                FROM\n                    candidates) batch\n            ORDER BY\n                priority,\n                updated_at,\n                link_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sync_generation!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "grant_generation!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "7f5ff886f0341df2fbdd930ec9d90d6886ca92960a28b2db464a4bd25ab26cd1"
+}

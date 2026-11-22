@@ -100,6 +100,8 @@ impl UserProvider {
 pub enum MailboxIssue {
     /// This snapshot exceeds the engine's bounded sync capacity.
     SnapshotTooLarge,
+    /// Saved mailbox credentials must be replaced by an owner reconnect.
+    CredentialsUnreadable,
     /// An issue introduced by a newer server; retain generic guidance.
     #[serde(other)]
     Unknown,

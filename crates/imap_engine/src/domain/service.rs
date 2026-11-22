@@ -357,8 +357,13 @@ impl Engine {
                 self.repository.acquire_scoped(binding, selection).await?
             });
             let account = account.as_mut().ok_or(Error::ConnectionUnavailable)?;
-            if account.state.needs_reauth {
-                return Err(Error::CredentialsRejected);
+            if !reading && account.state.needs_reauth && account.state.notification_pending {
+                // Recovery callbacks survive process restarts. Deliver the stored
+                // health before decrypting or reopening any provider connection.
+                self.notify(account).await?;
+            }
+            if let Some(error) = account.state.credential_issue() {
+                return Err(error);
             }
             tokio::select! {
                 biased;
@@ -501,7 +506,11 @@ impl Engine {
             match notifier
                 .notify(Notification {
                     binding: a.binding,
-                    credentials_rejected: a.state.needs_reauth,
+                    credentials_rejected: a.state.needs_reauth
+                        && a.state.mailbox_issue
+                            != Some(
+                                models_email::service::link::MailboxIssue::CredentialsUnreadable,
+                            ),
                     mailbox_issue: a.state.mailbox_issue,
                     sync_retry_at: a.state.sync_retry_at,
                 })

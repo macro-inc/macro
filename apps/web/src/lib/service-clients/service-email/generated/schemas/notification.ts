@@ -14,7 +14,7 @@ import type { NotificationSyncRetryAt } from './notificationSyncRetryAt';
 export interface Notification {
   /** Exact mailbox binding that produced the change. */
   binding: Binding;
-  /** A confirmed credential refusal; false is a normal journal wakeup. */
+  /** A confirmed provider refusal; never inferred from a saved-password or KMS failure. */
   credentialsRejected: boolean;
   mailboxIssue?: NotificationMailboxIssue;
   /** Durable retry guidance; absent on normal wakeups and older notifications. */

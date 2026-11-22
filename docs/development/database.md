@@ -124,30 +124,49 @@ compatible with the service code currently deployed, not just the code in its PR
 
 4. **Update affected tests/fixtures and run package tests** from the root with
    `SQLX_OFFLINE` unset. Test between batches of query changes, not just at the end.
+   For an owned test container, pin the URL after entering the dev shell:
+
+   ```bash
+   nix develop --command env DATABASE_URL="$TASK_DATABASE_URL" cargo test -p <package>
+   ```
+
+   The dev shell may replace an inherited `DATABASE_URL`. Before migrations,
+   preparation or DB tests, check the resolved host and port match your own
+   container; never fall through to the shared localhost:5432 database.
 
 5. **Refresh the workspace SQLx cache** when non-test queries or schema
-   change, or when required metadata is missing. From the repository root:
+   change, or when required metadata is missing. Snapshot the cache first;
+   even a failed preparation can truncate it:
 
    ```bash
-   nix develop --command just prepare_db
+   sqlx_cache_snapshot="$(mktemp -d)"
+   cp -a .sqlx/. "$sqlx_cache_snapshot/"
+   nix develop --command just --dry-run --set DATABASE_URL "$TASK_DATABASE_URL" prepare_db
    ```
 
-   The root recipe uses Just's `DATABASE_URL` variable, which defaults to the
-   database on localhost:5432; exporting the environment variable does not
-   override it. For a dedicated test database, set the Just variable explicitly:
+   Inspect the dry-run's resolved host and port before running it. Root Just
+   DB recipes use their own `DATABASE_URL` variable and ignore an environment
+   override, so pass `--set` on the actual command too:
 
    ```bash
-   nix develop --command just --set DATABASE_URL "$DATABASE_URL" prepare_db
+   nix develop --command just --set DATABASE_URL "$TASK_DATABASE_URL" prepare_db
    ```
 
-   Inspect `git status` after preparation and restore unrelated `.sqlx`
-   deletions before committing; workspace preparation can omit entries for
-   unbuilt or excluded targets.
+   If preparation fails, stop and inspect its error, then restore the snapshot:
 
-   Commit generated `.sqlx` changes with the query/schema change. Never manually
-   create or edit `.sqlx/query-*.json`, and never generate a crate-local cache.
-   Unrelated Rust-only DB-crate edits still need appropriate tests, but do not
-   require cache preparation when queries/schema are unchanged and metadata is present.
+   ```bash
+   mkdir -p .sqlx
+   cp -a "$sqlx_cache_snapshot/." .sqlx/
+   ```
+
+   After success, inspect `git status` and restore unrelated `.sqlx` deletions
+   from the snapshot; workspace preparation can omit unbuilt or excluded targets.
+   Scoped `cargo sqlx prepare` still needs the owned URL inside the dev-shell
+   command. Keep only cache entries for queries added or changed in this work.
+   Commit generated metadata with the query/schema change. Never hand-edit
+   `.sqlx/query-*.json` or generate a crate-local cache. Rust-only DB-crate edits
+   need tests, but no cache preparation when queries/schema are unchanged and
+   metadata is present.
 
 6. **Rerun the affected tests** after preparation or fixes. Cache preparation is
    not a substitute for `cargo test -p <package>` against the live local database.
