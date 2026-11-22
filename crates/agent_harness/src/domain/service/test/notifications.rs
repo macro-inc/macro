@@ -812,6 +812,42 @@ async fn a_settled_import_wakes_an_idle_session_with_its_final_report() {
     );
 }
 
+/// A live session whose owner's first turn ends with the agent's `reply`.
+async fn owner_session_answered(
+    service: &TestHarness,
+    containers: &MockContainerManager,
+    id: AgentSessionId,
+    reply: &str,
+) -> ContainerMock {
+    let open = service.execute(id, HarnessCommand::Open(open_command()));
+    let drive = async {
+        containers.first_spawned().await;
+        let container = containers.container(id).unwrap();
+        complete_session_handshake(&container).await;
+        container.agent().wait_for_requests(3).await;
+        container.agent().sends_raw(
+            agent_client_protocol::RawJsonRpcMessage::notification(
+                "session/update".to_owned(),
+                serde_json::json!({
+                    "sessionId": "acp-test",
+                    "update": {
+                        "sessionUpdate": "agent_message_chunk",
+                        "content": {"type": "text", "text": reply}
+                    }
+                }),
+            )
+            .unwrap(),
+        );
+        container.agent().completes_prompt().await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.unwrap();
+    container
+}
+
+const ASKS_FOR_CONFLUENCE: &str = "Confluence isn't connected yet. Connect it below.\n\n<m-connect-app>{\"appSlug\":\"confluence\",\"name\":\"Confluence\"}</m-connect-app>";
+
 /// The owner connecting an app wakes the session with an `app.connected`.
 async fn app_connected(outbox: &Outbox, session: AgentSessionId) {
     outbox
@@ -861,7 +897,7 @@ async fn an_app_connected_after_the_owners_turn_acts_for_the_owner() {
     let outbox = Arc::new(Outbox::default());
     let ((service, repo, containers, _, _), mut turns) = harness_with_outbox(outbox.clone());
     let id = AgentSessionId::new();
-    let container = live_session(&service, &containers, id).await;
+    let container = owner_session_answered(&service, &containers, id, ASKS_FOR_CONFLUENCE).await;
     turns.settled(id).await;
     let owner = sender();
     assert_eq!(
@@ -888,7 +924,7 @@ async fn an_app_connected_after_someone_elses_turn_acts_for_nobody() {
     let outbox = Arc::new(Outbox::default());
     let ((service, repo, containers, _, _), mut turns) = harness_with_outbox(outbox.clone());
     let id = AgentSessionId::new();
-    let container = live_session(&service, &containers, id).await;
+    let container = owner_session_answered(&service, &containers, id, ASKS_FOR_CONFLUENCE).await;
     turns.settled(id).await;
     service
         .execute(
@@ -920,7 +956,7 @@ async fn an_app_connected_batched_with_another_event_acts_for_nobody() {
     let outbox = Arc::new(Outbox::default());
     let ((service, repo, containers, _, _), mut turns) = harness_with_outbox(outbox.clone());
     let id = AgentSessionId::new();
-    let container = live_session(&service, &containers, id).await;
+    let container = owner_session_answered(&service, &containers, id, ASKS_FOR_CONFLUENCE).await;
     turns.settled(id).await;
     app_connected(&outbox, id).await;
     event(&outbox, id, "import", true).await;
@@ -930,4 +966,37 @@ async fn an_app_connected_batched_with_another_event_acts_for_nobody() {
         agent_session::domain::model::PrompterKind::System
     );
     assert!(prompter.acting_user().is_none());
+}
+
+/// A connect button the owner's latest turn did not offer: the turn that
+/// asked for the app is an older one, maybe somebody else's, so the
+/// continuation acts for nobody.
+#[tokio::test]
+async fn an_app_connected_the_owners_latest_turn_did_not_ask_for_acts_for_nobody() {
+    let outbox = Arc::new(Outbox::default());
+    let ((service, repo, containers, _, _), mut turns) = harness_with_outbox(outbox.clone());
+    let id = AgentSessionId::new();
+    let container = owner_session_answered(&service, &containers, id, "Here are your tasks.").await;
+    turns.settled(id).await;
+    assert_eq!(
+        repo.turn_prompter(id).await.unwrap().unwrap().acting_user(),
+        Some(&sender())
+    );
+    app_connected(&outbox, id).await;
+    let prompter = woken_prompter(&service, &repo, &container, id, 4).await;
+    assert_eq!(
+        prompter.kind,
+        agent_session::domain::model::PrompterKind::System
+    );
+    assert!(prompter.acting_user().is_none());
+}
+
+#[test]
+fn connect_buttons_reads_each_buttons_app() {
+    assert_eq!(
+        crate::domain::app_connections::connect_buttons(&format!(
+            "{ASKS_FOR_CONFLUENCE} or <m-connect-app>{{\"appSlug\":\"confluence_data_center\"}}</m-connect-app> <m-connect-app>not json</m-connect-app>"
+        )),
+        vec!["confluence".to_owned(), "confluence_data_center".to_owned()]
+    );
 }

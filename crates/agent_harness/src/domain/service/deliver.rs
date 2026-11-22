@@ -360,9 +360,16 @@ where
             for context in &batch.producer_contexts {
                 genai_telemetry::propagation::link(&tracing::Span::current(), Some(context));
             }
-            let owner = self
+            let owner = match self
                 .continuing_owner(session_id, &batch.notifications)
-                .await?;
+                .await
+            {
+                Ok(owner) => owner,
+                Err(error) => {
+                    store.release(batch.lease_id).await?;
+                    return Err(error);
+                }
+            };
             let entry = QueuedEntry {
                 action_id: batch.action_id,
                 action: AgentAction::notification(batch.notifications.clone()),
@@ -386,10 +393,13 @@ where
     }
 
     /// The owner a waking batch acts for: only a batch that continues their
-    /// own work ([`continues_for_owner`](crate::domain::app_connections::continues_for_owner)), picking up after a turn that acted
-    /// for them. The owner connecting an app is not their word on what a bot
-    /// or someone else asked for, so a continuation of anyone else's turn
-    /// acts for nobody and its calls wait for the owner.
+    /// own work
+    /// ([`continues_for_owner`](crate::domain::app_connections::continues_for_owner)),
+    /// picking up the turn that asked for those apps: the latest one, which
+    /// acted for the owner and ended offering every app's connect button.
+    /// The owner connecting an app is not their word on what a bot or
+    /// someone else asked for, so continuing anyone else's turn, or an older
+    /// button from one, acts for nobody and its calls wait for the owner.
     async fn continuing_owner(
         &self,
         session_id: AgentSessionId,
@@ -402,12 +412,27 @@ where
         let Some(owner) = session.owner_id.as_user() else {
             return Ok(None);
         };
-        let previous = self.sessions.turn_prompter(session_id).await?;
-        Ok(previous
-            .as_ref()
-            .and_then(agent_session::domain::model::TurnPrompter::acting_user)
-            .filter(|user| *user == owner)
-            .cloned())
+        let Some(previous) = self.sessions.turn_prompter(session_id).await? else {
+            return Ok(None);
+        };
+        if previous.acting_user() != Some(owner) {
+            return Ok(None);
+        }
+        let Some(agent_session::domain::action_history::RecordedAction::Finished {
+            last_text: Some(reply),
+            ..
+        }) = self
+            .sessions
+            .recorded_action(session_id, previous.action_id)
+            .await?
+        else {
+            return Ok(None);
+        };
+        let offered = crate::domain::app_connections::connect_buttons(&reply);
+        let asked = notifications
+            .iter()
+            .all(|notification| offered.contains(&notification.subject_id));
+        Ok(asked.then(|| owner.clone()))
     }
 
     /// Attach quiet events, or recover the prior turn before dispatching this

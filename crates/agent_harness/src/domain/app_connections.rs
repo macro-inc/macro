@@ -24,13 +24,35 @@ mod test;
 /// [`AppConnectedContinuation`] produces only once it has checked that the
 /// session's owner reported the connection. Such a turn may act with the
 /// owner's access (never as their word) when the turn before it acted for
-/// them; a batch with any other event acts for nobody.
+/// them and ended offering those apps' connect buttons
+/// ([`connect_buttons`]); a batch with any other event acts for nobody.
 #[must_use]
 pub fn continues_for_owner(notifications: &[Notification]) -> bool {
     !notifications.is_empty()
         && notifications.iter().all(|notification| {
             matches!(notification.event, NotificationEvent::AppConnected { .. })
         })
+}
+
+/// The app slugs of the connect buttons in an agent's reply: each
+/// `<m-connect-app>{"appSlug": ..}</m-connect-app>` it includes.
+#[must_use]
+pub fn connect_buttons(reply: &str) -> Vec<String> {
+    use agent_egress::domain::model::CONNECT_APP_TAG;
+    let open = format!("<{CONNECT_APP_TAG}>");
+    let close = format!("</{CONNECT_APP_TAG}>");
+    reply
+        .split(open.as_str())
+        .skip(1)
+        .filter_map(|rest| rest.split_once(close.as_str()))
+        .filter_map(|(payload, _)| {
+            serde_json::from_str::<serde_json::Value>(payload)
+                .ok()?
+                .get("appSlug")?
+                .as_str()
+                .map(str::to_owned)
+        })
+        .collect()
 }
 
 /// Who owns a session, and whether it can still take a turn.
