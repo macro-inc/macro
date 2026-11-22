@@ -2088,6 +2088,57 @@ describe('cached channel directory', () => {
     expect(directory.failed()).toBe(false);
   });
 
+  it.each([
+    { read: 'succeeds', outcome: 'read' },
+    { read: 'fails', outcome: 'failed' },
+  ])(
+    'records that the read of the cache after the network walk $read',
+    async ({ read, outcome }) => {
+      const spans: Record<string, Record<string, unknown>> = {};
+      const span = vi.spyOn(Telemetry, 'span').mockImplementation(((
+        name: string,
+        operation?: (span: unknown) => Promise<unknown>
+      ) => {
+        const attrs: Record<string, unknown> = {};
+        spans[name] = attrs;
+        const handle = {
+          setAttr: (key: string, value: unknown) => {
+            attrs[key] = value;
+          },
+          run: <T,>(work: () => T) => work(),
+          end: () => {},
+        };
+        return operation ? operation(handle) : handle;
+      }) as never);
+      onTestFinished(() => span.mockRestore());
+      const { cache, directory, host } = mountCachedDirectory([], {
+        pageAll: async () => {
+          if (read === 'fails')
+            host.search.mockRejectedValue(new Error('storage busy'));
+          return [directoryChannel('a')];
+        },
+      });
+      cache.put(channelRecord('a'));
+      await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
+
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+
+      await vi.waitFor(() =>
+        expect(
+          spans['channel_directory.fallback']?.[
+            'channel_directory.fallback_outcome'
+          ]
+        ).toBe('loaded')
+      );
+      expect(
+        spans['channel_directory.fallback']?.[
+          'channel_directory.fallback_read_back'
+        ]
+      ).toBe(outcome);
+      expect(ids(directory.channels())).toEqual(['a']);
+    }
+  );
+
   it('follows what the cache changes after the network read began', async () => {
     let answer!: (channels: DirectoryChannel[]) => void;
     const { cache, directory, reopen } = mountCachedDirectory(

@@ -54,6 +54,7 @@ import {
   untrack,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
+import { match } from 'ts-pattern';
 import { filter, pipe } from 'wonka';
 import { currentQueryAccount, type QueryAccount } from '../auth/account-scope';
 import { useQueryAccount } from '../auth/use-query-account';
@@ -658,6 +659,14 @@ export async function fetchJoinedChannels(
   const { channels } = await pageJoinedChannels(client, signal);
   return channels;
 }
+
+/** How the fallback's read of the cache after its walk ended. */
+const readBackOutcome = (read: boolean | undefined) =>
+  match(read)
+    .with(true, () => 'read')
+    .with(false, () => 'failed')
+    .with(undefined, () => 'timed_out')
+    .exhaustive();
 
 /** What `work` resolved to, if it settled within `timeoutMs`; undefined
  * once that passed, or at once when `signal` aborts. `work` must never
@@ -1697,6 +1706,8 @@ export function createCachedChannelDirectory(
   // A full read lists every cached record; a keys read rereads only the
   // records a by-id read wrote.
   let wantFull = true;
+  // Full reads that published, so a caller can tell one it waited on ran.
+  let fullReads = 0;
   const wantKeys = new Set<string>();
   // While the network fallback runs: the records the last read found, what
   // changed in the cache after the fallback's read began, and every channel
@@ -2049,7 +2060,7 @@ export function createCachedChannelDirectory(
         );
         span.setAttr(
           'channel_directory.fallback_read_back',
-          readBack ? 'read' : 'timed_out'
+          readBackOutcome(readBack)
         );
         if (signal.aborted || run !== fallbackRun) return;
         fallback = { status: 'loaded', channels: walk.channels };
@@ -2141,6 +2152,7 @@ export function createCachedChannelDirectory(
       span.setAttr('channel_directory.complete', lane.complete);
       span.setAttr('channel_directory.lane_failed', lane.failed);
       publish(read);
+      fullReads += 1;
     });
 
   /** Rereads these records; false when a full read has to run instead. One
@@ -2199,10 +2211,12 @@ export function createCachedChannelDirectory(
     wantFull = true;
     return runner();
   };
-  /** True once a full read that started after the call has ended. */
+  /** Whether a full read that started after the call published what it
+   * read: false when it failed or found another viewer's cache. */
   const refreshed = async () => {
+    const before = fullReads;
     await refresh();
-    return true;
+    return fullReads > before;
   };
   // Never rejects: a failed read is reported inside.
   const refreshNow = () =>
