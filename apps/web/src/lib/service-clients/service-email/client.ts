@@ -179,7 +179,8 @@ async function imapConnectionError(response: Response) {
 /** Keep unsupported content and mailbox contention out of generic server errors. */
 async function emailRequest<T extends ObjectLike | Uint8Array>(
   url: string,
-  init?: SafeFetchInit
+  init?: SafeFetchInit,
+  replay: 'never' | 'fixed_state' = 'never'
 ): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>> {
   let retryAfter: number | undefined;
   const parentSpan = init?.trace?.parentSpan ?? Telemetry.captureContext();
@@ -209,12 +210,9 @@ async function emailRequest<T extends ObjectLike | Uint8Array>(
       },
     });
   const result = await request();
-  const method = (init?.method ?? 'GET').toUpperCase();
-  // A send response cannot establish pre-I/O refusal; never replay submission.
-  const retryable =
-    method !== 'GET' &&
-    method !== 'HEAD' &&
-    !(url === '/email/messages' && method === 'POST');
+  // Mutations require an explicit fixed-state contract before a busy response
+  // can be replayed. A send or operation resolution has no such contract.
+  const retryable = replay === 'fixed_state';
   if (result.isErr() && retryAfter !== undefined && retryable) {
     await sleep(retryAfter * 1000);
     if (!init?.signal?.aborted) return request();
@@ -484,10 +482,14 @@ export const emailClient = {
   async updateMessageLabelBatch(args: UpdateLabelBatchRequest) {
     const { message_ids, label_id, value } = args;
     return (
-      await emailFetch<UpdateLabelBatchResponse>(`/email/messages/labels`, {
-        method: 'PATCH',
-        body: JSON.stringify({ value, label_id, message_ids }),
-      })
+      await emailRequest<UpdateLabelBatchResponse>(
+        `/email/messages/labels`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ value, label_id, message_ids }),
+        },
+        'fixed_state'
+      )
     ).map((result) => result);
   },
   async messageOperation(messageId: string) {

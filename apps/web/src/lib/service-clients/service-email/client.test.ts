@@ -156,3 +156,32 @@ it('never retries a send when the server responds busy', async () => {
   expect(result.isErr()).toBe(true);
   expect(fetchWithToken).toHaveBeenCalledTimes(1);
 });
+
+it.each([
+  [
+    'retry-send resolution',
+    () =>
+      emailClient.resolveMessageOperation('message-1', {
+        action: 'retry_send',
+        revision: '7',
+        accept_duplicate_risk: true,
+      }),
+  ],
+  ['sync request', () => emailClient.startSync()],
+])(
+  'does not replay an unapproved %s after a busy response',
+  async (_, write) => {
+    fetchWithToken.mockClear();
+    fetchWithToken.mockResolvedValue(ok({}));
+    fetchWithToken.mockImplementationOnce(async (_input, options) =>
+      err([
+        await options.errorResponseFilter(
+          new Response('', { status: 429, headers: { 'Retry-After': '0' } })
+        ),
+      ])
+    );
+    const result = await write();
+    expect(result.isErr()).toBe(true);
+    expect(fetchWithToken).toHaveBeenCalledTimes(1);
+  }
+);

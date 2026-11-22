@@ -2155,8 +2155,10 @@ holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide
   the footer. Avoid fixed action widths or clipped error copy.
 
 For email content limits, show the closed unsupported-size message rather than
-a generic HTTP fault. Retry an email mutation 429 once after Retry-After, capped
-at five seconds; submission is excluded because its outcome may be uncertain.
+a generic HTTP fault. Email mutations default to no automatic replay. Opt in
+only a fixed-state idempotent operation or an enforced deduplication contract;
+never replay sends or operation resolution. The fixed-state label batch may
+retry one 429 after Retry-After, capped at five seconds.
 Selective fetch error filters return undefined to preserve default status and
 server retry behavior for responses they do not handle.
 
