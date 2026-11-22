@@ -80,7 +80,8 @@ export function ToolCard(props: ToolCardProps) {
             as="span"
             class="min-w-0 shrink-[100] truncate text-ink-disabled"
           >
-            {subtitle()}
+            {/* The trigger is a flex box, which can't draw an ellipsis itself. */}
+            <span class="truncate">{subtitle()}</span>
           </Tooltip>
         )}
       </Show>
