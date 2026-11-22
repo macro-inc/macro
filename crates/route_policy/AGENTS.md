@@ -98,8 +98,16 @@ the axum route constructors that declare each handler's category.
   `egress`, and `bot` and `harness` x `connect` and `approval_gate` (the
   computers pair and approve through them today).
 - A credential header (bot, harness, user API key, internal key) is never
-  verified by the resolver: alone it resolves no caller, beside a verified
-  token it only narrows it. A route that admits bots, computers or internal
-  services must therefore decide them where it verifies the credential (the
-  way an account manager's key is decided again), or no request of theirs
-  reaches a categorized route: they are refused `no_caller` until it does.
+  verified by the resolver: alone it resolves no caller (`no_caller`, 403),
+  which is the fail-closed default, and beside a verified token it only
+  narrows it.
+- **Rule for a service's categorization PR.** Categorizing a service's routes
+  must not start refusing a production caller. Before a route declares a
+  category, decide each real caller kind that reaches it with no verified
+  user token (a bot, a computer, an internal service, a user API key) where
+  its credential is verified: in the extractor that checks it, deciding again
+  as `macro_authorization` does for an account manager's key. The PR carries
+  one test per real caller kind that reaches a categorized route, showing it
+  is allowed what its table row allows and refused what it refuses, so no
+  production path starts returning 403. A route no such caller reaches says
+  so in the PR. Verifying credentials centrally instead is bead mac-vq1j.
