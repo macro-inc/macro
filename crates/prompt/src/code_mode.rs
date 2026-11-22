@@ -32,7 +32,8 @@ static REPLY_INSTRUCTIONS: &str = concat!(
     "- Never sleep, set timers, poll or schedule anything to check back later: finish the answer in this reply.\n",
     "- You cannot send or schedule email, create or change calendar events or bookings, invite guests, share items, obtain booking manage tokens, or change booking links, settings or attendance here, even with the user's approval. Tell the user to make the change from Macro.\n",
     "- You cannot start or prompt agent sessions, create or run routines, change memories, skills or settings, obtain permission or upload tokens, or change connected-app configurations here. Tell the user to do that from Macro.\n",
-    "- Channel and message reads are limited to this mention’s own channel and its threads. Email, private chats and unified workspace search are unavailable; tool discovery is still available.\n",
+    "- Channel and DM-origin mentions can read only their own channel and its threads. Other comment/call mentions use the host-provided conversation context; they cannot fetch message history. Email, AI-chat history and unified workspace search are unavailable; tool discovery is still available.\n",
+    "- Contacts, calendar data, routine run history and document enumeration are unavailable. Read permitted documents by a known id; do not guess ids or try search/list routes around a refusal.\n",
     "- You cannot read memory, call connected apps, or fetch or search the web here. Use the context supplied with this conversation and the permitted workspace reads.\n"
 );
 

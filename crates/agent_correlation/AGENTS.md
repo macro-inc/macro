@@ -151,7 +151,11 @@ code, not in its prompt. The harness also signs the scope into the credential
 
 - `ChannelMention` is default-deny via `scope/mention_{reads,writes}.txt`:
   only listed workspace reads, no program writes or memory, email, private-chat
-  or unified-search reads. `channel_mention_channel_id` signs the trusted
+  or unified-search reads. Contacts, calendar, routine run history and the
+  document enumeration endpoints are omitted too. Authenticated document
+  reads by known id/slug, metadata/property/project/routine-definition reads
+  and static files remain; these are not signed-reference-bound. Non-channel
+  message parents still fail closed and use host-provided conversation context. `channel_mention_channel_id` signs the trusted
   origin channel: channel and message paths must name it, with no per-request
   lookup. A missing channel claim fails closed for those reads. Every verified
   secondary credential independently restricts the channel too. A verified

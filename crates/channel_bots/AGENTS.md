@@ -28,8 +28,13 @@ decides whether to trigger, authorizes, and delivers a reply.
   so in-process guards apply. Each bound tool dispatch reinstates it too:
   the model stream driver polls tools on a separate task.
   Channel/message reads are bound to that signed origin channel and its
-  threads; a missing origin fails closed. Email, private chats and unified
-  search are unavailable. Programs make only explicitly listed workspace reads; they cannot write,
+  threads; a missing origin fails closed. Email, private chats outside the origin, unified search, contacts, calendar
+  data, routine run history and document enumeration are unavailable. A DM
+  is a channel parent and retains its own message reads. Non-channel parents
+  (document/task, initiative, CRM or call comments) retain host-provided
+  context but no message-history API reads; missing channel claims fail closed.
+  Authenticated by-id document reads remain; they are not bound to signed
+  conversation reference ids. Programs make only explicitly listed workspace reads; they cannot write,
   query memory, mint tokens, delegate work or call connected apps. Their
   egress always uses the forwarder, even with its rollout flag off, and has
   no unfurl upstream; DSS delivers the final reply.

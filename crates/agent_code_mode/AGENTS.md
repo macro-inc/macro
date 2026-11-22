@@ -125,7 +125,7 @@ stacks. Process isolation belongs to
   (`compose_routines::DIRECT`). No byte budget counts the skill, so it never
   takes another entity's place. `mcp_guides` and `entity_guide` (no attached skill) serve
   hosts that carry areas whole. `GuideHost::ChannelMention` omits memory,
-  email and private-chat guides and attached routine-writing skills; channel
+  email, private-chat, contact and calendar guides and attached routine-writing skills; channel
   programs cannot use them.
   All other area guidance is generated from the SDK; edit the TSDoc.
 - `src/inbound/internal_user_executions.rs`: `POST

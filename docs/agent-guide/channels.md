@@ -755,8 +755,13 @@ confirm that no task or delegated agent session is created. Programs use a signe
 ChannelMention credential with an explicit read allowlist and no program writes.
 Channel/message reads are restricted to the original channel and its threads;
 legacy credentials without a signed channel cannot read channels or messages.
-Email, private-chat reads and unified workspace search are unavailable under
-this default policy. The native reply tools only discover tools, load them,
+A DM is a channel parent and retains its own thread reads. Non-channel
+comments (documents/tasks, initiatives, CRM or calls) use the host-provided
+conversation context and cannot fetch message history through the API.
+Email, other private-chat reads, unified search, contacts, calendar data,
+routine run history and document enumeration are unavailable under this
+default policy. Authenticated document reads by known id or slug remain;
+the ids are not cryptographically bound to conversation references. The native reply tools only discover tools, load them,
 read self-knowledge or retrieve tool results; import planners are unavailable.
 They cannot create or edit documents or tasks, assign bots, send or schedule
 messages or email, mutate calendar events or bookings, change sharing or

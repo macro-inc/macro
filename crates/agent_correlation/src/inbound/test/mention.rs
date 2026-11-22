@@ -331,3 +331,32 @@ async fn mentions_refuse_personal_enumeration_but_keep_authenticated_by_id_reads
     );
     assert_eq!(observed, expected);
 }
+
+#[tokio::test]
+async fn non_channel_mentions_use_host_context_instead_of_message_history() {
+    let mention = mention_bearer(Some("channel_mention"), None);
+    let ordinary = mint(None, None, None, None);
+    let parent = Uuid::from_u128(914);
+    for kind in [
+        "document",
+        "initiative",
+        "crm_company",
+        "crm_contact",
+        "call",
+    ] {
+        let path = format!("/messages/{kind}/{parent}/threads/{}", Uuid::from_u128(915));
+        assert_eq!(
+            mention_request(&ordinary, None, &path).await,
+            (StatusCode::OK, 1)
+        );
+        assert_eq!(
+            mention_request(&mention, None, &path).await,
+            (StatusCode::FORBIDDEN, 0),
+            "{kind}"
+        );
+    }
+    assert_eq!(
+        mention_request(&mention, None, &format!("/documents/{parent}/markdown")).await,
+        (StatusCode::OK, 1)
+    );
+}

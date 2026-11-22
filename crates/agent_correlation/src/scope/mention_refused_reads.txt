@@ -81,6 +81,9 @@ GET /user/stripe/plan  # outside mention context reads
 GET /user/stripe/trial_eligibility  # outside mention context reads
 
 [calendar]
+GET /events/{event_id}/provider-url  # personal data outside the mention conversation
+GET /calendars  # personal data outside the mention conversation
+GET /availability-calendars  # personal data outside the mention conversation
 GET /health  # outside mention context reads
 GET /replacements/{operation_id}  # outside mention context reads
 GET /scheduling/bookings  # outside mention context reads
@@ -152,6 +155,7 @@ GET /v1/user_notifications/preferences  # outside mention context reads
 GET /v1/user_notifications/{notification_id}  # outside mention context reads
 
 [scheduled-action]
+GET /scheduled-actions/{id}/history  # personal data outside the mention conversation
 GET /health  # outside mention context reads
 GET /scheduled-actions/catalog  # outside mention context reads
 GET /scheduled-actions/draft-jobs  # outside mention context reads
@@ -166,6 +170,10 @@ GET /suggestions/generation  # outside mention context reads
 GET /suggestions/review  # outside mention context reads
 
 [storage]
+GET /documents/list  # mention default excludes document enumeration
+GET /documents  # mention default excludes document enumeration
+GET /calendar-events/{event_id}/ics  # personal data outside the mention conversation
+GET /calendar-events  # personal data outside the mention conversation
 GET /channels/attachments/{entity_type}/{entity_id}/references  # not bound to the signed origin channel or its thread
 GET /account-managers  # outside mention context reads
 GET /account-managers/{id}  # outside mention context reads
@@ -330,3 +338,7 @@ GET /whatsapp/pairing/{id}  # outside mention context reads
 [unfurl]
 GET /proxy  # outside mention context reads
 GET /unfurl  # outside mention context reads
+
+[contacts]
+GET /contacts/search  # personal data outside the mention conversation
+GET /contacts  # personal data outside the mention conversation

@@ -42,7 +42,9 @@ AI system prompts: one module per prompt section, each exporting a
   Its `REPLY_PROMPT` shares the general rules while keeping classic channel-bot
   results in the reply and limiting ChannelMention programs to explicitly allowed
   workspace reads. Channel/message reads are limited to the signed origin channel
-  and its threads; email, private chats and unified search are unavailable.
+  and its threads; non-channel mentions use host-provided message context.
+  Email, other private chats, unified search, contacts, calendar, routine run
+  history and document enumeration are unavailable; known-id reads remain.
   It overrides general write guidance, excludes memory reads,
   web requests and connected apps, and leaves reply delivery to the trusted host.
 

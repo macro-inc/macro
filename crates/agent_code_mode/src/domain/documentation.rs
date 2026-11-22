@@ -200,8 +200,8 @@ pub enum GuideHost {
 const SDK_ONLY_GUIDES: [&str; 2] = ["agentSessions", "tasks"];
 
 /// A host's area guidance as one prompt section, for prompts that do not route
-/// entities per turn. Channel mentions omit memory, email, private-chat
-/// guidance and attached write skills.
+/// entities per turn. Channel mentions omit memory, email, private-chat,
+/// contact/calendar guidance and attached write skills.
 /// The search guide stays a `DescribeCodeTools` topic, as
 /// it is SDK how-to rather than how an area works. Each guide comes with its
 /// attached skill, in the form that host can follow.
@@ -215,7 +215,10 @@ pub fn inline_guides(host: GuideHost) -> &'static str {
             })
             .filter(|doc| {
                 host != GuideHost::ChannelMention
-                    || !matches!(doc.name.as_str(), "memory" | "email" | "chats")
+                    || !matches!(
+                        doc.name.as_str(),
+                        "memory" | "email" | "chats" | "contacts" | "calendar"
+                    )
             })
             .filter_map(|doc| {
                 guide_with_skill(doc, host)
