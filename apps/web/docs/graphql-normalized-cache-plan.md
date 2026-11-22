@@ -825,7 +825,8 @@ Without the cache, writes read mounted Soup lists again
 into the cache. A row read while the engine is still opening is written only
 once it opens, in line with lists that loaded meanwhile, so list-sync reads the
 row again after the host's `whenReady()` (`isReady()` says whether it is
-open); a host without them is always ready. A list that never shows, filters or sorts
+open); a host without them is always ready. The reread runs after its pass, so
+later events never wait for the engine, and gives up after 60 s. A list that never shows, filters or sorts
 by unread state (the Quick Access and menu feeds) passes
 `ignoresNotifications: true`, and notification and email read-state writes
 refresh with `notificationsOnly: true`, which skips it. Such a list also reads
