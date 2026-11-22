@@ -53,8 +53,8 @@ registry; the header is attached to that call's options before request dispatch.
 Every request to an SDK origin carries `x-macro-code-execution`, whatever
 credential it carries: `1`, or `js_tools` from a JavaScript tools program
 (`egress::code_execution_marker`, set by the bootstrap and, in a proxied run,
-by the forwarder), so a refusal can name the dialect's operations. A program can drop it with a raw `fetch`, so a refusal
-that must hold reads the credential's signed claims too: every code-mode
+by the forwarder), so a refusal can name the dialect's operations. A program
+can drop it with a raw `fetch`, so a refusal that must hold reads the credential's signed claims too: every code-mode
 credential, public MCP's included, signs an agent or a routine
 (`macro_authorization::is_program_run`), and the header never overrides a
 signed claim. The calendar mutation routes demand the copy's `inbox` from

@@ -342,7 +342,7 @@ async fn js_tools_tool_example_reaches_the_gate_and_creates_and_reads_a_task() {
     for request in &requests {
         let lower = request.to_lowercase();
         assert!(lower.contains("authorization: bearer fixture-run-token"));
-        assert!(lower.contains("x-macro-code-execution: 1"));
+        assert!(lower.contains("x-macro-code-execution: js_tools"));
     }
 
     let record = store.0.lock().unwrap()[0].clone();
