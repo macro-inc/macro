@@ -62,10 +62,14 @@ fn attached_skill(entity: &str, host: GuideHost) -> Option<&'static str> {
     use system_skills::compose_routines;
     static CODE: LazyLock<String> = LazyLock::new(|| compose_routines::CODE.to_string());
     static DIRECT: LazyLock<String> = LazyLock::new(|| compose_routines::DIRECT.to_string());
-    (entity == ROUTINES_ENTITY).then(|| match host {
-        GuideHost::Code => CODE.as_str(),
-        GuideHost::Direct => DIRECT.as_str(),
-    })
+    if entity != ROUTINES_ENTITY {
+        return None;
+    }
+    match host {
+        GuideHost::Code => Some(CODE.as_str()),
+        GuideHost::Direct => Some(DIRECT.as_str()),
+        GuideHost::ChannelMention => None,
+    }
 }
 
 /// The entity whose guidance carries the Compose Routines skill.
@@ -184,6 +188,8 @@ pub fn mcp_guides() -> &'static str {
 pub enum GuideHost {
     /// A code-mode agent session: every area.
     Code,
+    /// A read-only channel reply: no memory access or attached write skills.
+    ChannelMention,
     /// A host whose tools run directly: the areas whose guidance does not
     /// depend on calling the SDK.
     Direct,
@@ -193,8 +199,9 @@ pub enum GuideHost {
 /// cannot do; those hosts keep their own tool guidance for them.
 const SDK_ONLY_GUIDES: [&str; 2] = ["agentSessions", "tasks"];
 
-/// Every area's guidance as one prompt section, for prompts that do not route
-/// entities per turn. The search guide stays a `DescribeCodeTools` topic, as
+/// A host's area guidance as one prompt section, for prompts that do not route
+/// entities per turn. Channel mentions omit memory and attached write skills.
+/// The search guide stays a `DescribeCodeTools` topic, as
 /// it is SDK how-to rather than how an area works. Each guide comes with its
 /// attached skill, in the form that host can follow.
 pub fn inline_guides(host: GuideHost) -> &'static str {
@@ -202,7 +209,10 @@ pub fn inline_guides(host: GuideHost) -> &'static str {
         sdk_documentation()
             .iter()
             .filter(|doc| doc.name != SEARCH_ENTITY)
-            .filter(|doc| host == GuideHost::Code || !SDK_ONLY_GUIDES.contains(&doc.name.as_str()))
+            .filter(|doc| {
+                host != GuideHost::Direct || !SDK_ONLY_GUIDES.contains(&doc.name.as_str())
+            })
+            .filter(|doc| host != GuideHost::ChannelMention || doc.name != "memory")
             .filter_map(|doc| {
                 guide_with_skill(doc, host)
                     .map(|guide| format!("\n# Macro {}\n{guide}\n", doc.name))
@@ -211,9 +221,11 @@ pub fn inline_guides(host: GuideHost) -> &'static str {
     }
     static CODE: LazyLock<String> = LazyLock::new(|| render(GuideHost::Code));
     static DIRECT: LazyLock<String> = LazyLock::new(|| render(GuideHost::Direct));
+    static MENTION: LazyLock<String> = LazyLock::new(|| render(GuideHost::ChannelMention));
     match host {
         GuideHost::Code => &CODE,
         GuideHost::Direct => &DIRECT,
+        GuideHost::ChannelMention => &MENTION,
     }
 }
 

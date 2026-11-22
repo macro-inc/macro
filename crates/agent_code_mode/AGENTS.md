@@ -124,7 +124,9 @@ stacks. Process isolation belongs to
   result; direct hosts inline its routine-tools form
   (`compose_routines::DIRECT`). No byte budget counts the skill, so it never
   takes another entity's place. `mcp_guides` and `entity_guide` (no attached skill) serve
-  hosts that carry areas whole. All of it is generated from the SDK; edit the TSDoc.
+  hosts that carry areas whole. `GuideHost::ChannelMention` omits the memory
+  guide and attached routine-writing skills; channel programs cannot use them.
+  All other area guidance is generated from the SDK; edit the TSDoc.
 - `src/inbound/internal_user_executions.rs`: `POST
   /internal/code-mode/user-executions`, internal key only, runs one program
   through `UserCodeMode` as the body's user, always as `ToolCaller::Agent(MACRO_AI_BOT_ID)`

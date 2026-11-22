@@ -408,7 +408,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         ),
         AiHost::ChannelBot if code_mode_direct => (
             prompt::CODE_MODE_TOOL_USE_PROMPT.to_string(),
-            inline_guides(GuideHost::Code),
+            inline_guides(GuideHost::ChannelMention),
         ),
         AiHost::ChannelBot | AiHost::Mcp => (
             prompt::DIRECT_TOOL_USE_PROMPT

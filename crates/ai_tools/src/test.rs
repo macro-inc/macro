@@ -1093,3 +1093,19 @@ fn code_mode_reads_memory_and_activity_through_the_sdk() {
     }
     assert!(!code_mode.toolset.tools.contains_key("ReadActivity"));
 }
+
+#[test]
+fn channel_code_mode_does_not_offer_memory_or_its_guide() {
+    let channel = tools_for_channel_bot_code_mode();
+    for name in ["ReadMemory", "UpdateMemory"] {
+        assert!(!channel.toolset.tools.contains_key(name), "{name}");
+    }
+    let memory = agent_code_mode::domain::entity_guide("memory").unwrap();
+    assert!(!channel.prompt.to_string().contains(memory));
+    assert!(
+        tools_for_agent_code_mode()
+            .prompt
+            .to_string()
+            .contains(memory)
+    );
+}
