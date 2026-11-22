@@ -1,0 +1,71 @@
+{
+  "head": "f678c962e5744b7783719f2f3827a764752a1fe7",
+  "recordedHead": "f678c962e5744b7783719f2f3827a764752a1fe7",
+  "finalHead": "01ed1bb6f56dcd4134b0d975109deec0d65355b6",
+  "compare": "https://github.com/macro-inc/macro/compare/f678c962e5744b7783719f2f3827a764752a1fe7...01ed1bb6f56dcd4134b0d975109deec0d65355b6",
+  "mergeHeadSmoke": "merge-head-smoke.json",
+  "standIns": [
+    "Dovecot IMAP/SMTP",
+    "Mailpit SMTP capture",
+    "Synthetic SMTP RCPT refusal gateway",
+    "Synthetic sign-in",
+    "LocalStack KMS",
+    "Local feature flags"
+  ],
+  "delivery": "SMTP acceptance is not recipient delivery. Captured MIME is bridged unchanged into controlled lab INBOXes.",
+  "stress": {
+    "head": "f678c962e5744b7783719f2f3827a764752a1fe7",
+    "exit": 0,
+    "iterationsRequested": 20,
+    "iterationsPassed": 20,
+    "retries": 0,
+    "test": "imap_connect_receive_isolate_and_send",
+    "log": "final-merge-stress20.log",
+    "finishedAt": "2026-11-22T16:23:22.945117+00:00"
+  },
+  "views": {
+    "desktop": {
+      "run": "1dcc7392b294",
+      "durationSeconds": 215.583984,
+      "movie": "desktop/imap-smtp-lab.mp4",
+      "verification": "desktop/verification.json",
+      "sha256": "e94d1cd234fd25fb96f14f0a68328aa79fe82f305bdedcffa0388449351b4d25",
+      "scopeGaps": [
+        "Real-provider flows are not recorded; mail servers, local auth, KMS and feature flags are lab stand-ins.",
+        "Large-mailbox and unreadable-saved-credential health states are not exercised in this flow."
+      ]
+    },
+    "phone": {
+      "run": "ca6b5cecff4f",
+      "durationSeconds": 234.75,
+      "movie": "phone/imap-smtp-lab.mp4",
+      "verification": "phone/verification.json",
+      "sha256": "86bc62025045c93c4d778a52c6a1c8d87583da32cb54b4f43a205ef16e557417",
+      "scopeGaps": [
+        "Real-provider flows are not recorded; mail servers, local auth, KMS and feature flags are lab stand-ins.",
+        "Large-mailbox and unreadable-saved-credential health states are not exercised in this flow.",
+        "Phone viewport and safe insets are Chromium emulation, not physical iOS."
+      ]
+    }
+  },
+  "connectClip": {
+    "sourceHead": "76dda9df8e3f6bf783a846aaeb6425ebe4fe8bc7",
+    "run": "3e737f2231fe",
+    "movie": "connect-76dda9df8e3/imap-smtp-connect.mp4",
+    "verification": "connect-76dda9df8e3/verification.json",
+    "sha256": "4061fae409f6b5859d525ce153a9009e0723230fe3ee3a29a1a0404a336d513e",
+    "durationSeconds": 102.541992,
+    "dialogReceipt": "browser-dialog-traces.json"
+  },
+  "backendBuildHead": "fa7fac87a40e0590fa0a416b1615800b330b0dad",
+  "backendSourceEquivalent": true,
+  "postRecordingDelta": {
+    "base": "76dda9df8e3f6bf783a846aaeb6425ebe4fe8bc7",
+    "head": "01ed1bb6f56dcd4134b0d975109deec0d65355b6",
+    "scope": "tests and README only",
+    "compare": "https://github.com/macro-inc/macro/compare/76dda9df8e3f6bf783a846aaeb6425ebe4fe8bc7...01ed1bb6f56dcd4134b0d975109deec0d65355b6",
+    "diffStat": "test-only-diff-stat.txt"
+  },
+  "gates": "gate-results.json",
+  "knownRetries": "known-retries-01ed.json"
+}

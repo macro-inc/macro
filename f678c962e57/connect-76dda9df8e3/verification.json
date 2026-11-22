@@ -1,0 +1,650 @@
+{
+  "run": "3e737f2231fe",
+  "scope": "synthetic Dovecot/Mailpit lab through protected tailnet HTTPS preview",
+  "realProvider": "unverified",
+  "stages": {
+    "login": {
+      "at": "2026-11-22T18:52:04.956Z",
+      "method": "normal UI passwordless",
+      "account": "reader-3e737f2231fe@maillab.example.net"
+    },
+    "refetch-Home-chooser": {
+      "at": "2026-11-22T18:52:30.090Z",
+      "beganAt": "2026-11-22T18:52:26.106Z",
+      "completedAt": "2026-11-22T18:52:30.090Z",
+      "httpStatus": 200,
+      "path": "/dss/items/soup/graphql",
+      "trigger": "capture harness activates underlying list tab while modal open; actual app query and unchanged response",
+      "sameDialogNode": true,
+      "emptyStateUnmountedDuringRead": true,
+      "dialogAliveDuringRead": true,
+      "responseDelayMs": 1800,
+      "heldRealResponses": 1,
+      "responseBytesUnchanged": true,
+      "coldLoadingBranch": "real changed-tab request; deterministic loading-to-empty regression tests also cover this ownership boundary"
+    },
+    "refetch-Email-chooser": {
+      "at": "2026-11-22T18:52:44.111Z",
+      "beganAt": "2026-11-22T18:52:40.220Z",
+      "completedAt": "2026-11-22T18:52:44.111Z",
+      "httpStatus": 200,
+      "path": "/dss/items/soup/graphql",
+      "trigger": "capture harness activates underlying list tab while modal open; actual app query and unchanged response",
+      "sameDialogNode": true,
+      "emptyStateUnmountedDuringRead": true,
+      "dialogAliveDuringRead": true,
+      "responseDelayMs": 1800,
+      "heldRealResponses": 1,
+      "responseBytesUnchanged": true,
+      "coldLoadingBranch": "real changed-tab request; deterministic loading-to-empty regression tests also cover this ownership boundary"
+    },
+    "refetch-Home-typed IMAP form": {
+      "at": "2026-11-22T18:53:01.315Z",
+      "beganAt": "2026-11-22T18:52:57.377Z",
+      "completedAt": "2026-11-22T18:53:01.314Z",
+      "httpStatus": 200,
+      "path": "/dss/items/soup/graphql",
+      "trigger": "capture harness activates underlying list tab while modal open; actual app query and unchanged response",
+      "sameDialogNode": true,
+      "emptyStateUnmountedDuringRead": true,
+      "dialogAliveDuringRead": true,
+      "responseDelayMs": 1800,
+      "heldRealResponses": 1,
+      "responseBytesUnchanged": true,
+      "coldLoadingBranch": "real changed-tab request; deterministic loading-to-empty regression tests also cover this ownership boundary"
+    },
+    "refetch-Email-typed IMAP form": {
+      "at": "2026-11-22T18:53:15.353Z",
+      "beganAt": "2026-11-22T18:53:11.476Z",
+      "completedAt": "2026-11-22T18:53:15.353Z",
+      "httpStatus": 200,
+      "path": "/dss/items/soup/graphql",
+      "trigger": "capture harness activates underlying list tab while modal open; actual app query and unchanged response",
+      "sameDialogNode": true,
+      "emptyStateUnmountedDuringRead": true,
+      "dialogAliveDuringRead": true,
+      "responseDelayMs": 1800,
+      "heldRealResponses": 1,
+      "responseBytesUnchanged": true,
+      "coldLoadingBranch": "real changed-tab request; deterministic loading-to-empty regression tests also cover this ownership boundary"
+    },
+    "rejectedCredentials": {
+      "at": "2026-11-22T18:53:30.468Z",
+      "status": 422,
+      "typedError": "credentials_rejected",
+      "settingsRetained": true,
+      "passwordCleared": true,
+      "actionStable": true,
+      "traceId": "a94e5259d7137f1b5f5c78dd9704e39c",
+      "traceContext": "observed frontend-propagated traceparent; no request or response changed"
+    },
+    "successfulRetry": {
+      "at": "2026-11-22T18:53:35.568Z",
+      "status": 200,
+      "traceId": "fadf7503a4fd3fc3df5b170bd6e8168a",
+      "traceContext": "observed frontend-propagated traceparent; no request or response changed"
+    },
+    "connect": {
+      "at": "2026-11-22T18:53:35.737Z",
+      "id": "01a2049b-47d7-773a-8ac3-64bceb42390d",
+      "discovery": 200,
+      "verification": 200,
+      "catalogStatus": 200,
+      "syncStatus": "SYNCING",
+      "link_id": "01a2049b-47d7-773a-8ac3-64bceb42390d",
+      "provider": "IMAP",
+      "sync_active": true,
+      "sync_generation": 1,
+      "grant_generation": 1
+    },
+    "connectAnother": {
+      "at": "2026-11-22T18:53:46.004Z",
+      "chooserOpened": true,
+      "dismissedWithoutChangingExistingLink": true
+    },
+    "browserTraceFlush": {
+      "at": "2026-11-22T18:53:54.292Z",
+      "outsideMovie": true,
+      "waitedMs": 6000,
+      "exports": {
+        "200": 37
+      }
+    }
+  },
+  "gaps": [
+    "Real-provider flows are not recorded; mail servers, local auth, KMS and feature flags are lab stand-ins.",
+    "Large-mailbox and unreadable-saved-credential health states are not exercised in this flow."
+  ],
+  "source": {
+    "head": "76dda9df8e3f6bf783a846aaeb6425ebe4fe8bc7",
+    "branch": "wolf/imap-complete",
+    "project": "macro-imap-preview",
+    "runtimeProvenance": "Unchanged backend artifacts from verified fa7 build; frontend refreshed to PR head",
+    "backendBuildHead": "fa7fac87a40e0590fa0a416b1615800b330b0dad",
+    "runningBinaryHashes": {
+      "imap_service": {
+        "binary": "imap_service",
+        "sha256": "d5c31b2ab71dbb7b4dd1e6f29c694d194da01a5c38917057469caaa1baeb5fb8"
+      },
+      "email_service": {
+        "binary": "email_service",
+        "sha256": "e038990452c3ff975b8b1a5fdd6f0a4c7974eedbe58622771660076de3fff849"
+      },
+      "email_pubsub_workers": {
+        "binary": "pubsub_workers",
+        "sha256": "57959617fd50438d8c1918b86afb11c93ceab503adbfb72cc946a125246495b5"
+      },
+      "authentication-service": {
+        "binary": "authentication_service",
+        "sha256": "01b8f3d5891a63e80d416bfa8d79515bbcb4f851e64f28027bdcd3acb4a5c49c"
+      },
+      "document_storage_service": {
+        "binary": "document_storage_service",
+        "sha256": "534ba9b49d28ca497204b5663442a38f230b86c124d5b0c205c4590c4b2e2d62"
+      }
+    },
+    "allRunningNativeApps": [
+      {
+        "service": "email_pubsub_workers",
+        "binary": "pubsub_workers",
+        "sha256": "57959617fd50438d8c1918b86afb11c93ceab503adbfb72cc946a125246495b5"
+      },
+      {
+        "service": "email_service",
+        "binary": "email_service",
+        "sha256": "e038990452c3ff975b8b1a5fdd6f0a4c7974eedbe58622771660076de3fff849"
+      },
+      {
+        "service": "notification_service",
+        "binary": "notification_service",
+        "sha256": "d07d5d867f71bcdb9cc3c8344c733be6af86a38463d5a4bd66cfb283f3ebd3f5"
+      },
+      {
+        "service": "calendar_service",
+        "binary": "calendar_service",
+        "sha256": "9ea7585846179e360e641953fae7495c797e60ac040a15c58f0ec312888f3bf8"
+      },
+      {
+        "service": "document_storage_service",
+        "binary": "document_storage_service",
+        "sha256": "534ba9b49d28ca497204b5663442a38f230b86c124d5b0c205c4590c4b2e2d62"
+      },
+      {
+        "service": "agent_harness_service",
+        "binary": "agent_harness_service",
+        "sha256": "82718bbb5397252fb3eea31d74af1b01a17afe95565de162353493dce4076714"
+      },
+      {
+        "service": "outlook_emulator",
+        "binary": "outlook_emulator",
+        "sha256": "845f5a6818540c952ed879e0a0b1e910be85692afd44c5a5e9d576de4cdc3ee7"
+      },
+      {
+        "service": "gmail_emulator",
+        "binary": "gmail_emulator",
+        "sha256": "3c2ef1fef9722f56909e557ecb0d06dcbab36be3855f1578de41a5fd7c14471e"
+      },
+      {
+        "service": "imap_service",
+        "binary": "imap_service",
+        "sha256": "d5c31b2ab71dbb7b4dd1e6f29c694d194da01a5c38917057469caaa1baeb5fb8"
+      },
+      {
+        "service": "authentication-service",
+        "binary": "authentication_service",
+        "sha256": "01b8f3d5891a63e80d416bfa8d79515bbcb4f851e64f28027bdcd3acb4a5c49c"
+      },
+      {
+        "service": "unfurl_service",
+        "binary": "unfurl_service",
+        "sha256": "b9385437e25f625e91aa97de8c1a02bc8cb8d50b36d3e1da2b0c63155c02a32d"
+      },
+      {
+        "service": "connection_gateway",
+        "binary": "connection_gateway_service",
+        "sha256": "4cbb9cf3296711ce8e8edd34365b4d4df1a480a9fb63567fdd16a1d90a8e394a"
+      },
+      {
+        "service": "model_emulator",
+        "binary": "model_emulator",
+        "sha256": "3e75530da79483207220d2f36f5d55578a8201ef1b535b2edafd1880c7ce1c6e"
+      },
+      {
+        "service": "static_file_service",
+        "binary": "static_file_service",
+        "sha256": "c456d92cb91cc28ab9b62750fc639a3f16d88d126371abe4c1bd34ee7693deab"
+      },
+      {
+        "service": "document_upload_finalizer",
+        "binary": "document_upload_finalizer_local_worker",
+        "sha256": "731ac5b2b92d010a06a81a1a93afd29bad71e1eb809d7536c176bd8ecf5412e6"
+      },
+      {
+        "service": "whatsapp_session_service",
+        "binary": "whatsapp_session_service",
+        "sha256": "423dd98503105fe0d71160577dbaab142230a7aaf61267921ae5fd6b32a196b6"
+      },
+      {
+        "service": "contacts_service",
+        "binary": "contacts_service",
+        "sha256": "61cd41557c82ca87afa936f9f97aad45d534f9347f325310fbb55c83546c0ea5"
+      },
+      {
+        "service": "image_proxy_service",
+        "binary": "image_proxy_service",
+        "sha256": "0c07dcd08623ea99e3a12c0bd291bb6cc654c958e406266855cd9880c0ee2334"
+      }
+    ]
+  },
+  "current": "connect",
+  "browserTraceTransport": {
+    "privateGateAuthenticationSuppliedByHarness": true,
+    "requestBodiesUnchanged": true,
+    "applicationRequestsUnchanged": true
+  },
+  "authProgress": {
+    "role": "reader",
+    "loginStatus": 200,
+    "verificationStatus": 200,
+    "phase": "signed-in desktop shell visible"
+  },
+  "providerCapabilityRequests": [
+    {
+      "role": "retention",
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T18:52:02.528Z",
+      "state": "completed",
+      "headersAt": "2026-11-22T18:52:02.561Z",
+      "status": 200,
+      "durationToHeadersMs": 22.675,
+      "endedAt": "2026-11-22T18:52:02.570Z",
+      "durationMs": 43.588,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "role": "reader",
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T18:52:04.454Z",
+      "state": "completed",
+      "headersAt": "2026-11-22T18:52:04.470Z",
+      "status": 200,
+      "durationToHeadersMs": 9.414,
+      "endedAt": "2026-11-22T18:52:04.486Z",
+      "durationMs": 33.012,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "role": "reader",
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T18:52:26.058Z",
+      "state": "completed",
+      "headersAt": "2026-11-22T18:52:26.080Z",
+      "status": 200,
+      "durationToHeadersMs": 7.034,
+      "endedAt": "2026-11-22T18:52:26.084Z",
+      "durationMs": 15.172,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "role": "reader",
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T18:52:40.186Z",
+      "state": "completed",
+      "headersAt": "2026-11-22T18:52:40.201Z",
+      "status": 200,
+      "durationToHeadersMs": 7.863,
+      "endedAt": "2026-11-22T18:52:40.214Z",
+      "durationMs": 14.866,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "role": "retention",
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T18:52:54.858Z",
+      "state": "completed",
+      "headersAt": "2026-11-22T18:52:54.874Z",
+      "status": 200,
+      "durationToHeadersMs": 9.689,
+      "endedAt": "2026-11-22T18:52:54.883Z",
+      "durationMs": 17.775,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "role": "retention",
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T18:53:09.150Z",
+      "state": "completed",
+      "headersAt": "2026-11-22T18:53:09.163Z",
+      "status": 200,
+      "durationToHeadersMs": 6.921,
+      "endedAt": "2026-11-22T18:53:09.173Z",
+      "durationMs": 13.06,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "role": "reader",
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T18:53:21.351Z",
+      "state": "completed",
+      "headersAt": "2026-11-22T18:53:21.368Z",
+      "status": 200,
+      "durationToHeadersMs": 12.199,
+      "endedAt": "2026-11-22T18:53:21.387Z",
+      "durationMs": 19.846,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "role": "reader",
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T18:53:39.914Z",
+      "state": "completed",
+      "headersAt": "2026-11-22T18:53:39.929Z",
+      "status": 200,
+      "durationToHeadersMs": 7.591,
+      "endedAt": "2026-11-22T18:53:39.947Z",
+      "durationMs": 13.544,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    }
+  ],
+  "providerCapabilities": [
+    {
+      "at": "2026-11-22T18:52:02.570Z",
+      "role": "retention",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T18:52:04.486Z",
+      "role": "reader",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T18:52:26.084Z",
+      "role": "reader",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T18:52:40.214Z",
+      "role": "reader",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T18:52:54.883Z",
+      "role": "retention",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T18:53:09.173Z",
+      "role": "retention",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T18:53:21.387Z",
+      "role": "reader",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T18:53:39.947Z",
+      "role": "reader",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    }
+  ],
+  "browserTraceExports": {
+    "200": 37
+  },
+  "movieStartedAt": "2026-11-22T18:52:06.764Z",
+  "dialogActions": [
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:1",
+      "surface": "Home",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T18:52:24.322Z",
+      "closedAt": "2026-11-22T18:52:31.991Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:2",
+      "surface": "Home",
+      "kind": "setup",
+      "openedAt": "2026-11-22T18:52:31.891Z",
+      "closedAt": "2026-11-22T18:52:36.363Z",
+      "expectedCloseReason": "dismissed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:3",
+      "surface": "Email",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T18:52:38.449Z",
+      "closedAt": "2026-11-22T18:52:46.106Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:4",
+      "surface": "Email",
+      "kind": "setup",
+      "openedAt": "2026-11-22T18:52:45.912Z",
+      "closedAt": "2026-11-22T18:52:50.513Z",
+      "expectedCloseReason": "dismissed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:5",
+      "surface": "Home",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T18:52:53.113Z",
+      "closedAt": "2026-11-22T18:52:56.921Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:6",
+      "surface": "Home",
+      "kind": "setup",
+      "openedAt": "2026-11-22T18:52:56.701Z",
+      "closedAt": "2026-11-22T18:53:05.367Z",
+      "expectedCloseReason": "dismissed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:7",
+      "surface": "Email",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T18:53:07.412Z",
+      "closedAt": "2026-11-22T18:53:11.146Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:8",
+      "surface": "Email",
+      "kind": "setup",
+      "openedAt": "2026-11-22T18:53:10.974Z",
+      "closedAt": "2026-11-22T18:53:19.411Z",
+      "expectedCloseReason": "dismissed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:9",
+      "surface": "Email final",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T18:53:21.303Z",
+      "closedAt": "2026-11-22T18:53:23.577Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:10",
+      "surface": "Email final",
+      "kind": "setup",
+      "openedAt": "2026-11-22T18:53:23.410Z",
+      "closedAt": "2026-11-22T18:53:35.577Z",
+      "expectedCloseReason": "completed",
+      "emailLinkId": "01a2049b-47d7-773a-8ac3-64bceb42390d"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:11",
+      "surface": "Connect another",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T18:53:39.879Z",
+      "closedAt": "2026-11-22T18:53:44.204Z",
+      "expectedCloseReason": "dismissed"
+    }
+  ],
+  "handoffs": [
+    {
+      "fromActionId": "3e737f2231fe:1",
+      "toActionId": "3e737f2231fe:2",
+      "at": "2026-11-22T18:52:31.991Z",
+      "frameSamples": 6,
+      "mutationSamples": 1,
+      "minimumBackdrops": 1,
+      "zeroBackdropObservations": 0,
+      "styles": [
+        {
+          "opacity": "1",
+          "backgroundColor": "lab(0 0 0 / 0.1)",
+          "backdropFilter": "blur(2px) saturate(1.05)"
+        }
+      ]
+    },
+    {
+      "fromActionId": "3e737f2231fe:3",
+      "toActionId": "3e737f2231fe:4",
+      "at": "2026-11-22T18:52:46.105Z",
+      "frameSamples": 8,
+      "mutationSamples": 1,
+      "minimumBackdrops": 1,
+      "zeroBackdropObservations": 0,
+      "styles": [
+        {
+          "opacity": "1",
+          "backgroundColor": "lab(0 0 0 / 0.1)",
+          "backdropFilter": "blur(2px) saturate(1.05)"
+        }
+      ]
+    },
+    {
+      "fromActionId": "3e737f2231fe:5",
+      "toActionId": "3e737f2231fe:6",
+      "at": "2026-11-22T18:52:56.920Z",
+      "frameSamples": 6,
+      "mutationSamples": 1,
+      "minimumBackdrops": 1,
+      "zeroBackdropObservations": 0,
+      "styles": [
+        {
+          "opacity": "1",
+          "backgroundColor": "lab(0 0 0 / 0.1)",
+          "backdropFilter": "blur(2px) saturate(1.05)"
+        }
+      ]
+    },
+    {
+      "fromActionId": "3e737f2231fe:7",
+      "toActionId": "3e737f2231fe:8",
+      "at": "2026-11-22T18:53:11.146Z",
+      "frameSamples": 6,
+      "mutationSamples": 1,
+      "minimumBackdrops": 1,
+      "zeroBackdropObservations": 0,
+      "styles": [
+        {
+          "opacity": "1",
+          "backgroundColor": "lab(0 0 0 / 0.1)",
+          "backdropFilter": "blur(2px) saturate(1.05)"
+        }
+      ]
+    },
+    {
+      "fromActionId": "3e737f2231fe:9",
+      "toActionId": "3e737f2231fe:10",
+      "at": "2026-11-22T18:53:23.576Z",
+      "frameSamples": 6,
+      "mutationSamples": 1,
+      "minimumBackdrops": 1,
+      "zeroBackdropObservations": 0,
+      "styles": [
+        {
+          "opacity": "1",
+          "backgroundColor": "lab(0 0 0 / 0.1)",
+          "backdropFilter": "blur(2px) saturate(1.05)"
+        }
+      ]
+    }
+  ],
+  "movieFinishedAt": "2026-11-22T18:53:48.004Z",
+  "proofKind": "connect-only clip",
+  "recordedMoviesHead": "f678c962e5744b7783719f2f3827a764752a1fe7",
+  "result": "passed-through-connect",
+  "media": {
+    "movie": "connect-76dda9df8e3/imap-smtp-connect.mp4",
+    "before": "connect-76dda9df8e3/00-before-empty-inbox.png",
+    "after": "connect-76dda9df8e3/00-after-connect.png",
+    "review": "pending human playback and contact-sheet inspection",
+    "sha256": "4061fae409f6b5859d525ce153a9009e0723230fe3ee3a29a1a0404a336d513e",
+    "durationSeconds": 102.541992,
+    "fullDecodePassed": true,
+    "captionMinimumSeconds": 1.5,
+    "pathBase": "proof root"
+  },
+  "captureHarness": {
+    "driverSha256": "100bf6e48284864988fcb2e9247b54b81662a64e067c2344a2c9a4ff42c4878d",
+    "controlledListReadDelayMs": 1800,
+    "applicationRequestPayloadsUnchanged": true,
+    "realResponseBytesUnchanged": true,
+    "syntheticReaders": 2,
+    "signupFixture": "only owned Redis signup counter reset per committed harness; no database rows removed"
+  }
+}

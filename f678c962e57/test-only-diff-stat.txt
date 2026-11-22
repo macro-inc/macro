@@ -1,0 +1,5 @@
+ apps/web/tests/email-e2e/README.md                 |   8 +-
+ apps/web/tests/email-e2e/organise-sender.spec.ts   | 118 ++++++++++++++++-----
+ apps/web/tests/email-e2e/send-delivery.spec.ts     |  57 ++++++++++
+ .../tests/email-e2e/states-send1-failures.spec.ts  |  10 ++
+ 4 files changed, 164 insertions(+), 29 deletions(-)

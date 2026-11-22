@@ -1,0 +1,58 @@
+{
+  "head": "01ed1bb6f56dcd4134b0d975109deec0d65355b6",
+  "browserRun": "https://github.com/macro-inc/macro/actions/runs/45061757633",
+  "result": {
+    "firstPass": 762,
+    "retried": 2,
+    "skipped": 2
+  },
+  "classifications": [
+    {
+      "bead": "mac-7spd",
+      "test": "ways-thread-state.spec.ts: Mark done after a reload reaches the provider",
+      "provider": "Outlook",
+      "classification": "Pre-existing main product race; not caused by this PR",
+      "evidence": "Failure occurred before reload. Reminder GET completed after Enter; no reminder PUT occurred. The unchanged reminder form returns silently while its query is not ready.",
+      "impact": "A fast Enter while the reminder read is loading may do nothing.",
+      "firstAttempt": "Failed",
+      "retry": "Passed"
+    },
+    {
+      "bead": "mac-9njq",
+      "test": "states-send2-drafts.spec.ts: a draft this device cannot store says so until it can",
+      "provider": "Gmail",
+      "classification": "Pre-existing race, most likely in the test; not caused by this PR",
+      "evidence": "The second Retry locator never resolved after storage was restored. The banner had cleared; draft/save/sync code and server behavior are unchanged from main, and the links list was read once. No trace was uploaded, so the exact automatic recovery trigger is not established.",
+      "firstAttempt": "Timed out",
+      "retry": "Passed"
+    }
+  ],
+  "history": "Both passed first try in15 other checked runs:10main and5PR.",
+  "stoppingRule": "Pre-existing main races are recorded as follow-ups; no further test fix in this PR.",
+  "criticalSpecs": {
+    "organise-sender.spec.ts": {
+      "expected": 8,
+      "retries": 0
+    },
+    "ways-settings-manage.spec.ts": {
+      "expected": 2,
+      "retries": 0
+    },
+    "send-delivery.spec.ts": {
+      "expected": 14,
+      "retries": 0
+    },
+    "states-send1-failures.spec.ts": {
+      "expected": 4,
+      "retries": 0
+    },
+    "states-settings-accounts.spec.ts": {
+      "expected": 3,
+      "retries": 0
+    },
+    "list-controls.spec.ts": {
+      "expected": 8,
+      "retries": 0
+    }
+  }
+}

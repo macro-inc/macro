@@ -1,0 +1,9 @@
+{
+  "at": "2026-11-22T18:22:28.418432+00:00",
+  "scope": "owned imap-preview Redis signup-rate counter only, same operation as committed harness/sign-up-limit.ts",
+  "beforeCount": 50,
+  "removedCounters": 1,
+  "databaseRowsDeleted": 0,
+  "webhookReadTimeoutRestoredMs": 2000,
+  "rootCause": "local hourly signup cap, not a webhook timeout"
+}

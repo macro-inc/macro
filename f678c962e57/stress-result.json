@@ -1,0 +1,10 @@
+{
+  "head": "f678c962e5744b7783719f2f3827a764752a1fe7",
+  "exit": 0,
+  "iterationsRequested": 20,
+  "iterationsPassed": 20,
+  "retries": 0,
+  "test": "imap_connect_receive_isolate_and_send",
+  "log": "final-merge-stress20.log",
+  "finishedAt": "2026-11-22T16:23:22.945117+00:00"
+}

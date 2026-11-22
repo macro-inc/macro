@@ -1,0 +1,42 @@
+{
+  "head": "f678c962e5744b7783719f2f3827a764752a1fe7",
+  "run": "3e85a8ebaf58",
+  "check": {
+    "at": "2026-11-22T16:55:11.576Z",
+    "phoneViewport": "390x844 touch,44/34 safe insets",
+    "settingsExpanded": true,
+    "swipes": 2,
+    "before": {
+      "x": 28,
+      "y": 896,
+      "width": 334,
+      "height": 40
+    },
+    "immediate": {
+      "x": 28,
+      "y": 669,
+      "width": 334,
+      "height": 40
+    },
+    "after": {
+      "x": 28,
+      "y": 669,
+      "width": 334,
+      "height": 40
+    },
+    "footer": {
+      "x": 176.578125,
+      "y": 762,
+      "width": 64.484375,
+      "height": 36
+    },
+    "scroll": {
+      "scrollTop": 271,
+      "scrollHeight": 944,
+      "clientHeight": 673
+    },
+    "fullyReadable": true,
+    "waitAfterSwipeMs": 4500
+  },
+  "input": "CDP real touchStart/touchMove/touchEnd, two upward swipes, Server settings left expanded"
+}

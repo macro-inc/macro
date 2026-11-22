@@ -1,0 +1,37 @@
+{
+  "source": "browser ResourceTiming snapshots; capability path only; historical buffer may be partial; no URL query, headers or bodies",
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T16:38:42.985Z",
+      "endedAt": "2026-11-22T16:38:43.015Z",
+      "durationMs": 30,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T16:38:38.525Z",
+      "endedAt": "2026-11-22T16:38:38.570Z",
+      "durationMs": 44.200000047683716,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T16:38:39.568Z",
+      "endedAt": "2026-11-22T16:38:39.582Z",
+      "durationMs": 13.400000095367432,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T16:43:03.425Z",
+      "endedAt": "2026-11-22T16:43:03.509Z",
+      "durationMs": 84,
+      "status": 200
+    }
+  ]
+}

@@ -1,0 +1,468 @@
+{
+  "run": "aa7d2edf94d5",
+  "scope": "synthetic Dovecot/Mailpit lab through protected tailnet HTTPS preview",
+  "realProvider": "unverified",
+  "stages": {
+    "login": {
+      "at": "2026-11-22T18:54:38.730Z",
+      "method": "normal UI passwordless",
+      "account": "reader-aa7d2edf94d5@maillab.example.net"
+    },
+    "rejectedCredentials": {
+      "at": "2026-11-22T18:54:47.553Z",
+      "status": 422,
+      "typedError": "credentials_rejected",
+      "settingsRetained": true,
+      "passwordCleared": true,
+      "actionStable": true,
+      "traceId": "e2e3c3134abb4338a84698587a35886c",
+      "traceContext": "controlled traceparent on a real lab request; no response mocked"
+    },
+    "successfulRetry": {
+      "at": "2026-11-22T18:54:48.263Z",
+      "status": 200,
+      "traceId": "9669025a0a1747b7b60f165e061b1da6",
+      "traceContext": "controlled traceparent on a real lab request; no response mocked"
+    },
+    "connect": {
+      "at": "2026-11-22T18:54:48.412Z",
+      "id": "01a2049c-6539-7973-b5c1-113b8a71ba65",
+      "discovery": 200,
+      "verification": 200,
+      "catalogStatus": 200,
+      "syncStatus": "SYNCING",
+      "link_id": "01a2049c-6539-7973-b5c1-113b8a71ba65",
+      "provider": "IMAP",
+      "sync_active": true,
+      "sync_generation": 1,
+      "grant_generation": 1
+    },
+    "initial": {
+      "at": "2026-11-22T18:55:08.262Z",
+      "pendingState": "SYNCING",
+      "firstRows": 0,
+      "finalRows": 1,
+      "navigations": 0,
+      "sameDocument": true,
+      "barrier": "owned ingestion worker held during authorized maintenance, then resumed",
+      "messageId": "<seed.aa7d2edf94d5@maillab.example.net>",
+      "uid": "1",
+      "thread": "01a2049c-ad0c-789d-9cee-42e1c47e6b31"
+    },
+    "arrival": {
+      "at": "2026-11-22T18:55:19.630Z",
+      "messageId": "<arrival.aa7d2edf94d5@maillab.example.net>",
+      "uid": "2",
+      "appendAt": "2026-11-22T18:55:13.203Z",
+      "visibleAt": "2026-11-22T18:55:14.662Z",
+      "documentUnchanged": true,
+      "mainFrameNavigations": 0,
+      "idleBefore": 0,
+      "idleAfter": 1
+    },
+    "outbound": {
+      "at": "2026-11-22T18:56:05.423Z",
+      "messageId": "<01a2049c-f342-7b2a-9f82-57e3f20bf702@macro.email>",
+      "inReplyTo": [
+        "<seed.aa7d2edf94d5@maillab.example.net>"
+      ],
+      "references": [
+        "<seed.aa7d2edf94d5@maillab.example.net>"
+      ],
+      "sha256": "6c6fcf7f8d659c6a431289af8fb3cbae4f25e443f665d4a8a797020d1e083c71",
+      "mimeBytes": 2191,
+      "timings": {
+        "traceId": "b2f6fb3fbb0b1e130a5a0bcbd8274847",
+        "submitAt": "2026-11-22T18:55:35.116Z",
+        "smtpAcceptAt": "2026-11-22T18:55:35.144Z",
+        "attemptId": "01a2049c-f307-799b-b5fa-11210ad5a57b",
+        "messageId": "01a2049c-f342-7b2a-9f82-57e3f20bf702",
+        "undoDeadline": "2026-11-22T18:55:34.515443+00:00",
+        "sentConfirmedAt": "2026-11-22T18:55:40.234127+00:00",
+        "mailpitCapturedAt": "2026-11-22T18:55:35.14Z",
+        "undoToSubmitMs": 601,
+        "smtpTransactionMs": 28,
+        "acceptToHostSentMs": 5090
+      },
+      "mailpitMatches": 1,
+      "sentUID": "1"
+    },
+    "posthogOutage": {
+      "at": "2026-11-22T18:56:09.503Z",
+      "establishedArrival": true,
+      "smtpAccepted": true,
+      "ownedFlagsContainerWasStopped": true
+    },
+    "restart": {
+      "at": "2026-11-22T18:56:16.467Z",
+      "beforeServices": {
+        "imap_service": "2026-11-22T18:36:34.159428715Z",
+        "email_service": "2026-11-22T18:36:34.977186729Z"
+      },
+      "afterServices": {
+        "imap_service": "2026-11-22T18:56:11.244354177Z",
+        "email_service": "2026-11-22T18:56:11.992063057Z"
+      },
+      "deliveredAt": "2026-11-22T18:56:12.475Z",
+      "visibleAt": "2026-11-22T18:56:15.856Z",
+      "arrivalBoundMs": 15000,
+      "documentUnchanged": true,
+      "documentRequests": 0,
+      "newUID": "3",
+      "link": {
+        "link_id": "01a2049c-6539-7973-b5c1-113b8a71ba65",
+        "provider": "IMAP",
+        "sync_active": true,
+        "sync_generation": 1,
+        "grant_generation": 1
+      },
+      "beforeDB": [
+        {
+          "id": "01a2049c-acfc-7b1e-b2ee-a01f0724e588",
+          "thread_id": "01a2049c-ad0c-789d-9cee-42e1c47e6b31",
+          "global_id": "<seed.aa7d2edf94d5@maillab.example.net>",
+          "subject": "Preview conversation aa7d2edf94d5"
+        },
+        {
+          "id": "01a2049c-cabb-784b-8ea6-1f34d24540f4",
+          "thread_id": "01a2049c-cac0-7b72-9407-63d12c859109",
+          "global_id": "<arrival.aa7d2edf94d5@maillab.example.net>",
+          "subject": "Preview live arrival aa7d2edf94d5"
+        },
+        {
+          "id": "01a2049c-f342-7b2a-9f82-57e3f20bf702",
+          "thread_id": "01a2049c-ad0c-789d-9cee-42e1c47e6b31",
+          "global_id": "<01a2049c-f342-7b2a-9f82-57e3f20bf702@macro.email>",
+          "subject": "Re: Preview conversation aa7d2edf94d5"
+        }
+      ],
+      "afterDB": [
+        {
+          "id": "01a2049c-acfc-7b1e-b2ee-a01f0724e588",
+          "thread_id": "01a2049c-ad0c-789d-9cee-42e1c47e6b31",
+          "global_id": "<seed.aa7d2edf94d5@maillab.example.net>",
+          "subject": "Preview conversation aa7d2edf94d5"
+        },
+        {
+          "id": "01a2049c-cabb-784b-8ea6-1f34d24540f4",
+          "thread_id": "01a2049c-cac0-7b72-9407-63d12c859109",
+          "global_id": "<arrival.aa7d2edf94d5@maillab.example.net>",
+          "subject": "Preview live arrival aa7d2edf94d5"
+        },
+        {
+          "id": "01a2049c-f342-7b2a-9f82-57e3f20bf702",
+          "thread_id": "01a2049c-ad0c-789d-9cee-42e1c47e6b31",
+          "global_id": "<01a2049c-f342-7b2a-9f82-57e3f20bf702@macro.email>",
+          "subject": "Re: Preview conversation aa7d2edf94d5"
+        },
+        {
+          "id": "01a2049d-b76b-7ca3-beb4-9dc4d8a33dca",
+          "thread_id": "01a2049d-b76e-7ce2-97c6-66f9864af4f9",
+          "global_id": "<restart.aa7d2edf94d5@maillab.example.net>",
+          "subject": "Preview after restart aa7d2edf94d5"
+        }
+      ],
+      "beforeUIDs": [
+        {
+          "messageId": "<seed.aa7d2edf94d5@maillab.example.net>",
+          "folder": "Archive",
+          "uid": "1",
+          "subject": "Preview conversation aa7d2edf94d5"
+        },
+        {
+          "messageId": "<arrival.aa7d2edf94d5@maillab.example.net>",
+          "folder": "INBOX",
+          "uid": "2",
+          "subject": "Preview live arrival aa7d2edf94d5"
+        },
+        {
+          "messageId": "<01a2049c-f342-7b2a-9f82-57e3f20bf702@macro.email>",
+          "folder": "Sent",
+          "uid": "1",
+          "subject": "Re: Preview conversation aa7d2edf94d5"
+        }
+      ],
+      "afterUIDs": [
+        {
+          "messageId": "<seed.aa7d2edf94d5@maillab.example.net>",
+          "folder": "Archive",
+          "uid": "1",
+          "subject": "Preview conversation aa7d2edf94d5"
+        },
+        {
+          "messageId": "<arrival.aa7d2edf94d5@maillab.example.net>",
+          "folder": "INBOX",
+          "uid": "2",
+          "subject": "Preview live arrival aa7d2edf94d5"
+        },
+        {
+          "messageId": "<restart.aa7d2edf94d5@maillab.example.net>",
+          "folder": "INBOX",
+          "uid": "3",
+          "subject": "Preview after restart aa7d2edf94d5"
+        },
+        {
+          "messageId": "<01a2049c-f342-7b2a-9f82-57e3f20bf702@macro.email>",
+          "folder": "Sent",
+          "uid": "1",
+          "subject": "Re: Preview conversation aa7d2edf94d5"
+        }
+      ],
+      "outboundSubmissions": 1
+    },
+    "themes": {
+      "at": "2026-11-22T18:56:21.438Z",
+      "light": true,
+      "dark": true,
+      "source": "real running app; OS media preference"
+    }
+  },
+  "gaps": [
+    "Real-provider flows are not recorded; mail servers, local auth, KMS and feature flags are lab stand-ins.",
+    "Large-mailbox and unreadable-saved-credential health states are not exercised in this flow."
+  ],
+  "source": {
+    "head": "76dda9df8e3f6bf783a846aaeb6425ebe4fe8bc7",
+    "branch": "wolf/imap-complete",
+    "project": "macro-imap-preview",
+    "runtimeProvenance": "Unchanged backend artifacts from verified fa7 build; frontend refreshed to PR head",
+    "backendBuildHead": "fa7fac87a40e0590fa0a416b1615800b330b0dad",
+    "runningBinaryHashes": {
+      "imap_service": {
+        "binary": "imap_service",
+        "sha256": "d5c31b2ab71dbb7b4dd1e6f29c694d194da01a5c38917057469caaa1baeb5fb8"
+      },
+      "email_service": {
+        "binary": "email_service",
+        "sha256": "e038990452c3ff975b8b1a5fdd6f0a4c7974eedbe58622771660076de3fff849"
+      },
+      "email_pubsub_workers": {
+        "binary": "pubsub_workers",
+        "sha256": "57959617fd50438d8c1918b86afb11c93ceab503adbfb72cc946a125246495b5"
+      },
+      "authentication-service": {
+        "binary": "authentication_service",
+        "sha256": "01b8f3d5891a63e80d416bfa8d79515bbcb4f851e64f28027bdcd3acb4a5c49c"
+      },
+      "document_storage_service": {
+        "binary": "document_storage_service",
+        "sha256": "534ba9b49d28ca497204b5663442a38f230b86c124d5b0c205c4590c4b2e2d62"
+      }
+    },
+    "allRunningNativeApps": [
+      {
+        "service": "email_pubsub_workers",
+        "binary": "pubsub_workers",
+        "sha256": "57959617fd50438d8c1918b86afb11c93ceab503adbfb72cc946a125246495b5"
+      },
+      {
+        "service": "email_service",
+        "binary": "email_service",
+        "sha256": "e038990452c3ff975b8b1a5fdd6f0a4c7974eedbe58622771660076de3fff849"
+      },
+      {
+        "service": "notification_service",
+        "binary": "notification_service",
+        "sha256": "d07d5d867f71bcdb9cc3c8344c733be6af86a38463d5a4bd66cfb283f3ebd3f5"
+      },
+      {
+        "service": "calendar_service",
+        "binary": "calendar_service",
+        "sha256": "9ea7585846179e360e641953fae7495c797e60ac040a15c58f0ec312888f3bf8"
+      },
+      {
+        "service": "document_storage_service",
+        "binary": "document_storage_service",
+        "sha256": "534ba9b49d28ca497204b5663442a38f230b86c124d5b0c205c4590c4b2e2d62"
+      },
+      {
+        "service": "agent_harness_service",
+        "binary": "agent_harness_service",
+        "sha256": "82718bbb5397252fb3eea31d74af1b01a17afe95565de162353493dce4076714"
+      },
+      {
+        "service": "outlook_emulator",
+        "binary": "outlook_emulator",
+        "sha256": "845f5a6818540c952ed879e0a0b1e910be85692afd44c5a5e9d576de4cdc3ee7"
+      },
+      {
+        "service": "gmail_emulator",
+        "binary": "gmail_emulator",
+        "sha256": "3c2ef1fef9722f56909e557ecb0d06dcbab36be3855f1578de41a5fd7c14471e"
+      },
+      {
+        "service": "imap_service",
+        "binary": "imap_service",
+        "sha256": "d5c31b2ab71dbb7b4dd1e6f29c694d194da01a5c38917057469caaa1baeb5fb8"
+      },
+      {
+        "service": "authentication-service",
+        "binary": "authentication_service",
+        "sha256": "01b8f3d5891a63e80d416bfa8d79515bbcb4f851e64f28027bdcd3acb4a5c49c"
+      },
+      {
+        "service": "unfurl_service",
+        "binary": "unfurl_service",
+        "sha256": "b9385437e25f625e91aa97de8c1a02bc8cb8d50b36d3e1da2b0c63155c02a32d"
+      },
+      {
+        "service": "connection_gateway",
+        "binary": "connection_gateway_service",
+        "sha256": "4cbb9cf3296711ce8e8edd34365b4d4df1a480a9fb63567fdd16a1d90a8e394a"
+      },
+      {
+        "service": "model_emulator",
+        "binary": "model_emulator",
+        "sha256": "3e75530da79483207220d2f36f5d55578a8201ef1b535b2edafd1880c7ce1c6e"
+      },
+      {
+        "service": "static_file_service",
+        "binary": "static_file_service",
+        "sha256": "c456d92cb91cc28ab9b62750fc639a3f16d88d126371abe4c1bd34ee7693deab"
+      },
+      {
+        "service": "document_upload_finalizer",
+        "binary": "document_upload_finalizer_local_worker",
+        "sha256": "731ac5b2b92d010a06a81a1a93afd29bad71e1eb809d7536c176bd8ecf5412e6"
+      },
+      {
+        "service": "whatsapp_session_service",
+        "binary": "whatsapp_session_service",
+        "sha256": "423dd98503105fe0d71160577dbaab142230a7aaf61267921ae5fd6b32a196b6"
+      },
+      {
+        "service": "contacts_service",
+        "binary": "contacts_service",
+        "sha256": "61cd41557c82ca87afa936f9f97aad45d534f9347f325310fbb55c83546c0ea5"
+      },
+      {
+        "service": "image_proxy_service",
+        "binary": "image_proxy_service",
+        "sha256": "0c07dcd08623ea99e3a12c0bd291bb6cc654c958e406266855cd9880c0ee2334"
+      }
+    ]
+  },
+  "current": "restart",
+  "browserTraceTransport": {
+    "privateGateAuthenticationSuppliedByHarness": true,
+    "requestBodiesUnchanged": true,
+    "applicationRequestsUnchanged": true
+  },
+  "authProgress": {
+    "role": "reader",
+    "loginStatus": 200,
+    "verificationStatus": 200,
+    "phase": "signed-in desktop shell visible"
+  },
+  "providerCapabilityRequests": [
+    {
+      "role": "recipient",
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T18:54:34.017Z",
+      "state": "completed",
+      "headersAt": "2026-11-22T18:54:34.039Z",
+      "status": 200,
+      "durationToHeadersMs": 10.333,
+      "endedAt": "2026-11-22T18:54:34.050Z",
+      "durationMs": 33.764,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "role": "recipient",
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T18:54:35.049Z",
+      "state": "completed",
+      "headersAt": "2026-11-22T18:54:35.062Z",
+      "status": 200,
+      "durationToHeadersMs": 6.32,
+      "endedAt": "2026-11-22T18:54:35.079Z",
+      "durationMs": 19.918,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "role": "reader",
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T18:54:38.330Z",
+      "state": "completed",
+      "headersAt": "2026-11-22T18:54:38.349Z",
+      "status": 200,
+      "durationToHeadersMs": 13.319,
+      "endedAt": "2026-11-22T18:54:38.368Z",
+      "durationMs": 32.71,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "role": "reader",
+      "method": "GET",
+      "path": "/auth/link/email/providers",
+      "startedAt": "2026-11-22T18:54:39.947Z",
+      "state": "completed",
+      "headersAt": "2026-11-22T18:54:39.981Z",
+      "status": 200,
+      "durationToHeadersMs": 5.639,
+      "endedAt": "2026-11-22T18:54:39.992Z",
+      "durationMs": 13.56,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    }
+  ],
+  "providerCapabilities": [
+    {
+      "at": "2026-11-22T18:54:34.050Z",
+      "role": "recipient",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T18:54:35.079Z",
+      "role": "recipient",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T18:54:38.368Z",
+      "role": "reader",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T18:54:39.992Z",
+      "role": "reader",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    }
+  ],
+  "browserTraceExports": {
+    "200": 40
+  },
+  "renewalLink": "01a2049c-6539-7973-b5c1-113b8a71ba65",
+  "renewalAfter": "2026-11-22T18:56:15.856Z",
+  "proofKind": "merge-head smoke",
+  "smokeScope": [
+    "connect",
+    "first sync",
+    "new arrival without reload",
+    "one SMTP accepted with Sent copy",
+    "restart catch-up without reload or duplicates"
+  ],
+  "recordedMoviesHead": "f678c962e5744b7783719f2f3827a764752a1fe7",
+  "result": "passed-through-restart"
+}

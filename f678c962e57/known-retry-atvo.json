@@ -1,0 +1,33 @@
+{
+  "bead": "mac-atvo",
+  "classification": "Pre-existing main product race, not introduced by this PR",
+  "observedHead": "669593d09ef9774afb85f9ed72a5cc682b38a91e",
+  "browserRun": "https://github.com/macro-inc/macro/actions/runs/45059812433",
+  "case": {
+    "file": "send-delivery.spec.ts",
+    "provider": "Outlook",
+    "name": "a reply sent before a reload is not offered again in the composer",
+    "firstAttempt": "Failed after30 seconds waiting for EmailSendAttempt after reload",
+    "retry": "Passed"
+  },
+  "mechanism": "claimSend persists leaseUntil=now+60000; reload before the pending submit settles leaves the lease held. The new page skips the attempt until expiry.",
+  "impact": "Up to60-second status recovery delay after reload during slow submit; no resend or data loss",
+  "evidence": "Failed attempt completed SendEmailMessage after two draft/operation calls and CalendarChanges; passing attempt completed it before those calls. Both recorded PendingEmailSends six times; only the pass recorded EmailSendAttempt.",
+  "mainBase": "4ad2dfd438a4cb97ea6b8a6d23cebd664bafe1f3",
+  "unchangedSource": {
+    "apps/web/src/lib/queries/email/email-send-journal.ts": {
+      "mainBlob": "9faa6e5f5b453e3d1dc4691ba847401ade949802",
+      "prBlob": "9faa6e5f5b453e3d1dc4691ba847401ade949802"
+    },
+    "apps/web/src/lib/queries/email/email-send-dispatcher.ts": {
+      "mainBlob": "905d45b5077586be213bf578e5db415153a0751b",
+      "prBlob": "905d45b5077586be213bf578e5db415153a0751b"
+    },
+    "apps/web/src/features/email-compose/queries/send-progress.ts": {
+      "mainBlob": "7e0912aff7b7b1de89f78afce5eccd32d9afc73b",
+      "prBlob": "7e0912aff7b7b1de89f78afce5eccd32d9afc73b"
+    }
+  },
+  "testBoundary": "01ed1bb6f56 waits for the submit abort and reads the exact IndexedDB record until leaseUntil==0 before reload; original recovery and editor assertions unchanged.",
+  "productFix": "Separate follow-up; no production source changed by the test fix."
+}

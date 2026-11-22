@@ -1,0 +1,51 @@
+{
+  "head": "669593d09ef9774afb85f9ed72a5cc682b38a91e",
+  "ci": {
+    "run": 45059813076,
+    "url": "https://github.com/macro-inc/macro/actions/runs/45059813076",
+    "status": "success",
+    "checks": {
+      "success": 78,
+      "skipped": 18
+    }
+  },
+  "browser": {
+    "run": 45059812433,
+    "url": "https://github.com/macro-inc/macro/actions/runs/45059812433",
+    "status": "success",
+    "firstPass": 763,
+    "retried": 1,
+    "skipped": 2,
+    "criticalSpecs": {
+      "organise-sender.spec.ts": {
+        "expected": 8,
+        "retries": 0
+      },
+      "ways-settings-manage.spec.ts": {
+        "expected": 2,
+        "retries": 0
+      },
+      "states-send1-failures.spec.ts": {
+        "expected": 4,
+        "retries": 0
+      },
+      "states-settings-accounts.spec.ts": {
+        "expected": 3,
+        "retries": 0
+      },
+      "list-controls.spec.ts": {
+        "expected": 8,
+        "retries": 0
+      }
+    },
+    "retry": {
+      "file": "send-delivery.spec.ts",
+      "case": "a reply sent before a reload is not offered again in the composer",
+      "provider": "Outlook",
+      "firstAttempt": "30s timeout waiting for EmailSendAttempt after reload",
+      "secondAttempt": "passed",
+      "classification": "Pre-existing main product race: active submit holds a 60-second local lease through reload; test waited30 seconds. No resend or data loss.",
+      "bead": "mac-atvo"
+    }
+  }
+}

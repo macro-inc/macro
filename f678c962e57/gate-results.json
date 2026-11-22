@@ -1,0 +1,60 @@
+{
+  "head": "01ed1bb6f56dcd4134b0d975109deec0d65355b6",
+  "ci": {
+    "run": 45061758250,
+    "url": "https://github.com/macro-inc/macro/actions/runs/45061758250",
+    "status": "success",
+    "checks": {
+      "success": 78,
+      "skipped": 18,
+      "failing": 0,
+      "pending": 0
+    }
+  },
+  "browser": {
+    "run": 45061757633,
+    "url": "https://github.com/macro-inc/macro/actions/runs/45061757633",
+    "status": "success",
+    "firstPass": 762,
+    "retried": 2,
+    "skipped": 2,
+    "criticalSpecs": {
+      "organise-sender.spec.ts": {
+        "expected": 8,
+        "retries": 0
+      },
+      "ways-settings-manage.spec.ts": {
+        "expected": 2,
+        "retries": 0
+      },
+      "send-delivery.spec.ts": {
+        "expected": 14,
+        "retries": 0
+      },
+      "states-send1-failures.spec.ts": {
+        "expected": 4,
+        "retries": 0
+      },
+      "states-settings-accounts.spec.ts": {
+        "expected": 3,
+        "retries": 0
+      },
+      "list-controls.spec.ts": {
+        "expected": 8,
+        "retries": 0
+      }
+    },
+    "retryReceipt": "known-retries-01ed.json",
+    "classification": "Both pre-existing on main; non-blocking, recorded as mac-7spd and mac-9njq"
+  },
+  "backendE2e": {
+    "run": 45047474591,
+    "head": "fa7fac87a40e0590fa0a416b1615800b330b0dad",
+    "status": "success",
+    "carried": "Backend code unchanged by the later frontend/test commits"
+  },
+  "stress": "stress-result.json",
+  "smoke": "merge-head-smoke.json",
+  "smokeRuntimeHead": "76dda9df8e3f6bf783a846aaeb6425ebe4fe8bc7",
+  "laterDelta": "test-only-diff-stat.txt"
+}

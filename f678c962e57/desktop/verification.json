@@ -1,0 +1,757 @@
+{
+  "run": "1dcc7392b294",
+  "scope": "synthetic Dovecot/Mailpit lab through protected tailnet HTTPS preview",
+  "realProvider": "unverified",
+  "stages": {
+    "login": {
+      "at": "2026-11-22T16:38:43.359Z",
+      "method": "normal UI passwordless",
+      "account": "reader-1dcc7392b294@maillab.example.net"
+    },
+    "rejectedCredentials": {
+      "at": "2026-11-22T16:39:06.420Z",
+      "status": 422,
+      "typedError": "credentials_rejected",
+      "settingsRetained": true,
+      "passwordCleared": true,
+      "actionStable": true,
+      "traceId": "4797569d4d9643408e42bd70a888bf89",
+      "traceContext": "controlled traceparent on a real lab request; no response mocked"
+    },
+    "successfulRetry": {
+      "at": "2026-11-22T16:39:11.067Z",
+      "status": 200,
+      "traceId": "8cd53710dacf4417a72984d1e4a57a23",
+      "traceContext": "controlled traceparent on a real lab request; no response mocked"
+    },
+    "connect": {
+      "at": "2026-11-22T16:39:11.207Z",
+      "id": "01a20420-3b6c-7d04-a286-ce719610b7a7",
+      "discovery": 200,
+      "verification": 200,
+      "catalogStatus": 200,
+      "syncStatus": "SYNCING",
+      "link_id": "01a20420-3b6c-7d04-a286-ce719610b7a7",
+      "provider": "IMAP",
+      "sync_active": true,
+      "sync_generation": 1,
+      "grant_generation": 1
+    },
+    "initial": {
+      "at": "2026-11-22T16:39:20.196Z",
+      "pendingState": "SYNCING",
+      "firstRows": 0,
+      "finalRows": 1,
+      "navigations": 0,
+      "sameDocument": true,
+      "barrier": "owned ingestion worker held during authorized maintenance, then resumed",
+      "messageId": "<seed.1dcc7392b294@maillab.example.net>",
+      "uid": "1",
+      "thread": "01a20420-5400-725e-9de3-ae374b125da6"
+    },
+    "arrival": {
+      "at": "2026-11-22T16:39:33.046Z",
+      "messageId": "<arrival.1dcc7392b294@maillab.example.net>",
+      "uid": "2",
+      "appendAt": "2026-11-22T16:39:25.044Z",
+      "visibleAt": "2026-11-22T16:39:32.613Z",
+      "documentUnchanged": true,
+      "mainFrameNavigations": 0,
+      "idleBefore": 0,
+      "idleAfter": 1
+    },
+    "forcedGapAttempt1": {
+      "at": "2026-11-22T16:40:21.733Z",
+      "forcedTimingWindow": true,
+      "documentUnchanged": true,
+      "attempt": 1,
+      "triggerAt": "2026-11-22T16:39:37.236Z",
+      "committedRevision": 6,
+      "pauseRequestedAt": "2026-11-22T16:39:37.662Z",
+      "pausedAt": "2026-11-22T16:39:37.704Z",
+      "appendAckAt": "2026-11-22T16:39:37.829Z",
+      "resumeRequestedAt": "2026-11-22T16:39:37.851Z",
+      "resumedAt": "2026-11-22T16:39:37.904Z",
+      "pauseMs": 200,
+      "ownerUnchanged": true,
+      "ownerId": "01a20420-47d9-72e0-865e-d26969b75a83",
+      "watchdogPid": 2640676,
+      "watchdogIntervened": false,
+      "messageId": "<forced-gap-1.1dcc7392b294@maillab.example.net>",
+      "visibleAt": "2026-11-22T16:39:39.360Z",
+      "appendToVisibleMs": 1531,
+      "changedAtArm": {
+        "traceId": "e7b25881fc369797c229664103b9035d",
+        "startAt": "2026-11-22T16:39:37.918Z",
+        "endAt": "2026-11-22T16:39:37.932Z",
+        "durationMs": 13,
+        "idle.outcome": "changed",
+        "idle.changed_at_arm": true,
+        "snapshotEndedAt": "2026-11-22T16:39:37.571Z"
+      }
+    },
+    "forcedGap": {
+      "at": "2026-11-22T16:40:21.814Z",
+      "forcedTimingWindow": true,
+      "documentUnchanged": true,
+      "attempt": 1,
+      "triggerAt": "2026-11-22T16:39:37.236Z",
+      "committedRevision": 6,
+      "pauseRequestedAt": "2026-11-22T16:39:37.662Z",
+      "pausedAt": "2026-11-22T16:39:37.704Z",
+      "appendAckAt": "2026-11-22T16:39:37.829Z",
+      "resumeRequestedAt": "2026-11-22T16:39:37.851Z",
+      "resumedAt": "2026-11-22T16:39:37.904Z",
+      "pauseMs": 200,
+      "ownerUnchanged": true,
+      "ownerId": "01a20420-47d9-72e0-865e-d26969b75a83",
+      "watchdogPid": 2640676,
+      "watchdogIntervened": false,
+      "messageId": "<forced-gap-1.1dcc7392b294@maillab.example.net>",
+      "visibleAt": "2026-11-22T16:39:39.360Z",
+      "appendToVisibleMs": 1531,
+      "changedAtArm": {
+        "traceId": "e7b25881fc369797c229664103b9035d",
+        "startAt": "2026-11-22T16:39:37.918Z",
+        "endAt": "2026-11-22T16:39:37.932Z",
+        "durationMs": 13,
+        "idle.outcome": "changed",
+        "idle.changed_at_arm": true,
+        "snapshotEndedAt": "2026-11-22T16:39:37.571Z"
+      }
+    },
+    "outbound": {
+      "at": "2026-11-22T16:41:08.368Z",
+      "messageId": "<01a20421-630d-78bd-9bff-d4488575524b@macro.email>",
+      "inReplyTo": [
+        "<seed.1dcc7392b294@maillab.example.net>"
+      ],
+      "references": [
+        "<seed.1dcc7392b294@maillab.example.net>"
+      ],
+      "sha256": "128293e43ba7c0b1cd205152de5f87bf82cbd4515a6d5961aaf442a7fa7df78e",
+      "mimeBytes": 2191,
+      "timings": {
+        "traceId": "ae846caacdd14704c436991cba089748",
+        "submitAt": "2026-11-22T16:40:37.872Z",
+        "smtpAcceptAt": "2026-11-22T16:40:37.898Z",
+        "attemptId": "01a20421-62d9-7664-af05-086e85d61756",
+        "messageId": "01a20421-630d-78bd-9bff-d4488575524b",
+        "undoDeadline": "2026-11-22T16:40:36.669078+00:00",
+        "sentConfirmedAt": "2026-11-22T16:40:42.991918+00:00",
+        "mailpitCapturedAt": "2026-11-22T16:40:37.894Z",
+        "undoToSubmitMs": 1203,
+        "smtpTransactionMs": 26,
+        "acceptToHostSentMs": 5093
+      },
+      "mailpitMatches": 1,
+      "sentUID": "1"
+    },
+    "posthogOutage": {
+      "at": "2026-11-22T16:41:12.449Z",
+      "establishedArrival": true,
+      "smtpAccepted": true,
+      "ownedFlagsContainerWasStopped": true
+    },
+    "connectAnother": {
+      "at": "2026-11-22T16:41:17.375Z",
+      "chooserOpened": true,
+      "cancelledWithoutChangingExistingLink": true
+    },
+    "forcedRejection": {
+      "at": "2026-11-22T16:41:39.601Z",
+      "message_id": "01a20422-424a-73f4-bcb8-7e36558386b0",
+      "state": "failed",
+      "error_code": "send_rejected",
+      "attempt_id": "01a20422-4215-7664-af05-18d9d8e6ba09",
+      "sent": false,
+      "stage": "ready",
+      "send_refusal": {
+        "phase": "recipient",
+        "reply_class": "permanent",
+        "recipient_index": 0
+      },
+      "smtpPhase": "rcpt",
+      "replyClass": 5,
+      "failedNoticeVisible": true,
+      "dataEntered": false,
+      "seedMessageId": "<refusal-seed.1dcc7392b294@maillab.example.net>"
+    },
+    "queueRecovery": {
+      "at": "2026-11-22T16:42:00.442Z",
+      "newSendAccepted": true,
+      "submissions": 1,
+      "messageId": "<01a20422-a53e-7498-ad35-c5eb63e76b0b@macro.email>"
+    },
+    "returningSend": {
+      "at": "2026-11-22T16:42:53.556Z",
+      "timings": {
+        "traceId": "8b6d85a4864b63f088a0102c29490e86",
+        "submitAt": "2026-11-22T16:42:22.611Z",
+        "smtpAcceptAt": "2026-11-22T16:42:22.635Z",
+        "attemptId": "01a20422-fc69-7dd4-9519-88d1619f564e",
+        "messageId": "01a20422-fcac-7413-bb79-614b933e1174",
+        "undoDeadline": "2026-11-22T16:42:21.526503+00:00",
+        "sentConfirmedAt": "2026-11-22T16:42:27.722447+00:00",
+        "mailpitCapturedAt": "2026-11-22T16:42:22.633Z",
+        "undoToSubmitMs": 1085,
+        "smtpTransactionMs": 24,
+        "acceptToHostSentMs": 5087
+      }
+    },
+    "failureNoticeExpiry": {
+      "at": "2026-11-22T16:42:57.621Z",
+      "returnedToOriginalPage": true,
+      "oldFailureToastVisible": false,
+      "failedDraftStillFailed": true
+    },
+    "thread": {
+      "at": "2026-11-22T16:42:58.480Z",
+      "recipientLink": "01a2041f-c5cd-77f1-bcfb-3036c18ac248",
+      "recipientUID": "1",
+      "reply": {
+        "messageId": "<01a20422-fcac-7413-bb79-614b933e1174@macro.email>",
+        "inReplyTo": [
+          "<01a20421-630d-78bd-9bff-d4488575524b@macro.email>"
+        ],
+        "references": [
+          "<seed.1dcc7392b294@maillab.example.net>",
+          "<01a20421-630d-78bd-9bff-d4488575524b@macro.email>"
+        ],
+        "sha256": "ba9488a86fa33a76869c57364bb31a5f2936ec863b1848d66abe716c6f4f22f3",
+        "mimeBytes": 2733
+      },
+      "ownerUID": "8",
+      "sharedThread": "01a20420-5400-725e-9de3-ae374b125da6",
+      "messages": [
+        "01a20420-53f6-7feb-a955-bac52d33035d",
+        "01a20421-630d-78bd-9bff-d4488575524b",
+        "01a20423-ad34-793d-8cf3-c49dddfece87"
+      ],
+      "transport": "Mailpit capture \u2192 exact captured MIME APPEND into controlled INBOX in both directions"
+    },
+    "reconnect": {
+      "at": "2026-11-22T16:43:04.698Z",
+      "sameLink": true,
+      "before": {
+        "link_id": "01a20420-3b6c-7d04-a286-ce719610b7a7",
+        "provider": "IMAP",
+        "sync_active": true,
+        "sync_generation": 1,
+        "grant_generation": 1
+      },
+      "after": {
+        "link_id": "01a20420-3b6c-7d04-a286-ce719610b7a7",
+        "provider": "IMAP",
+        "sync_active": true,
+        "sync_generation": 2,
+        "grant_generation": 2
+      },
+      "status": 200
+    },
+    "restart": {
+      "at": "2026-11-22T16:43:21.032Z",
+      "beforeServices": {
+        "imap_service": "2026-11-22T16:30:43.725502504Z",
+        "email_service": "2026-11-22T16:30:44.459304897Z"
+      },
+      "afterServices": {
+        "imap_service": "2026-11-22T16:43:09.912999833Z",
+        "email_service": "2026-11-22T16:43:10.59936652Z"
+      },
+      "deliveredAt": "2026-11-22T16:43:11.082Z",
+      "visibleAt": "2026-11-22T16:43:20.629Z",
+      "arrivalBoundMs": 15000,
+      "documentUnchanged": true,
+      "documentRequests": 0,
+      "newUID": "9",
+      "link": {
+        "link_id": "01a20420-3b6c-7d04-a286-ce719610b7a7",
+        "provider": "IMAP",
+        "sync_active": true,
+        "sync_generation": 2,
+        "grant_generation": 2
+      },
+      "beforeDB": [
+        {
+          "id": "01a20420-53f6-7feb-a955-bac52d33035d",
+          "thread_id": "01a20420-5400-725e-9de3-ae374b125da6",
+          "global_id": "<seed.1dcc7392b294@maillab.example.net>",
+          "subject": "Preview conversation 1dcc7392b294"
+        },
+        {
+          "id": "01a20420-7798-7713-9abe-93c29f418a86",
+          "thread_id": "01a20420-779d-731f-9eb7-35833c8b21ef",
+          "global_id": "<arrival.1dcc7392b294@maillab.example.net>",
+          "subject": "Preview live arrival 1dcc7392b294"
+        },
+        {
+          "id": "01a20420-a7f4-73e1-aed9-6fcf6c4313e0",
+          "thread_id": "01a20420-a7f8-7c16-a0c9-be570da314a1",
+          "global_id": "<gap-trigger-1.1dcc7392b294@maillab.example.net>",
+          "subject": "Gap trigger 1 1dcc7392b294"
+        },
+        {
+          "id": "01a20420-a926-788c-8965-443728fda8ec",
+          "thread_id": "01a20420-a929-76cc-a956-23088d47b25e",
+          "global_id": "<forced-gap-1.1dcc7392b294@maillab.example.net>",
+          "subject": "Forced gap arrival 1 1dcc7392b294"
+        },
+        {
+          "id": "01a20421-630d-78bd-9bff-d4488575524b",
+          "thread_id": "01a20420-5400-725e-9de3-ae374b125da6",
+          "global_id": "<01a20421-630d-78bd-9bff-d4488575524b@macro.email>",
+          "subject": "Re: Preview conversation 1dcc7392b294"
+        },
+        {
+          "id": "01a20422-3afc-7f32-b4d6-ec4a0d83aa2e",
+          "thread_id": "01a20422-3b02-7318-b576-7f04ff4cc0f8",
+          "global_id": "<refusal-seed.1dcc7392b294@maillab.example.net>",
+          "subject": "Preview forced refusal 1dcc7392b294"
+        },
+        {
+          "id": "01a20422-424a-73f4-bcb8-7e36558386b0",
+          "thread_id": "01a20422-3b02-7318-b576-7f04ff4cc0f8",
+          "global_id": null,
+          "subject": "Re: Preview forced refusal 1dcc7392b294"
+        },
+        {
+          "id": "01a20422-9f39-7a03-9877-eb8cdcfee428",
+          "thread_id": "01a20422-9f3e-74e7-8f9d-df4155c3958d",
+          "global_id": "<queue-seed.1dcc7392b294@maillab.example.net>",
+          "subject": "Preview after refusal 1dcc7392b294"
+        },
+        {
+          "id": "01a20422-a53e-7498-ad35-c5eb63e76b0b",
+          "thread_id": "01a20422-9f3e-74e7-8f9d-df4155c3958d",
+          "global_id": "<01a20422-a53e-7498-ad35-c5eb63e76b0b@macro.email>",
+          "subject": "Re: Preview after refusal 1dcc7392b294"
+        },
+        {
+          "id": "01a20423-ad34-793d-8cf3-c49dddfece87",
+          "thread_id": "01a20420-5400-725e-9de3-ae374b125da6",
+          "global_id": "<01a20422-fcac-7413-bb79-614b933e1174@macro.email>",
+          "subject": "Re: Preview conversation 1dcc7392b294"
+        }
+      ],
+      "afterDB": [
+        {
+          "id": "01a20420-53f6-7feb-a955-bac52d33035d",
+          "thread_id": "01a20420-5400-725e-9de3-ae374b125da6",
+          "global_id": "<seed.1dcc7392b294@maillab.example.net>",
+          "subject": "Preview conversation 1dcc7392b294"
+        },
+        {
+          "id": "01a20420-7798-7713-9abe-93c29f418a86",
+          "thread_id": "01a20420-779d-731f-9eb7-35833c8b21ef",
+          "global_id": "<arrival.1dcc7392b294@maillab.example.net>",
+          "subject": "Preview live arrival 1dcc7392b294"
+        },
+        {
+          "id": "01a20420-a7f4-73e1-aed9-6fcf6c4313e0",
+          "thread_id": "01a20420-a7f8-7c16-a0c9-be570da314a1",
+          "global_id": "<gap-trigger-1.1dcc7392b294@maillab.example.net>",
+          "subject": "Gap trigger 1 1dcc7392b294"
+        },
+        {
+          "id": "01a20420-a926-788c-8965-443728fda8ec",
+          "thread_id": "01a20420-a929-76cc-a956-23088d47b25e",
+          "global_id": "<forced-gap-1.1dcc7392b294@maillab.example.net>",
+          "subject": "Forced gap arrival 1 1dcc7392b294"
+        },
+        {
+          "id": "01a20421-630d-78bd-9bff-d4488575524b",
+          "thread_id": "01a20420-5400-725e-9de3-ae374b125da6",
+          "global_id": "<01a20421-630d-78bd-9bff-d4488575524b@macro.email>",
+          "subject": "Re: Preview conversation 1dcc7392b294"
+        },
+        {
+          "id": "01a20422-3afc-7f32-b4d6-ec4a0d83aa2e",
+          "thread_id": "01a20422-3b02-7318-b576-7f04ff4cc0f8",
+          "global_id": "<refusal-seed.1dcc7392b294@maillab.example.net>",
+          "subject": "Preview forced refusal 1dcc7392b294"
+        },
+        {
+          "id": "01a20422-424a-73f4-bcb8-7e36558386b0",
+          "thread_id": "01a20422-3b02-7318-b576-7f04ff4cc0f8",
+          "global_id": null,
+          "subject": "Re: Preview forced refusal 1dcc7392b294"
+        },
+        {
+          "id": "01a20422-9f39-7a03-9877-eb8cdcfee428",
+          "thread_id": "01a20422-9f3e-74e7-8f9d-df4155c3958d",
+          "global_id": "<queue-seed.1dcc7392b294@maillab.example.net>",
+          "subject": "Preview after refusal 1dcc7392b294"
+        },
+        {
+          "id": "01a20422-a53e-7498-ad35-c5eb63e76b0b",
+          "thread_id": "01a20422-9f3e-74e7-8f9d-df4155c3958d",
+          "global_id": "<01a20422-a53e-7498-ad35-c5eb63e76b0b@macro.email>",
+          "subject": "Re: Preview after refusal 1dcc7392b294"
+        },
+        {
+          "id": "01a20423-ad34-793d-8cf3-c49dddfece87",
+          "thread_id": "01a20420-5400-725e-9de3-ae374b125da6",
+          "global_id": "<01a20422-fcac-7413-bb79-614b933e1174@macro.email>",
+          "subject": "Re: Preview conversation 1dcc7392b294"
+        },
+        {
+          "id": "01a20423-f89f-78ee-9f51-60156df03d9c",
+          "thread_id": "01a20423-f8a4-7afb-b327-980c5acf2c53",
+          "global_id": "<restart.1dcc7392b294@maillab.example.net>",
+          "subject": "Preview after restart 1dcc7392b294"
+        }
+      ],
+      "beforeUIDs": [
+        {
+          "messageId": "<seed.1dcc7392b294@maillab.example.net>",
+          "folder": "Archive",
+          "uid": "1",
+          "subject": "Preview conversation 1dcc7392b294"
+        },
+        {
+          "messageId": "<queue-seed.1dcc7392b294@maillab.example.net>",
+          "folder": "Archive",
+          "uid": "3",
+          "subject": "Preview after refusal 1dcc7392b294"
+        },
+        {
+          "messageId": "<arrival.1dcc7392b294@maillab.example.net>",
+          "folder": "INBOX",
+          "uid": "2",
+          "subject": "Preview live arrival 1dcc7392b294"
+        },
+        {
+          "messageId": "<gap-trigger-1.1dcc7392b294@maillab.example.net>",
+          "folder": "INBOX",
+          "uid": "3",
+          "subject": "Gap trigger 1 1dcc7392b294"
+        },
+        {
+          "messageId": "<forced-gap-1.1dcc7392b294@maillab.example.net>",
+          "folder": "INBOX",
+          "uid": "4",
+          "subject": "Forced gap arrival 1 1dcc7392b294"
+        },
+        {
+          "messageId": "<refusal-seed.1dcc7392b294@maillab.example.net>",
+          "folder": "INBOX",
+          "uid": "6",
+          "subject": "Preview forced refusal 1dcc7392b294"
+        },
+        {
+          "messageId": "<01a20422-fcac-7413-bb79-614b933e1174@macro.email>",
+          "folder": "INBOX",
+          "uid": "8",
+          "subject": "Re: Preview conversation 1dcc7392b294"
+        },
+        {
+          "messageId": "<01a20421-630d-78bd-9bff-d4488575524b@macro.email>",
+          "folder": "Sent",
+          "uid": "1",
+          "subject": "Re: Preview conversation 1dcc7392b294"
+        },
+        {
+          "messageId": "<01a20422-a53e-7498-ad35-c5eb63e76b0b@macro.email>",
+          "folder": "Sent",
+          "uid": "2",
+          "subject": "Re: Preview after refusal 1dcc7392b294"
+        }
+      ],
+      "afterUIDs": [
+        {
+          "messageId": "<seed.1dcc7392b294@maillab.example.net>",
+          "folder": "Archive",
+          "uid": "1",
+          "subject": "Preview conversation 1dcc7392b294"
+        },
+        {
+          "messageId": "<queue-seed.1dcc7392b294@maillab.example.net>",
+          "folder": "Archive",
+          "uid": "3",
+          "subject": "Preview after refusal 1dcc7392b294"
+        },
+        {
+          "messageId": "<arrival.1dcc7392b294@maillab.example.net>",
+          "folder": "INBOX",
+          "uid": "2",
+          "subject": "Preview live arrival 1dcc7392b294"
+        },
+        {
+          "messageId": "<gap-trigger-1.1dcc7392b294@maillab.example.net>",
+          "folder": "INBOX",
+          "uid": "3",
+          "subject": "Gap trigger 1 1dcc7392b294"
+        },
+        {
+          "messageId": "<forced-gap-1.1dcc7392b294@maillab.example.net>",
+          "folder": "INBOX",
+          "uid": "4",
+          "subject": "Forced gap arrival 1 1dcc7392b294"
+        },
+        {
+          "messageId": "<refusal-seed.1dcc7392b294@maillab.example.net>",
+          "folder": "INBOX",
+          "uid": "6",
+          "subject": "Preview forced refusal 1dcc7392b294"
+        },
+        {
+          "messageId": "<01a20422-fcac-7413-bb79-614b933e1174@macro.email>",
+          "folder": "INBOX",
+          "uid": "8",
+          "subject": "Re: Preview conversation 1dcc7392b294"
+        },
+        {
+          "messageId": "<restart.1dcc7392b294@maillab.example.net>",
+          "folder": "INBOX",
+          "uid": "9",
+          "subject": "Preview after restart 1dcc7392b294"
+        },
+        {
+          "messageId": "<01a20421-630d-78bd-9bff-d4488575524b@macro.email>",
+          "folder": "Sent",
+          "uid": "1",
+          "subject": "Re: Preview conversation 1dcc7392b294"
+        },
+        {
+          "messageId": "<01a20422-a53e-7498-ad35-c5eb63e76b0b@macro.email>",
+          "folder": "Sent",
+          "uid": "2",
+          "subject": "Re: Preview after refusal 1dcc7392b294"
+        }
+      ],
+      "outboundSubmissions": 1
+    },
+    "themes": {
+      "at": "2026-11-22T16:43:25.995Z",
+      "light": true,
+      "dark": true,
+      "source": "real running app; OS media preference"
+    },
+    "idleRenewal": {
+      "at": "2026-11-22T16:46:24.723Z",
+      "traceId": "82cb4458957a83e225071897a4358d25",
+      "startAt": "2026-11-22T16:43:15.844Z",
+      "endAt": "2026-11-22T16:46:15.870Z",
+      "durationMs": 180025,
+      "idle.outcome": "restarted",
+      "idle.changed_at_arm": false,
+      "snapshotEndedAt": "2026-11-22T16:43:15.595Z",
+      "configuredIntervalSeconds": 180,
+      "absoluteDeadline": true,
+      "observation": "quiet backend interval after the movie; real Dovecot and private Tempo"
+    },
+    "idleRenewalProbe": {
+      "at": "2026-11-22T16:46:30.398Z",
+      "messageId": "<after-renewal.1dcc7392b294@maillab.example.net>",
+      "deliveredAt": "2026-11-22T16:46:24.820Z",
+      "visibleAt": "2026-11-22T16:46:29.394Z",
+      "idleBefore": 12,
+      "idleAfter": 13,
+      "documentUnchanged": true
+    }
+  },
+  "gaps": [
+    "Real-provider flows are not recorded; mail servers, local auth, KMS and feature flags are lab stand-ins.",
+    "Large-mailbox and unreadable-saved-credential health states are not exercised in this flow."
+  ],
+  "source": {
+    "head": "f678c962e5744b7783719f2f3827a764752a1fe7",
+    "branch": "wolf/imap-complete",
+    "project": "macro-imap-preview",
+    "runtimeProvenance": "Successful clean-head 20-bin Cargo build; final-head-cargo-build.log",
+    "backendBuildHead": "f678c962e5744b7783719f2f3827a764752a1fe7",
+    "runningBinaryHashes": {
+      "imap_service": {
+        "binary": "imap_service",
+        "sha256": "d5c31b2ab71dbb7b4dd1e6f29c694d194da01a5c38917057469caaa1baeb5fb8"
+      },
+      "email_service": {
+        "binary": "email_service",
+        "sha256": "cdd134b001d8a41ebdc435ebfa4953f009b96c4409a0cbe4e928b75bd6939c80"
+      },
+      "email_pubsub_workers": {
+        "binary": "pubsub_workers",
+        "sha256": "d42b42495184858e7d232d296cc1d86b6d222beaf4dcd99908c4cbf2adc6b210"
+      },
+      "authentication-service": {
+        "binary": "authentication_service",
+        "sha256": "97b8626b30cff8c75ce98590cdcea2d98b0ac6c42cff0a86e0a2c89f4b30384c"
+      },
+      "document_storage_service": {
+        "binary": "document_storage_service",
+        "sha256": "59a9a2274b176f1f4813aaf07c0ea3ebcbffd82d388777c5afb2b0ef04f02068"
+      }
+    },
+    "allRunningNativeApps": [
+      {
+        "service": "agent_harness_service",
+        "binary": "agent_harness_service",
+        "sha256": "af01234d99e91e89ade7a80894d294326e309d200e9488b0713b5e7f958f889d"
+      },
+      {
+        "service": "notification_service",
+        "binary": "notification_service",
+        "sha256": "3cc9ff6a37a55c2bc3d4342e7ce4eb020e5fc8251b23e0e5f54c42e0fde4692d"
+      },
+      {
+        "service": "calendar_service",
+        "binary": "calendar_service",
+        "sha256": "9ea7585846179e360e641953fae7495c797e60ac040a15c58f0ec312888f3bf8"
+      },
+      {
+        "service": "outlook_emulator",
+        "binary": "outlook_emulator",
+        "sha256": "845f5a6818540c952ed879e0a0b1e910be85692afd44c5a5e9d576de4cdc3ee7"
+      },
+      {
+        "service": "gmail_emulator",
+        "binary": "gmail_emulator",
+        "sha256": "3c2ef1fef9722f56909e557ecb0d06dcbab36be3855f1578de41a5fd7c14471e"
+      },
+      {
+        "service": "unfurl_service",
+        "binary": "unfurl_service",
+        "sha256": "b9385437e25f625e91aa97de8c1a02bc8cb8d50b36d3e1da2b0c63155c02a32d"
+      },
+      {
+        "service": "document_upload_finalizer",
+        "binary": "document_upload_finalizer_local_worker",
+        "sha256": "814c269843a58a42910fe8d4df5d86a893e60fc1583264daa7ee1c562377de0a"
+      },
+      {
+        "service": "image_proxy_service",
+        "binary": "image_proxy_service",
+        "sha256": "0c07dcd08623ea99e3a12c0bd291bb6cc654c958e406266855cd9880c0ee2334"
+      },
+      {
+        "service": "model_emulator",
+        "binary": "model_emulator",
+        "sha256": "3e75530da79483207220d2f36f5d55578a8201ef1b535b2edafd1880c7ce1c6e"
+      },
+      {
+        "service": "static_file_service",
+        "binary": "static_file_service",
+        "sha256": "c456d92cb91cc28ab9b62750fc639a3f16d88d126371abe4c1bd34ee7693deab"
+      },
+      {
+        "service": "connection_gateway",
+        "binary": "connection_gateway_service",
+        "sha256": "4cbb9cf3296711ce8e8edd34365b4d4df1a480a9fb63567fdd16a1d90a8e394a"
+      },
+      {
+        "service": "contacts_service",
+        "binary": "contacts_service",
+        "sha256": "61cd41557c82ca87afa936f9f97aad45d534f9347f325310fbb55c83546c0ea5"
+      },
+      {
+        "service": "whatsapp_session_service",
+        "binary": "whatsapp_session_service",
+        "sha256": "423dd98503105fe0d71160577dbaab142230a7aaf61267921ae5fd6b32a196b6"
+      },
+      {
+        "service": "email_pubsub_workers",
+        "binary": "pubsub_workers",
+        "sha256": "d42b42495184858e7d232d296cc1d86b6d222beaf4dcd99908c4cbf2adc6b210"
+      },
+      {
+        "service": "email_service",
+        "binary": "email_service",
+        "sha256": "cdd134b001d8a41ebdc435ebfa4953f009b96c4409a0cbe4e928b75bd6939c80"
+      },
+      {
+        "service": "document_storage_service",
+        "binary": "document_storage_service",
+        "sha256": "59a9a2274b176f1f4813aaf07c0ea3ebcbffd82d388777c5afb2b0ef04f02068"
+      },
+      {
+        "service": "authentication-service",
+        "binary": "authentication_service",
+        "sha256": "97b8626b30cff8c75ce98590cdcea2d98b0ac6c42cff0a86e0a2c89f4b30384c"
+      },
+      {
+        "service": "imap_service",
+        "binary": "imap_service",
+        "sha256": "d5c31b2ab71dbb7b4dd1e6f29c694d194da01a5c38917057469caaa1baeb5fb8"
+      }
+    ],
+    "stress": {
+      "head": "f678c962e5744b7783719f2f3827a764752a1fe7",
+      "exit": 0,
+      "iterationsRequested": 20,
+      "iterationsPassed": 20,
+      "retries": 0,
+      "test": "imap_connect_receive_isolate_and_send",
+      "log": "final-merge-stress20.log",
+      "finishedAt": "2026-11-22T16:23:22.945117+00:00"
+    }
+  },
+  "current": "restart",
+  "authProgress": {
+    "role": "reader",
+    "loginStatus": 200,
+    "verificationStatus": 200,
+    "phase": "signed-in desktop shell visible"
+  },
+  "providerCapabilities": [
+    {
+      "at": "2026-11-22T16:38:38.586Z",
+      "role": "recipient",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T16:38:39.589Z",
+      "role": "recipient",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T16:38:43.024Z",
+      "role": "reader",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T16:38:59.185Z",
+      "role": "reader",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T16:41:13.090Z",
+      "role": "reader",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    },
+    {
+      "at": "2026-11-22T16:43:03.542Z",
+      "role": "reader",
+      "status": 200,
+      "gmail": true,
+      "outlook": true,
+      "imap": true
+    }
+  ],
+  "renewalLink": "01a20420-3b6c-7d04-a286-ce719610b7a7",
+  "renewalAfter": "2026-11-22T16:43:20.629Z",
+  "result": "passed-through-restart",
+  "media": {
+    "movie": "desktop/imap-smtp-lab.mp4",
+    "before": "00-before-empty-inbox.png",
+    "after": "05-recovered.png",
+    "review": "pending human playback and contact-sheet inspection",
+    "pathBase": "proof root"
+  },
+  "movieEdits": "edits.json"
+}

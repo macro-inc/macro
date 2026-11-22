@@ -1,0 +1,125 @@
+{
+  "captions": [
+    {
+      "at": 0.001,
+      "text": "Local lab: Dovecot, Mailpit, synthetic sign-in, KMS and flags"
+    },
+    {
+      "at": 4.001,
+      "text": "SMTP acceptance is not recipient delivery"
+    },
+    {
+      "at": 8.002,
+      "text": "Private gate credential: telemetry POST only (capture harness)"
+    },
+    {
+      "at": 12.002,
+      "text": "Connect a synthetic mailbox in Macro"
+    },
+    {
+      "at": 17.559,
+      "text": "Home: open the provider chooser"
+    },
+    {
+      "at": 19.369,
+      "text": "Home: list read held 1.8s; chooser stays open"
+    },
+    {
+      "at": 23.327,
+      "text": "Home: choose Other email (IMAP / SMTP)"
+    },
+    {
+      "at": 25.562,
+      "text": "Home: chooser passed; dismiss the unused form"
+    },
+    {
+      "at": 27.762,
+      "text": "Home: Cancel the IMAP form (dismissed)"
+    },
+    {
+      "at": 31.685,
+      "text": "Email: open the provider chooser"
+    },
+    {
+      "at": 33.463,
+      "text": "Email: list read held 1.8s; chooser stays open"
+    },
+    {
+      "at": 37.348,
+      "text": "Email: choose Other email (IMAP / SMTP)"
+    },
+    {
+      "at": 39.712,
+      "text": "Email: chooser passed; dismiss the unused form"
+    },
+    {
+      "at": 41.913,
+      "text": "Email: Cancel the IMAP form (dismissed)"
+    },
+    {
+      "at": 46.349,
+      "text": "Home: open the provider chooser"
+    },
+    {
+      "at": 48.136,
+      "text": "Home: choose Other email (IMAP / SMTP)"
+    },
+    {
+      "at": 50.619,
+      "text": "Home: list read held 1.8s; typed IMAP form stays open"
+    },
+    {
+      "at": 54.562,
+      "text": "Home: typed username and password retained"
+    },
+    {
+      "at": 56.763,
+      "text": "Home: Cancel the IMAP form (dismissed)"
+    },
+    {
+      "at": 60.648,
+      "text": "Email: open the provider chooser"
+    },
+    {
+      "at": 62.409,
+      "text": "Email: choose Other email (IMAP / SMTP)"
+    },
+    {
+      "at": 64.72,
+      "text": "Email: list read held 1.8s; typed IMAP form stays open"
+    },
+    {
+      "at": 68.597,
+      "text": "Email: typed username and password retained"
+    },
+    {
+      "at": 70.798,
+      "text": "Email: Cancel the IMAP form (dismissed)"
+    },
+    {
+      "at": 74.646,
+      "text": "Choose Other email (IMAP / SMTP)"
+    },
+    {
+      "at": 77.355,
+      "text": "A wrong lab password is rejected; settings stay in place"
+    },
+    {
+      "at": 79.704,
+      "text": "Sign-in rejected; confirmed server settings are retained"
+    },
+    {
+      "at": 83.973,
+      "text": "Retry with the correct synthetic app password"
+    },
+    {
+      "at": 88.973,
+      "text": "Macro verified IMAP and SMTP, then persisted the link"
+    },
+    {
+      "at": 93.203,
+      "text": "Connect another: provider list loaded before cancellation"
+    }
+  ],
+  "duration": 101.528
+}

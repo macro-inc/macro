@@ -1,0 +1,30 @@
+{
+  "sourceHead": "76dda9df8e3f6bf783a846aaeb6425ebe4fe8bc7",
+  "run": "3e737f2231fe",
+  "requestPropagation": [
+    {
+      "kind": "rejectedCredentials",
+      "traceId": "a94e5259d7137f1b5f5c78dd9704e39c",
+      "frontendHeaderObservedUnchanged": true,
+      "services": [
+        "email_service",
+        "imap-preview",
+        "imap_service"
+      ],
+      "spanCount": 19
+    },
+    {
+      "kind": "successfulRetry",
+      "traceId": "fadf7503a4fd3fc3df5b170bd6e8168a",
+      "frontendHeaderObservedUnchanged": true,
+      "services": [
+        "email_service",
+        "imap-preview",
+        "imap_service"
+      ],
+      "spanCount": 29
+    }
+  ],
+  "dialogLifetimeSpans": "browser-dialog-traces.json",
+  "note": "Enrollment traces use observed frontend HTTP context; dialog lifetime reasons have separate trace receipts."
+}

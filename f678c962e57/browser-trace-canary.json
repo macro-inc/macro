@@ -1,0 +1,14 @@
+{
+  "sourceHead": "8c16c192234830299fecf8e7713e4bc9a31810f8",
+  "traceId": "5621f443826bedb7c6f37cc341378883",
+  "privateCollectorOnly": true,
+  "authenticatedTracePost": 200,
+  "addressAbsent": true,
+  "nameAbsent": true,
+  "knownCloseReasonRetained": true,
+  "uuidLinkIdRetained": true,
+  "unknownSpanNameNormalized": true,
+  "invalidCloseReasonRemoved": true,
+  "invalidLinkIdRemoved": true,
+  "exportedSpans": 2
+}

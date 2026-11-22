@@ -1,0 +1,411 @@
+{
+  "sourceHead": "76dda9df8e3f6bf783a846aaeb6425ebe4fe8bc7",
+  "run": "3e737f2231fe",
+  "privateTempoOnly": true,
+  "linkage": "exact owned-browser action UTC windows, span start/end, trace IDs; pre-roll and unrelated spans excluded",
+  "actions": [
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:1",
+      "surface": "Home",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T18:52:24.322Z",
+      "closedAt": "2026-11-22T18:52:31.991Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:2",
+      "surface": "Home",
+      "kind": "setup",
+      "openedAt": "2026-11-22T18:52:31.891Z",
+      "closedAt": "2026-11-22T18:52:36.363Z",
+      "expectedCloseReason": "dismissed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:3",
+      "surface": "Email",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T18:52:38.449Z",
+      "closedAt": "2026-11-22T18:52:46.106Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:4",
+      "surface": "Email",
+      "kind": "setup",
+      "openedAt": "2026-11-22T18:52:45.912Z",
+      "closedAt": "2026-11-22T18:52:50.513Z",
+      "expectedCloseReason": "dismissed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:5",
+      "surface": "Home",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T18:52:53.113Z",
+      "closedAt": "2026-11-22T18:52:56.921Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:6",
+      "surface": "Home",
+      "kind": "setup",
+      "openedAt": "2026-11-22T18:52:56.701Z",
+      "closedAt": "2026-11-22T18:53:05.367Z",
+      "expectedCloseReason": "dismissed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:7",
+      "surface": "Email",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T18:53:07.412Z",
+      "closedAt": "2026-11-22T18:53:11.146Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:8",
+      "surface": "Email",
+      "kind": "setup",
+      "openedAt": "2026-11-22T18:53:10.974Z",
+      "closedAt": "2026-11-22T18:53:19.411Z",
+      "expectedCloseReason": "dismissed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:9",
+      "surface": "Email final",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T18:53:21.303Z",
+      "closedAt": "2026-11-22T18:53:23.577Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:10",
+      "surface": "Email final",
+      "kind": "setup",
+      "openedAt": "2026-11-22T18:53:23.410Z",
+      "closedAt": "2026-11-22T18:53:35.577Z",
+      "expectedCloseReason": "completed",
+      "emailLinkId": "01a2049b-47d7-773a-8ac3-64bceb42390d"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:11",
+      "surface": "Connect another",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T18:53:39.879Z",
+      "closedAt": "2026-11-22T18:53:44.204Z",
+      "expectedCloseReason": "dismissed"
+    }
+  ],
+  "spans": [
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:11",
+      "surface": "Connect another",
+      "traceId": "79f02decf709cc6473a2d8ecacbd282f",
+      "spanId": "HGN1KURD0z8=",
+      "name": "email.providers.choose",
+      "closeReason": "dismissed",
+      "emailLinkId": null,
+      "startedAt": "2026-11-22T18:53:39.908000+00:00",
+      "endedAt": "2026-11-22T18:53:44.198900+00:00"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:10",
+      "surface": "Email final",
+      "traceId": "519ad02b5623370ee8b1aa26cbc1e976",
+      "spanId": "t0NKkFj1FBk=",
+      "name": "email.imap.setup.lifetime",
+      "closeReason": "completed",
+      "emailLinkId": "01a2049b-47d7-773a-8ac3-64bceb42390d",
+      "startedAt": "2026-11-22T18:53:23.453000+00:00",
+      "endedAt": "2026-11-22T18:53:35.569800+00:00"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:9",
+      "surface": "Email final",
+      "traceId": "204603b64cd846e35a367cea44bfd7a3",
+      "spanId": "D4+c2ooJMM4=",
+      "name": "email.providers.choose",
+      "closeReason": "completed",
+      "emailLinkId": null,
+      "startedAt": "2026-11-22T18:53:21.344000+00:00",
+      "endedAt": "2026-11-22T18:53:23.466500+00:00"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:8",
+      "surface": "Email",
+      "traceId": "65e04e0df96e23155d61be7e9ef2a0d6",
+      "spanId": "0NuuzroSUIA=",
+      "name": "email.imap.setup.lifetime",
+      "closeReason": "dismissed",
+      "emailLinkId": null,
+      "startedAt": "2026-11-22T18:53:11.021000+00:00",
+      "endedAt": "2026-11-22T18:53:19.405000+00:00"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:7",
+      "surface": "Email",
+      "traceId": "e7e70c98ce29a2adc0047c6fb361f931",
+      "spanId": "qq/wOTjbCoc=",
+      "name": "email.providers.choose",
+      "closeReason": "completed",
+      "emailLinkId": null,
+      "startedAt": "2026-11-22T18:53:09.143000+00:00",
+      "endedAt": "2026-11-22T18:53:11.034300+00:00"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:6",
+      "surface": "Home",
+      "traceId": "82ab27cd679d0b801eef0e8bb17c9332",
+      "spanId": "9ubOG6S8GYw=",
+      "name": "email.imap.setup.lifetime",
+      "closeReason": "dismissed",
+      "emailLinkId": null,
+      "startedAt": "2026-11-22T18:52:56.755000+00:00",
+      "endedAt": "2026-11-22T18:53:05.359600+00:00"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:5",
+      "surface": "Home",
+      "traceId": "f5b75fbaf99661ddb6bcbf1a62290b5f",
+      "spanId": "gOjUWohEcms=",
+      "name": "email.providers.choose",
+      "closeReason": "completed",
+      "emailLinkId": null,
+      "startedAt": "2026-11-22T18:52:54.850000+00:00",
+      "endedAt": "2026-11-22T18:52:56.773300+00:00"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:4",
+      "surface": "Email",
+      "traceId": "0f9ce2cf189024b477b867765cc6855c",
+      "spanId": "qFt8xbE+RIc=",
+      "name": "email.imap.setup.lifetime",
+      "closeReason": "dismissed",
+      "emailLinkId": null,
+      "startedAt": "2026-11-22T18:52:45.972000+00:00",
+      "endedAt": "2026-11-22T18:52:50.504300+00:00"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:3",
+      "surface": "Email",
+      "traceId": "00f330082bf755f3bb5b35fba96d435e",
+      "spanId": "DsxWCHP+rvU=",
+      "name": "email.providers.choose",
+      "closeReason": "completed",
+      "emailLinkId": null,
+      "startedAt": "2026-11-22T18:52:40.179000+00:00",
+      "endedAt": "2026-11-22T18:52:45.989100+00:00"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:2",
+      "surface": "Home",
+      "traceId": "45c9f22cb0ab50796352b43d2d1e1a47",
+      "spanId": "ZhLco3iTaXo=",
+      "name": "email.imap.setup.lifetime",
+      "closeReason": "dismissed",
+      "emailLinkId": null,
+      "startedAt": "2026-11-22T18:52:31.942000+00:00",
+      "endedAt": "2026-11-22T18:52:36.355800+00:00"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:1",
+      "surface": "Home",
+      "traceId": "a12c2bed7e502b3b57171134a5b69305",
+      "spanId": "MFdjRlVRs7Y=",
+      "name": "email.providers.choose",
+      "closeReason": "completed",
+      "emailLinkId": null,
+      "startedAt": "2026-11-22T18:52:26.049000+00:00",
+      "endedAt": "2026-11-22T18:52:31.964000+00:00"
+    }
+  ],
+  "forcedRefetches": [
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:1",
+      "surface": "Home",
+      "kind": "chooser",
+      "at": "2026-11-22T18:52:30.090Z",
+      "beganAt": "2026-11-22T18:52:26.106Z",
+      "completedAt": "2026-11-22T18:52:30.090Z",
+      "httpStatus": 200,
+      "path": "/dss/items/soup/graphql",
+      "trigger": "capture harness activates underlying list tab while modal open; actual app query and unchanged response",
+      "sameDialogNode": true,
+      "emptyStateUnmountedDuringRead": true,
+      "dialogAliveDuringRead": true,
+      "responseDelayMs": 1800,
+      "heldRealResponses": 1,
+      "responseBytesUnchanged": true,
+      "coldLoadingBranch": "real changed-tab request; deterministic loading-to-empty regression tests also cover this ownership boundary"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:3",
+      "surface": "Email",
+      "kind": "chooser",
+      "at": "2026-11-22T18:52:44.111Z",
+      "beganAt": "2026-11-22T18:52:40.220Z",
+      "completedAt": "2026-11-22T18:52:44.111Z",
+      "httpStatus": 200,
+      "path": "/dss/items/soup/graphql",
+      "trigger": "capture harness activates underlying list tab while modal open; actual app query and unchanged response",
+      "sameDialogNode": true,
+      "emptyStateUnmountedDuringRead": true,
+      "dialogAliveDuringRead": true,
+      "responseDelayMs": 1800,
+      "heldRealResponses": 1,
+      "responseBytesUnchanged": true,
+      "coldLoadingBranch": "real changed-tab request; deterministic loading-to-empty regression tests also cover this ownership boundary"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:6",
+      "surface": "Home",
+      "kind": "setup",
+      "at": "2026-11-22T18:53:01.315Z",
+      "beganAt": "2026-11-22T18:52:57.377Z",
+      "completedAt": "2026-11-22T18:53:01.314Z",
+      "httpStatus": 200,
+      "path": "/dss/items/soup/graphql",
+      "trigger": "capture harness activates underlying list tab while modal open; actual app query and unchanged response",
+      "sameDialogNode": true,
+      "emptyStateUnmountedDuringRead": true,
+      "dialogAliveDuringRead": true,
+      "responseDelayMs": 1800,
+      "heldRealResponses": 1,
+      "responseBytesUnchanged": true,
+      "coldLoadingBranch": "real changed-tab request; deterministic loading-to-empty regression tests also cover this ownership boundary"
+    },
+    {
+      "run": "3e737f2231fe",
+      "actionId": "3e737f2231fe:8",
+      "surface": "Email",
+      "kind": "setup",
+      "at": "2026-11-22T18:53:15.353Z",
+      "beganAt": "2026-11-22T18:53:11.476Z",
+      "completedAt": "2026-11-22T18:53:15.353Z",
+      "httpStatus": 200,
+      "path": "/dss/items/soup/graphql",
+      "trigger": "capture harness activates underlying list tab while modal open; actual app query and unchanged response",
+      "sameDialogNode": true,
+      "emptyStateUnmountedDuringRead": true,
+      "dialogAliveDuringRead": true,
+      "responseDelayMs": 1800,
+      "heldRealResponses": 1,
+      "responseBytesUnchanged": true,
+      "coldLoadingBranch": "real changed-tab request; deterministic loading-to-empty regression tests also cover this ownership boundary"
+    }
+  ],
+  "counts": {
+    "filmedActions": 11,
+    "matchedSpans": 11,
+    "chooser": 6,
+    "setup": 5
+  },
+  "backdropHandoffs": {
+    "source": "live DOM MutationObserver and requestAnimationFrame samples during filmed transitions",
+    "handoffs": [
+      {
+        "fromActionId": "3e737f2231fe:1",
+        "toActionId": "3e737f2231fe:2",
+        "at": "2026-11-22T18:52:31.991Z",
+        "frameSamples": 6,
+        "mutationSamples": 1,
+        "minimumBackdrops": 1,
+        "zeroBackdropObservations": 0,
+        "styles": [
+          {
+            "opacity": "1",
+            "backgroundColor": "lab(0 0 0 / 0.1)",
+            "backdropFilter": "blur(2px) saturate(1.05)"
+          }
+        ]
+      },
+      {
+        "fromActionId": "3e737f2231fe:3",
+        "toActionId": "3e737f2231fe:4",
+        "at": "2026-11-22T18:52:46.105Z",
+        "frameSamples": 8,
+        "mutationSamples": 1,
+        "minimumBackdrops": 1,
+        "zeroBackdropObservations": 0,
+        "styles": [
+          {
+            "opacity": "1",
+            "backgroundColor": "lab(0 0 0 / 0.1)",
+            "backdropFilter": "blur(2px) saturate(1.05)"
+          }
+        ]
+      },
+      {
+        "fromActionId": "3e737f2231fe:5",
+        "toActionId": "3e737f2231fe:6",
+        "at": "2026-11-22T18:52:56.920Z",
+        "frameSamples": 6,
+        "mutationSamples": 1,
+        "minimumBackdrops": 1,
+        "zeroBackdropObservations": 0,
+        "styles": [
+          {
+            "opacity": "1",
+            "backgroundColor": "lab(0 0 0 / 0.1)",
+            "backdropFilter": "blur(2px) saturate(1.05)"
+          }
+        ]
+      },
+      {
+        "fromActionId": "3e737f2231fe:7",
+        "toActionId": "3e737f2231fe:8",
+        "at": "2026-11-22T18:53:11.146Z",
+        "frameSamples": 6,
+        "mutationSamples": 1,
+        "minimumBackdrops": 1,
+        "zeroBackdropObservations": 0,
+        "styles": [
+          {
+            "opacity": "1",
+            "backgroundColor": "lab(0 0 0 / 0.1)",
+            "backdropFilter": "blur(2px) saturate(1.05)"
+          }
+        ]
+      },
+      {
+        "fromActionId": "3e737f2231fe:9",
+        "toActionId": "3e737f2231fe:10",
+        "at": "2026-11-22T18:53:23.576Z",
+        "frameSamples": 6,
+        "mutationSamples": 1,
+        "minimumBackdrops": 1,
+        "zeroBackdropObservations": 0,
+        "styles": [
+          {
+            "opacity": "1",
+            "backgroundColor": "lab(0 0 0 / 0.1)",
+            "backdropFilter": "blur(2px) saturate(1.05)"
+          }
+        ]
+      }
+    ]
+  }
+}

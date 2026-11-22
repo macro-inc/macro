@@ -1,0 +1,66 @@
+{
+  "view": "desktop",
+  "recordedHead": "f678c962e5744b7783719f2f3827a764752a1fe7",
+  "originalSha256": "ac8baca0d13df27e8a0ed35b79682c6a6e7f41786dd01f91ccb2b8e04aad4ff9",
+  "editedSha256": "e94d1cd234fd25fb96f14f0a68328aa79fe82f305bdedcffa0388449351b4d25",
+  "originalDurationSeconds": 284.833984,
+  "removedIntervalsSeconds": [
+    [
+      56.236,
+      93.688
+    ],
+    [
+      127.0,
+      140.323
+    ],
+    [
+      232.0,
+      250.433
+    ]
+  ],
+  "removedOnly": "Private trace-export waiting after the UI outcome was already visible. No app interaction or outcome removed.",
+  "protectedUiOutcomeIntervalsSeconds": [
+    [
+      116.381,
+      127.0
+    ],
+    [
+      221.082,
+      232.0
+    ]
+  ],
+  "captionLayout": "Added captions occupy a new 72px band below the complete original video; original captions and source footer stay visible.",
+  "overlays": [
+    {
+      "startSeconds": 56.236,
+      "endSeconds": 58.836,
+      "text": "cut: waiting for trace export"
+    },
+    {
+      "startSeconds": 89.548,
+      "endSeconds": 92.148,
+      "text": "cut: waiting for trace export"
+    },
+    {
+      "startSeconds": 181.225,
+      "endSeconds": 183.825,
+      "text": "cut: waiting for trace export"
+    },
+    {
+      "startSeconds": 26.082,
+      "endSeconds": 32.924,
+      "text": "First sync: lab ingestion worker briefly held, then resumed"
+    },
+    {
+      "startSeconds": 37.921,
+      "endSeconds": 41.921,
+      "text": "Local flags held offline; mail still arrives"
+    },
+    {
+      "startSeconds": 66.236,
+      "endSeconds": 70.236,
+      "text": "Local flags remain offline during this send"
+    }
+  ],
+  "timings": "Verification timestamps describe the original uninterrupted run, not shortened movie time."
+}
