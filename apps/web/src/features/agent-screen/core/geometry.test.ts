@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   clampViewport,
   FIT_VIEWPORT,
+  fillViewport,
   frameTransform,
   keepInView,
   layoutFrame,
@@ -9,6 +10,7 @@ import {
   toGuestPoint,
   toViewerPoint,
   type ViewGeometry,
+  visibleFrameRect,
   zoomAt,
 } from './geometry';
 
@@ -27,6 +29,60 @@ describe('layoutFrame', () => {
       left: 0,
       top: 30,
     });
+  });
+});
+
+describe('visibleFrameRect', () => {
+  it('is the whole letterboxed picture at fit', () => {
+    expect(visibleFrameRect(LANDSCAPE, FIT_VIEWPORT)).toEqual({
+      left: 0,
+      top: 30,
+      width: 960,
+      height: 540,
+    });
+  });
+
+  it('is the container once zoomed past its edges', () => {
+    expect(visibleFrameRect(LANDSCAPE, { zoom: 2, panX: 0, panY: 0 })).toEqual({
+      left: 0,
+      top: 0,
+      width: 960,
+      height: 600,
+    });
+  });
+
+  it('keeps only the part still in view when panned', () => {
+    // 1.5x: 1440x810 centred at (-240, -105), panned 300 right.
+    expect(
+      visibleFrameRect(LANDSCAPE, { zoom: 1.5, panX: 300, panY: 0 })
+    ).toEqual({ left: 60, top: 0, width: 900, height: 600 });
+  });
+});
+
+describe('fillViewport', () => {
+  const PORTRAIT: ViewGeometry = {
+    container: { width: 390, height: 600 },
+    frame: { width: 1280, height: 800 },
+    rotation: 0,
+  };
+
+  it('covers a portrait container with a landscape frame, top-left in view', () => {
+    const viewport = fillViewport(PORTRAIT);
+    expect(layoutFrame(PORTRAIT, viewport)).toEqual({
+      scale: 0.75,
+      width: 960,
+      height: 600,
+      left: 0,
+      top: 0,
+    });
+  });
+
+  it('is fit when the frame already fills the container', () => {
+    const exact: ViewGeometry = {
+      ...LANDSCAPE,
+      container: { width: 960, height: 540 },
+    };
+    expect(fillViewport(exact)).toEqual(FIT_VIEWPORT);
   });
 });
 

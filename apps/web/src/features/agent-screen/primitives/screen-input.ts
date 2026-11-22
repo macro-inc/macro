@@ -8,12 +8,14 @@ import {
 } from 'solid-js';
 import {
   FIT_VIEWPORT,
+  fillViewport,
   frameTransform,
   keepInView,
   type Rotation,
   type Size,
   type ViewGeometry,
   type Viewport,
+  visibleFrameRect,
   zoomAt,
 } from '../core/geometry';
 import {
@@ -368,10 +370,20 @@ export function createScreenInput(options: ScreenInputOptions) {
       const current = geometry();
       return current ? frameTransform(current, viewport()) : undefined;
     },
+    /** Where the picture shows in the viewer, or `undefined` before the first frame size. */
+    pictureBox: () => {
+      const current = geometry();
+      return current ? visibleFrameRect(current, viewport()) : undefined;
+    },
     /** The viewer point under a touch-mode finger, for the loupe. */
     loupePoint: () => touchPoint(gestures()),
     zoomBy,
     fit: () => setViewport(FIT_VIEWPORT),
+    /** Zoom until the picture covers the viewer (`fillViewport`). */
+    fill: () => {
+      const current = geometry();
+      if (current) setViewport(fillViewport(current));
+    },
 
     onPointerDown(event: PointerEvent) {
       const target = event.currentTarget;

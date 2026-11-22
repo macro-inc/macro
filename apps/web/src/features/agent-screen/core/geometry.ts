@@ -78,6 +78,33 @@ export function layoutFrame(
   };
 }
 
+export type Rect = { left: number; top: number; width: number; height: number };
+
+/**
+ * The part of the container the picture covers: the whole picture when it
+ * fits, the container itself when zoomed past its edges. Chrome drawn around
+ * the picture (its edge, the driving frame) follows this box.
+ */
+export function visibleFrameRect(
+  geometry: ViewGeometry,
+  viewport: Viewport
+): Rect {
+  const layout = layoutFrame(geometry, viewport);
+  const left = Math.max(0, layout.left);
+  const top = Math.max(0, layout.top);
+  const right = Math.min(geometry.container.width, layout.left + layout.width);
+  const bottom = Math.min(
+    geometry.container.height,
+    layout.top + layout.height
+  );
+  return {
+    left,
+    top,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  };
+}
+
 /**
  * The CSS transform for an element laid out at the frame's native size with
  * `transform-origin: 0 0` at the container's top-left.
@@ -160,6 +187,27 @@ export function clampViewport(
     panX: clampPan(viewport.panX, maxPanX),
     panY: clampPan(viewport.panY, maxPanY),
   };
+}
+
+/**
+ * Zoomed until the picture covers the whole container, its top-left corner
+ * in view: a landscape desktop in a portrait phone fills the view at a
+ * readable size instead of a thin strip.
+ */
+export function fillViewport(geometry: ViewGeometry): Viewport {
+  const rotated = rotatedFrame(geometry);
+  const fit = fitScale(geometry);
+  if (fit <= 0) return FIT_VIEWPORT;
+  const cover = Math.max(
+    geometry.container.width / rotated.width,
+    geometry.container.height / rotated.height
+  );
+  // The largest pans keep the top-left corner at the container's.
+  return clampViewport(geometry, {
+    zoom: cover / fit,
+    panX: Number.POSITIVE_INFINITY,
+    panY: Number.POSITIVE_INFINITY,
+  });
 }
 
 function clampPan(pan: number, limit: number): number {

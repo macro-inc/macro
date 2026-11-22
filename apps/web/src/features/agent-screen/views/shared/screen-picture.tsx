@@ -58,6 +58,7 @@ export function ScreenPicture(props: {
       })}
       frame={session.store.frame}
       transform={input.transform()}
+      pictureBox={input.pictureBox()}
       driven={
         !!session.store.server?.driver && session.store.status.kind === 'live'
       }

@@ -56,6 +56,7 @@ describe('ScreenStage keyboard', () => {
         keyboardLabel="Keyboard for Scout's desktop"
         frame={{ width: 1920, height: 1080 }}
         transform={undefined}
+        pictureBox={undefined}
         driven
         drivingMe
         ownsKeyboard
@@ -115,6 +116,7 @@ describe('ScreenStage keyboard', () => {
         keyboardLabel="Keyboard for Scout's desktop"
         frame={{ width: 1920, height: 1080 }}
         transform={undefined}
+        pictureBox={undefined}
         driven
         drivingMe
         ownsKeyboard
@@ -168,6 +170,7 @@ describe('ScreenStage keyboard', () => {
         keyboardLabel="Keyboard for Scout's desktop"
         frame={{ width: 1920, height: 1080 }}
         transform={undefined}
+        pictureBox={undefined}
         driven
         drivingMe
         ownsKeyboard
@@ -234,6 +237,7 @@ describe('ScreenStage keyboard', () => {
         keyboardLabel="Keyboard for Scout's desktop"
         frame={{ width: 1920, height: 1080 }}
         transform={undefined}
+        pictureBox={undefined}
         driven
         drivingMe={driving()}
         ownsKeyboard={owns()}

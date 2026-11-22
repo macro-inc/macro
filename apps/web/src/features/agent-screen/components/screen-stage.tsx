@@ -1,6 +1,6 @@
 import { cn } from '@ui/utils/classname';
 import { createEffect, type JSX, on, Show } from 'solid-js';
-import type { Point } from '../core/geometry';
+import type { Point, Rect } from '../core/geometry';
 import type { ScreenFrameSize, ScreenRect } from '../transports/types';
 import { Loupe } from './loupe';
 
@@ -30,6 +30,8 @@ export function ScreenStage(props: {
   keyboardLabel: string;
   frame: ScreenFrameSize | undefined;
   transform: string | undefined;
+  /** Where the picture shows: its edge, and the driving frame, follow it. */
+  pictureBox: Rect | undefined;
   /** Amber frame while someone drives. */
   driven: boolean;
   /** This viewer drives: the input surface takes keyboard focus. */
@@ -123,11 +125,8 @@ export function ScreenStage(props: {
   return (
     <div
       ref={props.containerRef}
-      class={cn(
-        'relative overflow-hidden bg-surface-2',
-        props.driven && 'outline-2 -outline-offset-2 outline-amber',
-        props.class
-      )}
+      // A well darker than the panel, so a white guest page shows its edges.
+      class={cn('relative overflow-hidden bg-page', props.class)}
     >
       <div
         ref={(element) => {
@@ -202,6 +201,29 @@ export function ScreenStage(props: {
         onWheel={(event) => props.handlers.onWheel(event)}
         onContextMenu={(event) => props.handlers.onContextMenu(event)}
       />
+
+      {/*
+        Drawn over the picture, not the stage, so the picture's own pixels
+        never paint over its edge or the driving frame.
+      */}
+      <Show when={props.frame && props.pictureBox}>
+        {(box) => (
+          <div
+            aria-hidden="true"
+            data-screen-picture-edge={props.driven ? 'driven' : ''}
+            class={cn(
+              'pointer-events-none absolute ring-1 ring-edge ring-inset',
+              props.driven && 'outline-2 -outline-offset-2 outline-amber'
+            )}
+            style={{
+              left: `${box().left}px`,
+              top: `${box().top}px`,
+              width: `${box().width}px`,
+              height: `${box().height}px`,
+            }}
+          />
+        )}
+      </Show>
 
       <Show when={props.loupe}>
         {(loupe) => (
