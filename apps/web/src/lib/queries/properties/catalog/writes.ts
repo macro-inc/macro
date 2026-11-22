@@ -22,6 +22,7 @@ import {
   optimisticMutationDispositionOf,
   prependUnique,
   select,
+  selectRecord,
   update,
 } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
@@ -42,7 +43,7 @@ import {
   EnsureTagSetDocument,
   MergeTagDocument,
   PromoteTagDocument,
-  PropertyCatalogDefinitionsWithOptionsDocument,
+  PropertyCatalogDefinitionOptionsFragmentDoc,
   PropertyCatalogOptionsDocument,
   PropertyCatalogTagSetsDocument,
   UpdatePropertyOptionDocument,
@@ -54,6 +55,7 @@ import {
 import { onlineManager } from '@tanstack/solid-query';
 import type { AnyVariables, OperationResult } from '@urql/core';
 import { v7 as uuidv7 } from 'uuid';
+import { queryAccountSession } from '../../auth/account-scope';
 import { queryClient } from '../../client';
 import { observePropertyMutationSettlements } from '../graphql/mutation-settlements';
 import { propertiesKeys } from '../keys';
@@ -118,7 +120,8 @@ type Settled<TData> =
  * an older write) either waits for its commit, or resolves at once and reports
  * a later refusal through `onLateFailure`; the cache has rolled it back by then.
  * A write that goes straight to the server (`serverAnswered`) waits until the
- * app is online before it is sent.
+ * app is online before it is sent, in the trace it was started in, and is
+ * dropped if another login took over the page meanwhile.
  */
 async function settle<TData, TVariables extends AnyVariables>(
   send: () => Promise<OperationResult<TData, TVariables>>,
@@ -128,13 +131,23 @@ async function settle<TData, TVariables extends AnyVariables>(
     onLateFailure?: (error: Error) => void;
   }
 ): Promise<Settled<TData>> {
-  if (options.serverAnswered) await whenOnline();
+  // Context does not survive an await in the browser.
+  const trace = Telemetry.captureContext();
+  if (options.serverAnswered && !onlineManager.isOnline()) {
+    const session = queryAccountSession();
+    await whenOnline();
+    if (queryAccountSession() !== session)
+      throw new CatalogMutationError(
+        'Another login took over while the write waited to go online',
+        'ACCOUNT_CHANGED'
+      );
+  }
   const settlements = observePropertyMutationSettlements(
     getGraphqlSoupCacheHost()
   );
   let observing = false;
   try {
-    const result = await send();
+    const result = await trace.run(send);
     const disposition = optimisticMutationDispositionOf(result);
     if (disposition?.kind === 'queued') {
       if (options.waitForCommit) {
@@ -275,30 +288,16 @@ async function optionListLinks(
     ),
   ];
   // A definition's options are one field of its record, so linking through
-  // one list that holds it updates every list that does.
-  const withOptions = catalogReaders().find(
-    (reader) =>
-      reader.kind === 'definitions' &&
-      reader.withOptions &&
-      reader.definitionIds().includes(propertyDefinitionId)
+  // the record updates every list that holds it, cached or on screen.
+  links.push(
+    update(
+      selectRecord(PropertyCatalogDefinitionOptionsFragmentDoc, {
+        __typename: 'GraphqlPropertyDefinition',
+        id: propertyDefinitionId,
+      }).field('options'),
+      prependUnique(option)
+    )
   );
-  const variables =
-    withOptions?.kind === 'definitions' ? withOptions.variables() : undefined;
-  if (variables) {
-    links.push(
-      update(
-        select(PropertyCatalogDefinitionsWithOptionsDocument, {
-          scope: variables.scope,
-          forEntityType: variables.forEntityType ?? null,
-        })
-          .field('user')
-          .field('propertyDefinitions')
-          .item('id', propertyDefinitionId)
-          .field('options'),
-        prependUnique(option)
-      )
-    );
-  }
   const scope = await cachedTagScopeOf(propertyDefinitionId);
   if (scope) {
     links.push(
@@ -464,13 +463,16 @@ export async function ensureTagSet(scope: TagScope): Promise<TagSetResponse> {
       );
       span.setAttr('property.reloaded', !listed);
       if (!listed) {
-        await client
+        const reloaded = await client
           .query(
             PropertyCatalogTagSetsDocument,
             {},
             { requestPolicy: 'network-only' }
           )
           .toPromise();
+        // A tag added to a set the cache does not list would show nowhere.
+        // Provisioning is idempotent, so the caller can simply try again.
+        if (reloaded.error) throw errorOf(reloaded);
       }
     }
     return mapped;
