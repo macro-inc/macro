@@ -70,16 +70,7 @@ pub(super) fn ensure_markdown_edit(
     document: &DocumentBasic,
 ) -> Result<(), DocumentError> {
     ensure_markdown(access, document)?;
-    if document.sub_type == Some(document_sub_type::DocumentSubType::Skill)
-        && (agent_correlation::context::current_channel_mention().is_some()
-            || agent_correlation::context::current_scope()
-                == Some(agent_correlation::scope::SessionScope::NoSend))
-    {
-        return Err(DocumentError::Forbidden(
-            "Saved skill instructions cannot be changed from this restricted run. Edit the skill from Macro.".into(),
-        ));
-    }
-    Ok(())
+    super::skill_access::ensure_skill_write(document.sub_type)
 }
 
 /// Mint the worker token at `access_level` and the cursor name for a receipt:

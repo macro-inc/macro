@@ -47,6 +47,8 @@ pub mod response;
 /// Restore a deleted document through its owner receipt and persistence operation.
 #[cfg(feature = "ports")]
 pub mod restore;
+#[cfg(any(feature = "ports", feature = "ai_tools"))]
+pub(crate) mod skill_access;
 /// A skill's one-line routing description.
 pub mod skill_description;
 /// Comment threads anchored to quoted text, for the tool and HTTP callers.

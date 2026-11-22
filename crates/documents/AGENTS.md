@@ -14,6 +14,8 @@ word docs, Illustrator/Photoshop files).
   adapters implement.
 - `src/domain/restore.rs`: owner-receipt restoration before a lazy persistence
   operation; the legacy HTTP adapter keeps its existing restoration transaction.
+- `src/domain/skill_access.rs`: shared admission for writes to saved Skill
+  instructions; Markdown edits call it before worker-token issuance.
 - `src/domain/service/lifecycle.rs`: `DocumentLifecycleReads` supplies physical
   existence/trash facts to trusted imports through the owning repository port.
   Missing rows are false; read failures propagate. No viewer or content access.
