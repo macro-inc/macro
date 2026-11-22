@@ -256,6 +256,7 @@ pub enum ConnectStepResponse {
         /// The token the dialog opens with.
         token: String,
         /// RFC 3339 expiry of the token.
+        #[serde(rename = "expiresAt")]
         expires_at: String,
         /// A page that opens the same flow in a browser tab.
         link: String,

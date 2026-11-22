@@ -974,7 +974,8 @@ pub async fn build(
 }
 
 /// The apps Macro imports from, and what each import reads: Linear, Jira and
-/// Notion through the app's REST API, Slack's channels through its MCP tools.
+/// Notion through the app's REST API, Slack's channels and the agent-led
+/// imports (the web's connector-import catalog) through the app's MCP tools.
 fn importable_apps() -> anyhow::Result<connectors::inbound::dto::Importable> {
     use connectors::domain::models::ConnectorId;
     use connectors::inbound::dto::{ImportSurface, Importable};
@@ -985,6 +986,19 @@ fn importable_apps() -> anyhow::Result<connectors::inbound::dto::Importable> {
         ("jira", ImportSurface::Api),
         ("notion", ImportSurface::Api),
         ("slack", ImportSurface::Mcp),
+        ("airtable_oauth", ImportSurface::Mcp),
+        ("asana", ImportSurface::Mcp),
+        ("box", ImportSurface::Mcp),
+        ("close", ImportSurface::Mcp),
+        ("confluence", ImportSurface::Mcp),
+        ("dropbox", ImportSurface::Mcp),
+        ("github", ImportSurface::Mcp),
+        ("google_drive", ImportSurface::Mcp),
+        ("hubspot", ImportSurface::Mcp),
+        ("microsoft_onedrive", ImportSurface::Mcp),
+        ("monday", ImportSurface::Mcp),
+        ("salesforce_rest_api", ImportSurface::Mcp),
+        ("trello", ImportSurface::Mcp),
     ] {
         importable = importable.with(
             ConnectorId::parse(slug).context("an import's app slug is not an app slug")?,
