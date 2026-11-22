@@ -188,6 +188,7 @@ fn upgrade_cost_on_a_retained_cache() {
         copy_pair(&current, &out.join("current.turso"));
         copy_pair(&older, &out.join("older.turso"));
         copy_pair(&derived, &out.join("derived.turso"));
+        copy_pair(&twelve, &out.join("twelve.turso"));
     }
 
     let database = TursoFileDatabase::new(&live).unwrap();

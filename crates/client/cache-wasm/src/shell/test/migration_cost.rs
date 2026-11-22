@@ -140,3 +140,65 @@ async fn carry_forward_and_upgrade_cost_on_a_retained_cache() {
         .expect("destroy bench cache");
     remove_opfs_pair(&older).await;
 }
+
+/// The size of this module's linear memory. Wasm memory only grows, so its
+/// size after an open is that open's high-water mark.
+fn wasm_memory_bytes() -> f64 {
+    use wasm_bindgen::JsCast;
+    wasm_bindgen::memory()
+        .unchecked_into::<js_sys::WebAssembly::Memory>()
+        .buffer()
+        .unchecked_into::<js_sys::ArrayBuffer>()
+        .byte_length()
+        .into()
+}
+
+/// Linear memory before and after one first open in a fresh page: the move
+/// and upgrade from 11, or (with `CACHE_MIGRATION_BASELINE` set at build time)
+/// an ordinary reopen of the same cache at the current version. Run each in
+/// its own page, since memory never shrinks.
+#[wasm_bindgen_test(async)]
+#[ignore = "needs CACHE_MIGRATION_URL at build time; run alone with --include-ignored --nocapture"]
+async fn upgrade_memory_on_a_retained_cache() {
+    let Some(base) = option_env!("CACHE_MIGRATION_URL") else {
+        return;
+    };
+    let own = database_identity(BENCH_SCOPE);
+    // CACHE_MIGRATION_FROM=12 starts from the storage 12 shape instead.
+    let (from, source) = match option_env!("CACHE_MIGRATION_FROM") {
+        Some("12") => (12, "twelve.turso"),
+        _ => (11, "older.turso"),
+    };
+    let older = cache_database_name(BENCH_SCOPE, from);
+    for identity in [&own, &older] {
+        remove_opfs_pair(identity).await;
+    }
+    let baseline = option_env!("CACHE_MIGRATION_BASELINE").is_some();
+    if baseline {
+        load_pair(base, "current.turso", &own).await;
+    } else {
+        load_pair(base, source, &older).await;
+    }
+    let before = wasm_memory_bytes();
+    let (elapsed, report) = timed_open().await;
+    let after = wasm_memory_bytes();
+    let (_, again) = timed_open().await;
+    let reopened = wasm_memory_bytes();
+    assert_eq!(again.outcome, CacheOpenOutcome::OpenedExisting);
+    console_log!(
+        "{} from {from}: {:?} in {elapsed:.1} ms; wasm memory {:.1} MiB before, {:.1} MiB after, {:.1} MiB after a reopen",
+        if baseline {
+            "reopen at the current version"
+        } else {
+            "move and upgrade"
+        },
+        report.outcome,
+        before / 1048576.0,
+        after / 1048576.0,
+        reopened / 1048576.0,
+    );
+    destroy_cache(BENCH_SCOPE.into())
+        .await
+        .expect("destroy bench cache");
+    remove_opfs_pair(&older).await;
+}
