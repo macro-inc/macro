@@ -100,10 +100,11 @@ export function ChannelMessage(props: ChannelMessageProps) {
               variant="ghost"
               size="sm"
               aria-label={t('agentCards.openInChannel')}
-              // Beside the button: below it, it covered the first message's time.
+              // Above the card's corner: below, it covered the first message's
+              // time, and to the left, the channel name at phone width.
               tooltip={{
                 content: t('agentCards.openInChannel'),
-                placement: 'left',
+                placement: 'top-end',
               }}
               onClick={() => open(props.messageId)}
             >
