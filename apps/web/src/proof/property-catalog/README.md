@@ -104,6 +104,11 @@ an optimistic-state check failed.
   every extra one is excused that way. They are counted in `oldStale` by
   operation and reader. A head that is stale itself, or whose cold mount
   differs from main's, never qualifies, so the cache mutants still count.
+  One exception carries an excuse forward: a key excused at the previous
+  comparison of the same account stays excused while neither side's live copy
+  has moved and the cold mounts still agree. That is a write neither side is
+  told of (another account's) leaving both behind, the head no staler than
+  main; `oldStale.inherited` counts them.
 - `VALUE_DROPPED` (`run.mjs`) lists writes the head resolves with nothing
   where main resolved with the changed option (`updateTag`, `updateOption`):
   their hooks type the result `void`, so the type check proves no caller reads
@@ -123,8 +128,11 @@ an optimistic-state check failed.
   server's catalog against main; that the head's settled readers equal its
   own cold mount; that the write settles; on failure that both tabs roll back;
   otherwise that the head shows the write while it is pending and that this
-  is the settled state; offline, that the write reaches the server exactly
-  once, after the reconnect. Settled live readers compare with main as above,
+  is the settled state (creating a definition, which the server answers,
+  shows on neither side until it does); offline, that the write reaches the
+  server exactly once, after the reconnect, and how long after it
+  (`optimism.landMs`: main resumes on the reconnect, the cache's queue when
+  its retry delay runs out). Settled live readers compare with main as above,
   with main's staleness listed in `optimism.oldStale`. The first tab's state
   reaching the second is reported per case (`tab2Live`, `tab2Ms`).
 - `MUTANT=drop-row|swap-order|alter-field|stale-cache|skip-live-update` plants a

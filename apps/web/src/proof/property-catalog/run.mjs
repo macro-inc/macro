@@ -541,7 +541,7 @@ const R = {
   valueDropped: {},
   // live differences where main's reader was stale and the head's current
   // (see `oldStaleExcuses`), by operation and reader
-  oldStale: { byOp: {}, staleness: 0 },
+  oldStale: { byOp: {}, staleness: 0, inherited: 0 },
   visibility: { checks: 0, oldMissing: 0, newMissing: 0, readFailures: 0 },
   harnessErrors: [],
   settleTimeouts: [], // every settle timeout, whole (first 1,000)
@@ -637,6 +637,15 @@ const snapshotClean = (s, expected = []) => !!s && 'callers' in s && expected.ev
 // Live readers and callers whose difference is main's staleness alone, for
 // the comparison running now (set by compareStep, `oldStaleExcuses`).
 let OLD_STALE = null;
+// While live copies are compared: each side's cold mount at the same step, so
+// a dumped live difference carries what the server says beside it.
+let FRESH_PAIR = null;
+function freshOf(snap, kind) {
+  const caller = /^caller\.(.+)$/.exec(kind);
+  if (caller) return snap?.callers?.[caller[1]];
+  const reader = /^reader(.+)\.data$/.exec(kind);
+  return reader ? snap?.[reader[1]]?.data : undefined;
+}
 function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
   if (cls === 'diff' && OLD_STALE?.has(kind)) {
     cls = 'old-stale';
@@ -647,7 +656,8 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
   // DUMP=n: the first n differences in full, both sides, to out/<run>/dump.jsonl
   if (DUMP_LEFT > 0 && cls !== 'tie-order' && cls !== 'timestamp-format') {
     DUMP_LEFT--;
-    fs.appendFileSync(path.join(OUT, 'dump.jsonl'), `${JSON.stringify({ level, kind, cls, at: here(), old: a, neu: b })}\n`);
+    const fresh = FRESH_PAIR ? { freshOld: freshOf(FRESH_PAIR.fo, kind), freshNeu: freshOf(FRESH_PAIR.fn, kind) } : {};
+    fs.appendFileSync(path.join(OUT, 'dump.jsonl'), `${JSON.stringify({ level, kind, cls, at: here(), old: a, neu: b, ...fresh })}\n`);
   }
   const ex = (R.examples[`${level}:${cls}`] ??= []);
   // The first difference that survives normalization (timestamps, tie order).
@@ -1446,6 +1456,37 @@ function oldStaleExcuses(lo, ln, fo, fn) {
   }
   return out;
 }
+// A live difference main's staleness left behind. Main's copy was stale at
+// the last comparison (excused there), and since then neither live copy has
+// moved while a write neither side is told of (another account's) made both
+// stale; the cold mounts still agree. Without this, a difference excused once
+// would come back as a regression the first time the head also falls behind,
+// though the head is never staler than main there. A copy that moved, or cold
+// mounts that disagree, still count.
+const LAST_LIVE = new Map();
+function inheritedExcuses(key, lo, ln, fo, fn) {
+  const out = new Set();
+  const last = LAST_LIVE.get(key);
+  if (!last) return out;
+  const same = (x, y, canon) => JT(canon(x)) === JT(canon(y));
+  for (const kind of last.excused) {
+    const caller = /^caller\.(.+)$/.exec(kind);
+    if (caller) {
+      const c = caller[1];
+      const of = (snap) => snap?.callers?.[c];
+      const by = (g) => (x) => canonCallers(x, g(c));
+      if (same(of(lo), of(last.lo), by(callerGroups(lo, last.lo))) && same(of(ln), of(last.ln), by(callerGroups(ln, last.ln))) && same(of(fo), of(fn), by(callerGroups(fo, fn)))) out.add(kind);
+      continue;
+    }
+    const k = /^reader(.+)\.data$/.exec(kind)?.[1];
+    if (k === undefined) continue;
+    const canon = canonFor(readerKind(k));
+    const d = (snap) => snap?.[k]?.data;
+    if (same(d(lo), d(last.lo), canon) && same(d(ln), d(last.ln), canon) && same(d(fo), d(fn), canon)) out.add(kind);
+  }
+  return out;
+}
+
 // The staleness record, given each side's stale keys: main's staleness alone
 // when the head's stale keys are a subset of main's and every key only main
 // has stale is excused (for `callers`, every caller main has stale).
@@ -1510,10 +1551,17 @@ async function compareStep(pair, level, op) {
     // the cold NEW mount of this account, which a cache fault's catch must disagree with
     if (R.mutant) R.mutant.freshNew = freshOut[at + 1] ? null : fn;
     // main's staleness alone is excused only with both cold mounts in hand
-    const excuses = freshOutHere ? new Set() : oldStaleExcuses(lo, ln, fo, fn);
+    const liveKey = `${account}:${c.seq}`;
+    const fresh0 = freshOutHere ? new Set() : oldStaleExcuses(lo, ln, fo, fn);
+    const inherited = freshOutHere ? new Set() : inheritedExcuses(liveKey, lo, ln, fo, fn);
+    const excuses = new Set([...fresh0, ...inherited]);
+    for (const k of inherited) if (!fresh0.has(k)) R.oldStale.inherited++;
     OLD_STALE = excuses;
+    if (!liveOut) LAST_LIVE.set(liveKey, { lo, ln, excused: excuses });
+    FRESH_PAIR = freshOutHere ? null : { fo, fn };
     if (!liveOut) compareSnapshots(`${level}:live`, lo, ln, expected, { account, asOf: liveAsOf });
     OLD_STALE = null;
+    FRESH_PAIR = null;
     if (R.mutant) R.mutant.freshNew = null;
     if (!freshOutHere) compareSnapshots(`${level}:fresh`, fo, fn, expected, { account, asOf: fresh[at + 1].asOf });
     if (liveOut || freshOutHere) continue;
@@ -2170,7 +2218,7 @@ const real = Object.entries(R.diffSignatures);
 log(`done: ${R.counts.sequences} sequences, ${R.counts.steps} steps, ${R.counts.rawCases} raw cases, ${R.counts.readerComparisons} reader and ${R.counts.callerComparisons} caller comparisons; ${R.totals.differences} differences in ${real.length} signatures; ${R.totals.harnessErrors} harness errors; module checks ${JSON.stringify(R.moduleChecks)}`);
 {
   const n = Object.values(R.oldStale.byOp).reduce((a, x) => a + Object.values(x).reduce((b, y) => b + y, 0), 0);
-  if (n || R.oldStale.staleness) log(`main stale, head current: ${n} live differences and ${R.oldStale.staleness} staleness records (oldStale in results.json)`);
+  if (n || R.oldStale.staleness) log(`main stale, head current: ${n} live differences (${R.oldStale.inherited} excused keys carried from an earlier step where neither side moved) and ${R.oldStale.staleness} staleness records (oldStale in results.json)`);
   if (Object.keys(R.valueDropped).length) log(`value dropped by the head: ${JSON.stringify(R.valueDropped)}`);
 }
 for (const [s, n] of real.sort((a, b) => b[1] - a[1])) log(`  ${n}x ${s}`);
