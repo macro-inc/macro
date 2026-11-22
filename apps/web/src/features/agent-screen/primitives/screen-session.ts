@@ -44,10 +44,13 @@ const RECENTLY_LIVE_WINDOW_MS = 60_000;
 
 /**
  * While asleep and shown, how often the viewer checks whether the computer
- * is on again (turned on by someone else): one ticket each, well under the
- * per-person budget.
+ * is on again (turned on by someone else): one ticket each. Every 10 s for
+ * the first two minutes, then once a minute, so several asleep tabs stay
+ * well under the per-person ticket budget.
  */
 const ASLEEP_RECHECK_MS = 10_000;
+const ASLEEP_RECHECK_LATER_MS = 60_000;
+const ASLEEP_QUICK_WINDOW_MS = 120_000;
 
 /** Marks the previous connection's frame, kept on screen until the next is live. */
 const LAST_PICTURE_ATTRIBUTE = 'data-screen-last-picture';
@@ -141,6 +144,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
   let pendingConnect: AbortController | undefined;
   /** When the current connection went live, to tell a flapping one apart. */
   let liveSince: number | undefined;
+  /** When the view last fell asleep, for the asleep checks' back-off. */
+  let asleepSince: number | undefined;
   /** When the last steady (not flapping) connection dropped. */
   let steadyDroppedAt: number | undefined;
   /** Quick retries used since that drop (`QUICK_RETRIES` at most). */
@@ -338,6 +343,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
         ? { controlLost: undefined, notice: undefined }
         : {}),
     });
+    if (step.status.kind !== 'asleep') asleepSince = undefined;
+    else asleepSince ??= Date.now();
     if (step.kind === 'show') {
       record('computer.screen.status', { status: step.status.kind });
       clearTimeout(retryTimer);
@@ -543,6 +550,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
       hiddenSinceOpen = document.visibilityState !== 'visible';
       dropLastPicture();
       endBoot('live');
+      asleepSince = undefined;
       batch(() => {
         setStore({
           status: { kind: 'live' },
@@ -586,7 +594,13 @@ export function createScreenSession(options: ScreenSessionOptions) {
   function scheduleAsleepCheck() {
     clearTimeout(retryTimer);
     if (document.visibilityState !== 'visible') return;
-    retryTimer = setTimeout(checkAsleep, ASLEEP_RECHECK_MS);
+    const asleepFor = Date.now() - (asleepSince ?? Date.now());
+    retryTimer = setTimeout(
+      checkAsleep,
+      asleepFor < ASLEEP_QUICK_WINDOW_MS
+        ? ASLEEP_RECHECK_MS
+        : ASLEEP_RECHECK_LATER_MS
+    );
   }
   function checkAsleep() {
     if (disposed || store.status.kind !== 'asleep') return;

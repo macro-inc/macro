@@ -2132,4 +2132,51 @@ describe('createScreenSession', () => {
     });
     visibilityState.mockRestore();
   });
+
+  it('backs the asleep checks off: every 10 s for two minutes, then once a minute', async () => {
+    const tickets: number[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () => {
+        tickets.push(Date.now());
+        return ok({
+          socketUrl: 'wss://screen.test/ws?ticket=t',
+          expiresAt: '',
+        });
+      },
+      transport: () => ({
+        kind: 'vnc',
+        connect: async (_element, _ticket, handlers) => {
+          handlers.onEnded('computerOff');
+          throw new DOMException('closed', 'AbortError');
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => false,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      const asleepAt = Date.now();
+      await vi.advanceTimersByTimeAsync(7 * 60_000);
+
+      const checks = tickets.slice(1);
+      const early = checks.filter((at) => at - asleepAt <= 120_000);
+      expect(early.length).toBeLessThanOrEqual(12);
+      expect(early.length).toBeGreaterThanOrEqual(10);
+      // After that, at most one a minute, but still checking.
+      const late = checks.filter((at) => at - asleepAt > 120_000);
+      expect(late.length).toBeGreaterThanOrEqual(4);
+      expect(late.length).toBeLessThanOrEqual(5);
+      for (const [index, at] of late.slice(1).entries())
+        expect(at - late[index]).toBeGreaterThanOrEqual(60_000);
+      expect(session.store.status).toEqual({ kind: 'asleep' });
+      dispose();
+    });
+  });
 });
