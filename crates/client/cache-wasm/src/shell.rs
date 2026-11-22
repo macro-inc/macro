@@ -1796,7 +1796,32 @@ pub async fn remove_stale_cache_database(
             queued_mutations: None,
         });
     };
-    let owner = match open_owner(owner).await? {
+    let opened = match owner.open().await {
+        Ok(opened) => opened,
+        // An adoption into that name stopped between its moves: its main file
+        // is here and its WAL at the name before. It never opens, and its
+        // queue cannot be counted without the older build completing it, so
+        // what is here goes as a one-sided pair does.
+        Err(failure) if failure.error().kind() == OpfsErrorKind::SplitAdoption => {
+            let error = storage_err_js(failure.error());
+            let Some(owner) = failure.into_owner() else {
+                return Err(error);
+            };
+            owner.remove_and_release().await.map_err(err_js)?;
+            return to_js(&StaleDatabaseCleanup {
+                outcome: "removed",
+                queued_mutations: None,
+            });
+        }
+        Err(failure) => {
+            let error = storage_err_js(failure.error());
+            if let Some(owner) = failure.into_owner() {
+                owner.release().await.map_err(err_js)?;
+            }
+            return Err(error);
+        }
+    };
+    let owner = match opened {
         OpenResult::Ready(session) => {
             let connected = session.connect().map_err(err_js)?;
             let counted = count_queued_mutations(&connected);

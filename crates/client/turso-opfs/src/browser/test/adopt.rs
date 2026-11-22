@@ -824,7 +824,7 @@ async fn an_open_of_a_split_adoption_creates_nothing_and_fails() {
     adopt_and_stop(&old, &new).await;
     let owner = OpfsOwner::acquire(&new).await.expect("owner");
     let failure = owner.open().await.expect_err("an open of a split");
-    assert_eq!(failure.error().kind(), OpfsErrorKind::Open);
+    assert_eq!(failure.error().kind(), OpfsErrorKind::SplitAdoption);
     failure
         .into_owner()
         .expect("the owner comes back")

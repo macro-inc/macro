@@ -88,6 +88,11 @@ pub enum OpfsErrorKind {
     /// partial wipe, so the worker must be replaced and the next owner wipes
     /// again; a busy [`OpfsOwner::remove_and_release`] still releases the lock.
     Busy,
+    /// An adoption into this identity stopped between its two moves: its
+    /// main file is here and its WAL is still at the older identity. An open
+    /// fails with this kind, changes nothing and hands its owner back; only
+    /// [`OpfsOwner::complete_adoption`] finishes such a pair.
+    SplitAdoption,
 }
 
 /// A payload-free OPFS adapter error.
@@ -284,7 +289,7 @@ impl OpfsOwner {
                     Ok(Some(value)) => value,
                     Ok(None) => {
                         let error = OpfsError::new(
-                            OpfsErrorKind::Open,
+                            OpfsErrorKind::SplitAdoption,
                             "an unfinished adoption left this owner's WAL at the older identity",
                         );
                         cleanup_failed_open(self.id, session, &error);

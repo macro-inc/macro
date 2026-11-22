@@ -2806,6 +2806,39 @@ async fn stale_databases_are_removed_only_when_unused_and_empty() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn stale_cleanup_removes_a_split_adoption_like_a_one_sided_pair() {
+    const SCOPE: &str = "cache-wasm-stale-split";
+    let own = database_identity(SCOPE);
+    let older = cache_database_name(SCOPE, 11);
+    let stale = format!("{}:s0.v0.t3", legacy_cache_database_name(SCOPE));
+    remove_opfs_pair(&stale).await;
+    older_database_with_a_queued_write(SCOPE, Flaw::None).await;
+    move_without_opening(SCOPE).await;
+    // What an adoption into `stale` leaves when it stops between its moves:
+    // the main file and the marker there, the WAL still at the name before.
+    rename_opfs_file(&format!("{own}-wal"), &format!("{older}-wal")).await;
+    rename_opfs_file(&own, &stale).await;
+    rename_opfs_file(&format!("{own}-adopting"), &format!("{stale}-adopting")).await;
+    remove_opfs_file(&format!("{own}-adopting-attempts")).await;
+
+    // The split never opens, so cleanup removes what is there instead of
+    // rejecting, which would end the caller's sweep.
+    assert_eq!(
+        stale_cleanup(SCOPE, &stale).await,
+        serde_json::json!({ "outcome": "removed" })
+    );
+    assert!(!opfs_file_exists(&stale).await);
+    assert!(!opfs_entry_exists(&format!("{stale}-adopting")).await);
+    // The WAL left at the name before is a one-sided pair there.
+    assert_eq!(
+        stale_cleanup(SCOPE, &older).await,
+        serde_json::json!({ "outcome": "removed" })
+    );
+    assert!(!opfs_file_exists(&format!("{older}-wal")).await);
+    remove_opfs_pair(&own).await;
+}
+
+#[wasm_bindgen_test(async)]
 async fn calendar_ranges_report_gaps_watermarks_and_uncertain_events_across_the_js_boundary() {
     const SCOPE: &str = "cache-wasm-calendar-range";
     let engine = fresh_engine(SCOPE).await;

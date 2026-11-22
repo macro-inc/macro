@@ -83,10 +83,9 @@ Wiping, resetting or removing an identity removes its pair, then its marker
 (and tries its count), so a stop between, or a file that cannot be removed,
 leaves a marker beside what is left: beside no main file the next read removes
 it, and moved files never go on without their marker. `OpfsOwner::open`
-refuses a split (a marker beside a main file and no WAL) and creates nothing,
-since an empty WAL would make it read as whole and a reset would remove the
-main file. A
-`lock_previous` request dropped before it returns lets the lock go as soon as
+refuses a split (a marker beside a main file and no WAL) with
+`SplitAdoption` and creates nothing, since an empty WAL would make it read as
+whole and a reset would remove the main file. A `lock_previous` request dropped before it returns lets the lock go as soon as
 the browser grants it. `src/browser/test/adopt.rs` covers each outcome, the
 lock and a dropped request for it, Turso-invalid headers, both stops, splits
 with a matching and a changed WAL, stale and malformed markers, attempt counts

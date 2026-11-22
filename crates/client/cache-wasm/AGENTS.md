@@ -113,6 +113,9 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   `CACHE_CARRY_FORWARDS` (`telemetry.ts`) and the `CacheOpenResult` wire type
   (`worker/wasm-module.ts`).
   The carry-forward tests in `shell/test.rs` cover each path over real OPFS.
+- Stale cleanup (`remove_stale_cache_database`) removes a split adoption at an
+  older name (`OpfsErrorKind::SplitAdoption` from the open) as it removes a
+  one-sided pair, rather than rejecting, which ends the web app's sweep.
 - The engine is guarded by an async mutex so overlapping JS calls serialize
   instead of causing reentrancy — don't bypass it with a second entry point.
 - Compiles to an empty shell off-wasm specifically so plain `cargo test` across
