@@ -469,6 +469,8 @@ where
             input.provider_id = None;
             input.provider_thread_id = None;
         }
+        self.keep_stored_reply_target(&mut input, &accessible_link_ids)
+            .await?;
         // Authorize the reply target before validate_existing_message can move
         // the draft to another inbox, so a refused target leaves it in place.
         let reply_target = self
@@ -695,6 +697,30 @@ where
         input.provider_thread_id = msg.provider_thread_id;
 
         Ok(None)
+    }
+
+    /// A save of a stored draft that names no reply target keeps the one the
+    /// draft has: clients that edit only the content (the SDK, REST) omit it,
+    /// and saving it as null would drop the draft from its reply thread. The
+    /// adopted target is then authorized like one the client sent.
+    async fn keep_stored_reply_target(
+        &self,
+        input: &mut CreateDraftInput,
+        accessible_link_ids: &[Uuid],
+    ) -> Result<(), EmailErr> {
+        let Some(db_id) = input.db_id.filter(|_| input.replying_to_id.is_none()) else {
+            return Ok(());
+        };
+        if let Some(stored) = self
+            .email_repo
+            .get_simple_message(db_id, accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .filter(|stored| stored.is_draft && !stored.is_sent)
+        {
+            input.replying_to_id = stored.replying_to_id;
+        }
+        Ok(())
     }
 
     /// The reply target, authorized on every save, before an existing reply
