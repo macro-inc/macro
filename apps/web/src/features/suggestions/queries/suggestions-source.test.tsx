@@ -40,6 +40,8 @@ const server = vi.hoisted(() => ({
   gates: [] as Promise<void>[],
   /** The dismissal call fails (its answer lost, or refused). */
   dismissFails: false,
+  /** What an accept answers: the suggestion as it is now. */
+  acceptChanged: undefined as WireSuggestion | undefined,
   /** Runs as the server answers a restore. */
   onRestore: undefined as (() => void) | undefined,
 }));
@@ -63,6 +65,7 @@ vi.mock('@service-scheduled-action/client', () => ({
       server.onRestore?.();
       return ok(undefined);
     },
+    acceptSuggestion: async () => ok({ changed: server.acceptChanged ?? null }),
     dismissSuggestion: async () =>
       server.dismissFails
         ? err([{ code: 'HTTP_ERROR', message: 'connection lost' }])
@@ -100,6 +103,7 @@ beforeEach(() => {
   server.listed = undefined;
   server.gates = [];
   server.dismissFails = false;
+  server.acceptChanged = undefined;
   server.onRestore = undefined;
 });
 
@@ -193,6 +197,63 @@ it('holds a write until the read that replaced its own answers', async () => {
   release();
   await waiting;
   expect(settled).toBe(true);
+});
+
+it('holds a write through two reads that replaced its own', async () => {
+  const { source } = mount();
+  await waitFor(() => expect(source.feed()).toBeDefined());
+  // The write's read and Undo's never answer; a third write's read
+  // replaces Undo's and answers when released.
+  server.gates.push(new Promise<void>(() => {}));
+  server.gates.push(new Promise<void>(() => {}));
+  let release: () => void = () => {};
+  server.gates.push(
+    new Promise<void>((resolve) => {
+      release = resolve;
+    })
+  );
+  let settled = false;
+  const waiting = (async () => {
+    await source.refresh();
+    settled = true;
+  })();
+  await waitFor(() => expect(server.gates).toHaveLength(2));
+  await source.restore(decoded(DONE));
+  await waitFor(() => expect(server.gates).toHaveLength(1));
+  const third = source.refresh();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(settled).toBe(false);
+
+  release();
+  await Promise.all([waiting, third]);
+  expect(settled).toBe(true);
+});
+
+it('leaves a restored suggestion as a later write left it when the read after the restore fails', async () => {
+  const { source } = mount();
+  await waitFor(() =>
+    expect(source.feed()?.suggestions[0]?.status).toBe('done')
+  );
+  let release: () => void = () => {};
+  server.gates.push(
+    new Promise<void>((resolve) => {
+      release = resolve;
+    })
+  );
+  server.feedFails = true;
+  await source.restore(decoded(DONE));
+  // Taken up again before the read after the restore answers; the server
+  // answers with it done.
+  server.acceptChanged = { ...DONE, updatedAt: '2026-11-09T09:00:00Z' };
+  await source.accept(decoded({ ...DONE, status: 'open' }));
+  await waitFor(() =>
+    expect(source.feed()?.suggestions[0]?.status).toBe('done')
+  );
+
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  expect(source.feed()?.suggestions[0]?.status).toBe('done');
 });
 
 it('reads routine ideas again after a dismissal, without holding the dismissal for it', async () => {

@@ -100,22 +100,41 @@ export function useSuggestionsSource(): SuggestionsSource {
       feed.refetch(),
       queryClient.invalidateQueries({ queryKey: suggestionsKeys.top._def }),
     ]);
+    await followReplacingReads();
+  };
+  // A later write's read replaces this one's, and a write after that can
+  // replace it again: wait for the read that is out last, so a write isn't
+  // let go on a feed from before it.
+  const followReplacingReads = async () => {
+    const asked = { queryKey: key(), exact: true };
+    // Bounded: a read that never settles must not hold the row for good.
+    for (let turn = 0; turn < 3; turn++) {
+      if (queryClient.isFetching(asked) === 0) return;
+      await queryClient.refetchQueries(asked, { cancelRefetch: false });
+    }
+  };
+  // Each write to a suggestion, counted, so a write's late follow-up can
+  // tell whether a newer one has been made to it since.
+  const writes: Record<string, number> = {};
+  const wrote = (id: string) => {
+    writes[id] = (writes[id] ?? 0) + 1;
+    return writes[id];
   };
   /** The feed held for `asked`, with `suggestion` back in it, open. */
   const putBack = (asked: ReturnType<typeof key>, suggestion: Suggestion) =>
     queryClient.setQueryData(asked, (held: SuggestionFeed | undefined) =>
       held ? reopened(held, suggestion) : held
     );
-  // The read after a restore may fail, or land behind one already out that
-  // predates the restore: either way the restore stands.
+  // The read after a restore may fail: the restore stands, unless the
+  // suggestion was written to again since.
   const refreshKeeping = async (
     asked: ReturnType<typeof key>,
-    suggestion: Suggestion
+    suggestion: Suggestion,
+    write: number
   ) => {
     await refresh();
-    if (queryClient.getQueryState(asked)?.status === 'error') {
-      putBack(asked, suggestion);
-    }
+    const failed = queryClient.getQueryState(asked)?.status === 'error';
+    if (failed && writes[suggestion.id] === write) putBack(asked, suggestion);
   };
   // The sidebar's Ideas count is the routine suggestions feature's read, and
   // a dismissed routine suggestion takes its idea with it. A read already
@@ -176,6 +195,7 @@ export function useSuggestionsSource(): SuggestionsSource {
     async accept(suggestion) {
       // The answer belongs to the feed it was asked from.
       const asked = key();
+      wrote(suggestion.id);
       const { changed } = await throwOnErr(() =>
         scheduledActionClient.acceptSuggestion({
           suggestionId: suggestion.id,
@@ -194,6 +214,7 @@ export function useSuggestionsSource(): SuggestionsSource {
       return 'changed';
     },
     async dismiss(id) {
+      wrote(id);
       const sent = await ResultAsync.fromPromise(
         throwOnErr(() =>
           scheduledActionClient.dismissSuggestion({ suggestionId: id })
@@ -207,6 +228,7 @@ export function useSuggestionsSource(): SuggestionsSource {
       await refresh();
     },
     async stop(id) {
+      wrote(id);
       await throwOnErr(() =>
         scheduledActionClient.stopSuggestionRun({ suggestionId: id })
       );
@@ -214,6 +236,7 @@ export function useSuggestionsSource(): SuggestionsSource {
     },
     async restore(suggestion) {
       const asked = key();
+      const write = wrote(suggestion.id);
       await throwOnErr(() =>
         scheduledActionClient.restoreSuggestion({
           suggestionId: suggestion.id,
@@ -223,7 +246,7 @@ export function useSuggestionsSource(): SuggestionsSource {
       // the feed, so it goes back in.
       putBack(asked, suggestion);
       // The row shows open now; the read that follows doesn't hold it.
-      fireAndForget(refreshKeeping(asked, suggestion), 'suggestions');
+      fireAndForget(refreshKeeping(asked, suggestion, write), 'suggestions');
       // Readers hear of the patch on the next notify; resolving after it
       // means a caller that drops its own copy of the row never leaves a gap.
       await new Promise<void>((resolve) => notifyManager.schedule(resolve));
