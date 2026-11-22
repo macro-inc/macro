@@ -1,0 +1,21 @@
+crates/macro_db_client/migrations/20261122200405_mcp_servers_requires_sign_in.down.sql
+  s_e12aed0e824e9d::t_0f82f2c97743a4 1
+crates/macro_db_client/migrations/20261122200405_mcp_servers_requires_sign_in.up.sql
+  s_e12aed0e824e9d::t_819ec4620a3c2d 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "24fb3a8a8c89359e3e53c8512aa49970f46213b7",
+  "prompts": {},
+  "sessions": {
+    "s_e12aed0e824e9d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7740f515-3d51-4ff1-83e5-7b0503817647",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
