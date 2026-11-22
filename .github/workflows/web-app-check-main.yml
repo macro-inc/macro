@@ -13,6 +13,7 @@ jobs:
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
       calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
+      agent_screen_changed: ${{ steps.filter.outputs.agent_screen_changed }}
     timeout-minutes: 10
     steps:
       - name: Checkout Repo # zizmor: ignore[artipacked] path-check runs git over the PR's commits
@@ -102,6 +103,18 @@ jobs:
               - 'apps/web/src/features/calendar-view/**'
               - 'apps/web/src/features/calendar/**'
               - 'apps/web/src/lib/queries/calendar/**'
+            agent_screen_changed:
+              - 'apps/web/src/features/agent-screen/**'
+              - 'apps/web/src/features/channel/Channel/ChannelDetail.tsx'
+              - 'apps/web/src/features/settings/views/team-agent-dm-status.tsx'
+              - 'apps/web/src/components/priority-collapse/**'
+              - 'apps/web/src/lib/core/context/channels.ts'
+              - 'apps/web/src/features/channel/use-channel-participants.ts'
+              - 'apps/web/src/features/settings/primitives/team-agent-status.ts'
+              - 'apps/web/src/features/channel/Call/use-call.ts'
+              - 'apps/web/src/components/app/GlobalAppState.tsx'
+              - 'apps/web/src/lib/core/context/user.ts'
+              - 'apps/web/src/lib/core/user/displayName.ts'
       - id: codegen
         name: Detect schema changes
         run: |
@@ -1516,6 +1529,12 @@ jobs:
         run: |-
           bunx playwright install-deps chromium
           just test-calendar-details-browser
+        working-directory: apps/web
+      - name: Agent Screen Browser Tests
+        if: needs.path-check.outputs.agent_screen_changed == 'true'
+        run: |-
+          bunx playwright install-deps chromium
+          just test-agent-screen-browser
         working-directory: apps/web
       - name: Teardown Nix
         if: always()

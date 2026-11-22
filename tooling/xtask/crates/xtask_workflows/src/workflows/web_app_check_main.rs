@@ -45,6 +45,8 @@ struct PathCheckOutputs {
     database_grid_changed: JobOutput<Flag>,
     /// Whether the event details browser tests' surfaces changed.
     calendar_details_changed: JobOutput<Flag>,
+    /// Whether the agent screen browser tests' surfaces changed.
+    agent_screen_changed: JobOutput<Flag>,
 }
 
 const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
@@ -56,6 +58,7 @@ const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
         i18n_changed: JobOutput::new("path-check", "i18n_changed"),
         database_grid_changed: JobOutput::new("path-check", "database_grid_changed"),
         calendar_details_changed: JobOutput::new("path-check", "calendar_details_changed"),
+        agent_screen_changed: JobOutput::new("path-check", "agent_screen_changed"),
     },
 );
 
@@ -81,6 +84,8 @@ struct FilterOutputs {
     database_grid_changed: StepOutput<Flag>,
     /// The `calendar_details_changed` filter's match.
     calendar_details_changed: StepOutput<Flag>,
+    /// The `agent_screen_changed` filter's match.
+    agent_screen_changed: StepOutput<Flag>,
 }
 
 const FILTER: StepHandle<FilterOutputs> = StepHandle::new(
@@ -92,6 +97,7 @@ const FILTER: StepHandle<FilterOutputs> = StepHandle::new(
         i18n_changed: StepOutput::new("filter", "i18n_changed"),
         database_grid_changed: StepOutput::new("filter", "database_grid_changed"),
         calendar_details_changed: StepOutput::new("filter", "calendar_details_changed"),
+        agent_screen_changed: StepOutput::new("filter", "agent_screen_changed"),
     },
 );
 
@@ -157,6 +163,10 @@ fn path_check() -> Job {
         .add_output(
             PATH_CHECK.outputs.calendar_details_changed.name(),
             FILTER.outputs.calendar_details_changed.read(),
+        )
+        .add_output(
+            PATH_CHECK.outputs.agent_screen_changed.name(),
+            FILTER.outputs.agent_screen_changed.read(),
         )
         .add_step(path_check_checkout())
         .add_step(paths_filter())
@@ -433,6 +443,7 @@ fn browser() -> Job {
         .add_step(run_i18n_browser_tests())
         .add_step(run_database_browser_tests())
         .add_step(run_calendar_details_browser_tests())
+        .add_step(run_agent_screen_browser_tests())
         .add_step(steps::teardown_nix())
 }
 
@@ -579,11 +590,13 @@ fn paths_filter() -> Step<Use> {
     // tests: the grid, and the timeline with the Gantt it draws.
     // `calendar_details_changed` covers what the event details browser tests
     // render and the query modules their fixture replaces, whose exports the
-    // fixture must keep matching.
+    // fixture must keep matching. `agent_screen_changed` covers the screen
+    // viewer and the DM top bar its suite renders, with the modules that
+    // fixture replaces.
     DornyPathsFilter::new(
         "Filter changed paths",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'packages/muppet/**'\n  - 'packages/starter-agent/**'\n  - 'tooling/scripts/starter-agent-lock.sh'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'packages/muppet/**'\n  - 'packages/starter-agent/**'\n  - 'tooling/scripts/starter-agent-lock.sh'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\nagent_screen_changed:\n  - 'apps/web/src/features/agent-screen/**'\n  - 'apps/web/src/features/channel/Channel/ChannelDetail.tsx'\n  - 'apps/web/src/features/settings/views/team-agent-dm-status.tsx'\n  - 'apps/web/src/components/priority-collapse/**'\n  - 'apps/web/src/lib/core/context/channels.ts'\n  - 'apps/web/src/features/channel/use-channel-participants.ts'\n  - 'apps/web/src/features/settings/primitives/team-agent-status.ts'\n  - 'apps/web/src/features/channel/Call/use-call.ts'\n  - 'apps/web/src/components/app/GlobalAppState.tsx'\n  - 'apps/web/src/lib/core/context/user.ts'\n  - 'apps/web/src/lib/core/user/displayName.ts'\n"
             ),
     )
     .step()
@@ -773,6 +786,16 @@ fn run_calendar_details_browser_tests() -> Step<Run> {
     Step::new("Calendar Event Details Browser Tests")
         .run("bunx playwright install-deps chromium\njust test-calendar-details-browser")
         .if_condition(PATH_CHECK.outputs.calendar_details_changed.read().is_set())
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// The screen viewer's desktop and phone layouts and the agent DM's top bar,
+/// in Chromium over a stand-in transport and stubbed queries. Only when the
+/// viewer, that top bar, or a module the fixture replaces changes.
+fn run_agent_screen_browser_tests() -> Step<Run> {
+    Step::new("Agent Screen Browser Tests")
+        .run("bunx playwright install-deps chromium\njust test-agent-screen-browser")
+        .if_condition(PATH_CHECK.outputs.agent_screen_changed.read().is_set())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 

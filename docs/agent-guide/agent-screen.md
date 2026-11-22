@@ -64,8 +64,9 @@ A dropped connection while driving says "Connection lost while you were
 driving. Reconnecting…" and wins the same drive back.
 
 On a phone the viewer is full screen: the dock and the New button stand
-down while it shows. In portrait the picture starts zoomed to fill the view
-(top-left corner in view); **Fit** in the zoom control shows all of it.
+down while it shows. A portrait stage is filled (top-left corner in view) and
+a landscape one fitted, again on every resize or rotation, until the person
+zooms, pans or picks **Fit** in the zoom control.
 
 ## Testing without a computer
 
@@ -74,7 +75,10 @@ The views and the session are tested with fake transports (vitest, jsdom):
 take-overs; `transports/vnc-frame/novnc-clipboard.test.ts` runs the real
 noVNC against a scripted RFB server. The layouts have a backend-free browser
 regression over a stand-in transport (desktop split at 600 and 380 px, phone,
-light and dark, plus the DM header's status chip):
-`bunx playwright test --config src/features/agent-screen/browser-test/playwright.config.ts`
-from `apps/web`; `AGENT_SCREEN_SHOTS_DIR=<dir>` keeps a PNG of each state. A real run needs a local stack with an
+light and dark), plus the real agent DM top bar (`ChannelDetailTopBar`) over
+stubbed channel and team queries, where the Offline chip drops to its dot
+before the agent's name truncates: `just test-agent-screen-browser` from
+`apps/web`; `AGENT_SCREEN_SHOTS_DIR=<dir>` keeps a PNG of each state. CI's
+Browser Tests job runs it when the viewer, that top bar, or a module the
+fixture stubs changes. A real run needs a local stack with an
 agent teammate's computer and the harness screen socket.
