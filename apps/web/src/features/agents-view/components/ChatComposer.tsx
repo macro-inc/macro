@@ -21,6 +21,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { toast } from '@core/component/Toast/Toast';
+import { keepToastsClearOf } from '@core/component/Toast/toast-clearance';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
@@ -423,7 +424,10 @@ export function ChatComposer(props: {
       }}
     >
       <div
-        ref={container}
+        ref={(element) => {
+          container = element;
+          keepToastsClearOf(element);
+        }}
         data-keep-keyboard
         class="relative w-full min-w-0 touch:rounded-[32px]"
         classList={{

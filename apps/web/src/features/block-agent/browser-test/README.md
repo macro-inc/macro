@@ -8,6 +8,10 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome \
 bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts
 ```
 
+`composer.html?toast` raises a failure toast over the session composer;
+`toast-clearance.browser.e2e.ts` checks on desktop and phone that the toast
+sits clear of Send and that a click at Send's centre sends.
+
 `queued.html` renders the queued-message rows over the real composer
 (`?count=N` entries, `?light` for the light theme) with an in-page log of
 edits, removals and steers; `queued.browser.e2e.ts` checks that an open row

@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { toast } from '@core/component/Toast/Toast';
+import { keepToastsClearOf } from '@core/component/Toast/toast-clearance';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { IMAGE_INPUT_WARNING } from '../state/image-input';
 /**
@@ -310,7 +311,10 @@ export function AgentInput(props: AgentInputProps) {
       }}
     >
       <div
-        ref={containerRef}
+        ref={(element) => {
+          containerRef = element;
+          keepToastsClearOf(element);
+        }}
         data-keep-keyboard
         onFocusIn={() => fireAndForget(preloadAgentFold(), 'agent-composer')}
         class="flex flex-col gap-1.5"

@@ -13,6 +13,16 @@ the dock and preserves full descriptions and accessible close buttons. On phones
 open sheets and the pickers and menus on them cover prompts and reminders, which
 sit above the transient notice; the notice itself stays on top of sheets.
 
+Toasts never cover a composer's send and stop controls. A composer docked at
+the bottom of a pane (agent session and new-conversation composers, the phone
+agent composer, channel composers) registers with `keepToastsClearOf`; while a
+toast stack would overlap one, the stack rises to just above it, on desktop and
+phone. Register any new bottom-docked composer the same way. Backend-free
+desktop/phone regression over the real `AgentInput` and `ToastRegion`:
+`bunx playwright test --config
+src/features/block-agent/browser-test/playwright.config.ts
+toast-clearance.browser.e2e.ts` from `apps/web`.
+
 Backend-free regression that a toast animating over a heavy page restyles only
 the toasts, never the whole page (it counts style passes in a trace, not
 milliseconds): `bunx playwright test --config
