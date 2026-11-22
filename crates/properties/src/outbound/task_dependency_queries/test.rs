@@ -312,6 +312,16 @@ async fn inverse_capacity_is_atomic_and_oversized_snapshots_can_clear(
                 .await
                 .is_err()
         );
+        let legacy = sqlx::query!(
+            "UPDATE entity_properties SET values = $1 WHERE entity_id = $2 AND entity_type = 'TASK' AND property_definition_id = $3",
+            serde_json::json!({"type":"EntityReference","value":[{"entity_type":"TASK","entity_id":root.to_string()}]}),
+            leaves[1000].to_string(),
+            leaf_property
+        ).execute(&pool).await.unwrap_err();
+        assert_eq!(
+            legacy.as_database_error().unwrap().code().as_deref(),
+            Some("22023")
+        );
         let mut connection = pool.acquire().await?;
         assert!(
             targets(&mut connection, leaves[1000], leaf_property)

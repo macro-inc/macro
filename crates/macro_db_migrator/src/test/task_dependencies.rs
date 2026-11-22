@@ -23,7 +23,7 @@ async fn dependency_backfill_commits_multiple_batches_and_keeps_legacy_writers_c
         INSERT INTO entity_properties (id,entity_id,entity_type,property_definition_id,values)
         SELECT md5('status-'||n)::uuid,md5('task-'||n)::uuid::text,'TASK',
             '00000001-0000-0000-0000-000000000002',NULL
-        FROM generate_series(1,1002) n;
+        FROM generate_series(1,7003) n;
         INSERT INTO entity_properties (id,entity_id,entity_type,property_definition_id,values)
         SELECT md5('depends-'||n)::uuid,md5('task-'||n)::uuid::text,'TASK',
             '00000001-0000-0000-0000-000000000007',
@@ -32,13 +32,22 @@ async fn dependency_backfill_commits_multiple_batches_and_keeps_legacy_writers_c
         FROM generate_series(1,1001) n;
         -- Missing Status still means an unfinished task, not a missing endpoint.
         DELETE FROM entity_properties WHERE id=md5('status-3')::uuid;
+        -- A dense historical source exceeds the ordinary 5,000-reference batch.
+        INSERT INTO entity_properties (id,entity_id,entity_type,property_definition_id,values)
+        SELECT md5('depends-dense')::uuid,md5('task-1002')::uuid::text,'TASK',
+            '00000001-0000-0000-0000-000000000007',
+            jsonb_build_object('type','EntityReference','value',jsonb_agg(
+                jsonb_build_object('entity_id',md5('task-'||n)::uuid::text,'entity_type','TASK')))
+        FROM generate_series(2000,7000) n;
     "#).execute(&pool).await.unwrap();
     MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
     let count = sqlx::query_scalar!("SELECT count(*) FROM task_dependency_edges")
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(count, Some(1001));
+    assert_eq!(count, Some(6002));
+    let dense = sqlx::query_scalar!("SELECT count(*) FROM task_dependency_edges WHERE dependent_task_id = md5('task-1002')::uuid").fetch_one(&pool).await.unwrap();
+    assert_eq!(dense, Some(5001));
     MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
 
     // This is the deployed, single-property writer, without new repository code.

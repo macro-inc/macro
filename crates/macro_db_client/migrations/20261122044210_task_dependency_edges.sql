@@ -233,6 +233,26 @@ BEGIN
         RAISE EXCEPTION 'Task dependencies cannot contain a direct cycle';
     END IF;
 
+    -- Existing oversized inverses remain removable; only genuinely new edges
+    -- consume capacity. The graph lock serializes the check with insertion.
+    IF NEW.property_definition_id = '00000001-0000-0000-0000-000000000007' THEN
+        IF EXISTS (SELECT 1 FROM unnest(desired) endpoint(id)
+            WHERE NOT EXISTS (SELECT 1 FROM task_dependency_edges
+                WHERE dependent_task_id = source_id AND blocker_task_id = endpoint.id)
+            AND (SELECT count(*) FROM (SELECT 1 FROM task_dependency_edges
+                WHERE blocker_task_id = endpoint.id LIMIT 1000) edges) >= 1000) THEN
+            RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'At most 1000 task relationships are allowed per property';
+        END IF;
+    ELSE
+        IF EXISTS (SELECT 1 FROM unnest(desired) endpoint(id)
+            WHERE NOT EXISTS (SELECT 1 FROM task_dependency_edges
+                WHERE blocker_task_id = source_id AND dependent_task_id = endpoint.id)
+            AND (SELECT count(*) FROM (SELECT 1 FROM task_dependency_edges
+                WHERE dependent_task_id = endpoint.id LIMIT 1000) edges) >= 1000) THEN
+            RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'At most 1000 task relationships are allowed per property';
+        END IF;
+    END IF;
+
     -- Older tasks do not all have the new inverse assignment yet.
     INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id)
     SELECT task_dependency_assignment_id(), id::text, 'TASK', inverse_definition FROM unnest(desired) id
