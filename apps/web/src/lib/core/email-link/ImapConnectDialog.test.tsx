@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 
+import { Telemetry } from '@macro-inc/observability';
 import type { Discovery } from '@service-email/generated/schemas';
 import {
   cleanup,
@@ -8,9 +9,11 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
+import { ImperativeDialogHost } from '@ui';
 import { err, ok, type Result } from 'neverthrow';
+import { createRoot, getOwner } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { ImapConnectDialog } from './ImapConnectDialog';
+import { ImapConnectDialog, openImapConnection } from './ImapConnectDialog';
 
 const mail = vi.hoisted(() => ({
   discover: vi.fn(),
@@ -66,6 +69,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -205,7 +209,12 @@ it('retains confirmed settings and provider help after a rejected login, then re
   );
   fireEvent.input(password, { target: { value: 'corrected-test-password' } });
   fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
-  await vi.waitFor(() => expect(result).toHaveBeenCalledWith('connected'));
+  await vi.waitFor(() =>
+    expect(result).toHaveBeenCalledWith({
+      type: 'connected',
+      linkId: 'connected-inbox',
+    })
+  );
   expect(mail.connect).toHaveBeenCalledTimes(2);
   expect(mail.connect.mock.calls[1][0].imap.password).toBe(
     'corrected-test-password'
@@ -392,7 +401,12 @@ it('keeps an existing Google IMAP reconnect on its bound password flow', async (
   fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
   fireEvent.input(password, { target: { value: 'synthetic-app-password' } });
   fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
-  await vi.waitFor(() => expect(result).toHaveBeenCalledWith('connected'));
+  await vi.waitFor(() =>
+    expect(result).toHaveBeenCalledWith({
+      type: 'connected',
+      linkId: 'existing-inbox',
+    })
+  );
   expect(mail.connect.mock.calls[0][0].linkId).toBe('existing-inbox');
   expect(result).not.toHaveBeenCalledWith('GMAIL');
 });
@@ -453,7 +467,12 @@ it.each([
     fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
     fireEvent.input(password, { target: { value: 'synthetic-app-password' } });
     fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
-    await vi.waitFor(() => expect(result).toHaveBeenCalledWith('connected'));
+    await vi.waitFor(() =>
+      expect(result).toHaveBeenCalledWith({
+        type: 'connected',
+        linkId: 'password-connected-inbox',
+      })
+    );
     expect(mail.connect.mock.calls[0][0].imap.password).toBe(
       'synthetic-app-password'
     );
@@ -619,7 +638,38 @@ it('can connect with an app password after discovery returns a future steer valu
   fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
   fireEvent.input(password, { target: { value: 'synthetic-app-password' } });
   fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
-  await vi.waitFor(() => expect(result).toHaveBeenCalledWith('connected'));
+  await vi.waitFor(() =>
+    expect(result).toHaveBeenCalledWith({
+      type: 'connected',
+      linkId: 'new-inbox',
+    })
+  );
   expect(mail.connect).toHaveBeenCalledTimes(1);
   expect(mail.providers).not.toHaveBeenCalled();
+});
+
+it('records the newly connected link on its completed setup lifetime', async () => {
+  const linkId = '018f0000-0000-7000-8000-000000000123';
+  mail.connect.mockResolvedValue(ok({ linkId }));
+  const span = Telemetry.span('test.setup-lifetime');
+  const attribute = vi.spyOn(span, 'setAttr');
+  const ended = vi.spyOn(span, 'end');
+  vi.spyOn(Telemetry, 'span').mockReturnValue(span);
+  render(() => <ImperativeDialogHost />);
+  const owner = createRoot((dispose) => ({ owner: getOwner(), dispose }));
+  try {
+    const connection = openImapConnection(owner.owner, 'owner@example.com');
+    const password = await screen.findByLabelText('Password or app password');
+    fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
+    fireEvent.input(password, { target: { value: 'synthetic-app-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+    await connection;
+    expect(
+      attribute.mock.calls.filter(([key]) => key === 'email.link_id')
+    ).toEqual([['email.link_id', linkId]]);
+    expect(attribute).toHaveBeenCalledWith('dialog.close_reason', 'completed');
+    expect(ended).toHaveBeenCalledExactlyOnceWith();
+  } finally {
+    owner.dispose();
+  }
 });

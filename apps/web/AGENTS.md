@@ -36,6 +36,8 @@
 
 Keep Home and Email connect flows owned by their stable lists, passing callbacks
 to empty states so loading/empty transitions preserve the chooser and IMAP form.
+Record the connected link ID on the setup lifetime when connection succeeds;
+new connections have no link ID when the dialog opens.
 
 ## Account-scoped source queries
 

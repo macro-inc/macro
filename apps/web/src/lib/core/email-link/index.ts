@@ -431,7 +431,7 @@ export function useAddInboxFlow() {
     );
     if (!isCurrentQueryAccount(viewer)) return;
     if (result === 'payment_required') showPaywall(PaywallKey.MULTI_INBOX);
-    if (result === 'connected') {
+    if (typeof result === 'object' && result.type === 'connected') {
       invalidateEmailLinks();
       await invalidateUserInfo();
       toast.success(

@@ -38,7 +38,11 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 
-type ConnectOutcome = 'connected' | 'payment_required' | 'GMAIL' | 'OUTLOOK';
+type ConnectOutcome =
+  | { type: 'connected'; linkId: string }
+  | 'payment_required'
+  | 'GMAIL'
+  | 'OUTLOOK';
 
 function consentProvider(steer: Discovery['steer']) {
   return match(steer ?? undefined)
@@ -375,7 +379,7 @@ function ConnectForm(props: ImapConnectProps) {
       if (result.isOk()) {
         if (result.value?.linkId)
           parent.setAttr('email.link_id', result.value.linkId);
-        props.onResult('connected');
+        props.onResult({ type: 'connected', linkId: result.value.linkId });
         return;
       }
       const code = result.error.find(
@@ -703,7 +707,6 @@ export async function openImapConnection(
   linkId?: string
 ) {
   const lifecycle = Telemetry.span('email.imap.setup.lifetime');
-  if (linkId) lifecycle.setAttr('email.link_id', linkId);
   let outcome: ConnectOutcome | undefined;
   try {
     const interaction = lifecycle.run(() =>
@@ -732,6 +735,9 @@ export async function openImapConnection(
       interaction.end();
     }
     const event = await closed;
+    const completedLinkId =
+      typeof outcome === 'object' ? outcome.linkId : linkId;
+    if (completedLinkId) lifecycle.setAttr('email.link_id', completedLinkId);
     lifecycle.setAttr(
       'dialog.close_reason',
       outcome === undefined ? event.reason : 'completed'
