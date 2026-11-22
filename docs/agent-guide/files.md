@@ -138,13 +138,15 @@ due date and assignee. Linked sources outside the selected roots appear as
 **Linked from <page title>** dependencies when a selected standalone page refers
 to them. External dependencies start unticked with **Link**; tick one to copy
 it. An old or missing saved selection never implicitly imports a dependency.
-Sources already inside the selection show **Shown inline on <page title>** and
+Sources already inside the selection show **Linked from <page title>** and
 default to a database copy; an approved task-list choice or exclusion
 keeps Notion links in its cards and reports why. Excluding one
 keeps a named Notion link in the page; unreadable dependencies show the reason
 and cannot be included. The same source is copied once across repeated inline
 and linked placements. Each placement becomes an editable database card at its
-original position, including in row bodies, with its translated saved view.
+original position, including in row bodies, with its translated saved view. The text
+title column stays first so related-record chips show row names; a row-body
+**Page** link appears immediately after it.
 Row bodies are checked while importing: a reference to a source absent from the
 review stays a named Notion link, with the reason and count in the report.
 A missing selected-tab hint uses the first Notion tab and reports that assumption.
@@ -152,7 +154,7 @@ If a selected saved view is unavailable but its database is ready, the card stay
 editable on the default view and the report names that approximation. Saved view
 names are readable and unique, without source identifiers.
 Unsupported filter clauses broaden the view rather than hide source rows; its
-name says **filter approximated** and the report lists every translation loss.
+name ends in **≈** and the report explains every translation loss using view and property titles, without importer paths.
 Formula and rollup columns are labelled snapshots. Database sharing is separate
 from page sharing; if a personal database's folder or an ancestor has explicit
 sharing grants, it uses the owner-only **Notion (personal)** folder and mirrored
@@ -177,7 +179,10 @@ three failed attempts on distinct reviews form a sustained chain spanning
 24 hours, with no gap over 12 hours and no successful reservation in between.
 A longer gap or a success restarts the chain; redelivering one review never
 counts twice. Then the report says the database was imported as a link.
-Rate limits never trigger this fallback.
+Rate limits never trigger this fallback. Unsupported properties, including buttons,
+are named as omitted in the review and report. People assignments that cannot
+be matched to Macro users are counted by database and property; matched people
+are kept and resume does not count an omission twice.
 Cancellation stays cancelled even if an in-flight reservation later returns an
 error. A teammate still
 creating a shared copy produces a named waiting error; a later import retry

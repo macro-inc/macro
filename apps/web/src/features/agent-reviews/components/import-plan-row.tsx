@@ -285,7 +285,7 @@ export function ImportPlanRow(props: {
               class="truncate text-xs text-ink-muted"
               title={props.node.inlineOn?.join(', ')}
             >
-              Shown inline on {props.node.inlineOn?.join(', ')}
+              Linked from {props.node.inlineOn?.join(', ')}
             </span>
           </Show>
           <Show when={props.node.decision === 'hand' && props.node.reason}>

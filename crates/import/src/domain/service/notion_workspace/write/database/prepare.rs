@@ -64,19 +64,12 @@ pub(in super::super::super) async fn prepare_database<
         progress.source_stopped(&item.title, reason).await?;
         return Err(reason.into());
     }
-    let names = ColumnNames::new(&source.properties);
-    let snapshots: Vec<String> = source
-        .properties
-        .iter()
-        .filter(|property| {
-            matches!(
-                property.kind,
-                NotionPropertyKind::Formula | NotionPropertyKind::Rollup
-            )
-        })
-        .map(|property| format!("Database {}: {}", item.title, names.of(property)))
-        .collect();
-    progress.warn(&snapshots).await?;
+    progress
+        .warn(&super::super::super::fidelity::property_warnings(
+            &source,
+            &item.title,
+        ))
+        .await?;
     // Retain only property ids: reservation spans the whole workspace, so row
     // snapshots here would keep every source in memory until writing begins.
     let mut ranges = HashSet::new();
@@ -199,26 +192,18 @@ pub(in super::super::super) async fn prepare_database<
             continue;
         }
         let mut translated = views::translate(&view, &bindings);
-        let warnings: Vec<String> = translated
-            .losses
-            .iter()
-            .map(|loss| {
-                format!(
-                    "Database {}, view {}: {} at {}: {}",
-                    item.title, view.name, loss.kind, loss.path, loss.reason
-                )
-            })
-            .collect();
+        let warnings = super::super::super::fidelity::view_warnings(
+            &source,
+            &item.title,
+            &view,
+            &translated.losses,
+        );
         progress.warn(&warnings).await?;
         let approximated = translated
             .losses
             .iter()
             .any(|loss| loss.kind == ViewLossKind::Filter);
-        let marker = if approximated {
-            " (filter approximated)"
-        } else {
-            ""
-        };
+        let marker = if approximated { " ≈" } else { "" };
         let id = ViewId::from_uuid(derived_id(
             created.database_id,
             &format!("view/{}", view.id),

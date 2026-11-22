@@ -549,7 +549,9 @@ export function planSummary(
     .join(', ');
   return [
     shared ? `${sourceLabel(source)} shared ${shared}` : '',
-    `importing ${volumeLabel(volume)}`,
+    counts.deciding > 0
+      ? 'Deciding what to import…'
+      : `importing ${volumeLabel(volume)}`,
   ]
     .filter(Boolean)
     .join(' — ')

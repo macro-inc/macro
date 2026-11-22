@@ -139,7 +139,7 @@ pub(in super::super) async fn write_database<
     clippy::too_many_arguments,
     reason = "the approved source, its destination and ledger progress"
 )]
-#[tracing::instrument(name = "notion.write_database", skip_all, fields(source_id = %item.notion_id, database_id = %prepared.created.database_id, rows_read_write = tracing::field::Empty), err)]
+#[tracing::instrument(name = "notion.write_database", skip_all, fields(source_id = %item.notion_id, database_id = %prepared.created.database_id, rows_read_write = tracing::field::Empty, unmapped_people = tracing::field::Empty), err)]
 pub(in super::super) async fn write_prepared_database<
     Api: NotionApi,
     Writer: WorkspaceWriter,
@@ -258,9 +258,41 @@ pub(in super::super) async fn write_prepared_database<
         .filter(|row| !written.rows.contains_key(&row.id))
         .cloned()
         .collect();
+    let mut unmapped_people = 0u64;
     for batch in owned_batches(&unwritten) {
         cancel.ensure_running()?;
         for row in &batch {
+            for column in &plan.columns {
+                if !matches!(column.shape, ColumnShape::People { .. }) {
+                    continue;
+                }
+                let Some(NotionValue::People(ids)) = row.properties.get(&column.property) else {
+                    continue;
+                };
+                let missing = ids
+                    .iter()
+                    .filter(|id| {
+                        people
+                            .get(*id)
+                            .is_none_or(|person| person.macro_user.is_none())
+                    })
+                    .collect::<HashSet<_>>()
+                    .len();
+                if missing > 0 {
+                    unmapped_people =
+                        unmapped_people.saturating_add(u64::try_from(missing).unwrap_or(u64::MAX));
+                    tracing::Span::current().record("unmapped_people", unmapped_people);
+                    progress.loss(crate::domain::models::SourceLossFact {
+                        object: row.id.clone(),
+                        detail: crate::domain::models::SourceLossDetail::UnmappedPeople {
+                            source: item.title.clone(),
+                            property_id: column.property_id.clone(),
+                            property: column.property.clone(),
+                            count: u32::try_from(missing).unwrap_or(u32::MAX),
+                        },
+                    })?;
+                }
+            }
             for loss in plan.option_losses(row) {
                 progress.loss(crate::domain::models::SourceLossFact {
                     object: row.id.clone(),
@@ -671,8 +703,8 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
     if changes.is_empty() {
         return Ok(());
     }
-    // Only a database whose rows have content gets the column, and it goes
-    // first so the row's page is one click away.
+    // Keep the text title first: relation chips name rows by that column.
+    // Put the row's page immediately after it so its body is one click away.
     if progress.get(WrittenKind::PageColumn).is_none() {
         writer
             .apply_database_ops(
@@ -698,8 +730,13 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                     DatabaseOp::Table {
                         table,
                         change: TableChange::ReorderColumns {
-                            order: std::iter::once(page_column.id)
-                                .chain(page_column.order.iter().copied())
+                            order: page_column
+                                .order
+                                .first()
+                                .copied()
+                                .into_iter()
+                                .chain(std::iter::once(page_column.id))
+                                .chain(page_column.order.iter().skip(1).copied())
                                 .collect(),
                         },
                     },

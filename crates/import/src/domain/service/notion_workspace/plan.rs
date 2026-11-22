@@ -242,7 +242,7 @@ impl PlanTree {
                     verdict.decision = NotionDecision::Copy;
                     verdict.task_fields = None;
                     verdict.reason =
-                        Some("Shown inline; copy the database so its cards work.".into());
+                        Some("Referenced from pages; copy the database so its cards work.".into());
                 }
                 Some(self.row(node, Some(verdict), None, sharing, team, &index))
             })
@@ -345,23 +345,10 @@ fn data_source_node(summary: &DataSourceSummary) -> Node {
         dependency_of: Vec::new(),
         inline_on: Vec::new(),
         unavailable: None,
-        warnings: source
-            .properties
-            .iter()
-            .filter_map(|property| match property.kind {
-                NotionPropertyKind::Formula => Some(format!(
-                    "Database {}: {} (Notion formula snapshot)",
-                    titled(&source.title, UNTITLED_DATABASE),
-                    property.name
-                )),
-                NotionPropertyKind::Rollup => Some(format!(
-                    "Database {}: {} (Notion rollup snapshot)",
-                    titled(&source.title, UNTITLED_DATABASE),
-                    property.name
-                )),
-                _ => None,
-            })
-            .collect(),
+        warnings: super::fidelity::property_warnings(
+            source,
+            &titled(&source.title, UNTITLED_DATABASE),
+        ),
         table: Some(TriageTable {
             columns,
             rows: summary.row_count,

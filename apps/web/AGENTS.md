@@ -1805,14 +1805,17 @@ Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
 Import review metadata decodes `plan.dependencyOf` into **Linked from** and
-`plan.inlineOn` into **Shown inline on** labels on existing rows. Readable sources
+`plan.inlineOn` into **Linked from** labels on existing rows. Readable sources
 inside the selection default to Copy. External dependencies start unticked as
 Link; ticking removes their id from the saved draft's excluded list. Including
 a parent must not opt in external children. Refresh the saved review when new
 dependencies arrive, keeping them excluded until its defaults are saved. Use
 ordinary inclusion and sharing controls;
 unavailable by-hand rows stay disabled and show their reason. Desktop and touch
-use the same row layout.
+use the same row layout. While any rows are undecided, the summary says
+**Deciding what to import…** rather than describing an empty import. Imported
+approximated views use a short **≈** suffix; never parse user-visible view names
+to infer typed view state.
 Desktop shows every import run in the corner's import tray
 (`features/import-jobs`, in `ToastRegion`), independent of the import dialog
 and never on phones. Its backend-free check is

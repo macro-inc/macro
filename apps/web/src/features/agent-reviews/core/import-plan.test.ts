@@ -255,6 +255,13 @@ describe('already in Macro', () => {
 });
 
 describe('planSummary', () => {
+  it('does not call an undecided plan an empty import', () => {
+    const waiting = entries.map((entry) => ({ ...entry, decision: null }));
+    const summary = planSummary(planCounts(waiting), importVolume(waiting, []));
+    expect(summary).toContain('Deciding what to import');
+    expect(summary).not.toContain('importing nothing');
+  });
+
   it('reads the plan size and decisions', () => {
     expect(planSummary(planCounts(entries), importVolume(entries, []))).toBe(
       'Notion shared 4 pages and 1 database — importing 2 pages, 40 tasks · 1 skipped, 1 needs you'

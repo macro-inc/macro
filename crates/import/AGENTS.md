@@ -413,6 +413,12 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   option loss facts in the same ledger batch as their completed row/body/task.
   Flush counted, human-readable warnings at most twice per source attempt
   (reservation and after writing, including failures), before marking it imported.
+  Render view losses with source/view/property titles, keeping JSON paths inside
+  the translator. Use a short “ ≈” saved-view suffix for filter approximation.
+  Report unsupported property types, including buttons, in the plan and report.
+  Persist unmapped people counts with their row markers; keep mapped assignments
+  and merge cumulative counts on resume. Keep the text title column first and
+  put the row-body Page reference immediately after it so relations stay named.
   Reports merge cumulative snapshots by maximum count across retries; settlement
   events carry the same warning lines. Keep formulas and rollups labelled snapshots.
 - Database ids derive from the ledger row; view ids derive from database and

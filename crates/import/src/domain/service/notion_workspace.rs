@@ -40,6 +40,7 @@ use run::{IMPORT_STOPPED, JobControl, Stop, WriteSet};
 
 mod databases;
 mod dependency_review;
+mod fidelity;
 mod object;
 mod personal;
 pub(super) mod plan;

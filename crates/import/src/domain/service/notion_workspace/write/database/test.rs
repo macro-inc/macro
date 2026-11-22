@@ -618,7 +618,7 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
         }),
         "a row body keeps its Notion page's dates"
     );
-    // The Page column is created first in the table...
+    // The text title stays first so relation chips can name the target row.
     let DatabaseOp::Column {
         column: page_column,
         change:
@@ -646,8 +646,8 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
     else {
         panic!("expected the column order, got {:?}", batches[2]);
     };
-    assert_eq!(order[0], *page_column);
-    assert_eq!(order[1], ColumnId::from_uuid(TITLE_COLUMN));
+    assert_eq!(order[0], ColumnId::from_uuid(TITLE_COLUMN));
+    assert_eq!(order[1], *page_column);
     assert_eq!(order.len(), 3);
     // ...then filled with the row's document.
     let DatabaseOp::Rows {
@@ -985,3 +985,5 @@ mod folders;
 mod resume;
 
 mod review;
+
+mod fable;

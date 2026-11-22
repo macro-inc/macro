@@ -110,6 +110,15 @@ pub enum FidelityWarning {
         /// Cumulative distinct losses for this group.
         count: u32,
     },
+    /// People assignments omitted because their account could not be matched.
+    UnmappedPeople {
+        /// Database display title.
+        source: String,
+        /// Property display title.
+        property: String,
+        /// Cumulative omitted assignments.
+        count: u32,
+    },
 }
 
 impl From<String> for FidelityWarning {
@@ -130,6 +139,7 @@ impl FidelityWarning {
         let mut stopped = BTreeSet::new();
         let mut references: BTreeMap<_, u32> = BTreeMap::new();
         let mut options: BTreeMap<_, u32> = BTreeMap::new();
+        let mut people: BTreeMap<_, u32> = BTreeMap::new();
         for warning in warnings {
             match warning {
                 Self::SourceStopped { title, reason } => {
@@ -144,6 +154,14 @@ impl FidelityWarning {
                     count,
                 } => {
                     let known = references.entry((reason, title)).or_default();
+                    *known = (*known).max(count);
+                }
+                Self::UnmappedPeople {
+                    source,
+                    property,
+                    count,
+                } => {
+                    let known = people.entry((source, property)).or_default();
                     *known = (*known).max(count);
                 }
                 Self::OmittedOptions {
@@ -181,6 +199,15 @@ impl FidelityWarning {
                             count,
                         },
                     ),
+            )
+            .chain(
+                people
+                    .into_iter()
+                    .map(|((source, property), count)| Self::UnmappedPeople {
+                        source,
+                        property,
+                        count,
+                    }),
             )
             .collect()
     }
@@ -227,6 +254,20 @@ impl FidelityWarning {
                     }
                 };
                 format!("{count} references to database \"{title}\" {explanation}.")
+            }
+            Self::UnmappedPeople {
+                source,
+                property,
+                count,
+            } => {
+                let (noun, verb) = if *count == 1 {
+                    ("person assignment", "was")
+                } else {
+                    ("people assignments", "were")
+                };
+                format!(
+                    "{count} {noun} in database “{source}”, property “{property}”, could not be matched to Macro users and {verb} omitted."
+                )
             }
             Self::OmittedOptions {
                 property,
@@ -277,6 +318,17 @@ pub enum SourceLossDetail {
         /// Identity available when matching the reserved option.
         matched_by: OptionMatch,
     },
+    /// Unmapped assignments on one completed row, without person names or ids.
+    UnmappedPeople {
+        /// Database display title.
+        source: String,
+        /// Stable source property identity.
+        property_id: String,
+        /// Property display title.
+        property: String,
+        /// Number of omitted assignments on this row.
+        count: u32,
+    },
     /// A body-resolution note that must survive skipping an already written body.
     Text {
         /// Human-readable detail retained across resume.
@@ -317,6 +369,12 @@ impl SourceLossFact {
                 bounded(property);
                 bounded(option);
             }
+            SourceLossDetail::UnmappedPeople {
+                source, property, ..
+            } => {
+                bounded(source);
+                bounded(property);
+            }
             SourceLossDetail::Text { message } => bounded(message),
         }
     }
@@ -326,6 +384,7 @@ impl SourceLossFact {
         let mut text = BTreeSet::new();
         let mut references: BTreeMap<_, u32> = BTreeMap::new();
         let mut options: BTreeMap<_, u32> = BTreeMap::new();
+        let mut people: BTreeMap<_, u32> = BTreeMap::new();
         for fact in facts.into_iter().collect::<HashSet<_>>() {
             match fact.detail {
                 SourceLossDetail::Reference { title, reason, .. } => {
@@ -341,10 +400,24 @@ impl SourceLossFact {
                     let count = options.entry((property, option, matched_by)).or_default();
                     *count = count.saturating_add(1);
                 }
+                SourceLossDetail::UnmappedPeople {
+                    source,
+                    property,
+                    count,
+                    ..
+                } => {
+                    let known = people.entry((source, property, fact.object)).or_default();
+                    *known = (*known).max(count);
+                }
                 SourceLossDetail::Text { message } => {
                     text.insert(message);
                 }
             }
+        }
+        let mut totals: BTreeMap<_, u32> = BTreeMap::new();
+        for ((source, property, _), count) in people {
+            let total = totals.entry((source, property)).or_default();
+            *total = (*total).saturating_add(count);
         }
         text.into_iter()
             .map(FidelityWarning::Text)
@@ -367,6 +440,13 @@ impl SourceLossFact {
                         }
                     }),
             )
+            .chain(totals.into_iter().map(|((source, property), count)| {
+                FidelityWarning::UnmappedPeople {
+                    source,
+                    property,
+                    count,
+                }
+            }))
             .collect()
     }
 }

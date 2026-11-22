@@ -64,7 +64,7 @@ async fn databases_and_views_exist_before_page_and_row_cards_and_sharing_stays_i
     let saved = service.creator.saved_views.lock().unwrap();
     assert_eq!(saved.len(), 2);
     assert_ne!(saved[0].2.name, saved[1].2.name);
-    assert!(saved[1].2.name.contains("filter approximated"));
+    assert!(saved[1].2.name.ends_with(" ≈"));
     let first = saved[0].1;
     let second = saved[1].1;
     drop(saved);
@@ -118,7 +118,7 @@ async fn databases_and_views_exist_before_page_and_row_cards_and_sharing_stays_i
         report
             .warnings
             .iter()
-            .any(|warning| warning.contains("filter approximated at"))
+            .any(|warning| warning.contains("filter") && warning.contains("additional rows"))
     );
 }
 
