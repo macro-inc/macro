@@ -223,6 +223,8 @@ type ImportPlanCardProps = {
   canAct: boolean;
   /** Trimming and approving are open. */
   editable: boolean;
+  /** Dismissing is open: the plan is ready, or failed. */
+  dismissable: boolean;
   /** The agent approved it because the owner told it to in chat. */
   startedByAgent: boolean;
   working: boolean;
@@ -437,7 +439,7 @@ function PlanContents(
           <Button
             variant="ghost"
             size="sm"
-            disabled={!props.editable}
+            disabled={!props.dismissable}
             onClick={() => props.onDismiss()}
           >
             Dismiss
@@ -449,6 +451,18 @@ function PlanContents(
             onClick={() => props.onApprove()}
           >
             {planning() ? 'Import' : `Import ${volumeLabel(props.volume)}`}
+          </Button>
+        </footer>
+      </Show>
+      <Show when={props.canAct && planFailed()}>
+        <footer class="flex justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!props.dismissable}
+            onClick={() => props.onDismiss()}
+          >
+            Dismiss
           </Button>
         </footer>
       </Show>

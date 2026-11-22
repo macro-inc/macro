@@ -99,6 +99,7 @@ export function ImportReview(props: {
         isShared={review.isShared}
         canAct={props.canAct}
         editable={review.editable()}
+        dismissable={review.dismissable()}
         startedByAgent={props.review.decision?.via === 'chat'}
         working={review.working()}
         stopping={review.stopping()}

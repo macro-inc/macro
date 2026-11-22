@@ -356,7 +356,7 @@ describe('import review', () => {
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
   });
 
-  it('shows why planning failed instead of an empty plan', () => {
+  it('shows why planning failed instead of an empty plan', async () => {
     // Planning a new plan clears the run's review, so the failed run names none.
     imports.entities = [];
     imports.report = {
@@ -378,7 +378,7 @@ describe('import review', () => {
       waiting: 0,
       writing: 0,
     };
-    setup();
+    const decide = setup();
 
     expect(screen.getByRole('alert').textContent).toBe(
       "Couldn't plan the import: Notion object not found or not shared with the connection"
@@ -386,7 +386,44 @@ describe('import review', () => {
     expect(screen.queryByText(/nothing/i)).toBeNull();
     expect(screen.queryByText('The plan has no objects to show.')).toBeNull();
     expect(screen.queryByRole('button', { name: /^Import/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+
+    // The owner can still dismiss it, so the review does not stay pending.
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() =>
+      expect(decide).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'dismiss' })
+      )
+    );
+  });
+
+  it('shows why planning failed after the plan was presented, hiding its rows', () => {
+    imports.report = {
+      status: 'failed',
+      error: 'Notion was unreachable',
+      reviewId: 'review',
+      onTeam: false,
+      pages: 1,
+      dataSources: 1,
+      copy: 1,
+      tasks: 1,
+      skip: 1,
+      hand: 1,
+      documents: 1,
+      databases: 1,
+      databaseRows: 0,
+      taskRows: 0,
+      imported: 0,
+      waiting: 0,
+      writing: 0,
+    };
+    setup();
+
+    expect(screen.getByRole('alert').textContent).toBe(
+      "Couldn't plan the import: Notion was unreachable"
+    );
+    expect(screen.queryByRole('list', { name: 'Import plan' })).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Import/ })).toBeNull();
   });
 
   it('saves who each object is shared with, down the tree', async () => {
