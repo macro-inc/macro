@@ -7,6 +7,7 @@ import { createEffect, createSignal, on, onCleanup } from 'solid-js';
 import { agendaDay, agendaWindowIndices } from './agenda-window';
 
 const DAY_SELECTOR = '[data-agenda-day]';
+const EDGE_TOUCH_DISTANCE = 12;
 
 function isLayoutClamp(element: HTMLElement, previousScrollTop: number) {
   const max = Math.max(0, element.scrollHeight - element.clientHeight);
@@ -118,11 +119,53 @@ export function createAgendaPaging(
       const releaseInitialPosition = () => {
         initialPositioning = false;
       };
+      const atEdge = (direction: -1 | 1) => {
+        const bottom = Math.max(0, element.scrollHeight - element.clientHeight);
+        return direction < 0
+          ? element.scrollTop <= 1
+          : element.scrollTop >= bottom - 1;
+      };
+      const requestEdgeLoad = (direction: -1 | 1) => {
+        if (!atEdge(direction)) return;
+        releaseInitialPosition();
+        if (interaction) queuedDirection = direction;
+        else move(direction);
+      };
       const onWheel = (event: WheelEvent) => {
         releaseInitialPosition();
-        // At the edge, another upward wheel need not produce a scroll event.
-        if (event.deltaY < 0 && element.scrollTop <= 0) onScroll();
+        // A collapsed list or an overscrolled edge need not emit scroll events.
+        if (event.deltaY < 0) requestEdgeLoad(-1);
+        else if (event.deltaY > 0) requestEdgeLoad(1);
       };
+      let touch: { id: number; x: number; y: number } | undefined;
+      const onTouchStart = (event: TouchEvent) => {
+        releaseInitialPosition();
+        const point = event.touches.length === 1 ? event.touches[0] : undefined;
+        touch = point
+          ? { id: point.identifier, x: point.clientX, y: point.clientY }
+          : undefined;
+      };
+      const onTouchMove = (event: TouchEvent) => {
+        if (!touch || event.touches.length !== 1) return;
+        const point = Array.from(event.touches).find(
+          (point) => point.identifier === touch?.id
+        );
+        if (!point) return;
+        const dx = point.clientX - touch.x;
+        const dy = point.clientY - touch.y;
+        if (Math.abs(dy) < EDGE_TOUCH_DISTANCE || Math.abs(dy) <= Math.abs(dx))
+          return;
+        touch = { id: point.identifier, x: point.clientX, y: point.clientY };
+        // Observe intent only. Native touch scrolling keeps control of motion.
+        requestEdgeLoad(dy > 0 ? -1 : 1);
+      };
+      const onTouchEnd = () => {
+        touch = undefined;
+      };
+      element.addEventListener('touchstart', onTouchStart, { passive: true });
+      element.addEventListener('touchmove', onTouchMove, { passive: true });
+      element.addEventListener('touchend', onTouchEnd, { passive: true });
+      element.addEventListener('touchcancel', onTouchEnd, { passive: true });
       element.addEventListener('pointerdown', releaseInitialPosition);
       element.addEventListener('wheel', onWheel, {
         passive: true,
@@ -135,6 +178,10 @@ export function createAgendaPaging(
         element.removeEventListener('pointerdown', releaseInitialPosition);
         element.removeEventListener('wheel', onWheel);
         element.removeEventListener('keydown', releaseInitialPosition);
+        element.removeEventListener('touchstart', onTouchStart);
+        element.removeEventListener('touchmove', onTouchMove);
+        element.removeEventListener('touchend', onTouchEnd);
+        element.removeEventListener('touchcancel', onTouchEnd);
       });
     })
   );

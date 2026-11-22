@@ -237,7 +237,8 @@ midnight position is not replaced by the default opening hour. Changes that resi
 offset, including when query results replace its row or merge it into an empty
 range. Fast upward scrolling keeps movement received during a prepend frame;
 collapsed ranges anchor their visible heading rather than a hidden day marker.
-Repeated upward input at the top keeps loading until the supported date bound.
+Repeated touch or wheel input at a collapsed edge keeps loading in the requested
+direction until the supported date bound, even when the list cannot emit a scroll event.
 Initial positioning waits through late window loads until the reader
 scrolls or interacts; browser find and assistive navigation also take control.
 Equal-height event moves between days can still shift it.

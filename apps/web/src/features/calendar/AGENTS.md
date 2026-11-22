@@ -172,7 +172,9 @@ host lives in `../block-calendar/`.
   `create-agenda-paging.ts` owns resize observation, and each explicit date request
   starts a fresh list even when its calendar day is unchanged. Preserve user movement
   during prepend frames and resolve merged headings instead of zero-height markers;
-  queue edge input through the frame and stop at supported date bounds. `create-agenda-grouping.ts`
+  queue edge input through the frame and stop at supported date bounds. Observe
+  vertical touch intent and both wheel directions at collapsed-list edges without
+  preventing native scrolling; a scroll event is not guaranteed there. `create-agenda-grouping.ts`
   merges confirmed empty ranges across window boundaries without merging today;
   group-end metadata lets paging anchor requested dates inside collapsed ranges.
 - Reuse `../../lib/queries/calendar/` for account-scoped reads, optimistic writes,

@@ -102,7 +102,7 @@ describe('agenda paging', () => {
       paging.positionInitial();
       expect(viewport.scrollTop).toBe(1500);
       expect(paging.activeWindow()).toBe(0);
-      viewport.dispatchEvent(new Event('wheel'));
+      viewport.dispatchEvent(new WheelEvent('wheel'));
       viewport.scrollTop = 3100;
       paging.onScroll();
       expect(paging.activeWindow()).toBe(1);
@@ -240,7 +240,7 @@ describe('agenda paging', () => {
     paging.positionInitial();
     resize?.();
     expect(viewport.scrollTop).toBe(1000);
-    viewport.dispatchEvent(new Event('wheel'));
+    viewport.dispatchEvent(new WheelEvent('wheel'));
 
     earlierHeight = 1500;
     resize?.();
@@ -569,6 +569,93 @@ describe('agenda paging', () => {
     resize?.();
     expect(viewport.scrollTop).toBe(1540);
     expect(paging.capturePosition()).toEqual(initialPosition);
+    dispose();
+  });
+  it.each([-1, 1] as const)(
+    'loads in direction %i from a touch gesture on a non-scrollable collapsed list',
+    (direction) => {
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          observe() {}
+          disconnect() {}
+        }
+      );
+      const frames: FrameRequestCallback[] = [];
+      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+        frames.push(callback)
+      );
+      vi.stubGlobal('cancelAnimationFrame', vi.fn());
+      const viewport = document.createElement('div');
+      viewport.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+      Object.defineProperty(viewport, 'clientHeight', { value: 600 });
+      Object.defineProperty(viewport, 'scrollHeight', { value: 96 });
+      const date = new Date(2026, 2, 7);
+      const row = document.createElement('section');
+      row.dataset.agendaDay = date.toDateString();
+      row.getBoundingClientRect = () => ({ top: 0, bottom: 96 }) as DOMRect;
+      viewport.append(row);
+      const { paging, dispose } = createRoot((dispose) => ({
+        paging: createAgendaPaging(() => viewport, date),
+        dispose,
+      }));
+      const touch = (type: string, x: number, y: number) => {
+        const event = new Event(type);
+        Object.defineProperty(event, 'touches', {
+          value: [{ identifier: 1, clientX: x, clientY: y }],
+        });
+        viewport.dispatchEvent(event);
+      };
+      touch('touchstart', 100, 100);
+      expect(paging.indices()[0]).toBe(-2);
+      touch('touchmove', 150, 105);
+      expect(paging.indices()[0]).toBe(-2);
+      // Native vertical panning cancels Pointer Events, but Touch Events continue.
+      viewport.dispatchEvent(new Event('pointercancel'));
+      touch('touchmove', 100, 100 - direction * 40);
+      expect(paging.indices()[0]).toBe(-2 + direction);
+      frames.shift()?.(0);
+      touch('touchmove', 100, 100 - direction * 80);
+      expect(paging.indices()[0]).toBe(-2 + direction * 2);
+      viewport.dispatchEvent(new Event('touchcancel'));
+      frames.shift()?.(0);
+      touch('touchmove', 100, 100 - direction * 120);
+      expect(paging.indices()[0]).toBe(-2 + direction * 2);
+      dispose();
+      touch('touchmove', 100, 100 - direction * 120);
+      expect(paging.indices()[0]).toBe(-2 + direction * 2);
+    }
+  );
+
+  it('can wheel toward newer windows from a collapsed list at the lower supported bound', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    vi.stubGlobal('requestAnimationFrame', () => 1);
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    Object.defineProperty(viewport, 'clientHeight', { value: 600 });
+    Object.defineProperty(viewport, 'scrollHeight', { value: 96 });
+    const date = new Date(2026, 2, 7);
+    const row = document.createElement('section');
+    row.dataset.agendaDay = date.toDateString();
+    row.getBoundingClientRect = () => ({ top: 0, bottom: 96 }) as DOMRect;
+    viewport.append(row);
+    const { paging, dispose } = createRoot((dispose) => ({
+      paging: createAgendaPaging(() => viewport, date, {
+        canLoadWindow: (index) => index >= -2,
+      }),
+      dispose,
+    }));
+    viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }));
+    expect(paging.indices()[0]).toBe(-2);
+    viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: 100 }));
+    expect(paging.indices()[0]).toBe(-1);
     dispose();
   });
 });
