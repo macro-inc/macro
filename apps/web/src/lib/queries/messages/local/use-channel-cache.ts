@@ -24,8 +24,10 @@ import {
 import { channelCacheHost } from './flag';
 import { queueIfAnswering, sendLeftBehindOverRest } from './left-behind-sends';
 import { resetPendingChannelPages } from './pages';
-import { evictIdleChannels, runChannelPrewarm } from './prewarm';
+import { evictIdleChannels, runChannelPrewarmPass } from './prewarm';
 import { loadPrewarmChannelIds } from './prewarm-list';
+import { setQueuedSendsOwner } from './queued-sends';
+import { resetSendsInHand } from './sends-in-hand';
 import { holdUnheldReads } from './source';
 import { holdUnqueuedSendsPage, resendUnqueuedSends } from './unqueued-sends';
 import { resetUnsettledReplies } from './unsettled-replies';
@@ -76,9 +78,7 @@ async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
   await whenIdle(signal);
   // Offline the lists cannot be asked for; the pass after the reconnect runs.
   if (signal.aborted || !onlineManager.isOnline()) return;
-  const channelIds = await loadPrewarmChannelIds();
-  if (signal.aborted) return;
-  const outcome = await runChannelPrewarm(host, channelIds, {
+  const outcome = await runChannelPrewarmPass(host, loadPrewarmChannelIds, {
     signal,
     ready: whenIdle,
   });
@@ -90,7 +90,8 @@ async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
  * While `userId` is signed in and channels read from the device cache
  * (`enable-channel-local-sync`), the cross-tab
  * leader keeps up to forty unread and the twenty most recently used channels
- * ready, one request at a time and only while the person leaves the app alone,
+ * ready (asking for the lists again as a pass ends, for channels that became
+ * unread meanwhile), one request at a time and only while the person leaves the app alone,
  * again after a reconnect or a replaced cache, and drops channels not opened
  * for thirty days. When the cache storage is reset under the page, the open
  * channels' pages and threads are read again so the device holds them again.
@@ -138,7 +139,14 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
       resetChannelSync();
       resetPendingChannelPages();
       resetUnsettledReplies();
+      resetSendsInHand();
     });
+  });
+
+  createEffect(() => {
+    // The device queue is this person's: its waiting messages are theirs.
+    setQueuedSendsOwner(userId());
+    onCleanup(() => setQueuedSendsOwner(undefined));
   });
 
   createEffect(() => {

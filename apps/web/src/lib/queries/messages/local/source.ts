@@ -24,6 +24,7 @@ import {
   pageHasPendingWrites,
 } from './pages';
 import { PREWARM_PAGE_SIZE } from './prewarm';
+import { pageLacksQueuedSends, withQueuedSends } from './queued-sends';
 import { sortKeyFromCursor } from './sort-key';
 import { loadChannelMessage, loadChannelThread } from './thread';
 import {
@@ -103,7 +104,9 @@ async function settleServerPage(
   if (storedSeq === null) return;
   if (
     (await pageHasPendingWrites(host, request)) ||
-    (await pageHasQueuedReplies(host, request.channelId, loaded.page))
+    (await pageHasQueuedReplies(host, request.channelId, loaded.page)) ||
+    (!anchored &&
+      (await pageLacksQueuedSends(host, request.channelId, loaded.page)))
   ) {
     refreshChannelViews(request.channelId);
   }
@@ -176,7 +179,11 @@ export async function loadLocalChannelTimelinePage(
     } else if (!anchored && (!read.revalidate || !caughtUp)) {
       fireAndForget(catchUpAndRefresh(host, read.channelId), SYNC_SURFACE);
     }
-    return loaded.page;
+    // The device has just answered, so its queue is listed without a wait; a
+    // server page is read again once the device holds it (`settleServerPage`).
+    return loaded.source === 'device' && !anchored
+      ? await withQueuedSends(host, read.channelId, loaded.page)
+      : loaded.page;
   } catch (error) {
     reportFallback(error, read.signal);
     return undefined;
