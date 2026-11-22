@@ -10,8 +10,7 @@ use agent_session::domain::service::AgentSessionService;
 use agent_session::inbound::routine_sessions::{RoutineSessionsState, routine_sessions_router};
 use axum::Router;
 use bots::domain::models::AgentMcpServer;
-use connectors::{ConnectorId, ConnectorKey};
-use connectors::{ConnectionManagementService, McpConnectionsService};
+use connectors::{ConnectionManagementService, ConnectorId, ConnectorKey, McpConnectionsService};
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -92,11 +91,12 @@ where
     }
 }
 
-impl<S> ConnectedApps for RoutineConnectedApps<S>
+impl<S> RoutineConnectedApps<S>
 where
     S: McpConnectionsService + ConnectionManagementService,
 {
-    async fn connected_app_slugs(
+    /// The canonical slugs of `user`'s usable app connections.
+    pub async fn connected_app_slugs(
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> anyhow::Result<Vec<String>> {
@@ -106,6 +106,31 @@ where
             .into_iter()
             .map(|app| app.app_slug)
             .collect())
+    }
+}
+
+impl<S> ConnectedApps for RoutineConnectedApps<S>
+where
+    S: McpConnectionsService + ConnectionManagementService,
+{
+    /// Compared as apps, not strings: a routine saved with an alias
+    /// (`slack_v2`) requires the app the connections answer under (`slack`).
+    /// A slug that names no app is never connected.
+    async fn all_connected(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        apps: &[&str],
+    ) -> anyhow::Result<bool> {
+        let connected: Vec<ConnectorId> = self
+            .usable(user)
+            .await?
+            .iter()
+            .filter_map(|app| ConnectorId::parse(&app.app_slug).ok())
+            .collect();
+
+        Ok(apps
+            .iter()
+            .all(|slug| ConnectorId::parse(slug).is_ok_and(|app| connected.contains(&app))))
     }
 }
 

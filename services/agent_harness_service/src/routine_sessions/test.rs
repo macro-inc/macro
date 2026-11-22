@@ -21,9 +21,7 @@ fn held(slug: &str) -> FakeConnection {
     FakeConnection::app(slug).named(&format!("{slug} name"))
 }
 
-async fn sorted_slugs(
-    apps: &RoutineConnectedApps<connectors::Connectors>,
-) -> Vec<String> {
+async fn sorted_slugs(apps: &RoutineConnectedApps<connectors::Connectors>) -> Vec<String> {
     let mut slugs = apps.connected_app_slugs(&owner()).await.unwrap();
     slugs.sort();
     slugs
@@ -97,4 +95,28 @@ async fn a_missing_app_is_requirable_when_it_is_in_the_catalog() {
             .unwrap(),
         [app("sentry"), app("asana")]
     );
+}
+
+/// A routine saved with an alias requires the app the alias names: a stored
+/// `slack_v2` is met by the connection answered as `slack`, and the reverse.
+#[tokio::test]
+async fn a_required_alias_is_met_by_the_apps_connection() {
+    let fake = FakeConnectors::new()
+        .with_connection(&owner(), held("slack_v2"))
+        .with_connection(&owner(), held("linear"));
+    let apps = apps(&fake);
+
+    assert!(apps.all_connected(&owner(), &["slack_v2"]).await.unwrap());
+    assert!(
+        apps.all_connected(&owner(), &["slack", "linear"])
+            .await
+            .unwrap()
+    );
+    assert!(
+        !apps
+            .all_connected(&owner(), &["slack_v2", "notion"])
+            .await
+            .unwrap()
+    );
+    assert!(!apps.all_connected(&owner(), &["Not A Slug"]).await.unwrap());
 }

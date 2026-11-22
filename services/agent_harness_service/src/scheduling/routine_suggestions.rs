@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use agent_session::domain::routines::ConnectedApps;
 use crm::domain::auth::CrmMemberAccess;
 use email_service_client::EmailServiceClient;
 use entity_access::domain::ports::AccessRepository;
