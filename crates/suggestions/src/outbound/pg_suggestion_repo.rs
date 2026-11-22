@@ -593,6 +593,21 @@ impl SuggestionRepo for PgSuggestionRepo {
         Ok(self.load(user, Read::Id(id)).await?.into_iter().next())
     }
 
+    async fn proposing_session(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> Result<Option<Uuid>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"SELECT session_id FROM suggestion WHERE id = $1 AND user_id = $2"#,
+            id,
+            user.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(PgSuggestionRepoError::from)
+    }
+
     async fn by_dedup_key(
         &self,
         user: &MacroUserIdStr<'_>,
