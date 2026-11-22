@@ -86,7 +86,8 @@ maps a data source onto Macro database columns and cells
   matches by id when supplied and by name only when no id was supplied; callers
   must report `option_losses` and restore reserved option mappings on resume.
   View bindings use the same stable mapping, including renamed options.
-- Formula and rollup column names label their values as Notion snapshots.
+- Formula and rollup column names use the short ` (snapshot)` suffix; the
+  typed loss report explains which calculation was retained as a fixed value.
   Before planning columns, union `macro_cells::date_range_properties` from
   the source rows with stable property ids used by timeline views, then call
   `ColumnPlan::new_with_date_ranges` to preserve both date endpoints.

@@ -444,8 +444,8 @@ fn formula_and_rollup_columns_label_their_values_as_notion_snapshots() {
     let names = ColumnNames::new(&properties);
     let formula = planned_column(&properties[0], &names, Uuid::from_u128(500)).unwrap();
     let rollup = planned_column(&properties[1], &names, Uuid::from_u128(500)).unwrap();
-    assert_eq!(formula.name, "Estimate (Notion formula snapshot)");
-    assert_eq!(rollup.name, "Total (Notion rollup snapshot)");
+    assert_eq!(formula.name, "Estimate (snapshot)");
+    assert_eq!(rollup.name, "Total (snapshot)");
     assert_eq!(
         cell(&NotionValue::Number(42.0), &formula, &PeopleMap::new()),
         Some(CellValue::Text("42".to_string()))
@@ -555,16 +555,12 @@ fn snapshot_labels_survive_long_names_and_do_not_collide_with_existing_columns()
         },
         NotionPropertySchema {
             id: "text".into(),
-            name: "Total (Notion rollup snapshot)".into(),
+            name: "Total (snapshot)".into(),
             kind: NotionPropertyKind::RichText,
         },
     ];
     let names = ColumnNames::new(&properties);
-    assert!(
-        names
-            .of(&properties[0])
-            .ends_with(" (Notion formula snapshot)")
-    );
+    assert!(names.of(&properties[0]).ends_with(" (snapshot)"));
     assert_eq!(names.of(&properties[0]).chars().count(), MAX_NAME);
     assert_ne!(names.of(&properties[1]), names.of(&properties[2]));
     assert_eq!(names, ColumnNames::new(&properties));

@@ -464,8 +464,7 @@ impl ColumnNames {
 // Keep the snapshot marker inside the name limit even for long source names.
 fn snapshot_column_name(property: &NotionPropertySchema) -> String {
     let suffix = match property.kind {
-        NotionPropertyKind::Formula => " (Notion formula snapshot)",
-        NotionPropertyKind::Rollup => " (Notion rollup snapshot)",
+        NotionPropertyKind::Formula | NotionPropertyKind::Rollup => " (snapshot)",
         _ => return capped_name(&property.name),
     };
     let name = property.name.trim();
