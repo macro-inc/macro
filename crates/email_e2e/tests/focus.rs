@@ -490,8 +490,11 @@ async fn gmail_an_owner_away_from_macro_gets_no_focus_until_they_come_back() -> 
         0
     );
 
-    bob.opens_macro().await?;
+    // Counted from before Bob is back: the look may find the inbox and finish
+    // a pass over it before `opens_macro` returns. While Bob was away no pass
+    // covered it, so every pass counted from here came after his return.
     let back = log_mark(&stack);
+    bob.opens_macro().await?;
     let verdict = wait_until_classified(&bob, &april).await?;
     assert_eq!(verdict, json!({ "isFocus": true, "category": "OTHER" }));
     wait_for_logged(&stack, back, BACKFILL_PASS_FINISHED, Some(&link_id), 1).await?;

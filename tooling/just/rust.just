@@ -52,6 +52,13 @@ email-e2e-known-bugs *args:
     SQLX_OFFLINE=true cargo build -p imap_service --bin imap_service -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p user_link_cleanup_handler --bin user_link_cleanup_handler -p email_sfs_delete_handler --bin email_sfs_delete_handler -p email_suppression_handler --bin email_suppression_handler -p email_refresh_handler --bin email_refresh_handler -p calendar_service --bin calendar_service -p document_storage_service --bin document_storage_service -p email_focus_worker --bin email_focus_worker -p search_processing_service --bin search_processing_service --features search_processing_service/no_pdf
     SQLX_OFFLINE=true crates/email_e2e/scripts/known_bugs.sh {{ args }}
 
+# The connectors suite (crates/connectors_e2e/AGENTS.md): Macro's connectors on
+# dev, as two test accounts. Skips without CONNECTORS_E2E_FLAGGED_API_KEY and
+# CONNECTORS_E2E_UNFLAGGED_API_KEY. Arguments go to nextest, e.g.
+# `just connectors-e2e pipedream` or `just connectors-e2e --run-ignored only`.
+connectors-e2e *args:
+    cargo nextest run -P connectors-e2e -p connectors_e2e {{ args }}
+
 # What the last `just email-e2e` run covers: the functions of email and the
 # backend entry points, from the records its scenarios left. Writes
 # target/email-e2e-coverage/index.html. `--enforce` fails on gaps, as CI does.
@@ -164,7 +171,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entity_access_db_utils/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entity_registry/entity_registry/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entity_registry/entity_registry_db_utils/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/mcp_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/connectors/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/document_storage_service/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/task_dedup/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/crm/.env

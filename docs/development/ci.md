@@ -62,6 +62,15 @@ way: on pushes to `main`, queued as above, and nightly at 04:00 UTC; not in
 last job is the same `Tell Macro Alerts` job, so what follows holds for it
 too, with the nightly run in place of the sweep.
 
+The connectors suite (`connectors_e2e.yml`,
+[its guide](../../crates/connectors_e2e/AGENTS.md)) drives dev as two real test
+accounts, so it runs only nightly at 05:00 UTC and by hand
+(`gh workflow run connectors_e2e.yml --ref <branch>`): never on pull requests
+or pushes. Its last job, `Tell the connectors channel`, is the same job posting
+to the channel `CONNECTORS_E2E_ALERT_WEBHOOK_URL` names, so what follows holds
+for it too, with the nightly run in place of the sweep; its report names the
+failed scenarios, and the run's log has each one's error.
+
 ### When an email end-to-end alert fires
 
 The last job of each of the three workflows, `Tell Macro Alerts`

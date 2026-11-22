@@ -15,12 +15,12 @@ import {
   useAiBillingPlansQuery,
   useCreateBillingPortalMutation,
   useCreateCheckoutSessionMutation,
-  useGithubLinkStatusQuery,
   useTrialEligibilityQuery,
 } from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
+import { type Connector, useConnectors } from '@queries/connectors';
 import {
   invalidateEmailLinks,
   useEmailLinksQuery,
@@ -29,12 +29,10 @@ import {
 import { queryReadyGate } from '@queries/gate';
 import { useGithubStarsQuery } from '@queries/github-stars';
 import { useGtmInviteOfferQuery } from '@queries/gtm-invite/links';
-import { useMcpServersQuery } from '@queries/mcp-servers';
 import {
   useCompleteOnboardingMutation,
   useOnboardingQuery,
 } from '@queries/onboarding';
-import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import {
   useJoinTeamMutation,
   useUserInvitesQuery,
@@ -57,6 +55,7 @@ import type {
 } from './context/onboarding-context';
 import { onboardingCheckoutRequest } from './core/checkout';
 import {
+  type HeldApp,
   onboardingConnectedTools,
   onboardingToolState,
 } from './queries/connected-tools';
@@ -72,6 +71,15 @@ import {
 import { useTeamContacts } from './queries/team-contacts';
 import { createOnboardingToolCatalog } from './queries/tool-catalog';
 import { createOnboardingToolConnect } from './queries/tool-connect';
+
+/** The apps among the user's connectors, with the server's status. */
+function heldApps(connectors: readonly Connector[]): HeldApp[] {
+  return connectors.flatMap((connector) =>
+    connector.target.type === 'app'
+      ? [{ slug: connector.target.slug, status: connector.status }]
+      : []
+  );
+}
 
 /** How often connected tools re-check while the user is on the tools step. */
 const CONNECTED_TOOLS_POLL_MS = 5_000;
@@ -258,50 +266,22 @@ export function createAppOnboardingContext(): OnboardingContext {
 
     createToolCatalog: createOnboardingToolCatalog,
     createConnectedTools: ({ poll }) => {
-      const connected = usePipedreamConnectionsQuery({
-        neverSuspend: true,
+      const connectors = useConnectors({
         refetchInterval: poll ? CONNECTED_TOOLS_POLL_MS : undefined,
       });
-      const native = useMcpServersQuery({
-        neverSuspend: true,
-        refetchInterval: poll ? CONNECTED_TOOLS_POLL_MS : undefined,
-      });
-      const github = useGithubLinkStatusQuery({
-        refetchInterval: poll ? CONNECTED_TOOLS_POLL_MS : undefined,
-        refetchOnMount: 'always',
-      });
-      const pdState = () =>
-        connected.isPlaceholderData
-          ? { t: 'loading' as const }
-          : loadableQuery(connected, (data) => data);
-      const nativeState = () =>
-        native.isPlaceholderData
-          ? { t: 'loading' as const }
-          : loadableQuery(native, (data) => data);
+      const apps = () => heldApps(connectors.list());
       return {
-        connected: () =>
-          onboardingConnectedTools(
-            new Set(
-              queryReadyGate(connected)
-                ? connected.data.filter((c) => c.enabled).map((c) => c.app_slug)
-                : []
-            ),
-            queryReadyGate(native) ? native.data : [],
-            queryReadyGate(github) && github.data.status === 'linked'
-          ),
+        connected: () => onboardingConnectedTools(apps()),
         state: (slug) =>
           onboardingToolState(
             slug,
-            pdState(),
-            nativeState(),
-            loadableQuery(github, (data) => data.status)
+            connectors.ready()
+              ? { t: 'ready', value: apps() }
+              : connectors.error()
+                ? { t: 'error' }
+                : { t: 'loading' }
           ),
-        retry: () => {
-          if (connected.isError)
-            fireAndForget(connected.refetch(), 'onboarding');
-          if (native.isError) fireAndForget(native.refetch(), 'onboarding');
-          if (github.isError) fireAndForget(github.refetch(), 'onboarding');
-        },
+        retry: connectors.retry,
       };
     },
     connectTool,

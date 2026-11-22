@@ -500,9 +500,18 @@ attachments-only menu. The block composer's plus menu has a backend-free
 browser regression on desktop and phone:
 `bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts composer.browser.e2e.ts`.
 
-Composer `/` menus list Connections between Skills and Pull requests. Keep native
-and hosted providers aligned with `mcp_select::select_connections`, prefer native
-credentials per provider, and preserve editor focus on pointer and touch selection.
+Composer `/` menus list Connections between Skills and Pull requests: the
+connected apps and servers `GET /connectors` lists, as the server decided them.
+Preserve editor focus on pointer and touch selection.
+
+Web code reads connection state (which apps and servers are connected, and
+how) only through `src/lib/queries/connectors/` (`useConnectors`, its
+mutations, `connectConnector` and the catalog). The server applies every
+rule; the web never picks a source, reads `macro-connect`, or computes a
+status. Connecting asks the server (`POST /connectors/{key}/connect`) and
+follows the step it answers, for GitHub too: when GitHub's connection is the
+account link, the server answers with `/app/connect/github`, the page that
+starts it.
 
 Undo in a large collaborative Markdown document (Loro undo, mirror, reconcile,
 caret mapping) has a backend-free timing regression:
@@ -897,8 +906,8 @@ ownership. Done, logout, and the ten-minute timeout retire pending callbacks.
 
 Connect can close without reporting success (an OAuth provider severs its
 consent popup's opener) even though Pipedream created the account. Every close
-without success, on web and native, asks `/pipedream/mcp/recover` to register
-the user's newest account for that app from the last fifteen minutes.
+without success, on web and native, asks `POST /connectors/{key}/complete`
+once, which records the account if the flow made one.
 Desktop Home and Agents new-conversation and active-session composers show the shared **Run agents
 on this computer** invitation until this installation is paired or the current
 user dismisses it locally. Keep the invitation tied to bundled macrod support,
@@ -1434,7 +1443,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   The resolved interface language is reported to PostHog as the person
   property `interface_language` when the account language loads.
 - When adding or changing a feature flag, follow the `feature-flags` skill.
-- Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off.
+- Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off. The server reads a routine (`GET /scheduled-actions/{id}`) only to its owner and refuses everyone else (401/404): a routine page shows the template on that refusal (`readRefused`), and routine mention previews fall back to the template's read.
 - Gate the Agent pings notification setting and its settings-search entry on `enable-agent-notifications`; the notification service refuses `notifications.send` for a sender under the same key.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 - Keep Tasks date ranges on view-owned date-bucket boundaries in `features/tasks-view/core/task-due-date.ts`; send `sort_method=property` with the selected definition and direction, use keyed `date_ranges` grouping, and restart pages when midnight/timezone/resume changes the query key; preserve text-search ordering.
