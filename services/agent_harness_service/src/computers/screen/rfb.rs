@@ -3,9 +3,6 @@
 //! harness's own RFB connection. RFB is RFC 6143; the extensions noVNC sends
 //! are TigerVNC's and QEMU's.
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
-
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 use super::tunnel::GuestStream;
@@ -21,8 +18,10 @@ const MAX_TEXT_CHARS: usize = 4096;
 const MAX_SCROLL_CLICKS: u32 = 10;
 /// The longest desktop name Xvnc may send in its ServerInit.
 const MAX_NAME_BYTES: u32 = 4096;
-/// The pixel size until the ServerInit or a SetPixelFormat says otherwise.
-const DEFAULT_BITS_PER_PIXEL: u8 = 32;
+/// The only pixel size spoken: Xvnc's `-depth 24` ServerInit and noVNC's
+/// SetPixelFormat. Fixed, so a viewer can't change how the server side
+/// frames pixels under a frame already on its way (and read past it).
+const BITS_PER_PIXEL: u8 = 32;
 
 /// What the viewer's RFB stream broke.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -45,6 +44,9 @@ pub enum GateError {
     /// A rectangle encoding the server side can't frame.
     #[error("unframeable RFB encoding {0}")]
     UnknownEncoding(i32),
+    /// A pixel format other than 32 bits per pixel, true colour.
+    #[error("only 32-bit true-colour pixels are allowed")]
+    PixelFormat,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,7 +66,6 @@ enum GateState {
 pub struct RfbGate {
     state: GateState,
     pending: Vec<u8>,
-    bits_per_pixel: Arc<AtomicU8>,
 }
 
 impl Default for RfbGate {
@@ -93,7 +94,7 @@ enum Verdict {
     Shared,
     /// SetEncodings, forwarded with only [`framable`] encodings.
     Encodings,
-    /// SetPixelFormat, whose pixel size the server side frames by.
+    /// SetPixelFormat, forwarded only for 32-bit true colour.
     PixelFormat,
 }
 
@@ -143,14 +144,12 @@ impl RfbGate {
         Self {
             state: GateState::Version,
             pending: Vec::new(),
-            bits_per_pixel: Arc::new(AtomicU8::new(DEFAULT_BITS_PER_PIXEL)),
         }
     }
 
-    /// The server side of this connection, framed by the pixel format this
-    /// viewer sets.
+    /// The server side of this connection.
     pub fn server_filter(&self) -> RfbServerFilter {
-        RfbServerFilter::new(Arc::clone(&self.bits_per_pixel))
+        RfbServerFilter::new()
     }
 
     /// Take `input` from the viewer and return what goes on to Xvnc. Bytes
@@ -174,8 +173,9 @@ impl RfbGate {
                 Verdict::Shared => forward.push(1),
                 Verdict::Encodings => forward.extend(framable_encodings(message)),
                 Verdict::PixelFormat => {
-                    if let Some(&bits) = message.get(4) {
-                        self.bits_per_pixel.store(bits, Ordering::Relaxed);
+                    // Bits per pixel at 4, true colour at 7.
+                    if message.get(4) != Some(&BITS_PER_PIXEL) || message.get(7) == Some(&0) {
+                        return Err(GateError::PixelFormat);
                     }
                     forward.extend_from_slice(message);
                 }
@@ -357,7 +357,6 @@ enum Header {
 pub struct RfbServerFilter {
     state: ServerState,
     header: Vec<u8>,
-    bits_per_pixel: Arc<AtomicU8>,
 }
 
 fn u32_at(bytes: &[u8], at: usize) -> Option<u64> {
@@ -368,11 +367,10 @@ fn u32_at(bytes: &[u8], at: usize) -> Option<u64> {
 }
 
 impl RfbServerFilter {
-    fn new(bits_per_pixel: Arc<AtomicU8>) -> Self {
+    fn new() -> Self {
         Self {
             state: ServerState::Version,
             header: Vec::new(),
-            bits_per_pixel,
         }
     }
 
@@ -481,7 +479,9 @@ impl RfbServerFilter {
                     if name > u64::from(MAX_NAME_BYTES) {
                         return Err(GateError::TooLarge);
                     }
-                    self.bits_per_pixel.store(bits, Ordering::Relaxed);
+                    if bits != BITS_PER_PIXEL {
+                        return Err(GateError::PixelFormat);
+                    }
                     pass(name, ServerState::Message)
                 }
                 _ => Header::Needs(24),
@@ -535,8 +535,7 @@ impl RfbServerFilter {
                 let height = u64::from(u16::from_be_bytes([rectangle[6], rectangle[7]]));
                 let encoding =
                     i32::from_be_bytes([rectangle[8], rectangle[9], rectangle[10], rectangle[11]]);
-                let bytes_per_pixel =
-                    u64::from(self.bits_per_pixel.load(Ordering::Relaxed).div_ceil(8));
+                let bytes_per_pixel = u64::from(BITS_PER_PIXEL / 8);
                 let next: ServerState = AfterBody::Rectangles(left.saturating_sub(1)).into();
                 match encoding {
                     // Raw
