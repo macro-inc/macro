@@ -287,6 +287,7 @@ impl ExecutionCredentials for RunCredentials {
                 CodeModeError::Unavailable
             })?;
         Ok(IssuedRun {
+            correlation_id: correlation,
             environment: RunEnvironment {
                 token,
                 trace_headers: trace_headers(),

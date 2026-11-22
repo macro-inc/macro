@@ -130,7 +130,7 @@ fn app(fixture: Arc<Fixture>) -> Router {
     Router::new().route("/agent-sessions/{session}/code-executions/{execution}/connected-apps", get(list_apps))
         .route("/agent-sessions/{session}/code-executions/{execution}/connected-apps/app/fixture/calls", axum::routing::post(call_app))
         .with_state(fixture)
-        .layer(middleware::from_fn_with_state(CorrelationState { jwt:JwtValidationArgs::testing_macro_token("fixture", PUBLIC), repository:Arc::new(Correlations) }, propagate))
+        .layer(middleware::from_fn_with_state(CorrelationState { jwt:JwtValidationArgs::testing_macro_token("fixture", PUBLIC), repository:Arc::new(Correlations), specs:Some(&["agent-harness"]) }, propagate))
 }
 
 #[tokio::test]
