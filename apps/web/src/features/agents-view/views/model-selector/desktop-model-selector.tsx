@@ -21,7 +21,10 @@ import {
   speedTier,
 } from '../../core/model-selection';
 import { MACRO_PERSONA_ID } from '../../core/roster';
-import { createModelSelectorNavigation } from '../../primitives/model-selector-navigation';
+import {
+  createModelSelectorNavigation,
+  type ModelSelectorPage,
+} from '../../primitives/model-selector-navigation';
 import { ModelSpeedMarker } from '../shared/model-speed-marker';
 import { UnifiedModelTrigger } from '../shared/model-trigger';
 import { UnifiedModelTriggerContent } from '../shared/model-trigger-content';
@@ -56,9 +59,19 @@ export function DesktopModelSelector(props: {
     if (!value) setLockedPlacement(undefined);
     changeOpen(value);
   };
-  const openInPlace = (next: 'all' | 'model' | 'effort' | 'speed') => {
+  const openInPlace = (next: Exclude<ModelSelectorPage, 'list'>) => {
     setLockedPlacement(openedSide());
     setPage(next);
+    // The row that had focus is gone, so keyboard navigation would stop;
+    // focus the chosen option, or the first. All models focuses its search.
+    if (next === 'all') return;
+    requestAnimationFrame(() => {
+      const option =
+        content?.querySelector<HTMLElement>(
+          '[role="menuitemradio"][aria-checked="true"]'
+        ) ?? content?.querySelector<HTMLElement>('[role="menuitemradio"]');
+      option?.focus();
+    });
   };
   const chooseModel = (id: string) => {
     (state.onSuggestedModel ?? state.onModel)(id);
