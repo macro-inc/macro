@@ -1043,6 +1043,169 @@ async fn a_team_release_whose_revoke_fails_keeps_the_install_for_the_retry() {
     assert!(rows[0].parked() && rows[0].revoke_pending, "{rows:?}");
 }
 
+/// Whether the machine's latest key still works: no revoke since the last
+/// mint.
+fn machines_key_works(journal: &Journal) -> bool {
+    journal
+        .entries()
+        .iter()
+        .rev()
+        .find(|entry| *entry == "api_key.mint" || *entry == "api_key.revoke_all")
+        .is_some_and(|entry| entry == "api_key.mint")
+}
+
+/// Whether the machine's repository token still works: no token was issued
+/// after the one its latest delivery carried (the repository create right
+/// after the last mint).
+fn machines_repo_token_works(journal: &Journal) -> bool {
+    let entries = journal.entries();
+    let Some(last_mint) = entries.iter().rposition(|entry| entry == "api_key.mint") else {
+        return false;
+    };
+    entries[last_mint + 1..]
+        .iter()
+        .filter(|entry| entry.starts_with("repo.create"))
+        .count()
+        == 1
+}
+
+#[tokio::test]
+async fn a_parked_agents_key_and_repository_token_are_void_once_it_is_parked() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let install = install_of(&service, &agent);
+    service
+        .issue_install(LAPTOP, install.install_id, None)
+        .await
+        .unwrap()
+        .expect("the machine gets the agent");
+    assert!(machines_key_works(&journal));
+    assert!(machines_repo_token_works(&journal));
+
+    service.installs.unentitled.lock().unwrap().push(LAPTOP);
+    service.offboard_unentitled_hosts().await.unwrap();
+
+    // Revoked by the time parking returns, before anything else is issued.
+    assert!(install_of(&service, &agent).parked());
+    assert!(!machines_key_works(&journal));
+    assert!(!machines_repo_token_works(&journal));
+    // The old machine asking again gets nothing new.
+    assert!(
+        service
+            .issue_install(LAPTOP, install.install_id, Some((1, 1)))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(!machines_key_works(&journal));
+}
+
+#[tokio::test]
+async fn nothing_is_minted_for_a_parked_agent_while_its_revoke_is_pending() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let install = install_of(&service, &agent);
+    service
+        .issue_install(LAPTOP, install.install_id, None)
+        .await
+        .unwrap();
+    service.api_keys.fail_revokes(true);
+    service.installs.unentitled.lock().unwrap().push(LAPTOP);
+    service.offboard_unentitled_hosts().await.unwrap();
+    assert!(install_of(&service, &agent).revoke_pending);
+
+    // Its inviter hosts it elsewhere while the old key may still be live.
+    let moved = service
+        .move_install(
+            receipt(),
+            &agent.user_id,
+            MoveTeammate {
+                harness_id: DESKTOP,
+            },
+        )
+        .await;
+    assert!(
+        moved.is_err(),
+        "the revoke at the move fails too: {moved:?}"
+    );
+    let on_desktop = install_of(&service, &agent);
+    assert_eq!(on_desktop.harness_id, DESKTOP);
+    assert!(on_desktop.revoke_pending);
+    let mints = |journal: &Journal| {
+        journal
+            .entries()
+            .iter()
+            .filter(|entry| *entry == "api_key.mint")
+            .count()
+    };
+    let before = mints(&journal);
+    for reported in [None, Some((0, 0))] {
+        assert!(
+            service
+                .issue_install(DESKTOP, on_desktop.install_id, reported)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+    assert_eq!(mints(&journal), before, "no key while the old one may live");
+
+    // The sweep's retry revokes, then the new machine gets its first key.
+    service.api_keys.fail_revokes(false);
+    service.offboard_unentitled_hosts().await.unwrap();
+    assert!(
+        service
+            .issue_install(DESKTOP, on_desktop.install_id, None)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(mints(&journal), before + 1);
+}
+
+#[tokio::test]
+async fn a_move_revokes_the_old_machines_key_before_the_new_machine_is_minted_one() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let old = install_of(&service, &agent);
+    service
+        .issue_install(LAPTOP, old.install_id, None)
+        .await
+        .unwrap();
+    service
+        .move_install(
+            receipt(),
+            &agent.user_id,
+            MoveTeammate {
+                harness_id: DESKTOP,
+            },
+        )
+        .await
+        .unwrap();
+    // Checkpointing: the old machine still runs it, and the new one waits.
+    assert!(machines_key_works(&journal));
+    let before = journal.entries().len();
+
+    service.finish_checkpoint(old.install_id).await.unwrap();
+    let moved = install_of(&service, &agent);
+    service
+        .issue_install(DESKTOP, moved.install_id, None)
+        .await
+        .unwrap()
+        .expect("the new machine gets the agent");
+
+    let after = &journal.entries()[before..];
+    let revoked = after
+        .iter()
+        .position(|entry| entry == "api_key.revoke_all")
+        .expect("the old key is revoked");
+    let minted = after
+        .iter()
+        .position(|entry| entry == "api_key.mint")
+        .expect("the new machine is minted a key");
+    assert!(revoked < minted, "{after:?}");
+}
+
 #[tokio::test]
 async fn a_membership_change_parks_the_agents_it_unentitled_at_once() {
     let (service, journal, _) = self_hosted_service();
