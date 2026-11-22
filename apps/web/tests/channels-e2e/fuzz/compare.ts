@@ -8,8 +8,8 @@
  * put in one of three classes:
  *
  * - `intended`: the builds ended differently and each ended as its model
- *   says: writes made while cut off, which only the build that keeps
- *   channels on the device delivers.
+ *   says: writes made while requests failed or their answers were lost,
+ *   which the models say the two builds treat differently.
  * - `on only` / `off only`: one build disagreed with its model, with the
  *   services or between its windows, and the other did not.
  * - `both`: both builds did, at the same operation: not a difference

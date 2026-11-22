@@ -137,5 +137,6 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   known defect for that reason alone). Suspect the runner first when a defect
   shows on both builds and only here.
 - The fuzzer's models are what a browser that knows its connection does: a
-  write made with no connection waits in the open page on both builds. Change
+  write made with no connection is held on both builds, over REST by the page
+  it was made in and not by the person's other window. Change
   a model only from behaviour seen where `checkBrowserSeesConnection` passes.

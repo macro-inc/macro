@@ -146,7 +146,10 @@ FUZZ_CASES=<work directory>/shrunk.json FUZZ_TRACE=1 \
 - A reaction is compared by emoji and count, not by who made it.
 - Operations made at once are modelled in the order they are listed. Two that
   conflict (a delete and a reaction on one message) are not both tried, and
-  only one outcome of the race is expected.
+  only one outcome of the race is expected. A connection restored at the same
+  moment as a write through the services is modelled as delivering what it
+  held first: when the two conflict (a reply held, its parent deleted) the
+  other order is reported as a disagreement.
 - A write made on a cut-off device is not checked against the services until
   the next operation that waits for them.
 - A deleted message whose last reply is then deleted stays in the model as

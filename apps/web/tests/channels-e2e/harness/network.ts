@@ -273,15 +273,31 @@ export async function holdChannelList(
  * connection and no such test checks what it says.
  */
 export async function checkBrowserSeesConnection(): Promise<void> {
-  const browser = await chromium.launch();
+  // The browser the tests run in, which the configs take from the same place.
+  const browser = await chromium.launch({
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+  });
   try {
     const context = await browser.newContext();
     const page = await context.newPage();
+    await page.evaluate(() => {
+      const seen: string[] = [];
+      Object.assign(window, { seenConnectionEvents: seen });
+      window.addEventListener('offline', () => seen.push('offline'));
+      window.addEventListener('online', () => seen.push('online'));
+    });
     const online = () => page.evaluate(() => navigator.onLine);
+    // The app goes by the events, so the state alone is not enough.
     const becomes = (state: boolean) =>
-      page.waitForFunction((want) => navigator.onLine === want, state, {
-        timeout: 5_000,
-      });
+      page.waitForFunction(
+        (want) =>
+          navigator.onLine === want &&
+          (
+            window as unknown as { seenConnectionEvents: string[] }
+          ).seenConnectionEvents.at(-1) === (want ? 'online' : 'offline'),
+        state,
+        { timeout: 5_000 }
+      );
     if (!(await online())) {
       throw new Error(
         'The browser reports no connection before any test cut it (navigator.onLine is false). Run the suite where the browser has a network interface with an address, not loopback alone.'

@@ -146,7 +146,15 @@ export class Model {
   private server: State = { roots: [], replies: {}, messages: {} };
   private cuts = new Map<
     Windowed,
-    { how: Cut; frozen: State; pending: Act[]; written: number }
+    {
+      how: Cut;
+      /** The channel as it was at the cut, with every write made since. */
+      frozen: State;
+      /** The same with only the writes the services took. */
+      base: State;
+      pending: { act: Act; place?: string }[];
+      written: number;
+    }
   >();
   /** Writes the services refused when a device delivered what it held. */
   refused: Act[] = [];
@@ -173,15 +181,26 @@ export class Model {
     return cut.written === 0 ? 'apply' : 'queue';
   }
 
-  /** The channel as this person's windows should show it. */
-  private world(person: PersonKey): State {
+  /**
+   * The channel as this person's windows should show it. A device that keeps
+   * channels holds a waiting write for all its windows; over REST it waits in
+   * the page it was made in, so `place` names the window asked about.
+   */
+  private world(person: PersonKey, place?: string): State {
     const cut = this.cuts.get(person as Windowed);
     if (!cut) return this.server;
-    if (cut.how === 'offline') return cut.frozen;
+    if (cut.how === 'offline') {
+      if (this.side === 'on' || place === undefined) return cut.frozen;
+      const world = clone(cut.base);
+      for (const held of cut.pending) {
+        if (held.place === place) change(world, held.act, 0);
+      }
+      return world;
+    }
     if (cut.pending.length === 0) return this.server;
     // Cut off only for writes, the device still hears of everyone else's.
     const world = clone(this.server);
-    for (const act of cut.pending) change(world, act, 0);
+    for (const held of cut.pending) change(world, held.act, 0);
     return world;
   }
 
@@ -190,6 +209,7 @@ export class Model {
     this.cuts.set(person, {
       how,
       frozen: clone(this.server),
+      base: clone(this.server),
       pending: [],
       written: 0,
     });
@@ -200,18 +220,19 @@ export class Model {
     const cut = this.cuts.get(person);
     if (!cut) return;
     this.cuts.delete(person);
-    for (const act of cut.pending) {
+    for (const { act } of cut.pending) {
       if (!change(this.server, act, group)) this.refused.push(act);
     }
   }
 
   /** Whether the write is possible in what the person's windows show. */
-  possible(act: Act): boolean {
-    return change(clone(this.world(act.actor)), act, 0);
+  possible(act: Act, place?: string): boolean {
+    return change(clone(this.world(act.actor, place)), act, 0);
   }
 
-  write(act: Act, group: number): Outcome {
-    if (!this.possible(act)) return 'skipped';
+  /** `place` is the window the write is made in, when it is made in one. */
+  write(act: Act, group: number, place?: string): Outcome {
+    if (!this.possible(act, place)) return 'skipped';
     const policy = this.policy(act.actor);
     if (!policy || policy === 'apply') {
       change(this.server, act, group);
@@ -219,27 +240,34 @@ export class Model {
       if (cut) {
         cut.written += 1;
         change(cut.frozen, act, group);
+        change(cut.base, act, group);
       }
       return 'applied';
     }
     if (policy === 'drop') return 'dropped';
     const cut = this.cuts.get(act.actor as Windowed);
     if (!cut) throw new Error('a write is queued only on a cut device');
-    cut.pending.push(act);
+    cut.pending.push({ act, place });
     change(cut.frozen, act, group);
     return 'queued';
   }
 
   /** Whether the person has this reaction on the message, as they see it. */
-  hasReacted(person: PersonKey, target: Key, emoji: string): boolean {
+  hasReacted(
+    person: PersonKey,
+    target: Key,
+    emoji: string,
+    place?: string
+  ): boolean {
     return (
-      this.world(person).messages[target]?.reactions[emoji]?.includes(person) ??
-      false
+      this.world(person, place).messages[target]?.reactions[emoji]?.includes(
+        person
+      ) ?? false
     );
   }
 
-  message(person: PersonKey, key: Key): Message | undefined {
-    return this.world(person).messages[key];
+  message(person: PersonKey, key: Key, place?: string): Message | undefined {
+    return this.world(person, place).messages[key];
   }
 
   /**
@@ -271,10 +299,11 @@ export class Model {
 
   /**
    * The channel, written as `serverChannel` and `shown` write it: what the
-   * services should hold, or what one person's windows should show.
+   * services should hold, or what one person's windows should show (one
+   * window of theirs, when `place` names it).
    */
-  lines(person?: PersonKey): string[] {
-    const state = person ? this.world(person) : this.server;
+  lines(person?: PersonKey, place?: string): string[] {
+    const state = person ? this.world(person, place) : this.server;
     return state.roots.flatMap((root) => [
       lineOf(this.seed, state.messages[root]),
       ...(state.replies[root] ?? []).map(

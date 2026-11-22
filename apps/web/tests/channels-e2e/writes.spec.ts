@@ -467,7 +467,8 @@ test('WRT-15 a message waiting to be sent when the device loses what it kept is 
     try {
       await expect(sent).toBeVisible({ timeout: 10_000 });
     } catch (error) {
-      showed = false;
+      // No row at all: one that is there and not drawn has been sent.
+      showed = (await sent.count()) > 0;
       throw error;
     }
   });

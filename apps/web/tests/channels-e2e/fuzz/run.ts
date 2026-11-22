@@ -433,7 +433,7 @@ export class Run {
         if (WINDOWS[win] === 'ada') await view.page.bringToFront();
         lines = await this.readWhole(view);
         if (this.mine.howCut(person)) {
-          const expected = this.mine.lines(person);
+          const expected = this.mine.lines(person, win);
           if (sameBlocks(lines, expected)) return { lines };
           wrong = difference(lines, expected, 'window', 'model');
         } else {
@@ -684,16 +684,16 @@ export class Run {
       }
       const had =
         act.k === 'react' &&
-        this.mine.hasReacted(act.actor, act.target, act.emoji);
+        this.mine.hasReacted(act.actor, act.target, act.emoji, win);
       // Read before the models take the write: a deleted reply has no
       // thread to be looked for in afterwards.
       const parent =
         act.k === 'send'
           ? null
-          : (this.mine.message(act.actor, act.target)?.parent ?? null);
+          : (this.mine.message(act.actor, act.target, win)?.parent ?? null);
       let outcome: Outcome = 'skipped';
       for (const model of this.models) {
-        const result = model.write(act, group);
+        const result = model.write(act, group, win);
         if (model === this.mine) outcome = result;
       }
       const target = act.k === 'send' ? (act.parent ?? '') : act.target;
