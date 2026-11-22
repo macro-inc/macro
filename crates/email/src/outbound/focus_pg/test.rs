@@ -2303,7 +2303,7 @@ async fn only_mail_the_owner_sent_lately_makes_a_sender_a_recent_contact(
     let repo = FocusPgRepository(pool.clone());
     // The newsletter's sender is on mail the owner received, as a list address
     // is on every message sent through it: that alone doesn't count.
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
          VALUES ('00000000-0000-0000-0000-00000000f611', '00000000-0000-0000-0000-0000000cf006', 'CC')",
     )
@@ -2317,22 +2317,22 @@ async fn only_mail_the_owner_sent_lately_makes_a_sender_a_recent_contact(
         let pool = pool.clone();
         async move {
             let id = Uuid::parse_str(id)?;
-            sqlx::query(
+            sqlx::query!(
                 "INSERT INTO email_messages (id, thread_id, link_id, is_sent, is_draft, from_contact_id,
                                              internal_date_ts, subject)
                  VALUES ($1, '00000000-0000-0000-0000-00000000f305', '00000000-0000-0000-0000-000000000f01',
-                         NOT $3, $3, '00000000-0000-0000-0000-0000000cf002', NOW() - make_interval(days => $2::int), 'Numbers')",
+                         NOT $3, $3, '00000000-0000-0000-0000-0000000cf002', NOW() - make_interval(days => ($2::bigint)::int), 'Numbers')",
+                id,
+                days,
+                is_draft,
             )
-            .bind(id)
-            .bind(days)
-            .bind(is_draft)
             .execute(&pool)
             .await?;
-            sqlx::query(
+            sqlx::query!(
                 "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
                  VALUES ($1, '00000000-0000-0000-0000-0000000cf006', 'TO')",
+                id,
             )
-            .bind(id)
             .execute(&pool)
             .await?;
             Ok::<_, Report>(())
