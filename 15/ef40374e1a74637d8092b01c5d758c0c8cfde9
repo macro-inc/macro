@@ -3,6 +3,8 @@ crates/connectors/src/domain.rs
   s_3d0d2ab631115e::t_3467c96ec5061f 21,23-24,26,31-35
   s_3d0d2ab631115e::t_ddc1178ec38f5f 5-8,25
   s_3d0d2ab631115e::t_8af215198e4517 13-18,22
+  s_3d0d2ab631115e::t_8dd371e8b35459 12
+  s_3d0d2ab631115e::t_b537a7c430c802 11
 crates/connectors/src/domain/service/test.rs
   s_3d0d2ab631115e::t_8af215198e4517 59-60,279-282,347-350,487-490,687-688,703-705,709-711,713-716
   s_3d0d2ab631115e::t_b0b0367b4f6eba 641,643
@@ -18,6 +20,7 @@ crates/connectors/src/domain/catalog.rs
   s_3d0d2ab631115e::t_044fb73260039b 64-68
 crates/connectors/AGENTS.md
   s_3d0d2ab631115e::t_230f9f22326e83 30-38,71,80
+  s_3d0d2ab631115e::t_e5edbc81aa4452 65-66
 crates/connectors/src/fake/source.rs
   s_3d0d2ab631115e::t_d9ba5a45443cd8 1-288,292-305,307-416
   s_3d0d2ab631115e::t_8af215198e4517 289-291
