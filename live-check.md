@@ -34,7 +34,9 @@ The user mentions the agent in their channel with the same kind of program.
 - `POST {hosts.calendar}/scheduling/public/proof/intro/book` returned 403: `POST /scheduling/public/proof/intro/book isn't an operation of Macro's SDK, so this run can't send it. ...`
 - `GET {hosts.unfurl}/unfurl?url=https://example.com` returned 403: `GET /unfurl was sent without the run's credential, so this run can't send it. Call the macro SDK, which adds it.`
 
-Both are refused, but as `unknown_operation` and `no_credential`, not `anonymous_outward`: a scoped run is refused those routes as `anonymous_outward` before anything else, and the unfurl host was present in the run's hosts. So on this stack the mention run was not scoped in the forwarder; reported to the owner of the mention work.
+Triggered through the current `@` picker in the user's own channel (the session-backed Macro agent, not the classic bot API). The stack's database shows both mention sessions with a NULL correlation scope, so these runs are unscoped.
+
+Both are refused, but as `unknown_operation` and `no_credential`, not `anonymous_outward`: a scoped run is refused those routes as `anonymous_outward` before anything else, and the unfurl host was present in the run's hosts. So on this stack a session-backed mention run is not scoped; reported to the owner of the mention work. Enforcement there came from the stand-in flags, not from the scope.
 
 ## Not observed
 
