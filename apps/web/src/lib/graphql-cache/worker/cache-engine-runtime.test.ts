@@ -426,14 +426,16 @@ describe('cache engine worker runtime', () => {
     }
   });
 
-  it('reports a recovery that kept moved files as recovery-deferred', async () => {
-    // Only a recovery open defers; storage-busy wins over it.
+  it('reports an open that kept moved files as recovery-deferred', async () => {
+    // Either open can keep them; storage-busy wins over it.
     const cases = [
-      ['wipe-before-open', false, 'recovery-deferred'],
-      ['open-existing', false, 'initialization-failed'],
-      ['wipe-before-open', true, 'storage-busy'],
+      ['wipe-before-open', false, true, 'recovery-deferred'],
+      ['open-existing', false, true, 'recovery-deferred'],
+      ['wipe-before-open', true, true, 'storage-busy'],
+      ['open-existing', false, false, 'initialization-failed'],
+      ['wipe-before-open', false, false, 'recovery-open-failed'],
     ] as const;
-    for (const [databaseAction, busy, failureCode] of cases) {
+    for (const [databaseAction, busy, deferred, failureCode] of cases) {
       const scope = new FakeWorkerScope();
       const direct = new FakePort();
       installRuntime({
@@ -443,7 +445,7 @@ describe('cache engine worker runtime', () => {
           handleRequest: async (port, request) => {
             await coreOptions.onOwnerLockAcquired?.();
             if (busy) coreOptions.onStorageBusy?.();
-            coreOptions.onRecoveryDeferred?.();
+            if (deferred) coreOptions.onRecoveryDeferred?.();
             port.postMessage({
               id: request.id,
               ok: false,

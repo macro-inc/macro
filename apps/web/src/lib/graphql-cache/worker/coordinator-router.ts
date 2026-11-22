@@ -280,9 +280,16 @@ export class CoordinatorRouter {
   private nextRecoveryResetReason: CacheResetReason | undefined;
   private readonly resetRequiredEpochs = new Set<number>();
   private recoveryAttemptCount = 0;
-  /** Whether a recovery in this retry cycle kept files a storage upgrade
-   * moved because it could not decide on them (`recovery-deferred`). */
-  private recoveryDeferred = false;
+  /** Whether an open since the last accepted readiness kept files a storage
+   * upgrade moved here because it could not decide on them
+   * (`recovery-deferred`). Until an open succeeds those files may hold the
+   * only copy of an older build's queue, so this scope is never given up. */
+  private movedFilesKept = false;
+  /** Whether a retry cycle already ended in a deferral since the last
+   * accepted readiness. Each later registration then gets one recovery
+   * attempt rather than a full cycle, so a page retrying its cache waits for
+   * one open, not five, before it runs uncached again. */
+  private recoveryDeferredBefore = false;
   private recoveryRetryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now = (): number =>
     globalThis.performance?.now() ?? Date.now();
@@ -718,7 +725,11 @@ export class CoordinatorRouter {
         );
         if (!violated) {
           // Accepted readiness proves the storage outcome even if visibility
-          // immediately drains this epoch or publishing its actions fails.
+          // immediately drains this epoch or publishing its actions fails:
+          // any moved files were decided, and a later failure starts afresh.
+          this.resetRecoveryRetries();
+          this.movedFilesKept = false;
+          this.recoveryDeferredBefore = false;
           const recoveryResetReason = this.pendingRecoveryResetEpochs.get(
             message.ownerEpoch
           );
@@ -774,7 +785,6 @@ export class CoordinatorRouter {
               startedAt === undefined ? undefined : this.now() - startedAt,
           });
           this.clearActivationTimer();
-          this.resetRecoveryRetries();
           this.scheduleHeartbeat(message.ownerEpoch);
           this.allowStaleDatabaseRemoval(route).catch(
             reportCoordinatorTaskFailure
@@ -1324,13 +1334,17 @@ export class CoordinatorRouter {
   private scheduleResetActivation(): void {
     const core = this.coreValue;
     if (!core || core.state.kind !== 'resetting-after-loss') return;
-    if (this.recoveryAttemptCount >= RECOVERY_RETRY_LIMIT) {
-      if (this.recoveryDeferred) {
+    const retryLimit = this.recoveryDeferredBefore ? 0 : RECOVERY_RETRY_LIMIT;
+    if (this.recoveryAttemptCount >= retryLimit) {
+      if (this.movedFilesKept) {
         // Giving the scope up would strand the files a recovery kept: the
-        // next scope's name never looks for them. Run uncached and let a
-        // later attempt decide again; the engine bounds those decisions.
-        const reason = `cache recovery kept files it could not decide on after ${RECOVERY_RETRY_LIMIT} attempts: ${core.state.reason}`;
+        // next scope's name never looks for them. That holds whatever ended
+        // this cycle, even failures that never reached storage. Run uncached
+        // and let a later attempt decide again; the engine bounds those
+        // decisions.
+        const reason = `cache recovery kept files it could not decide on: ${core.state.reason}`;
         this.resetRecoveryRetries();
+        this.recoveryDeferredBefore = true;
         this.telemetry.record({
           name: 'graphql_cache.owner',
           operationCategory: 'lifecycle',
@@ -1364,7 +1378,6 @@ export class CoordinatorRouter {
 
   private resetRecoveryRetries(): void {
     this.recoveryAttemptCount = 0;
-    this.recoveryDeferred = false;
     this.clearRecoveryRetryTimer();
   }
 
@@ -1385,7 +1398,7 @@ export class CoordinatorRouter {
     if (!core) return;
     const actions = core.ownerLost(tabId, ownerEpoch, reason);
     if (actions.length === 0) return;
-    if (failureCode === 'recovery-deferred') this.recoveryDeferred = true;
+    if (failureCode === 'recovery-deferred') this.movedFilesKept = true;
     this.handoff.cancel();
     this.activationStarted.delete(ownerEpoch);
     const next = core.state;

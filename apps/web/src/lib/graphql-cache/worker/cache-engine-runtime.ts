@@ -141,7 +141,8 @@ const engineOpenOutcome = (outcome: CacheOpenOutcome): EngineOpenOutcome =>
     .exhaustive((): EngineOpenOutcome => 'reset-storage-uncertain');
 
 /** Why an activation failed. Busy files outrank everything: the open
- * changed nothing. Only a recovery open can defer its decision. */
+ * changed nothing. Next, an open of either kind that kept files a storage
+ * upgrade moved here defers, so the coordinator never gives their scope up. */
 function activationFailureCode(
   databaseAction: DatabaseAction,
   {
@@ -150,8 +151,10 @@ function activationFailureCode(
   }: { storageBusy: boolean; recoveryDeferred: boolean }
 ): ActivationFailureCode {
   if (storageBusy) return 'storage-busy';
-  if (databaseAction !== 'wipe-before-open') return 'initialization-failed';
-  return recoveryDeferred ? 'recovery-deferred' : 'recovery-open-failed';
+  if (recoveryDeferred) return 'recovery-deferred';
+  return databaseAction === 'wipe-before-open'
+    ? 'recovery-open-failed'
+    : 'initialization-failed';
 }
 
 const errorMessage = (error: unknown): string =>

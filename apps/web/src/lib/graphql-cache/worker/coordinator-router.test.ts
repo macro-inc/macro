@@ -62,6 +62,9 @@ const version = {
   coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
 } as const;
 
+/** The router's automatic recovery retries after a failed activation. */
+const RECOVERY_RETRIES = 5;
+
 const register = async (
   router: CoordinatorRouter,
   port: FakePort,
@@ -564,7 +567,9 @@ describe('CoordinatorRouter', () => {
     ).toHaveLength(1);
 
     // Nothing retries in the background. A tab that registers later runs the
-    // recovery again, with every retry available to it.
+    // recovery again, once: a failure that never reached storage, such as
+    // assets that did not load, defers again rather than giving the scope up
+    // with the moved files still in it.
     await vi.advanceTimersByTimeAsync(10 * 60_000);
     expect(router.snapshot()?.state.kind).toBe('waiting-for-tab');
     const tabC = new FakePort();
@@ -577,27 +582,208 @@ describe('CoordinatorRouter', () => {
     ]);
     const engine = new FakePort();
     await attach(router, tabC, 'tab-c', 7, engine);
-    for (const kind of [
-      'engine-assets-ready',
-      'owner-lock-acquired',
-    ] as const) {
-      engine.receive({ ...version, kind, tabId: 'tab-c', ownerEpoch: 7 });
-    }
     engine.receive({
       ...version,
       kind: 'activation-failed',
       tabId: 'tab-c',
       ownerEpoch: 7,
-      reason: 'OPFS path remove failed (NoModificationAllowedError)',
+      reason: 'Wasm asset download failed',
       failureCode: 'recovery-open-failed',
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(router.snapshot()?.state).toEqual({
+      kind: 'waiting-for-tab',
+      nextDatabaseAction: 'wipe-before-open',
+    });
+    expect(messagesOfKind(tabC, 'terminal-error')).toEqual([]);
+    expect(messagesOfKind(tabC, 'cache-unavailable')).toEqual([
+      expect.objectContaining({
+        reason: expect.stringContaining('Wasm asset download failed'),
+      }),
+    ]);
+    expect(
+      observations.filter(
+        (observation) => observation.ownerEvent === 'recovery-deferred'
+      )
+    ).toHaveLength(2);
+
+    // An open that succeeds decided the files: later failures get every
+    // retry again and, when none kept moved files, end as they always did.
+    const tabD = new FakePort();
+    await register(router, tabD, 'tab-d');
+    const recovered = new FakePort();
+    await attach(router, tabD, 'tab-d', 8, recovered);
+    ready(recovered, 'tab-d', 8, 'wiped-before-open');
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'active',
+      ownerEpoch: 8,
+    });
+    await router.handleTabMessage(tabD as CoordinatorMessagePort, {
+      ...version,
+      kind: 'engine-lost',
+      tabId: 'tab-d',
+      ownerEpoch: 8,
+      reason: 'engine worker crashed',
+    });
+    for (let attempt = 1; attempt <= RECOVERY_RETRIES; attempt += 1) {
+      await vi.advanceTimersByTimeAsync(1_000);
+      const state = router.snapshot()?.state;
+      if (state?.kind !== 'activating') {
+        throw new Error('expected an activating recovery owner');
+      }
+      expect(state).toMatchObject({
+        tabId: 'tab-d',
+        ownerEpoch: 8 + attempt,
+        databaseAction: 'wipe-before-open',
+      });
+      const retried = new FakePort();
+      await attach(router, tabD, 'tab-d', state.ownerEpoch, retried);
+      retried.receive({
+        ...version,
+        kind: 'activation-failed',
+        tabId: 'tab-d',
+        ownerEpoch: state.ownerEpoch,
+        reason: 'OPFS path remove failed (NoModificationAllowedError)',
+        failureCode: 'recovery-open-failed',
+      });
+    }
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(router.snapshot()?.state).toEqual({
+      kind: 'failed',
+      reason: expect.stringContaining('cache recovery failed after 5 attempts'),
+    });
+  });
+
+  it('gives a recovery that a hidden tab drains every retry afresh', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    const fail = async (
+      tab: FakePort,
+      tabId: string,
+      ownerEpoch: number,
+      failureCode: ActivationFailureCode
+    ) => {
+      const engine = new FakePort();
+      await attach(router, tab, tabId, ownerEpoch, engine);
+      engine.receive({
+        ...version,
+        kind: 'activation-failed',
+        tabId,
+        ownerEpoch,
+        reason: 'Wasm asset download failed',
+        failureCode,
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+    };
+    const engineA = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engineA);
+    for (const kind of ['engine-assets-ready', 'owner-lock-acquired'] as const)
+      engineA.receive({ ...version, kind, tabId: 'tab-a', ownerEpoch: 1 });
+    engineA.receive({
+      ...version,
+      kind: 'activation-failed',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'cache recovery kept the files an upgrade moved here',
+      failureCode: 'recovery-deferred',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    await register(router, tabB, 'tab-b');
+    // The recovery decides; its tab is hidden, so it drains at once.
+    const recovered = new FakePort();
+    await attach(router, tabA, 'tab-a', 2, recovered);
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'tab-visibility',
+      tabId: 'tab-a',
+      visible: false,
+    });
+    ready(recovered, 'tab-a', 2, 'wiped-before-open');
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'draining',
+      ownerEpoch: 2,
+    });
+    recovered.receive({
+      ...version,
+      kind: 'engine-drained',
+      tabId: 'tab-a',
+      ownerEpoch: 2,
     });
     await vi.advanceTimersByTimeAsync(0);
     expect(router.snapshot()?.state).toMatchObject({
       kind: 'activating',
-      tabId: 'tab-c',
-      ownerEpoch: 8,
-      databaseAction: 'wipe-before-open',
+      tabId: 'tab-b',
+      ownerEpoch: 3,
+      databaseAction: 'open-existing',
     });
+
+    // Its successor's failures before storage start a cycle of their own:
+    // every retry, then the failure that leaves storage untouched.
+    for (let epoch = 3; epoch <= 3 + RECOVERY_RETRIES; epoch += 1) {
+      expect(router.snapshot()?.state).toMatchObject({
+        kind: 'activating',
+        ownerEpoch: epoch,
+      });
+      await fail(tabB, 'tab-b', epoch, 'initialization-failed');
+    }
+    expect(router.snapshot()?.state).toEqual({
+      kind: 'failed',
+      reason: expect.stringContaining('cache recovery failed after 5 attempts'),
+      storageUntouched: true,
+    });
+    expect(messagesOfKind(tabB, 'cache-unavailable')).toEqual([]);
+  });
+
+  it('keeps the scope when an ordinary open kept moved files and recovery never reaches storage', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a');
+    const opened = new FakePort();
+    await attach(router, tab, 'tab-a', 1, opened);
+    for (const kind of ['engine-assets-ready', 'owner-lock-acquired'] as const)
+      opened.receive({ ...version, kind, tabId: 'tab-a', ownerEpoch: 1 });
+    opened.receive({
+      ...version,
+      kind: 'activation-failed',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'the moved database is kept for the recovery open to decide',
+      failureCode: 'recovery-deferred',
+    });
+    for (let epoch = 2; epoch <= 1 + RECOVERY_RETRIES; epoch += 1) {
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(router.snapshot()?.state).toMatchObject({
+        kind: 'activating',
+        ownerEpoch: epoch,
+        databaseAction: 'wipe-before-open',
+      });
+      const engine = new FakePort();
+      await attach(router, tab, 'tab-a', epoch, engine);
+      engine.receive({
+        ...version,
+        kind: 'activation-failed',
+        tabId: 'tab-a',
+        ownerEpoch: epoch,
+        reason: 'Wasm asset download failed',
+        failureCode: 'recovery-open-failed',
+      });
+    }
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(router.snapshot()?.state).toEqual({
+      kind: 'waiting-for-tab',
+      nextDatabaseAction: 'wipe-before-open',
+    });
+    expect(messagesOfKind(tab, 'terminal-error')).toEqual([]);
   });
 
   it('registers only after independent liveness-lock contention succeeds', async () => {
