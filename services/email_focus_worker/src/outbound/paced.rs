@@ -72,21 +72,29 @@ impl<C: FocusClassifier> FocusClassifier for PacedClassifier<C> {
             .await;
         match &answer {
             // Spent through the recorder, at what TypeSafe billed.
-            Ok(_) => {}
-            Err(FocusClassifierError::Unavailable) => {
-                self.budget.spend_requests(ATTEMPTS_WHEN_UNAVAILABLE);
-                if self.budget.slow_down() {
-                    self.metrics.add(Metric::ClassifierSlowDowns, 1.0);
-                    tracing::warn!(
-                        tokens_per_second = self.budget.rate(),
-                        "TypeSafe pushed back; focus classification slowed down"
-                    );
+            Ok(_) => drop(reservation),
+            Err(error) => {
+                // A failed call reports no usage, though TypeSafe may have
+                // billed it: what it set aside stays spent, so the next call
+                // doesn't get it back at once, and its requests count.
+                if let Some(reservation) = reservation {
+                    reservation.keep();
+                }
+                match error {
+                    FocusClassifierError::Unavailable => {
+                        self.budget.spend_requests(ATTEMPTS_WHEN_UNAVAILABLE);
+                        if self.budget.slow_down() {
+                            self.metrics.add(Metric::ClassifierSlowDowns, 1.0);
+                            tracing::warn!(
+                                tokens_per_second = self.budget.rate(),
+                                "TypeSafe pushed back; focus classification slowed down"
+                            );
+                        }
+                    }
+                    FocusClassifierError::Rejected => self.budget.spend_requests(1),
                 }
             }
-            // A refusal reports no usage, but TypeSafe still counted it.
-            Err(FocusClassifierError::Rejected) => self.budget.spend_requests(1),
         }
-        drop(reservation);
         answer
     }
 

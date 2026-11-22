@@ -839,8 +839,8 @@ async fn gmail_an_answered_thread_comes_back_on_its_due_day_unless_the_answer_cl
 }
 
 /// Tokens a second the worker's backfills and sweeps keep to
-/// (`TOKENS_PER_SECOND` in `email_focus_worker`), a second of which they
-/// may spend at once.
+/// (`TOKENS_PER_SECOND` in `email_focus_worker`), half a second of which
+/// they may spend at once.
 const BUDGET: u64 = 60_000;
 /// What the model bills each question in the budget scenario, as for a long
 /// thread: two a second fit the budget.
@@ -861,14 +861,14 @@ fn billed_between(requests: &[&ModelRequest], first: usize, last: usize) -> u64 
 }
 
 /// No stretch of `requests` bills more than `rate` tokens a second over its
-/// length, plus a second's worth spent at once and one call more.
+/// length, plus half a second's worth spent at once and one call more.
 fn assert_within(requests: &[&ModelRequest], rate: u64, what: &str) {
     for first in 0..requests.len() {
         for last in first..requests.len() {
             let seconds = (requests[last].at - requests[first].at).as_secs_f64();
             let billed = billed_between(requests, first, last);
             #[expect(clippy::cast_precision_loss, reason = "token counts are small")]
-            let allowed = rate as f64 * (seconds + 1.0) + BILLED as f64;
+            let allowed = rate as f64 * (seconds + 0.5) + (BILLED + 1) as f64;
             #[expect(clippy::cast_precision_loss, reason = "token counts are small")]
             let billed_f = billed as f64;
             assert!(
@@ -918,8 +918,8 @@ async fn gmail_a_backfill_keeps_to_its_token_budget_and_never_holds_up_new_mail(
         async || Ok((answered("Quarterly figures") >= 10).then_some(())),
     )
     .await?;
-    let live = arrives(&inbox, MALLORY, "Board meeting moved").await?;
     let arrived = Instant::now();
+    let live = arrives(&inbox, MALLORY, "Board meeting moved").await?;
     wait_until_classified(&ada, &live).await?;
     let requests = classifier.requests_about("Board meeting moved");
     let asked = requests

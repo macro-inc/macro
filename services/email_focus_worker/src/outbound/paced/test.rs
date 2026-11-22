@@ -148,9 +148,9 @@ async fn ten_minutes_of_backfill_bill_no_more_than_the_budget() {
     }
     tasks.join_all().await;
     let billed = f64::from(*calls.lock().unwrap()) * 8_500.0;
-    // A second's worth on hand at the start, then the rate, for as long as
+    // Half a second's worth on hand at the start, then the rate, for as long as
     // the calls went on: those that waited past the ten minutes too.
-    let allowed = TOKENS_PER_SECOND * (started.elapsed().as_secs_f64() + 1.0);
+    let allowed = TOKENS_PER_SECOND * (started.elapsed().as_secs_f64() + 0.5);
     assert!(billed <= allowed, "billed {billed} of {allowed}");
     assert!(
         billed >= allowed * 0.95,
@@ -189,5 +189,20 @@ async fn refused_and_pushed_back_calls_still_count_as_requests() {
     assert!(
         started.elapsed() >= Duration::from_millis(100),
         "a backfill call went through with the requests already spent"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_pushed_back_backfill_call_keeps_its_share() {
+    let paced = paced(Err(FocusClassifierError::Unavailable), 0);
+    paced.ask(ClassifierLane::Background).await.ok();
+    // The next backfill call waits for the first call's estimate to refill
+    // at the halved rate rather than taking it back at once.
+    let started = Instant::now();
+    paced.ask(ClassifierLane::Background).await.ok();
+    assert!(
+        started.elapsed() >= Duration::from_millis(600),
+        "the next call waited only {:?}",
+        started.elapsed()
     );
 }

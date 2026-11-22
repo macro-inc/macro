@@ -3,7 +3,8 @@
 //!
 //! TypeSafe allows the account 100,000 tokens and 80 requests a second, and
 //! the agent services share them. The budget refills at [`TOKENS_PER_SECOND`],
-//! holding at most a second's worth, or one call's when a call costs more.
+//! holding at most half a second's worth, or one call's when a call costs
+//! more, so a burst after a quiet spell stays inside both limits.
 //! Every Jev call the worker makes, live or not, is taken out of it at what
 //! TypeSafe says it cost, and at least [`TOKENS_PER_REQUEST`], so the request
 //! limit holds too. A background call waits until the budget holds what a call
@@ -11,9 +12,11 @@
 //! so a burst of new mail makes the backfill wait instead.
 //!
 //! When TypeSafe says to slow down (a rate limit, overload, timeout or server
-//! error, after Jev's own retries) the rate halves, at most once per
-//! [`COOL_DOWN`] and down to [`MIN_TOKENS_PER_SECOND`], and climbs back by a
-//! tenth of the full rate each [`COOL_DOWN`] after.
+//! error after Jev's own retries; Jev can't tell a connection failure apart,
+//! so that slows it too) the rate halves, at most once per [`COOL_DOWN`] and
+//! down to [`MIN_TOKENS_PER_SECOND`], and climbs back by a tenth of the full
+//! rate each [`COOL_DOWN`] without a push back. A failed background call keeps
+//! what it set aside, so it can't hand the next call its share at once.
 
 use std::{
     sync::{Mutex, MutexGuard, PoisonError},
@@ -50,6 +53,10 @@ const CLIMB: f64 = 0.1;
 /// The shortest a background call waits for the budget to refill: a wait
 /// that rounds to nothing would wake with nothing refilled, and spin.
 const MIN_WAIT: Duration = Duration::from_millis(1);
+/// How many seconds' worth the budget holds on hand: half a second's, so the
+/// calls let through at once after a quiet spell, with the refill over the
+/// next second, stay under TypeSafe's 100,000 tokens and 80 requests.
+const ON_HAND_SECONDS: f64 = 0.5;
 
 /// How fast the budget fills; [`Rates::default`] is production's.
 #[derive(Debug, Clone, Copy)]
@@ -90,23 +97,32 @@ struct State {
 }
 
 impl State {
-    /// Bring the rate and the balance up to `now`.
+    /// Bring the rate and the balance up to `now`, each climb in between
+    /// counting from when it came rather than back to the last refill.
     fn refill(&mut self, rates: &Rates, now: Instant) {
-        if self.rate < rates.full {
-            let climbs = (now.duration_since(self.changed_at).as_secs_f64()
-                / rates.cool_down.as_secs_f64())
-            .floor();
-            if climbs >= 1.0 {
-                self.rate = (self.rate + climbs * CLIMB * rates.full).min(rates.full);
-                self.changed_at += rates.cool_down.mul_f64(climbs);
+        while self.rate < rates.full {
+            let climbs_at = self.changed_at + rates.cool_down;
+            if climbs_at > now {
+                break;
             }
+            self.fill_until(climbs_at);
+            self.rate = (self.rate + CLIMB * rates.full).min(rates.full);
+            self.changed_at = climbs_at;
         }
-        let elapsed = now.duration_since(self.refilled_at).as_secs_f64();
-        // At most a second's worth on hand, so an idle worker can't burst,
-        // or one call's worth when a call costs more than that: a slowed-down
-        // budget must still let a long thread through.
-        self.balance = (self.balance + elapsed * self.rate).min(self.rate.max(self.estimate));
-        self.refilled_at = now;
+        self.fill_until(now);
+    }
+
+    /// Add what the current rate gives from the last refill until `until`.
+    fn fill_until(&mut self, until: Instant) {
+        let elapsed = until
+            .saturating_duration_since(self.refilled_at)
+            .as_secs_f64();
+        // At most half a second's worth on hand, so an idle worker can't
+        // burst, or one call's worth when a call costs more than that: a
+        // slowed-down budget must still let a long thread through.
+        let cap = (self.rate * ON_HAND_SECONDS).max(self.estimate);
+        self.balance = (self.balance + elapsed * self.rate).min(cap);
+        self.refilled_at = self.refilled_at.max(until);
     }
 }
 
@@ -115,6 +131,14 @@ impl State {
 pub struct Reservation<'a> {
     budget: &'a TokenBudget,
     amount: f64,
+}
+
+impl Reservation<'_> {
+    /// The call failed, so what it cost is unknown: leave what it set aside
+    /// spent instead of giving it back.
+    pub fn keep(mut self) {
+        self.amount = 0.0;
+    }
 }
 
 impl Drop for Reservation<'_> {
@@ -138,7 +162,7 @@ impl TokenBudget {
         Self {
             rates,
             state: Mutex::new(State {
-                balance: rates.full,
+                balance: rates.full * ON_HAND_SECONDS,
                 refilled_at: now,
                 rate: rates.full,
                 changed_at: now,
@@ -211,11 +235,13 @@ impl TokenBudget {
 
     /// TypeSafe pushed back: halve the rate, unless it already fell within the
     /// last cool-down, and let nothing else through until the balance refills.
+    /// Either way the rate climbs no sooner than a cool-down from now.
     /// Answers whether the rate fell.
     pub fn slow_down(&self) -> bool {
         let now = Instant::now();
         let mut state = self.state();
         state.refill(&self.rates, now);
+        state.changed_at = now;
         if state
             .slowed_at
             .is_some_and(|at| now.duration_since(at) < self.rates.cool_down)
@@ -223,7 +249,6 @@ impl TokenBudget {
             return false;
         }
         state.rate = (state.rate / 2.0).max(self.rates.min);
-        state.changed_at = now;
         state.slowed_at = Some(now);
         state.balance = state.balance.min(0.0);
         true

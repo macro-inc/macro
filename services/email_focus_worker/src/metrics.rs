@@ -51,7 +51,8 @@ pub enum Metric {
     ClassifierUnavailable,
     /// Classifier calls it refused or answered unusably.
     ClassifierRejected,
-    /// Times TypeSafe pushed back and the worker halved its token rate.
+    /// Times Jev found TypeSafe unavailable (a rate limit, overload, timeout,
+    /// server or connection error) and the worker halved its token rate.
     ClassifierSlowDowns,
     /// How long a backfill or sweep call waited on the token budget (sample).
     ClassifierBudgetWaitSeconds,

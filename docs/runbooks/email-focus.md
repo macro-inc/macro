@@ -39,12 +39,13 @@ services. The worker keeps its backfills and sweeps to 60,000 tokens a second,
 every call counting at least 1,250 tokens so the request limit holds too
 (`services/email_focus_worker/src/outbound/token_budget.rs`). New mail never
 waits on the budget, but what it spends is taken out of it, so a burst of new
-mail makes the backfill wait instead. When TypeSafe pushes back (after Jev's
-own retries) the rate halves, at most once per 30 seconds and down to 6,000,
-and climbs back a tenth each 30 seconds after. `ClassifierSlowDowns` counts
-the halvings and `ClassifierBudgetWaitSeconds` how long background calls
-waited. The budget is per worker process: running a second task doubles what
-the worker may spend.
+mail makes the backfill wait instead. When Jev finds TypeSafe unavailable
+after its own retries (a rate limit, overload, timeout, server error, or a
+connection failure, which Jev reports the same way) the rate halves, at most
+once per 30 seconds and down to 6,000, and climbs back a tenth each 30 seconds
+without one. `ClassifierSlowDowns` counts the halvings and
+`ClassifierBudgetWaitSeconds` how long background calls waited. The budget is
+per worker process: running a second task doubles what the worker may spend.
 
 At the full rate the worker classifies about 7 threads a second, so a rollout
 step that enrolls N inboxes at once is backfilled in about N × 15 / 7 seconds
