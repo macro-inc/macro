@@ -23,6 +23,9 @@ pub struct MarkdownInitializationOptions {
 }
 
 /// Initializes markdown document content in the collaborative editor backend.
+///
+/// Initialization returns once the backend holds the document's content, and
+/// fails if it cannot get there. A document that already has content keeps it.
 pub trait MarkdownInitializationPort: Send + Sync {
     /// Initialize an already-created markdown document and return the canonical snapshot.
     fn initialize_existing_markdown(

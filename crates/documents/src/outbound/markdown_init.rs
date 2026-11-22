@@ -13,7 +13,7 @@ use lexical_client::notion::{
 };
 use lexical_client::parse_markdown::MarkdownSnapshotOptions;
 use sync_service_client::{SyncServiceClient, initialize::SnapshotAlreadyExists};
-use tokio_retry::{RetryIf, strategy::FixedInterval};
+use tokio_retry::{Retry, strategy::FixedInterval};
 
 use crate::domain::models::DocumentError;
 use crate::domain::notion_markdown::NotionMarkdown;
@@ -157,12 +157,14 @@ where
     }
 }
 
-/// POST the snapshot to sync-service, retrying transient failures. A 409 on
-/// the first attempt is returned as-is: retrying cannot change it, and callers
-/// decide whether an existing snapshot is acceptable. A 409 on a retry means an
-/// earlier attempt stored this snapshot after its response was lost (the
-/// sync-service front worker answers 408 when the durable object is slow, but
-/// the object still finishes the write), so it counts as success.
+/// POST the snapshot to sync-service, retrying transient failures.
+///
+/// A 409 means sync-service already holds a snapshot for this document, which
+/// is kept: on a retry it is usually this snapshot, written by an earlier
+/// attempt whose response was lost (the sync-service front worker answers 408
+/// when the durable object is slow, but the object still finishes the write);
+/// on a first attempt it is a room left by an earlier creation of a document
+/// with a deterministic id, or by an upload or backfill that already ran.
 async fn initialize_with_retry<S: SyncInitializeSnapshotPort>(
     sync_service_client: &S,
     document_id: &str,
@@ -172,37 +174,31 @@ async fn initialize_with_retry<S: SyncInitializeSnapshotPort>(
     const RETRY_DELAY: Duration = Duration::from_secs(1);
 
     let mut attempt = 0usize;
-    RetryIf::start(
+    Retry::start(
         FixedInterval::new(RETRY_DELAY).take(MAX_ATTEMPTS - 1),
         || {
             attempt += 1;
             async move {
-                let result = sync_service_client
+                match sync_service_client
                     .initialize_from_snapshot(document_id, snapshot)
-                    .await;
-                match &result {
-                    Err(error) if attempt > 1 && is_snapshot_already_exists(error) => {
-                        tracing::info!(
-                            attempt,
-                            "sync service already holds the snapshot an earlier attempt sent"
-                        );
-                        return Ok(());
+                    .await
+                {
+                    Err(error) if error.is::<SnapshotAlreadyExists>() => {
+                        tracing::info!(attempt, "sync service already holds a snapshot; keeping it");
+                        Ok(())
                     }
-                    Err(error) if attempt < MAX_ATTEMPTS && !is_snapshot_already_exists(error) => {
-                        tracing::warn!(error=?error, attempt, "failed to initialize sync service from snapshot, retrying in 1s");
+                    Err(error) => {
+                        if attempt < MAX_ATTEMPTS {
+                            tracing::warn!(error=?error, attempt, "failed to initialize sync service from snapshot, retrying in 1s");
+                        }
+                        Err(error)
                     }
-                    _ => {}
+                    Ok(()) => Ok(()),
                 }
-                result
             }
         },
-        |error: &anyhow::Error| !is_snapshot_already_exists(error),
     )
     .await
-}
-
-fn is_snapshot_already_exists(error: &anyhow::Error) -> bool {
-    error.is::<SnapshotAlreadyExists>()
 }
 
 #[cfg(test)]
@@ -335,7 +331,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn awaited_does_not_retry_an_existing_snapshot() {
+    async fn an_existing_snapshot_is_kept_without_retrying() {
         let mut lexical = MockLexicalSnapshotPort::new();
         let mut sync = MockSyncInitializeSnapshotPort::new();
 
@@ -348,11 +344,11 @@ mod tests {
             .returning(|_, _| Box::pin(async { Err(SnapshotAlreadyExists.into()) }));
 
         let initializer = LexicalSyncMarkdownInitializer::new(lexical, sync);
-        let error = initializer
+        let snapshot = initializer
             .initialize_existing_markdown("doc4", "# hi", MarkdownInitializationOptions::default())
             .await
-            .unwrap_err();
-        assert_eq!(error.to_string(), "snapshot already exists");
+            .unwrap();
+        assert_eq!(snapshot, [1, 2, 3]);
     }
 
     #[tokio::test(start_paused = true)]

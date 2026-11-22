@@ -193,19 +193,13 @@ where
                 )
             })?;
 
-            match self
-                .markdown_initializer
+            self.markdown_initializer
                 .initialize_existing_markdown(
                     &document_context.document_id,
                     markdown,
                     MarkdownInitializationOptions::default(),
                 )
-                .await
-            {
-                Ok(_) => {}
-                Err(error) if sync_snapshot_already_exists(&error) => {}
-                Err(error) => return Err(error),
-            }
+                .await?;
         }
 
         let location = if matches!(file_type, Some(FileType::Md)) {
@@ -221,8 +215,4 @@ where
             )
             .await
     }
-}
-
-fn sync_snapshot_already_exists(error: &DocumentError) -> bool {
-    error.to_string().contains("snapshot already exists")
 }
