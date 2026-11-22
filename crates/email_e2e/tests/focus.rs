@@ -8,9 +8,12 @@
 
 use email_e2e::chrono::{DateTime, Days, NaiveDate, SubsecRound as _, TimeDelta, Utc};
 use email_e2e::{
-    DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, StackOptions, User, eventually,
+    DEFAULT_TIMEOUT, Inbox, Mail, ModelRequest, Provider, Report, Stack, StackOptions, User,
+    eventually,
 };
 use serde_json::{Value, json};
+use std::time::Duration;
+use tokio::time::Instant;
 
 const GRACE: &str = "Grace <grace@example.net>";
 const GRACE_ADDRESS: &str = "grace@example.net";
@@ -831,6 +834,157 @@ async fn gmail_an_answered_thread_comes_back_on_its_due_day_unless_the_answer_cl
         )
         .await?;
     }
+
+    stack.finish().await
+}
+
+/// Tokens a second the worker's backfills and sweeps keep to
+/// (`TOKENS_PER_SECOND` in `email_focus_worker`), a second of which they
+/// may spend at once.
+const BUDGET: u64 = 60_000;
+/// What the model bills each question in the budget scenario, as for a long
+/// thread: two a second fit the budget.
+const BILLED: u64 = 30_000;
+/// Threads in the mailbox before it is linked: a backfill of a minute at the
+/// budget.
+const BACKLOG: usize = 80;
+/// What the worker logs when TypeSafe pushes back.
+const PUSHED_BACK: &str = "TypeSafe pushed back";
+
+/// The tokens of the requests answered between the `first` and `last`
+/// (inclusive) of `requests`.
+fn billed_between(requests: &[&ModelRequest], first: usize, last: usize) -> u64 {
+    requests[first..=last]
+        .iter()
+        .map(|request| request.tokens)
+        .sum()
+}
+
+/// No stretch of `requests` bills more than `rate` tokens a second over its
+/// length, plus a second's worth spent at once and one call more.
+fn assert_within(requests: &[&ModelRequest], rate: u64, what: &str) {
+    for first in 0..requests.len() {
+        for last in first..requests.len() {
+            let seconds = (requests[last].at - requests[first].at).as_secs_f64();
+            let billed = billed_between(requests, first, last);
+            #[expect(clippy::cast_precision_loss, reason = "token counts are small")]
+            let allowed = rate as f64 * (seconds + 1.0) + BILLED as f64;
+            #[expect(clippy::cast_precision_loss, reason = "token counts are small")]
+            let billed_f = billed as f64;
+            assert!(
+                billed_f <= allowed,
+                "{what}: requests {first}..={last} billed {billed} tokens in {seconds:.2} s, \
+                 more than {allowed}"
+            );
+        }
+    }
+}
+
+/// A backfill spends no more than its token budget, waits when TypeSafe
+/// says to slow down and comes back at half the rate, and never holds up
+/// new mail: Ada links a mailbox of 80 threads whose questions bill 30,000
+/// tokens each, two a second at the budget. Mail arriving in the middle is
+/// classified within seconds while the backfill still has threads to go.
+///
+/// When it fails: a rollout step's backfills take the whole TypeSafe rate
+/// limit from the agent features, keep at it while TypeSafe turns them away,
+/// or new mail waits behind a mailbox's backlog.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_backfill_keeps_to_its_token_budget_and_never_holds_up_new_mail()
+-> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    classifier.put_in_focus_when_mail_contains("Quarterly figures");
+    classifier.put_in_focus_when_mail_contains("Board meeting moved");
+    classifier.bill_tokens_per_call(BILLED);
+    let ada = stack.user("ada").await?;
+    let backlog: Vec<Mail> = (1..=BACKLOG)
+        .map(|n| Mail::new(MALLORY, &format!("Quarterly figures {n}"), "Attached."))
+        .collect();
+    stack.seed_mailbox(Provider::Gmail, ada.email(), &backlog)?;
+    let inbox = ada.link(Provider::Gmail, ada.email()).await?;
+    let answered = |text: &str| {
+        classifier
+            .requests_about(text)
+            .into_iter()
+            .filter(|request| request.about && !request.rate_limited)
+            .count()
+    };
+
+    // New mail in the middle of the backfill goes straight to the model.
+    eventually(
+        "the backfill to be under way",
+        DEFAULT_TIMEOUT,
+        async || Ok((answered("Quarterly figures") >= 10).then_some(())),
+    )
+    .await?;
+    let live = arrives(&inbox, MALLORY, "Board meeting moved").await?;
+    let arrived = Instant::now();
+    wait_until_classified(&ada, &live).await?;
+    let requests = classifier.requests_about("Board meeting moved");
+    let asked = requests
+        .iter()
+        .find(|request| request.about)
+        .map(|request| request.at)
+        .ok_or_else(|| rootcause::report!("the new mail never reached the model"))?;
+    let backlog_done_then = requests
+        .iter()
+        .filter(|request| request.at <= asked && !request.about && !request.rate_limited)
+        .count();
+    assert!(
+        asked.saturating_duration_since(arrived) < Duration::from_secs(10),
+        "the new mail reached the model {:?} after it arrived",
+        asked.saturating_duration_since(arrived)
+    );
+    assert!(
+        backlog_done_then + 20 <= BACKLOG,
+        "the new mail waited until {backlog_done_then} of {BACKLOG} backlog threads were done"
+    );
+
+    // TypeSafe turns everything away for five seconds: Jev's retries of the
+    // questions out then are refused too, and the worker slows down.
+    let mark = log_mark(&stack);
+    classifier.rate_limit_for(Duration::from_secs(5));
+    wait_for_logged(&stack, mark, PUSHED_BACK, None, 1).await?;
+    eventually("the backfill to finish", DEFAULT_TIMEOUT * 2, async || {
+        Ok((answered("Quarterly figures") >= BACKLOG).then_some(()))
+    })
+    .await?;
+
+    let requests = classifier.requests_about("Quarterly figures");
+    let backfill: Vec<&ModelRequest> = requests.iter().filter(|request| request.about).collect();
+    let refused_at = backfill
+        .iter()
+        .filter(|request| request.rate_limited)
+        .map(|request| request.at)
+        .max()
+        .ok_or_else(|| rootcause::report!("no question was turned away"))?;
+    let (before, after): (Vec<&ModelRequest>, Vec<&ModelRequest>) = backfill
+        .iter()
+        .filter(|request| !request.rate_limited)
+        .partition(|request| request.at < refused_at);
+    // Never more than the budget, before TypeSafe pushed back or after.
+    assert_within(&before, BUDGET, "before the push back");
+    // After it: half the rate, climbing a tenth of the full rate each 30 s,
+    // so below 48,000 a second for the first 90 s.
+    let first_90s: Vec<&ModelRequest> = after
+        .iter()
+        .copied()
+        .filter(|request| request.at - refused_at < Duration::from_secs(90))
+        .collect();
+    assert!(
+        first_90s.len() >= 10,
+        "only {} backlog threads were asked about in the 90 s after the push back",
+        first_90s.len()
+    );
+    assert_within(&first_90s, BUDGET * 8 / 10, "after the push back");
+    let resumed = after.first().map(|request| request.at - refused_at);
+    tracing::info!(
+        ?resumed,
+        before = before.len(),
+        after = after.len(),
+        "backfill paced"
+    );
 
     stack.finish().await
 }

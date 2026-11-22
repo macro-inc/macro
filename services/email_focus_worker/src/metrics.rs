@@ -51,6 +51,10 @@ pub enum Metric {
     ClassifierUnavailable,
     /// Classifier calls it refused or answered unusably.
     ClassifierRejected,
+    /// Times TypeSafe pushed back and the worker halved its token rate.
+    ClassifierSlowDowns,
+    /// How long a backfill or sweep call waited on the token budget (sample).
+    ClassifierBudgetWaitSeconds,
     /// Jev input tokens.
     JevInputTokens,
     /// Jev output tokens.
@@ -106,6 +110,7 @@ impl Metric {
             self,
             Self::EnrolledInboxes
                 | Self::EventToClassifiedSeconds
+                | Self::ClassifierBudgetWaitSeconds
                 | Self::SweepSeconds
                 | Self::BackfillTopFilledSeconds
                 | Self::BackfillFilledSeconds
@@ -118,6 +123,7 @@ impl Metric {
         match self {
             Self::EventToClassifiedSeconds
             | Self::SweepSeconds
+            | Self::ClassifierBudgetWaitSeconds
             | Self::BackfillTopFilledSeconds
             | Self::BackfillFilledSeconds
             | Self::StaleThreadsSeconds => Unit::Seconds,
