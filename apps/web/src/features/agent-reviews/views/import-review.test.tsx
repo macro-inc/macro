@@ -356,6 +356,39 @@ describe('import review', () => {
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
   });
 
+  it('shows why planning failed instead of an empty plan', () => {
+    // Planning a new plan clears the run's review, so the failed run names none.
+    imports.entities = [];
+    imports.report = {
+      status: 'failed',
+      error: 'Notion object not found or not shared with the connection',
+      reviewId: null,
+      onTeam: false,
+      pages: 0,
+      dataSources: 0,
+      copy: 0,
+      tasks: 0,
+      skip: 0,
+      hand: 0,
+      documents: 0,
+      databases: 0,
+      databaseRows: 0,
+      taskRows: 0,
+      imported: 0,
+      waiting: 0,
+      writing: 0,
+    };
+    setup();
+
+    expect(screen.getByRole('alert').textContent).toBe(
+      "Couldn't plan the import: Notion object not found or not shared with the connection"
+    );
+    expect(screen.queryByText(/nothing/i)).toBeNull();
+    expect(screen.queryByText('The plan has no objects to show.')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Import/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+  });
+
   it('saves who each object is shared with, down the tree', async () => {
     imports.entities = [
       entity('wiki', null, 'Wiki', {

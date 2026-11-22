@@ -334,6 +334,27 @@ describe('importReviewPhase', () => {
     ).toEqual({ kind: 'dismissed' });
   });
 
+  it('says why when planning failed before the plan was approved', () => {
+    const pending = { status: 'pending', error: null } as const;
+    expect(
+      importReviewPhase({ presentedAt: 1 }, pending, {
+        ...progress,
+        status: 'failed',
+        error: 'Notion object not found or not shared with the connection',
+      })
+    ).toEqual({
+      kind: 'planFailed',
+      error: 'Notion object not found or not shared with the connection',
+    });
+    expect(
+      importReviewPhase({ presentedAt: 1 }, pending, {
+        ...progress,
+        status: 'failed',
+        error: null,
+      })
+    ).toEqual({ kind: 'planFailed', error: null });
+  });
+
   it('follows the run once the plan is approved', () => {
     const completed: { status: 'completed'; error: null } = {
       status: 'completed',

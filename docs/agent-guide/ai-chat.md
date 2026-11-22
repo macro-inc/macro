@@ -2809,6 +2809,10 @@ until the agent starts its reply. This behaves the same on mobile. Approving an
 import plan only starts its write, so no **Responding** shows until the write
 ends; the card shows its final state and the agent's reply follows. A plan
 still being made when it was presented also wakes the agent once it is ready.
+An import review cannot be presented for a plan that failed, finished, or was
+never made: the agent is told why (for example, the source lost access) and no
+card appears. A card whose plan fails after it was presented shows **Couldn't
+plan the import** with the reason, and no plan or Import button.
 These events create no user bubble; events without an existing card use a
 quiet timeline row.
 The agent can read final drafts and confirmed outcomes through **GetReview**.

@@ -79,9 +79,17 @@ export function createImportReview(sources: ImportReviewSources) {
     if (!report) return undefined;
     if (report.reviewId === record().id) return report;
     // A newer run replaced this one; its rows still say how it ended.
-    return item()?.status === 'completed'
-      ? progressFromEntries(record().id, sources.entries())
-      : undefined;
+    if (item()?.status === 'completed')
+      return progressFromEntries(record().id, sources.entries());
+    // Planning again clears the run's review, so a plan that failed names
+    // none: this review's plan can no longer be approved.
+    if (
+      item()?.status === 'pending' &&
+      report.status === 'failed' &&
+      report.reviewId === null
+    )
+      return report;
+    return undefined;
   };
   const phase = () => importReviewPhase(record(), item(), progress());
   const locked = () =>

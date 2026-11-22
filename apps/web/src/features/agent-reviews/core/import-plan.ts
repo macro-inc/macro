@@ -95,6 +95,8 @@ export type ImportReviewPhase =
   | { kind: 'preparing' }
   | { kind: 'planning' }
   | { kind: 'plan' }
+  /** Planning failed before the plan was approved; nothing can be approved. */
+  | { kind: 'planFailed'; error: string | null }
   | { kind: 'starting' }
   | { kind: 'importing' }
   | { kind: 'completed' }
@@ -586,7 +588,17 @@ export function importReviewPhase(
   return match(item.status)
     .returnType<ImportReviewPhase>()
     .with('pending', () =>
-      progress?.status === 'running' ? { kind: 'planning' } : { kind: 'plan' }
+      match(progress?.status ?? null)
+        .returnType<ImportReviewPhase>()
+        .with('running', () => ({ kind: 'planning' }))
+        .with('failed', () => ({
+          kind: 'planFailed',
+          error: progress?.error ?? null,
+        }))
+        .with('ready', 'importing', 'completed', 'dismissed', null, () => ({
+          kind: 'plan',
+        }))
+        .exhaustive()
     )
     .with('submitting', () => ({ kind: 'starting' }))
     .with('dismissed', () => ({ kind: 'dismissed' }))

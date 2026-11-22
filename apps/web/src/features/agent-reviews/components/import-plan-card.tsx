@@ -58,7 +58,9 @@ function PhaseStatus(props: {
   // Rebuild only when the phase changes, not on every progress tick.
   const kind = createMemo(() => props.phase.kind);
   const error = () =>
-    props.phase.kind === 'failed' || props.phase.kind === 'unknown'
+    props.phase.kind === 'failed' ||
+    props.phase.kind === 'unknown' ||
+    props.phase.kind === 'planFailed'
       ? props.phase.error
       : null;
   return (
@@ -105,6 +107,13 @@ function PhaseStatus(props: {
         .with('failed', () => (
           <p role="alert" class="text-sm text-failure">
             {error()}
+          </p>
+        ))
+        .with('planFailed', () => (
+          <p role="alert" class="text-sm text-failure">
+            {error()
+              ? `Couldn't plan the import: ${error()}`
+              : "Couldn't plan the import"}
           </p>
         ))
         .with('dismissed', () => (
@@ -264,6 +273,8 @@ function PlanContents(
   const running = () =>
     props.phase.kind === 'starting' || props.phase.kind === 'importing';
   const failures = () => props.progress?.failures ?? [];
+  // A failed plan has nothing to approve, so its summary and rows are hidden.
+  const planFailed = () => props.phase.kind === 'planFailed';
   return (
     <>
       <header class="flex min-w-0 flex-col gap-0.5">
@@ -282,14 +293,16 @@ function PlanContents(
         >
           <ActionDialogShell.Title>{props.title}</ActionDialogShell.Title>
         </Show>
-        <Show when={props.summary}>
+        <Show when={props.summary && !planFailed()}>
           <p class="text-xs text-ink-muted">{props.summary}</p>
         </Show>
         <Show when={(choosing() || planning()) && props.sharingSummary}>
           <p class="text-xs text-ink-muted">{props.sharingSummary}</p>
         </Show>
       </header>
-      <PlanTotals totals={props.totals} />
+      <Show when={!planFailed()}>
+        <PlanTotals totals={props.totals} />
+      </Show>
       <Show when={props.progress?.warnings?.length}>
         <ul aria-label="Import warnings" class="text-xs text-ink-muted">
           <For each={props.progress?.warnings}>
@@ -332,9 +345,9 @@ function PlanContents(
         </p>
       </Show>
       <Show
-        when={props.hasPlan}
+        when={props.hasPlan && !planFailed()}
         fallback={
-          <Show when={!planning()}>
+          <Show when={!planning() && !planFailed()}>
             <p class="text-xs text-ink-muted">
               {props.alreadyInMacro.length > 0
                 ? 'Everything shared by this source is already in Macro.'
