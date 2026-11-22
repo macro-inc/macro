@@ -1,0 +1,19 @@
+apps/web/src/features/routines/routine-detail.test.tsx
+  s_469178e7d0841d::t_92f55ce1918928 2,46-47,90-96,391,1056-1073
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d01707e17786fbb677abc877aadf9d3fb48c6715",
+  "prompts": {},
+  "sessions": {
+    "s_469178e7d0841d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "03e00d02-2073-4d8a-95c5-5b0e1b8f9396",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
