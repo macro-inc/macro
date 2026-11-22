@@ -8,7 +8,8 @@ import {
 
 /** Why a Soup list read REST instead of GraphQL, without any filter values. */
 export type SoupRestFallback = {
-  /** The translator's reason, e.g. `sort_method touched_by_me`. */
+  /** The translator's fixed reason, e.g. `sort_method touched_by_me`; it
+   * names filter keys but never their values. */
   reason: string;
   /** Sort, grouping, email view and filter targets of the request. */
   shape: string;
@@ -43,6 +44,23 @@ const SHAPE_KEYS = [
   'propf',
 ] as const;
 
+/** Mailbox views the server knows; any other string is reported as `other`. */
+const EMAIL_VIEWS = new Set([
+  'all',
+  'drafts',
+  'important',
+  'inbox',
+  'other',
+  'sent',
+  'spam',
+  'trash',
+]);
+
+function emailViewLabel(view: unknown): string {
+  if (view === undefined) return 'none';
+  return typeof view === 'string' && EMAIL_VIEWS.has(view) ? view : 'other';
+}
+
 /** A low-cardinality description of a Soup request, for grouping fallbacks. */
 export function soupQueryShape({
   params,
@@ -54,7 +72,7 @@ export function soupQueryShape({
   return [
     `sort=${params.sort_method ?? 'default'}`,
     `group=${groupBy?.type ?? 'none'}`,
-    `view=${typeof record.emailView === 'string' ? record.emailView : 'none'}`,
+    `view=${emailViewLabel(record.emailView)}`,
     `targets=${targets.join(',') || 'none'}`,
   ].join(' ');
 }
@@ -108,14 +126,15 @@ export async function traceSoupRestFallback<T>(
     'soup.fallback.kind': kind,
   };
   const logKey = `${fallback.reason}|${fallback.shape}`;
-  if (!loggedShapes.has(logKey) && loggedShapes.size < MAX_LOGGED_SHAPES) {
-    loggedShapes.add(logKey);
-    Telemetry.warn('soup.rest_fallback', attributes);
-  }
   return await Telemetry.span(
     'soup.rest_fallback',
     { kind: 'client', attributes },
     async (span) => {
+      // Logged before the first await, so the warning carries this span.
+      if (!loggedShapes.has(logKey) && loggedShapes.size < MAX_LOGGED_SHAPES) {
+        loggedShapes.add(logKey);
+        Telemetry.warn('soup.rest_fallback', attributes);
+      }
       try {
         return await read();
       } catch (error) {

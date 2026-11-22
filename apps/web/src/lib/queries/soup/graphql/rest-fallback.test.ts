@@ -44,6 +44,40 @@ it('names the reason and shape of an untranslatable request without values', () 
   expect(JSON.stringify(fallback)).not.toContain(SECRET_ID);
 });
 
+it.each([
+  ['document subType', { df: { l: { dst: SECRET_ID } } }],
+  ['file association', { df: { l: { fa: `assoc:${SECRET_ID}` } } }],
+  ['email view', { emailView: SECRET_ID }],
+  ['literal key', { calf: { l: { [SECRET_ID]: true } } }],
+])(
+  'keeps a rejected %s out of the fallback reason and shape',
+  (_case, body) => {
+    const fallback = soupRestFallback({
+      params: { limit: 10, sort_method: 'updated_at' },
+      body: body as never,
+    });
+    expect(fallback).toBeDefined();
+    expect(JSON.stringify(fallback)).not.toContain(SECRET_ID);
+  }
+);
+
+it('logs the fallback warning inside its span', async () => {
+  const order: string[] = [];
+  telemetry.span.mockImplementationOnce(async (_name, _options, operation) => {
+    order.push('span');
+    return await operation(fallbackSpan);
+  });
+  telemetry.warn.mockImplementationOnce(() => {
+    order.push('warn');
+  });
+  await traceSoupRestFallback(
+    { reason: 'sort_method frecency', shape: 'sort=frecency' },
+    'flat',
+    async () => 'page'
+  );
+  expect(order).toEqual(['span', 'warn']);
+});
+
 it('spans every fallback read and logs each shape once', async () => {
   const fallback = { reason: 'sort_method frecency', shape: 'sort=frecency' };
   await expect(
