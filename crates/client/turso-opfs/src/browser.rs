@@ -464,12 +464,12 @@ impl OpfsOwner {
     /// the marker names, and only while it still has the size and header the
     /// marker recorded: once the older build reset that identity (it resets a
     /// pair whose main file is missing), its WAL belongs to another database.
-    /// Returns whether this owner's pair is now complete; when it is not, the
-    /// moved main file cannot be opened safely and the caller discards it.
+    /// Without `previous`, that WAL is not read at all, since the older build
+    /// may be using it: the result is [`CompleteOutcome::LockNeeded`].
     pub async fn complete_adoption(
         &mut self,
         previous: Option<&PreviousLock>,
-    ) -> Result<bool, OpfsError> {
+    ) -> Result<CompleteOutcome, OpfsError> {
         let to = self.paths.clone();
         let previous = previous.map(|lock| (lock.identity.clone(), lock.paths.clone()));
         self.in_adoption_phase(complete_pair(to, previous)).await
@@ -479,12 +479,13 @@ impl OpfsOwner {
     /// identity `previous` locks, so the build that wrote them finds them where
     /// it left them, then removes the marker.
     ///
-    /// Only a self-contained database goes back: this owner's WAL must be
-    /// empty (a close checkpoints it), and the previous identity must have no
-    /// main file and at most an empty WAL. Anything else is
-    /// [`ReturnOutcome::Refused`] and nothing moves. The caller decides that
-    /// the files are still what the older build wrote; this method only moves
-    /// them.
+    /// Only a self-contained database goes back, in one rename: this owner's
+    /// WAL must be empty (a close checkpoints it), or the result is
+    /// [`ReturnOutcome::WalNotEmpty`]; and the previous identity must have no
+    /// main file and at most an empty WAL, or it is
+    /// [`ReturnOutcome::Occupied`]. Either way nothing moves. A pair that is
+    /// not whole here is an error. The caller decides that the files are still
+    /// what the older build wrote; this method only moves them.
     pub async fn return_adoption(
         &mut self,
         previous: &PreviousLock,
@@ -492,6 +493,27 @@ impl OpfsOwner {
         let to = self.paths.clone();
         let from = previous.paths.clone();
         self.in_adoption_phase(return_pair(to, from)).await
+    }
+
+    /// Counts one more attempt in the adoption marker beside this owner's
+    /// paths, read back as [`Adoption::attempts`]. The marker only grows by a
+    /// byte, so a stop during the write leaves the adoption it records intact.
+    /// Fails when there is no marker.
+    pub async fn record_attempt(&mut self) -> Result<(), OpfsError> {
+        let to = self.paths.clone();
+        self.in_adoption_phase(async move {
+            let root = adoption_root().await?;
+            let file = existing_file(&root, &marker_path(&to))
+                .await?
+                .ok_or_else(|| {
+                    OpfsError::new(
+                        OpfsErrorKind::Write,
+                        "no adoption marker to record an attempt in",
+                    )
+                })?;
+            append_attempt(&file, BusyDeadline::start()).await
+        })
+        .await
     }
 
     /// Removes the adoption marker beside this owner's paths, so the files here
@@ -552,6 +574,9 @@ pub struct Adoption {
     pub previous_identity: String,
     /// Which of the files moved.
     pub state: AdoptionState,
+    /// How many times [`OpfsOwner::record_attempt`] counted an attempt for
+    /// this adoption, up to `u8::MAX`.
+    pub attempts: u8,
 }
 
 /// Which files of an [`Adoption`] sit at the owner's paths.
@@ -564,15 +589,31 @@ pub enum AdoptionState {
     Split,
 }
 
+/// What [`OpfsOwner::complete_adoption`] found.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompleteOutcome {
+    /// Main file and WAL now sit at this owner's paths.
+    Completed,
+    /// The WAL that went with the moved main file is gone or was replaced, or
+    /// the adoption itself is gone, so the main file alone cannot be opened
+    /// safely.
+    WalLost,
+    /// The WAL is still at the previous identity, and moving it needs that
+    /// identity's lock, which the caller did not pass. Nothing was read there.
+    LockNeeded,
+}
+
 /// What [`OpfsOwner::return_adoption`] did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReturnOutcome {
     /// The database sits at the previous identity again, this owner's paths
     /// are empty and the marker is gone.
     Returned,
-    /// This owner's WAL was not empty, or the previous identity holds a
-    /// database again; nothing moved.
-    Refused,
+    /// The previous identity holds a database again; nothing moved.
+    Occupied,
+    /// This owner's WAL still holds frames, so the main file alone is not the
+    /// whole database; nothing moved.
+    WalNotEmpty,
 }
 
 /// An exclusive Web Lock on another identity, from
@@ -632,6 +673,10 @@ impl PreviousLock {
                 "Promise executor did not run synchronously",
             ));
         };
+        // Resolves `held` unless this request hands it to a `PreviousLock`, so
+        // a request dropped before it returns, or one that fails, lets the
+        // lock go as soon as the browser grants it.
+        let release = ReleaseOnDrop(Some(release));
         let callback = Closure::once_into_js(move |lock: JsValue| -> Promise {
             let acquired = !lock.is_null() && !lock.is_undefined();
             let _ = granted.call1(&JsValue::UNDEFINED, &JsValue::from_bool(acquired));
@@ -661,7 +706,7 @@ impl PreviousLock {
         Ok(Some(Self {
             identity,
             paths,
-            release: Some(release),
+            release: release.disarm(),
             settled: Some(settled),
         }))
     }
@@ -686,6 +731,23 @@ impl Drop for PreviousLock {
     fn drop(&mut self) {
         // Let the lock go without waiting; nothing here touches files.
         if let Some(release) = self.release.take() {
+            let _ = release.call0(&JsValue::UNDEFINED);
+        }
+    }
+}
+
+/// The resolver of a lock callback's promise, called on drop unless taken.
+struct ReleaseOnDrop(Option<Function>);
+
+impl ReleaseOnDrop {
+    fn disarm(mut self) -> Option<Function> {
+        self.0.take()
+    }
+}
+
+impl Drop for ReleaseOnDrop {
+    fn drop(&mut self) {
+        if let Some(release) = self.0.take() {
             let _ = release.call0(&JsValue::UNDEFINED);
         }
     }
@@ -807,6 +869,7 @@ async fn adopt_pair(
     let marker = Marker {
         previous_identity,
         wal: wal_fingerprint,
+        attempts: 0,
     };
     write_marker(&root, &to, &marker, deadline).await?;
     move_entry(&root, &main, to.get(FileRole::Main), deadline).await?;
@@ -863,26 +926,30 @@ async fn read_pending(to: Paths) -> Result<Option<Adoption>, OpfsError> {
         } else {
             AdoptionState::Split
         },
+        attempts: marker.attempts,
     }))
 }
 
-async fn complete_pair(to: Paths, previous: Option<(String, Paths)>) -> Result<bool, OpfsError> {
+async fn complete_pair(
+    to: Paths,
+    previous: Option<(String, Paths)>,
+) -> Result<CompleteOutcome, OpfsError> {
     let root = adoption_root().await?;
     let deadline = BusyDeadline::start();
     let Some(marker) = read_marker(&root, &to, deadline).await? else {
-        return Ok(false);
+        return Ok(CompleteOutcome::WalLost);
     };
     match present_files(&root, &to).await? {
-        [Some(_), Some(_)] => return Ok(true),
+        [Some(_), Some(_)] => return Ok(CompleteOutcome::Completed),
         [Some(_), None] => {}
-        [None, _] => return Ok(false),
+        [None, _] => return Ok(CompleteOutcome::WalLost),
     }
     if marker.wal.size == 0 {
         create_empty(&root, to.get(FileRole::Wal)).await?;
-        return Ok(true);
+        return Ok(CompleteOutcome::Completed);
     }
     let Some((identity, from)) = previous else {
-        return Ok(false);
+        return Ok(CompleteOutcome::LockNeeded);
     };
     if identity != marker.previous_identity {
         return Err(OpfsError::new(
@@ -891,33 +958,36 @@ async fn complete_pair(to: Paths, previous: Option<(String, Paths)>) -> Result<b
         ));
     }
     let Some(wal) = existing_file(&root, from.get(FileRole::Wal)).await? else {
-        return Ok(false);
+        return Ok(CompleteOutcome::WalLost);
     };
     let (size, header) = file_prefix(&wal, WAL_HEADER_LEN, deadline).await?;
     if size != marker.wal.size || header != marker.wal.header {
-        return Ok(false);
+        return Ok(CompleteOutcome::WalLost);
     }
     move_entry(&root, &wal, to.get(FileRole::Wal), deadline).await?;
-    Ok(true)
+    Ok(CompleteOutcome::Completed)
 }
 
 async fn return_pair(to: Paths, from: Paths) -> Result<ReturnOutcome, OpfsError> {
     let root = adoption_root().await?;
     let deadline = BusyDeadline::start();
     let [Some(main), Some(wal)] = present_files(&root, &to).await? else {
-        return Ok(ReturnOutcome::Refused);
+        return Err(OpfsError::new(
+            OpfsErrorKind::Move,
+            "this owner has no whole pair to return",
+        ));
     };
     if file_prefix(&wal, 0, deadline).await?.0 != 0 {
-        return Ok(ReturnOutcome::Refused);
+        return Ok(ReturnOutcome::WalNotEmpty);
     }
     let [previous_main, previous_wal] = present_files(&root, &from).await?;
     if previous_main.is_some() {
-        return Ok(ReturnOutcome::Refused);
+        return Ok(ReturnOutcome::Occupied);
     }
     match previous_wal {
         Some(previous_wal) => {
             if file_prefix(&previous_wal, 0, deadline).await?.0 != 0 {
-                return Ok(ReturnOutcome::Refused);
+                return Ok(ReturnOutcome::Occupied);
             }
         }
         // The pair is whole the moment the main file arrives.
@@ -954,7 +1024,8 @@ struct WalFingerprint {
 enum PairHeaders {
     /// Both files are empty: the pair never held a database.
     Empty,
-    /// Each non-empty file has a header Turso opens, with matching page sizes.
+    /// Each non-empty file has a header Turso opens, with matching page sizes,
+    /// and a non-empty main file holds whole pages and a readable first page.
     Readable(WalFingerprint),
     /// A non-empty file has a header Turso rejects.
     Unreadable,
@@ -967,12 +1038,15 @@ async fn pair_headers(
     wal: &FileSystemFileHandle,
     deadline: BusyDeadline,
 ) -> Result<PairHeaders, OpfsError> {
-    let (main_size, main_head) = file_prefix(main, DATABASE_HEADER_LEN, deadline).await?;
+    let (main_size, main_head) = file_prefix(main, DATABASE_HEADER_LEN + 1, deadline).await?;
     let (wal_size, wal_head) = file_prefix(wal, WAL_HEADER_LEN, deadline).await?;
     if main_size == 0 && wal_size == 0 {
         return Ok(PairHeaders::Empty);
     }
-    let main_page = (main_size > 0).then(|| database_page_size(&main_head));
+    let main_page = (main_size > 0).then(|| {
+        database_page_size(&main_head)
+            .filter(|&page| first_page_readable(main_size, &main_head, page))
+    });
     let wal_page = (wal_size > 0).then(|| wal_page_size(&wal_head));
     let readable = match (main_page, wal_page) {
         (Some(None), _) | (_, Some(None)) | (None, None) => false,
@@ -1046,6 +1120,16 @@ fn database_page_size(header: &[u8]) -> Option<u32> {
     .then_some(page_size)
 }
 
+/// Whether a database file of `size` bytes, starting with `head`, holds whole
+/// pages of `page_size` and a first page Turso reads as a table b-tree page
+/// (interior or leaf), as its open and first schema read require.
+fn first_page_readable(size: u64, head: &[u8], page_size: u32) -> bool {
+    let page_size = u64::from(page_size);
+    size >= page_size
+        && size.is_multiple_of(page_size)
+        && matches!(head.get(DATABASE_HEADER_LEN), Some(0x05 | 0x0d))
+}
+
 /// The page size of a WAL header Turso opens: a whole header, magic, format
 /// version and a valid page size.
 fn wal_page_size(header: &[u8]) -> Option<u32> {
@@ -1095,21 +1179,24 @@ fn read_prefix(handle: &FileSystemSyncAccessHandle, len: usize) -> Result<(u64, 
 const ADOPTION_MARKER_SUFFIX: &str = "-adopting";
 /// The first bytes of every marker, so no other file reads as one.
 const MARKER_MAGIC: &[u8] = b"turso-opfs adoption v1\n";
-/// A marker holds one identity and a WAL header; anything longer was not
-/// written here.
+/// A marker holds one identity, a WAL header and a byte per attempt; anything
+/// longer was not written here.
 const MAX_MARKER_BYTES: usize = 4096;
+/// Appended to a marker for each attempt [`OpfsOwner::record_attempt`] counts.
+const ATTEMPT_BYTE: u8 = b'+';
 
-/// What a marker records: where the files came from, and the WAL that went
-/// with the main file.
+/// What a marker records: where the files came from, the WAL that went with
+/// the main file, and how many attempts were counted since.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Marker {
     previous_identity: String,
     wal: WalFingerprint,
+    attempts: u8,
 }
 
 impl Marker {
     /// Magic, identity length (u16) and bytes, WAL size (u64), header length
-    /// (u8) and bytes, all big-endian.
+    /// (u8) and bytes, all big-endian, then one byte per attempt.
     fn encode(&self) -> Option<Vec<u8>> {
         let identity = self.previous_identity.as_bytes();
         let identity_len = u16::try_from(identity.len()).ok()?;
@@ -1120,30 +1207,62 @@ impl Marker {
         bytes.extend_from_slice(&self.wal.size.to_be_bytes());
         bytes.push(header_len);
         bytes.extend_from_slice(&self.wal.header);
+        bytes.extend(std::iter::repeat_n(
+            ATTEMPT_BYTE,
+            usize::from(self.attempts),
+        ));
         (bytes.len() <= MAX_MARKER_BYTES).then_some(bytes)
     }
 
-    /// The marker `bytes` hold exactly, or `None` for anything else.
+    /// The marker `bytes` hold, or `None` when they do not hold one exactly.
+    /// Every byte after the WAL header counts as an attempt, whatever its
+    /// value, so an append cut short never makes the marker unreadable.
     fn decode(bytes: &[u8]) -> Option<Self> {
         let rest = bytes.strip_prefix(MARKER_MAGIC)?;
         let (identity_len, rest) = rest.split_first_chunk::<2>()?;
         let (identity, rest) =
             rest.split_at_checked(usize::from(u16::from_be_bytes(*identity_len)))?;
         let (size, rest) = rest.split_first_chunk::<8>()?;
-        let (header_len, header) = rest.split_first()?;
+        let (header_len, rest) = rest.split_first()?;
+        let (header, attempts) = rest.split_at_checked(usize::from(*header_len))?;
         let wal = WalFingerprint {
             size: u64::from_be_bytes(*size),
             header: header.to_vec(),
         };
-        let valid_header = header.len() == usize::from(*header_len)
-            && header.len() <= WAL_HEADER_LEN
+        let valid_header = header.len() <= WAL_HEADER_LEN
             && u64::try_from(header.len()).ok() == Some(wal.size.min(WAL_HEADER_LEN as u64));
         valid_header.then_some(())?;
         Some(Self {
             previous_identity: String::from_utf8(identity.to_vec()).ok()?,
             wal,
+            attempts: u8::try_from(attempts.len()).unwrap_or(u8::MAX),
         })
     }
+}
+
+/// Appends one [`ATTEMPT_BYTE`] to the marker `file` and flushes it.
+async fn append_attempt(
+    file: &FileSystemFileHandle,
+    deadline: BusyDeadline,
+) -> Result<(), OpfsError> {
+    let handle = retry_busy_entry(deadline, || file.create_sync_access_handle())
+        .await
+        .and_then(|value| value.dyn_into::<FileSystemSyncAccessHandle>())
+        .map_err(|error| entry_error(OpfsErrorKind::Write, "OPFS marker open", &error))?;
+    let written = append_byte(&handle, ATTEMPT_BYTE);
+    let closed = close_sync_handle(&handle);
+    written.map_err(|error| js_error(OpfsErrorKind::Write, "OPFS marker append", &error))?;
+    closed.map_err(|error| js_error(OpfsErrorKind::Write, "OPFS marker close", &error))
+}
+
+fn append_byte(handle: &FileSystemSyncAccessHandle, byte: u8) -> Result<(), JsValue> {
+    let options = FileSystemReadWriteOptions::new();
+    options.set_at(handle.get_size()?);
+    let written = handle.write_with_u8_array_and_options(&[byte], &options)?;
+    if written as usize != 1 {
+        return Err(JsValue::from_str("short OPFS marker append"));
+    }
+    handle.flush()
 }
 
 fn marker_path(paths: &Paths) -> String {

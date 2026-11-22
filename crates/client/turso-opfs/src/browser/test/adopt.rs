@@ -187,6 +187,22 @@ fn database_header(page_size: u16, edit: impl FnOnce(&mut [u8])) -> Vec<u8> {
     header
 }
 
+/// A whole first database page Turso opens: [`database_header`] with the page
+/// size field `page_size` (1 for 65536), a leaf table b-tree page type, and
+/// zeros to the end of the page, after `edit`.
+fn database_page(page_size: u16, edit: impl FnOnce(&mut Vec<u8>)) -> Vec<u8> {
+    let len = if page_size == 1 {
+        65_536
+    } else {
+        usize::from(page_size)
+    };
+    let mut page = database_header(page_size, |_| {});
+    page.resize(len, 0);
+    page[DATABASE_HEADER_LEN] = 0x0d;
+    edit(&mut page);
+    page
+}
+
 /// A WAL header Turso opens, with `page_size` and `salt`, after `edit`.
 fn wal_header(page_size: u32, salt: u32, edit: impl FnOnce(&mut [u8])) -> Vec<u8> {
     let mut header = vec![0_u8; WAL_HEADER_LEN];
@@ -232,7 +248,7 @@ async fn read_adoption(new: &str) -> Option<Adoption> {
 }
 
 /// Completes a split adoption into `new`, holding `old`'s lock when `locked`.
-async fn complete(old: &str, new: &str, locked: bool) -> bool {
+async fn complete(old: &str, new: &str, locked: bool) -> CompleteOutcome {
     let mut owner = OpfsOwner::acquire(new).await.expect("owner");
     let lock = if locked {
         owner.lock_previous(old).await.expect("lock")
@@ -289,6 +305,7 @@ async fn adopting_moves_the_complete_pair_and_keeps_its_rows() {
             Some(Adoption {
                 previous_identity: old.clone(),
                 state: AdoptionState::Complete,
+                attempts: 0,
             })
         );
         assert_eq!(open_and_finish(&new).await, if live_wal { 41 } else { 42 });
@@ -395,7 +412,7 @@ async fn adopting_never_overwrites_or_moves_an_incomplete_pair() {
 
 #[wasm_bindgen_test]
 async fn a_pair_turso_would_not_open_stays_where_it_is() {
-    let main = database_header(4096, |_| {});
+    let main = database_page(4096, |_| {});
     let wal = wal_header(4096, 7, |_| {});
     let not_a_wal = vec![b'x'; WAL_HEADER_LEN];
     let cases: Vec<(&str, Vec<u8>, Vec<u8>)> = vec![
@@ -442,6 +459,26 @@ async fn a_pair_turso_would_not_open_stays_where_it_is() {
             database_header(4096, |h| h[56..60].copy_from_slice(&2_u32.to_be_bytes())),
             Vec::new(),
         ),
+        (
+            "main not a whole page",
+            database_page(4096, |p| p.truncate(DATABASE_HEADER_LEN + 1)),
+            Vec::new(),
+        ),
+        (
+            "main not whole pages",
+            database_page(4096, |p| p.push(0)),
+            Vec::new(),
+        ),
+        (
+            "first page type",
+            database_page(4096, |p| p[DATABASE_HEADER_LEN] = 0),
+            wal.clone(),
+        ),
+        (
+            "first page an index page",
+            database_page(4096, |p| p[DATABASE_HEADER_LEN] = 0x0a),
+            Vec::new(),
+        ),
         ("WAL magic", Vec::new(), not_a_wal),
         (
             "WAL shorter than its header",
@@ -486,18 +523,26 @@ async fn a_pair_turso_would_not_open_stays_where_it_is() {
         ("4096", main.clone(), wal.clone()),
         (
             "65536",
-            database_header(1, |_| {}),
+            database_page(1, |_| {}),
             wal_header(65_536, 7, |_| {}),
         ),
         (
             "version 1",
-            database_header(512, |h| h[18..20].copy_from_slice(&[1, 1])),
+            database_page(512, |p| p[18..20].copy_from_slice(&[1, 1])),
             Vec::new(),
         ),
         (
             "unset encoding",
-            database_header(4096, |h| h[56..60].fill(0)),
+            database_page(4096, |p| p[56..60].fill(0)),
             wal.clone(),
+        ),
+        (
+            "interior first page, two pages",
+            database_page(4096, |p| {
+                p[DATABASE_HEADER_LEN] = 0x05;
+                p.resize(2 * 4096, 0);
+            }),
+            Vec::new(),
         ),
         (
             "WAL alone",
@@ -527,6 +572,7 @@ fn a_marker_reads_back_only_as_written() {
             size: 4096 + 32,
             header: wal_header(4096, 9, |_| {}),
         },
+        attempts: 0,
     };
     let bytes = marker.encode().expect("encode");
     assert_eq!(Marker::decode(&bytes), Some(marker.clone()));
@@ -543,10 +589,22 @@ fn a_marker_reads_back_only_as_written() {
     );
 
     assert_eq!(Marker::decode(&bytes[..bytes.len() - 1]), None, "cut short");
+    // Every byte after the WAL header counts as an attempt, whatever its
+    // value, so an append cut short still reads.
+    let tried = Marker {
+        attempts: 2,
+        ..marker.clone()
+    };
+    let tried_bytes = tried.encode().expect("encode");
+    assert_eq!(tried_bytes.len(), bytes.len() + 2);
+    assert_eq!(Marker::decode(&tried_bytes), Some(tried));
     assert_eq!(
-        Marker::decode(&[bytes.as_slice(), b"x"].concat()),
-        None,
-        "extra byte"
+        Marker::decode(&[bytes.as_slice(), b"\0"].concat()),
+        Some(Marker {
+            attempts: 1,
+            ..marker.clone()
+        }),
+        "a byte of any value"
     );
     assert_eq!(Marker::decode(b""), None, "empty");
     let mut wrong_magic = bytes.clone();
@@ -602,9 +660,13 @@ async fn a_split_adoption_completes_only_with_the_wal_it_recorded() {
         Some(Adoption {
             previous_identity: old.clone(),
             state: AdoptionState::Split,
+            attempts: 0,
         })
     );
-    assert!(complete(&old, &new, false).await);
+    assert_eq!(
+        complete(&old, &new, false).await,
+        CompleteOutcome::Completed
+    );
     assert_eq!(present(&new).await, [true, true]);
     assert_eq!(
         read_adoption(&new).await.map(|adoption| adoption.state),
@@ -622,17 +684,29 @@ async fn a_split_adoption_completes_only_with_the_wal_it_recorded() {
     let wal_name = format!("{old}-wal");
     let wal = read_file(&wal_name).await.expect("WAL");
     adopt_and_stop(&old, &new).await;
-    assert!(!complete(&old, &new, false).await, "no lock");
+    assert_eq!(
+        complete(&old, &new, false).await,
+        CompleteOutcome::LockNeeded,
+        "no lock"
+    );
     let mut reset = wal.clone();
     reset[16] ^= 1;
     write_file(&wal_name, &reset).await;
-    assert!(!complete(&old, &new, true).await, "new salts");
+    assert_eq!(
+        complete(&old, &new, true).await,
+        CompleteOutcome::WalLost,
+        "new salts"
+    );
     write_file(&wal_name, &wal[..wal.len() - 1]).await;
-    assert!(!complete(&old, &new, true).await, "another size");
+    assert_eq!(
+        complete(&old, &new, true).await,
+        CompleteOutcome::WalLost,
+        "another size"
+    );
     write_file(&wal_name, &wal).await;
     // Nothing moved while it was refused.
     assert_eq!(present(&new).await, [true, false]);
-    assert!(complete(&old, &new, true).await);
+    assert_eq!(complete(&old, &new, true).await, CompleteOutcome::Completed);
     assert_eq!(present(&old).await, [false, false]);
     assert_eq!(read_file(&format!("{new}-wal")).await, Some(wal));
     assert_eq!(open_and_finish(&new).await, 8);
@@ -674,6 +748,7 @@ async fn stale_and_malformed_markers_read_as_no_adoption() {
                 size: 0,
                 header: Vec::new(),
             },
+            attempts: 0,
         }
         .encode()
         .expect("encode")
@@ -713,7 +788,10 @@ async fn files_that_never_opened_go_back_to_the_older_identity() {
         clean_pair(&new).await;
         if split {
             adopt_and_stop(&old, &new).await;
-            assert!(complete(&old, &new, false).await);
+            assert_eq!(
+                complete(&old, &new, false).await,
+                CompleteOutcome::Completed
+            );
         } else {
             assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
         }
@@ -724,20 +802,6 @@ async fn files_that_never_opened_go_back_to_the_older_identity() {
         assert_eq!(read_pair(&old).await, 11);
         clean_pair(&old).await;
     }
-
-    // A recovery removes the marker before it probes the files, then returns
-    // them without one.
-    let (old, new) = identities("return-unmarked");
-    write_pair(&old, 12).await;
-    clean_pair(&new).await;
-    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
-    let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
-    owner.discard_adoption().await.expect("discard");
-    owner.release().await.expect("release");
-    assert!(!marker_exists(&new).await);
-    assert_eq!(give_back(&old, &new).await, ReturnOutcome::Returned);
-    assert_eq!(read_pair(&old).await, 12);
-    clean_pair(&old).await;
 }
 
 #[wasm_bindgen_test]
@@ -747,7 +811,7 @@ async fn a_return_moves_nothing_unless_the_database_is_self_contained() {
     write_pair_with_live_wal(&old, 13).await;
     clean_pair(&new).await;
     assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
-    assert_eq!(give_back(&old, &new).await, ReturnOutcome::Refused);
+    assert_eq!(give_back(&old, &new).await, ReturnOutcome::WalNotEmpty);
     assert_eq!(present(&new).await, [true, true]);
     assert_eq!(present(&old).await, [false, false]);
     assert!(marker_exists(&new).await);
@@ -760,7 +824,7 @@ async fn a_return_moves_nothing_unless_the_database_is_self_contained() {
     clean_pair(&new).await;
     assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
     write_pair(&old, 15).await;
-    assert_eq!(give_back(&old, &new).await, ReturnOutcome::Refused);
+    assert_eq!(give_back(&old, &new).await, ReturnOutcome::Occupied);
     assert_eq!(read_pair(&old).await, 15);
     assert_eq!(present(&new).await, [true, true]);
     clean_pair(&old).await;
@@ -772,7 +836,7 @@ async fn a_return_moves_nothing_unless_the_database_is_self_contained() {
     clean_pair(&new).await;
     assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
     write_file(&format!("{old}-wal"), &wal_header(4096, 3, |_| {})).await;
-    assert_eq!(give_back(&old, &new).await, ReturnOutcome::Refused);
+    assert_eq!(give_back(&old, &new).await, ReturnOutcome::Occupied);
     assert_eq!(present(&new).await, [true, true]);
     clean_pair(&old).await;
     clean_pair(&new).await;
@@ -828,4 +892,112 @@ async fn discarding_or_wiping_ends_the_adoption() {
     owner.remove_and_release().await.expect("remove");
     assert_eq!(read_adoption(&new).await, None);
     assert_eq!(present(&new).await, [false, false]);
+}
+
+#[wasm_bindgen_test]
+async fn attempts_are_counted_in_the_marker_until_the_adoption_ends() {
+    let (old, new) = identities("attempts");
+    write_pair(&old, 20).await;
+    clean_pair(&new).await;
+    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
+    let written = read_file(&marker_name(&new)).await.expect("marker");
+    let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
+    for counted in 1..=3 {
+        owner.record_attempt().await.expect("record attempt");
+        assert_eq!(
+            owner.read_adoption().await.expect("read"),
+            Some(Adoption {
+                previous_identity: old.clone(),
+                state: AdoptionState::Complete,
+                attempts: counted,
+            })
+        );
+    }
+    owner.release().await.expect("release");
+    // The adoption as written is untouched: each attempt is one more byte.
+    let counted = read_file(&marker_name(&new)).await.expect("marker");
+    assert_eq!(counted.len(), written.len() + 3);
+    assert_eq!(&counted[..written.len()], written.as_slice());
+    assert_eq!(open_and_finish(&new).await, 20);
+
+    // Nothing to count once the adoption ended.
+    let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
+    assert_eq!(
+        owner.record_attempt().await.map_err(|error| error.kind()),
+        Err(OpfsErrorKind::Write)
+    );
+    assert!(!marker_exists(&new).await);
+    owner.release().await.expect("release");
+    clean_pair(&new).await;
+}
+
+#[wasm_bindgen_test]
+async fn a_return_without_a_whole_pair_here_is_an_error() {
+    let (old, new) = identities("return-split-pair");
+    write_pair_with_live_wal(&old, 21).await;
+    clean_pair(&new).await;
+    adopt_and_stop(&old, &new).await;
+    let mut owner = OpfsOwner::acquire(&new).await.expect("owner");
+    let lock = owner
+        .lock_previous(&old)
+        .await
+        .expect("lock")
+        .expect("free");
+    assert_eq!(
+        owner
+            .return_adoption(&lock)
+            .await
+            .map_err(|error| error.kind()),
+        Err(OpfsErrorKind::Move)
+    );
+    lock.release().await.expect("release previous");
+    owner.release().await.expect("release");
+    // Nothing moved: the split still completes.
+    assert_eq!(present(&new).await, [true, false]);
+    assert_eq!(present(&old).await, [false, true]);
+    assert_eq!(complete(&old, &new, true).await, CompleteOutcome::Completed);
+    assert_eq!(open_and_finish(&new).await, 21);
+    clean_pair(&new).await;
+}
+
+/// Whether a context that waits for `lock_name` gets it within `ms`.
+async fn lock_granted_within(lock_name: &str, ms: u32) -> bool {
+    let race = Function::new_with_args(
+        "name, ms",
+        "return new Promise((resolve) => {
+          const timer = setTimeout(() => resolve(false), ms);
+          navigator.locks.request(name, { mode: 'exclusive' }, () => {
+            clearTimeout(timer);
+            resolve(true);
+          });
+        });",
+    );
+    let promise = race
+        .call2(
+            &JsValue::UNDEFINED,
+            &JsValue::from_str(lock_name),
+            &JsValue::from(ms),
+        )
+        .expect("lock race")
+        .dyn_into::<Promise>()
+        .expect("lock race promise");
+    JsFuture::from(promise)
+        .await
+        .expect("lock race settles")
+        .as_bool()
+        .expect("lock race is boolean")
+}
+
+#[wasm_bindgen_test]
+async fn a_lock_request_dropped_before_it_returns_lets_the_lock_go() {
+    let (old, new) = identities("lock-dropped");
+    let owner = OpfsOwner::acquire(&new).await.expect("owner");
+    {
+        let request = std::pin::pin!(owner.lock_previous(&old));
+        assert!(poll_once(request).is_pending());
+    }
+    // The browser grants the request after it was dropped; the grant ends at
+    // once instead of holding the older build out until this worker ends.
+    assert!(lock_granted_within(&owner_lock_name(&old), 2_000).await);
+    owner.release().await.expect("release");
 }

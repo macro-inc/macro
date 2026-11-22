@@ -293,6 +293,21 @@ pub mod test_hooks {
         }))
     }
 
+    /// Removes the row that says which storage version wrote this database,
+    /// so no open can tell, and the next open of it must reset it.
+    pub fn forget_storage_version(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
+        storage.require_healthy()?;
+        let connection = storage.connection();
+        storage.latch_result(driver::write_transaction(&connection, || {
+            driver::execute(
+                &connection,
+                "DELETE FROM meta WHERE key = 'storage_schema_version'",
+                Vec::new(),
+            )?;
+            Ok(())
+        }))
+    }
+
     thread_local! {
         static STOP_AFTER: Cell<Option<u32>> = const { Cell::new(None) };
         static STOPPED: Cell<bool> = const { Cell::new(false) };
