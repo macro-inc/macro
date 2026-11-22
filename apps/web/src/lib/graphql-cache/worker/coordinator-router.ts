@@ -287,9 +287,10 @@ export class CoordinatorRouter {
    * only copy of an older build's queue, so this scope is never given up. */
   private movedFilesKept = false;
   /** Whether an open that may have reached storage ended without saying
-   * what it did there: a watchdog, a lost tab or worker, a fatal error. It
-   * may have kept moved files no report named, so until an open that reaches
-   * storage reports, or one succeeds, this scope is not given up either. */
+   * what it did there: a watchdog, a lost tab or worker, a fatal error, a
+   * rejected readiness proof. It may have kept moved files no report named, so
+   * until an open that reaches storage reports (a busy exit says nothing), or
+   * one succeeds, this scope is not given up either. */
   private storageOutcomeUnknown = false;
   /** Whether a retry cycle already ended in a deferral since the last
    * accepted readiness. Each later registration then gets one recovery
@@ -722,6 +723,7 @@ export class CoordinatorRouter {
         );
         break;
       case 'engine-ready': {
+        const before = core.state;
         const actions = core.engineReady({
           ...message,
           expectedOwnerLockName: databaseOwnerLockName(core.scope),
@@ -769,6 +771,16 @@ export class CoordinatorRouter {
           );
           if (pendingReason !== undefined)
             this.nextRecoveryResetReason = pendingReason;
+          if (
+            before.kind === 'activating' &&
+            before.tabId === route.tabId &&
+            before.ownerEpoch === message.ownerEpoch
+          ) {
+            // The open reached storage, and nothing it says can be trusted
+            // about the files it may have kept.
+            this.noteOpenEnded(before, undefined);
+            this.activationStarted.delete(message.ownerEpoch);
+          }
         }
         this.applyActions(actions);
         if (violated) {

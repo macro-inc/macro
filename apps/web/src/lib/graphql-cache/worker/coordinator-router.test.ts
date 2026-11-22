@@ -877,7 +877,7 @@ describe('CoordinatorRouter', () => {
    * then fails every recovery before storage once the first one reached it
    * only if `firstRecoveryReachesStorage`. */
   const endOpenUnreported = async (
-    ending: 'watchdog' | 'fatal error',
+    ending: 'watchdog' | 'fatal error' | 'rejected readiness proof',
     firstRecoveryReachesStorage: boolean
   ) => {
     vi.useFakeTimers();
@@ -900,7 +900,7 @@ describe('CoordinatorRouter', () => {
           reason: 'engine database opening watchdog timed out',
         })
       );
-    } else {
+    } else if (ending === 'fatal error') {
       opening.receive({
         ...version,
         kind: 'engine-fatal',
@@ -909,6 +909,8 @@ describe('CoordinatorRouter', () => {
         reason: 'cache engine worker crashed',
         fatalCode: 'runtime-failure',
       });
+    } else {
+      ready(opening, 'tab-a', 1, 'opened-existing', 'reset-storage-uncertain');
     }
     for (let epoch = 2; epoch <= 1 + RECOVERY_RETRIES; epoch += 1) {
       await vi.advanceTimersByTimeAsync(1_000);
@@ -943,7 +945,7 @@ describe('CoordinatorRouter', () => {
     return { router, tab };
   };
 
-  it.each(['watchdog', 'fatal error'] as const)(
+  it.each(['watchdog', 'fatal error', 'rejected readiness proof'] as const)(
     'keeps the scope when a %s ended an open before it reported',
     async (ending) => {
       // The open may have kept files an upgrade moved here and never said
