@@ -11,7 +11,7 @@ export default defineConfig(async (env) =>
   mergeConfig(await appConfig(env), {
     cacheDir: `${directory}.vite`,
     optimizeDeps: {
-      entries: ['src/features/database/browser-test/grid.html'],
+      entries: ['src/features/database/browser-test/*.html'],
     },
   })
 );

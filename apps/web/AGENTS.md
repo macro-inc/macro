@@ -748,6 +748,11 @@ controls. CI runs it when
 cut `Gantt.BarTitle` (or the label itself overflowing) counts as a cramped bar,
 so wrap a bar's title in it.
 
+The record panel has a desktop/phone regression in the same suite,
+`record.browser.e2e.ts`: every related record's chip and every property name
+shows in full. The panel passes `wrap` to relation fields, so their chips wrap
+onto more lines instead of clipping, and property names wrap under their icon.
+
 Column renames have a backend-free desktop/phone regression using the real
 schema query and mutation adapter with delayed service responses:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts rename.browser.e2e.ts`.
