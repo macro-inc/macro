@@ -1151,7 +1151,7 @@ fn system_prompt(
     // kind (every routine draft) the same instructions, so they join the
     // cached shared block and are read back across sessions.
     if delivery == ReplyDelivery::Unseen {
-        prompt.push_shared(PromptSection::Preamble, unseen::PROMPT);
+        prompt.push_shared(PromptSection::Preamble, unseen::prompt(kind));
         if let Some(identity) = &identity {
             prompt.push_shared(PromptSection::Identity, identity);
         }

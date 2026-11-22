@@ -98,7 +98,8 @@ runs on `ReplyDelivery::Unseen` (the harness's `reply_delivery`); an accepted
 suggestion's run, opened without any, still streams. An unseen turn reads
 `outbound/rig_engine/unseen.md` as its shared prompt, followed by those
 instructions, so every session of its kind reads them back from the prompt
-cache. It gets no picked documentation (`routes_documentation`), opener,
+cache; a dialect turn reads its dialect form (`unseen::DIALECT_PROMPT`: the
+same rules with `unseen_dialect.md` as its code-mode section). It gets no picked documentation (`routes_documentation`), opener,
 skills or `<agent_session>` block, runs at low effort where its model takes
 one (`unseen_effort`), and has only code mode's three tools plus
 `ReadToolResult` (`unseen::CodeModeOnly`), `ExecuteCode` without its reviews

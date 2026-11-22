@@ -1017,3 +1017,51 @@ fn the_session_preamble_follows_the_turns_code_mode_kind() {
     assert!(dialect.contains(prompt::dialect::agent_session_prompt()));
     assert!(!dialect.contains("macro.connectedApps"));
 }
+
+/// An unseen dialect turn (a routine draft whose owner has agent
+/// permissions) is taught the dialect: no TypeScript SDK call, its own
+/// operations. A TypeScript one keeps today's prompt.
+#[test]
+fn an_unseen_dialect_turn_is_taught_only_the_dialect() {
+    let text = system_prompt(
+        agent_code_mode::domain::CodeModeKind::Dialect,
+        &TOOLS,
+        AgentSessionId::new(),
+        ReplyDelivery::Unseen,
+        None,
+        Some("draft routines"),
+        None,
+    )
+    .to_string();
+    let sdk_calls: Vec<&str> = text
+        .match_indices("macro.")
+        .map(|(index, _)| &text[index..(index + 24).min(text.len())])
+        .filter(|call| {
+            let rest = &call["macro.".len()..];
+            rest.starts_with(|c: char| c.is_ascii_lowercase()) && !rest.starts_with("com")
+        })
+        .collect();
+    assert_eq!(sdk_calls, Vec::<&str>::new());
+    for marker in ["entity index", "SDK objects"] {
+        assert!(!text.contains(marker), "{marker}");
+    }
+    assert!(text.contains("tools.<service>.<operation>"));
+    assert!(text.contains("tools.storage.post_items_soup_ast"));
+    assert!(text.starts_with(&unseen::PROMPT[..unseen::PROMPT.find("# About Macro").unwrap()]));
+    assert!(text.contains("<session_instructions>\ndraft routines\n</session_instructions>"));
+    for (from, _) in unseen::DIALECT_SWAPS {
+        assert!(unseen::PROMPT.contains(from), "{from}");
+    }
+
+    let typescript = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
+        &TOOLS,
+        AgentSessionId::new(),
+        ReplyDelivery::Unseen,
+        None,
+        None,
+        None,
+    )
+    .to_string();
+    assert_eq!(typescript, unseen::PROMPT);
+}
