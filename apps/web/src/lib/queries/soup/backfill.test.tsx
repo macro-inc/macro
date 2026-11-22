@@ -406,6 +406,30 @@ describe('runSoupBackfills', () => {
     }
   );
 
+  it('reads every page of the channel lane from the primary', async () => {
+    const fetchPage = vi.fn(async (_input: FetchInput) => ({
+      nextCursor:
+        fetchPage.mock.calls.length < 3
+          ? `page-${fetchPage.mock.calls.length + 1}`
+          : null,
+    }));
+    await Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, {
+        ...CHANNEL_SOUP_BACKFILL_LANE,
+        createFetchPage: async () => fetchPage,
+        pageDelayMs: 0,
+      })
+    );
+    // The cursor does not carry it, so a continuation without it would
+    // read the rest of the pass from the replica.
+    expect(
+      fetchPage.mock.calls.map(
+        ([input]) =>
+          input.initial?.channelReads ?? input.continuation?.channelReads
+      )
+    ).toEqual(['PRIMARY', 'PRIMARY', 'PRIMARY']);
+  });
+
   it('bounds Shared mail to either recency window in one scan', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime('2026-10-06T12:00:00.000Z');

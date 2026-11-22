@@ -686,6 +686,14 @@ describe('fetchJoinedChannels', () => {
       '2',
       '4',
     ]);
+    // The cursor does not carry where channels are read: every page asks
+    // for the primary, or the pass after the first page reads the replica.
+    expect(
+      network.inputs.map(
+        (input) =>
+          input.initial?.channelReads ?? input.continuation?.channelReads
+      )
+    ).toEqual(['PRIMARY', 'PRIMARY', 'PRIMARY']);
   });
 
   it('keeps one copy of a channel that two pages return', async () => {

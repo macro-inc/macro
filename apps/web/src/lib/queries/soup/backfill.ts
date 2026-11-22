@@ -521,6 +521,10 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
             cursor: checkpoint.nextCursor,
             expand: passInput.expand,
             emailView: passInput.emailView,
+            // The cursor does not carry where channels are read.
+            ...(passInput.channelReads
+              ? { channelReads: passInput.channelReads }
+              : {}),
           },
         }
       : { initial: passInput };

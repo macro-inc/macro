@@ -20,6 +20,10 @@ export const CHANNEL_DIRECTORY_INPUT: GraphqlSoupInitialInput = {
   // yet could move ahead of its cursor and be skipped.
   sortMethod: 'CREATED_AT',
   emailView: 'ALL',
+  // The channels as the REST channel list reads them, on the primary: a
+  // replica that lags a join or a leave would put back a stale membership.
+  // The cursor does not carry it, so every continuation sends it again.
+  channelReads: 'PRIMARY',
   filters: {
     calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
     documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },

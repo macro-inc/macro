@@ -129,7 +129,8 @@ function chunks<T>(items: readonly T[], size: number): T[][] {
  * The channels named by `ids` that the viewer can still read: joined ones,
  * and public or team channels they have not joined. This is the server's
  * by-id rule, which a filter naming only channel ids and both
- * participation states selects.
+ * participation states selects. Name 1 to 100 ids: with the lane's
+ * primary channel reads, the server refuses a page naming none or more.
  */
 export function readableChannelsInput(
   lane: GraphqlSoupInitialInput,

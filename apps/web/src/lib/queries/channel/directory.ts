@@ -643,6 +643,7 @@ export async function pageJoinedChannels(
           cursor: page.nextCursor,
           expand: CHANNEL_DIRECTORY_INPUT.expand,
           emailView: CHANNEL_DIRECTORY_INPUT.emailView,
+          channelReads: CHANNEL_DIRECTORY_INPUT.channelReads,
         },
       };
     }
@@ -1203,7 +1204,9 @@ export function createByIdReader(
   // here.
   const readBatch = async (ids: string[]) => {
     const reset = controller.signal;
-    if (reset.aborted) return;
+    // A read naming no id would ask for every channel, which a primary
+    // channel page is refused.
+    if (reset.aborted || ids.length === 0) return;
     const deadline = AbortSignal.timeout(BY_ID_DEADLINE_MS);
     const signal = anyAbortSignal([reset, deadline]);
     const before = new Map(ids.map((id) => [id, versionOf?.(id)]));
