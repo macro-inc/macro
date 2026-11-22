@@ -1,5 +1,5 @@
+import { bundledServerIcon, type SvgIcon } from '@core/connectors/app-icons';
 import Plug from '@icon/system/regular/plug.svg';
-import { getMcpServerIcon, type SvgIcon } from '../../constant/mcpServers';
 import { BaseTool } from './BaseTool';
 import type { RenderContext } from './ToolRenderer';
 
@@ -11,7 +11,7 @@ export function McpToolCall(props: {
   renderContext: RenderContext;
 }) {
   const Icon = (): SvgIcon =>
-    getMcpServerIcon(props.service) ?? (Plug as SvgIcon);
+    bundledServerIcon(props.service) ?? (Plug as SvgIcon);
 
   return (
     <BaseTool

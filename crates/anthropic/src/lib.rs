@@ -6,6 +6,3 @@ pub mod types;
 
 #[cfg(feature = "openai")]
 pub mod openai;
-
-#[cfg(feature = "toolset")]
-pub mod toolset;

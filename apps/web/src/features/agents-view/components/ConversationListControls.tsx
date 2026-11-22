@@ -90,7 +90,6 @@ const FILTER_GROUPS: ListFilterGroup<
 const GROUPING_OPTIONS: ListControlOption<ConversationGrouping>[] = [
   { id: 'none', label: 'None' },
   { id: 'status', label: 'Status' },
-  { id: 'type', label: 'Type' },
 ];
 
 export type ConversationListControlsProps = {
