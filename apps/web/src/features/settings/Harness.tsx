@@ -533,7 +533,7 @@ function HarnessRemoveDialog(props: {
             Agents using this machine will stop running until it's reconnected.
             Agent teammates hosted on it are paused instead: their chats and
             memory are kept, and they run again only once moved to another
-            computer. macrod on it will need to pair again.
+            computer. To use it again, pair macrod on it again.
           </Dialog.Description>
         </Panel.Body>
         <Panel.Footer class="justify-end gap-2 px-5 py-3">
@@ -548,7 +548,7 @@ function HarnessRemoveDialog(props: {
           </Button>
           <Button
             type="button"
-            variant="secondary"
+            variant="danger"
             size="sm"
             disabled={props.pending}
             onClick={props.onConfirm}

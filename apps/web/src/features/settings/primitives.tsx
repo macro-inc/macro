@@ -346,7 +346,9 @@ export function ChoiceRow(props: {
         disabled={props.disabled}
         onChange={props.onChange}
         aria-label={props.title}
-        class="mt-0.5 accent-accent dark-mode:[color-scheme:dark]"
+        // Drawn by hand: a native radio is a grey disc in dark mode whether or
+        // not it can be picked. An open ring, an accent dot once picked.
+        class="mt-0.5 size-4 shrink-0 appearance-none rounded-full border border-ink-muted bg-surface checked:border-[5px] checked:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:border-edge"
         classList={{ 'opacity-50': props.disabled }}
       />
       <span class="min-w-0 flex-1">
