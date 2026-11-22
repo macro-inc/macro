@@ -3469,6 +3469,7 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
             save_search_projection_version(connection)?;
             calendar::save_projection_version(connection)?;
             page_retention::save_version(connection)?;
+            derived_sorts::save_version(connection)?;
             Ok(())
         })
         .map_err(TursoStorageError::initialization)?;
@@ -3560,6 +3561,7 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
     validate_queue_consistency(connection)?;
     validate_optimistic_shadow_consistency(connection)?;
     page_retention::compact_legacy_pages(connection)?;
+    derived_sorts::ensure_version(connection)?;
     ensure_search_projection_version(connection)?;
     calendar::ensure_projection_version(connection)?;
     people_sql::open(connection)?;
@@ -5586,6 +5588,7 @@ mod bounded_selection;
 mod calendar;
 mod conjunction;
 mod contact_search;
+mod derived_sorts;
 mod integrity;
 mod mutation_retry;
 mod name_search;

@@ -3937,6 +3937,7 @@ version = "0.1.0"
 dependencies = [
  "cache-core",
  "chrono",
+ "item-filter-index",
  "maybe_send",
  "miniz_oxide",
  "pollster",

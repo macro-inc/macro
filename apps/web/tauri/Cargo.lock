@@ -1091,6 +1091,7 @@ name = "cache-turso"
 version = "0.1.0"
 dependencies = [
  "cache-core",
+ "item-filter-index",
  "maybe_send",
  "predicate-index",
  "thiserror 2.0.18",
