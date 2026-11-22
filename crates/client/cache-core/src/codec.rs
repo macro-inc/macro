@@ -9,10 +9,10 @@
 //! and optimistic layers. A file at an older storage version with registered
 //! upgrade steps is upgraded instead, in the browser after it moves to this
 //! build's name, and a format in [`MIGRATABLE_CACHE_FORMAT_VERSIONS`] is
-//! migrated on native. Any other compatibility/format mismatch, or a browser
-//! owner lost after its storage grant, physically resets the database and
-//! discards all three, once a recovery has decided any moved files whose first
-//! open never succeeded.
+//! migrated on native. Any other compatibility/format mismatch, or a recovery
+//! open after a browser owner loss, physically resets the database and
+//! discards all three, once that recovery has decided any moved files whose
+//! first open never succeeded.
 
 use crate::normalize::RecordUpdates;
 use crate::queue::{PersistedOptimisticLayer, StoredMutation};
@@ -176,8 +176,8 @@ pub const UNVERSIONED_STORAGE_VERSIONS: (u32, u32, u32) = (3, 3, 11);
 /// `carry_forward`), which can decline, for instance while a tab of the older
 /// build holds that file's lock.
 /// Metadata is still validated on open: a file moved here at an older storage
-/// version is upgraded by its registered steps, and any other mismatch or an
-/// owner lost after its storage grant physically resets both files, discarding every
+/// version is upgraded by its registered steps, and any other mismatch or a
+/// recovery open after an owner loss physically resets both files, discarding every
 /// row, including queued mutations and optimistic layers. Before that reset, a
 /// recovery decides moved files whose first open never succeeded: it returns or
 /// discards them, or fails the open and keeps them while it cannot tell which.

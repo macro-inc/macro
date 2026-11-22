@@ -448,9 +448,8 @@ end of the retries that follows a promised handover to a newer build completes
 the handover instead.
 A terminal
 failure would quarantine the scope and strand the moved files with their
-queue; the Rust side bounds these recoveries by count, or by age when the
-count cannot be written, and keeps the files with neither
-(`crates/client/README.md#storage-upgrades`). Accepted readiness resets the
+queue; the Rust side bounds most of these recoveries by count or age, and
+`crates/client/README.md#storage-upgrades` lists the cases it cannot bound. Accepted readiness resets the
 retries and the deferral, even when visibility drains that owner at once.
 The deferral lives in the coordinator's memory: a worker transport failure
 still quarantines as for any queue, and a restarted coordinator relearns it
@@ -586,8 +585,7 @@ forward, after any storage upgrade the file needs, by dropping records, search
 projections, index facts, and calendar ranges — all refetchable — while keeping
 queued mutations, optimistic layers, and their projections. Native storage then
 tries to compact the migrated file with `VACUUM INTO`, so the upgrade usually
-reclaims the space instead of leaving freed pages behind; if that fails, the
-migrated file stays. Browser database names embed the format
+reclaims the space instead of leaving freed pages behind. Browser database names embed the format
 version and a carry-forward looks only at older storage versions of the current
 format, so a browser format bump starts a new file and leaves the previous one to
 the older build's tabs.
