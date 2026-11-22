@@ -656,7 +656,7 @@ fn check_generated_chain(
     if let Interruption::CrashAfterStep(at) = interruption {
         test_hooks::interrupt_after_steps(Some(u32::try_from(at + 1).unwrap()));
     }
-    let first = run_steps(&connection, steps, target, &validate);
+    let first = run_steps(&connection, steps, target, validate);
     test_hooks::interrupt_after_steps(None);
     let interrupted = test_hooks::take_interrupted();
     if let Interruption::CrashAfterStep(_) = interruption {
@@ -711,7 +711,7 @@ fn check_generated_chain(
     };
     let clean = leak_steps(&planned, base, Interruption::None, &crashed, &survivor);
     let (_survivor_db, survivor) = raw_open(&survivor);
-    let resumed = run_steps(&survivor, clean, target, &accept_expected);
+    let resumed = run_steps(&survivor, clean, target, accept_expected);
     if matches!(interruption, Interruption::None) {
         prop_assert_eq!(resumed, Ok(None));
     } else {
