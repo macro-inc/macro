@@ -236,8 +236,11 @@ async function connectVnc(
           // A stream the filter can't frame can't be trusted past this point.
           Telemetry.error(error, { 'screen.transport': 'vnc' });
           reject(error);
+          // `close` forgets readiness: an established session reports its
+          // end, one still handshaking has the rejection.
+          const established = rfbReady;
           close();
-          if (rfbReady) handlers.onEnded('error');
+          if (established) handlers.onEnded('error');
           return;
         }
         if (socket.readyState !== WebSocket.OPEN) return;

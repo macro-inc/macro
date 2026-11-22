@@ -276,4 +276,36 @@ describe('VNC_TRANSPORT', () => {
     port.close();
     element.remove();
   });
+
+  it('reports the end of an established session whose client stream it can no longer frame', async () => {
+    const element = document.createElement('div');
+    document.body.append(element);
+    const ended: string[] = [];
+    const connecting = VNC_TRANSPORT.connect(
+      element,
+      TICKET,
+      { ...handlers(), onEnded: (reason) => ended.push(reason) },
+      new AbortController().signal
+    );
+    const socket = FakeSocket.last;
+    if (!socket) throw new Error('no socket');
+    socket.open();
+    const frame = await frameIn(element);
+    const port = await frameAsksForPort(frame);
+    const fromFrame = (message: FromVncFrame) => port.postMessage(message);
+    fromFrame({
+      type: 'send',
+      data: new TextEncoder().encode('RFB 003.008\n').buffer,
+    });
+    fromFrame({ type: 'send', data: new Uint8Array([1, 1]).buffer });
+    fromFrame({ type: 'connected' });
+    await connecting;
+
+    // A client message type the filter doesn't know: the stream is lost.
+    fromFrame({ type: 'send', data: new Uint8Array([77, 1, 2, 3]).buffer });
+    await vi.waitFor(() => expect(ended).toEqual(['error']));
+    expect(socket.readyState).toBe(FakeSocket.CLOSED);
+    port.close();
+    element.remove();
+  });
 });
