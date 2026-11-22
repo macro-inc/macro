@@ -304,10 +304,30 @@ impl Exec<'_> {
                 ));
             }
             if plan.masks() {
-                let abandoned = |value: &Value| value.to_string().contains(ABANDONED);
+                // A filter or search answers with its pages, the first of which
+                // the abandon stops; an op that never reached the host (no
+                // pages, a request that does not parse) proves nothing either way.
+                let paged = |value: &Value| match value {
+                    Value::Array(pages) => Some(pages.first().cloned()),
+                    _ => value["pages"]
+                        .as_array()
+                        .map(|pages| pages.first().cloned()),
+                };
                 match &outcome {
                     Err(error) if error == ABANDONED => self.count("abandon.abandoned"),
-                    Ok(value) if abandoned(value) => self.count("abandon.abandoned"),
+                    Err(error) if error.starts_with("request: ") => self.count("abandon.unreached"),
+                    Ok(value) => match paged(value) {
+                        Some(None) => self.count("abandon.unreached"),
+                        Some(Some(page)) if page["error"] == json!(ABANDONED) => {
+                            self.count("abandon.abandoned")
+                        }
+                        _ => {
+                            return Err(format!(
+                                "op {index}: a read abandoned before it ran answered: {}",
+                                normalize_outcome(&outcome)
+                            ));
+                        }
+                    },
                     _ => {
                         return Err(format!(
                             "op {index}: a read abandoned before it ran answered: {}",

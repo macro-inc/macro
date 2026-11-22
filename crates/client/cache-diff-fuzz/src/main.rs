@@ -106,8 +106,10 @@ struct Args {
     /// The share of reads, filters, searches and keyed reads (0 to 1) sent
     /// with a request id; some are abandoned while queued (see
     /// `exec::abandon`). Give it to both sides: a side whose host can't
-    /// abandon reads runs them all, and the other must match it everywhere
-    /// but the abandoned answers. Writes `<seed>.broad`.
+    /// abandon reads runs them all. Abandoned answers are masked, and
+    /// operations an abandon left registered broadly are masked out of
+    /// `affectedOps`; `<seed>.broad` lists where, for `fuzz.sh` to check
+    /// that the other side reported each of them too.
     #[arg(long, default_value_t = 0.0, value_parser = share)]
     abandon_reads: f64,
 }

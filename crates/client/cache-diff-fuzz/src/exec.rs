@@ -385,7 +385,11 @@ impl<'a> Exec<'a> {
                 self.count(format!("write.{lane}"));
                 self.note_registration(register.as_ref(), doc, variables);
                 let outcome = self.write(doc, variables, data, register.clone()).await;
+                // Its own affectedOps come before it registers the operation
+                // again, as a read's does: on both sides alike from then on.
+                let registered = outcome.is_ok();
                 self.record(index, "write", outcome);
+                self.read_registered(register.as_ref(), registered);
             }
             Op::Read {
                 doc,
@@ -677,6 +681,10 @@ impl<'a> Exec<'a> {
                     .clear()
                     .await
                     .map(|revision| json!(revision.to_string()));
+                // A clear drops every registration.
+                if outcome.is_ok() {
+                    self.broad.clear();
+                }
                 self.record(index, "clear", outcome);
             }
             Op::Idle => {
