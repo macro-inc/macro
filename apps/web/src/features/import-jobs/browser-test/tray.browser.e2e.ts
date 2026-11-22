@@ -13,7 +13,7 @@ test('follows a Notion import from scanning to done, then dismisses it', async (
   page,
 }) => {
   const button = page.getByRole('button', { name: /^\d+ imports?$/ });
-  const tray = page.getByRole('dialog', { name: 'Imports' });
+  const tray = page.getByRole('dialog', { name: /^Imports · \d+$/ });
   await expect(button).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Scan Notion' }).click();
@@ -75,7 +75,7 @@ test('marks a failed import on the rail button and lists it beside a running one
   const button = page.getByRole('button', { name: '2 imports' });
   await expect(button).toHaveAttribute('aria-description', 'An import failed');
   await button.click();
-  const tray = page.getByRole('dialog', { name: 'Imports' });
+  const tray = page.getByRole('dialog', { name: /^Imports · \d+$/ });
   await expect(tray.getByRole('listitem')).toHaveCount(2);
   await expect(tray.getByRole('listitem', { name: 'Jira' })).toContainText(
     'Failed: Jira access lost'
@@ -112,6 +112,22 @@ test('keeps the corner pill on tablets, where the rail is not shown', async ({
   await expect(tray.getByRole('listitem', { name: 'Jira' })).toContainText(
     'Failed: Jira access lost'
   );
+  // The pill and its open list sit above the touch layout's bottom-right
+  // buttons, not on them.
+  const fresh = await page.getByRole('button', { name: '+ New' }).boundingBox();
+  const list = await tray.boundingBox();
+  expect(fresh && list).toBeTruthy();
+  if (fresh && list) {
+    expect(list.y + list.height).toBeLessThanOrEqual(fresh.y);
+  }
+  const status = tray
+    .getByRole('listitem', { name: 'Jira' })
+    .locator('[data-slot="item-description"]');
+  expect(
+    await status.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth
+    )
+  ).toBe(true);
   await tray.getByRole('button', { name: 'Hide imports' }).click();
   await expect(tray.getByRole('listitem')).toHaveCount(0);
   await tray.getByRole('button', { name: 'Show imports' }).click();
@@ -120,4 +136,51 @@ test('keeps the corner pill on tablets, where the rail is not shown', async ({
     .getByRole('button', { name: 'Dismiss the Jira import' })
     .click();
   await expect(tray).toHaveCount(0);
+});
+
+test('keeps the rail button readable: no tooltip over its list, a focus ring after Escape, one-line rows', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Scan Notion' }).click();
+  await page.getByRole('button', { name: 'Fail Jira' }).click();
+  await page.getByRole('button', { name: 'Fail Linear' }).click();
+  const button = page.getByRole('button', { name: '3 imports' });
+  await button.click();
+  const tray = page.getByRole('dialog', { name: 'Imports · 3' });
+  await expect(
+    tray.getByRole('heading', { name: 'Imports · 3' })
+  ).toBeVisible();
+  await expect(tray.getByRole('listitem')).toHaveCount(3);
+
+  // Hovering the open button shows no tooltip over the list.
+  await button.hover();
+  await page.waitForTimeout(1200);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+
+  // Each row's status stays on one line, even beside its widest action.
+  for (const name of ['Notion', 'Jira', 'Linear']) {
+    const status = tray
+      .getByRole('listitem', { name })
+      .locator('[data-slot="item-description"]');
+    const fit = await status.evaluate((element) => {
+      const height = element.getBoundingClientRect().height;
+      const line = Number.parseFloat(getComputedStyle(element).lineHeight);
+      return {
+        lines: Math.round(height / line),
+        clipped: element.scrollWidth > element.clientWidth,
+      };
+    });
+    expect(fit, name).toEqual({ lines: 1, clipped: false });
+  }
+
+  await page.mouse.move(600, 100);
+  await page.keyboard.press('Escape');
+  await expect(tray).toHaveCount(0);
+  await expect(button).toBeFocused();
+  const ring = await button.evaluate((element) => ({
+    visible: element.matches(':focus-visible'),
+    shadow: getComputedStyle(element).boxShadow,
+  }));
+  expect(ring.visible).toBe(true);
+  expect(ring.shadow).not.toBe('none');
 });

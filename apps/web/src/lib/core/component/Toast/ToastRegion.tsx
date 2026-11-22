@@ -59,7 +59,7 @@ export function ToastRegion() {
     <Portal>
       {/*
         Desktop stack, bottom-right. Persistent prompts get their own region
-        capped at one visible card. Ordinary notices form an expandable three-card stack. Imports (tablets only), upload progress, then background work, sit nearest the corner.
+        capped at one visible card. Ordinary notices form an expandable three-card stack. Upload progress, then background work, sit nearest the corner.
       */}
       <div class="fixed bottom-5 right-5 m-0 w-[380px] max-w-[calc(100vw-32px)] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4">
         <Toast.Region
@@ -93,18 +93,21 @@ export function ToastRegion() {
           <Toast.List class="macro-toast-list" data-stack />
         </Toast.Region>
         <Show when={!isMobile()}>
-          <Show when={isTouchDevice()}>
-            {/* A tray that fails to load leaves toasts and uploads alone. */}
-            <ErrorBoundary fallback={null}>
-              <Suspense>
-                <ImportJobsCornerTray />
-              </Suspense>
-            </ErrorBoundary>
-          </Show>
           <UploadProgressIndicator />
           <BackgroundWorkIndicator align="end" />
         </Show>
       </div>
+
+      {/* Tablets have no rail, so their imports sit in this corner, above
+          the touch layout's bottom buttons. A tray that fails to load leaves
+          toasts and uploads alone. */}
+      <Show when={isTouchDevice() && !isMobile()}>
+        <ErrorBoundary fallback={null}>
+          <Suspense>
+            <ImportJobsCornerTray />
+          </Suspense>
+        </ErrorBoundary>
+      </Show>
 
       {/*
         Mobile-only stacks: centered above the mobile dock. At most one

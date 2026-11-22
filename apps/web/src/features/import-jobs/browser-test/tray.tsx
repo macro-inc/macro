@@ -2,7 +2,7 @@ import '@app/index.css';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import type { ImportRun, NotionImportReport } from '@service-cognition/import';
 import { Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import type { ImportJobsContext } from '../context/contracts';
 import { ImportJobsProvider } from '../context/import-jobs-context';
@@ -106,6 +106,16 @@ function failJira() {
 const CORNER = new URLSearchParams(location.search).get('layout') === 'corner';
 let help: HTMLButtonElement | undefined;
 
+function failLinear() {
+  setRun({
+    source: 'linear',
+    status: 'failed',
+    error_kind: 'forbidden',
+    updated_at: new Date().toISOString(),
+    review_session_id: 'linear-session',
+  });
+}
+
 function Fixture() {
   return (
     <ImportJobsProvider context={context}>
@@ -121,6 +131,9 @@ function Fixture() {
         </Button>
         <Button variant="secondary" onClick={failJira}>
           Fail Jira
+        </Button>
+        <Button variant="secondary" onClick={failLinear}>
+          Fail Linear
         </Button>
         <output aria-label="Opened session" class="text-xs text-ink-muted">
           {opened()}
@@ -138,10 +151,25 @@ function Fixture() {
           </div>
         }
       >
-        {/* Stands in for the toast region's corner on tablets. */}
-        <div class="fixed bottom-5 right-5 flex w-[380px] flex-col items-stretch pointer-events-none">
-          <ImportJobsCornerView />
+        {/* Stands in for a tablet's bottom-right buttons, which publish
+            their height as the bottom content inset. */}
+        <div
+          ref={(element) =>
+            onMount(() =>
+              document.documentElement.style.setProperty(
+                '--mobile-content-inset-bottom',
+                `${element.offsetHeight + 12}px`
+              )
+            )
+          }
+          class="fixed bottom-3 right-3 flex flex-col items-end gap-2"
+        >
+          <Button variant="secondary">+ New</Button>
+          <Button variant="secondary" size="icon-md" aria-label="Search">
+            ?
+          </Button>
         </div>
+        <ImportJobsCornerView />
       </Show>
     </ImportJobsProvider>
   );

@@ -66,7 +66,9 @@ Help (`src/features/import-jobs`, mounted in `FooterActions`), so nothing
 floats over the page. The button is named `2 imports`; it shows a progress
 ring while something is moving and a red dot (described as `An import
 failed`) when a run failed. Pressing it opens the list beside the rail;
-pressing outside, Escape or opening a session closes it. Each row names the
+pressing outside, Escape or opening a session closes it. The list is headed
+`Imports · N`; the button shows no tooltip while it is open and a focus ring
+when Escape returns focus to it. Each row names the
 source and its phase: `Scanning 120 pages` (Linear and Jira: `Reading N
 issues`, Slack: `Finding channels`), `Deciding on N items`, `Waiting for your
 approval`, `Importing 31 of 124` with a percentage, then `Imported`, `Import
@@ -81,7 +83,8 @@ run leaves after about five seconds; a failed one stays until **Dismiss the
 plan waiting for approval stays for an hour after its last change.
 Dismissals are kept per user on the device, and dismissing a failed review in
 the thread dismisses its run's entry too. Touch layouts have no rail: tablets
-keep the older pill in the bottom-right toast corner (`Show imports` / `Hide
+keep the older pill in the bottom-right corner, above the touch layout's bottom
+buttons (`Show imports` / `Hide
 imports`, mounted in `ToastRegion`), and phones never show imports. A newly
 failed run is announced politely (`Notion import failed`). It reads `/import/state` (polling only while something
 is running, otherwise on `import_updated` pushes) and each listed workspace

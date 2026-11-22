@@ -1,6 +1,7 @@
 /** The desktop tray listing background imports (Notion, Linear, Jira, Slack). */
 export default {
   trayLabel: 'Imports',
+  heading: { other: 'Imports · {{count}}' },
   summary: { one: '{{count}} import', other: '{{count}} imports' },
   showImports: 'Show imports',
   hideImports: 'Hide imports',
@@ -43,8 +44,8 @@ export default {
   failedAccessLost: 'Failed: {{source}} access lost',
   failedConnectionUnavailable: 'Failed: couldn’t use {{source}}',
   failedNotConnected: 'Failed: {{source}} not connected',
-  failedNotFound: 'Failed: something isn’t shared',
-  failedForbidden: 'Failed: no access to part of {{source}}',
+  failedNotFound: 'Failed: not shared with Macro',
+  failedForbidden: 'Failed: {{source}} denied access',
   failedRateLimited: 'Failed: {{source}} rate limit',
   failedUnreachable: 'Failed: {{source}} unreachable',
   failedUsageRefused: 'Failed: AI usage refused',

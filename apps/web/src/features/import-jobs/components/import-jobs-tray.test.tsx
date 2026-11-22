@@ -75,6 +75,43 @@ describe('import jobs tray', () => {
     expect(status.textContent).toBe('Jira import failed');
   });
 
+  it('heads the list with the count of the runs it lists', () => {
+    tray([
+      {
+        key: 'notion:running:1',
+        source: 'notion',
+        phase: { kind: 'importing', done: 1, total: 4 },
+        sessionId: 'session',
+        dismissable: false,
+      },
+      {
+        key: 'jira:failed:1',
+        source: 'jira',
+        phase: { kind: 'failed', errorKind: 'access_lost' },
+        sessionId: undefined,
+        dismissable: true,
+      },
+    ]);
+    const list = screen.getByRole('dialog', { name: 'Imports · 2' });
+    expect(within(list).getByRole('heading').textContent).toBe('Imports · 2');
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('keeps the imports icon inside the ring while a run moves', () => {
+    tray([
+      {
+        key: 'notion:running:1',
+        source: 'notion',
+        phase: { kind: 'importing', done: 1, total: 4 },
+        sessionId: 'session',
+        dismissable: false,
+      },
+    ]);
+    const button = screen.getByRole('button', { name: '1 import' });
+    expect(within(button).getByTestId('imports-icon')).toBeTruthy();
+    expect(button.querySelector('svg circle')).toBeTruthy();
+  });
+
   it('shows nothing in the rail when there are no imports', () => {
     tray([]);
     expect(screen.queryByRole('button')).toBeNull();
@@ -158,7 +195,7 @@ describe('a failed import offers what to do next', () => {
 });
 
 describe('failed import labels', () => {
-  it('stay short enough for two lines beside the row actions', () => {
+  it('stay short enough for one line beside the row actions', () => {
     for (const errorKind of [
       'not_found',
       'forbidden',
@@ -187,7 +224,7 @@ describe('failed import labels', () => {
       expect(
         label?.textContent?.length ?? 0,
         String(errorKind)
-      ).toBeLessThanOrEqual(40);
+      ).toBeLessThanOrEqual(32);
     }
   });
 });

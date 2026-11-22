@@ -135,8 +135,11 @@ function ImportJobRow(props: {
         <Dynamic component={source().icon} />
       </Item.Icon>
       <Item.Content>
-        <Item.Title>{source().name}</Item.Title>
-        <Item.Description>{label()}</Item.Description>
+        {/* The status stays whole on one line; a long name gives way. */}
+        <Item.Title class="truncate" title={source().name}>
+          {source().name}
+        </Item.Title>
+        <Item.Description class="whitespace-nowrap">{label()}</Item.Description>
       </Item.Content>
       <Item.Actions>
         <Show when={!props.job.dismissable}>
@@ -244,25 +247,35 @@ export function ImportJobsRailButton(props: {
             size="icon-md"
             class={cn(
               'size-10 cursor-default rounded-xl',
+              // Escape returns focus here; keep it visible from hover.
+              'focus-visible:ring-2 focus-visible:ring-accent',
               props.open && 'bg-hover text-ink'
             )}
             aria-label={label()}
             aria-description={
               failed() ? t('importJobs.somethingFailed') : undefined
             }
-            tooltip={{ content: label(), placement: 'right' }}
+            // The open list already says what this is; a tooltip would cover it.
+            tooltip={
+              props.open ? undefined : { content: label(), placement: 'right' }
+            }
             draggable={false}
             data-sidebar-next-item="imports"
           >
             <span class="pointer-events-none relative flex size-6 items-center justify-center">
-              <Show
-                when={moving()}
-                fallback={<TrayArrowDown class="size-5" aria-hidden="true" />}
-              >
-                <ProgressRing
-                  size="md"
-                  fraction={overallFraction(props.jobs)}
-                />
+              <TrayArrowDown
+                data-testid="imports-icon"
+                class={moving() ? 'size-3.5' : 'size-5'}
+                aria-hidden="true"
+              />
+              <Show when={moving()}>
+                <span class="absolute inset-0">
+                  <ProgressRing
+                    size="xl"
+                    strongTrack
+                    fraction={overallFraction(props.jobs)}
+                  />
+                </span>
               </Show>
               <Show when={failed()}>
                 <span
@@ -275,8 +288,7 @@ export function ImportJobsRailButton(props: {
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Content
-              aria-label={t('importJobs.trayLabel')}
-              class="menu-surface z-modal w-[340px] max-w-[calc(100vw-5rem)] p-1 outline-none animate-menu-open"
+              class="menu-surface z-modal w-[420px] max-w-[calc(100vw-5rem)] p-1 outline-none animate-menu-open"
               onCloseAutoFocus={(event) => {
                 // The opened session's split takes focus; Escape and the
                 // trigger still return it to the button.
@@ -285,6 +297,9 @@ export function ImportJobsRailButton(props: {
                 event.preventDefault();
               }}
             >
+              <Popover.Title class="px-2 pb-1 pt-1.5 text-xs font-medium text-ink-muted">
+                {t('importJobs.heading', { count: props.jobs.length })}
+              </Popover.Title>
               <div role="list">
                 <Index each={props.jobs}>
                   {(job) => (
@@ -323,9 +338,14 @@ export function ImportJobsCornerTray(props: {
 }) {
   return (
     <Show when={props.jobs.length > 0}>
+      {/* Above the touch layout's bottom-right buttons, which publish their
+          height as the bottom content inset. */}
       <section
         aria-label={t('importJobs.trayLabel')}
-        class="pointer-events-auto flex flex-col items-end gap-2"
+        class="pointer-events-auto fixed right-5 z-toast-region flex w-[420px] max-w-[calc(100vw-32px)] flex-col items-end gap-2"
+        style={{
+          bottom: 'calc(1.25rem + var(--mobile-content-inset-bottom, 0px))',
+        }}
       >
         <Show when={props.expanded}>
           <Surface

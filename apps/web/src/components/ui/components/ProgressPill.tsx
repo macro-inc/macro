@@ -9,8 +9,17 @@ const INDETERMINATE_ARC = 0.25;
 export type ProgressRingProps = {
   /** A completed fraction, or null when progress is indeterminate. */
   fraction: number | null;
-  size?: 'sm' | 'md' | 'lg';
+  /** `xl` (24px) rings a 16px icon, such as a rail glyph. */
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  /** A darker track, for a ring that must read on light surfaces. */
+  strongTrack?: boolean;
 };
+
+function strokeWidth(size: ProgressRingProps['size']): number {
+  if (size === 'lg') return 1;
+  if (size === 'xl') return 1.25;
+  return 2;
+}
 
 /** Decorative ring; place it inside an element that names the progress. */
 export function ProgressRing(props: ProgressRingProps) {
@@ -29,6 +38,7 @@ export function ProgressRing(props: ProgressRingProps) {
         props.size === 'sm' && 'size-3',
         (props.size === 'md' || props.size === undefined) && 'size-4',
         props.size === 'lg' && 'size-11',
+        props.size === 'xl' && 'size-6',
         props.fraction === null && 'motion-safe:animate-spin'
       )}
     >
@@ -37,15 +47,15 @@ export function ProgressRing(props: ProgressRingProps) {
         cy="8"
         r={RING_RADIUS}
         fill="none"
-        stroke-width={props.size === 'lg' ? 1 : 2}
-        class="stroke-ink/15"
+        stroke-width={strokeWidth(props.size)}
+        class={props.strongTrack ? 'stroke-ink/30' : 'stroke-ink/15'}
       />
       <circle
         cx="8"
         cy="8"
         r={RING_RADIUS}
         fill="none"
-        stroke-width={props.size === 'lg' ? 1 : 2}
+        stroke-width={strokeWidth(props.size)}
         stroke-linecap="round"
         stroke-dasharray={String(RING_CIRCUMFERENCE)}
         stroke-dashoffset={RING_CIRCUMFERENCE * (1 - fraction())}
