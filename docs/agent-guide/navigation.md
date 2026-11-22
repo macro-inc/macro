@@ -1347,15 +1347,16 @@ an on/off switch, and one line under them:
 - what starts it and its last run, such as **Weekdays at 9:00 AM · Ran 9:00
   AM** after a green dot (grey for a skipped or stopped run), or **Not run
   yet**, then **· N sub-routines** when its runs created any;
-- **Running now** with a spinning mark and **Stop** (named **Stop the run of
-  <name>**), which ends the run in progress; it reads **Stopping…** until the
+- **Running now** with a spinning mark and, for its owner, **Stop** (named
+  **Stop the run of <name>**), which ends the run in progress; it reads **Stopping…** until the
   run ends, and the run's details then say it was stopped;
 - **Failed <when> · <why>** in failure colour, the whole reason in a tooltip;
 - **<trigger> · Off** while it is off.
 
 Clicking a card opens the routine in the same pane. Switching one off shows
 **<name> is off**, **Its settings and past runs are kept**, with **Undo**,
-which switches it back on. With no routines, the page shows **Nothing is
+which switches it back on (no Undo while a run is in progress or once a
+one-time routine has run, which its switch can't turn back on). With no routines, the page shows **Nothing is
 running yet** with **New routine** and, where suggestions are on, **Browse
 Discover**, which opens the Discover tab.
 
