@@ -3,8 +3,9 @@
 use super::*;
 use crate::domain::approval::{InProcessCall, refusal};
 use crate::domain::model::{
-    AgentSessionId, SessionGrant, connect_prompt_listing, disconnected_text, not_connected_text,
-    out_of_scope_text, tool_error_result, tool_result_response,
+    AgentSessionId, SessionGrant, calls_connect_tool, connect_prompt_listing,
+    connected_since_listing_text, disconnected_text, not_connected_text, out_of_scope_text,
+    tool_error_result, tool_result_response,
 };
 use agent_session::domain::model::TurnPrompter;
 use ai_toolset::actor::{ToolActor, add_actor_schema};
@@ -77,6 +78,12 @@ where
             .resolve_upstream(grant, user, destination, listing)
             .await?
         {
+            Reach::Upstream(_) if calls_connect_tool(&request) => {
+                return Ok(tool_result_response(
+                    id,
+                    connected_since_listing_text(&connect_tool_owner(grant, destination)),
+                ));
+            }
             Reach::Upstream(upstream) => upstream,
             Reach::Listed(result) => return listing_response(id, result, destination),
             Reach::Refused(text) => return Ok(tool_result_response(id, text)),
@@ -142,18 +149,30 @@ where
         };
         Ok(match resolution {
             McpResolution::Connected(call) => Reach::Upstream(call),
+            // Lists the app's real tools; a call waits for a connection.
+            McpResolution::Unconnected(call) if listing => Reach::Upstream(call),
             McpResolution::NotConnected if listing => {
                 Reach::Listed(connect_prompt_listing(&name()))
             }
-            McpResolution::NotConnected => Reach::Refused(match destination {
-                McpDestination::Connected(slug) => not_connected_text(slug, &name()),
-                _ => "The selected actor has no connection for this tool.".into(),
-            }),
+            McpResolution::Unconnected(_) | McpResolution::NotConnected => {
+                Reach::Refused(match destination {
+                    McpDestination::Connected(slug) => not_connected_text(slug, &name()),
+                    _ => "The selected actor has no connection for this tool.".into(),
+                })
+            }
             McpResolution::Disconnected { name } if listing => {
                 Reach::Listed(connect_prompt_listing(&name))
             }
             McpResolution::Disconnected { name } => Reach::Refused(disconnected_text(&name)),
         })
+    }
+}
+
+/// The name a connect-tool answer gives the app or server it was listed for.
+fn connect_tool_owner(grant: &SessionGrant, destination: &McpDestination) -> String {
+    match destination {
+        McpDestination::Connected(slug) => grant.display_name(slug),
+        _ => "This MCP server".to_owned(),
     }
 }
 
@@ -213,6 +232,11 @@ where
             .resolve_upstream(grant, user, destination, listing)
             .await?
         {
+            Reach::Upstream(_) if calls_connect_tool(&request) => {
+                return Ok(tool_error_result(connected_since_listing_text(
+                    &connect_tool_owner(grant, destination),
+                )));
+            }
             Reach::Upstream(upstream) => upstream,
             Reach::Listed(result) => return Ok(result),
             Reach::Refused(text) => return Ok(tool_error_result(text)),

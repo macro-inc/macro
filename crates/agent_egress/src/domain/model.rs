@@ -348,7 +348,11 @@ pub struct CustomMcpServerListing {
 /// How a destination the session may reach resolved: to a call the owner's
 /// grant backs, or to an app or server they cannot use yet.
 ///
-/// Neither unusable case has an upstream to forward to: the proxy answers
+/// An unusable app whose upstream can still address the owner (Pipedream
+/// scopes a call by user id and app slug alone) is [`Self::Unconnected`]:
+/// its handshake and listing are forwarded, so the session sees the app's
+/// real tools from the start, and only a tool call is answered here. The
+/// other unusable cases have no upstream to forward to: the proxy answers
 /// the session's MCP client itself, so the model sees how to connect. A
 /// destination the session's agent was not given is not a resolution at
 /// all but [`EgressError::OutOfScope`].
@@ -356,6 +360,10 @@ pub struct CustomMcpServerListing {
 pub enum McpResolution {
     /// The owner holds a usable connection for this destination.
     Connected(UpstreamCall),
+    /// The owner cannot use this app yet, but its upstream addresses them
+    /// anyway: everything but a tool call is forwarded, and a tool call is
+    /// answered with the connect prompt until they connect it.
+    Unconnected(UpstreamCall),
     /// The owner has no usable connection to this app: never connected,
     /// turned off, or its grant needs authorizing again. The answer is a
     /// connect prompt.
@@ -459,8 +467,28 @@ pub fn out_of_scope_text(name: &str) -> String {
 }
 
 /// The one tool the proxy lists for an app or server the owner cannot use
-/// yet. Calling it answers with how to connect.
-pub const CONNECT_TOOL_NAME: &str = "connect";
+/// yet. Calling it answers with how to connect. The proxy answers it
+/// itself even once the owner has connected, so it is named apart from any
+/// tool an app's own server is likely to list.
+pub const CONNECT_TOOL_NAME: &str = "how_to_connect";
+
+/// Whether `request` is a JSON-RPC `tools/call` of [`CONNECT_TOOL_NAME`].
+pub fn calls_connect_tool(request: &serde_json::Value) -> bool {
+    request["method"] == TOOLS_CALL_METHOD && request["params"]["name"] == CONNECT_TOOL_NAME
+}
+
+/// What the model is told when it calls [`CONNECT_TOOL_NAME`] on an app or
+/// server the owner has connected since the session listed its tools. The
+/// client listed the connect tool in place of the real ones and keeps that
+/// listing for the session, so the real tools arrive with the next one.
+pub fn connected_since_listing_text(name: &str) -> String {
+    format!(
+        "{name} is connected now, but this session listed its tools before it was, so they \
+         are not available here. They will be in the next session. Tell the person {name} \
+         is connected and that a new session will have its tools; do not try another way \
+         to reach it."
+    )
+}
 
 /// The `tools/list` result the proxy answers for an app or server the owner
 /// cannot use yet: no upstream can be reached to list its real tools, so the

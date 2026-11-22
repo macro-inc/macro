@@ -91,7 +91,8 @@ where
         permitted: Permitted<'_>,
         connections: &McpConnections,
     ) -> Result<McpResolution, EgressError> {
-        let key = permitted.key();
+        let key = permitted.key().clone();
+        let key = &key;
         match self.connections.upstream(permitted).await {
             Ok(upstream) => upstream_call(upstream).map(McpResolution::Connected),
             // The grant died between listing and reaching for it.
@@ -103,6 +104,36 @@ where
             }),
             Err(error) => Err(EgressError::Upstream(rootcause::report!(
                 "could not address {key}: {error}"
+            ))),
+        }
+    }
+
+    /// An app in scope the owner cannot use yet: addressed for them anyway
+    /// where its counted source can, so the session lists its real tools;
+    /// otherwise answered with the connect prompt.
+    async fn unconnected(
+        &self,
+        scoped: &McpConnections,
+        key: &ConnectorKey,
+    ) -> Result<McpResolution, EgressError> {
+        let permitted = scoped
+            .permit_unconnected(key)
+            .map_err(|refused| match refused {
+                PermitRefused::OutOfScope => EgressError::OutOfScope,
+                PermitRefused::NotUsable(status) => EgressError::Internal(rootcause::report!(
+                    "an app in scope was refused as {status:?}"
+                )),
+            })?;
+        match self.connections.upstream(permitted).await {
+            Ok(upstream) => upstream_call(upstream).map(McpResolution::Unconnected),
+            // Its source reaches it only through the owner's own connection.
+            Err(
+                ConnectorsError::NotFound(_)
+                | ConnectorsError::UnknownApp(_)
+                | ConnectorsError::NeedsReauth(_),
+            ) => Ok(McpResolution::NotConnected),
+            Err(error) => Err(EgressError::Upstream(rootcause::report!(
+                "could not address {key} for an owner who has not connected it: {error}"
             ))),
         }
     }
@@ -149,7 +180,7 @@ where
             Err(PermitRefused::NotUsable(status)) => match key {
                 ConnectorKey::App(_) => {
                     tracing::debug!(?status, "the owner cannot use this app yet");
-                    Ok(McpResolution::NotConnected)
+                    self.unconnected(&scoped, &key).await
                 }
                 // Found among the usable connections above, so not reached;
                 // answered as a server with nowhere to go all the same.

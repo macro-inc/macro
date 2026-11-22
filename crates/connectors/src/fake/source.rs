@@ -130,6 +130,12 @@ impl FakeSource {
             mcp: Some(Arc::new(FakeMcp {
                 name: row.name.clone(),
                 tools: row.tools.clone(),
+                scope: match (&row.source, &row.key) {
+                    (SourceKind::Pipedream, ConnectorKey::App(app)) => {
+                        Some((row.user.clone(), app.clone()))
+                    }
+                    _ => None,
+                },
             })),
             api,
         }
@@ -204,6 +210,26 @@ impl Source for FakeSource {
             .filter(|row| resolve::identify(&self.connection(row), &self.overlays).contains(&key))
             .map(|row| row.user.clone())
             .collect())
+    }
+
+    /// Pipedream addresses a user by id and app alone, as the real one
+    /// does; no other source can reach an app without the user's
+    /// connection.
+    async fn address_unconnected(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        app: &ConnectorId,
+    ) -> Result<Option<Upstream>, rootcause::Report> {
+        if self.kind != SourceKind::Pipedream {
+            return Ok(None);
+        }
+        let mcp = FakeMcp {
+            name: app.to_string(),
+            tools: Vec::new(),
+            scope: Some((user.clone(), app.clone())),
+        };
+
+        mcp.upstream().await.map(Some)
     }
 
     async fn start_connect(
@@ -322,7 +348,15 @@ impl ServerDirectory for FakeSource {
 struct FakeMcp {
     name: String,
     tools: Vec<String>,
+    /// For a Pipedream row, the user and app its upstream is scoped to,
+    /// stamped as Pipedream's own scoping headers.
+    scope: Option<(MacroUserIdStr<'static>, ConnectorId)>,
 }
+
+/// Pipedream's header naming whose account a call spends.
+const PIPEDREAM_USER_HEADER: &str = "x-pd-external-user-id";
+/// Pipedream's header naming the app a call is to.
+const PIPEDREAM_APP_HEADER: &str = "x-pd-app-slug";
 
 #[async_trait::async_trait]
 impl McpConnection for FakeMcp {
@@ -349,11 +383,16 @@ impl McpConnection for FakeMcp {
             .map_err(|error| rootcause::report!("{error}"))?;
         url.query_pairs_mut().append_pair("server", &self.name);
 
-        Ok(Upstream::new(
-            url,
-            Some("fake-token".to_owned()),
-            http::HeaderMap::new(),
-        ))
+        let mut headers = http::HeaderMap::new();
+        if let Some((user, app)) = &self.scope {
+            let value = |text: &str| {
+                http::HeaderValue::from_str(text).map_err(|error| rootcause::report!("{error}"))
+            };
+            headers.insert(PIPEDREAM_USER_HEADER, value(user.as_ref())?);
+            headers.insert(PIPEDREAM_APP_HEADER, value(app.as_str())?);
+        }
+
+        Ok(Upstream::new(url, Some("fake-token".to_owned()), headers))
     }
 }
 

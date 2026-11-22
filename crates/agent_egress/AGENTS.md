@@ -34,10 +34,18 @@ MCP app, a custom server, or a GitHub installation token) on each request.
 - The agent's selected app list (`SessionGrant::selection`, from the
   session's `AgentMcpServers`) is a permission: a destination outside it is
   `EgressError::OutOfScope` (403; a tool result on the actor path). An app
-  in scope the owner cannot use has no upstream: the proxy answers its MCP
+  in scope the owner cannot use is first offered to
+  `permit_unconnected`: where its counted source addresses any user
+  (Pipedream), it resolves `McpResolution::Unconnected` and everything but
+  `tools/call` is forwarded under the owner's scoping headers, so the
+  session lists the real tools from its first turn and calls flow once the
+  owner connects (runtimes such as `agent_inmem` keep their first listing
+  for the session). Otherwise it has no upstream: the proxy answers its MCP
   client itself (`answer_unusable`): `initialize`/`ping` succeed,
-  `tools/list` offers one `connect` tool, and every `tools/call` answers the
-  connect prompt.
+  `tools/list` offers one `how_to_connect` tool, and every `tools/call`
+  answers the connect prompt. A `how_to_connect` call that reaches a
+  connected app or server is answered locally too (the upstream has no
+  such tool), saying its tools arrive with the next session.
 - `src/inbound/axum_router.rs`: the HTTP entry point the sandbox calls.
 - `SessionMcpExchange` (`src/domain/service/actor.rs`): in-process
   `tools/list`/`tools/call` on a connected app or custom server for a caller

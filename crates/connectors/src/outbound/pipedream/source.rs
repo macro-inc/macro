@@ -221,6 +221,31 @@ impl Source for PipedreamSource {
         self.repo.holders(&catalog::slugs_of(app)).await
     }
 
+    /// Pipedream's remote server scoped to the user and the app's Pipedream
+    /// slug. Pipedream scopes a call by those two alone, so it lists the
+    /// app's tools for a user with no account there yet, and answers a call
+    /// with its own error.
+    #[tracing::instrument(skip(self, user), fields(app = %app), err)]
+    async fn address_unconnected(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        app: &ConnectorId,
+    ) -> Result<Option<Upstream>, Report> {
+        let record = PipedreamConnection {
+            user_id: user.clone(),
+            app_slug: connect_slug(app).to_owned(),
+            server_name: app.to_string(),
+            account_id: String::new(),
+            enabled: false,
+        };
+        let connection = PipedreamApp {
+            vendor: self.vendor.clone(),
+            record,
+        };
+
+        McpConnection::upstream(&connection).await.map(Some)
+    }
+
     /// Pipedream's hosted connect dialog, opened on the app's Pipedream slug.
     #[tracing::instrument(skip(self, user), fields(key = %key), err)]
     async fn start_connect(

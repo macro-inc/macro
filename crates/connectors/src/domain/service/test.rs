@@ -376,6 +376,107 @@ async fn a_selected_app_the_owner_has_not_connected_asks_to_connect() {
     );
 }
 
+/// The scoping headers an upstream carries, as (user, app).
+fn scope_of(upstream: &Upstream) -> (Option<&str>, Option<&str>) {
+    let header = |name: &str| {
+        upstream
+            .headers()
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+    };
+    (header("x-pd-external-user-id"), header("x-pd-app-slug"))
+}
+
+/// An app in scope whose counted source scopes a call by user and app
+/// (Pipedream) is addressed for an owner who has not connected it, or has
+/// turned it off, so a sandbox can list its tools; the proof says it is not
+/// connected.
+#[tokio::test]
+async fn an_unconnected_app_whose_source_addresses_any_user_is_permitted_for_listing() {
+    let held_off = World::new().holding(FakeRow {
+        enabled: false,
+        ..row(SourceKind::Pipedream, app_key("asana"))
+    });
+    for world in [World::new(), held_off] {
+        let connectors = world.connectors();
+        let connections = connectors.connections(&user()).await.unwrap();
+        let scoped = connections.scoped(&Selection::Apps(vec![app("asana")]));
+
+        assert!(matches!(
+            scoped.permit(&app_key("asana")).unwrap_err(),
+            PermitRefused::NotUsable(_)
+        ));
+        let permitted = scoped.permit_unconnected(&app_key("asana")).unwrap();
+        assert!(!permitted.is_connected());
+        let upstream = connectors.upstream(permitted).await.unwrap();
+
+        assert_eq!(scope_of(&upstream), (Some(user().as_ref()), Some("asana")));
+    }
+}
+
+/// An app outside the agent's scope is never addressed, connected or not.
+#[tokio::test]
+async fn an_unconnected_app_outside_the_scope_is_never_permitted() {
+    let world = World::new().holding(row(SourceKind::Pipedream, app_key("notion")));
+    let connections = world.connectors().connections(&user()).await.unwrap();
+    let scoped = connections.scoped(&Selection::Apps(vec![app("asana")]));
+
+    for slug in ["notion", "linear"] {
+        assert_eq!(
+            scoped.permit_unconnected(&app_key(slug)).unwrap_err(),
+            PermitRefused::OutOfScope
+        );
+    }
+}
+
+/// An app whose counted source reaches it only through the user's own
+/// connection is not addressed: Connect for a flagged user (even one still
+/// holding a Pipedream row, which the rules ignore), an overlaid app's
+/// native server, and the GitHub link. The caller keeps the connect prompt.
+#[tokio::test]
+async fn an_unconnected_app_whose_source_needs_a_connection_is_not_addressed() {
+    let world = World::new()
+        .flagged(&user())
+        .holding(row(SourceKind::Pipedream, app_key("linear")));
+    let connectors = world.connectors();
+    let connections = connectors.connections(&user()).await.unwrap();
+
+    for slug in ["linear", "stripe", "github"] {
+        let permitted = connections.permit_unconnected(&app_key(slug)).unwrap();
+        assert!(!permitted.is_connected());
+
+        assert!(
+            matches!(
+                connectors.upstream(permitted).await,
+                Err(ConnectorsError::NotFound(key)) if key == app_key(slug)
+            ),
+            "{slug} must not be addressed without a connection"
+        );
+    }
+}
+
+/// A server added by URL is never addressed without its row, and an app the
+/// owner can use is permitted as connected.
+#[tokio::test]
+async fn permitting_unconnected_never_widens_a_server_or_weakens_a_connection() {
+    let world = World::new().holding(row(SourceKind::Pipedream, app_key("notion")));
+    let connectors = world.connectors();
+    let connections = connectors.connections(&user()).await.unwrap();
+
+    assert_eq!(
+        connections
+            .permit_unconnected(&server_key("https://tools.example.com/mcp"))
+            .unwrap_err(),
+        PermitRefused::NotUsable(Status::NotConnected)
+    );
+    let notion = connections.permit_unconnected(&app_key("notion")).unwrap();
+    assert!(notion.is_connected());
+    assert_eq!(
+        connectors.upstream(notion).await.unwrap().bearer(),
+        Some("fake-token")
+    );
+}
+
 // API connections.
 
 #[tokio::test]

@@ -1,8 +1,8 @@
 use super::*;
 use crate::domain::model::{
-    AgentSessionId, BearerToken, CustomMcpServerKey, GitEndpoint, GitService, McpDestination,
-    McpServerListing, McpServerSlug, ProxyBody, RepoSlug, SessionGrant, UpstreamCall,
-    UpstreamCredential,
+    AgentSessionId, BearerToken, CONNECT_TOOL_NAME, CustomMcpServerKey, GitEndpoint, GitService,
+    McpDestination, McpServerListing, McpServerSlug, ProxyBody, RepoSlug, SessionGrant,
+    UpstreamCall, UpstreamCredential,
 };
 use bot_id::BotId;
 use connectors::{ConnectorId, Selection};
@@ -104,6 +104,8 @@ enum Knowledge {
     Connected,
     /// The agent may reach it, but the owner cannot use it yet.
     Unconnected,
+    /// The owner cannot use it yet, but its upstream addresses them anyway.
+    Addressable,
     /// Connected once; the grant has since died, with the owner's name for
     /// the server, the way the connectors adapter reports one.
     Disconnected,
@@ -148,6 +150,15 @@ impl SpyCredentials {
     fn unconnected() -> Self {
         Self {
             known: Knowledge::Unconnected,
+            ..Self::knowing()
+        }
+    }
+
+    /// An app the owner has not connected whose upstream still addresses
+    /// them, as Pipedream does.
+    fn addressable() -> Self {
+        Self {
+            known: Knowledge::Addressable,
             ..Self::knowing()
         }
     }
@@ -243,7 +254,7 @@ impl McpCredentials for SpyCredentials {
                     name: "Team wiki".to_owned(),
                 });
             }
-            Knowledge::Connected | Knowledge::Anonymous => {}
+            Knowledge::Connected | Knowledge::Anonymous | Knowledge::Addressable => {}
         }
 
         let url = Url::parse(&self.url).expect("url");
@@ -252,6 +263,9 @@ impl McpCredentials for SpyCredentials {
         }
         let call = UpstreamCall::bearer(url, BearerToken::new("upstream-token"))?
             .scoped_by(self.scope.clone());
+        if self.known == Knowledge::Addressable {
+            return Ok(McpResolution::Unconnected(call));
+        }
         Ok(McpResolution::Connected(call))
     }
 }
@@ -592,7 +606,7 @@ async fn the_handshake_and_listing_of_an_unconnected_app_are_answered_locally() 
             let answer = body_json(response).await;
             assert!(answer.get("error").is_none(), "{answer}");
             if body.is_some_and(|body| body.contains("tools/list")) {
-                assert_eq!(answer["result"]["tools"][0]["name"], "connect");
+                assert_eq!(answer["result"]["tools"][0]["name"], CONNECT_TOOL_NAME);
                 let description = answer["result"]["tools"][0]["description"]
                     .as_str()
                     .expect("a description");
@@ -603,6 +617,126 @@ async fn the_handshake_and_listing_of_an_unconnected_app_are_answered_locally() 
             }
         }
     }
+}
+
+/// An app the owner has not connected whose upstream addresses them anyway
+/// (Pipedream) behaves as on a connected one until a tool runs: the
+/// handshake, the listing, notifications, the event stream and teardown are
+/// forwarded with the owner's credential, so the session sees the app's
+/// real tools. Only a `tools/call` is answered here, with how to connect.
+#[tokio::test]
+async fn an_addressable_unconnected_app_forwards_everything_but_a_tool_call() {
+    for (method, body) in [
+        (
+            Method::POST,
+            Some(r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#),
+        ),
+        (
+            Method::POST,
+            Some(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#),
+        ),
+        (
+            Method::POST,
+            Some(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#),
+        ),
+        (Method::GET, None),
+        (Method::DELETE, None),
+    ] {
+        let service = EgressServiceImpl::new(
+            StubSessions::granting_with(selected(&[("datadog", "Datadog")])),
+            SpyCredentials::addressable(),
+            SpyGithubTokens::default(),
+            SpyForwarder::answering(&[]),
+        );
+        let request = match body {
+            Some(body) => json_request(body),
+            None => request(method.clone(), &[]),
+        };
+
+        service
+            .proxy(&SessionToken::new("token"), datadog(), request)
+            .await
+            .expect("forwarded");
+
+        assert!(service.forward.was_called(), "{method} {body:?}");
+        assert_eq!(
+            service
+                .forward
+                .forwarded(|parts| parts.headers[AUTHORIZATION].clone()),
+            "Bearer upstream-token",
+            "{method} {body:?}"
+        );
+    }
+
+    let service = EgressServiceImpl::new(
+        StubSessions::granting_with(selected(&[("datadog", "Datadog")])),
+        SpyCredentials::addressable(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    );
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(
+                r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"list_monitors","arguments":{}}}"#,
+            ),
+        )
+        .await
+        .expect("answered");
+
+    assert!(!service.forward.was_called());
+    let body = body_json(response).await;
+    assert_eq!(body["id"], 7);
+    assert_eq!(body["result"]["isError"], true);
+    let text = body["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.contains(r#"<m-connect-app>{"appSlug":"datadog","name":"Datadog"}</m-connect-app>"#),
+        "{text}"
+    );
+}
+
+/// A session that listed the connect tool before the owner connected the
+/// app keeps that listing; calling it once the app is connected is answered
+/// here, since the app's server has no such tool. Its real tools go through.
+#[tokio::test]
+async fn the_connect_tool_called_after_connecting_is_answered_locally() {
+    let service = EgressServiceImpl::new(
+        StubSessions::granting_with(selected(&[("datadog", "Datadog")])),
+        SpyCredentials::knowing(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    );
+
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(&format!(
+                r#"{{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{{"name":"{CONNECT_TOOL_NAME}","arguments":{{}}}}}}"#
+            )),
+        )
+        .await
+        .expect("answered");
+
+    assert!(!service.forward.was_called());
+    let body = body_json(response).await;
+    assert_eq!(body["id"], 3);
+    let text = body["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(text.contains("Datadog is connected now"), "{text}");
+
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(
+                r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_monitors","arguments":{}}}"#,
+            ),
+        )
+        .await
+        .expect("forwarded");
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert!(service.forward.was_called());
 }
 
 /// The one path that reads a request body is bounded.
@@ -772,7 +906,7 @@ async fn the_listing_of_a_disconnected_custom_server_is_answered_locally() {
     assert_eq!(response.status(), StatusCode::OK);
     assert!(!service.forward.was_called());
     let body = body_json(response).await;
-    assert_eq!(body["result"]["tools"][0]["name"], "connect");
+    assert_eq!(body["result"]["tools"][0]["name"], CONNECT_TOOL_NAME);
 }
 
 /// The resolver's refusal of a key that names none of the owner's servers

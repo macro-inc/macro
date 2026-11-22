@@ -115,6 +115,19 @@ pub(crate) trait Source: Send + Sync {
         app: &ConnectorId,
     ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report>;
 
+    /// How to reach `app` for a user who holds no usable connection to it
+    /// here, when this source can address them anyway: one that scopes a
+    /// call by user and app, so listing the app's tools works and calling
+    /// one fails until they connect. `None` for a source that needs the
+    /// user's own connection to reach the app at all.
+    async fn address_unconnected(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        _app: &ConnectorId,
+    ) -> Result<Option<Upstream>, rootcause::Report> {
+        Ok(None)
+    }
+
     /// Begin connecting `key` for the user: an app, or signing in to a
     /// server added by URL.
     async fn start_connect(

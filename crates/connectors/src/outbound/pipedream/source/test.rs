@@ -22,6 +22,8 @@ struct FakePipedream {
     accounts: Vec<PipedreamAccount>,
     asked: Mutex<Vec<String>>,
     revoked: Mutex<Vec<String>>,
+    /// The user and Pipedream slug of every upstream addressed.
+    addressed: Mutex<Vec<(String, String)>>,
 }
 
 #[async_trait::async_trait]
@@ -74,8 +76,16 @@ impl PipedreamVendor for FakePipedream {
         Err(rootcause::report!("not dialed in source tests"))
     }
 
-    async fn upstream(&self, _record: &PipedreamConnection) -> Result<McpUpstreamCall, Report> {
-        Err(rootcause::report!("not addressed in source tests"))
+    async fn upstream(&self, record: &PipedreamConnection) -> Result<McpUpstreamCall, Report> {
+        self.addressed
+            .lock()
+            .unwrap()
+            .push((record.user_id.as_ref().to_owned(), record.app_slug.clone()));
+        Ok(McpUpstreamCall {
+            url: Url::parse("https://remote.mcp.pipedream.test/").unwrap(),
+            bearer_token: "pd-token".to_owned(),
+            headers: http::HeaderMap::new(),
+        })
     }
 
     async fn proxy(
@@ -182,6 +192,27 @@ async fn supports_asks_pipedream_for_the_connectable_slug(pool: PgPool) {
     );
     assert_eq!(pipedream.supports(&app("unknown_app")).await.unwrap(), None);
     assert_eq!(*vendor.asked.lock().unwrap(), ["slack_v2", "unknown_app"]);
+}
+
+/// An app the user holds no connection to is still addressed, by the user
+/// and the app's connectable slug, since Pipedream scopes a call by those
+/// alone.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_unconnected_app_is_addressed_by_user_and_connectable_slug(pool: PgPool) {
+    let vendor = Arc::new(FakePipedream::default());
+    let pipedream = source(pool, vendor.clone(), Arc::default());
+
+    let upstream = pipedream
+        .address_unconnected(&user(), &app("slack"))
+        .await
+        .unwrap()
+        .expect("Pipedream addresses an unconnected user");
+
+    assert_eq!(upstream.bearer(), Some("pd-token"));
+    assert_eq!(
+        *vendor.addressed.lock().unwrap(),
+        [(USER.to_owned(), "slack_v2".to_owned())]
+    );
 }
 
 /// Completing stores the newest account Pipedream holds for the user, takes

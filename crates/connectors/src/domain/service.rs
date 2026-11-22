@@ -35,7 +35,11 @@ pub trait McpConnectionsService: Send + Sync + 'static {
     fn toolset(&self, connections: &[McpHandle]) -> impl Future<Output = UserMcpTools> + Send;
 
     /// The upstream call for the sandbox proxy. Takes proof the session may
-    /// reach it.
+    /// reach it. For an app the user cannot use yet
+    /// ([`McpConnections::permit_unconnected`]), the upstream its counted
+    /// source addresses them at without a connection, which lists tools but
+    /// must not be sent a call; [`ConnectorsError::NotFound`] when that
+    /// source cannot address them.
     fn upstream(&self, permitted: Permitted<'_>) -> impl Future<Output = Result<Upstream>> + Send;
 }
 
@@ -342,6 +346,23 @@ impl Connectors {
         Ok((source, key))
     }
 
+    /// The upstream an app's counted source addresses a user at who holds
+    /// no usable connection to it, or [`ConnectorsError::NotFound`] when that
+    /// source cannot.
+    async fn address_unconnected(&self, permitted: &Permitted<'_>) -> Result<Upstream> {
+        let key = permitted.key();
+        let ConnectorKey::App(app) = key else {
+            return Err(ConnectorsError::NotFound(key.clone()));
+        };
+        let user = permitted.user();
+        let (source, _) = self.designated(user, app).await?;
+        source
+            .address_unconnected(user, app)
+            .await
+            .map_err(refusal_error)?
+            .ok_or_else(|| ConnectorsError::NotFound(key.clone()))
+    }
+
     /// Every connection the user holds that is to `key`, each with the
     /// source holding it. A native row at an overlay server is to every app
     /// overlaid there.
@@ -493,12 +514,10 @@ impl McpConnectionsService for Connectors {
 
     #[tracing::instrument(name = "connectors.upstream", skip_all, err, fields(connector = %permitted.key()))]
     async fn upstream(&self, permitted: Permitted<'_>) -> Result<Upstream> {
-        permitted
-            .handle()
-            .connection()
-            .upstream()
-            .await
-            .map_err(refusal_error)
+        match permitted.handle() {
+            Some(handle) => handle.connection().upstream().await.map_err(refusal_error),
+            None => self.address_unconnected(&permitted).await,
+        }
     }
 }
 

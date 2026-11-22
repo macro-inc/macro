@@ -330,7 +330,10 @@ async fn an_in_process_listing_reads_the_owner_catalog_and_an_unconnected_call_o
         .unwrap();
 
     // Unconnected for the owner too, so the listing is the connect tool.
-    assert_eq!(listing["tools"][0]["name"], "connect");
+    assert_eq!(
+        listing["tools"][0]["name"],
+        crate::domain::model::CONNECT_TOOL_NAME
+    );
     assert_eq!(call["isError"], true);
     assert!(
         call["content"][0]["text"]
@@ -572,6 +575,110 @@ async fn an_app_outside_the_agents_selection_is_refused_on_the_actor_path() {
         .expect_err("refused");
     assert!(matches!(listing, EgressError::OutOfScope), "{listing:?}");
 
+    assert!(transport.0.lock().unwrap().is_empty());
+    assert!(!service.forward.was_called());
+}
+
+/// An app nobody has connected whose upstream addresses the owner anyway
+/// lists its real tools through the actor transport, and a call of one is
+/// answered with how to connect, never sent.
+#[tokio::test]
+async fn an_addressable_unconnected_app_lists_real_tools_and_refuses_a_call() {
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let transport = Arc::new(ActorTransport::default());
+    let service = gated(
+        prompted_by(Some(asker.clone())),
+        SpyCredentials::addressable(),
+    )
+    .with_actor_mcp(transport.clone());
+    let linear = || {
+        EgressTarget::McpServer(McpDestination::Connected(
+            McpServerSlug::parse("linear").unwrap(),
+        ))
+    };
+
+    let listing = service
+        .proxy(
+            &SessionToken::new("session"),
+            linear(),
+            json_request(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#),
+        )
+        .await
+        .unwrap();
+    let call = service
+        .proxy(
+            &SessionToken::new("session"),
+            linear(),
+            json_request(
+                r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search","arguments":{"acting_as":"requester","q":"x"}}}"#,
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        body_json(listing).await["result"]["tools"][0]["name"],
+        "search"
+    );
+    let call = body_json(call).await;
+    assert_eq!(call["result"]["isError"], true);
+    assert!(
+        call["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("<m-connect-app>")
+    );
+    let sent = transport.0.lock().unwrap();
+    assert_eq!(sent.len(), 1);
+    assert_eq!(sent[0]["method"], "tools/list");
+    assert!(!service.forward.was_called());
+}
+
+/// The connect tool, listed before the owner connected the app, is answered
+/// locally on the actor path too, once the app is connected: the app's
+/// server has no such tool.
+#[tokio::test]
+async fn the_connect_tool_is_answered_locally_on_the_actor_path_once_connected() {
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let transport = Arc::new(ActorTransport::default());
+    let service = gated(prompted_by(Some(asker.clone())), SpyCredentials::knowing())
+        .with_actor_mcp(transport.clone());
+    let linear = McpDestination::Connected(McpServerSlug::parse("linear").unwrap());
+    let connect_tool = json!({
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "tools/call",
+        "params": {
+            "name": crate::domain::model::CONNECT_TOOL_NAME,
+            "arguments": {"acting_as": "requester"},
+        },
+    });
+
+    let response = service
+        .proxy(
+            &SessionToken::new("session"),
+            EgressTarget::McpServer(linear.clone()),
+            json_request(&connect_tool.to_string()),
+        )
+        .await
+        .unwrap();
+    let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
+    let in_process = service
+        .exchange_as(&grant, &asker, &linear, connect_tool.clone())
+        .await
+        .unwrap();
+
+    let response = body_json(response).await;
+    assert_eq!(response["id"], 5);
+    for result in [&response["result"], &in_process] {
+        assert_eq!(result["isError"], true);
+        assert!(
+            result["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("is connected now")
+        );
+    }
     assert!(transport.0.lock().unwrap().is_empty());
     assert!(!service.forward.was_called());
 }

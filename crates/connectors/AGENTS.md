@@ -22,7 +22,11 @@ Pipedream, Macro Connect) or tell which one holds a connection.
   app, `slack_v2` is `slack`, a native row is an app only at its overlay URL,
   API access from the counted connection, a failed flag read is off). Its
   tests are the rule table and the properties. Agent scope (rule 7) is
-  `McpConnections::scoped`/`permit` in `domain/models.rs`; a GitHub link that
+  `McpConnections::scoped`/`permit` in `domain/models.rs`;
+  `permit_unconnected` permits an app in scope the user cannot use, which
+  `upstream` addresses only where its counted source can reach any user
+  (`Source::address_unconnected`: Pipedream, by user and slug), for the
+  proxy to list its tools before they connect. A GitHub link that
   needs reauth (rule 8) is `outbound/github_link.rs`.
 - `src/domain/policy.rs`: the only reader of the `macro-connect` flag, through
   one per-user cache. The string appears in no other Rust file (CI checks).

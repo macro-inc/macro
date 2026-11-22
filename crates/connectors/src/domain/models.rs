@@ -376,22 +376,57 @@ impl fmt::Debug for ApiHandle {
     }
 }
 
-/// Proof that a session's scope allows a destination and that the
-/// destination is connected. Only [`McpConnections::permit`] builds one.
-#[derive(Clone, Copy, Debug)]
+/// Proof that a session's scope allows a destination. Only
+/// [`McpConnections::permit`] and [`McpConnections::permit_unconnected`]
+/// build one.
+///
+/// From `permit`, the destination is connected. From `permit_unconnected`,
+/// it is an app the user cannot use yet, which
+/// [`McpConnectionsService::upstream`](crate::McpConnectionsService::upstream)
+/// still addresses for them where the app's counted source can: listing its
+/// tools then works, and calling one is the caller's to answer with how to
+/// connect it.
+#[derive(Clone, Debug)]
 pub struct Permitted<'a> {
-    handle: &'a McpHandle,
+    user: &'a MacroUserIdStr<'static>,
+    reach: Reach<'a>,
+}
+
+#[derive(Clone, Debug)]
+enum Reach<'a> {
+    /// A connection the rules count and allow.
+    Connected(&'a McpHandle),
+    /// An app in scope the user holds no usable connection to.
+    Unconnected(ConnectorKey),
 }
 
 impl<'a> Permitted<'a> {
-    /// The permitted connection's app or server.
-    pub fn key(&self) -> &'a ConnectorKey {
-        &self.handle.key
+    /// The permitted app or server.
+    pub fn key(&self) -> &ConnectorKey {
+        match &self.reach {
+            Reach::Connected(handle) => &handle.key,
+            Reach::Unconnected(key) => key,
+        }
     }
 
-    /// The permitted connection.
-    pub(crate) fn handle(&self) -> &'a McpHandle {
-        self.handle
+    /// Whether the user has a usable connection to it. When not, its
+    /// upstream (if it has one) lists tools but must not be sent a call.
+    pub fn is_connected(&self) -> bool {
+        matches!(self.reach, Reach::Connected(_))
+    }
+
+    /// The user the destination is reached for.
+    pub(crate) fn user(&self) -> &'a MacroUserIdStr<'static> {
+        self.user
+    }
+
+    /// The permitted connection; `None` for a destination the user cannot
+    /// use yet.
+    pub(crate) fn handle(&self) -> Option<&'a McpHandle> {
+        match &self.reach {
+            Reach::Connected(handle) => Some(handle),
+            Reach::Unconnected(_) => None,
+        }
     }
 }
 
@@ -489,8 +524,33 @@ impl McpConnections {
             return Err(PermitRefused::NotUsable(Status::NotConnected));
         };
         match &resolved.mcp {
-            Some(handle) => Ok(Permitted { handle }),
+            Some(handle) => Ok(Permitted {
+                user: &self.user,
+                reach: Reach::Connected(handle),
+            }),
             None => Err(PermitRefused::NotUsable(resolved.status)),
+        }
+    }
+
+    /// Proof that `key`, an app in scope the user cannot use yet (never
+    /// connected, or turned off), may still be addressed for them, so a
+    /// client can list its tools before they connect it.
+    ///
+    /// Whether it can be addressed is the app's counted source's to say:
+    /// [`McpConnectionsService::upstream`](crate::McpConnectionsService::upstream)
+    /// refuses one whose source needs the user's own connection to reach it.
+    /// An app outside the scope is refused outright, a server added by URL
+    /// is never addressable without its row, and an app the user can use is
+    /// permitted as [`Self::permit`] permits it.
+    pub fn permit_unconnected(&self, key: &ConnectorKey) -> Result<Permitted<'_>, PermitRefused> {
+        match self.permit(key) {
+            Err(PermitRefused::NotUsable(_)) if matches!(key, ConnectorKey::App(_)) => {
+                Ok(Permitted {
+                    user: &self.user,
+                    reach: Reach::Unconnected(key.clone()),
+                })
+            }
+            answer => answer,
         }
     }
 

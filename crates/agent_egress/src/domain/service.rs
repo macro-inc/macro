@@ -13,9 +13,9 @@ use crate::domain::error::EgressError;
 use crate::domain::model::{
     EgressTarget, MAX_MCP_REQUEST_BYTES, McpDestination, McpResolution, ProxyRequest,
     ProxyResponse, SessionToken, TOOLS_CALL_METHOD, UpstreamCall, answered_initialize,
-    connect_prompt_listing, disconnected_text, ensure_method_allowed, json_rpc_method_not_found,
-    json_rpc_result, not_connected_text, peek_json_rpc, sanitize_request_headers,
-    sanitize_response_headers, tool_result_response,
+    calls_connect_tool, connect_prompt_listing, connected_since_listing_text, disconnected_text,
+    ensure_method_allowed, json_rpc_method_not_found, json_rpc_result, not_connected_text,
+    peek_json_rpc, sanitize_request_headers, sanitize_response_headers, tool_result_response,
 };
 use crate::domain::observed_body::{ObservedBody, StreamIdentity};
 use crate::domain::ports::{Forwarder, GithubTokens, McpCredentials, SessionAuthority};
@@ -278,7 +278,38 @@ where
                     )
                     .await?
                 {
-                    McpResolution::Connected(call) => call,
+                    McpResolution::Connected(call) => {
+                        match Self::answer_connect_tool(&grant, destination, request).await? {
+                            Inspected::Answered(response) => return Ok(response),
+                            Inspected::Forward(forwarded) => {
+                                request = forwarded;
+                                call
+                            }
+                        }
+                    }
+                    // The owner cannot use this app yet, but its upstream
+                    // addresses them anyway: the handshake and listing go
+                    // through, so the session sees the app's real tools, and
+                    // a tool call is answered here with how to connect it.
+                    // Once the owner does, the same advertised app resolves
+                    // as connected and calls flow through.
+                    McpResolution::Unconnected(call) => {
+                        let (name, text) = match destination {
+                            McpDestination::Connected(slug) => {
+                                let name = grant.display_name(slug);
+                                let text = not_connected_text(slug, &name);
+                                (name, text)
+                            }
+                            _ => ("MCP server".to_owned(), NO_CONNECTION.to_owned()),
+                        };
+                        match Self::answer_unconnected_call(&name, text, request).await? {
+                            Inspected::Answered(response) => return Ok(response),
+                            Inspected::Forward(forwarded) => {
+                                request = forwarded;
+                                call
+                            }
+                        }
+                    }
                     // The agent may reach this app, but the owner cannot use
                     // it yet, so there is no upstream to forward to. The
                     // proxy answers the client itself: its handshake works,
@@ -542,6 +573,81 @@ impl<Sessions, Credentials, Tokens, Forward, Approvals>
             TOOLS_CALL_METHOD => tool_result_response(call.id, text),
             _ => json_rpc_method_not_found(call.id),
         })
+    }
+}
+
+/// What became of a request the proxy looked inside before forwarding.
+enum Inspected {
+    /// The proxy answered it itself; nothing goes upstream.
+    Answered(ProxyResponse),
+    /// Forward it. The body has been read and put back.
+    Forward(ProxyRequest),
+}
+
+impl<Sessions, Credentials, Tokens, Forward, Approvals>
+    EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
+{
+    /// An app the owner cannot use yet whose upstream addresses them
+    /// anyway: forward everything but a `tools/call`, which is answered
+    /// with `text`, naming the app and how to connect it.
+    async fn answer_unconnected_call(
+        name: &str,
+        text: String,
+        request: ProxyRequest,
+    ) -> Result<Inspected, EgressError> {
+        if *request.method() != Method::POST {
+            return Ok(Inspected::Forward(request));
+        }
+        let (parts, bytes) = read_mcp_body(request).await?;
+        let Some(call) = peek_json_rpc(&bytes) else {
+            return Ok(Inspected::Forward(ProxyRequest::from_parts(
+                parts,
+                full_body(bytes),
+            )));
+        };
+        if call.method == TOOLS_CALL_METHOD {
+            tracing::info!(app = %name, "answering tools/call for an app the owner has not connected");
+            return Ok(Inspected::Answered(tool_result_response(call.id, text)));
+        }
+
+        Ok(Inspected::Forward(ProxyRequest::from_parts(
+            parts,
+            full_body(bytes),
+        )))
+    }
+
+    /// A connected app or server: a call of the connect tool the proxy
+    /// listed before the owner connected it is answered here, since the
+    /// upstream has no such tool. Everything else is forwarded.
+    async fn answer_connect_tool(
+        grant: &crate::domain::model::SessionGrant,
+        destination: &McpDestination,
+        request: ProxyRequest,
+    ) -> Result<Inspected, EgressError> {
+        let name = match destination {
+            McpDestination::Connected(slug) => grant.display_name(slug),
+            McpDestination::Custom(_) => "This MCP server".to_owned(),
+            McpDestination::Macro | McpDestination::Preview => {
+                return Ok(Inspected::Forward(request));
+            }
+        };
+        if *request.method() != Method::POST {
+            return Ok(Inspected::Forward(request));
+        }
+        let (parts, bytes) = read_mcp_body(request).await?;
+        if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes)
+            && calls_connect_tool(&value)
+        {
+            return Ok(Inspected::Answered(tool_result_response(
+                value["id"].clone(),
+                connected_since_listing_text(&name),
+            )));
+        }
+
+        Ok(Inspected::Forward(ProxyRequest::from_parts(
+            parts,
+            full_body(bytes),
+        )))
     }
 }
 
