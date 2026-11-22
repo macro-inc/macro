@@ -41,7 +41,8 @@ agent's brain waiting while a person drives.
   parallel opens can pass a cap by a few.
 - A take-over takes the lease only when it is free, lapsed or the same
   user's: the upsert is guarded, so two people taking over at once never both
-  hold it. The guard, the renewal and the lapse read `clock_timestamp()`,
+  hold it. The guard, the new lease's times, the renewal and the lapse read
+  `clock_timestamp()`,
   not `now()`: `now()` is the transaction's start, before any wait on the
   lease row.
 - A lease lapses `LEASE_TTL` after its last renewal (driver input renews it
