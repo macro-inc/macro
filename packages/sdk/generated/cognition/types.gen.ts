@@ -514,7 +514,7 @@ export type ConnectStep = {
     /**
      * RFC 3339 expiry of the token.
      */
-    expires_at: string;
+    expiresAt: string;
     /**
      * A page that opens the same flow in a browser tab.
      */
@@ -527,19 +527,21 @@ export type ConnectStep = {
 };
 
 /**
- * One of the user's MCP server connections, as the setup page sees it.
+ * One of the user's usable connections, an app or a server added by URL,
+ * as the setup page sees it.
  */
 export type ConnectedServer = {
     /**
-     * Whether the user has completed OAuth against it.
+     * Whether it is usable; always true, since only usable connections are
+     * listed.
      */
     authenticated: boolean;
     /**
-     * The server's display name.
+     * The display name.
      */
     name: string;
     /**
-     * The server URL.
+     * The app's slug, or the server's URL.
      */
     url: string;
 };
@@ -1643,7 +1645,7 @@ export type OnboardingRow = {
  */
 export type OnboardingState = {
     /**
-     * The user's MCP server connections.
+     * The user's usable connections.
      */
     connected_servers: Array<ConnectedServer>;
     /**

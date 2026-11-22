@@ -12,7 +12,7 @@ reports success, call `POST /connectors/{kind}/{id}/complete`.
  */
 export type ConnectStepOneOfThree = {
   /** RFC 3339 expiry of the token. */
-  expires_at: string;
+  expiresAt: string;
   /** A page that opens the same flow in a browser tab. */
   link: string;
   /** The token the dialog opens with. */

@@ -16,9 +16,8 @@ import {
 } from '../ai-usage-limit';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
 import type { CatalogPage } from './generated/schemas/catalogPage';
-import type { ConnectStep } from './generated/schemas/connectStep';
 import type { Connector } from './generated/schemas/connector';
-import type { UpdateConnectorRequest } from './generated/schemas/updateConnectorRequest';
+import type { ConnectStep } from './generated/schemas/connectStep';
 import type { DatabaseQueryAnswer } from './generated/schemas/databaseQueryAnswer';
 import type { DatabaseQueryRequest } from './generated/schemas/databaseQueryRequest';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
@@ -30,6 +29,7 @@ import type { StopChatStreamRequest } from './generated/schemas/stopChatStreamRe
 import type { StopChatStreamResponse } from './generated/schemas/stopChatStreamResponse';
 import type { StructuredCompletionRequest } from './generated/schemas/structuredCompletionRequest';
 import type { StructuredCompletionResponse } from './generated/schemas/structuredCompletionResponse';
+import type { UpdateConnectorRequest } from './generated/schemas/updateConnectorRequest';
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 

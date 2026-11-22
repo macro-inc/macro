@@ -4108,9 +4108,9 @@
           {
             "type": "object",
             "description": "Open the embedded connect dialog with this short-lived token. When it\nreports success, call `POST /connectors/{kind}/{id}/complete`.",
-            "required": ["token", "expires_at", "link", "type"],
+            "required": ["token", "expiresAt", "link", "type"],
             "properties": {
-              "expires_at": {
+              "expiresAt": {
                 "type": "string",
                 "description": "RFC 3339 expiry of the token."
               },
@@ -4133,20 +4133,20 @@
       },
       "ConnectedServer": {
         "type": "object",
-        "description": "One of the user's MCP server connections, as the setup page sees it.",
+        "description": "One of the user's usable connections, an app or a server added by URL,\nas the setup page sees it.",
         "required": ["name", "url", "authenticated"],
         "properties": {
           "authenticated": {
             "type": "boolean",
-            "description": "Whether the user has completed OAuth against it."
+            "description": "Whether it is usable; always true, since only usable connections are\nlisted."
           },
           "name": {
             "type": "string",
-            "description": "The server's display name."
+            "description": "The display name."
           },
           "url": {
             "type": "string",
-            "description": "The server URL."
+            "description": "The app's slug, or the server's URL."
           }
         }
       },
@@ -6236,7 +6236,7 @@
             "items": {
               "$ref": "#/components/schemas/ConnectedServer"
             },
-            "description": "The user's MCP server connections."
+            "description": "The user's usable connections."
           },
           "row": {
             "$ref": "#/components/schemas/OnboardingRow",
