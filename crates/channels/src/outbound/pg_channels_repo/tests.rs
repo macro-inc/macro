@@ -375,6 +375,141 @@ async fn a_by_id_read_that_mentions_participation_returns_every_channel_the_user
     );
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_read_keyed_by_ids_or_team_keeps_joined_channels_only(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::NotificationState::Done;
+
+    seed_channel_list_notifications(&pool).await?;
+    let repo = repo(pool);
+    let joined: HashSet<Uuid> = repo
+        .get_user_channels_with_participants(channels_params(LEFT_USER, None))
+        .await?
+        .into_iter()
+        .map(|c| c.channel.id)
+        .collect();
+    let id = |id| Expr::val(ChannelLiteral::ChannelId(id));
+    let participant = Expr::val(ChannelLiteral::IsParticipant(true));
+    let named_ids = [CH1, TEAM_A_AUTO_ACTIVE, TEAM_A_AUTO_LEFT, TEAM_B_AUTO];
+    let named = named_ids.into_iter().map(id).reduce(Expr::or).unwrap();
+    let joined_named: HashSet<Uuid> = named_ids
+        .into_iter()
+        .filter(|id| joined.contains(id))
+        .collect();
+    assert_eq!(
+        joined_named,
+        HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_B_AUTO])
+    );
+
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, named.clone()).await,
+        joined_named
+    );
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, Expr::and(participant.clone(), named)).await,
+        joined_named
+    );
+    // Team A's left channel is the team's, but left-user left it.
+    assert_eq!(
+        channel_ids_matching(
+            &repo,
+            LEFT_USER,
+            Expr::and(participant, Expr::val(ChannelLiteral::TeamId(TEAM_A)))
+        )
+        .await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE, TEAM_A_MANUAL])
+    );
+    let not_done = |channel| Expr::and(id(channel), Expr::is_not(channel_state(Done)));
+    assert_eq!(
+        channel_ids_matching(&repo, LEFT_USER, not_done(TEAM_A_AUTO_ACTIVE)).await,
+        HashSet::from([TEAM_A_AUTO_ACTIVE])
+    );
+    assert!(
+        channel_ids_matching(&repo, LEFT_USER, not_done(TEAM_B_AUTO))
+            .await
+            .is_empty()
+    );
+    Ok(())
+}
+
+#[test]
+fn joined_candidates_start_from_named_ids_or_teams() {
+    use super::ChannelCandidates::{Joined, JoinedByChannel, JoinedKeyed, Named, WithTeamChannels};
+    use item_filters::NotificationState::Done;
+
+    let id = || Expr::val(ChannelLiteral::ChannelId(CH1));
+    let team = || Expr::val(ChannelLiteral::TeamId(TEAM_A));
+    let participant = |is| Expr::val(ChannelLiteral::IsParticipant(is));
+    let org = || Expr::val(ChannelLiteral::OrganizationId(1));
+    let pick = |filter: Expr<ChannelLiteral>| {
+        format!("{:?}", super::ChannelCandidates::for_filter(Some(filter)))
+    };
+    let want = |candidates: super::ChannelCandidates, filter: Option<Expr<ChannelLiteral>>| {
+        format!("{:?}", (candidates, filter))
+    };
+
+    assert_eq!(
+        format!("{:?}", super::ChannelCandidates::for_filter(None)),
+        want(Joined, None)
+    );
+    assert_eq!(pick(id()), want(JoinedKeyed, Some(id())));
+    assert_eq!(
+        pick(Expr::or(id(), team())),
+        want(JoinedKeyed, Some(Expr::or(id(), team())))
+    );
+    assert_eq!(
+        pick(Expr::and(participant(true), id())),
+        want(JoinedKeyed, Some(id()))
+    );
+    assert_eq!(
+        pick(Expr::and(Expr::and(team(), participant(true)), org())),
+        want(JoinedKeyed, Some(Expr::and(team(), org())))
+    );
+    assert_eq!(pick(participant(true)), want(Joined, None));
+    assert_eq!(
+        pick(Expr::or(id(), org())),
+        want(Joined, Some(Expr::or(id(), org())))
+    );
+    assert_eq!(
+        pick(Expr::is_not(id())),
+        want(Joined, Some(Expr::is_not(id())))
+    );
+    assert_eq!(
+        pick(Expr::is_not(channel_state(Done))),
+        want(JoinedByChannel, Some(Expr::is_not(channel_state(Done))))
+    );
+    assert_eq!(
+        pick(Expr::and(participant(true), channel_state(Done))),
+        want(JoinedByChannel, Some(channel_state(Done)))
+    );
+    assert_eq!(
+        pick(Expr::and(id(), channel_state(Done))),
+        want(JoinedKeyed, Some(Expr::and(id(), channel_state(Done))))
+    );
+    let either = Expr::or(participant(true), participant(false));
+    assert_eq!(
+        pick(Expr::and(id(), either.clone())),
+        want(Named, Some(Expr::and(id(), either.clone())))
+    );
+    assert_eq!(
+        pick(Expr::and(team(), either.clone())),
+        want(WithTeamChannels, Some(Expr::and(team(), either)))
+    );
+
+    let sql = super::build_channel_list_query(&Some(Arc::new(Expr::and(participant(true), id()))))
+        .sql()
+        .to_owned();
+    assert!(!sql.contains("fcp"), "{sql}");
+    assert!(
+        sql.find("c.id = ").unwrap() < sql.find("OFFSET 0").unwrap(),
+        "the ids narrow the channels inside the fence: {sql}"
+    );
+}
+
 fn channel_state(state: item_filters::NotificationState) -> Expr<ChannelLiteral> {
     Expr::val(ChannelLiteral::NotificationState(state))
 }

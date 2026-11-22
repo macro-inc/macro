@@ -485,19 +485,23 @@ fn id_to_display_name(user_id: &MacroUserIdStr<'static>, name_lookup: &NameLooku
 
 /// Candidate set of channels the viewer participates in.
 ///
-/// Reads the viewer's memberships, then each channel by primary key, with
-/// both behind `OFFSET 0` fences. A plain join lets the planner push a
-/// page's cursor onto `comms_channels` and scan that whole table for it,
-/// which on default cost settings it did for most keyset pages of a viewer
-/// in 15,000 channels. Fenced, a page reads the viewer's channels and no
-/// others, whatever the plan.
+/// Reads the viewer's memberships with their activity, then each channel by
+/// primary key, with both behind `OFFSET 0` fences. A plain join lets the
+/// planner push a page's cursor onto `comms_channels` and scan that whole
+/// table for it, which on default cost settings it did for most keyset pages
+/// of a viewer in 15,000 channels. Fenced, a page reads the viewer's channels
+/// and no others, whatever the plan. The activity join sits inside the
+/// membership fence so the viewer's activity is read once by user rather than
+/// probed once per channel, which doubled the reads of a page sorted by view
+/// time.
 #[cfg(feature = "list")]
 static CHANNEL_LIST_PREFIX: &str = r#"
     WITH user_channels AS (
-        SELECT c.*, a.viewed_at
+        SELECT c.*, m.viewed_at
         FROM (
-            SELECT cp.channel_id
+            SELECT cp.channel_id, a.viewed_at
             FROM comms_channel_participants cp
+            LEFT JOIN comms_activity a ON a.channel_id = cp.channel_id AND a.user_id = $1
             WHERE cp.user_id = $1 AND cp.left_at IS NULL
             OFFSET 0
         ) m
@@ -507,8 +511,65 @@ static CHANNEL_LIST_PREFIX: &str = r#"
             WHERE c.id = m.channel_id
             OFFSET 0
         ) c
-        LEFT JOIN comms_activity a ON a.channel_id = c.id AND a.user_id = $1
         WHERE TRUE
+"#;
+
+/// Candidate set of channels the viewer participates in, for a filter on the
+/// viewer's notification state ([`build_channel_notification_state_clause`]).
+///
+/// The same unfenced join every joined page used before
+/// [`CHANNEL_LIST_PREFIX`]. On statistics that put the viewer at one
+/// notification, the planner here hashed the viewer's channel notifications
+/// once against the candidates (110 ms for a `NOT done` over 15,000 channels
+/// and 147,000 done notifications), where behind the fences it rescanned them
+/// for every candidate and ran past the 15 s timeout. It keeps that earlier
+/// join's plans, including the cursor on `comms_channels` the fences prevent.
+#[cfg(feature = "list")]
+static CHANNEL_LIST_PREFIX_BY_CHANNEL: &str = r#"
+    WITH user_channels AS (
+        SELECT c.*, a.viewed_at
+        FROM comms_channels c
+        INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
+        LEFT JOIN comms_activity a ON a.channel_id = c.id AND a.user_id = $1
+        WHERE cp.user_id = $1 AND cp.left_at IS NULL
+"#;
+
+/// Candidate set of channels the viewer participates in, for a filter whose
+/// every match is a channel it names by id or a channel of a team it names
+/// ([`channel_filter_keys_channels`]).
+///
+/// Reads those channels first, by `comms_channels_pkey` or
+/// `idx_comms_channels_team_id`, with the filter inside an `OFFSET 0` fence,
+/// then keeps the ones the viewer participates in. Starting from the
+/// viewer's memberships would read all of them to answer for one id. The
+/// filter is completed by [`CHANNEL_LIST_KEYED_CLOSE`].
+#[cfg(feature = "list")]
+static CHANNEL_LIST_PREFIX_KEYED: &str = r#"
+    WITH user_channels AS (
+        SELECT c.*, a.viewed_at
+        FROM (
+            SELECT c.*
+            FROM comms_channels c
+            WHERE TRUE
+"#;
+
+#[cfg(feature = "list")]
+static CHANNEL_LIST_KEYED_CLOSE: &str = r#"
+            OFFSET 0
+        ) c
+        LEFT JOIN LATERAL (
+            SELECT a.viewed_at
+            FROM comms_activity a
+            WHERE a.channel_id = c.id AND a.user_id = $1
+            OFFSET 0
+        ) a ON TRUE
+        WHERE EXISTS (
+            SELECT 1
+            FROM comms_channel_participants cp
+            WHERE cp.channel_id = c.id
+              AND cp.user_id = $1
+              AND cp.left_at IS NULL
+        )
 "#;
 
 /// Candidate set used when the filter mentions [`ChannelLiteral::IsParticipant`]
@@ -847,6 +908,33 @@ fn channel_filter_names_channels(expr: &Expr<ChannelLiteral>) -> bool {
     })
 }
 
+/// Whether every channel the filter can match is one it names with
+/// [`ChannelLiteral::ChannelId`] or belongs to a team it names with
+/// [`ChannelLiteral::TeamId`], so an index on `comms_channels` can find them.
+#[cfg(feature = "list")]
+fn channel_filter_keys_channels(expr: &Expr<ChannelLiteral>) -> bool {
+    expr.collapse_frames(|frame: filter_ast::ExprFrame<bool, _>| match frame {
+        filter_ast::ExprFrame::And(a, b) => a || b,
+        filter_ast::ExprFrame::Or(a, b) => a && b,
+        filter_ast::ExprFrame::Not(_) => false,
+        filter_ast::ExprFrame::Literal(
+            ChannelLiteral::ChannelId(_) | ChannelLiteral::TeamId(_),
+        ) => true,
+        filter_ast::ExprFrame::Literal(_) => false,
+    })
+}
+
+/// Whether the filter mentions [`ChannelLiteral::NotificationState`] anywhere.
+#[cfg(feature = "list")]
+fn channel_filter_mentions_notification_state(expr: &Expr<ChannelLiteral>) -> bool {
+    expr.collapse_frames(|frame: filter_ast::ExprFrame<bool, _>| match frame {
+        filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
+        filter_ast::ExprFrame::Not(a) => a,
+        filter_ast::ExprFrame::Literal(ChannelLiteral::NotificationState(_)) => true,
+        filter_ast::ExprFrame::Literal(_) => false,
+    })
+}
+
 /// Whether `IsParticipant(true)` is on the top-level AND chain, so only
 /// channels the user participates in can match.
 #[cfg(feature = "list")]
@@ -861,12 +949,32 @@ fn channel_filter_requires_participation(expr: &Expr<ChannelLiteral>) -> bool {
     }
 }
 
+/// The filter without its top-level `IsParticipant(true)` conjuncts, which
+/// joined candidates already satisfy; `None` when nothing else is left.
+/// Each conjunct is otherwise one more membership read per candidate.
+#[cfg(feature = "list")]
+fn drop_required_participation(expr: &Expr<ChannelLiteral>) -> Option<Expr<ChannelLiteral>> {
+    let mut conjuncts = Vec::new();
+    collect_conjuncts(expr, &mut conjuncts);
+    conjuncts
+        .into_iter()
+        .filter(|conjunct| !matches!(conjunct, Expr::Literal(ChannelLiteral::IsParticipant(true))))
+        .cloned()
+        .reduce(Expr::and)
+}
+
 /// Which channels a channel list reads before its filter applies.
 #[cfg(feature = "list")]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ChannelCandidates {
     /// Channels the user participates in ([`CHANNEL_LIST_PREFIX`]).
     Joined,
+    /// Channels the user participates in, for a filter on notification state
+    /// ([`CHANNEL_LIST_PREFIX_BY_CHANNEL`]).
+    JoinedByChannel,
+    /// Channels the user participates in, read from the ids or teams the
+    /// filter names ([`CHANNEL_LIST_PREFIX_KEYED`]).
+    JoinedKeyed,
     /// Joined channels and their teams' channels
     /// ([`CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS`]).
     WithTeamChannels,
@@ -877,27 +985,45 @@ enum ChannelCandidates {
 
 #[cfg(feature = "list")]
 impl ChannelCandidates {
-    fn for_filter(filter: Option<&Expr<ChannelLiteral>>) -> Self {
-        match filter {
-            Some(expr)
-                if channel_filter_mentions_participation(expr)
-                    && !channel_filter_requires_participation(expr) =>
-            {
-                if channel_filter_names_channels(expr) {
-                    Self::Named
-                } else {
-                    Self::WithTeamChannels
-                }
+    /// The candidates for `filter`, and the part of it left to apply to them.
+    fn for_filter(filter: Option<Expr<ChannelLiteral>>) -> (Self, Option<Expr<ChannelLiteral>>) {
+        let Some(expr) = filter else {
+            return (Self::Joined, None);
+        };
+        if channel_filter_mentions_participation(&expr)
+            && !channel_filter_requires_participation(&expr)
+        {
+            let candidates = if channel_filter_names_channels(&expr) {
+                Self::Named
+            } else {
+                Self::WithTeamChannels
+            };
+            return (candidates, Some(expr));
+        }
+        match drop_required_participation(&expr) {
+            Some(rest) if channel_filter_keys_channels(&rest) => (Self::JoinedKeyed, Some(rest)),
+            Some(rest) if channel_filter_mentions_notification_state(&rest) => {
+                (Self::JoinedByChannel, Some(rest))
             }
-            _ => Self::Joined,
+            rest => (Self::Joined, rest),
         }
     }
 
     fn prefix(self) -> &'static str {
         match self {
             Self::Joined => CHANNEL_LIST_PREFIX,
+            Self::JoinedByChannel => CHANNEL_LIST_PREFIX_BY_CHANNEL,
+            Self::JoinedKeyed => CHANNEL_LIST_PREFIX_KEYED,
             Self::WithTeamChannels => CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS,
             Self::Named => CHANNEL_LIST_PREFIX_NAMED_CHANNELS,
+        }
+    }
+
+    /// SQL that follows the filter, before [`CHANNEL_LIST_SELECT`].
+    fn close(self) -> &'static str {
+        match self {
+            Self::JoinedKeyed => CHANNEL_LIST_KEYED_CLOSE,
+            Self::Joined | Self::JoinedByChannel | Self::WithTeamChannels | Self::Named => "",
         }
     }
 }
@@ -911,9 +1037,10 @@ fn build_channel_list_query(
     let filter = filter_ast
         .as_deref()
         .map(|expr| drop_implied_notification_conjuncts(expr, channel_literal_state));
-    let candidates = ChannelCandidates::for_filter(filter.as_ref());
+    let (candidates, filter) = ChannelCandidates::for_filter(filter);
     let mut builder = QueryBuilder::new(candidates.prefix());
     builder.push(build_channel_list_filter(filter.as_ref()));
+    builder.push(candidates.close());
     builder.push(CHANNEL_LIST_SELECT);
     builder
 }
