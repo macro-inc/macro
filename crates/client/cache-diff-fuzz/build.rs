@@ -38,6 +38,12 @@ fn main() {
     if normalized {
         println!("cargo::rustc-cfg=write_projections_normalized");
     }
+    // Hosts whose reads can be abandoned by request id (`EngineHandle::abandonable`)
+    // get `cfg(abandon_reads)`, so `--abandon-reads` abandons them.
+    println!("cargo::rustc-check-cfg=cfg(abandon_reads)");
+    if read(&host.join("engine/authority.rs")).contains("pub fn abandonable(") {
+        println!("cargo::rustc-cfg=abandon_reads");
+    }
     let hooks = manifest.join("src/fuzz_hooks.rs");
     std::fs::write(out.join("engine/fuzz_hooks.rs"), read(&hooks)).unwrap();
     std::fs::write(

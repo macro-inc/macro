@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
+mod abandon;
 mod around;
 mod people;
 
@@ -63,6 +64,16 @@ pub struct Exec<'a> {
     staged: Vec<(usize, crate::host::engine::fuzz_hooks::FuzzStagedHydrate)>,
     /// Stop the first open's migration after this many steps (see `interrupt_open`).
     interrupt_migration: Option<u32>,
+    /// The share of reads sent with a request id (see `abandon`).
+    pub abandon_reads: f64,
+    /// Operations an abandoned read registered against every change.
+    broad: BTreeSet<String>,
+    /// Where those operations were reported affected, as `index op`.
+    broad_hits: Vec<String>,
+    /// The handle a planned read runs with while it runs.
+    reader: Option<EngineHandle>,
+    /// Where `broad_hits` go when the run finishes.
+    pub broad_out: Option<PathBuf>,
 }
 
 type Outcome = Result<Value, String>;
@@ -129,6 +140,11 @@ impl<'a> Exec<'a> {
             #[cfg(staged_hydrate)]
             staged: Vec::new(),
             interrupt_migration,
+            abandon_reads: 0.0,
+            broad: BTreeSet::new(),
+            broad_hits: Vec::new(),
+            reader: None,
+            broad_out: None,
         };
         exec.open(0)?;
         Ok(exec)
@@ -247,7 +263,10 @@ impl<'a> Exec<'a> {
 
     fn record(&mut self, index: usize, kind: &'static str, outcome: Outcome) {
         let value = match outcome {
-            Ok(value) => value,
+            Ok(mut value) => {
+                self.mask_broad(index, &mut value);
+                value
+            }
             Err(error) => {
                 self.count(format!("{kind}.error"));
                 json!({ "error": error })
@@ -366,6 +385,11 @@ impl<'a> Exec<'a> {
                 variables,
                 register,
             } => {
+                if let Some(plan) = self.abandon_plan(index, true) {
+                    return self
+                        .abandon_read_op(index, plan, doc, variables, register.as_ref())
+                        .await;
+                }
                 let outcome = async {
                     let result = self
                         .handle()
@@ -384,9 +408,11 @@ impl<'a> Exec<'a> {
                     let kind = value["kind"].as_str().unwrap_or("?").to_owned();
                     self.count(format!("read.{kind}"));
                 }
+                self.read_registered(register.as_ref(), outcome.is_ok());
                 self.record(index, "read", outcome);
             }
             Op::Teardown { op_id } => {
+                self.broad.remove(op_id);
                 let outcome = self
                     .handle()
                     .teardown(op_id.clone())
@@ -400,11 +426,35 @@ impl<'a> Exec<'a> {
                     None => self.last_keys.get("filter").cloned().unwrap_or_default(),
                 };
                 self.add("read-keys.keys", keys.len() as u64);
-                let outcome = self.read_keys(fragment, keys).await;
+                let plan = self.abandon_plan(index, false);
+                let id = match plan {
+                    Some(plan) => self.plan_reader(index, plan)?,
+                    None => None,
+                };
+                let mut outcome = self.read_keys(fragment, keys).await;
+                if let Some(plan) = plan {
+                    outcome = self.end_planned(index, plan, id, outcome)?;
+                }
                 self.record(index, "read-keys", outcome);
             }
             Op::Filter { request, pages } => {
-                let outcome = self.filter(request, *pages).await;
+                let plan = self.abandon_plan(index, false);
+                let id = match plan {
+                    Some(plan) => self.plan_reader(index, plan)?,
+                    None => None,
+                };
+                // An abandoned filter's keys never reached its caller.
+                let keys = self.last_keys.get("filter").cloned();
+                let mut outcome = self.filter(request, *pages).await;
+                if let Some(plan) = plan {
+                    outcome = self.end_planned(index, plan, id, outcome)?;
+                    if plan.masks() {
+                        match keys {
+                            Some(keys) => self.last_keys.insert("filter", keys),
+                            None => self.last_keys.remove("filter"),
+                        };
+                    }
+                }
                 self.record(index, "filter", outcome);
             }
             Op::Live {
@@ -416,7 +466,15 @@ impl<'a> Exec<'a> {
                 self.record(index, "live", outcome);
             }
             Op::Search { request, pages } => {
-                let outcome = self.search(request, *pages).await;
+                let plan = self.abandon_plan(index, false);
+                let id = match plan {
+                    Some(plan) => self.plan_reader(index, plan)?,
+                    None => None,
+                };
+                let mut outcome = self.search(request, *pages).await;
+                if let Some(plan) = plan {
+                    outcome = self.end_planned(index, plan, id, outcome)?;
+                }
                 self.record(index, "search", outcome);
             }
             Op::Enqueue {
@@ -635,6 +693,8 @@ impl<'a> Exec<'a> {
                 self.pause(index);
                 let handle = self.handle.take().ok_or("engine is closed")?;
                 handle.shutdown()?;
+                // A new engine starts with no operations registered.
+                self.broad.clear();
                 self.open(index)?;
             }
             Op::Crash => {
@@ -647,6 +707,7 @@ impl<'a> Exec<'a> {
                 // The old engine is abandoned as it is: nothing it does after
                 // the copy reaches the files the next engine opens.
                 drop(self.handle.take());
+                self.broad.clear();
                 self.path = to.join("cache.turso");
                 self.open(index)?;
             }
@@ -794,7 +855,7 @@ impl<'a> Exec<'a> {
     async fn read_keys(&mut self, fragment: &str, keys: Vec<String>) -> Outcome {
         let document = self.doc(&format!("fragment:{fragment}"))?;
         let result = self
-            .handle()
+            .reader()
             .read_records_by_keys(document, fragment.to_owned(), keys)
             .await?;
         serde_json::to_value(result).map_err(|error| error.to_string())
@@ -808,7 +869,7 @@ impl<'a> Exec<'a> {
         for page in 0..pages {
             let parsed: EntityFilterRequest = serde_json::from_value(request.clone())
                 .map_err(|error| format!("request: {error}"))?;
-            let result = self.handle().entity_filter(parsed).await;
+            let result = self.reader().entity_filter(parsed).await;
             let value = match result {
                 Ok(result) => serde_json::to_value(result).map_err(|error| error.to_string())?,
                 Err(error) => {
@@ -915,7 +976,7 @@ impl<'a> Exec<'a> {
         for _ in 0..pages {
             let parsed: cache_core::search::SearchRequest = serde_json::from_value(request.clone())
                 .map_err(|error| format!("request: {error}"))?;
-            let value = match self.handle().search(parsed).await {
+            let value = match self.reader().search(parsed).await {
                 Ok(page) => serde_json::to_value(page).map_err(|error| error.to_string())?,
                 Err(error) => {
                     self.count("search.error");
@@ -983,6 +1044,14 @@ impl<'a> Exec<'a> {
     pub fn finish(mut self) -> Result<Finished, String> {
         let handle = self.handle.take().ok_or("engine is closed")?;
         handle.shutdown()?;
+        if let Some(out) = &self.broad_out {
+            let hits: String = self
+                .broad_hits
+                .iter()
+                .map(|hit| format!("{hit}\n"))
+                .collect();
+            std::fs::write(out, hits).map_err(|error| error.to_string())?;
+        }
         Ok((self.lines, self.counters, self.path, self.normalizer))
     }
 }

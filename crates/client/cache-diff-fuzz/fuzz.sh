@@ -195,6 +195,17 @@ one() {
     [ -f "$out/$side/$seed.trace" ] && [ "$(tail -n 1 "$out/$side/$seed.trace")" = end ] \
       || status="$status $side-no-trace"
   done
+  # With --abandon-reads, where a reported an operation an abandoned read had
+  # registered broadly, b must report it too (b is the side that abandons).
+  if [ "$status" = ok ] && [ -f "$out/a/$seed.broad" ]; then
+    if [ ! -f "$out/b/$seed.broad" ]; then
+      status="b-no-broad"
+    elif [ -n "$(comm -23 <(sort "$out/a/$seed.broad") <(sort "$out/b/$seed.broad"))" ]; then
+      status="broad-dropped:$(comm -23 <(sort "$out/a/$seed.broad") <(sort "$out/b/$seed.broad") | head -1 | tr ' ' @)"
+    else
+      rm -f "$out/a/$seed.broad" "$out/b/$seed.broad"
+    fi
+  fi
   same=0
   [ "$status" = ok ] && { cmp -s "$out/a/$seed.trace" "$out/b/$seed.trace" || same=$?; }
   if [ -n "${UPGRADE:-}${CHAIN_A:-}" ]; then

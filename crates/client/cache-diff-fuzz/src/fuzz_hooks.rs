@@ -156,3 +156,17 @@ impl EngineHandle {
         }))
     }
 }
+
+/// What a read abandoned before its turn fails with.
+#[cfg(abandon_reads)]
+pub(crate) const FUZZ_ABANDONED: &str = super::abandon::ABANDONED;
+
+#[cfg(abandon_reads)]
+impl EngineHandle {
+    /// Runs `during` while this engine is held, as a long write or a stall
+    /// holds it, so reads sent meanwhile queue for it.
+    pub(crate) async fn fuzz_while_held<F: std::future::Future>(&self, during: F) -> F::Output {
+        let _held = self.inner.lock().await;
+        during.await
+    }
+}

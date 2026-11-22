@@ -103,6 +103,13 @@ struct Args {
     /// file (`--start-from`, `UPGRADE`, a `CHAIN_*` segment).
     #[arg(long, value_name = "K", value_parser = clap::value_parser!(u32).range(1..))]
     interrupt_migration_after: Option<u32>,
+    /// The share of reads, filters, searches and keyed reads (0 to 1) sent
+    /// with a request id; some are abandoned while queued (see
+    /// `exec::abandon`). Give it to both sides: a side whose host can't
+    /// abandon reads runs them all, and the other must match it everywhere
+    /// but the abandoned answers. Writes `<seed>.broad`.
+    #[arg(long, default_value_t = 0.0, value_parser = share)]
+    abandon_reads: f64,
 }
 
 fn main() -> Result<(), rootcause::Report> {
@@ -215,6 +222,10 @@ fn run(
     exec.idle_hook = !args.no_idle_hook;
     exec.stage_hydrates = args.stage_hydrates;
     exec.concurrent_reads = args.concurrent_reads;
+    exec.abandon_reads = args.abandon_reads;
+    if args.abandon_reads > 0.0 {
+        exec.broad_out = Some(args.out.join(format!("{seed}.broad")));
+    }
     let outcome = pollster::block_on(exec.run());
     let (lines, mut counters, path, mut normalizer) =
         exec.finish().map_err(|error| match &outcome {
