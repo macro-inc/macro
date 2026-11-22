@@ -1,15 +1,33 @@
 /**
- * The agent harness's `/agent-feedback` routes. Each call is one client span
- * whose trace context travels to the harness, so a rating's trace runs from
- * the click through the write.
+ * The agent harness's `/agent-feedback` routes, through the generated
+ * client's URLs and types. Each call is one client span whose trace context
+ * travels to the harness, so a rating's trace runs from the click through the
+ * write.
  */
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ResultError } from '@core/util/result';
 import type { BaseFetchErrorCode } from '@core/util/safeFetch';
 import { Telemetry } from '@macro-inc/observability';
-import type { Result } from 'neverthrow';
-import { containerPath, subjectAttributes, subjectPath } from '../core/routes';
+import {
+  getAgentFeedbackMyMessageFeedbackUrl,
+  getAgentFeedbackMyRunFeedbackUrl,
+  getAgentFeedbackMyTurnFeedbackUrl,
+  getAgentFeedbackRateMessageUrl,
+  getAgentFeedbackRateRunUrl,
+  getAgentFeedbackRateTurnUrl,
+  getAgentFeedbackRetractMessageUrl,
+  getAgentFeedbackRetractRunUrl,
+  getAgentFeedbackRetractTurnUrl,
+} from '@service-agent-harness/generated/client';
+import type {
+  FeedbackState as FeedbackStateDto,
+  MyFeedback,
+  MyFeedbackResponse,
+  RateFeedbackBody,
+} from '@service-agent-harness/generated/schemas';
+import { err, type Result } from 'neverthrow';
+import { match } from 'ts-pattern';
 import type {
   FeedbackContainer,
   FeedbackRating,
@@ -22,24 +40,6 @@ import type {
 type FeedbackFetchResult<T> = Promise<
   Result<T, ResultError<BaseFetchErrorCode>[]>
 >;
-
-/** The current state after a write; no rating once retracted. */
-type FeedbackStateDto = {
-  rating?: FeedbackRating | null;
-  note?: string | null;
-  updatedAt?: string | null;
-};
-
-/** One rated response: the session's turn, or the message or run itself. */
-type MyFeedbackDto = {
-  subjectId: string;
-  turn?: number | null;
-  rating: FeedbackRating;
-  note?: string | null;
-  updatedAt: string;
-};
-
-type MyFeedbackResponseDto = { items: MyFeedbackDto[] };
 
 export type RateRequest = {
   id: string;
@@ -62,24 +62,116 @@ export type AgentFeedbackClient = {
   ): FeedbackFetchResult<void>;
 };
 
-const host = () => `${SERVER_HOSTS['agent-harness']}/agent-feedback`;
+const host = () => SERVER_HOSTS['agent-harness'];
+const segment = encodeURIComponent;
+
+/** A subject this build can't address: the request fails rather than guess. */
+const UNKNOWN_SUBJECT: ResultError<BaseFetchErrorCode>[] = [
+  { code: 'UNKNOWN_ERROR', message: 'Unknown feedback subject' },
+];
+
+function mineUrl(container: FeedbackContainer): string | undefined {
+  return match(container)
+    .with({ kind: 'agent_session' }, (c) =>
+      getAgentFeedbackMyTurnFeedbackUrl(segment(c.sessionId))
+    )
+    .with({ kind: 'message_parent' }, (c) =>
+      getAgentFeedbackMyMessageFeedbackUrl(
+        segment(c.parentType),
+        segment(c.parentId)
+      )
+    )
+    .with({ kind: 'routine' }, (c) =>
+      getAgentFeedbackMyRunFeedbackUrl(segment(c.routineId))
+    )
+    .exhaustive(() => undefined);
+}
+
+function rateUrl(subject: FeedbackSubject): string | undefined {
+  return match(subject)
+    .with({ kind: 'agent_session_turn' }, (s) =>
+      getAgentFeedbackRateTurnUrl(segment(s.sessionId), s.turn)
+    )
+    .with({ kind: 'message' }, (s) =>
+      getAgentFeedbackRateMessageUrl(
+        segment(s.parentType),
+        segment(s.parentId),
+        segment(s.messageId)
+      )
+    )
+    .with({ kind: 'routine_run' }, (s) =>
+      getAgentFeedbackRateRunUrl(segment(s.routineId), segment(s.runId))
+    )
+    .exhaustive(() => undefined);
+}
+
+function retractUrl(
+  subject: FeedbackSubject,
+  params: RetractRequest
+): string | undefined {
+  return match(subject)
+    .with({ kind: 'agent_session_turn' }, (s) =>
+      getAgentFeedbackRetractTurnUrl(segment(s.sessionId), s.turn, params)
+    )
+    .with({ kind: 'message' }, (s) =>
+      getAgentFeedbackRetractMessageUrl(
+        segment(s.parentType),
+        segment(s.parentId),
+        segment(s.messageId),
+        params
+      )
+    )
+    .with({ kind: 'routine_run' }, (s) =>
+      getAgentFeedbackRetractRunUrl(
+        segment(s.routineId),
+        segment(s.runId),
+        params
+      )
+    )
+    .exhaustive(() => undefined);
+}
+
+/** The ids a span about this subject records, by attribute name. */
+function subjectAttributes(
+  subject: FeedbackSubject
+): Record<string, string | number> {
+  return match(subject)
+    .with({ kind: 'agent_session_turn' }, (s) => ({
+      'agent.session.id': s.sessionId,
+      'agent_feedback.turn': s.turn,
+    }))
+    .with({ kind: 'message' }, (s) => ({
+      'message.parent_type': s.parentType,
+      'message.parent_id': s.parentId,
+      'message.id': s.messageId,
+    }))
+    .with({ kind: 'routine_run' }, (s) => ({
+      'routine.id': s.routineId,
+      'routine.run_id': s.runId,
+    }))
+    .exhaustive(() => ({}));
+}
 
 function toState(dto: FeedbackStateDto): FeedbackState | undefined {
   if (!dto.rating || !dto.updatedAt) return undefined;
-  return {
-    rating: dto.rating,
-    note: dto.note ?? null,
-    updatedAt: dto.updatedAt,
-  };
+  return { rating: dto.rating, note: dto.note, updatedAt: dto.updatedAt };
 }
 
-/** The item's response key in its container, as `responseKey` makes it. */
-function itemKey(
+/** One rated response, keyed the way `responseKey` keys its subject. */
+function toItem(
   container: FeedbackContainer,
-  item: MyFeedbackDto
-): string | undefined {
-  if (container.kind !== 'agent_session') return item.subjectId;
-  return item.turn == null ? undefined : String(item.turn);
+  item: MyFeedback
+): MyFeedbackItem[] {
+  const fields = {
+    rating: item.rating,
+    note: item.note,
+    updatedAt: item.updatedAt,
+  };
+  if (container.kind !== 'agent_session')
+    return [{ key: item.subjectId, ...fields }];
+  // A session's ratings are per turn; one without a turn isn't a reply's.
+  if (item.turn === null) return [];
+  return [{ key: String(item.turn), ...fields }];
 }
 
 /** Opens the operation's client span and the headers that carry it. */
@@ -93,35 +185,35 @@ function startSpan(name: string, subjectKind: string) {
   return { span, headers };
 }
 
+function startSubjectSpan(name: string, subject: FeedbackSubject) {
+  const started = startSpan(name, subject.kind);
+  for (const [attribute, value] of Object.entries(subjectAttributes(subject)))
+    started.span.setAttr(attribute, value);
+  return started;
+}
+
+/** The server's answer that this person can't rate here: feature off, or no access. */
+export function isRefusal(errors: ResultError<string>[]): boolean {
+  return errors.some(
+    (error) => error.code === 'NOT_FOUND' || error.code === 'FORBIDDEN'
+  );
+}
+
 export const agentFeedbackClient: AgentFeedbackClient = {
   async mine(container) {
+    const url = mineUrl(container);
+    if (!url) return err(UNKNOWN_SUBJECT);
     const { span, headers } = startSpan('agent_feedback.mine', container.kind);
     try {
-      const result = await fetchWithToken<MyFeedbackResponseDto>(
-        `${host()}${containerPath(container)}/mine`,
+      const result = await fetchWithToken<MyFeedbackResponse>(
+        `${host()}${url}`,
         { method: 'GET', headers, trace: { parentSpan: span } }
       );
-      // A 404 (flag off) or 403 is an answer, not a failure.
-      const refused =
-        result.isErr() &&
-        result.error.some(
-          (error) => error.code === 'NOT_FOUND' || error.code === 'FORBIDDEN'
-        );
-      if (result.isErr() && !refused)
+      // A 404 (feature off) or 403 is an answer, not a failure.
+      if (result.isErr() && !isRefusal(result.error))
         span.error('Reading agent feedback failed');
       return result.map(({ items }) => {
-        const rated = items.flatMap((item): MyFeedbackItem[] => {
-          const key = itemKey(container, item);
-          if (key === undefined) return [];
-          return [
-            {
-              key,
-              rating: item.rating,
-              note: item.note ?? null,
-              updatedAt: item.updatedAt,
-            },
-          ];
-        });
+        const rated = items.flatMap((item) => toItem(container, item));
         span.setAttr('agent_feedback.count', rated.length);
         return rated;
       });
@@ -131,30 +223,28 @@ export const agentFeedbackClient: AgentFeedbackClient = {
   },
 
   async rate(subject, request) {
-    const { span, headers } = startSpan('agent_feedback.rate', subject.kind);
-    for (const [name, value] of Object.entries(subjectAttributes(subject)))
-      span.setAttr(name, value);
+    const url = rateUrl(subject);
+    if (!url) return err(UNKNOWN_SUBJECT);
+    const { span, headers } = startSubjectSpan('agent_feedback.rate', subject);
     span.setAttr('agent_feedback.id', request.id);
     span.setAttr('agent_feedback.rating', request.rating);
     span.setAttr('agent_feedback.surface', request.surface);
     span.setAttr('agent_feedback.has_note', request.note !== null);
+    const body: RateFeedbackBody = {
+      id: request.id,
+      rating: request.rating,
+      note: request.note,
+      surface: request.surface,
+    };
     try {
-      const result = await fetchWithToken<FeedbackStateDto>(
-        `${host()}${subjectPath(subject)}`,
-        {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({
-            id: request.id,
-            rating: request.rating,
-            note: request.note ?? undefined,
-            surface: request.surface,
-          }),
-          // The id makes a repeated PUT a no-op, so a lost answer is retried.
-          retry: { maxTries: 2 },
-          trace: { parentSpan: span },
-        }
-      );
+      const result = await fetchWithToken<FeedbackStateDto>(`${host()}${url}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(body),
+        // The id makes a repeated PUT a no-op, so a lost answer is retried.
+        retry: { maxTries: 2 },
+        trace: { parentSpan: span },
+      });
       if (result.isErr()) span.error('Rating an agent response failed');
       return result.map(toState);
     } finally {
@@ -163,18 +253,17 @@ export const agentFeedbackClient: AgentFeedbackClient = {
   },
 
   async retract(subject, request) {
-    const { span, headers } = startSpan('agent_feedback.retract', subject.kind);
-    for (const [name, value] of Object.entries(subjectAttributes(subject)))
-      span.setAttr(name, value);
+    const url = retractUrl(subject, request);
+    if (!url) return err(UNKNOWN_SUBJECT);
+    const { span, headers } = startSubjectSpan(
+      'agent_feedback.retract',
+      subject
+    );
     span.setAttr('agent_feedback.id', request.id);
     span.setAttr('agent_feedback.surface', request.surface);
     try {
-      const query = new URLSearchParams({
-        id: request.id,
-        surface: request.surface,
-      });
       const result = await fetchWithToken<Record<string, never>>(
-        `${host()}${subjectPath(subject)}?${query}`,
+        `${host()}${url}`,
         {
           method: 'DELETE',
           headers,

@@ -5,11 +5,7 @@
  * responses in the same container are never undone with it.
  */
 
-import {
-  type ResultError,
-  thrownResultErrorHasCode,
-  throwOnErr,
-} from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { queryReadyGate } from '@queries/gate';
 import {
   type QueryClient,
@@ -34,7 +30,7 @@ import {
   type MyFeedbackItem,
   responseKey,
 } from '../core/subject';
-import type { AgentFeedbackClient } from './client';
+import { type AgentFeedbackClient, isRefusal } from './client';
 import { agentFeedbackKeys } from './keys';
 
 type WriteVariables = {
@@ -46,12 +42,6 @@ type WriteVariables = {
 
 /** The response's rating before the write, to put back if it fails. */
 type WriteContext = { previous: MyFeedbackItem | undefined };
-
-function refusesFeedback(errors: ResultError<string>[]): boolean {
-  return errors.some(
-    (error) => error.code === 'NOT_FOUND' || error.code === 'FORBIDDEN'
-  );
-}
 
 function mineKey(container: FeedbackContainer) {
   return agentFeedbackKeys.mine(containerKey(container)).queryKey;
@@ -70,7 +60,7 @@ export function myFeedbackQueryOptions(
     queryKey: mineKey(container),
     queryFn: async (): Promise<MyFeedbackItem[] | null> => {
       const result = await client.mine(container);
-      if (result.isErr() && refusesFeedback(result.error)) return null;
+      if (result.isErr() && isRefusal(result.error)) return null;
       return throwOnErr(async () => result);
     },
   });
