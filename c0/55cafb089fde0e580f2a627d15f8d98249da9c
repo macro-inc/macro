@@ -4,8 +4,10 @@ crates/agent_permissions/AGENTS.md
   s_9aaadd038e8bff::t_79ac02130e1239 105
 docs/agent-guide/ai-chat.md
   s_9aaadd038e8bff::t_ea61d21f1689d3 1849-1851,1872-1874,1877
+  s_9aaadd038e8bff::t_d3bce8229c64a5 1868,1870-1871
 docs/agent-guide/settings.md
   s_9aaadd038e8bff::t_2473879826513c 1244-1269,1273-1295
+  s_9aaadd038e8bff::t_5167f25f63cc5a 1270-1272
 ---
 {
   "schema_version": "authorship/3.0.0",
