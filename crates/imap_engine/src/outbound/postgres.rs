@@ -14,8 +14,8 @@ pub struct PgRepository {
 impl PgRepository {
     /// Use the composition root's shared pool.
     pub fn new(pool: PgPool) -> Self {
-        // Leave two production pool connections for ownership heartbeats and
-        // cleanup while bounded command-state loads hold their transactions.
+        // Leave two production pool connections for non-loading queries,
+        // including heartbeats and cleanup; these are shared, not reserved.
         let loading_slots = pool
             .options()
             .get_max_connections()
@@ -431,6 +431,7 @@ impl Repository for PgRepository {
     async fn acquire(&self, b: Binding) -> Result<Account, Error> {
         self.acquire_scoped(b, StateSelection::Sync).await
     }
+    #[tracing::instrument(skip_all, name = "imap.account.load", fields(acquire.outcome = tracing::field::Empty, imap.load.rows = tracing::field::Empty, imap.load.bytes = tracing::field::Empty), err)]
     async fn acquire_scoped(
         &self,
         b: Binding,
@@ -445,11 +446,11 @@ impl Repository for PgRepository {
         // the uncommitted lease instead of stranding it for five minutes.
         let (mut tx, mut account) = self.begin_acquisition(b).await?;
         self.hydrate(&mut tx, &mut account, selection).await?;
-        tx.commit()
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+        tx.commit().await.map_err(acquisition::load_error)?;
+        acquisition::record_outcome(acquisition::AcquireOutcome::Acquired);
         Ok(account)
     }
+    #[tracing::instrument(skip_all, name = "imap.account.read", fields(acquire.outcome = tracing::field::Empty, imap.load.rows = tracing::field::Empty, imap.load.bytes = tracing::field::Empty), err)]
     async fn read_scoped(
         &self,
         binding: Binding,
@@ -465,9 +466,8 @@ impl Repository for PgRepository {
             .map_err(|_| Error::ConnectionUnavailable)?;
         let (mut tx, mut account) = self.begin_read(binding).await?;
         self.hydrate(&mut tx, &mut account, selection).await?;
-        tx.commit()
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+        tx.commit().await.map_err(acquisition::load_error)?;
+        acquisition::record_outcome(acquisition::AcquireOutcome::Acquired);
         Ok(account)
     }
     async fn validate_read(&self, account: &Account) -> Result<(), Error> {

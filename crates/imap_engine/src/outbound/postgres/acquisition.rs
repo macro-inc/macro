@@ -5,19 +5,24 @@ impl PgRepository {
         &self,
         b: Binding,
     ) -> Result<(sqlx::Transaction<'_, sqlx::Postgres>, Account), Error> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+        let mut tx = self.pool.begin().await.map_err(load_error)?;
         sqlx::query!("SET LOCAL statement_timeout = '30s'")
             .execute(&mut *tx)
             .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
-        sqlx::query!("SET LOCAL idle_in_transaction_session_timeout = '10s'")
-            .execute(&mut *tx)
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+            .map_err(load_error)?;
+        // Full sync hydration includes mailbox-sized CPU work between queries.
+        // Its idle backstop follows the admitted round budget, not a short read.
+        let idle_ms = SYNC_ROUND_BUDGET.as_millis().to_string();
+        sqlx::query!(
+            r#"
+            SELECT
+                set_config('idle_in_transaction_session_timeout', $1, true)
+            "#,
+            idle_ms,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(load_error)?;
         // A peer must fail fast instead of waiting for a loading transaction's
         // row lock. Its generation/active/owner checks still run in the UPDATE.
         sqlx::query_scalar!(
@@ -28,7 +33,7 @@ impl PgRepository {
                 imap_accounts
             WHERE
                 link_id = $1
-            FOR UPDATE NOWAIT
+            FOR NO KEY UPDATE NOWAIT
             "#,
             b.link_id,
         )
@@ -39,12 +44,16 @@ impl PgRepository {
                 .as_database_error()
                 .is_some_and(|error| error.code().as_deref() == Some("55P03"))
             {
+                record_outcome(AcquireOutcome::LockBusy);
                 Error::Throttled
             } else {
-                Error::ConnectionUnavailable
+                load_error(error)
             }
         })?
-        .ok_or(Error::Conflict)?;
+        .ok_or_else(|| {
+            record_outcome(AcquireOutcome::Conflict);
+            Error::Conflict
+        })?;
         let lease = Uuid::now_v7();
         let row = sqlx::query!(
             r#"
@@ -81,7 +90,7 @@ impl PgRepository {
         )
         .fetch_optional(&mut *tx)
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(load_error)?;
         let r = match row {
             Some(row) => row,
             None => {
@@ -111,10 +120,12 @@ impl PgRepository {
                 )
                 .fetch_one(&mut *tx)
                 .await
-                .map_err(|_| Error::ConnectionUnavailable)?;
+                .map_err(load_error)?;
                 return Err(if current {
+                    record_outcome(AcquireOutcome::LeaseHeld);
                     Error::Throttled
                 } else {
+                    record_outcome(AcquireOutcome::Conflict);
                     Error::Conflict
                 });
             }
@@ -124,10 +135,41 @@ impl PgRepository {
             binding: b,
             user_id: r.user_id,
             ciphertext: r.credential_ciphertext,
-            state: serde_json::from_value(r.state).map_err(|_| Error::ConnectionUnavailable)?,
+            state: serde_json::from_value(r.state).map_err(|_| {
+                record_outcome(AcquireOutcome::InvalidState);
+                Error::ConnectionUnavailable
+            })?,
             revision: r.revision,
             lease_id: Some(lease),
         };
         Ok((tx, account))
     }
+}
+
+#[derive(strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub(super) enum AcquireOutcome {
+    Acquired,
+    LockBusy,
+    LeaseHeld,
+    Conflict,
+    StatementTimeout,
+    IdleTimeout,
+    Unavailable,
+    InvalidState,
+}
+
+pub(super) fn record_outcome(outcome: AcquireOutcome) {
+    tracing::Span::current().record("acquire.outcome", outcome.as_ref());
+}
+
+pub(super) fn load_error(error: sqlx::Error) -> Error {
+    let code = error.as_database_error().and_then(|error| error.code());
+    let outcome = match code.as_deref() {
+        Some("57014") => AcquireOutcome::StatementTimeout,
+        Some("25P03") => AcquireOutcome::IdleTimeout,
+        _ => AcquireOutcome::Unavailable,
+    };
+    record_outcome(outcome);
+    Error::ConnectionUnavailable
 }

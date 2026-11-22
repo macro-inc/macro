@@ -182,9 +182,11 @@ is observed so its returned lease can be released.
 
 State hydration and its command claim share one transaction, committed before
 provider IO. Loading cancellation rolls the claim back. A primary-key NOWAIT
-lock makes competing claims fail promptly, with 30-second statement and
-10-second idle-transaction deadlines. The loading semaphore reserves two of the
-production pool's ten connections for heartbeats and cleanup.
+non-key lock makes competing claims fail promptly without blocking first-owner
+foreign-key checks. Statements have a 30-second deadline; full sync hydration's
+idle backstop follows its 240-second admitted work budget, including CPU work.
+The loading semaphore leaves two of the production pool's ten connections for
+all non-loading queries, including heartbeats and cleanup; they are shared.
 
 The [owner-renewal plan record](../design/imap-owner-renewal-query-plans.json)
 measures the heartbeat caller against synthetic large tables, including actual
@@ -253,3 +255,9 @@ releasing global admission; a still-all-busy batch reports a busy failure rather
 than an empty success. Public source/attachment failures preserve ContentTooLarge
 as HTTP413 with code message_too_large; the web client presents fixed size-limit
 copy and one capped Retry-After retry for ordinary email mutations, never sends.
+
+Loading spans record selected row count and encoded component bytes, reusing
+checkpoint serialization rather than serializing the rows again. These bytes
+measure loaded metadata, not network transfer. Closed acquisition outcomes
+separate lock contention, an existing lease, a stale fence, statement timeout,
+idle timeout and other unavailability; database text and row content are omitted.

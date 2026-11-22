@@ -10,7 +10,7 @@
       "mode": "force_custom_plan",
       "case": "present",
       "repeat": 1,
-      "executionMs": 0.112,
+      "executionMs": 0.168,
       "sharedHits": 1,
       "sharedReads": 4,
       "nodes": [
@@ -30,7 +30,7 @@
       "mode": "force_custom_plan",
       "case": "present",
       "repeat": 2,
-      "executionMs": 0.016,
+      "executionMs": 0.023,
       "sharedHits": 5,
       "sharedReads": 0,
       "nodes": [
@@ -50,7 +50,7 @@
       "mode": "force_custom_plan",
       "case": "missing",
       "repeat": 1,
-      "executionMs": 0.036,
+      "executionMs": 0.056,
       "sharedHits": 1,
       "sharedReads": 2,
       "nodes": [
@@ -70,7 +70,7 @@
       "mode": "force_custom_plan",
       "case": "missing",
       "repeat": 2,
-      "executionMs": 0.01,
+      "executionMs": 0.008,
       "sharedHits": 3,
       "sharedReads": 0,
       "nodes": [
@@ -90,7 +90,7 @@
       "mode": "force_generic_plan",
       "case": "present",
       "repeat": 1,
-      "executionMs": 0.04,
+      "executionMs": 0.022,
       "sharedHits": 5,
       "sharedReads": 0,
       "nodes": [
@@ -110,7 +110,7 @@
       "mode": "force_generic_plan",
       "case": "present",
       "repeat": 2,
-      "executionMs": 0.029,
+      "executionMs": 0.011,
       "sharedHits": 5,
       "sharedReads": 0,
       "nodes": [
@@ -130,7 +130,7 @@
       "mode": "force_generic_plan",
       "case": "missing",
       "repeat": 1,
-      "executionMs": 0.01,
+      "executionMs": 0.005,
       "sharedHits": 3,
       "sharedReads": 0,
       "nodes": [
@@ -170,7 +170,7 @@
       "mode": "force_custom_plan",
       "case": "present",
       "repeat": 1,
-      "executionMs": 0.191,
+      "executionMs": 0.157,
       "sharedHits": 1,
       "sharedReads": 4,
       "nodes": [
@@ -190,7 +190,7 @@
       "mode": "force_custom_plan",
       "case": "present",
       "repeat": 2,
-      "executionMs": 0.042,
+      "executionMs": 0.052,
       "sharedHits": 5,
       "sharedReads": 0,
       "nodes": [
@@ -210,7 +210,7 @@
       "mode": "force_custom_plan",
       "case": "missing",
       "repeat": 1,
-      "executionMs": 0.06,
+      "executionMs": 0.058,
       "sharedHits": 1,
       "sharedReads": 2,
       "nodes": [
@@ -230,7 +230,7 @@
       "mode": "force_custom_plan",
       "case": "missing",
       "repeat": 2,
-      "executionMs": 0.013,
+      "executionMs": 0.008,
       "sharedHits": 3,
       "sharedReads": 0,
       "nodes": [
@@ -250,7 +250,7 @@
       "mode": "force_generic_plan",
       "case": "present",
       "repeat": 1,
-      "executionMs": 0.059,
+      "executionMs": 0.031,
       "sharedHits": 5,
       "sharedReads": 0,
       "nodes": [
@@ -270,7 +270,7 @@
       "mode": "force_generic_plan",
       "case": "present",
       "repeat": 2,
-      "executionMs": 0.062,
+      "executionMs": 0.024,
       "sharedHits": 5,
       "sharedReads": 0,
       "nodes": [
@@ -290,7 +290,7 @@
       "mode": "force_generic_plan",
       "case": "missing",
       "repeat": 1,
-      "executionMs": 0.013,
+      "executionMs": 0.008,
       "sharedHits": 3,
       "sharedReads": 0,
       "nodes": [
@@ -310,7 +310,7 @@
       "mode": "force_generic_plan",
       "case": "missing",
       "repeat": 2,
-      "executionMs": 0.025,
+      "executionMs": 0.006,
       "sharedHits": 3,
       "sharedReads": 0,
       "nodes": [
@@ -325,6 +325,5 @@
       ]
     }
   ],
-  "query": "PgRepository::begin_acquisition: SELECT link_id FROM imap_accounts WHERE link_id=$1 FOR UPDATE NOWAIT",
-  "limitations": "Synthetic local PostgreSQL18, not production latency. Each measured row lock rolled back. Existing and missing keys, custom/generic plans, analyzed/stale stats, twice each. Utility SET LOCAL statements bound each transaction only; no data scan."
+  "statement": "SELECT link_id FROM imap_accounts WHERE link_id = $1 FOR NO KEY UPDATE NOWAIT"
 }

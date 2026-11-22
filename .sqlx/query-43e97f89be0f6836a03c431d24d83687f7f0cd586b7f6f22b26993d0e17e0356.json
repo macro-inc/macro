@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                link_id\n            FROM\n                imap_accounts\n            WHERE\n                link_id = $1\n            FOR NO KEY UPDATE NOWAIT\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "43e97f89be0f6836a03c431d24d83687f7f0cd586b7f6f22b26993d0e17e0356"
+}

@@ -227,8 +227,18 @@ async fn connection_owner_takeover_is_fenced_and_old_owner_cannot_release_succes
     // fails fast on its row lock and can acquire immediately after rollback.
     let (tx, staged) = repo.begin_acquisition(binding).await.unwrap();
     assert!(matches!(repo.acquire(binding).await, Err(Error::Throttled)));
+    let first_owner = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        repo.claim_owner(binding, a),
+    )
+    .await;
     drop(staged);
     drop(tx);
+    assert!(
+        first_owner
+            .expect("first ownership claim must not wait on hydration's non-key lock")
+            .unwrap()
+    );
     let before = sqlx::query_scalar!(r#"SELECT now() AS "now!""#)
         .fetch_one(&pool)
         .await
@@ -504,6 +514,29 @@ async fn large_mailbox_point_reads_and_writes_preserve_unloaded_rows(pool: PgPoo
         sync_generation: 1,
         grant_generation: 1,
     };
+    let (mut loading, staged) = repo.begin_acquisition(binding).await.unwrap();
+    let idle = sqlx::query_scalar!(
+        r#"SELECT current_setting('idle_in_transaction_session_timeout') AS "timeout!""#
+    )
+    .fetch_one(&mut *loading)
+    .await
+    .unwrap();
+    drop(staged);
+    drop(loading);
+    assert_eq!(idle, "4min");
+    let full_started = std::time::Instant::now();
+    let full = repo
+        .acquire_scoped(binding, StateSelection::Sync)
+        .await
+        .unwrap();
+    assert_eq!(full.state.messages.len(), 100_000);
+    assert_eq!(full.state.locations.len(), 100_000);
+    assert_eq!(full.state.folders.len(), 1);
+    repo.release(&full).await.unwrap();
+    eprintln!(
+        "100k-message complete sync load: {:?}",
+        full_started.elapsed()
+    );
     let untouched = sqlx::query_scalar!(
         r#"
         SELECT

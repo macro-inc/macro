@@ -124,8 +124,10 @@ and drains command-lease cleanup; acquisition completes before that cancellation
 is observed so its returned lease can be released.
 
 Keep command claims uncommitted through state hydration, with local statement
-and idle-transaction deadlines. Lock the account with NOWAIT so peers fail fast;
-limit simultaneous loads below the pool size to reserve heartbeat/cleanup slots.
+and idle-transaction deadlines. Use FOR NO KEY UPDATE NOWAIT so peers fail fast
+without blocking first-owner foreign-key checks. Full sync idle time follows the
+round budget; small read snapshots keep a short idle limit. Leave two pool slots
+for shared non-loading queries, without claiming dedicated heartbeat capacity.
 
 Read Changes, Message, Organization, Attachment, Folders and RecentInbox through
 read_scoped without a command lease. Keep scalar state and selected rows in one

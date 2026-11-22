@@ -30,7 +30,11 @@ impl Entry {
         })
     }
     fn hash(&self) -> Result<[u8; 32], Error> {
-        Ok(Sha256::digest(serde_json::to_vec(self).map_err(|_| Error::Invalid)?).into())
+        self.hash_and_size().map(|(hash, _)| hash)
+    }
+    fn hash_and_size(&self) -> Result<([u8; 32], usize), Error> {
+        let encoded = serde_json::to_vec(self).map_err(|_| Error::Invalid)?;
+        Ok((Sha256::digest(&encoded).into(), encoded.len()))
     }
 }
 fn entries(state: &AccountState) -> Result<Vec<Entry>, Error> {
@@ -168,7 +172,7 @@ macro_rules! load {
         for r in $query
             .fetch_all(&mut *$connection)
             .await
-            .map_err(|_| Error::ConnectionUnavailable)?
+            .map_err(super::acquisition::load_error)?
         {
             $rows.push(Entry {
                 kind: r.kind,
@@ -457,10 +461,24 @@ impl PgRepository {
             unique.insert((e.kind.clone(), e.key.clone()), e);
         }
         let rows = unique.into_values().collect::<Vec<_>>();
+        let mut encoded_bytes = 0usize;
         account.checkpoint = rows
             .iter()
-            .map(|e| Ok(((e.kind.clone(), e.key.clone()), e.hash()?)))
+            .map(|entry| {
+                let (hash, bytes) = entry.hash_and_size()?;
+                encoded_bytes = encoded_bytes.saturating_add(bytes);
+                Ok(((entry.kind.clone(), entry.key.clone()), hash))
+            })
             .collect::<Result<_, Error>>()?;
+        let span = tracing::Span::current();
+        span.record(
+            "imap.load.rows",
+            i64::try_from(rows.len()).unwrap_or(i64::MAX),
+        );
+        span.record(
+            "imap.load.bytes",
+            i64::try_from(encoded_bytes).unwrap_or(i64::MAX),
+        );
         hydrate(&mut account.state, &rows)
     }
     async fn load_message(
