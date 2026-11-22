@@ -542,6 +542,30 @@ describe('a message the harness does not take', () => {
     );
   });
 
+  it('says it is checking while a lost send is looked for, then keeps the box empty', async () => {
+    let answer!: (result: unknown) => void;
+    mocks.issue.mockImplementation(
+      (_action: unknown, options: { onChecking?: () => void }) =>
+        new Promise((resolve) => {
+          options.onChecking?.();
+          answer = resolve;
+        })
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    expect(
+      await screen.findByText('Checking whether it was sent…')
+    ).toBeTruthy();
+    expect(mocks.input?.draft).toBe('');
+    answer(ok({ status: 'sent', actionId: 'a' }));
+    await vi.waitFor(() =>
+      expect(screen.queryByText('Checking whether it was sent…')).toBeNull()
+    );
+    expect(mocks.input?.draft).toBe('');
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+  });
+
   it('leaves the composer empty once the message is taken', async () => {
     mocks.issue.mockResolvedValue(ok({ status: 'accepted', actionId: 'a' }));
     render(() => <AgentComposer />);

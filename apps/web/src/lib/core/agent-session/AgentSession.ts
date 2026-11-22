@@ -442,6 +442,11 @@ export class AgentSession {
       options.onChecking?.();
       const settled = await this.settleUnknown(actionId, arrival.arrived);
       arrival.stop();
+      if (!settled)
+        trace?.end(
+          'failed',
+          thrown?.error ?? new Error('The prompt never reached the log.')
+        );
       if (settled) {
         if (speculated && settled.status === 'queued')
           fireAndForget(
@@ -580,7 +585,12 @@ export class AgentSession {
       const result = await trace.run(() =>
         agentHarnessServiceClient.control(this.id, request)
       );
-      if (result.isErr()) {
+      if (result.isErr() && isUnknownOutcome(result.error)) {
+        // Still followed: its row may yet come back over the socket.
+        trace.stage('unanswered', {
+          unanswered_status: result.error[0]?.status ?? 0,
+        });
+      } else if (result.isErr()) {
         trace.end(
           'failed',
           new Error(result.error.map((error) => error.message).join(' '))
@@ -597,7 +607,8 @@ export class AgentSession {
       }
       return result;
     } catch (error) {
-      trace.end('failed', error);
+      // Still followed: the request may have reached the harness anyway.
+      trace.stage('unanswered');
       throw error;
     } finally {
       // Released while the POST was out: nothing will observe the turn.

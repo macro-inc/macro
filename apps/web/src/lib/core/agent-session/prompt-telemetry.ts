@@ -56,6 +56,11 @@ export type PromptStage =
   | 'configured'
   /** The control POST answered. */
   | 'accepted'
+  /**
+   * The control POST got no clear answer (lost response, 5xx, gateway
+   * timeout); the log or the queue decides whether it was sent.
+   */
+  | 'unanswered'
   /** The log confirmed the prompt: its row came back over the socket. */
   | 'confirmed'
   /** The first agent message in the prompt's turn was folded. */
