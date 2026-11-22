@@ -92,6 +92,20 @@ fn a_routine_owner_token_cannot_decide_a_review_without_the_marker() {
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
+#[tokio::test]
+async fn an_expired_connected_app_is_a_conflict_carrying_what_to_tell_the_user() {
+    let response = CodeExecutionApiError(CodeModeError::ConnectedAppNeedsReconnect(
+        "Stripe's connection has expired".into(),
+    ))
+    .into_response();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(&body[..], b"Stripe's connection has expired");
+}
+
 #[test]
 fn a_rate_limited_connected_app_is_too_many_requests_with_retry_after() {
     let response = CodeExecutionApiError(CodeModeError::ConnectedAppRateLimited {

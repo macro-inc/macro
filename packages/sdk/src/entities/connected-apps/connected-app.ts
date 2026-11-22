@@ -106,7 +106,10 @@ export class ConnectedApp {
 
   /**
    * The tools this app serves, with each one's description and argument
-   * schema. Read a tool's `inputSchema` before calling it.
+   * schema. Read a tool's `inputSchema` before calling it. Throws a 409
+   * `MacroApiError` when the account's connection to the app expired; its
+   * message says what to tell the user, with the reconnect markup to put in
+   * your reply verbatim.
    *
    * @readonly
    * @openworld

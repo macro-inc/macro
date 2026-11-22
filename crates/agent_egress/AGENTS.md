@@ -41,6 +41,21 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   `tools/call` is `EgressError::RateLimited` (with its `Retry-After`), which
   `exchange_as` returns as an error, never as an `isError` result (the
   sandbox proxy answers a tool result saying the call did not run).
+- An upstream HTTP 409 from a connected app, on the handshake, a listing or
+  a call, is `EgressError::NeedsReconnect`: Macro Connect's gateway answers
+  it for every request on a connection whose grant needs reauthorization,
+  before calling the vendor. rmcp types only 429 and 5xx statuses, so
+  `TracedClient` gives a 409 its typed status back, and the transport drops
+  that upstream session so the call after a reconnect handshakes again. A
+  `tools/call` (sandbox or `exchange_as`) answers `reconnect_text` as an
+  `isError` result, with an `m-connect-app` chip marked `"reconnect": true`;
+  so does a sandbox owner's forwarded call, held or not, when the upstream
+  answers it 409 (`ReconnectAnswer` in `domain/service.rs`). A listing
+  returns the error (the sandbox proxy answers HTTP 409, and code mode's
+  `tools()` turns it into `owner_reconnect_text`). Any other server's 409 is
+  an `EgressError::Upstream` (`traced_exchange`), and a forwarded one passes
+  through. A sandbox's `initialize` is forwarded raw, so a session started
+  after the grant expired gets its 409 and never lists the app.
 
 ## Scope
 
@@ -100,7 +115,7 @@ scope, `dry_run` for a routine's dry run).
   `domain/service/actor.rs`): `server.address`, `app.kind` / `app.key` (the
   connected-app slug or custom-server key), `mcp.method`,
   `mcp.request_bytes` / `mcp.response_bytes` (JSON lengths) and `mcp.outcome`
-  (`ok`, `tool_error`, `rate_limited`, `upstream_error`). Never arguments or
+  (`ok`, `tool_error`, `rate_limited`, `needs_reconnect`, `upstream_error`). Never arguments or
   results. A new upstream session's handshake is its own
   `connected_app.mcp_connect` child, and a `tools/call`'s pacing is its
   `mcp.call_budget` child (`wait_ms`, `attempts`, `rate_limited`).

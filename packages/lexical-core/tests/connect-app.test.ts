@@ -14,6 +14,8 @@ const TAG =
   '<m-connect-app>{"appSlug":"linear","name":"Linear"}</m-connect-app>';
 const HARNESS_TAG =
   '<m-connect-app>{"appSlug":"cursor","name":"Cursor","target":"harness"}</m-connect-app>';
+const RECONNECT_TAG =
+  '<m-connect-app>{"appSlug":"stripe","name":"Stripe","reconnect":true}</m-connect-app>';
 
 function editorWith(markdown: string, transformers = ALL_TRANSFORMERS) {
   const editor = createEditor({
@@ -57,6 +59,33 @@ describe('connect-app chip', () => {
     expect(chip?.getAppSlug()).toBe('linear');
     expect(chip?.getName()).toBe('Linear');
     expect(chip?.getTarget()).toBe('connections');
+    expect(chip?.getReconnect()).toBe(false);
+  });
+
+  it('parses the reconnect tag for an expired connection and round-trips it', () => {
+    const editor = editorWith(`It expired: ${RECONNECT_TAG}`);
+    const chip = inlineNodes(editor).find($isConnectAppNode);
+    expect(chip?.getAppSlug()).toBe('stripe');
+    expect(chip?.getReconnect()).toBe(true);
+    const exported = editor
+      .getEditorState()
+      .read(() => $convertToMarkdownString(ALL_TRANSFORMERS));
+    expect(exported).toContain(RECONNECT_TAG);
+  });
+
+  it('keeps reconnect through Lexical JSON', () => {
+    const editor = editorWith(RECONNECT_TAG);
+    const restored = createEditor({
+      nodes: SupportedNodeTypes,
+      onError: (error) => {
+        throw error;
+      },
+    });
+    restored.setEditorState(
+      restored.parseEditorState(JSON.stringify(editor.getEditorState()))
+    );
+    const chip = inlineNodes(restored).find($isConnectAppNode);
+    expect(chip?.getReconnect()).toBe(true);
   });
 
   it('parses the harness-targeted tag the Cursor bot posts and round-trips it', () => {
@@ -115,6 +144,12 @@ describe('connect-app chip', () => {
     );
     expect(markdownToPlainText(`Do this: ${HARNESS_TAG}`)).toBe(
       'Do this: Connect Cursor'
+    );
+    expect(markdownToPlainText(`Do this: ${RECONNECT_TAG}`)).toBe(
+      'Do this: Reconnect Stripe'
+    );
+    expect(markdownToEmbeddingText(`Do this: ${RECONNECT_TAG}`)).toBe(
+      'Do this: Reconnect Stripe'
     );
   });
 });

@@ -276,6 +276,7 @@ impl GithubTokens for SpyGithubTokens {
 struct SpyForwarder {
     seen: Mutex<Option<http::request::Parts>>,
     response_headers: HeaderMap,
+    status: StatusCode,
 }
 
 impl SpyForwarder {
@@ -283,6 +284,15 @@ impl SpyForwarder {
         Self {
             seen: Mutex::default(),
             response_headers: header_map(response_headers),
+            status: StatusCode::ACCEPTED,
+        }
+    }
+
+    /// Answers every request with `status`.
+    fn answering_status(status: StatusCode) -> Self {
+        Self {
+            status,
+            ..Self::answering(&[])
         }
     }
 
@@ -307,7 +317,7 @@ impl Forwarder for SpyForwarder {
         *self.seen.lock().expect("lock") = Some(parts);
 
         let mut response = http::Response::new(empty_body());
-        *response.status_mut() = StatusCode::ACCEPTED;
+        *response.status_mut() = self.status;
         *response.headers_mut() = self.response_headers.clone();
         Ok(response)
     }
@@ -1634,4 +1644,5 @@ async fn a_public_web_search_in_a_gated_turn_goes_straight_through() {
 }
 
 mod actor;
+mod reconnect;
 mod telemetry;

@@ -192,7 +192,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   directly either (`ScopedToolGate::refuse_remote_mcp`). The actor MCP
   transport is wrapped in `agent_egress::outbound::budgeted_mcp`, so each
   account's calls to an app are paced; a call still rate limited answers
-  HTTP 429 to the SDK, which throws.
+  HTTP 429 to the SDK, which throws. A listing refused because the account's
+  connection to the app expired answers HTTP 409 with the reconnect text
+  (`listing_error`); a call answers it as an `isError` result.
   Code execution's destination list in `src/code_mode.rs` (`SdkHost`) also
   includes the configured editing worker, whose comment-mark endpoint requires
   a scoped document token; this does not grant permission to edit document

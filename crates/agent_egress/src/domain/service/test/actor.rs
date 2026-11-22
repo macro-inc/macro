@@ -527,3 +527,123 @@ async fn an_in_process_call_the_upstream_rate_limited_is_an_error_not_a_tool_res
         other => panic!("expected a rate limit, got {other:?}"),
     }
 }
+
+/// Refuses every exchange the way Macro Connect does for a grant that needs
+/// reauthorization.
+struct ExpiredGrantTransport;
+
+#[async_trait::async_trait]
+impl ActorMcpTransport for ExpiredGrantTransport {
+    async fn exchange(
+        &self,
+        _: AgentSessionId,
+        _: MacroUserIdStr<'static>,
+        _: UpstreamCall,
+        _: Value,
+    ) -> Result<Value, EgressError> {
+        Err(EgressError::NeedsReconnect)
+    }
+}
+
+const RECONNECT_STRIPE: &str =
+    r#"<m-connect-app>{"appSlug":"stripe","name":"Stripe","reconnect":true}</m-connect-app>"#;
+
+#[tokio::test]
+async fn a_sandbox_call_to_an_app_whose_grant_expired_offers_reconnect() {
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let service = gated(prompted_by(Some(asker)), SpyCredentials::knowing())
+        .with_actor_mcp(Arc::new(ExpiredGrantTransport));
+    let request = json_request(
+        r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"list_customers","arguments":{"acting_as":"requester"}}}"#,
+    );
+
+    let response = service
+        .proxy(
+            &SessionToken::new("session"),
+            EgressTarget::McpServer(McpDestination::Connected(
+                McpServerSlug::parse("stripe").unwrap(),
+            )),
+            request,
+        )
+        .await
+        .unwrap();
+
+    let body = body_json(response).await;
+    assert_eq!(body["id"], 9);
+    assert_eq!(body["result"]["isError"], true);
+    let text = body["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains(RECONNECT_STRIPE), "{text}");
+    assert!(text.contains("nothing ran"), "{text}");
+}
+
+#[tokio::test]
+async fn an_in_process_call_to_an_app_whose_grant_expired_offers_reconnect() {
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let service = gated(prompted_by(Some(asker.clone())), SpyCredentials::knowing())
+        .with_actor_mcp(Arc::new(ExpiredGrantTransport));
+    let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
+    let stripe = McpDestination::Connected(McpServerSlug::parse("stripe").unwrap());
+
+    let call = service
+        .exchange_as(
+            &grant,
+            &asker,
+            &stripe,
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_customers","arguments":{}}}),
+        )
+        .await
+        .unwrap();
+    let listing = service
+        .exchange_as(
+            &grant,
+            &asker,
+            &stripe,
+            json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}),
+        )
+        .await;
+
+    assert_eq!(call["isError"], true);
+    let text = call["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains(RECONNECT_STRIPE), "{text}");
+    assert!(
+        matches!(listing, Err(EgressError::NeedsReconnect)),
+        "{listing:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_custom_server_refusing_with_409_is_an_upstream_failure_not_a_reconnect() {
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let service = gated(prompted_by(Some(asker.clone())), SpyCredentials::knowing())
+        .with_actor_mcp(Arc::new(ExpiredGrantTransport));
+    let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
+    let custom = McpDestination::Custom(
+        CustomMcpServerKey::parse("0123456789abcdef0123456789abcdef").unwrap(),
+    );
+
+    let call = service
+        .exchange_as(
+            &grant,
+            &asker,
+            &custom,
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{}}}),
+        )
+        .await
+        .unwrap();
+    let listing = service
+        .exchange_as(
+            &grant,
+            &asker,
+            &custom,
+            json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}),
+        )
+        .await;
+
+    assert_eq!(call["isError"], true);
+    let text = call["content"][0]["text"].as_str().unwrap();
+    assert!(!text.contains("m-connect-app"), "{text}");
+    assert!(
+        matches!(listing, Err(EgressError::Upstream(_))),
+        "{listing:?}"
+    );
+}

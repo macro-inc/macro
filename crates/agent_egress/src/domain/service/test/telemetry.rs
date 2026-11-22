@@ -18,6 +18,7 @@ enum Answer {
     Result(Value),
     Fails,
     RateLimited,
+    NeedsReconnect,
 }
 
 struct AnsweringTransport(Answer);
@@ -39,6 +40,7 @@ impl ActorMcpTransport for AnsweringTransport {
             Answer::RateLimited => Err(EgressError::RateLimited {
                 retry_after: Some(std::time::Duration::from_secs(1)),
             }),
+            Answer::NeedsReconnect => Err(EgressError::NeedsReconnect),
         }
     }
 }
@@ -161,9 +163,17 @@ async fn an_exchange_records_where_it_went_how_big_and_how_it_ended() {
     assert_eq!(failed["mcp.outcome"], "upstream_error");
     assert_eq!(failed["otel.status_code"], "ERROR");
 
-    let paced = exchange(Answer::RateLimited, linear).await;
+    let paced = exchange(Answer::RateLimited, linear.clone()).await;
     assert_eq!(paced["mcp.outcome"], "rate_limited");
     assert_eq!(paced["otel.status_code"], "ERROR");
+
+    let expired = exchange(Answer::NeedsReconnect, linear).await;
+    assert_eq!(expired["mcp.outcome"], "needs_reconnect");
+    assert_eq!(expired["otel.status_code"], "ERROR");
+
+    let key = CustomMcpServerKey::parse("c491e4f2db62532ac6bc94f43fb214cf").unwrap();
+    let custom_conflict = exchange(Answer::NeedsReconnect, McpDestination::Custom(key)).await;
+    assert_eq!(custom_conflict["mcp.outcome"], "upstream_error");
 
     let key = CustomMcpServerKey::parse("c491e4f2db62532ac6bc94f43fb214cf").unwrap();
     let custom = exchange(

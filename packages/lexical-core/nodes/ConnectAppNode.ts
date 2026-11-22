@@ -13,14 +13,14 @@ import {
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
-const VERSION = 2;
+const VERSION = 3;
 
 /**
  * The tag an agent emits when a tool call failed because the person running
- * the session has not connected an app, and the tag the harness posts when
- * `@cursor` was mentioned by someone without a Cursor key. Mirrors the
- * backend's `CONNECT_APP_TAG`; the payload shape is
- * `{"appSlug": ..., "name": ..., "target"?: ...}`.
+ * the session has not connected an app, or the app's connection expired, and
+ * the tag the harness posts when `@cursor` was mentioned by someone without a
+ * Cursor key. Mirrors the backend's `CONNECT_APP_TAG`; the payload shape is
+ * `{"appSlug": ..., "name": ..., "target"?: ..., "reconnect"?: true}`.
  */
 export const CONNECT_APP_TAG = 'm-connect-app';
 
@@ -41,6 +41,12 @@ export type ConnectAppInfo = {
   name: string;
   /** Settings surface the chip connects through. */
   target: ConnectAppTarget;
+  /**
+   * The app has a connection whose grant expired: the chip offers to
+   * reconnect it even though the app counts as connected. Absent in older
+   * payloads, which mean `false`.
+   */
+  reconnect?: boolean;
 };
 
 export type SerializedConnectAppNode = Spread<
@@ -58,6 +64,14 @@ export function isConnectAppSlug(value: unknown): value is string {
   return typeof value === 'string' && /^[a-z0-9_-]+$/.test(value);
 }
 
+/** What a chip reads as in plain text: its call to action. */
+export function connectAppCallToAction(
+  name: string,
+  reconnect: boolean
+): string {
+  return reconnect ? `Reconnect ${name}` : `Connect ${name}`;
+}
+
 export function isConnectAppTarget(value: unknown): value is ConnectAppTarget {
   return (CONNECT_APP_TARGETS as readonly unknown[]).includes(value);
 }
@@ -65,7 +79,8 @@ export function isConnectAppTarget(value: unknown): value is ConnectAppTarget {
 /**
  * An inline chip offering to connect one integration. Rendered from a reply
  * the agent wrote after the egress proxy told it a Pipedream app was not
- * connected for the session owner, or from the reply the Cursor bot posts
+ * connected for the session owner (or that its connection expired, with
+ * `reconnect`), or from the reply the Cursor bot posts
  * when its mentioner has no Cursor key; clicking it takes the reader to the
  * settings surface named by `target` with that integration ready to connect.
  */
@@ -75,6 +90,7 @@ export class ConnectAppNode extends DecoratorNode<
   __appSlug: string;
   __name: string;
   __target: ConnectAppTarget;
+  __reconnect: boolean;
 
   static getType() {
     return 'connect-app';
@@ -93,6 +109,7 @@ export class ConnectAppNode extends DecoratorNode<
       node.__appSlug,
       node.__name,
       node.__target,
+      node.__reconnect,
       node.__key
     );
   }
@@ -101,12 +118,14 @@ export class ConnectAppNode extends DecoratorNode<
     appSlug: string,
     name: string,
     target: ConnectAppTarget = DEFAULT_CONNECT_APP_TARGET,
+    reconnect = false,
     key?: NodeKey
   ) {
     super(key);
     this.__appSlug = appSlug;
     this.__name = name;
     this.__target = target;
+    this.__reconnect = reconnect;
   }
 
   static importJSON(serializedNode: SerializedConnectAppNode) {
@@ -115,7 +134,8 @@ export class ConnectAppNode extends DecoratorNode<
       serializedNode.name,
       isConnectAppTarget(serializedNode.target)
         ? serializedNode.target
-        : DEFAULT_CONNECT_APP_TARGET
+        : DEFAULT_CONNECT_APP_TARGET,
+      serializedNode.reconnect === true
     );
     $applyIdFromSerialized(node, serializedNode);
     return node;
@@ -127,6 +147,7 @@ export class ConnectAppNode extends DecoratorNode<
       appSlug: this.__appSlug,
       name: this.__name,
       target: this.__target,
+      reconnect: this.__reconnect,
       type: ConnectAppNode.getType(),
       version: VERSION,
     };
@@ -137,6 +158,7 @@ export class ConnectAppNode extends DecoratorNode<
       appSlug: this.__appSlug,
       name: this.__name,
       target: this.__target,
+      reconnect: this.__reconnect,
     };
   }
 
@@ -158,12 +180,12 @@ export class ConnectAppNode extends DecoratorNode<
   exportDOM() {
     const element = document.createElement('span');
     element.setAttribute('data-connect-app', this.__appSlug);
-    element.textContent = `Connect ${this.__name}`;
+    element.textContent = this.getTextContent();
     return { element };
   }
 
   getTextContent(): string {
-    return `Connect ${this.__name}`;
+    return connectAppCallToAction(this.__name, this.__reconnect);
   }
 
   getAppSlug(): string {
@@ -178,6 +200,10 @@ export class ConnectAppNode extends DecoratorNode<
     return this.__target;
   }
 
+  getReconnect(): boolean {
+    return this.__reconnect;
+  }
+
   decorate(_: LexicalEditor, config: EditorConfig) {
     const decorator = getDecorator<ConnectAppDecoratorProps>(ConnectAppNode);
     if (decorator) {
@@ -186,6 +212,7 @@ export class ConnectAppNode extends DecoratorNode<
           appSlug: this.__appSlug,
           name: this.__name,
           target: this.__target,
+          reconnect: this.__reconnect,
           key: this.getKey(),
           theme: config.theme,
         });
@@ -196,9 +223,12 @@ export class ConnectAppNode extends DecoratorNode<
 export function $createConnectAppNode(
   appSlug: string,
   name: string,
-  target: ConnectAppTarget = DEFAULT_CONNECT_APP_TARGET
+  target: ConnectAppTarget = DEFAULT_CONNECT_APP_TARGET,
+  reconnect = false
 ): ConnectAppNode {
-  return $applyNodeReplacement(new ConnectAppNode(appSlug, name, target));
+  return $applyNodeReplacement(
+    new ConnectAppNode(appSlug, name, target, reconnect)
+  );
 }
 
 export function $isConnectAppNode(

@@ -13,8 +13,8 @@ use crate::domain::error::EgressError;
 use crate::domain::model::{
     EgressTarget, MAX_MCP_REQUEST_BYTES, McpDestination, McpResolution, ProxyRequest,
     ProxyResponse, SessionToken, TOOLS_CALL_METHOD, UpstreamCall, disconnected_tool_result,
-    ensure_method_allowed, not_connected_tool_result, peek_json_rpc, sanitize_request_headers,
-    sanitize_response_headers,
+    ensure_method_allowed, not_connected_tool_result, peek_json_rpc, reconnect_text,
+    sanitize_request_headers, sanitize_response_headers, tool_result_response,
 };
 use crate::domain::observed_body::{ObservedBody, StreamIdentity};
 use crate::domain::ports::{Forwarder, GithubTokens, McpCredentials, SessionAuthority};
@@ -197,6 +197,10 @@ where
         span.record("session", tracing::field::display(&grant.session));
         span.record("owner", tracing::field::display(&grant.owner));
 
+        // An owner `tools/call` on a connected app is forwarded raw; when
+        // Macro Connect refuses it for an expired grant, its 409 is answered
+        // with the reconnect tool result instead.
+        let mut reconnect: Option<ReconnectAnswer> = None;
         if self.actor_mcp.is_some()
             && matches!(&target, EgressTarget::McpServer(destination) if !matches!(destination, McpDestination::Preview))
             && *request.method() == Method::POST
@@ -223,7 +227,15 @@ where
                     return self.actor_exchange(token, &grant, destination, value).await;
                 } else {
                     match actor::owner_call_arguments(&grant, &value) {
-                        Ok(Some(arguments)) => value["params"]["arguments"] = arguments,
+                        Ok(Some(arguments)) => {
+                            value["params"]["arguments"] = arguments;
+                            if let McpDestination::Connected(slug) = destination {
+                                reconnect = Some(ReconnectAnswer {
+                                    id: rpc.id.clone(),
+                                    text: reconnect_text(slug, &grant.display_name(slug)),
+                                });
+                            }
+                        }
                         Ok(None) => {
                             return self.actor_exchange(token, &grant, destination, value).await;
                         }
@@ -414,6 +426,7 @@ where
                 let token = SessionToken::new(token.as_str());
                 let original_turn = grant.prompter.clone();
                 let request_id = call.id.clone();
+                let reconnect = reconnect.take();
                 return self
                     .approvals
                     .hold(HeldCall {
@@ -435,7 +448,7 @@ where
                                 }
                                 let mut response = forward.forward(request).await?;
                                 sanitize_response_headers(response.headers_mut());
-                                Ok(response)
+                                Ok(ReconnectAnswer::answer(reconnect, response))
                             })
                         }),
                     })
@@ -471,6 +484,8 @@ where
                 "upstream answered with a failure status"
             );
         }
+        // Recorded above as the upstream's own status.
+        let response = ReconnectAnswer::answer(reconnect, response);
 
         if event_stream {
             let identity = StreamIdentity {
@@ -507,6 +522,30 @@ fn log_proxy_error(error: &EgressError) {
     match error {
         EgressError::SessionClosed => tracing::info!(error = %error),
         _ => tracing::error!(error = %error),
+    }
+}
+
+/// The tool result a forwarded owner `tools/call` on a connected app gets
+/// in place of the upstream's HTTP 409: Macro Connect answers so, before
+/// calling the vendor, when the grant needs reauthorization.
+struct ReconnectAnswer {
+    /// The call's JSON-RPC id.
+    id: serde_json::Value,
+    /// [`reconnect_text`] for the app.
+    text: String,
+}
+
+impl ReconnectAnswer {
+    /// `response`, or the reconnect tool result when it is a 409 to a call
+    /// that has one.
+    fn answer(reconnect: Option<Self>, response: ProxyResponse) -> ProxyResponse {
+        match reconnect {
+            Some(answer) if response.status() == http::StatusCode::CONFLICT => {
+                tracing::info!("answering a connected app's 409 with how to reconnect it");
+                tool_result_response(answer.id, answer.text)
+            }
+            _ => response,
+        }
     }
 }
 

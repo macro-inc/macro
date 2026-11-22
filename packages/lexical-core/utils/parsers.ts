@@ -1,4 +1,5 @@
 import { isAgentContextData } from '../nodes/AgentContextNode';
+import { connectAppCallToAction } from '../nodes/ConnectAppNode';
 import { parseDatabaseQueryJson } from '../nodes/DatabaseQueryNode';
 import { parseDateMentionBody } from '../nodes/DateMentionNode';
 
@@ -154,7 +155,7 @@ export function parseConnectApps(text: string): string {
     try {
       const data = JSON.parse(json);
       return typeof data.name === 'string' && data.name
-        ? `Connect ${data.name}`
+        ? connectAppCallToAction(data.name, data.reconnect === true)
         : '';
     } catch {
       return '';
@@ -370,6 +371,7 @@ type MentionTagPayload = {
   groupAlias?: string;
   displayText?: string;
   equation?: string;
+  reconnect?: boolean;
 };
 
 /**
@@ -534,7 +536,7 @@ export function markdownToEmbeddingText(markdown: string): string {
   );
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
   text = replaceJsonTag(text, 'm-connect-app', (data) =>
-    data.name ? `Connect ${data.name}` : ''
+    data.name ? connectAppCallToAction(data.name, data.reconnect === true) : ''
   );
   text = replaceJsonTag(
     text,

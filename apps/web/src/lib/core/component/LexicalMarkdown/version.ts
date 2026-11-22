@@ -40,5 +40,6 @@
  * Version 9.3 - Nov 2026. AgentActivityNode rows carry an optional `card`: a view the agent presented.
  * Version 10.0 - Nov 2026. Added AccountManagerRequestNode: a DM card for one account manager request, holding only its grant id.
  * Version 11.0 - Nov 2026. Added DetailsNode and DetailsSummaryNode: GitHub `<details>` sections, registered only by the read-only renderer.
+ * Version 11.1 - Nov 2026. ConnectAppNode: optional `reconnect` so the chip can renew an expired connection.
  */
-export const MARKDOWN_VERSION_COUNTER = 11.0;
+export const MARKDOWN_VERSION_COUNTER = 11.1;

@@ -771,8 +771,12 @@ consent in the system browser, which returns to the waiting app on its own after
 authorization (**Return to Macro** is the fallback link). Unconnected picks never block
 saving; each teammate connects their own account. An agent session that calls a picked
 but unconnected app gets a tool result saying so, and the agent's reply renders a
-`Connect <app>` chip that opens Agents → Connections for that app. The same page
-is also available as Settings → Integrations.
+`Connect <app>` chip that opens Agents → Connections for that app. A call to a
+connected app whose connection has expired (Macro Connect asks for consent again)
+does not run: the agent gets a tool result saying so, and its reply renders a
+`Reconnect <app>` chip, clickable although the app still counts as connected,
+that runs the same connection flow and then reads `<app> reconnected`. The same
+page is also available as Settings → Integrations.
 
 Reference captures from an isolated browser fixture: [native waiting dialog](media/pipedream/native-waiting.png)
 and [browser return page](media/pipedream/browser-return.png). The fixture uses

@@ -27,7 +27,7 @@ mod test;
 type Client = rmcp::service::RunningService<rmcp::RoleClient, ClientConfig>;
 type Connection = Arc<OnceCell<Arc<Client>>>;
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 struct AccountSession {
     session: AgentSessionId,
     actor: MacroUserIdStr<'static>,
@@ -65,7 +65,7 @@ impl HttpActorMcpTransport {
         session: AgentSessionId,
         actor: MacroUserIdStr<'static>,
         upstream: UpstreamCall,
-    ) -> Result<Arc<Client>, EgressError> {
+    ) -> Result<(AccountSession, Connection, Arc<Client>), EgressError> {
         guarded_http::check_url(self.policy, upstream.url())
             .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?;
         let mut config = StreamableHttpClientTransportConfig::with_uri(upstream.url().to_string());
@@ -103,28 +103,42 @@ impl HttpActorMcpTransport {
                 Arc::clone(connection)
             } else {
                 let cell = Arc::new(OnceCell::new());
-                sessions.put(key, Arc::clone(&cell));
+                sessions.put(key.clone(), Arc::clone(&cell));
                 cell
             }
         };
-        cell.get_or_try_init(|| {
-            async {
-                let transport =
-                    StreamableHttpClientTransport::with_client(self.client.clone(), config);
-                let client = tokio::time::timeout(
-                    std::time::Duration::from_secs(30),
-                    mcp_client::domain::models::client_info().serve(transport),
-                )
-                .await
-                .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?
-                .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?;
-                Ok(Arc::new(client))
-            }
-            // A new upstream session's handshake, apart from the call it serves.
-            .instrument(tracing::info_span!("connected_app.mcp_connect"))
-        })
-        .await
-        .cloned()
+        let client = cell
+            .get_or_try_init(|| {
+                async {
+                    let transport =
+                        StreamableHttpClientTransport::with_client(self.client.clone(), config);
+                    let client = tokio::time::timeout(
+                        std::time::Duration::from_secs(30),
+                        mcp_client::domain::models::client_info().serve(transport),
+                    )
+                    .await
+                    .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?
+                    .map_err(handshake_error)?;
+                    Ok(Arc::new(client))
+                }
+                // A new upstream session's handshake, apart from the call it serves.
+                .instrument(tracing::info_span!("connected_app.mcp_connect"))
+            })
+            .await
+            .cloned()?;
+        Ok((key, cell, client))
+    }
+
+    /// Drop `cell` from the pool when it still holds `key`'s session, so the
+    /// next request opens a new one.
+    fn evict(&self, key: &AccountSession, cell: &Connection) {
+        if let Ok(mut sessions) = self.sessions.lock()
+            && sessions
+                .peek(key)
+                .is_some_and(|current| Arc::ptr_eq(current, cell))
+        {
+            sessions.pop(key);
+        }
     }
 }
 
@@ -138,13 +152,13 @@ impl ActorMcpTransport for HttpActorMcpTransport {
         upstream: UpstreamCall,
         request: Value,
     ) -> Result<Value, EgressError> {
-        let client = self.connection(session, actor, upstream).await?;
-        match request["method"].as_str() {
+        let (key, cell, client) = self.connection(session, actor, upstream).await?;
+        let result = match request["method"].as_str() {
             Some("tools/list") => client
                 .list_all_tools()
                 .await
                 .map(|tools| serde_json::json!({"tools": tools}))
-                .map_err(|error| EgressError::Upstream(rootcause::report!(error).into())),
+                .map_err(call_error),
             Some("tools/call") => {
                 let mut params: rmcp::model::CallToolRequestParams =
                     serde_json::from_value(request["params"].clone())
@@ -171,25 +185,66 @@ impl ActorMcpTransport for HttpActorMcpTransport {
             _ => Err(EgressError::Unauthenticated(
                 "unsupported actor MCP exchange",
             )),
+        };
+        // A grant that needs reconnecting may come back with a new upstream
+        // session behind it; the retry after a reconnect handshakes again.
+        if matches!(result, Err(EgressError::NeedsReconnect)) {
+            self.evict(&key, &cell);
         }
+        result
     }
 }
 
-/// A failed call: a 429 the upstream answered is a typed rate limit, since
-/// the request did not run and may be sent again; anything else broke the
-/// exchange.
+/// A failed handshake: a 409 the upstream answered means the account's
+/// grant needs reconnecting; anything else broke the exchange.
+fn handshake_error(error: rmcp::service::ClientInitializeError) -> EgressError {
+    use rmcp::service::ClientInitializeError;
+    // A discover-first startup that fell back to `initialize` failed twice;
+    // the upstream answers both the same way.
+    let transport = match &error {
+        ClientInitializeError::TransportError { error, .. } => Some(error),
+        ClientInitializeError::LegacyFallbackFailed { fallback, .. } => match fallback.as_ref() {
+            ClientInitializeError::TransportError { error, .. } => Some(error),
+            _ => None,
+        },
+        _ => None,
+    };
+    if transport.and_then(http_status) == Some(http::StatusCode::CONFLICT.as_u16()) {
+        return EgressError::NeedsReconnect;
+    }
+    EgressError::Upstream(rootcause::report!(error).into())
+}
+
+/// A failed request on an open session: a 429 the upstream answered is a typed rate limit, since
+/// the request did not run and may be sent again, and a 409 means the
+/// account's grant needs reconnecting; anything else broke the exchange.
 fn call_error(error: rmcp::ServiceError) -> EgressError {
     if let rmcp::ServiceError::TransportSend(transport) = &error
         && let Some(StreamableHttpError::HttpStatus(status)) = transport
             .error
             .downcast_ref::<StreamableHttpError<reqwest::Error>>()
-        && status.status == http::StatusCode::TOO_MANY_REQUESTS.as_u16()
     {
-        return EgressError::RateLimited {
-            retry_after: status.retry_after.as_deref().and_then(retry_after),
-        };
+        if status.status == http::StatusCode::TOO_MANY_REQUESTS.as_u16() {
+            return EgressError::RateLimited {
+                retry_after: status.retry_after.as_deref().and_then(retry_after),
+            };
+        }
+        if status.status == http::StatusCode::CONFLICT.as_u16() {
+            return EgressError::NeedsReconnect;
+        }
     }
     EgressError::Upstream(rootcause::report!(error).into())
+}
+
+/// The HTTP status a transport failure carries, when it carries one.
+fn http_status(transport: &rmcp::transport::DynamicTransportError) -> Option<u16> {
+    match transport
+        .error
+        .downcast_ref::<StreamableHttpError<reqwest::Error>>()?
+    {
+        StreamableHttpError::HttpStatus(status) => Some(status.status),
+        _ => None,
+    }
 }
 
 /// A `Retry-After` value as a wait: delay-seconds, or an HTTP date, which

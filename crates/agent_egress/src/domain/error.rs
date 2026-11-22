@@ -93,6 +93,13 @@ pub enum EgressError {
         retry_after: Option<std::time::Duration>,
     },
 
+    /// The upstream refused the request with HTTP 409 before running it:
+    /// Macro Connect's gateway answers so, on the handshake and on every
+    /// call, when the account's grant for the app needs reauthorization.
+    /// Nothing reached the vendor; the user has to reconnect the app.
+    #[error("the account's connection to the app needs reconnecting")]
+    NeedsReconnect,
+
     /// Our side broke: storage, decryption, configuration.
     #[error("egress failed: {0}")]
     Internal(rootcause::Report),
