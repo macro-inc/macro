@@ -118,8 +118,11 @@ marker could not be removed after it did; its build decides those files first,
 and its next open removes such a marker: `older-in-use`), a browser without
 OPFS moves, a pair whose headers Turso would not open, or a failed move leaves
 the old file where it is and starts empty, as every version change did before.
-A marker beside no whole pair is an adoption stopped before its moves finished,
-and the open looks further back, where its files still are. So moved files come
+A marker beside no whole pair is an adoption into that name stopped before its
+moves finished, or a wipe of it stopped after removing its pair, and the open
+looks further back: any whole pair such an adoption named is still at its own
+name, and a split (its main file moved in, its WAL still further back) leaves no
+whole pair anywhere, so nothing moves and that build completes it. So moved files come
 from a name whose files are at its own version, which a hand-back compares
 against: a wipe removes a pair before its marker, and a hand-back first removes
 a marker that an adoption into the older name left beside no main file. Only a
@@ -236,7 +239,11 @@ lose them instead, and each needs a worker lost or an open failing mid-upgrade:
   leaves the same split;
 - the worker is lost during the first open, before any step committed, and a
   tab of the older build opens its now empty name before the recovery open: the
-  files cannot go back over its new ones and are discarded;
+  files cannot go back over its new ones and are discarded. On a later storage
+  bump that tab may instead start moving an even older pair into its name and
+  lose its worker before the move: a hand-back that lands before that tab's
+  recovery open puts the files back, and that recovery, finding no adoption,
+  wipes them;
 - the first open commits the upgrade and then fails (its queue checks or a
   projection rebuild), or is lost, before it is ready: the file is already the
   newer version, so it is discarded. An open slower than the coordinator's

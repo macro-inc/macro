@@ -29,10 +29,13 @@ nothing; holding it through the moves and the first open keeps the older build
 from opening, resetting or recreating its paths meanwhile. Nothing moves when
 this owner's main file exists (`TargetExists`), when the previous pair is
 incomplete or both files are empty (`NothingToAdopt`, also beside a marker: an
-adoption into it stopped before its moves finished, whose files are still
-further back), when that whole pair has a marker of its own, an adoption into
-it whose first open has not succeeded (`PreviousAdopting`: its build decides
-those files first, and moving them would leave that marker without them), or when a non-empty filelacks a header Turso opens (`Unreadable`: the checks Turso's own open makes of
+adoption into it stopped before its moves finished, or a wipe stopped after
+removing its pair; any whole pair such an adoption named is still further back,
+and a split leaves none), when that whole pair has a marker of its own, an
+adoption into it whose first open has not succeeded (`PreviousAdopting`: its
+build decides those files first, and moving them would leave that marker
+without them), or when a non-empty file lacks a header Turso opens
+(`Unreadable`: the checks Turso's own open makes of
 the database header, whole pages and a table b-tree first page in the main
 file, the WAL magic, format and page size, and matching page sizes). Main and
 WAL move under their new names, so committed WAL frames move
@@ -52,8 +55,9 @@ under the older identity's lock (`LockNeeded` without one). `return_adoption`
 moves a self-contained database (empty WAL, which a close leaves;
 `WalNotEmpty` otherwise) back to an older identity that holds no database
 (`Occupied` otherwise), first removing a marker there beside no main file (an
-adoption into it stopped before its main file moved, whose files are still
-where they were), and reports it `Returned` once the main file is back,
+adoption into it stopped before its main file moved, or a wipe stopped after
+removing it; the count beside it goes too, but a failure to remove the count
+never holds the pair back, as a later adoption writes its own), and reports it `Returned` once the main file is back,
 even when removing the leftovers fails; `discard_adoption` makes the files
 this owner's own. `record_attempt` counts a caller attempt and returns the count, so a
 caller can bound how often it retries a decision. The count is a file of its

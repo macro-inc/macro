@@ -914,6 +914,26 @@ async fn a_return_clears_a_marker_its_older_identity_was_left_with() {
     clean_pair(&oldest).await;
     clean_pair(&old).await;
     clean_pair(&new).await;
+
+    // The count beside that marker cannot be removed: the pair still goes
+    // back, and the count left alone labels nothing.
+    let (old, new) = identities("return-marked-count");
+    write_pair(&old, 18).await;
+    clean_pair(&new).await;
+    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
+    write_file(&attempts_name(&old), b"+-------").await;
+    write_file(&marker_name(&old), &stopped).await;
+    let root = worker_root().await.expect("root");
+    let (held, _) = open_sync_handle(&root, &attempts_name(&old), BusyDeadline::start())
+        .await
+        .expect("hold the count open");
+    assert_eq!(give_back(&old, &new).await, ReturnOutcome::Returned);
+    close_sync_handle(&held).expect("close the count");
+    assert!(!marker_exists(&old).await);
+    assert_eq!(read_adoption(&old).await, None);
+    assert_eq!(read_pair(&old).await, 18);
+    clean_pair(&old).await;
+    clean_pair(&new).await;
 }
 
 #[wasm_bindgen_test]

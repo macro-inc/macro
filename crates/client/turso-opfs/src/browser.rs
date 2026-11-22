@@ -886,9 +886,12 @@ async fn adopt_pair(
         return Ok(AdoptOutcome::TargetExists);
     }
     let [Some(main), Some(wal)] = present_files(&root, &from).await? else {
-        // A marker beside no whole pair is an adoption stopped before its
-        // moves finished: the files it names are still at their own name,
-        // and the caller looks there next.
+        // No whole pair at `from`, with or without a marker: a marker there
+        // is an adoption into `from` stopped before its moves finished, or a
+        // wipe stopped after removing its pair. Any whole pair that adoption
+        // named is still at its own name, where the caller looks next; a
+        // split has none, so nothing moves and the build of `from` completes
+        // it.
         return Ok(AdoptOutcome::NothingToAdopt);
     };
     // Moving a whole pair with a marker would leave the marker behind: once
@@ -1034,11 +1037,14 @@ async fn return_pair(to: Paths, from: Paths) -> Result<ReturnOutcome, OpfsError>
         return Ok(ReturnOutcome::Occupied);
     }
     // A marker there beside no main file is an adoption into the older
-    // identity stopped before its main file moved: the files it names are
-    // still where they were. It goes first, as the next read there would
-    // remove it, so the pair coming back is never taken for the files that
-    // adoption was moving.
-    remove_marker(&root, &from, deadline).await?;
+    // identity stopped before its main file moved, or a wipe stopped after
+    // removing it. It goes first, as the next read there would remove it, so
+    // the pair coming back is never taken for the files that adoption was
+    // moving. Its attempt count goes only as cleanup: an adoption writes a
+    // fresh count before its marker, so a count left without a marker never
+    // labels the pair, and failing to remove it never holds the pair back.
+    remove_if_present(&root, &marker_path(&from), true, deadline).await?;
+    let _ = remove_if_present(&root, &attempts_path(&from), true, deadline).await;
     if previous_wal.is_none() {
         // The pair is whole the moment the main file arrives.
         create_empty(&root, from.get(FileRole::Wal)).await?;
