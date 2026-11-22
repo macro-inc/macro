@@ -1261,7 +1261,9 @@ says Never.
 
 The header counts the saved settings by who made them (`2 settings changed ·
 1 set by <agent> itself`). The page lists every permission group as a
-collapsible row whose summary says what is restricted (`⊘ Never deletes · ✋
+collapsible row (`Channels & messages` is messaging; creating and deleting
+channels, their settings, members, join links, access requests and channel
+bots are under `Channel settings & members`) whose summary says what is restricted (`⊘ Never deletes · ✋
 Asks before sending · 2 tools customized`), or says it once when every action
 the group has tools for agrees (`✋ Asks for everything`, `⊘ Never allowed`).
 Expanded, each of the five actions (Create, Read, Update, Delete, Send) has an
