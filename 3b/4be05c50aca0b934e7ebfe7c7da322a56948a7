@@ -1,0 +1,21 @@
+packages/code-mode-sdk/src/js-tools/catalog.ts
+  s_dba41136531d82::t_cb338fd0231cbc 346-352
+apps/web/src/features/agent-permissions/primitives/pending-changes.ts
+  s_dba41136531d82::t_cb338fd0231cbc 44-46,71,107-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3b4be05c50aca0b934e7ebfe7c7da322a56948a7",
+  "prompts": {},
+  "sessions": {
+    "s_dba41136531d82": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d6968615-4a55-466d-97aa-a623132ee12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
