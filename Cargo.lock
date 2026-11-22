@@ -10044,6 +10044,7 @@ dependencies = [
 name = "graphql_properties"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-graphql",
  "chrono",
  "entity_access",
@@ -10054,6 +10055,8 @@ dependencies = [
  "models_properties",
  "properties",
  "rootcause",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "uuid",

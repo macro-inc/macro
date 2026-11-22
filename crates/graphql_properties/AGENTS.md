@@ -21,12 +21,21 @@ edge.
   it is provisioned.
 - `src/mutations.rs`: `PropertiesMutationRoot` — setting/clearing a property
   value on an entity.
+- `src/catalog.rs`: `PropertyCatalogMutationRoot` — creating and deleting
+  definitions, adding/updating/deleting their options, and provisioning,
+  promoting and merging tags. Each mutation makes the same properties-service
+  call as its REST route, with the same team receipt and managed-definition
+  guard (`properties::ManagedTeamDefinitions`); refusals carry
+  `extensions.code` (`BAD_REQUEST`, `NOT_FOUND`, `CONFLICT`, `FORBIDDEN`,
+  `INTERNAL`), deletes answer `GraphqlCacheDeletion`, and a promotion name
+  conflict is a `GraphqlTagPromotionConflict` result, not an error.
 - `src/loaders.rs`: `EntityPropertiesLoader` batching.
 
 ## Scope
 
-- Owns: GraphQL types/resolvers for property definitions and values.
-- Not here: property storage, selectable-option management, and filter
+- Owns: GraphQL types/resolvers for property definitions, options, tag sets
+  and values, and the GraphQL writes to each.
+- Not here: property storage, the catalog rules themselves, and filter
   evaluation → `crates/properties`, `crates/models_properties`.
 
 ## Boundaries
@@ -43,11 +52,17 @@ edge.
   `src/mutations.rs` (`GraphqlSetPropertyValue` variant).
 - Add a field to property definitions: `src/definitions.rs` →
   `load_property_definitions`.
+- Add a catalog write: a `PropertyCatalogWriter` method with a refusing
+  default → its `PropertiesEntityPropertyWriter` impl calling the same service
+  method as the REST handler (with its guard) → a field on
+  `PropertyCatalogMutationRoot` → `src/catalog/test.rs`.
 
 ## Checks
 
 - `cargo test -p graphql_properties` (`SQLX_OFFLINE` unset).
-- `cargo test -p complete_graph` for the SDL contract after a schema change.
+- `cargo test -p complete_graph` for the SDL contract after a schema change
+  (needs a live database: `DATABASE_URL` set, `SQLX_OFFLINE` unset), then
+  regenerate `static_assets/schema.graphql`.
 
 ## Related
 
