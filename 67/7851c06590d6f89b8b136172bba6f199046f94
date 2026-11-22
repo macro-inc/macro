@@ -1,0 +1,24 @@
+crates/suggestions/src/outbound/pg_suggestion_repo.rs
+  s_be0dcf8f48154b::t_913013204b7a90 608
+  s_be0dcf8f48154b::t_3740889ccb37a7 596-607,609-610
+crates/suggestions/src/domain/ports.rs
+  s_be0dcf8f48154b::t_3740889ccb37a7 87-94
+crates/suggestions/src/outbound/pg_suggestion_repo/test.rs
+  s_be0dcf8f48154b::t_d8e4066a2d348f 451-486
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "677851c06590d6f89b8b136172bba6f199046f94",
+  "prompts": {},
+  "sessions": {
+    "s_be0dcf8f48154b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84f26c56-f4ae-4114-a847-2d20de026f21",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
