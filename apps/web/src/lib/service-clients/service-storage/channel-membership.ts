@@ -25,7 +25,7 @@ export function subscribeToChannelMembership(
   return () => membershipListeners.delete(listener);
 }
 
-export function publishChannelMembership(patch: ChannelMembershipPatch): void {
+function publishChannelMembership(patch: ChannelMembershipPatch): void {
   for (const listener of membershipListeners) {
     try {
       listener(patch);
@@ -36,7 +36,7 @@ export function publishChannelMembership(patch: ChannelMembershipPatch): void {
 }
 
 /** The membership changes `patches` carry. */
-export function channelMembershipPatches(
+function channelMembershipPatches(
   patches: SoupUpdatesSubscription['soupUpdates']
 ): ChannelMembershipPatch[] {
   const changes: ChannelMembershipPatch[] = [];

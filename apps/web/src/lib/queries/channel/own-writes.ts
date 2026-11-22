@@ -31,14 +31,14 @@ export type OwnChannelWrite = {
 };
 
 /** A read of the primary sent and not settled yet. */
-export type OwnWriteRead = {
+type OwnWriteRead = {
   sequence: number;
   account: QueryAccount;
   channelIds: readonly string[];
 };
 
 /** A read of the primary, sent. */
-export type SentOwnWriteRead = {
+type SentOwnWriteRead = {
   sequence: number;
   /** Holds what the read found, by channel id (null for a channel the
    * viewer can no longer read), as writes of its sequence, and ends the

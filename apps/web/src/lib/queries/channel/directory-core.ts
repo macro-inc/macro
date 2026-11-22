@@ -13,7 +13,7 @@ export type DirectoryChannelType =
   | 'public'
   | 'team';
 
-export type DirectoryRole = 'owner' | 'admin' | 'member';
+type DirectoryRole = 'owner' | 'admin' | 'member';
 
 export type DirectoryParticipant = {
   userId: string;
@@ -22,14 +22,14 @@ export type DirectoryParticipant = {
   leftAt: string | null;
 };
 
-export type DirectoryBotParticipant = {
+type DirectoryBotParticipant = {
   botId: string;
   role: DirectoryRole;
   joinedAt: string;
   leftAt: string | null;
 };
 
-export type DirectoryMessage = {
+type DirectoryMessage = {
   messageId: string;
   threadId: string | null;
   senderId: string;

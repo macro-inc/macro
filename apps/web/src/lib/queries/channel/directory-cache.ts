@@ -55,7 +55,7 @@ export async function listCachedChannelDocuments(
 
 /** Reads channel records by key. A record missing any directory field, or
  * no longer cached, is left out. */
-export async function readDirectoryChannels(
+async function readDirectoryChannels(
   host: Pick<CacheHost, 'readRecordsByKeys'>,
   keys: readonly string[],
   signal?: AbortSignal

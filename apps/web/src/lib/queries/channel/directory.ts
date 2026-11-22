@@ -1670,7 +1670,7 @@ type ObservedChange = DirectoryChannel | null;
 
 /** What the cache showed after the network's read of the joined channels
  * began, and what by-id reads found since its pages landed. */
-export type FallbackEvidence = {
+type FallbackEvidence = {
   /** Each record the cache changed or removed since the read began. */
   changes: ReadonlyMap<string, ObservedChange>;
   /** Every channel the cache held a record of at some read since. */
@@ -1698,7 +1698,7 @@ export type FallbackEvidence = {
  *   cache, and a view stamp then rewrites it), unless a by-id read since
  *   returned it.
  */
-export function fallbackChannels(
+function fallbackChannels(
   network: readonly DirectoryChannel[],
   evidence: FallbackEvidence
 ): DirectoryChannel[] {
@@ -1725,7 +1725,7 @@ export function fallbackChannels(
  * read its page, or rejoined after the viewer lost it (its record removed,
  * or kept as a nonmember's), can be cached first by a read without the
  * directory's fields, and only a by-id read lands it with them. */
-export function fallbackConfirmations(
+function fallbackConfirmations(
   network: readonly DirectoryChannel[],
   evidence: FallbackEvidence,
   incomplete: readonly string[] = []
@@ -2632,7 +2632,7 @@ export function createMemoryChannelDirectory(
 }
 
 /** A directory with nothing in it, for a signed-out session. */
-export const EMPTY_CHANNEL_DIRECTORY: ChannelDirectory = {
+const EMPTY_CHANNEL_DIRECTORY: ChannelDirectory = {
   channels: () => [],
   complete: () => false,
   lookup: () => PENDING,

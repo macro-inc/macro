@@ -11,7 +11,7 @@ import type { ChannelDirectoryState, PrimaryChannelRead } from './directory';
  * leave: a read sent before it (an event's refetch, a by-id read, another
  * list's page) lands within seconds, and a replica read sent just after it
  * can trail it by as much. */
-export const DEPARTURE_RECHECKS_MS: readonly number[] = [10_000, 60_000];
+const DEPARTURE_RECHECKS_MS: readonly number[] = [10_000, 60_000];
 /** At most this many departures are followed at once; past it, a departure
  * is left to the lane's next pass. */
 export const DEPARTURES_LIMIT = 200;
@@ -24,7 +24,7 @@ export const DEPARTURE_ROUND_DEADLINE_MS = 60_000;
  * long later, at most `DEPARTURE_RETRIES` times; after that the lane's next
  * pass decides the channel. */
 export const DEPARTURE_RETRY_MS = 30_000;
-export const DEPARTURE_RETRIES = 2;
+const DEPARTURE_RETRIES = 2;
 /** Primary reads in flight at once. */
 const READ_CONCURRENCY = 4;
 /** Reads one check makes at most while live rejoins keep landing during
