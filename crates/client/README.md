@@ -179,8 +179,10 @@ any uncounted attempt is, never discarded for not reading. When it still does no
 does (the files beside it cannot be looked up), the time comes from the marker.
 When neither the marker nor the count reads, nothing bounds the attempt or says
 how old the adoption is, so it keeps everything. A version probe that fails
-loses its hold on the files before any of them changes, so it cannot discard
-them and only the count bounds it; uncounted, it keeps everything too. A read
+before it opens anything (a busy file) gives the files back undecided, as any
+attempt that keeps them. One that fails after opening them (a failed connect
+or close) loses its hold on them before any of them changes, so it cannot
+discard them and only the count bounds it; uncounted, it keeps everything too. A read
 that returns fewer bytes than the file holds is an error, never a shorter
 marker or WAL header.
 
@@ -269,7 +271,8 @@ lose them instead, and each needs a worker lost or an open failing mid-upgrade:
   build through all three, or recoveries lost after counting their attempt. The
   next one discards the files unread, though the older build might still have
   opened them. Recoveries whose attempts cannot be counted do the same once ten
-  minutes passed since the adoption began by the browser's clock, so a clock
+  minutes passed since the adoption began by the browser's clock (except after
+  a failed connect or close, which only the count bounds), so a clock
   jump either way can bring that early, and then one count write that fails
   while a tab of the older build briefly holds its lock is enough. An uncounted
   recovery whose two reads of the adoption both fail takes the time from the

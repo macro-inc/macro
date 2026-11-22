@@ -3812,6 +3812,56 @@ async fn an_uncounted_recovery_reads_the_adoption_again_before_the_age_bound() {
     destroy_cache(SCOPE.into()).await.expect("destroy cache");
 }
 
+#[wasm_bindgen_test(async)]
+async fn an_uncounted_recovery_whose_version_probe_fails_discards_once_old() {
+    const SCOPE: &str = "cache-wasm-recovery-uncounted-probe";
+    let own = database_identity(SCOPE);
+    let attempts = format!("{own}-adopting-attempts");
+    let held = format!("{own}-held");
+    older_database_with_a_queued_write(SCOPE, Flaw::None).await;
+    move_without_opening(SCOPE).await;
+    rename_opfs_file(&attempts, &held).await;
+
+    // A probe that fails before opening anything keeps the files, with its
+    // own error, as any attempt that cannot decide.
+    PROBE_OPEN_FAILURES.with(|left| left.set(1));
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(UNCOUNTED_RECOVERY_MS - 60_000));
+    let result = recovery_open(SCOPE).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(0));
+    assert_eq!(PROBE_OPEN_FAILURES.with(std::cell::Cell::get), 0);
+    let error = result.err().expect("a recovery whose probe failed");
+    assert!(kept_for_recovery(&error));
+    let message = js_sys::Reflect::get(&error, &JsValue::from_str("message"))
+        .expect("Error.message")
+        .as_string()
+        .expect("message is a string");
+    assert_eq!(message, "injected version probe open failure");
+    assert!(opfs_file_exists(&own).await);
+    assert!(opfs_entry_exists(&format!("{own}-adopting")).await);
+
+    // Once the adoption is past the age bound, what that probe would keep
+    // is discarded, so a probe that keeps failing cannot keep the cache from
+    // starting.
+    PROBE_OPEN_FAILURES.with(|left| left.set(1));
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(UNCOUNTED_RECOVERY_MS));
+    let result = recovery_open(SCOPE).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(0));
+    assert_eq!(PROBE_OPEN_FAILURES.with(std::cell::Cell::get), 0);
+    let (engine, report) = result.expect("old uncounted recovery whose probe failed");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::ResetStorageUncertain,
+            carry_forward: Some(CarryForward::new(CarryForwardKind::Discarded, 11)),
+        }
+    );
+    assert_eq!(queue_depth(&engine).await, "0");
+    resolved(engine.close()).await;
+    remove_opfs_file(&held).await;
+    assert!(!opfs_entry_exists(&format!("{own}-adopting")).await);
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
 /// Whether `error` says its open kept files an upgrade moved here for a
 /// later recovery to decide.
 fn kept_for_recovery(error: &JsValue) -> bool {

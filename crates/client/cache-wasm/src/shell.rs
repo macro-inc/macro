@@ -795,6 +795,10 @@ thread_local! {
     /// When not zero, this many of the next recovery reads of an adoption
     /// fail, as a read that fails in passing would.
     static ADOPTION_READ_FAILURES: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
+    /// When not zero, this many of the next version probes fail before
+    /// opening anything and give the owner back, as an open that met a busy
+    /// file would.
+    static PROBE_OPEN_FAILURES: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
 }
 
 /// Milliseconds since the Unix epoch by this browser's clock.
@@ -1278,9 +1282,11 @@ fn recovery_deferred(error: JsValue) -> JsValue {
 /// one after [`RECOVERY_ATTEMPTS`] discards the files unopened. One whose
 /// attempt cannot be counted still decides if it can, and discards only what
 /// it would keep once [`UNCOUNTED_RECOVERY_MS`] passed since the adoption
-/// began. A version probe that fails gives the owner up before any file
-/// changes; the count bounds it, and when nothing can be counted either,
-/// nothing does, as when neither adoption file reads.
+/// began. A version probe that fails before opening anything gives the owner
+/// back, and the attempt keeps the files as any other would. One that fails
+/// after opening them (a failed connect or close) gives the owner up before
+/// any file changes; the count bounds it, and when nothing can be counted
+/// either, nothing does, as when neither adoption file reads.
 async fn recover_adoption(
     scope: &str,
     mut owner: OpfsOwner,
@@ -1344,8 +1350,13 @@ async fn recover_read_adoption(
     let old = counted.is_none() && adoption_is_old(adoption.adopted_at_ms);
     match decide_adoption(owner, adoption, from_version).await {
         Decided::Done(owner, carry_forward) => Ok((owner, carry_forward)),
-        Decided::Kept(owner, _) if old => Ok((owner, discarded)),
+        Decided::Kept(owner, _) | Decided::Unprobed(owner, _) if old => Ok((owner, discarded)),
         Decided::Kept(owner, reason) => Err(keep_for_recovery(owner, reason).await),
+        // The probe's own error, so one that met a busy file still says so.
+        Decided::Unprobed(owner, error) => match owner.release().await {
+            Ok(()) => Err(recovery_deferred(error)),
+            Err(failure) => Err(recovery_deferred(err_js(failure))),
+        },
         Decided::Lost(error) => Err(recovery_deferred(error)),
     }
 }
@@ -1358,8 +1369,11 @@ enum Decided {
     /// Nothing could be decided, for the reason given; every file and the
     /// marker are as they were.
     Kept(OpfsOwner, String),
-    /// The version probe failed and gave the owner up before any file
-    /// changed.
+    /// The version probe failed before opening anything, with this error,
+    /// and gave the owner back; every file and the marker are as they were.
+    Unprobed(OpfsOwner, JsValue),
+    /// The version probe failed after opening the files and gave the owner
+    /// up before any file changed.
     Lost(JsValue),
 }
 
@@ -1391,9 +1405,12 @@ async fn decide_adoption(mut owner: OpfsOwner, adoption: Adoption, from_version:
     }
     let (mut owner, stored) = match read_storage_version(owner).await {
         Ok(read) => read,
-        Err(error) => {
+        Err(ProbeFailure { error, owner }) => {
             release_previous(Some(previous)).await;
-            return Decided::Lost(error);
+            return match owner {
+                Some(owner) => Decided::Unprobed(owner, error),
+                None => Decided::Lost(error),
+            };
         }
     };
     let kept = match stored {
@@ -1490,19 +1507,55 @@ enum StoredVersion {
     Reset,
 }
 
+/// A version probe that failed and left the files as they were.
+#[derive(Debug)]
+struct ProbeFailure {
+    error: JsValue,
+    /// The owner, when the probe failed before opening anything and gave it
+    /// back; `None` once it opened the files, or its cleanup was uncertain.
+    owner: Option<OpfsOwner>,
+}
+
+impl ProbeFailure {
+    fn lost(error: &OpfsError) -> Self {
+        Self {
+            error: storage_err_js(error),
+            owner: None,
+        }
+    }
+}
+
 /// Opens this owner's files only to read the storage version they say they
 /// were written at, then closes them, which checkpoints the WAL into the main
 /// file. An open or connect that fails is an error, and leaves the files as
 /// they were.
-async fn read_storage_version(owner: OpfsOwner) -> Result<(OpfsOwner, StoredVersion), JsValue> {
-    match open_owner(owner).await? {
+async fn read_storage_version(
+    owner: OpfsOwner,
+) -> Result<(OpfsOwner, StoredVersion), ProbeFailure> {
+    #[cfg(test)]
+    if PROBE_OPEN_FAILURES.with(|left| left.replace(left.get().saturating_sub(1)) > 0) {
+        return Err(ProbeFailure {
+            error: err_js("injected version probe open failure"),
+            owner: Some(owner),
+        });
+    }
+    let opened = match owner.open().await {
+        Ok(opened) => opened,
+        Err(failure) => {
+            return Err(ProbeFailure {
+                error: storage_err_js(failure.error()),
+                owner: failure.into_owner(),
+            });
+        }
+    };
+    match opened {
         OpenResult::Ready(session) => {
             let connected = session
                 .connect()
-                .map_err(|failure| storage_err_js(failure.error()))?;
+                .map_err(|failure| ProbeFailure::lost(failure.error()))?;
             let (version, owner) = TursoStorage::read_storage_version_and_close(connected);
             Ok((
-                owner.map_err(|error| storage_err_js(&error))?,
+                owner.map_err(|error| ProbeFailure::lost(&error))?,
                 StoredVersion::Read(version),
             ))
         }
@@ -1510,7 +1563,7 @@ async fn read_storage_version(owner: OpfsOwner) -> Result<(OpfsOwner, StoredVers
             session
                 .reset()
                 .await
-                .map_err(|failure| storage_err_js(failure.error()))?,
+                .map_err(|failure| ProbeFailure::lost(failure.error()))?,
             StoredVersion::Reset,
         )),
     }
