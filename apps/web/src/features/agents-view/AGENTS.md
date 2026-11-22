@@ -69,3 +69,5 @@ From the repository root, run `just check`. Exercise the sidebar, archive action
 - [Web guide](../../../AGENTS.md)
 
 Keep session names and agent-bubble labels at the normal list-row weight on desktop and phone, including archive, preview, and header surfaces; unread uses a dot, never heavier text.
+
+The new-conversation composer's `@` menu always offers Macro and the agents of the viewer's own teams (`useOwnAgentMentionTransform`), merged with the contact directory and listed once; a new account with no contacts can still mention them.
