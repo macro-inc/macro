@@ -379,7 +379,9 @@ describe('checking a channel the viewer left again', () => {
     expect(answers).toHaveLength(1);
 
     // The read writes the viewer out, then a scan lands them back in.
-    h.show(complete(channel('kept'), channel('gone', { isParticipant: false })));
+    h.show(
+      complete(channel('kept'), channel('gone', { isParticipant: false }))
+    );
     comeBack(h);
     answers[0]?.({
       kind: 'read',
@@ -464,10 +466,13 @@ describe('checking a channel the viewer left again', () => {
   );
 
   it.each([
-    ['deleted nothing', async (): Promise<RemoveUnreadableResult> => ({
-      removed: [],
-      unconfirmed: [],
-    })],
+    [
+      'deleted nothing',
+      async (): Promise<RemoveUnreadableResult> => ({
+        removed: [],
+        unconfirmed: [],
+      }),
+    ],
     ['answered nothing', async () => undefined],
   ] as const)(
     'reports a delete that %s as skipped, and checks the channel again while the cache shows it joined',
