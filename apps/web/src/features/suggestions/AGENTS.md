@@ -82,8 +82,13 @@ only, behind `enable-suggestions`.
   (`queries/top-suggestions.ts`).
 - A dismissal is sent at once; the suggestion stays as a row for the visit,
   and Undo calls `POST /suggestions/{id}/restore`, which the server allows
-  for a few minutes. A refused dismissal leaves the row with the
-  failed-action line; a refused Undo says it may be too late. Dismissing a
+  for a few minutes; a restored suggestion shows open at once, even if the
+  read after it fails. A dismissed routine suggestion has no Undo: its idea
+  goes with it, which the server can't bring back. A dismissal also reads
+  the routine ideas again, for the sidebar's Ideas count. A refused
+  dismissal leaves the row with the failed-action line; a refused Undo says
+  it may be too late. The Undo that replaces a pressed ✓ or ✕ takes the
+  focus it left (`takeLostFocus`). Dismissing a
   running suggestion stops its run (the control and the row say so), and
   restoring it brings it back open, not running.
 - Leaving For you calls `POST /suggestions/viewed` (also on `pagehide`, with
@@ -109,14 +114,16 @@ only, behind `enable-suggestions`.
   Undo while the page can restore it), a finished run (a green check and
   the one line its run reported, `run.report`, else its summary), a routine
   turned on (a green dot and when it runs, Edit and the routine's switch),
-  or dismissed (Undo). With nothing waiting in Today, the page says "You’re
+  or dismissed (Undo). Switched off from its row, a turned-on routine reads
+  "is off" with a grey dot. With nothing waiting in Today, the page says "You’re
   all caught up" above whatever settled here.
 - Every row is one `components/suggestion-row.tsx`: an `Item size="sm"`
   with `border-0`, 56px whatever its state (`h-14`), a 32px tile tinted by
   the suggestion's kind (`suggestionLook`), a medium `text-sm` title and one
   dimmer 13px line (`text-ink-extra-muted`). Both stay on one line, cut
   where the row ends; pointing at a cut line shows all of it (`Cut`). A
-  failed action or a rewritten suggestion replaces the line with its note.
+  failed action or a rewritten suggestion replaces the line with its note,
+  after what the run sends (`SendsFirst`), since Run stays one press away.
   The rows sit flat on the page: no cards, outlines, or local surfaces.
   `for-you.browser.e2e.ts` holds that every row in a list is the same
   height.

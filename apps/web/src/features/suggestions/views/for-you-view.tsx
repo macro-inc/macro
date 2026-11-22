@@ -254,6 +254,13 @@ export function ForYouView(props: {
     </li>
   );
 
+  let scroller: HTMLElement | undefined;
+  // Each list starts at its top: the lists share one scroller.
+  const selectList = (list: ForYouList) => {
+    scroller?.scrollTo({ top: 0 });
+    props.onSelectList(list);
+  };
+
   return (
     <ViewShell.Root
       asidePreferenceKey="for-you"
@@ -265,7 +272,7 @@ export function ForYouView(props: {
         <ForYouSidebar
           list={props.list}
           counts={props.feed.counts()}
-          onSelect={props.onSelectList}
+          onSelect={selectList}
           ideas={props.routines.ideas()}
           newIdea={newIdea()}
           routines={props.routines.routines()}
@@ -282,6 +289,7 @@ export function ForYouView(props: {
           </div>
         </ViewShell.TopBar>
         <section
+          ref={scroller}
           class="min-h-0 flex-1 overflow-y-auto px-8"
           aria-label={listName(props.list)}
         >
@@ -316,7 +324,7 @@ export function ForYouView(props: {
                   <CaughtUp
                     done={props.feed.counts()?.done ?? 0}
                     fill={entries().length === 0}
-                    onSeeDone={() => props.onSelectList('done')}
+                    onSeeDone={() => selectList('done')}
                     onBrowseRoutines={openRoutines}
                   />
                 </Show>

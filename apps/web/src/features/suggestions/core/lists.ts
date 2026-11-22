@@ -65,12 +65,15 @@ export function inList(list: ForYouList, suggestion: Suggestion): boolean {
 
 /** How a suggestion that settled during the visit reads. */
 export function settledState(suggestion: Suggestion): RowState {
-  if (suggestion.kind === 'routine') return 'routineOn';
-  if (suggestion.kind === 'prompt' && suggestion.runMode === 'background') {
-    return 'finished';
-  }
-
-  return 'markedDone';
+  return match(suggestion)
+    .with({ kind: 'routine' }, (): RowState => 'routineOn')
+    .with(
+      { kind: 'prompt' },
+      (prompt): RowState =>
+        prompt.runMode === 'background' ? 'finished' : 'markedDone'
+    )
+    .with({ kind: 'entity' }, (): RowState => 'markedDone')
+    .exhaustive();
 }
 
 /** The routine a turned-on routine suggestion saved; undefined until the feed says. */

@@ -159,7 +159,7 @@ test('marking a to-do done keeps it in place, struck through, with Undo there an
 
   await expect(review).toHaveAttribute('data-suggestion-state', 'markedDone');
   await expect(review).toContainText(
-    'Done just now · Moves to Done when you leave this page'
+    'Done just now · Stays here until you leave this page'
   );
   await expect(review.locator('#suggestion-title-suggestion-review')).toHaveCSS(
     'text-decoration-line',
@@ -267,6 +267,11 @@ test('Turn on saves a routine suggestion switched on, in one click, with its swi
   await toggle.click({ force: true });
   await expect(requests(page)).toContainText('routine routine-1 off');
   await expect(toggle).not.toBeChecked();
+  // Off, the row stops saying it is on and when it runs.
+  await expect(routine).toContainText('Weekly vendor digest is off');
+  await expect(routine).toContainText('Won’t run until you turn it back on');
+  await expect(routine).not.toContainText('Runs Fridays');
+  await expectEqualHeights(page);
 
   await button(routine, 'Edit').click();
   await expect(requests(page)).toContainText('open scheduled_action routine-1');
@@ -434,6 +439,10 @@ test('Run on a suggestion that changed shows the new text and starts nothing unt
   await button(suggestion, 'Run').click();
 
   await expect(suggestion.locator('[data-suggestion-changed]')).toBeVisible();
+  // Run is one press away, so where the new version posts is still said.
+  await expect(suggestion.locator('[data-suggestion-sends]')).toHaveText(
+    'Posts the weekly status summary in #leadership'
+  );
   await expect(suggestion).toHaveAttribute('data-suggestion-state', 'open');
   await expectEqualHeights(page);
 
@@ -484,4 +493,72 @@ test('a row keeps its place and focus when the feed updates under it', async ({
   );
 
   await expect(action).toBeFocused();
+});
+
+test('a refused Run still says what the run sends beside the failure', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=accept-refused');
+  const suggestion = row(page, 'suggestion-background');
+  await button(suggestion, 'Run').click();
+
+  await expect(suggestion.getByRole('alert')).toContainText(
+    'That didn’t work. Try again.'
+  );
+  await expect(suggestion.locator('[data-suggestion-sends]')).toHaveText(
+    'Posts the weekly status summary in #ops'
+  );
+});
+
+test('marking done or dismissing from the keyboard leaves focus on Undo', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const review = row(page, 'suggestion-review');
+  await button(review, 'Mark “Review the vendor contract” done').focus();
+  await page.keyboard.press('Enter');
+  await expect(review).toHaveAttribute('data-suggestion-state', 'markedDone');
+  await expect(button(review, 'Undo')).toBeFocused();
+
+  const composer = row(page, 'suggestion-composer');
+  await button(composer, 'Dismiss “Prepare the budget review”').focus();
+  await page.keyboard.press('Enter');
+  await expect(composer).toHaveAttribute('data-suggestion-state', 'dismissed');
+  await expect(button(composer, 'Undo')).toBeFocused();
+});
+
+test('a dismissed routine idea offers no Undo, which the server would refuse', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const routine = row(page, 'suggestion-routine');
+  await routine.hover();
+  await button(routine, 'Dismiss “Weekly vendor digest”').click();
+
+  await expect(routine).toHaveAttribute('data-suggestion-state', 'dismissed');
+  await expect(routine).toContainText('Dismissed');
+  await expect(button(routine, 'Undo')).toHaveCount(0);
+  await expectEqualHeights(page);
+});
+
+test('each list opens at its top, wherever the last one was scrolled', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 420 });
+  await page.goto('/');
+  const scroller = page.locator('section[aria-label="Today"]');
+  await scroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  expect(
+    await scroller.evaluate((element) => element.scrollTop)
+  ).toBeGreaterThan(0);
+
+  await sidebarList(page, 'suggestions').click();
+  await expect(title(page)).toHaveText('Suggestions');
+  expect(
+    await page
+      .locator('section[aria-label="Suggestions"]')
+      .evaluate((element) => element.scrollTop)
+  ).toBe(0);
 });

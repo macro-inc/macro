@@ -1,5 +1,5 @@
-import { t } from '@app/lib/i18n';
-import { formatTime } from '@core/util/date';
+import { formatLocale, t } from '@app/lib/i18n';
+import { onElementConnect } from '@core/util/onElementConnect';
 import CheckIcon from '@icon/system/regular/check.svg';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
@@ -242,15 +242,20 @@ function StateLine(props: SuggestionRowProps) {
       </Match>
       <Match when={props.entry.failed}>
         <RowLine class="text-failure">
+          {/* A run that sends keeps saying so: Run stays one press away. */}
           <span role="alert" class="truncate">
-            {t('suggestions.actionFailed')}
+            <SendsFirst suggestion={suggestion()}>
+              {t('suggestions.actionFailed')}
+            </SendsFirst>
           </span>
         </RowLine>
       </Match>
       <Match when={props.entry.changed}>
         <RowLine class="text-ink-muted">
           <span role="status" class="truncate" data-suggestion-changed>
-            {t('suggestions.suggestionChanged')}
+            <SendsFirst suggestion={suggestion()}>
+              {t('suggestions.suggestionChanged')}
+            </SendsFirst>
           </span>
         </RowLine>
       </Match>
@@ -268,6 +273,16 @@ function StateLine(props: SuggestionRowProps) {
       <Match when={props.entry.state === 'markedDone'}>
         <RowLine>
           <span class="truncate">{t('suggestions.doneJustNow')}</span>
+        </RowLine>
+      </Match>
+      <Match
+        when={
+          props.entry.state === 'routineOn' && props.routineEnabled === false
+        }
+      >
+        <RowLine>
+          <span class="size-1.5 shrink-0 rounded-full bg-ink-placeholder" />
+          <span class="truncate">{t('suggestions.routineOffLine')}</span>
         </RowLine>
       </Match>
       <Match when={props.entry.state === 'routineOn'}>
@@ -476,6 +491,24 @@ function WaitingHover(props: SuggestionRowProps) {
   );
 }
 
+/**
+ * The control that replaces one the person just pressed (Mark done, Dismiss)
+ * takes the focus it left behind, so the keyboard stays on the row.
+ */
+function takeLostFocus(element: HTMLElement) {
+  onElementConnect(element, () => {
+    const active = document.activeElement;
+    if (!active || active === document.body) element.focus();
+  });
+}
+
+/** A done row's time, in the interface language. */
+function doneTime(at: string): string {
+  return new Intl.DateTimeFormat(formatLocale(), { timeStyle: 'short' }).format(
+    new Date(at)
+  );
+}
+
 /** The right side of the row, for its state. */
 function StateEnd(props: SuggestionRowProps) {
   const suggestion = () => props.entry.suggestion;
@@ -489,27 +522,32 @@ function StateEnd(props: SuggestionRowProps) {
             class="text-xs leading-4 font-medium whitespace-nowrap text-ink-placeholder"
             data-suggestion-time
           >
-            {formatTime(suggestion().stateChangedAt)}
+            {doneTime(suggestion().stateChangedAt)}
           </span>
         </RowEnd>
       </Match>
       <Match when={props.entry.state === 'dismissed'}>
         <RowEnd>
-          <Button
-            variant="ghost"
-            size="sm"
-            loading={props.entry.busy}
-            onClick={props.onUndoDismiss}
-            data-suggestion-undo
-          >
-            {t('suggestions.undo')}
-          </Button>
+          {/* A routine suggestion leaves with its idea, which the server can't bring back. */}
+          <Show when={suggestion().kind !== 'routine'}>
+            <Button
+              ref={takeLostFocus}
+              variant="ghost"
+              size="sm"
+              loading={props.entry.busy}
+              onClick={props.onUndoDismiss}
+              data-suggestion-undo
+            >
+              {t('suggestions.undo')}
+            </Button>
+          </Show>
         </RowEnd>
       </Match>
       <Match when={props.entry.state === 'markedDone'}>
         <RowEnd>
           <Show when={props.entry.canUndo}>
             <Button
+              ref={takeLostFocus}
               variant="secondary"
               size="sm"
               loading={props.entry.busy}
@@ -630,9 +668,12 @@ export function SuggestionRow(props: SuggestionRowProps) {
         )}
       >
         {props.entry.state === 'routineOn'
-          ? t('suggestions.routineIsOn', {
-              title: props.entry.suggestion.title,
-            })
+          ? t(
+              props.routineEnabled === false
+                ? 'suggestions.routineIsOff'
+                : 'suggestions.routineIsOn',
+              { title: props.entry.suggestion.title }
+            )
           : props.entry.suggestion.title}
       </Item.Title>
     </Cut>

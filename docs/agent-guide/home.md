@@ -390,7 +390,7 @@ for the visit with a green check, the one line its run reported, and
 run's text puts its prompt there without starting it. **Turn on** saves a
 routine switched on in one click: the row reads "<name> is on" with a green
 dot and when it runs, **Edit** and its switch, and a toast offers **View
-routine**. A To do row names the item it is about, who wrote, whether a
+routine**. Switched off there, it reads "<name> is off" with a grey dot. A To do row names the item it is about, who wrote, whether a
 reply is drafted, and how long it has waited; pressing its text, or **Open**
 / **Open draft**, opens the item. A reply stays open until the person
 replies on its thread, however often it is opened, and has no ✓. **Open
@@ -398,12 +398,13 @@ draft** opens the thread with the draft in its reply composer and a footer
 under it that reads **Drafted by Macro**, links what else the suggestion
 cites, and offers **Rewrite**, which opens the agent composer with the thread
 mentioned and the request typed, unsent. ✓ strikes the row through, "Done
-just now · Moves to Done when you leave this page", with **Undo** on the row
-and in a **Marked done** toast. With nothing waiting in Today, the page reads
+just now · Stays here until you leave this page" (the Done list already
+holds it), with **Undo** on the row and in a **Marked done** toast. With nothing waiting in Today, the page reads
 **You’re all caught up** (the date line adds "Nothing needs you right now")
 with **See what’s done** and **Browse routines**. ✕ dismisses at once and
-leaves the row in place with **Undo** for the visit; Undo restores the
-suggestion, which the server allows for a few minutes. Dismissing a running
+leaves the row in place with **Undo** for the visit (a routine idea has no
+Undo: the server can't bring it back); Undo restores the suggestion, which
+the server allows for a few minutes. Dismissing a running
 suggestion stops its run, and restoring it brings it back open, not running.
 **Refresh** in the top bar asks for a fresh run, at most once an hour; while
 one runs it reads "Looking for suggestions", and during the cooldown

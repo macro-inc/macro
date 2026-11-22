@@ -139,13 +139,21 @@ function Fixture() {
     refresh: async () => {},
     accept: async ({ id, updatedAt }) => {
       record(`accept ${id}`);
+      if (scenario === 'accept-refused') throw new Error('refused');
       if (scenario === 'changed' && updatedAt !== REWRITTEN_AT) {
         // Rewritten under the card: the server refuses and the feed is read again.
-        change(id, (suggestion) => ({
-          ...suggestion,
-          summary: 'Rewritten: the team moved the summary to Mondays.',
-          updatedAt: REWRITTEN_AT,
-        }));
+        // The rewrite moved where the run posts.
+        change(id, (suggestion) =>
+          match(suggestion)
+            .returnType<Suggestion>()
+            .with({ kind: 'prompt' }, (prompt) => ({
+              ...prompt,
+              summary: 'Rewritten: the team moved the summary to Mondays.',
+              sends: 'Posts the weekly status summary in #leadership',
+              updatedAt: REWRITTEN_AT,
+            }))
+            .otherwise((other) => ({ ...other, updatedAt: REWRITTEN_AT }))
+        );
         return 'changed';
       }
 
@@ -196,6 +204,8 @@ function Fixture() {
       if (scenario === 'restore-refused') throw new Error('too late');
 
       const back = dismissedHere.find((suggestion) => suggestion.id === id);
+      // As the server: a routine suggestion leaves with its idea for good.
+      if (back?.kind === 'routine') throw new Error('not restorable');
       if (!back) {
         // Marked done here: Undo opens it again, in its place.
         change(id, (suggestion) => ({
