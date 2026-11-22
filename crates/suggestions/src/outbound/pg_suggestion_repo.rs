@@ -202,7 +202,7 @@ impl PgSuggestionRepo {
         // Each suggestion's latest run, by its index.
         let runs = sqlx::query!(
             r#"SELECT DISTINCT ON (suggestion_id) suggestion_id, session_id, started_at, state,
-                      state_changed_at
+                      state_changed_at, report
                FROM suggestion_run
                WHERE suggestion_id = ANY($1)
                ORDER BY suggestion_id, started_at DESC"#,
@@ -237,6 +237,7 @@ impl PgSuggestionRepo {
                     started_at: row.started_at,
                     state,
                     state_changed_at: row.state_changed_at,
+                    report: row.report,
                 });
                 (row.suggestion_id, run)
             })
@@ -1139,6 +1140,24 @@ impl SuggestionRepo for PgSuggestionRepo {
         .rows_affected()
             == 1;
         Ok(moved)
+    }
+
+    async fn report_run(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        session: Uuid,
+        report: &str,
+    ) -> Result<bool, Self::Err> {
+        let stored = sqlx::query!(
+            r#"UPDATE suggestion_run SET report = $3
+               WHERE session_id = $1 AND user_id = $2 AND settled_at IS NULL"#,
+            session,
+            user.as_ref(),
+            report,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(stored.rows_affected() == 1)
     }
 
     async fn cancel_run(

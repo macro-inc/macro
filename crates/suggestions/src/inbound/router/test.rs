@@ -228,6 +228,15 @@ impl SuggestionApi for FakeSuggestions {
         Ok(())
     }
 
+    async fn report_run(
+        &self,
+        _: &CreationPrincipal,
+        _: Option<Uuid>,
+        _: crate::domain::model::RunReport,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
+        unreachable!()
+    }
+
     async fn stop_run(
         &self,
         user: &MacroUserIdStr<'static>,

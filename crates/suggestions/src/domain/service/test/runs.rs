@@ -1,7 +1,7 @@
 //! Background runs, through the service: starting one, and moving it along
 //! from its session's lifecycle events and the reconcile sweep.
 
-use crate::domain::model::{RunStartError, SessionReadError, SessionState, StoredRun};
+use crate::domain::model::{RunReport, RunStartError, SessionReadError, SessionState, StoredRun};
 use crate::domain::ports::{RunEventOutcome, RunsReconciled, SuggestionRuns};
 use crate::domain::run::{Advanced, RunStateName, SessionEvent, SessionNews};
 
@@ -789,6 +789,91 @@ async fn stopping_a_run_keeps_its_suggestion_open_to_run_again(pool: PgPool) {
     assert_eq!(stopped.result, None);
     h.accept(&user(OWNER), suggestion.id).await.unwrap();
     assert_ne!(runs.last().session, run);
+}
+
+/// A run writes its one-line report from its own session while it runs, and
+/// the feed shows it on its card, through the finish. Nothing else may
+/// report, and a report that isn't one plain line is sent back to fix.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_run_reports_what_it_did_for_its_card(pool: PgPool) {
+    let (h, runs) = run_harness(pool).await;
+    let suggestion = h.background("quotes:compare").await;
+    h.accept(&user(OWNER), suggestion.id).await.unwrap();
+    let run = runs.last();
+    let report = |line: &str| RunReport {
+        report: line.to_owned(),
+    };
+
+    for (caller, correlation) in [
+        (OWNER, None),
+        (OWNER, Some(Uuid::now_v7())),
+        (OTHER, Some(run.session)),
+    ] {
+        assert!(
+            matches!(
+                h.service
+                    .report_run(&principal(caller), correlation, report("Done"))
+                    .await,
+                Err(SuggestionError::NotARun)
+            ),
+            "{caller} {correlation:?}"
+        );
+    }
+    for bad in [
+        "",
+        "two\nlines",
+        "Wrote to ada@example.com · Nothing was sent",
+    ] {
+        let refused = h
+            .service
+            .report_run(&principal(OWNER), Some(run.session), report(bad))
+            .await
+            .unwrap();
+        assert!(!refused.ok && !refused.problems.is_empty(), "{bad:?}");
+    }
+    assert_eq!(
+        h.in_feed(suggestion.id).await.unwrap().run.unwrap().report,
+        None
+    );
+
+    for line in [
+        "Compared 2 quotes",
+        "  Compared 3 quotes · Nothing was sent  ",
+    ] {
+        let stored = h
+            .service
+            .report_run(&principal(OWNER), Some(run.session), report(line))
+            .await
+            .unwrap();
+        assert!(stored.ok, "{:?}", stored.problems);
+    }
+    let running = h.in_feed(suggestion.id).await.unwrap();
+    assert_eq!(
+        running.run.unwrap().report.as_deref(),
+        Some("Compared 3 quotes · Nothing was sent")
+    );
+
+    h.news(
+        run.session,
+        SessionNews::TurnEnded {
+            action: run.action,
+            finished: true,
+        },
+    )
+    .await;
+    let done = h.in_feed(suggestion.id).await.unwrap();
+    assert_eq!(done.status, SuggestionStatus::Done);
+    assert_eq!(
+        done.run.unwrap().report.as_deref(),
+        Some("Compared 3 quotes · Nothing was sent")
+    );
+    // A settled run reports nothing more.
+    assert!(matches!(
+        h.service
+            .report_run(&principal(OWNER), Some(run.session), report("Again"))
+            .await,
+        Err(SuggestionError::NotARun)
+    ));
 }
 
 /// A run that finishes as its suggestion is dismissed records what it made,

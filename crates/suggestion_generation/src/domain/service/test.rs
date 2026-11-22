@@ -343,6 +343,15 @@ impl SuggestionApi for FakeSuggestions {
         unused()
     }
 
+    async fn report_run(
+        &self,
+        _: &CreationPrincipal,
+        _: Option<Uuid>,
+        _: suggestions::domain::model::RunReport,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
+        unused()
+    }
+
     async fn stop_run(
         &self,
         _: &MacroUserIdStr<'static>,

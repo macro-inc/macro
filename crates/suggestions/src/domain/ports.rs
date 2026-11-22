@@ -10,7 +10,7 @@ use model_owner::CreationPrincipal;
 
 use super::model::{
     Accept, AttachDraft, Change, GenerationSession, GenerationTrigger, NewKind, NewSuggestion,
-    OpenTarget, ResolveReason, RetireSuggestionRequest, RewriteSuggestion, RoutineText,
+    OpenTarget, ResolveReason, RetireSuggestionRequest, RewriteSuggestion, RoutineText, RunReport,
     RunStartError, SessionReadError, SessionState, StoredRun, Suggestion, SuggestionCaller,
     SuggestionContent, SuggestionError, SuggestionFeed, SuggestionState, SuggestionWriteOutcome,
     SuggestionsReview, Target, Waiting,
@@ -222,6 +222,15 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         id: Uuid,
         closed_since: DateTime<Utc>,
         now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Store `report` on the person's unsettled run `session`, replacing an
+    /// earlier one; whether there is such a run.
+    fn report_run(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        session: Uuid,
+        report: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Cancel the unsettled run of the person's suggestion `id` while the
@@ -485,6 +494,18 @@ pub trait SuggestionApi: Send + Sync + 'static {
         caller: SuggestionCaller,
         id: Uuid,
     ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
+
+    /// A background run, from its own session, says in one line what it did
+    /// and what it sent, for its card; a later report replaces an earlier one.
+    /// A report that isn't one plain line naming nobody's details is refused
+    /// with what to fix. Any caller but an unsettled run is refused
+    /// (`NotARun`).
+    fn report_run(
+        &self,
+        principal: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        report: RunReport,
+    ) -> impl Future<Output = Result<SuggestionWriteOutcome, SuggestionError>> + Send;
 
     /// The person, or their own agent, takes back dismissing a suggestion, or
     /// completing one they acted on themself, within
