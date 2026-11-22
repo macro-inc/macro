@@ -9,6 +9,7 @@ import {
   type PropertyCatalogOptionFieldsFragment,
   UpdatePropertyOptionDocument,
 } from '@service-storage/graphql/generated/graphql';
+import { onlineManager } from '@tanstack/solid-query';
 import { CombinedError } from '@urql/core';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
@@ -290,7 +291,7 @@ describe('catalog list results', () => {
   });
 
   it('reads an offline failure over a list it has as a paused success', () => {
-    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    onlineManager.setOnline(false);
     try {
       const offline = new CombinedError({ networkError: new Error('offline') });
       const state: { data?: string[]; error?: Error } = {
@@ -303,7 +304,13 @@ describe('catalog list results', () => {
         null,
         true,
       ]);
-      // With nothing to show, or a refusal from the server, it still fails.
+      // It stays paused until the next result replaces it, as a paused
+      // TanStack read stayed successful until it resumed.
+      onlineManager.setOnline(true);
+      expect(list.isSuccess).toBe(true);
+      onlineManager.setOnline(false);
+      // With nothing to show, a refusal from the server, or an HTTP status
+      // from one, it still fails.
       state.data = undefined;
       expect(list.isError).toBe(true);
       state.data = ['a'];
@@ -311,8 +318,13 @@ describe('catalog list results', () => {
         graphQLErrors: [{ message: 'forbidden' }],
       });
       expect(list.isError).toBe(true);
+      state.error = new CombinedError({
+        networkError: new Error('refused'),
+        response: { status: 403 },
+      });
+      expect(list.isError).toBe(true);
     } finally {
-      online.mockRestore();
+      onlineManager.setOnline(true);
     }
   });
 });
@@ -397,5 +409,30 @@ describe('catalog mutations', () => {
     finish(7);
     await expect(done).resolves.toBe(7);
     expect(calls).toEqual(['default', 'hook']);
+  });
+
+  it("drops a call's callbacks when its component goes while a hook callback awaits", async () => {
+    const calls: string[] = [];
+    let release: () => void = () => {};
+    let dispose: () => void = () => {};
+    const done = createRoot((d) => {
+      dispose = d;
+      const mutation = createCatalogMutation(async () => 7, {
+        onSuccess: async () => {
+          calls.push('default');
+          await new Promise<void>((resolve) => (release = resolve));
+        },
+      });
+      return mutation.mutateAsync(1, {
+        onSuccess: () => {
+          calls.push('call');
+        },
+      });
+    });
+    await vi.waitFor(() => expect(calls).toEqual(['default']));
+    dispose();
+    release();
+    await expect(done).resolves.toBe(7);
+    expect(calls).toEqual(['default']);
   });
 });

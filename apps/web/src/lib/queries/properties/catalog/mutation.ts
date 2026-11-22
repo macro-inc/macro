@@ -45,10 +45,18 @@ export function createCatalogMutation<TVars, TData>(
   const [pending, setPending] = createSignal(0);
   let disposed = false;
   if (getOwner()) onCleanup(() => (disposed = true));
-  const layers = (call?: CatalogMutationCallbacks<TData, TVars>) =>
-    [defaults, callbacks, disposed ? undefined : call].filter(
-      (layer): layer is CatalogMutationCallbacks<TData, TVars> => !!layer
-    );
+  // Runs one callback on each layer in order. Disposal is checked before the
+  // call layer runs, so an unmount during an earlier layer's await drops it.
+  const eachLayer = async (
+    call: CatalogMutationCallbacks<TData, TVars> | undefined,
+    parent: TraceContext,
+    run: (layer: CatalogMutationCallbacks<TData, TVars>) => MaybePromise
+  ) => {
+    for (const layer of [defaults, callbacks, call]) {
+      if (!layer || (layer === call && disposed)) continue;
+      await parent.run(() => run(layer));
+    }
+  };
 
   const execute = async (
     vars: TVars,
@@ -63,16 +71,16 @@ export function createCatalogMutation<TVars, TData>(
         data = await run(vars);
       } catch (cause) {
         const error = asError(cause);
-        for (const layer of layers(call))
-          await parent.run(() => layer.onError?.(error, vars));
-        for (const layer of layers(call))
-          await parent.run(() => layer.onSettled?.(undefined, error, vars));
+        await eachLayer(call, parent, (layer) => layer.onError?.(error, vars));
+        await eachLayer(call, parent, (layer) =>
+          layer.onSettled?.(undefined, error, vars)
+        );
         throw error;
       }
-      for (const layer of layers(call))
-        await parent.run(() => layer.onSuccess?.(data, vars));
-      for (const layer of layers(call))
-        await parent.run(() => layer.onSettled?.(data, null, vars));
+      await eachLayer(call, parent, (layer) => layer.onSuccess?.(data, vars));
+      await eachLayer(call, parent, (layer) =>
+        layer.onSettled?.(data, null, vars)
+      );
       return data;
     } finally {
       setPending((count) => count - 1);

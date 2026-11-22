@@ -1,5 +1,6 @@
 import type { UrqlQueryResult } from '@app/lib/urql-solid/types';
 import { normalizedCacheResultMetadata } from '@graphql-cache/index';
+import { onlineManager } from '@tanstack/solid-query';
 import type { AnyVariables, CombinedError, OperationResult } from '@urql/core';
 import { createSignal } from 'solid-js';
 
@@ -41,23 +42,35 @@ export function createListedAt() {
   };
 }
 
+// Whether each failure reached no server while the app was offline, decided
+// when it is first read: a failure stays paused until the next result
+// replaces it, as a paused TanStack read stayed successful until it resumed.
+const OFFLINE_AT_FAILURE = new WeakMap<CombinedError, boolean>();
+
 /**
- * A read that failed because the browser is offline, over a list it already
- * has. TanStack paused such reads and kept their success; the cache answers
- * them with a network error, which readers would show as a failure.
+ * A read that failed because the app is offline, over a list it already has.
+ * TanStack paused such reads and kept their success; the cache answers them
+ * with a network error, which readers would show as a failure. Offline is
+ * the app's network status (`onlineManager`, the native network path on iOS
+ * and Android). A failure with an HTTP status came from a server, so it is
+ * a refusal, never a pause.
  */
 export function isOfflineFailure(
   error: CombinedError | null,
   hasData: boolean
 ): boolean {
-  return (
-    !!error &&
-    hasData &&
-    !!error.networkError &&
-    error.graphQLErrors.length === 0 &&
-    typeof navigator !== 'undefined' &&
-    navigator.onLine === false
-  );
+  if (!error || !hasData) return false;
+  let offline = OFFLINE_AT_FAILURE.get(error);
+  if (offline === undefined) {
+    const status = (error.response as { status?: unknown } | undefined)?.status;
+    offline =
+      !!error.networkError &&
+      error.graphQLErrors.length === 0 &&
+      status === undefined &&
+      !onlineManager.isOnline();
+    OFFLINE_AT_FAILURE.set(error, offline);
+  }
+  return offline;
 }
 
 /** A query result that reports an offline failure over its data as success. */

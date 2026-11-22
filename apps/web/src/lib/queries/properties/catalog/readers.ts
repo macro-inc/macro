@@ -11,6 +11,7 @@ import type {
   GraphqlPropertyDefinitionScope,
   GraphqlPropertyEntityType,
 } from '@service-storage/graphql/generated/graphql';
+import { onlineManager } from '@tanstack/solid-query';
 import { onCleanup } from 'solid-js';
 
 export type CatalogReader =
@@ -46,10 +47,15 @@ const READERS = new Set<CatalogReader>();
 
 let reconnectInstalled = false;
 
+// Reloads mounted lists when the app comes back online, as TanStack's
+// refetchOnReconnect did, from the same network status (the native network
+// path on iOS and Android, browser events elsewhere).
 function reloadOnReconnect() {
-  if (reconnectInstalled || typeof window === 'undefined') return;
+  if (reconnectInstalled) return;
   reconnectInstalled = true;
-  window.addEventListener('online', () => refreshCatalogReadersInBackground());
+  onlineManager.subscribe((online) => {
+    if (online) refreshCatalogReadersInBackground();
+  });
 }
 
 /** Registers a reader for the lifetime of the calling owner. */
