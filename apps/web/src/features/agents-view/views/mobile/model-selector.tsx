@@ -12,7 +12,7 @@ import Plus from '@icon/system/regular/plus.svg';
 import Squares from '@icon/system/regular/squares-four.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, createUniqueId, For, Show } from 'solid-js';
 import { AgentIcon } from '../../components/AgentGlyph';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { agentPickerGroups } from '../../core/agent-picker-groups';
@@ -30,6 +30,7 @@ import { UnifiedModelTriggerContent } from '../shared/model-trigger-content';
 
 export function MobileModelSelector() {
   const state = useUnifiedModelSelector();
+  const currentModelId = createUniqueId();
   const {
     open,
     query,
@@ -335,10 +336,19 @@ export function MobileModelSelector() {
           >
             <MobileDrawer.Section class="mx-3 mb-3 shrink-0">
               <Show when={options().model}>
-                <MobileDrawer.Item onClick={() => setPage('model')}>
+                {/* Named "Model" for screen readers, with the current model as
+                    its description. */}
+                <MobileDrawer.Item
+                  aria-label={t('agentControls.model')}
+                  aria-describedby={currentModelId}
+                  onClick={() => setPage('model')}
+                >
                   <ModelIcon model={state.model} />
                   <span class="flex-1">{t('agentControls.model')}</span>
-                  <span class="max-w-32 truncate text-ink-subtle">
+                  <span
+                    id={currentModelId}
+                    class="max-w-32 truncate text-ink-subtle"
+                  >
                     {state.models.find((option) => option.id === state.model)
                       ?.label ?? catalogModelLabel(state.model, state.models)}
                   </span>
