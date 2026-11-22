@@ -772,6 +772,10 @@ export type AgentToolPermissions = {
      */
     kind: ToolPermissionPolicyKind;
     /**
+     * The policy's stable id.
+     */
+    policyId: ToolPermissionPolicyId;
+    /**
      * How many operations are not always allowed.
      */
     restricted: number;
@@ -3613,6 +3617,12 @@ export type ToolPermissionOverride = {
      */
     state: ToolPermissionState;
 };
+
+/**
+ * A policy's stable id: the same for as long as the policy exists, whatever
+ * its owner or settings.
+ */
+export type ToolPermissionPolicyId = string;
 
 /**
  * Whether the permissions are an owned agent's or the caller's own for a

@@ -358,9 +358,20 @@ fn a_session_overlay_can_tighten_but_never_loosen() {
 }
 
 fn view_of(catalog: &Catalog, saved: Vec<Rule>, overlay: Option<Vec<Rule>>) -> PermissionsView {
+    view_with_policy(catalog, PolicyId::generate(), saved, overlay)
+}
+
+/// [`view_of`] under the policy id `policy`.
+fn view_with_policy(
+    catalog: &Catalog,
+    policy: PolicyId,
+    saved: Vec<Rule>,
+    overlay: Option<Vec<Rule>>,
+) -> PermissionsView {
     view(
         catalog,
         BotId::TEST_A,
+        policy,
         PolicyKind::Agent,
         ViewAccess {
             can_edit: true,
@@ -395,8 +406,10 @@ fn the_view_lists_overrides_and_counts_restricted_operations() {
     ];
     let overlay = vec![tool_rule("email", "send_email", Never)];
 
-    let view = view_of(&catalog(), saved.clone(), Some(overlay.clone()));
+    let policy = PolicyId::generate();
+    let view = view_with_policy(&catalog(), policy, saved.clone(), Some(overlay.clone()));
 
+    assert_eq!(view.policy_id, policy);
     assert_eq!(view.restricted, 3);
     assert_eq!(view.rules, saved);
     assert_eq!(view.session_rules, Some(overlay));

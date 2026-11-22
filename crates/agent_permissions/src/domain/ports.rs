@@ -7,18 +7,24 @@ use agent_fold::domain::log::AgentSessionId;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
-use super::model::{AgentAccess, Change, PermissionError, PolicyOwner, Rule, SessionFacts, SetBy};
+use super::model::{
+    AgentAccess, Change, PermissionError, PolicyId, PolicyOwner, Rule, SessionFacts, SetBy,
+};
 
 /// Saved settings and session overlays.
 pub trait PermissionStore: Send + Sync + 'static {
     /// The adapter's error.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// A policy's saved settings.
-    fn rules(
+    /// The id of `owner`'s policy, created (with no settings) when it has
+    /// none yet. Concurrent calls for one owner return the same id.
+    fn ensure_policy(
         &self,
         owner: &PolicyOwner,
-    ) -> impl Future<Output = Result<Vec<Rule>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<PolicyId, Self::Err>> + Send;
+
+    /// A policy's saved settings.
+    fn rules(&self, policy: PolicyId) -> impl Future<Output = Result<Vec<Rule>, Self::Err>> + Send;
 
     /// A session's overlay.
     fn session_rules(
@@ -31,7 +37,7 @@ pub trait PermissionStore: Send + Sync + 'static {
     /// before it with the overlay after it.
     fn rules_with_session(
         &self,
-        owner: &PolicyOwner,
+        policy: PolicyId,
         session: AgentSessionId,
     ) -> impl Future<Output = Result<(Vec<Rule>, Vec<Rule>), Self::Err>> + Send;
 
@@ -51,14 +57,14 @@ pub trait PermissionStore: Send + Sync + 'static {
 
     /// Delete every saved setting of a policy, under the same lock as
     /// [`PermissionStore::write`]. Session overlays stay.
-    fn reset(&self, owner: &PolicyOwner) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn reset(&self, policy: PolicyId) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// What a [`PermissionStore::write`] reads, locks and saves to.
 #[derive(Debug, Clone, Copy)]
 pub struct Write<'a> {
     /// The policy, always read and locked.
-    pub owner: &'a PolicyOwner,
+    pub policy: PolicyId,
     /// The session whose overlay is read and locked too.
     pub session: Option<AgentSessionId>,
     /// Where the changes go.

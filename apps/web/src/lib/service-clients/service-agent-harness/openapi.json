@@ -5789,6 +5789,7 @@
         "description": "An agent's permissions as they apply to the caller.",
         "required": [
           "agentId",
+          "policyId",
           "kind",
           "canEdit",
           "canTighten",
@@ -5820,6 +5821,10 @@
           "kind": {
             "$ref": "#/components/schemas/ToolPermissionPolicyKind",
             "description": "Whose settings these are."
+          },
+          "policyId": {
+            "$ref": "#/components/schemas/ToolPermissionPolicyId",
+            "description": "The policy's stable id."
           },
           "restricted": {
             "type": "integer",
@@ -9821,6 +9826,11 @@
             "description": "Its effective state."
           }
         }
+      },
+      "ToolPermissionPolicyId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "A policy's stable id: the same for as long as the policy exists, whatever\nits owner or settings."
       },
       "ToolPermissionPolicyKind": {
         "type": "string",

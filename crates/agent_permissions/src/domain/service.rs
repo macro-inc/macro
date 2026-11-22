@@ -22,8 +22,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::model::{
     AgentAccess, AppliedTo, Caller, Catalog, Change, Credential, OperationKey, Origin,
-    PermissionError, PermissionState, PermissionsView, PolicyKind, PolicyOwner, ResolvedCall, Rule,
-    SessionFacts, SessionPolicy, SetBy, Tightened, ToolPermissionCatalog,
+    PermissionError, PermissionState, PermissionsView, PolicyId, PolicyKind, PolicyOwner,
+    ResolvedCall, Rule, SessionFacts, SessionPolicy, SetBy, Tightened, ToolPermissionCatalog,
 };
 use super::ports::{
     AgentDirectory, PermissionStore, PermissionsRollout, SessionDirectory, Write, WriteTo,
@@ -311,19 +311,25 @@ where
         }
     }
 
+    /// The id of `owner`'s policy, created when it has none yet.
+    async fn policy_id(&self, owner: &PolicyOwner) -> Result<PolicyId, PermissionError> {
+        self.store.ensure_policy(owner).await.map_err(internal)
+    }
+
     async fn build_view(
         &self,
         caller: &Caller,
         agent: BotId,
         access: AgentAccess,
-        (owner, kind): (PolicyOwner, PolicyKind),
+        (policy, owner, kind): (PolicyId, PolicyOwner, PolicyKind),
         context: Option<&AgentContext>,
         overlay: Option<Vec<Rule>>,
     ) -> Result<PermissionsView, PermissionError> {
-        let saved = self.store.rules(&owner).await.map_err(internal)?;
+        let saved = self.store.rules(policy).await.map_err(internal)?;
         Ok(resolve::view(
             &self.catalog,
             agent,
+            policy,
             kind,
             view_access(caller, agent, access, &owner, context),
             saved,
@@ -370,9 +376,17 @@ where
 
         let context = self.agent_context(caller, agent).await?;
         let overlay = self.session_rules(context.as_ref()).await?;
-        let owner = Self::owner(caller, agent, access, context.as_ref());
-        self.build_view(caller, agent, access, owner, context.as_ref(), overlay)
-            .await
+        let (owner, kind) = Self::owner(caller, agent, access, context.as_ref());
+        let policy = self.policy_id(&owner).await?;
+        self.build_view(
+            caller,
+            agent,
+            access,
+            (policy, owner, kind),
+            context.as_ref(),
+            overlay,
+        )
+        .await
     }
 
     #[tracing::instrument(
@@ -413,7 +427,7 @@ where
         }
 
         // The settings that apply in the session: for a persona, its owner's.
-        let owner = match access {
+        let (owner, kind) = match access {
             AgentAccess::Persona => (
                 PolicyOwner::Persona {
                     persona: agent,
@@ -436,11 +450,12 @@ where
             .agent_context(caller, agent)
             .await?
             .filter(|(acting_in, _)| *acting_in == session_id);
+        let policy = self.policy_id(&owner).await?;
         self.build_view(
             caller,
             agent,
             access,
-            owner,
+            (policy, owner, kind),
             context.as_ref(),
             Some(overlay),
         )
@@ -462,9 +477,10 @@ where
         self.ensure_enabled(caller).await?;
         validate(&self.catalog, &changes)?;
         let (owner, kind, access) = self.editable_owner(caller, agent).await?;
+        let policy = self.policy_id(&owner).await?;
 
         let write = Write {
-            owner: &owner,
+            policy,
             session: None,
             to: WriteTo::Saved,
             by: &caller.user,
@@ -474,7 +490,7 @@ where
             .write(write, |_, _| Ok(resolve::normalize(changes, false)))
             .await
             .map_err(internal)??;
-        self.build_view(caller, agent, access, (owner, kind), None, None)
+        self.build_view(caller, agent, access, (policy, owner, kind), None, None)
             .await
     }
 
@@ -506,6 +522,7 @@ where
         let (owner, kind) = Self::owner(caller, agent, access, context.as_ref());
         let to = tighten_destination(caller, agent, access, &owner, context.as_ref())
             .ok_or(PermissionError::Forbidden)?;
+        let policy = self.policy_id(&owner).await?;
 
         // A tightening never stores `always`, so a tool's `always` is saved
         // as clearing its own setting, and tool settings not made by a
@@ -519,7 +536,7 @@ where
         let set_by = SetBy::of(&caller.credential);
         let catalog = &self.catalog;
         let write = Write {
-            owner: &owner,
+            policy,
             session: context.as_ref().map(|(session, _)| *session),
             to,
             by: &caller.user,
@@ -558,7 +575,7 @@ where
                 caller,
                 agent,
                 access,
-                (owner, kind),
+                (policy, owner, kind),
                 context.as_ref(),
                 overlay,
             )
@@ -577,8 +594,9 @@ where
     ) -> Result<PermissionsView, PermissionError> {
         self.ensure_enabled(caller).await?;
         let (owner, kind, access) = self.editable_owner(caller, agent).await?;
-        self.store.reset(&owner).await.map_err(internal)?;
-        self.build_view(caller, agent, access, (owner, kind), None, None)
+        let policy = self.policy_id(&owner).await?;
+        self.store.reset(policy).await.map_err(internal)?;
+        self.build_view(caller, agent, access, (policy, owner, kind), None, None)
             .await
     }
 
@@ -605,12 +623,15 @@ where
         } else {
             PolicyOwner::Agent(policy.agent)
         };
+        // Its own statement, before the snapshot, so the snapshot stays read
+        // only.
+        let policy_id = self.policy_id(&owner).await?;
         // One snapshot: a gate must never combine layers no single
         // committed state held, such as the saved rules from before a
         // person's Never with the overlay from after the agent dropped its own.
         let (saved, overlay) = self
             .store
-            .rules_with_session(&owner, policy.session)
+            .rules_with_session(policy_id, policy.session)
             .await
             .map_err(internal)?;
         let saved = Layer::new(&saved);

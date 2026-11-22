@@ -6,6 +6,7 @@ use agent_permission_registry::Action;
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -142,6 +143,39 @@ pub struct Change {
     pub target: Target,
     /// The new state, or `null` to remove the setting.
     pub state: Option<PermissionState>,
+}
+
+/// A policy's stable id: the same for as long as the policy exists, whatever
+/// its owner or settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(transparent)]
+#[schema(as = ToolPermissionPolicyId)]
+pub struct PolicyId(Uuid);
+
+impl PolicyId {
+    /// A new id, for a policy about to be created.
+    #[must_use]
+    pub fn generate() -> Self {
+        Self(macro_uuid::generate_uuid_v7())
+    }
+
+    /// The id a stored policy has.
+    #[must_use]
+    pub const fn from_uuid(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    /// The id as stored.
+    #[must_use]
+    pub const fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+}
+
+impl std::fmt::Display for PolicyId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 /// Whose saved settings apply.
@@ -420,6 +454,8 @@ pub struct ToolPermissionGroup {
 pub struct PermissionsView {
     /// The agent (or persona) id.
     pub agent_id: BotId,
+    /// The policy's stable id.
+    pub policy_id: PolicyId,
     /// Whose settings these are.
     pub kind: PolicyKind,
     /// The caller may change and reset them.

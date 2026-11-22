@@ -18,13 +18,13 @@ const SESSION: Uuid = Uuid::from_u128(0x91000000_0000_0000_0000_000000000031);
 impl PgPermissionStore {
     async fn apply(
         &self,
-        owner: &PolicyOwner,
+        policy: PolicyId,
         changes: &[Change],
         by: &MacroUserIdStr<'static>,
         set_by: SetBy,
     ) -> Result<(), PgPermissionStoreError> {
         let write = Write {
-            owner,
+            policy,
             session: None,
             to: WriteTo::Saved,
             by,
@@ -41,8 +41,9 @@ impl PgPermissionStore {
         changes: &[Change],
         by: &MacroUserIdStr<'static>,
     ) -> Result<(), PgPermissionStoreError> {
+        let policy = self.ensure_policy(&PolicyOwner::Agent(AGENT)).await?;
         let write = Write {
-            owner: &PolicyOwner::Agent(AGENT),
+            policy,
             session: Some(session),
             to: WriteTo::Session(session),
             by,
@@ -100,11 +101,14 @@ fn states(rules: &[Rule]) -> Vec<(String, PermissionState, bool, bool)> {
 )]
 async fn an_agents_rules_upsert_delete_and_reset(pool: PgPool) {
     let store = PgPermissionStore::new(pool);
-    let owner = PolicyOwner::Agent(AGENT);
+    let owner = store
+        .ensure_policy(&PolicyOwner::Agent(AGENT))
+        .await
+        .unwrap();
 
     store
         .apply(
-            &owner,
+            owner,
             &[
                 group_action(Some(PermissionState::Never)),
                 tool(Some(PermissionState::Always)),
@@ -116,7 +120,7 @@ async fn an_agents_rules_upsert_delete_and_reset(pool: PgPool) {
         .unwrap();
     store
         .apply(
-            &owner,
+            owner,
             &[group_action(Some(PermissionState::Ask))],
             &user(OWNER),
             SetBy::Agent,
@@ -124,7 +128,7 @@ async fn an_agents_rules_upsert_delete_and_reset(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(
-        states(&store.rules(&owner).await.unwrap()),
+        states(&store.rules(owner).await.unwrap()),
         vec![
             ("email:send".to_owned(), PermissionState::Ask, true, true),
             (
@@ -137,13 +141,13 @@ async fn an_agents_rules_upsert_delete_and_reset(pool: PgPool) {
     );
 
     store
-        .apply(&owner, &[tool(None)], &user(OWNER), SetBy::Person)
+        .apply(owner, &[tool(None)], &user(OWNER), SetBy::Person)
         .await
         .unwrap();
-    assert_eq!(store.rules(&owner).await.unwrap().len(), 1);
+    assert_eq!(store.rules(owner).await.unwrap().len(), 1);
 
-    store.reset(&owner).await.unwrap();
-    assert!(store.rules(&owner).await.unwrap().is_empty());
+    store.reset(owner).await.unwrap();
+    assert!(store.rules(owner).await.unwrap().is_empty());
 }
 
 #[sqlx::test(
@@ -152,29 +156,36 @@ async fn an_agents_rules_upsert_delete_and_reset(pool: PgPool) {
 )]
 async fn a_personas_rules_are_each_persons_own(pool: PgPool) {
     let store = PgPermissionStore::new(pool);
-    let mine = PolicyOwner::Persona {
-        persona: MACRO_NEW_BOT_ID,
-        user: user(OWNER),
-    };
-    let theirs = PolicyOwner::Persona {
-        persona: MACRO_NEW_BOT_ID,
-        user: user(OTHER),
-    };
+    let mine = store
+        .ensure_policy(&PolicyOwner::Persona {
+            persona: MACRO_NEW_BOT_ID,
+            user: user(OWNER),
+        })
+        .await
+        .unwrap();
+    let theirs = store
+        .ensure_policy(&PolicyOwner::Persona {
+            persona: MACRO_NEW_BOT_ID,
+            user: user(OTHER),
+        })
+        .await
+        .unwrap();
+    assert_ne!(mine, theirs);
 
     store
         .apply(
-            &mine,
+            mine,
             &[tool(Some(PermissionState::Never))],
             &user(OWNER),
             SetBy::Person,
         )
         .await
         .unwrap();
-    assert_eq!(store.rules(&mine).await.unwrap().len(), 1);
-    assert!(store.rules(&theirs).await.unwrap().is_empty());
+    assert_eq!(store.rules(mine).await.unwrap().len(), 1);
+    assert!(store.rules(theirs).await.unwrap().is_empty());
 
-    store.reset(&mine).await.unwrap();
-    assert!(store.rules(&mine).await.unwrap().is_empty());
+    store.reset(mine).await.unwrap();
+    assert!(store.rules(mine).await.unwrap().is_empty());
 }
 
 #[sqlx::test(
@@ -215,25 +226,35 @@ async fn a_sessions_overlay_upserts_and_deletes(pool: PgPool) {
     fixtures(path = "../../../fixtures", scripts("permissions"))
 )]
 async fn the_tables_refuse_a_stored_default_and_a_bad_target(pool: PgPool) {
-    let always_group_action = sqlx::query!(
-        "INSERT INTO agent_tool_permission (bot_id, kind, target, state)
-         VALUES ($1, 'group_action', 'email:send', 'always')",
-        AGENT.as_uuid(),
+    let store = PgPermissionStore::new(pool.clone());
+    let policy = store
+        .ensure_policy(&PolicyOwner::Agent(AGENT))
+        .await
+        .unwrap()
+        .as_uuid();
+    // An action's default is `always` when no row says otherwise.
+    let always_action = sqlx::query!(
+        "INSERT INTO agent_permission_rule (policy_id, kind, target, state)
+         VALUES ($1, 'action', 'send', 'always')",
+        policy,
     )
     .execute(&pool)
     .await;
-    assert!(always_group_action.is_err());
+    assert!(always_action.is_err());
 
     for (kind, target) in [
+        ("action", "email:send"),
+        ("action", "delete"),
         ("group_action", "email:delete"),
         ("group_action", "storage.delete_document"),
         ("tool", "email:send"),
         ("tool", "storage delete"),
+        ("operation", "email.send_email"),
     ] {
         let inserted = sqlx::query!(
-            "INSERT INTO agent_tool_permission (bot_id, kind, target, state)
+            "INSERT INTO agent_permission_rule (policy_id, kind, target, state)
              VALUES ($1, $2, $3, 'never')",
-            AGENT.as_uuid(),
+            policy,
             kind,
             target,
         )
@@ -252,13 +273,35 @@ async fn the_tables_refuse_a_stored_default_and_a_bad_target(pool: PgPool) {
     assert!(always_overlay.is_err());
     // The agent's label always comes with the restriction-only rule.
     let labelled_unrestricted = sqlx::query!(
-        "INSERT INTO agent_tool_permission (bot_id, kind, target, state, via_agent, restriction_only)
+        "INSERT INTO agent_permission_rule (policy_id, kind, target, state, via_agent, restriction_only)
          VALUES ($1, 'tool', 'email.send_email', 'ask', true, false)",
-        AGENT.as_uuid(),
+        policy,
     )
     .execute(&pool)
     .await;
     assert!(labelled_unrestricted.is_err());
+
+    // A policy names exactly one owner, of its kind.
+    for (kind, bot, user, persona) in [
+        ("agent", None, None, None),
+        ("agent", Some(AGENT.as_uuid()), Some(OWNER), None),
+        ("persona", None, Some(OWNER), None),
+        ("persona", None, None, Some(MACRO_NEW_BOT_ID.as_uuid())),
+        ("team", None, None, None),
+    ] {
+        let inserted = sqlx::query!(
+            "INSERT INTO agent_permission_policy (id, kind, bot_id, user_id, persona_id)
+             VALUES ($1, $2, $3, $4, $5)",
+            PolicyId::generate().as_uuid(),
+            kind,
+            bot,
+            user,
+            persona,
+        )
+        .execute(&pool)
+        .await;
+        assert!(inserted.is_err(), "{kind} {bot:?} {user:?} {persona:?}");
+    }
 }
 
 #[sqlx::test(
@@ -267,19 +310,25 @@ async fn the_tables_refuse_a_stored_default_and_a_bad_target(pool: PgPool) {
 )]
 async fn rows_go_with_their_agent_person_and_session(pool: PgPool) {
     let store = PgPermissionStore::new(pool.clone());
-    let agent = PolicyOwner::Agent(AGENT);
-    let persona = PolicyOwner::Persona {
-        persona: MACRO_NEW_BOT_ID,
-        user: user(OTHER),
-    };
+    let agent = store
+        .ensure_policy(&PolicyOwner::Agent(AGENT))
+        .await
+        .unwrap();
+    let persona = store
+        .ensure_policy(&PolicyOwner::Persona {
+            persona: MACRO_NEW_BOT_ID,
+            user: user(OTHER),
+        })
+        .await
+        .unwrap();
     let session = AgentSessionId::new_from_uuid(SESSION);
     let never = [tool(Some(PermissionState::Never))];
     store
-        .apply(&agent, &never, &user(OTHER), SetBy::Person)
+        .apply(agent, &never, &user(OTHER), SetBy::Person)
         .await
         .unwrap();
     store
-        .apply(&persona, &never, &user(OTHER), SetBy::Person)
+        .apply(persona, &never, &user(OTHER), SetBy::Person)
         .await
         .unwrap();
     store
@@ -292,8 +341,8 @@ async fn rows_go_with_their_agent_person_and_session(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    assert_eq!(store.rules(&agent).await.unwrap().len(), 1);
-    assert!(store.rules(&persona).await.unwrap().is_empty());
+    assert_eq!(store.rules(agent).await.unwrap().len(), 1);
+    assert!(store.rules(persona).await.unwrap().is_empty());
     assert_eq!(store.session_rules(session).await.unwrap().len(), 1);
 
     sqlx::query!("DELETE FROM agent_session WHERE id = $1", SESSION)
@@ -306,7 +355,16 @@ async fn rows_go_with_their_agent_person_and_session(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    assert!(store.rules(&agent).await.unwrap().is_empty());
+    assert!(store.rules(agent).await.unwrap().is_empty());
+    // The policies went with their agent and person, not only their rules.
+    let policies = sqlx::query_scalar!(
+        "SELECT count(*) AS \"count!\" FROM agent_permission_policy WHERE id = ANY($1)",
+        &[agent.as_uuid(), persona.as_uuid()],
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(policies, 0);
 }
 
 #[sqlx::test(
@@ -315,11 +373,14 @@ async fn rows_go_with_their_agent_person_and_session(pool: PgPool) {
 )]
 async fn a_write_reads_both_layers_and_a_refused_plan_writes_nothing(pool: PgPool) {
     let store = PgPermissionStore::new(pool);
-    let owner = PolicyOwner::Agent(AGENT);
+    let owner = store
+        .ensure_policy(&PolicyOwner::Agent(AGENT))
+        .await
+        .unwrap();
     let session = AgentSessionId::new_from_uuid(SESSION);
     store
         .apply(
-            &owner,
+            owner,
             &[group_action(Some(PermissionState::Ask))],
             &user(OWNER),
             SetBy::Person,
@@ -332,7 +393,7 @@ async fn a_write_reads_both_layers_and_a_refused_plan_writes_nothing(pool: PgPoo
         .unwrap();
 
     let write = Write {
-        owner: &owner,
+        policy: owner,
         session: Some(session),
         to: WriteTo::Saved,
         by: &user(OWNER),
@@ -347,7 +408,7 @@ async fn a_write_reads_both_layers_and_a_refused_plan_writes_nothing(pool: PgPoo
         .unwrap();
 
     assert!(matches!(refused, Err(PermissionError::Forbidden)));
-    assert_eq!(store.rules(&owner).await.unwrap().len(), 1);
+    assert_eq!(store.rules(owner).await.unwrap().len(), 1);
 }
 
 /// The CodeRabbit interleaving: the gate has read the policy (no setting,
@@ -361,7 +422,10 @@ async fn a_write_reads_both_layers_and_a_refused_plan_writes_nothing(pool: PgPoo
 )]
 async fn a_gate_reads_the_policy_and_overlay_as_one_snapshot(pool: PgPool) {
     let store = PgPermissionStore::new(pool.clone());
-    let owner = PolicyOwner::Agent(AGENT);
+    let owner = store
+        .ensure_policy(&PolicyOwner::Agent(AGENT))
+        .await
+        .unwrap();
     let session = AgentSessionId::new_from_uuid(SESSION);
     store
         .apply_session(session, &[tool(Some(PermissionState::Never))], &user(OTHER))
@@ -369,11 +433,11 @@ async fn a_gate_reads_the_policy_and_overlay_as_one_snapshot(pool: PgPool) {
         .unwrap();
 
     let mut gate = pool.begin_with(SNAPSHOT).await.unwrap();
-    assert!(policy_rules(&mut gate, &owner).await.unwrap().is_empty());
+    assert!(policy_rules(&mut gate, owner).await.unwrap().is_empty());
 
     store
         .apply(
-            &owner,
+            owner,
             &[tool(Some(PermissionState::Never))],
             &user(OWNER),
             SetBy::Person,
@@ -396,7 +460,7 @@ async fn a_gate_reads_the_policy_and_overlay_as_one_snapshot(pool: PgPool) {
     );
     gate.commit().await.unwrap();
 
-    let (saved, overlay) = store.rules_with_session(&owner, session).await.unwrap();
+    let (saved, overlay) = store.rules_with_session(owner, session).await.unwrap();
     assert_eq!(
         states(&saved),
         vec![(
@@ -407,6 +471,213 @@ async fn a_gate_reads_the_policy_and_overlay_as_one_snapshot(pool: PgPool) {
         )]
     );
     assert!(overlay.is_empty());
+}
+
+/// Everything in the migration after this line: the backfill alone.
+const BACKFILL_FROM: &str = "-- Backfill";
+
+fn backfill() -> &'static str {
+    let migration = include_str!(
+        "../../../../macro_db_client/migrations/20261122220100_agent_permission_policies.sql"
+    );
+    &migration[migration.find(BACKFILL_FROM).expect("the backfill marker")..]
+}
+
+/// Rows saved before policies had ids, in the old tables, come through the
+/// backfill under one stable v7 id per policy, verbatim (channel_admin rows
+/// included), and a second run adds nothing.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("permissions"))
+)]
+async fn the_backfill_gives_every_policy_a_stable_id_and_copies_its_rows(pool: PgPool) {
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_tool_permission
+            (bot_id, kind, target, state, updated_by, via_agent, restriction_only, updated_at)
+        VALUES
+            ($1, 'group_action', 'channels:send', 'never', $2, false, false, '2026-11-01T00:00:00Z'),
+            ($1, 'group_action', 'channel_admin:send', 'never', $2, false, false, '2026-11-01T00:00:00Z'),
+            ($1, 'tool', 'email.send_email', 'ask', NULL, true, true, '2026-11-02T00:00:00Z')
+        "#,
+        AGENT.as_uuid(),
+        OWNER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO persona_tool_permission
+            (user_id, persona_id, kind, target, state, via_agent, restriction_only, updated_at)
+        VALUES
+            ($1, $3, 'tool', 'static-files.delete_file', 'always', false, false, '2026-11-03T00:00:00Z'),
+            ($2, $3, 'group_action', 'email:send', 'ask', false, true, '2026-11-04T00:00:00Z')
+        "#,
+        OWNER,
+        OTHER,
+        MACRO_NEW_BOT_ID.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::raw_sql(backfill()).execute(&pool).await.unwrap();
+    let ids = sqlx::query!(
+        r#"
+        SELECT id, kind
+        FROM agent_permission_policy
+        ORDER BY kind, user_id
+        "#
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    // Again: nothing new, nothing changed.
+    sqlx::raw_sql(backfill()).execute(&pool).await.unwrap();
+
+    let store = PgPermissionStore::new(pool.clone());
+    let agent = store
+        .ensure_policy(&PolicyOwner::Agent(AGENT))
+        .await
+        .unwrap();
+    let mine = store
+        .ensure_policy(&PolicyOwner::Persona {
+            persona: MACRO_NEW_BOT_ID,
+            user: user(OWNER),
+        })
+        .await
+        .unwrap();
+    let theirs = store
+        .ensure_policy(&PolicyOwner::Persona {
+            persona: MACRO_NEW_BOT_ID,
+            user: user(OTHER),
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        ids.iter()
+            .map(|row| (
+                row.kind.as_str(),
+                PolicyId::from_uuid(row.id),
+                row.id.get_version_num()
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            ("agent", agent, 7),
+            // `perm-other` sorts before `perm-owner`.
+            ("persona", theirs, 7),
+            ("persona", mine, 7)
+        ]
+    );
+    let policies =
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM agent_permission_policy"#)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(policies, 3);
+
+    assert_eq!(
+        states(&store.rules(agent).await.unwrap()),
+        vec![
+            (
+                "channel_admin:send".to_owned(),
+                PermissionState::Never,
+                false,
+                false
+            ),
+            (
+                "channels:send".to_owned(),
+                PermissionState::Never,
+                false,
+                false
+            ),
+            (
+                "email.send_email".to_owned(),
+                PermissionState::Ask,
+                true,
+                true
+            ),
+        ]
+    );
+    assert_eq!(
+        states(&store.rules(mine).await.unwrap()),
+        vec![(
+            "static-files.delete_file".to_owned(),
+            PermissionState::Always,
+            false,
+            false
+        )]
+    );
+    assert_eq!(
+        states(&store.rules(theirs).await.unwrap()),
+        vec![("email:send".to_owned(), PermissionState::Ask, false, true)]
+    );
+
+    // Who made each row and when come along unchanged.
+    let copied = sqlx::query!(
+        r#"
+        SELECT target, updated_by, updated_at::text AS "updated_at!"
+        FROM agent_permission_rule
+        ORDER BY target COLLATE "C"
+        "#
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        copied
+            .iter()
+            .map(|row| (
+                row.target.as_str(),
+                row.updated_by.as_deref(),
+                row.updated_at.as_str()
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            ("channel_admin:send", Some(OWNER), "2026-11-01 00:00:00+00"),
+            ("channels:send", Some(OWNER), "2026-11-01 00:00:00+00"),
+            ("email.send_email", None, "2026-11-02 00:00:00+00"),
+            ("email:send", None, "2026-11-04 00:00:00+00"),
+            ("static-files.delete_file", None, "2026-11-03 00:00:00+00"),
+        ]
+    );
+}
+
+/// Callers racing to create one owner's policy all get the one id.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("permissions"))
+)]
+async fn concurrent_first_uses_of_a_policy_agree_on_its_id(pool: PgPool) {
+    let store = PgPermissionStore::new(pool.clone());
+    let owners = [
+        PolicyOwner::Agent(AGENT),
+        PolicyOwner::Persona {
+            persona: MACRO_NEW_BOT_ID,
+            user: user(OWNER),
+        },
+    ];
+    for owner in owners {
+        let calls = (0..8).map(|_| {
+            let store = store.clone();
+            let owner = owner.clone();
+            tokio::spawn(async move { store.ensure_policy(&owner).await.unwrap() })
+        });
+        let mut ids = Vec::new();
+        for call in calls.collect::<Vec<_>>() {
+            ids.push(call.await.unwrap());
+        }
+        ids.dedup();
+        assert_eq!(ids.len(), 1, "{owner:?}");
+        assert_eq!(store.ensure_policy(&owner).await.unwrap(), ids[0]);
+    }
+    let policies =
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM agent_permission_policy"#)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(policies, 2);
 }
 
 /// Migration `20261122220000` copies each saved `channels:<action>` rule to
