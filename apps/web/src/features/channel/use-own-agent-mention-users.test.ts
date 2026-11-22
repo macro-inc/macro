@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const fixture = vi.hoisted(() => ({
   agents: [] as Agent[],
   bots: [] as Bot[],
+  offline: new Set<string>(),
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
@@ -24,6 +25,9 @@ vi.mock('@queries/agents/agents', () => ({
       return fixture.agents;
     },
   }),
+}));
+vi.mock('@queries/agents/offline-runtimes', () => ({
+  useOfflineAgentBotIds: () => () => fixture.offline,
 }));
 vi.mock('@queries/bots/bots', () => ({
   useBotsQuery: () => ({
@@ -57,6 +61,14 @@ function agent(id: string, name: string): Agent {
   };
 }
 
+function offlineFlags(contacts: IUser[]): Record<string, boolean | undefined> {
+  return createRoot((dispose) => {
+    const users = useOwnAgentMentionTransform()(contacts);
+    dispose();
+    return Object.fromEntries(users.map((user) => [user.id, user.offline]));
+  });
+}
+
 const noContacts: IUser[] = [];
 
 function mentionable(contacts: IUser[]): string[] {
@@ -70,6 +82,7 @@ function mentionable(contacts: IUser[]): string[] {
 beforeEach(() => {
   fixture.agents = [];
   fixture.bots = [];
+  fixture.offline = new Set();
 });
 
 describe('agents mentionable without contacts', () => {
@@ -118,5 +131,17 @@ describe('agents mentionable without contacts', () => {
     };
     const ids = mentionable([contact]);
     expect(ids.filter((id) => id === 'bot|team-agent')).toHaveLength(1);
+  });
+
+  it('marks an agent whose runtime is disconnected as offline', () => {
+    const away = agent('away', 'Away');
+    const here = agent('here', 'Here');
+    fixture.agents = [away, here];
+    fixture.bots = [away.bot, here.bot];
+    fixture.offline = new Set(['away']);
+    expect(offlineFlags(noContacts)).toMatchObject({
+      'bot|away': true,
+      'bot|here': undefined,
+    });
   });
 });

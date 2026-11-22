@@ -1,5 +1,6 @@
 import type { IUser } from '@core/user/types';
 import { useAgentsQuery } from '@queries/agents/agents';
+import { useOfflineAgentBotIds } from '@queries/agents/offline-runtimes';
 import { useBotsQuery } from '@queries/bots/bots';
 import { queryReadyGate } from '@queries/gate';
 import type { Accessor } from 'solid-js';
@@ -20,9 +21,11 @@ export function useOwnAgentMentionUsers(
 ): Accessor<IUser[]> {
   const agents = useAgentsQuery(enabled);
   const bots = useBotsQuery(enabled);
+  const offlineBotIds = useOfflineAgentBotIds(enabled);
   return () => {
     if (!enabled() || !queryReadyGate(agents) || !queryReadyGate(bots))
       return [];
+    const offline = offlineBotIds();
     const availableIds = new Set(bots.data.map((bot) => bot.id));
     return agents.data
       .filter(
@@ -34,6 +37,7 @@ export function useOwnAgentMentionUsers(
         name: bot.name,
         email: `@${bot.handle}`,
         photoUrl: bot.avatar_url ?? undefined,
+        offline: offline.has(bot.id) || undefined,
       }));
   };
 }
