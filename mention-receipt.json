@@ -1,0 +1,21 @@
+{
+  "status": 200,
+  "body": {
+    "status": "succeeded",
+    "activity": [
+      {
+        "id": 1,
+        "label": "List Execution Connected Apps",
+        "status": "failed"
+      }
+    ],
+    "activityTruncated": false,
+    "result": {
+      "data": {
+        "host": "mention test client",
+        "connectedAppStatus": 403
+      }
+    },
+    "error": null
+  }
+}

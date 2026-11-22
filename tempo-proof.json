@@ -1,0 +1,26 @@
+{
+  "traceId": "f4a459bb72eb2334be2243369acc65f1",
+  "bExec": "01a200a1-b2e6-7886-b1e4-84e05b7c434c",
+  "spans": [
+    {
+      "name": "admit",
+      "refusal": "other_session",
+      "events": [
+        {
+          "name": "execution admission refused",
+          "level": "WARN"
+        }
+      ]
+    },
+    {
+      "name": "admit",
+      "refusal": "other_session",
+      "events": [
+        {
+          "name": "execution admission refused",
+          "level": "WARN"
+        }
+      ]
+    }
+  ]
+}
