@@ -133,7 +133,8 @@ stacks. Process isolation belongs to
   its `module` (left out when absent) and the interpreter and catalog's
   `sdkFingerprint` (`code_mode_assets::JS_TOOLS_FINGERPRINT`), all in the
   `agent_code_execution.record` JSON, so no migration. The public MCP's
-  `UserExecuteCode` stays TypeScript only.
+  `UserExecuteCode` stays TypeScript only, and the harness withholds it from
+  calls an agent session in a dialect turn makes.
 - Dialect docs sit beside the TypeScript ones and never replace them. A
   dialect turn's `DescribeCodeTools`/`ReadCodeDocs` (in
   `toolset_with_js_tools`, from `src/inbound/toolset/dialect.rs`) serve the

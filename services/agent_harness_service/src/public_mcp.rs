@@ -38,6 +38,9 @@ use tool_service::{AuthenticatedToolService, CodeModeSurface};
 /// User-scoped code execution.
 pub struct PublicCodeMode {
     pub service: Arc<dyn agent_code_mode::domain::UserCodeMode>,
+    /// The code-mode kind of an agent session's turn, for calls that carry
+    /// its provenance; `None` serves every call TypeScript.
+    pub kinds: Option<Arc<dyn agent_code_mode::domain::CodeModeKinds>>,
 }
 
 /// Browser-based MCP clients Macro has vetted, whose users skip the consent
@@ -106,6 +109,7 @@ pub async fn router(
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
             service: code_mode.service,
             cognition: tool_context.cognition_tool_context.service.clone(),
+            kinds: code_mode.kinds,
         })
     });
     // Create the MCP service with authenticated tool handler

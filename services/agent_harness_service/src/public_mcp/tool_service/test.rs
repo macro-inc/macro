@@ -455,10 +455,18 @@ mod code_mode {
     }
 
     fn app(runs: Arc<dyn UserCodeMode>) -> axum::Router {
+        app_with_kinds(runs, None)
+    }
+
+    fn app_with_kinds(
+        runs: Arc<dyn UserCodeMode>,
+        kinds: Option<Arc<dyn agent_code_mode::domain::CodeModeKinds>>,
+    ) -> axum::Router {
         let surface = Arc::new(CodeModeSurface {
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
             service: runs,
             cognition: None,
+            kinds,
         });
         let mut config =
             StreamableHttpServerConfig::default().with_allowed_hosts(["localhost".to_owned()]);
@@ -836,6 +844,79 @@ mod code_mode {
         .await;
         rpc_as(external, USER, Some(ToolCaller::ApiKey), "tools/call", call).await;
         assert_eq!(*runs.2.lock().unwrap(), [Some(session), None]);
+    }
+
+    /// Every agent session's turn is a dialect turn.
+    struct Dialect;
+
+    #[async_trait::async_trait]
+    impl agent_code_mode::domain::CodeModeKinds for Dialect {
+        async fn code_mode_kind(
+            &self,
+            _: agent_session::domain::model::AgentSessionId,
+            _: &MacroUserIdStr<'static>,
+        ) -> agent_code_mode::domain::CodeModeKind {
+            agent_code_mode::domain::CodeModeKind::Dialect
+        }
+    }
+
+    /// An agent session in a dialect turn runs no TypeScript here: its code
+    /// goes through `macro_internal.ExecuteCode`, gated by its permissions.
+    /// Callers without session provenance keep TypeScript.
+    #[tokio::test]
+    async fn a_dialect_sessions_calls_get_no_typescript_code_mode() {
+        let runs = Arc::new(Runs::default());
+        let external = app_with_kinds(runs.clone(), Some(Arc::new(Dialect)));
+        let managed = external.clone().layer(axum::Extension(
+            mcp_auth_proxy::inbound::middleware::ManagedAgentSession(uuid::Uuid::now_v7()),
+        ));
+        let agent = || Some(ToolCaller::Agent(BotId::TEST_A));
+        let names = |listed: &serde_json::Value| -> Vec<String> {
+            listed["result"]["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|tool| tool["name"].as_str().unwrap().to_owned())
+                .collect()
+        };
+        let listed = rpc_as(
+            managed.clone(),
+            USER,
+            agent(),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert!(
+            !names(&listed).contains(&"ExecuteCode".to_owned()),
+            "{listed}"
+        );
+        let call = serde_json::json!({"name": "ExecuteCode", "arguments": {"source": "export async function main() { return {data: 1}; }"}});
+        let refused = rpc_as(managed, USER, agent(), "tools/call", call.clone()).await;
+        assert!(
+            refused.to_string().contains("macro_internal.ExecuteCode"),
+            "{refused}"
+        );
+        assert!(runs.0.lock().unwrap().is_empty());
+
+        let listed = rpc_as(
+            external.clone(),
+            USER,
+            Some(ToolCaller::ApiKey),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert!(
+            names(&listed).contains(&"ExecuteCode".to_owned()),
+            "{listed}"
+        );
+        let ran = rpc_as(external, USER, Some(ToolCaller::ApiKey), "tools/call", call).await;
+        assert_eq!(
+            ran["result"]["structuredContent"]["status"], "succeeded",
+            "{ran}"
+        );
+        assert_eq!(runs.0.lock().unwrap().len(), 1);
     }
 
     /// A request the middleware left without a caller runs nothing.

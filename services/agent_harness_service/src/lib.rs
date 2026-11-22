@@ -882,6 +882,7 @@ pub async fn run() -> anyhow::Result<()> {
     });
     let public_code_mode = match &code_runner {
         Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
+            kinds: None,
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
@@ -901,32 +902,6 @@ pub async fn run() -> anyhow::Result<()> {
         }),
         None => None,
     };
-    let public_mcp_router = public_mcp::router(
-        &config,
-        &secrets,
-        tool_context.clone(),
-        pool.clone(),
-        aws_sdk_kms::Client::new(&aws_config),
-        macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
-            config.environment,
-            &secrets,
-        )
-        .await?,
-        event_broker_tracker.clone(),
-        service_shutdown.clone(),
-        public_code_mode,
-        feature_flags
-            .clone()
-            .map(|flags| {
-                anthropic_gateway::brain::BrainRollout::new(
-                    agent_credentials::rollout::PgAgentCreators::new(pool.clone()),
-                    flags,
-                )
-            })
-            .unwrap_or_default(),
-    )
-    .await
-    .context("failed to compose public MCP")?;
     // Session tasks are read as the owner through the same services Macro's own tools use.
     let task_directory = agent_harness::outbound::session_tasks::DocumentTaskDirectory::new(
         tool_context.document_tool_context.service.clone(),
@@ -1064,6 +1039,36 @@ pub async fn run() -> anyhow::Result<()> {
         None => session_code_mode,
     };
     let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> = Arc::new(session_code_mode);
+    let public_mcp_router = public_mcp::router(
+        &config,
+        &secrets,
+        tool_context.clone(),
+        pool.clone(),
+        aws_sdk_kms::Client::new(&aws_config),
+        macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
+            config.environment,
+            &secrets,
+        )
+        .await?,
+        event_broker_tracker.clone(),
+        service_shutdown.clone(),
+        // An agent session's public MCP code mode follows its turn's kind.
+        public_code_mode.map(|public| public_mcp::PublicCodeMode {
+            kinds: Some(code_mode.clone()),
+            ..public
+        }),
+        feature_flags
+            .clone()
+            .map(|flags| {
+                anthropic_gateway::brain::BrainRollout::new(
+                    agent_credentials::rollout::PgAgentCreators::new(pool.clone()),
+                    flags,
+                )
+            })
+            .unwrap_or_default(),
+    )
+    .await
+    .context("failed to compose public MCP")?;
     let session_metadata_realtime = WorkRegistrationRealtime::new(
         ConnectionGatewayAgentSessionRealtime::new(
             connection_gateway.clone(),

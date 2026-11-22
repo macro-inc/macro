@@ -212,7 +212,13 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on `tools/list`
   (`tool_service.rs`) and can call only those; a native tool named directly
   is refused. ChatGPT gets the
-  direct tools: its plugin directory refuses generic executors.
+  direct tools: its plugin directory refuses generic executors. A call
+  carrying an agent session's provenance (`ManagedAgentSession`, a sandboxed
+  runtime's `macro` server) in a dialect turn (`CodeModeSurface::kinds`, the
+  session code mode's `CodeModeKinds`) gets none of the three code tools:
+  they are left off `tools/list` and refused, pointing at
+  `macro_internal.ExecuteCode`, so a session with agent permissions has no
+  ungated TypeScript path. Calls without session provenance stay TypeScript.
   `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
   the session repo, Redis budgets and
   the gateway `ui_command` send.
