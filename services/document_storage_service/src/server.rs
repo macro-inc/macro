@@ -2023,7 +2023,7 @@ async fn run_server() -> anyhow::Result<()> {
                 PgChannelsRepo::new(db.clone()),
                 frecency_storage.clone(),
             )
-            .with_agent_dm_profiles(agent_dm_profiles),
+            .with_agent_dm_profiles(agent_dm_profiles.clone()),
             call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
             crm_service.clone(),
             GithubPullRequestServiceImpl::new(
@@ -2062,46 +2062,69 @@ async fn run_server() -> anyhow::Result<()> {
     // REST and GraphQL lists share this reader. CRM email eligibility must
     // observe committed withdrawals/exclusions immediately; only that preview
     // leg reads the primary. Ordinary inbox lists keep using the replica.
-    let soup_service = Arc::new(
-        SoupImpl::new(
-            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone()))
-                .with_source_items_enabled(config.soup_source_items_enabled),
-            frecency_service,
-            service::email_previews::ConsistentEmailPreviewReader::new(
-                ReadonlyEmailPreviewAdapter(email_service.clone()),
-                readonly_email_service.clone(),
-            ),
-            ChannelListServiceImpl::new(
-                PgChannelsRepo::new(readonly_db.clone()),
-                PgChannelsRepo::new(readonly_db.clone()),
-                frecency_storage.clone(),
-            )
-            .with_agent_dm_profiles(Arc::new(
-                outbound::agent_dm_authorizer::AgentDmProfileReader::new(
-                    PgChannelsRepo::new(readonly_db.clone()),
-                    PgBotsRepo::new(readonly_db.clone()),
+    // `channels` decides where the page's channels come from.
+    let list_soup =
+        |channels: ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>| {
+            Arc::new(
+                SoupImpl::new(
+                    PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone()))
+                        .with_source_items_enabled(config.soup_source_items_enabled),
+                    frecency_service.clone(),
+                    service::email_previews::ConsistentEmailPreviewReader::new(
+                        ReadonlyEmailPreviewAdapter(email_service.clone()),
+                        readonly_email_service.clone(),
+                    ),
+                    channels,
+                    call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                        readonly_db.clone(),
+                    )),
+                    // The Sales views' activity edges probe every record of the scope;
+                    // read them from the replica, like the rest of the list. Record
+                    // and access reads stay on the primary.
+                    crm::domain::service::CrmServiceImpl::new(
+                        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone())
+                            .with_activity_edges_replica(readonly_pool::ReadOnlyPool(
+                                readonly_db.clone(),
+                            )),
+                        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+                    ),
+                    GithubPullRequestServiceImpl::new(
+                        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
+                            readonly_db.clone(),
+                        )),
+                        PgGithubPullRequestRepo::new(readonly_db.clone()),
+                    ),
+                )
+                .with_favorites(favorites_service.clone())
+                .with_agent_branches(
+                    agent_changes::outbound::postgres::PgChangesetRepo::new(readonly_db.clone()),
                 ),
-            )),
-            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
-                readonly_db.clone(),
-            )),
-            // The Sales views' activity edges probe every record of the scope;
-            // read them from the replica, like the rest of the list. Record
-            // and access reads stay on the primary.
-            crm::domain::service::CrmServiceImpl::new(
-                crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone())
-                    .with_activity_edges_replica(readonly_pool::ReadOnlyPool(readonly_db.clone())),
-                crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
-            ),
-            GithubPullRequestServiceImpl::new(
-                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
-                PgGithubPullRequestRepo::new(readonly_db.clone()),
-            ),
+            )
+        };
+    let soup_service = list_soup(
+        ChannelListServiceImpl::new(
+            PgChannelsRepo::new(readonly_db.clone()),
+            PgChannelsRepo::new(readonly_db.clone()),
+            frecency_storage.clone(),
         )
-        .with_favorites(favorites_service.clone())
-        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
-            readonly_db.clone(),
+        .with_agent_dm_profiles(Arc::new(
+            outbound::agent_dm_authorizer::AgentDmProfileReader::new(
+                PgChannelsRepo::new(readonly_db.clone()),
+                PgBotsRepo::new(readonly_db.clone()),
+            ),
         )),
+    );
+    // The same lists with their channels read from the primary, where the
+    // REST channel list reads them: a complete pass over the viewer's channel
+    // directory (`channelReads: PRIMARY`) then never lists a channel the
+    // viewer just left, or misses one just joined, while the replica lags.
+    let primary_channel_soup = list_soup(
+        ChannelListServiceImpl::new(
+            PgChannelsRepo::new(db.clone()),
+            PgChannelsRepo::new(db.clone()),
+            frecency_storage.clone(),
+        )
+        .with_agent_dm_profiles(agent_dm_profiles.clone()),
     );
 
     let websocket_notification_consumer_service =
@@ -2719,6 +2742,7 @@ async fn run_server() -> anyhow::Result<()> {
                 entity_access_service.as_ref().clone(),
             ),
         ),
+        graphql_primary_channel_soup: graphql_soup::PrimaryChannelSoup(primary_channel_soup),
         graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader::new(
             primary_entity_soup,
             Arc::new(email_service.clone()),

@@ -1002,7 +1002,8 @@ export type GraphqlChannelLiteral =
   |  { channelId?: never; channelType?: never; importance?: never;   /**
    * The is participant option. Filters by whether the requesting user is an
    * active participant; its presence widens the candidate set to team channels
-   * of the user's teams they have not joined.
+   * of the user's teams they have not joined, and, when the filter admits only
+   * channels it names by id, to public channels too.
    */
   isParticipant: boolean; mention?: never; notificationState?: never; organizationId?: never; sender?: never; teamId?: never; threadId?: never; }
   |  { channelId?: never; channelType?: never; importance?: never; isParticipant?: never;   /** The mention option. */
