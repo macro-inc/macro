@@ -113,15 +113,17 @@ main and WAL to this build's name (`OpfsOwner::adopt`), and opens them, which
 runs the steps. It holds that lock until the first open ends, so no tab of the
 older build can open, reset or recreate its name meanwhile. A tab of the older
 build already holding the lock, a whole pair with a marker of its own beside it
-(an unfinished adoption into that name, below, which its build decides first:
-`older-in-use`), a browser without OPFS moves, a pair whose headers Turso would
-not open, or a failed move leaves the old file where it is and starts empty, as
-every version change did before. A marker beside no whole pair is an adoption
-stopped before its moves finished, and the open looks further back, where its
-files still are. So moved files come from a name whose files are at its own
-version, which a hand-back compares against; the one exception is a pair whose
-wipe there stopped after removing its marker, which was being reset anyway.
-Only a later storage bump can meet any of these markers. The open result reports
+(an adoption into that name whose first open has not succeeded, below, or whose
+marker could not be removed after it did; its build decides those files first,
+and its next open removes such a marker: `older-in-use`), a browser without
+OPFS moves, a pair whose headers Turso would not open, or a failed move leaves
+the old file where it is and starts empty, as every version change did before.
+A marker beside no whole pair is an adoption stopped before its moves finished,
+and the open looks further back, where its files still are. So moved files come
+from a name whose files are at its own version, which a hand-back compares
+against: a wipe removes a pair before its marker, and a hand-back first removes
+a marker that an adoption into the older name left beside no main file. Only a
+later storage bump can meet any of these markers. The open result reports
 `upgraded-existing` with `fromStorageVersion`, and `carryForward` says what
 happened to the older database; `graphql_cache.schema_init` records both. The
 coordinator protocol carries an upgrade as `opened-existing`, since storage
@@ -257,17 +259,7 @@ lose them instead, and each needs a worker lost or an open failing mid-upgrade:
   nothing of markers. If it opens that name after the adopting worker was lost
   or let it go, while a move is split or the moved files are still at 11, it
   resets them as any half pair or older file. Builds that use the name of any
-  later storage version all know the marker;
-- from the next storage bump on, a whole older pair whose marker outlived its
-  first open (removing it failed) or no longer reads stays with its build, and
-  this build starts empty beside it and, having its own database from then on,
-  never moves that pair; its queue waits for that build, whose next open
-  removes the marker. And with three builds in turn: after this build moved a
-  pair on, the older build adopts again from an even older name and stops
-  after writing its marker; if this build's first open of the moved pair then
-  fails and hands it back, the pair lands beside that marker, and the older
-  build's next recovery open finds it a version above the marker's and
-  discards it (an ordinary open would have opened it).
+  later storage version all know the marker.
 
 Already true before upgrades, and unchanged: a worker lost after its open was
 ready but before the coordinator saw it wipes the file on the recovery open; an

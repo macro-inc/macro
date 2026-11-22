@@ -60,7 +60,8 @@ contract and the multi-target verification commands.
   lock until the first open ends. `complete_adoption` moves a split's WAL only
   while it matches the marker, and one with frames only under the older lock;
   `return_adoption` moves back only a self-contained database onto an identity
-  holding none; the caller decides the files are still what the older build
+  holding none, clearing a marker there beside no main file first; a wipe
+  removes the pair before the marker. The caller decides the files are still what the older build
   wrote, and bounds its retries with `record_attempt`, or by
   `Adoption::adopted_at_ms` (`read_adoption_time` when the files beside the
   marker do not read) when an attempt cannot be counted. The marker is

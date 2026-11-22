@@ -1028,14 +1028,20 @@ async fn return_pair(to: Paths, from: Paths) -> Result<ReturnOutcome, OpfsError>
     if previous_main.is_some() {
         return Ok(ReturnOutcome::Occupied);
     }
-    match previous_wal {
-        Some(previous_wal) => {
-            if file_prefix(&previous_wal, 0, deadline).await?.0 != 0 {
-                return Ok(ReturnOutcome::Occupied);
-            }
-        }
+    if let Some(previous_wal) = &previous_wal
+        && file_prefix(previous_wal, 0, deadline).await?.0 != 0
+    {
+        return Ok(ReturnOutcome::Occupied);
+    }
+    // A marker there beside no main file is an adoption into the older
+    // identity stopped before its main file moved: the files it names are
+    // still where they were. It goes first, as the next read there would
+    // remove it, so the pair coming back is never taken for the files that
+    // adoption was moving.
+    remove_marker(&root, &from, deadline).await?;
+    if previous_wal.is_none() {
         // The pair is whole the moment the main file arrives.
-        None => create_empty(&root, from.get(FileRole::Wal)).await?,
+        create_empty(&root, from.get(FileRole::Wal)).await?;
     }
     move_entry(&root, &main, from.get(FileRole::Main), deadline).await?;
     // The pair went back. A stop or a failure from here on leaves a marker
@@ -2060,6 +2066,7 @@ struct Registry {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ResetFault {
     AfterMainRemoval,
+    AfterMarkerRemoval,
     AfterMainRecreate,
 }
 
@@ -3079,10 +3086,11 @@ async fn reset_paths(paths: &Paths, recursive: bool) -> Result<(), OpfsError> {
     let root = worker_root()
         .await
         .map_err(|error| js_error(OpfsErrorKind::Remove, "OPFS reset root open", &error))?;
-    // The adoption marker goes first: files left without it open as this
-    // identity's own, and a marker left without a main file is removed as
-    // stale by the next read.
-    remove_marker(&root, paths, deadline).await?;
+    // The files go before the adoption marker: a stop between leaves a marker
+    // beside no main file, which the next read removes as stale. Removed
+    // first, the marker would leave moved files that may not be at this
+    // identity's version reading as its own, to a newer build that moves them
+    // and compares their version when it gives them back.
     for role in FileRole::ALL {
         remove_if_present(&root, paths.get(role), recursive, deadline).await?;
         #[cfg(test)]
@@ -3092,6 +3100,14 @@ async fn reset_paths(paths: &Paths, recursive: bool) -> Result<(), OpfsError> {
                 "injected failure after removing the main path",
             ));
         }
+    }
+    remove_marker(&root, paths, deadline).await?;
+    #[cfg(test)]
+    if take_reset_failure(ResetFault::AfterMarkerRemoval) {
+        return Err(OpfsError::new(
+            OpfsErrorKind::Remove,
+            "injected failure after removing the adoption marker",
+        ));
     }
     for role in FileRole::ALL {
         let options = FileSystemGetFileOptions::new();

@@ -882,6 +882,41 @@ async fn files_that_never_opened_go_back_to_the_older_identity() {
 }
 
 #[wasm_bindgen_test]
+async fn a_return_clears_a_marker_its_older_identity_was_left_with() {
+    // t12's pair moved to t13. A t12 build then began adopting t10 and
+    // stopped after its marker, before moving anything. The pair t13 gives
+    // back is t12's own again, and t10's stays where it is.
+    let nonce = js_sys::Date::now() as u64;
+    let oldest = format!("adopt-return-marked-{nonce}:t10");
+    let (old, new) = identities("return-marked");
+    write_pair(&oldest, 3).await;
+    write_pair(&old, 12).await;
+    clean_pair(&new).await;
+    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::Adopted);
+    let stopped = Marker {
+        previous_identity: oldest.clone(),
+        wal: WalFingerprint {
+            size: 0,
+            header: Vec::new(),
+        },
+        adopted_at_ms: 0,
+    }
+    .encode()
+    .expect("encode");
+    write_file(&attempts_name(&old), b"+-------").await;
+    write_file(&marker_name(&old), &stopped).await;
+    assert_eq!(give_back(&old, &new).await, ReturnOutcome::Returned);
+    assert!(!marker_exists(&old).await);
+    assert_eq!(read_file(&attempts_name(&old)).await, None);
+    assert_eq!(read_adoption(&old).await, None);
+    assert_eq!(read_pair(&old).await, 12);
+    assert_eq!(read_pair(&oldest).await, 3);
+    clean_pair(&oldest).await;
+    clean_pair(&old).await;
+    clean_pair(&new).await;
+}
+
+#[wasm_bindgen_test]
 async fn a_return_moves_nothing_unless_the_database_is_self_contained() {
     // This owner's WAL still holds rows: the main file alone would lose them.
     let (old, new) = identities("refused-wal");
@@ -993,6 +1028,32 @@ async fn discarding_or_wiping_ends_the_adoption() {
     owner.remove_and_release().await.expect("remove");
     assert_eq!(read_adoption(&new).await, None);
     assert_eq!(present(&new).await, [false, false]);
+
+    // A wipe that stops never leaves moved files without their marker:
+    // after the marker, nothing is left; after the main file, the marker and
+    // the WAL beside no main file are stale.
+    let (old, new) = identities("wipe-stopped");
+    write_pair(&old, 20).await;
+    clean_pair(&new).await;
+    for fault in [ResetFault::AfterMarkerRemoval, ResetFault::AfterMainRemoval] {
+        assert_eq!(
+            adopt_into(&old, &new).await,
+            AdoptOutcome::Adopted,
+            "{fault:?}"
+        );
+        let owner = OpfsOwner::acquire(&new).await.expect("owner");
+        REGISTRY.with(|registry| registry.borrow_mut().faults.reset_fault = Some(fault));
+        let failure = owner.recovery_wipe().await.err().expect("stopped wipe");
+        assert_eq!(failure.error().kind(), OpfsErrorKind::Remove, "{fault:?}");
+        replace_poisoned_registry_for_test().await;
+        assert!(!present(&new).await[0], "{fault:?}");
+        assert_eq!(read_adoption(&new).await, None, "{fault:?}");
+        assert_eq!(present(&new).await, [false, false], "{fault:?}");
+        assert!(!marker_exists(&new).await, "{fault:?}");
+        write_pair(&old, 20).await;
+    }
+    clean_pair(&old).await;
+    clean_pair(&new).await;
 }
 
 #[wasm_bindgen_test]
