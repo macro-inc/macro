@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                needs_reauth,\n                mailbox_issue,\n                mailbox_retry_at,\n                imap_notification_revision,\n                imap_notification_sync_generation,\n                imap_notification_grant_generation\n            FROM\n                email_links\n            WHERE\n                id = $1\n                AND provider = 'IMAP'\n                AND is_sync_active\n                AND sync_generation = $2\n                AND grant_generation = $3\n            FOR UPDATE\n            ",
+  "query": "\n            SELECT\n                needs_reauth,\n                mailbox_issue,\n                mailbox_retry_at,\n                imap_notification_revision,\n                imap_notification_sync_generation,\n                imap_notification_grant_generation\n            FROM\n                email_links\n            WHERE\n                id = $1\n                AND provider = 'IMAP'\n                AND is_sync_active\n                AND sync_generation = $2\n                AND grant_generation = $3\n            FOR NO KEY UPDATE\n            ",
   "describe": {
     "columns": [
       {
@@ -50,5 +50,5 @@
       true
     ]
   },
-  "hash": "073c36bf8934ee14b94e4305938056d5ef4dad3b1ede02def321d3ff54fade1a"
+  "hash": "ea44bbe9d6073ca989fc304787646248b639b80733444a8c80f15fc9de09dd7a"
 }

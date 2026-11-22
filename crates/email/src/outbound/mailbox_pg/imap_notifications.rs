@@ -29,7 +29,7 @@ impl ImapNotificationRepository for PgMailboxSync {
                 AND is_sync_active
                 AND sync_generation = $2
                 AND grant_generation = $3
-            FOR UPDATE
+            FOR NO KEY UPDATE
             "#,
             mailbox.link_id,
             mailbox.sync_generation,

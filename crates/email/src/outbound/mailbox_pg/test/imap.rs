@@ -181,6 +181,57 @@ async fn blocked_imap_ingestion_records_one_recoverable_move_with_the_message(db
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn imap_notification_does_not_wait_for_a_foreign_key_reader(db: PgPool) {
+    use crate::domain::mailbox::imap_notifications::ImapNotificationRepository;
+
+    let (_, link) = fixture(&db).await;
+    sqlx::query!(
+        "UPDATE email_links SET provider = 'IMAP' WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let repo =
+        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let mut foreign_key_reader = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_links WHERE id = $1 FOR KEY SHARE",
+        link
+    )
+    .fetch_one(&mut *foreign_key_reader)
+    .await
+    .unwrap();
+
+    // The key reader remains open throughout the notification. Updating health
+    // never changes the referenced link key, so these operations must coexist.
+    tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        repo.commit(
+            MailboxKey {
+                link_id: link,
+                sync_generation: 1,
+                grant_generation: 1,
+            },
+            false,
+            Some(1),
+            Some(models_email::service::link::MailboxIssue::SnapshotTooLarge),
+            None,
+        ),
+    )
+    .await
+    .expect("health notification waited for a foreign-key key-share reader")
+    .unwrap();
+    foreign_key_reader.rollback().await.unwrap();
+
+    let issue = sqlx::query_scalar!("SELECT mailbox_issue FROM email_links WHERE id = $1", link)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(issue.as_deref(), Some("snapshot_too_large"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPool) {
     use crate::domain::mailbox::imap_notifications::ImapNotificationService;
     use imap_engine::domain::models::{Binding, Notification};
