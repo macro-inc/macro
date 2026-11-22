@@ -1,6 +1,7 @@
 //! Point-probed residual predicates for a scoped, already-selected candidate set.
 
 use super::*;
+use predicate_index::ExactValue;
 
 #[derive(Clone, Copy)]
 pub(super) enum FactSource {
@@ -84,10 +85,81 @@ fn exists(
     )
 }
 
+/// Single exact facts tested through `LEFT JOIN`s on the fact primary key
+/// instead of one `EXISTS` subprogram each. The key is (document, attribute,
+/// value), so each join matches at most one row and never repeats a document.
+/// A fact tested twice reuses its join.
+pub(super) struct ExactJoins {
+    source: FactSource,
+    facts: Vec<(Token, ExactValue)>,
+    sql: String,
+    parameters: Vec<Value>,
+}
+
+impl ExactJoins {
+    pub(super) fn new(source: FactSource) -> Self {
+        Self {
+            source,
+            facts: Vec::new(),
+            sql: String::new(),
+            parameters: Vec::new(),
+        }
+    }
+
+    /// The joins, to follow the table that `d` names, and their parameters,
+    /// which follow every parameter of the select list.
+    pub(super) fn finish(self) -> (String, Vec<Value>) {
+        (self.sql, self.parameters)
+    }
+
+    fn test(&mut self, attribute: &Token, value: &ExactValue) -> String {
+        let index = match self
+            .facts
+            .iter()
+            .position(|(known, known_value)| known == attribute && known_value == value)
+        {
+            Some(index) => index,
+            None => {
+                let index = self.facts.len();
+                let (table, key) = self.source.table(FactKind::Exact);
+                self.sql.push_str(&format!(
+                    " LEFT JOIN {table} AS x{index} INDEXED BY {key} ON x{index}.document_id = d.id AND x{index}.attribute = ? AND x{index}.value = ?"
+                ));
+                self.parameters.extend([
+                    text(attribute.as_str()),
+                    Value::from_blob(value.as_bytes().to_vec()),
+                ]);
+                self.facts.push((attribute.clone(), value.clone()));
+                index
+            }
+        };
+        format!("x{index}.document_id IS NOT NULL")
+    }
+}
+
 pub(super) fn condition(
     expr: &PredicateExpr,
     source: FactSource,
     parameters: &mut Vec<Value>,
+) -> String {
+    condition_with(expr, source, parameters, &mut None)
+}
+
+/// `condition`, testing each single exact fact through `joins`.
+pub(super) fn joined_condition(
+    expr: &PredicateExpr,
+    parameters: &mut Vec<Value>,
+    joins: &mut ExactJoins,
+) -> String {
+    let source = joins.source;
+    condition_with(expr, source, parameters, &mut Some(joins))
+}
+
+fn condition_with(
+    expr: &PredicateExpr,
+    source: FactSource,
+    parameters: &mut Vec<Value>,
+    joins: &mut Option<&mut ExactJoins>,
 ) -> String {
     if matches!(expr, PredicateExpr::Or(_, _))
         && let Some((attribute, values)) = alternatives::exact_alternatives(expr)
@@ -106,14 +178,17 @@ pub(super) fn condition(
     match expr {
         PredicateExpr::All => "1".into(),
         PredicateExpr::None => "0".into(),
-        PredicateExpr::Exact { attribute, value } => exists(
-            source,
-            FactKind::Exact,
-            attribute,
-            " AND f.value = ?",
-            [Value::from_blob(value.as_bytes().to_vec())],
-            parameters,
-        ),
+        PredicateExpr::Exact { attribute, value } => match joins {
+            Some(joins) => joins.test(attribute, value),
+            None => exists(
+                source,
+                FactKind::Exact,
+                attribute,
+                " AND f.value = ?",
+                [Value::from_blob(value.as_bytes().to_vec())],
+                parameters,
+            ),
+        },
         PredicateExpr::ExactExists { attribute } => {
             exists(source, FactKind::Exact, attribute, "", [], parameters)
         }
@@ -172,14 +247,16 @@ pub(super) fn condition(
         }
         PredicateExpr::And(left, right) => format!(
             "({} AND {})",
-            condition(left, source, parameters),
-            condition(right, source, parameters)
+            condition_with(left, source, parameters, joins),
+            condition_with(right, source, parameters, joins)
         ),
         PredicateExpr::Or(left, right) => format!(
             "({} OR {})",
-            condition(left, source, parameters),
-            condition(right, source, parameters)
+            condition_with(left, source, parameters, joins),
+            condition_with(right, source, parameters, joins)
         ),
-        PredicateExpr::Not(inner) => format!("NOT ({})", condition(inner, source, parameters)),
+        PredicateExpr::Not(inner) => {
+            format!("NOT ({})", condition_with(inner, source, parameters, joins))
+        }
     }
 }
