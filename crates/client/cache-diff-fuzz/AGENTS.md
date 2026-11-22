@@ -16,8 +16,8 @@ purpose (it says what).
   is compiled inside that module.
 - `src/sequence.rs` generates a case from a seed: hydrates, writes, reads, Soup
   filters and live views of them (read, read since, resume, release), search, the optimistic mutation queue (enqueue, claim, commit,
-  rollback, defer), deletes, invalidation, people search, people reference resolution (every
-  cached contact visited), idle, reopen, crash,
+  rollback, defer), deletes, invalidation, people search, people reference resolution (it reads
+  every cached contact, unless it answers that people context is pending), idle, reopen, crash,
   probes, and written pages again with one value broken (`src/malformed.rs`). Responses come from `src/faker.rs` over the app schema.
   Random filters rarely fill a first candidate window (64 candidates), so a `deep-window`
   op hydrates every core page and filters for a few documents past the first window: the
