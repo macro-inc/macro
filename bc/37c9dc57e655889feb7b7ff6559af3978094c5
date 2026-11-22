@@ -1,0 +1,27 @@
+apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.tsx
+  s_9671c7bc652ab5::t_3da938713bdf9a 12,18,23,33-36,60-63,71,101-150,164,209,302-344,348-349,446
+apps/web/src/features/block-call/primitives/recording-video.ts
+  s_9671c7bc652ab5::t_3da938713bdf9a 24,185
+apps/web/src/lib/i18n/locales/en/calls.ts
+  s_9671c7bc652ab5::t_3da938713bdf9a 153-155
+apps/web/src/features/block-call/component/CallRecording/CallRecordingVideo.tsx
+  s_9671c7bc652ab5::t_3da938713bdf9a 15-16
+apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.test.tsx
+  s_9671c7bc652ab5::t_f29c61ee78c121 103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "bc37c9dc57e655889feb7b7ff6559af3978094c5",
+  "prompts": {},
+  "sessions": {
+    "s_9671c7bc652ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a46e4f3c-7142-45e8-9694-084925c538ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
