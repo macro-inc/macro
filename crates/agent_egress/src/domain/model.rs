@@ -441,19 +441,20 @@ pub fn not_connected_text(slug: &McpServerSlug, name: &str) -> String {
     )
 }
 
-/// What the model is told when it calls a tool on a custom MCP server whose
-/// grant has died.
+/// What the model is told when it calls a tool on a custom MCP server that
+/// needs a sign-in: its grant died, or it was never signed in to and asked
+/// for one.
 ///
 /// No connect-button markup: that chip opens the app catalog, and a custom
-/// server is reconnected from its own row under Agents → Connections. The
+/// server is signed in to from its own row under Agents → Connections. The
 /// name is the owner's own, never anything the request carried.
 pub fn disconnected_text(name: &str) -> String {
     format!(
-        "{name} is a custom MCP server the selected acting_as account added, but its \
-         connection has expired, so this tool cannot run yet. Tell them so in your reply, \
-         and ask them to open Agents → Connections, find {name} under Custom MCP, and use \
-         Reconnect. Close your reply by asking them to let you know once they have done so \
-         - when they do, call this tool again; nothing else needs to change.",
+        "{name} is a custom MCP server the selected acting_as account added, but it needs \
+         them to sign in, so this tool cannot run yet. Tell them so in your reply, and ask \
+         them to open Agents → Connections, find {name} under Custom MCP, and use Sign in. \
+         Close your reply by asking them to let you know once they have done so - when they \
+         do, call this tool again; nothing else needs to change.",
     )
 }
 

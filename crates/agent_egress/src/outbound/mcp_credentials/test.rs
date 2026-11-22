@@ -548,3 +548,43 @@ fn forwarded_parts(forwarded: &Forwarded) -> http::request::Parts {
         .clone()
         .expect("the request was forwarded")
 }
+
+/// A 401 is recorded on the connection the destination names, exactly as
+/// `resolve` finds it, and answers with the owner's name for it; a
+/// destination naming none of the owner's connections has nothing to
+/// record on.
+#[tokio::test]
+async fn a_401_is_reported_on_the_connection_the_destination_names() {
+    let fake = connectors();
+    let credentials = credentials(&fake);
+    let other_server = McpDestination::Custom(CustomMcpServerKey::for_url(
+        "https://elsewhere.example.com/mcp",
+    ));
+
+    let mut named = Vec::new();
+    for destination in [
+        wiki(),
+        app("linear"),
+        app("datadog"),
+        other_server,
+        McpDestination::Macro,
+    ] {
+        named.push(
+            credentials
+                .unauthorized(&owner(), &destination)
+                .await
+                .expect("reported"),
+        );
+    }
+
+    assert_eq!(
+        named,
+        [
+            Some("Team wiki".to_owned()),
+            Some("Linear".to_owned()),
+            None,
+            None,
+            None
+        ]
+    );
+}

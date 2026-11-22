@@ -92,7 +92,6 @@ where
             .actor_mcp
             .clone()
             .ok_or(EgressError::Unauthenticated("actor transport unavailable"))?;
-        let session_id = grant.session;
         let acting_user = user.clone();
         if !listing {
             let current = self.sessions.authorize(token).await?;
@@ -103,16 +102,92 @@ where
                 ));
             }
         }
-        exchange_result(
+        self.exchange_result(
             transport.as_ref(),
-            session_id,
+            grant,
             acting_user,
             upstream,
             destination,
             request,
-            listing,
         )
         .await
+    }
+
+    /// One sandbox exchange through the actor transport, as the JSON-RPC
+    /// response the sandbox reads. A call that did not complete answers a
+    /// tool result saying why.
+    async fn exchange_result(
+        &self,
+        transport: &dyn crate::domain::ports::ActorMcpTransport,
+        grant: &SessionGrant,
+        actor: MacroUserIdStr<'static>,
+        upstream: UpstreamCall,
+        destination: &McpDestination,
+        request: Value,
+    ) -> Result<ProxyResponse, EgressError> {
+        let id = request["id"].clone();
+        let listing = request["method"] == "tools/list";
+        let result = match traced_exchange(
+            transport,
+            grant.session,
+            actor.clone(),
+            upstream,
+            destination,
+            request,
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(EgressError::SignInRequired) => {
+                let name = self.signed_out(grant, &actor, destination).await;
+                if listing {
+                    return listing_response(id, connect_prompt_listing(&name), destination);
+                }
+                return Ok(tool_result_response(id, sign_in_text(destination, &name)));
+            }
+            Err(EgressError::RateLimited { .. }) if !listing => {
+                return Ok(tool_result_response(id, RATE_LIMITED.into()));
+            }
+            Err(error) if !listing => {
+                tracing::warn!(?error, "actor MCP exchange failed");
+                return Ok(tool_result_response(id, UNKNOWN_OUTCOME.into()));
+            }
+            Err(error) => return Err(error),
+        };
+        if listing {
+            return listing_response(id, result, destination);
+        }
+        json_response(&json!({"jsonrpc": "2.0", "id": id, "result": result}))
+    }
+
+    /// The upstream `user`'s connection reaches `destination` through
+    /// answered HTTP 401: record it, so the connection stops reading as
+    /// connected, and name it for the answer a connection that cannot be
+    /// used gets. The call did not run, so it is never retried or reported
+    /// as of unknown outcome.
+    async fn signed_out(
+        &self,
+        grant: &SessionGrant,
+        user: &MacroUserIdStr<'static>,
+        destination: &McpDestination,
+    ) -> String {
+        let recorded = self
+            .credentials
+            .unauthorized(user, destination)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
+                    ?error,
+                    "could not record that an MCP server asked for a sign-in"
+                );
+            })
+            .ok()
+            .flatten();
+        tracing::info!(
+            ?destination,
+            "an MCP server asked the selected account to sign in"
+        );
+        recorded.unwrap_or_else(|| connect_tool_owner(grant, destination))
     }
 
     /// The upstream `user`'s connection reaches `destination` through, or
@@ -165,6 +240,16 @@ where
             }
             McpResolution::Disconnected { name } => Reach::Refused(disconnected_text(&name)),
         })
+    }
+}
+
+/// What a call to a server that asked for a sign-in is told: an app is
+/// connected again from the catalog, a custom server signed in to from its
+/// own row.
+fn sign_in_text(destination: &McpDestination, name: &str) -> String {
+    match destination {
+        McpDestination::Connected(slug) => not_connected_text(slug, name),
+        _ => disconnected_text(name),
     }
 }
 
@@ -263,6 +348,13 @@ where
         .await
         {
             Ok(result) => Ok(result),
+            Err(EgressError::SignInRequired) => {
+                let name = self.signed_out(grant, user, destination).await;
+                if listing {
+                    return Ok(connect_prompt_listing(&name));
+                }
+                Ok(tool_error_result(sign_in_text(destination, &name)))
+            }
             // Refused before it ran: the caller paces and retries it.
             Err(error @ EgressError::RateLimited { .. }) => Err(error),
             Err(error) if !listing => {
@@ -391,10 +483,10 @@ async fn traced_exchange(
         Err(error) => {
             // The limiter's own `mcp.call_budget` span, inside this one,
             // records its waits, attempts and refusals.
-            let outcome = if matches!(error, EgressError::RateLimited { .. }) {
-                "rate_limited"
-            } else {
-                "upstream_error"
+            let outcome = match error {
+                EgressError::RateLimited { .. } => "rate_limited",
+                EgressError::SignInRequired => "sign_in_required",
+                _ => "upstream_error",
             };
             span.record("mcp.outcome", outcome);
             span.record("otel.status_code", "ERROR");
@@ -422,34 +514,6 @@ fn json_bytes(value: &Value) -> i64 {
 
 /// What a failed call says: it may have run upstream before failing.
 const UNKNOWN_OUTCOME: &str = "The selected account's tool could not complete. Its outcome may be unknown; check state before retrying writes.";
-
-async fn exchange_result(
-    transport: &dyn crate::domain::ports::ActorMcpTransport,
-    session: crate::domain::model::AgentSessionId,
-    actor: macro_user_id::user_id::MacroUserIdStr<'static>,
-    upstream: UpstreamCall,
-    destination: &McpDestination,
-    request: Value,
-    listing: bool,
-) -> Result<ProxyResponse, EgressError> {
-    let id = request["id"].clone();
-    let result =
-        match traced_exchange(transport, session, actor, upstream, destination, request).await {
-            Ok(result) => result,
-            Err(EgressError::RateLimited { .. }) if !listing => {
-                return Ok(tool_result_response(id, RATE_LIMITED.into()));
-            }
-            Err(error) if !listing => {
-                tracing::warn!(?error, "actor MCP exchange failed");
-                return Ok(tool_result_response(id, UNKNOWN_OUTCOME.into()));
-            }
-            Err(error) => return Err(error),
-        };
-    if listing {
-        return listing_response(id, result, destination);
-    }
-    json_response(&json!({"jsonrpc": "2.0", "id": id, "result": result}))
-}
 
 /// A `tools/list` answer as the sandbox sees it: tools that already choose
 /// an account are left out, and every tool that spends one takes

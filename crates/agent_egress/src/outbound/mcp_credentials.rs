@@ -193,4 +193,42 @@ where
             },
         }
     }
+
+    #[tracing::instrument(skip_all, err, fields(?destination))]
+    async fn unauthorized(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        destination: &McpDestination,
+    ) -> Result<Option<String>, EgressError> {
+        if matches!(destination, McpDestination::Macro | McpDestination::Preview) {
+            return Ok(None);
+        }
+        let connections = self.connections.connections(owner).await.map_err(|error| {
+            EgressError::Internal(rootcause::report!(
+                "could not read the owner's MCP connections: {error}"
+            ))
+        })?;
+        // The key exactly as `resolve` found it; a destination naming none
+        // of the owner's connections has nothing to record on.
+        let Ok(key) = Self::key(&connections, destination) else {
+            return Ok(None);
+        };
+        let Some(name) = connections
+            .handles()
+            .find(|handle| handle.key() == &key)
+            .map(|handle| handle.name().to_owned())
+        else {
+            return Ok(None);
+        };
+
+        self.connections
+            .unauthorized(owner, &key)
+            .await
+            .map_err(|error| {
+                EgressError::Internal(rootcause::report!(
+                    "could not record that {key} asked for a sign-in: {error}"
+                ))
+            })?;
+        Ok(Some(name))
+    }
 }

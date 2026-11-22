@@ -183,6 +183,18 @@ where
         };
         Ok(McpResolution::Connected(call))
     }
+
+    async fn unauthorized(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        destination: &McpDestination,
+    ) -> Result<Option<String>, EgressError> {
+        // Macro's own server has no connection to mark.
+        if *destination == McpDestination::Macro {
+            return Ok(None);
+        }
+        self.inner.unauthorized(owner, destination).await
+    }
 }
 
 /// A cached token, if it will still be valid long enough to be worth using.

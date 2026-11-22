@@ -68,6 +68,16 @@ pub trait McpCredentials: Send + Sync {
         selection: &Selection,
         destination: &McpDestination,
     ) -> impl Future<Output = Result<McpResolution, EgressError>> + Send;
+
+    /// The upstream `owner`'s connection to `destination` reached answered
+    /// HTTP 401: record it, so the connection reads as needing a sign-in
+    /// rather than connected. The display name of the connection it was
+    /// recorded on, or `None` when `destination` names none of `owner`'s.
+    fn unauthorized(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        destination: &McpDestination,
+    ) -> impl Future<Output = Result<Option<String>, EgressError>> + Send;
 }
 
 /// Mint a credential for git access to one repository.

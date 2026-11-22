@@ -12,10 +12,11 @@ use crate::domain::approval::{
 use crate::domain::error::EgressError;
 use crate::domain::model::{
     EgressTarget, MAX_MCP_REQUEST_BYTES, McpDestination, McpResolution, ProxyRequest,
-    ProxyResponse, SessionToken, TOOLS_CALL_METHOD, UpstreamCall, answered_initialize,
-    calls_connect_tool, connect_prompt_listing, connected_since_listing_text, disconnected_text,
-    ensure_method_allowed, json_rpc_method_not_found, json_rpc_result, not_connected_text,
-    peek_json_rpc, sanitize_request_headers, sanitize_response_headers, tool_result_response,
+    ProxyResponse, SessionToken, TOOLS_CALL_METHOD, UpstreamCall, UpstreamCredential,
+    answered_initialize, calls_connect_tool, connect_prompt_listing, connected_since_listing_text,
+    disconnected_text, ensure_method_allowed, json_rpc_method_not_found, json_rpc_result,
+    not_connected_text, peek_json_rpc, sanitize_request_headers, sanitize_response_headers,
+    tool_result_response,
 };
 use crate::domain::observed_body::{ObservedBody, StreamIdentity};
 use crate::domain::ports::{Forwarder, GithubTokens, McpCredentials, SessionAuthority};
@@ -487,6 +488,26 @@ where
                 upstream = %target.name(),
                 %status,
                 "upstream answered with a failure status"
+            );
+        }
+
+        // A server added by URL and never signed in to is called bare, and
+        // a 401 to that is it asking the owner to sign in: recorded, so the
+        // connection stops reading as connected. The status still passes
+        // through untouched, as every status does.
+        if status == http::StatusCode::UNAUTHORIZED
+            && matches!(call.authorization(), UpstreamCredential::Anonymous)
+            && let EgressTarget::McpServer(
+                destination @ (McpDestination::Connected(_) | McpDestination::Custom(_)),
+            ) = &target
+            && let Err(error) = self
+                .credentials
+                .unauthorized(&grant.owner, destination)
+                .await
+        {
+            tracing::warn!(
+                ?error,
+                "could not record that an MCP server asked for a sign-in"
             );
         }
 

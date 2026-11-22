@@ -84,6 +84,14 @@ impl McpCredentials for &SpyInner {
         self.asked.lock().expect("lock").push(slug.to_string());
         Err(EgressError::UnknownServer(slug.clone()))
     }
+
+    async fn unauthorized(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _destination: &McpDestination,
+    ) -> Result<Option<String>, EgressError> {
+        Ok(None)
+    }
 }
 
 fn macro_url() -> Url {
