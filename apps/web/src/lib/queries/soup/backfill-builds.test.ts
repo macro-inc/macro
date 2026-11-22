@@ -2,6 +2,7 @@ import {
   SoupBackfillDocument,
   SoupMailBackfillDocument,
 } from '@service-storage/graphql/generated/graphql';
+import * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
 import * as Fiber from 'effect/Fiber';
@@ -48,6 +49,11 @@ type LaneChange = 'same' | 'filter' | 'operation' | 'version' | 'recency';
 const LANE_COUNT = DEFAULT_SOUP_BACKFILL_LANES.length;
 /** Every model step moves the clock on, so no two events share a time. */
 const TICK_MS = 1000;
+
+/** The suite tab a fiber runs for; -1 for single-lane runs. */
+const TabId = Context.Reference<number>('backfill-builds/TabId', {
+  defaultValue: () => -1,
+});
 
 function changeLane(
   lane: SoupBackfillParams,
@@ -245,9 +251,9 @@ type WriteContext = {
   lane: SoupBackfillParams;
   request: string;
   generation: string;
-  /** Older generations a reset ended just after a tab sampled them, while a
-   * tab that was running then has not sampled again: it may still write under
-   * them, and loading discards what it writes. */
+  /** Older generations a reset ended just after a sample while the writing
+   * tab was running, before it sampled again: it may still write under them,
+   * and loading discards what it writes. */
   lateGenerations: { has: (generation: string) => boolean };
   /** Called with the generation of each write under an older one. */
   onLate?: (generation: string) => void;
@@ -404,9 +410,9 @@ function writeError(
  * succeeded completed. Tabs also run whole suites (`runSoupBackfills`), alone
  * or two at once, leaving held lanes and revisiting them; when every suite of
  * a step finished, each of their lanes is completed. Storage may reset just
- * after any generation sample of a suite. Until each tab running then samples
- * again, a write under that generation is checked as a runner step in it, and
- * may not replace a checkpoint of the current one; the app then runs its
+ * after any generation sample of a suite. Until a tab running then samples
+ * again, its write under that generation is checked as a runner step in it,
+ * and may not replace a checkpoint of the current one; the app then runs its
  * suites again, as it does when the cache generation changes.
  */
 async function replay(
@@ -497,8 +503,23 @@ async function replay(
   const bump = (resume: Resumes extends Map<infer K, number> ? K : never) =>
     resumes.set(resume, (resumes.get(resume) ?? 0) + 1);
 
-  /** Checks a checkpoint write against the one before it (see `replay`). */
-  const checkWrite = (key: string, previous: Stored | null, next: Stored) => {
+  /** The generations `tab` may still act on after a reset ended them. */
+  const lateFor = (tab: number) => ({
+    has: (stale: string) => late.get(stale)?.has(tab) ?? false,
+  });
+  /** The suite tab whose fiber writes, as `runSuite` provides it. */
+  const writingTab = () => {
+    const fiber = Fiber.getCurrent();
+    if (fiber === undefined) violations.push('a checkpoint write off a fiber');
+    return fiber?.getRef(TabId) ?? -1;
+  };
+  /** Checks `tab`'s checkpoint write against the one before it. */
+  const checkWrite = (
+    key: string,
+    previous: Stored | null,
+    next: Stored,
+    tab: number
+  ) => {
     const owner = lanesByKey.get(key);
     if (!owner) return;
     const error = writeError(
@@ -506,9 +527,9 @@ async function replay(
         lane: owner.lane,
         request: requestOf(owner.build, owner.laneIndex),
         generation: `g${generation}`,
-        lateGenerations: late,
-        onLate: (generation) => {
-          if (late.has(generation)) bump('late-write');
+        lateGenerations: lateFor(tab),
+        onLate: (stale) => {
+          if (lateFor(tab).has(stale)) bump('late-write');
         },
         served,
       },
@@ -526,7 +547,7 @@ async function replay(
     .spyOn(Storage.prototype, 'setItem')
     .mockImplementation(function (this: Storage, key: string, value: string) {
       if (lanesByKey.has(key)) {
-        checkWrite(key, read(key), JSON.parse(value) as Stored);
+        checkWrite(key, read(key), JSON.parse(value) as Stored, writingTab());
         const by = fetchedBy.get(key);
         if (by !== undefined) pageWriter.set(key, by);
         fetchedBy.delete(key);
@@ -614,9 +635,12 @@ async function replay(
     /** Called with the count after each page the run fetches. */
     onFetched?: (count: number) => void;
     close?: AbortController;
+    /** The suite tab; -1 for single-lane runs. */
+    id?: number;
   };
   /** A tab's page budget and how it ends, shared by the lanes it runs. */
   type Tab = {
+    id: number;
     budget: number;
     end: End;
     close: AbortController;
@@ -627,6 +651,7 @@ async function replay(
     onFetched?: (count: number) => void;
   };
   const openTab = (budget: number, options: RunOptions): Tab => ({
+    id: options.id ?? -1,
     budget,
     end: options.end,
     close: options.close ?? new AbortController(),
@@ -656,7 +681,8 @@ async function replay(
   const checkFirstRequest = (
     build: Build,
     laneIndex: number,
-    position: string
+    position: string,
+    tab: number
   ) => {
     const lane = builds[build][laneIndex];
     const key = soupBackfillCheckpointKey('user-1', lane);
@@ -679,7 +705,8 @@ async function replay(
       };
     };
     const savedGeneration = saved?.storageGeneration ?? null;
-    const fromLate = savedGeneration !== null && late.has(savedGeneration);
+    const fromLate =
+      savedGeneration !== null && lateFor(tab).has(savedGeneration);
     const dues = [due(savedGeneration === `g${generation}`)];
     if (fromLate) dues.push(due(true));
     const matched = dues.find((option) => option.position === position);
@@ -715,7 +742,7 @@ async function replay(
       const continuation = 'continuation' in input ? input.continuation : null;
       const since = continuation === null ? watermarkOf(input) : null;
       const position = continuation?.cursor ?? positionOf(request, since);
-      if (first) checkFirstRequest(build, laneIndex, position);
+      if (first) checkFirstRequest(build, laneIndex, position, tab.id);
       first = false;
       if (tab.fetched === tab.budget) return endTab(tab, fetchOptions?.signal);
       tab.fetched += 1;
@@ -816,7 +843,10 @@ async function replay(
    * finished.
    */
   const runSuite = async (build: Build, budget: number | null, id: number) => {
-    const tab = openTab(budget ?? Number.POSITIVE_INFINITY, { end: 'close' });
+    const tab = openTab(budget ?? Number.POSITIVE_INFINITY, {
+      end: 'close',
+      id,
+    });
     const lanes = builds[build].map((_lane, laneIndex) =>
       paramsOf(build, laneIndex, tab)
     );
@@ -824,7 +854,9 @@ async function replay(
     const exit = await asLeader(
       build,
       tab.close,
-      runSoupBackfills('user-1', hostOf(id), lanes)
+      runSoupBackfills('user-1', hostOf(id), lanes).pipe(
+        Effect.provideService(TabId, id)
+      )
     );
     running.delete(id);
     caughtUp(id);
