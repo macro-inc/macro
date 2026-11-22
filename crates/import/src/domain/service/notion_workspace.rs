@@ -257,7 +257,8 @@ where
                 Some(self.workspace_source),
                 Some(ImportStatus::Staged),
             )
-            .await?;
+            .await
+            .map_err(ImportError::not_started)?;
         let mut planned: Vec<(ImportEntity, write::WriteItem)> = staged
             .into_iter()
             .filter(|row| row.review_id == Some(review_id))
@@ -266,13 +267,19 @@ where
         if planned.is_empty() {
             return Err(crate::domain::ports::UnreviewableRun::NothingLeft.into());
         }
-        let team_id = self.repo.user_team_id(user).await?;
+        let team_id = self
+            .repo
+            .user_team_id(user)
+            .await
+            .map_err(ImportError::not_started)?;
         // Only the ready plan this review presents is written: a failed,
         // replaced or still-planning plan is refused here, whoever approved,
-        // before anything about it changes.
+        // before anything about it changes. Until the write is held, every
+        // failure leaves the plan as it was (`NotStarted`); after, it may not.
         self.repo
             .start_reviewed_write(user, self.workspace_source, review_id)
-            .await?;
+            .await
+            .map_err(ImportError::not_started)?;
         // The owner's sharing changes are recorded on the rows before the
         // write starts, so a resumed write shares exactly what they approved.
         let items: Vec<write::WriteItem> = planned.iter().map(|(_, item)| item.clone()).collect();
@@ -280,7 +287,7 @@ where
             sharing::sharing_changes(&items, &choices.shared, &choices.personal);
         if let Err(error) = self.repo.set_plan_sharing(user, &to_share, &to_keep).await {
             self.reopen_plan(user).await;
-            return Err(error);
+            return Err(error.not_started());
         }
         for (_, item) in &mut planned {
             if to_share.contains(&item.import_id) {
@@ -332,7 +339,7 @@ where
         self.jobs
             .tracker
             .spawn(async move { service.write_plan(&owner, set).await }.in_current_span());
-        self.notion_import_report(user).await
+        Ok(self.report_after_start(user).await)
     }
 
     async fn cancel_notion_import(&self, user: &MacroUserIdStr<'static>) -> Result<bool> {
@@ -359,6 +366,24 @@ where
     W: SlackWorkspaceSource,
     N: NotionConnections,
 {
+    /// The report once a write has started. The write is running, so a
+    /// failed read must not say it did not start.
+    pub(super) async fn report_after_start(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> NotionImportReport {
+        match self.notion_import_report(user).await {
+            Ok(report) => report,
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not read the report of a write that started");
+                NotionImportReport {
+                    status: Some(RunStatus::Importing),
+                    ..NotionImportReport::default()
+                }
+            }
+        }
+    }
+
     /// Put a run the fence just started back to `ready` when the write
     /// could not get going, so the same review can approve it again.
     pub(super) async fn reopen_plan(&self, user: &MacroUserIdStr<'static>) {
@@ -904,7 +929,7 @@ impl Place<'_> {
 
 /// The kind of a plan or write failure, recorded on the run for what the
 /// user and the agent are told.
-pub(super) fn failure_kind(error: &ImportError) -> RunErrorKind {
+pub fn failure_kind(error: &ImportError) -> RunErrorKind {
     use import_notion::domain::ports::NotionError;
     use import_tracker::domain::model::TrackerError;
     match error {
@@ -917,16 +942,7 @@ pub(super) fn failure_kind(error: &ImportError) -> RunErrorKind {
             NotionError::Upstream { .. } | NotionError::Transport(_) => RunErrorKind::Unreachable,
             NotionError::Decode(_) => RunErrorKind::Internal,
         },
-        ImportError::Tracker(error) => match error {
-            TrackerError::NotConnected => RunErrorKind::NotConnected,
-            TrackerError::Forbidden(401) => RunErrorKind::AccessLost,
-            TrackerError::Forbidden(_) => RunErrorKind::Forbidden,
-            TrackerError::Upstream { status: 401, .. } => RunErrorKind::AccessLost,
-            TrackerError::Upstream { status: 404, .. } => RunErrorKind::NotFound,
-            TrackerError::Upstream { status: 429, .. } => RunErrorKind::RateLimited,
-            TrackerError::Upstream { .. } | TrackerError::Transport(_) => RunErrorKind::Unreachable,
-            TrackerError::Decode(_) => RunErrorKind::Internal,
-        },
+        ImportError::Tracker(error) => tracker_failure_kind(error),
         ImportError::NotionNotConnected => RunErrorKind::NotConnected,
         ImportError::Admission(_) => RunErrorKind::UsageRefused,
         ImportError::UnsupportedDiscovery(_)
@@ -941,8 +957,36 @@ pub(super) fn failure_kind(error: &ImportError) -> RunErrorKind {
         | ImportError::EntityNotAccessible(_)
         | ImportError::ImportRunning
         | ImportError::AccessCheck(_)
-        | ImportError::RunNotReviewable(_)
-        | ImportError::Other(_) => RunErrorKind::Internal,
+        | ImportError::RunNotReviewable(_) => RunErrorKind::Internal,
+        ImportError::NotStarted(error) => failure_kind(error),
+        // Usage refusals and tracker failures often arrive wrapped.
+        ImportError::Other(error) => {
+            if error
+                .downcast_ref::<ai_billing::AiAdmissionError>()
+                .is_some()
+            {
+                RunErrorKind::UsageRefused
+            } else if let Some(error) = error.downcast_ref::<TrackerError>() {
+                tracker_failure_kind(error)
+            } else {
+                RunErrorKind::Internal
+            }
+        }
+    }
+}
+
+/// The kind of an issue tracker failure.
+fn tracker_failure_kind(error: &import_tracker::domain::model::TrackerError) -> RunErrorKind {
+    use import_tracker::domain::model::TrackerError;
+    match error {
+        TrackerError::NotConnected => RunErrorKind::NotConnected,
+        TrackerError::Forbidden(401) => RunErrorKind::AccessLost,
+        TrackerError::Forbidden(_) => RunErrorKind::Forbidden,
+        TrackerError::Upstream { status: 401, .. } => RunErrorKind::AccessLost,
+        TrackerError::Upstream { status: 404, .. } => RunErrorKind::NotFound,
+        TrackerError::Upstream { status: 429, .. } => RunErrorKind::RateLimited,
+        TrackerError::Upstream { .. } | TrackerError::Transport(_) => RunErrorKind::Unreachable,
+        TrackerError::Decode(_) => RunErrorKind::Internal,
     }
 }
 

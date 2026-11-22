@@ -1,4 +1,4 @@
-use super::{attach_error, refused};
+use super::{attach_error, refused, start_error};
 use agent_code_mode::domain::CodeModeError;
 use import::domain::models::{ImportSource, RunErrorKind};
 use import::domain::ports::{ImportError, UnreviewableRun};
@@ -54,4 +54,39 @@ fn a_review_refused_before_it_is_saved_names_no_review() {
         message,
         "The import review was not created: the import plan failed (Linear couldn't be reached); nothing can be reviewed until it is planned again. Tell the user why instead of presenting it again."
     );
+}
+
+#[test]
+fn only_a_start_that_changed_nothing_is_approvable_again() {
+    let refused = start_error(
+        ImportSource::Notion,
+        ImportError::RunNotReviewable(UnreviewableRun::StillPlanning),
+    );
+    assert!(
+        matches!(refused, CodeModeError::NotApprovable(_)),
+        "{refused:?}"
+    );
+
+    let not_started = start_error(
+        ImportSource::Notion,
+        ImportError::Db(rootcause::report!("pool timed out").into_dynamic()).not_started(),
+    );
+    let CodeModeError::NotApprovable(message) = not_started else {
+        panic!("expected a retry, got {not_started:?}");
+    };
+    assert_eq!(
+        message,
+        "The import did not start: something went wrong on Macro's side. Approve it again once that is fixed."
+    );
+
+    // After the write was held, its outcome is unknown.
+    let later = start_error(
+        ImportSource::Notion,
+        ImportError::Db(rootcause::report!("pool timed out").into_dynamic()),
+    );
+    let CodeModeError::Invalid(message) = later else {
+        panic!("expected an unknown outcome, got {later:?}");
+    };
+    assert!(!message.contains("pool timed out"), "{message}");
+    assert!(!message.contains("Approve it again"), "{message}");
 }

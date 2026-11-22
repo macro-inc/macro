@@ -188,7 +188,8 @@ fn map_error(error: import::domain::ports::ImportError) -> rootcause::Report<Imp
         | LedgerError::NotionSharingRequired
         | LedgerError::EntityNotAccessible(_)
         | LedgerError::NotReady(_)
-        | LedgerError::RunNotReviewable(_) => ImportError::Internal,
+        | LedgerError::RunNotReviewable(_)
+        | LedgerError::NotStarted(_) => ImportError::Internal,
     };
     rootcause::Report::new(error).context(code)
 }

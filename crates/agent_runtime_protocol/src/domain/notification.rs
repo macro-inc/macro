@@ -91,7 +91,6 @@ pub enum ReviewSettlement {
     PartialEq,
     Eq,
     Serialize,
-    Deserialize,
     schemars::JsonSchema,
     specta::Type,
     strum::EnumString,
@@ -121,8 +120,18 @@ pub enum RunErrorKind {
     /// The run stopped before it finished (its process went away too
     /// often); starting it again picks up what is left.
     Interrupted,
-    /// Anything else, on Macro's side.
+    /// Anything else, on Macro's side. A kind this build does not know (a
+    /// newer writer's) reads as this one.
     Internal,
+}
+
+impl<'de> Deserialize<'de> for RunErrorKind {
+    /// Tolerant: an unknown kind reads as `Internal`, so a payload from a
+    /// newer writer still decodes.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let kind = String::deserialize(deserializer)?;
+        Ok(kind.parse().unwrap_or(Self::Internal))
+    }
 }
 
 /// The final report of an approved workspace import, with no page content.
@@ -349,3 +358,6 @@ pub fn input_from_runtime(
     let params = request.params.as_ref()?.clone().into_value();
     serde_json::from_value(params.get("_meta")?.get(NOTIFICATIONS_META)?.clone()).ok()
 }
+
+#[cfg(test)]
+mod test;

@@ -71,6 +71,10 @@ pub enum ImportError {
     /// failed, finished, or never started.
     #[error(transparent)]
     RunNotReviewable(#[from] UnreviewableRun),
+    /// An approved write failed before anything about the plan changed (or
+    /// after it was put back as it was), so approving again is safe.
+    #[error("the import did not start: {0}")]
+    NotStarted(Box<ImportError>),
     /// Anything else.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -137,6 +141,17 @@ impl UnreviewableRun {
             RunStatus::Importing => Some(Self::Importing),
             RunStatus::Completed => Some(Self::Completed),
             RunStatus::Dismissed => Some(Self::Dismissed),
+        }
+    }
+}
+
+impl ImportError {
+    /// The same error, marked as one that left the plan as it was. A
+    /// refusal already says that.
+    pub fn not_started(self) -> Self {
+        match self {
+            refusal @ (Self::RunNotReviewable(_) | Self::NotStarted(_)) => refusal,
+            error => Self::NotStarted(Box::new(error)),
         }
     }
 }

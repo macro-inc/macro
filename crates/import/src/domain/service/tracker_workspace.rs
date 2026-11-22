@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use super::notion_workspace::{sharing, triage};
 use super::workspace::run::{JobControl, WriteSet};
-use super::{ImportServiceImpl, NOTION_IMPORT_MODEL, NotionWorkspaceImporter};
+use super::{ImportServiceImpl, NOTION_IMPORT_MODEL};
 use crate::domain::models::{
     ImportEntity, ImportKind, ImportSource, ImportStatus, NotionDecision, NotionImportReport,
     NotionJob, NotionPlanItem, NotionSharing, NotionWriteChoices, RunStatus, ScanCounts, TeamClaim,
@@ -162,7 +162,8 @@ where
                 Some(self.workspace_source),
                 Some(ImportStatus::Staged),
             )
-            .await?;
+            .await
+            .map_err(ImportError::not_started)?;
         let planned: Vec<_> = rows
             .into_iter()
             .filter(|row| row.review_id == Some(review) && row.user_id == user.as_ref())
@@ -173,7 +174,8 @@ where
         let mut shared = Vec::new();
         let mut personal = Vec::new();
         for row in &planned {
-            let meta: TrackerMeta = serde_json::from_value(row.metadata.clone())?;
+            let meta: TrackerMeta = serde_json::from_value(row.metadata.clone())
+                .map_err(|error| ImportError::from(error).not_started())?;
             if meta.plan.shareable {
                 if choices.personal.contains(&row.id) {
                     personal.push(row.id);
@@ -186,10 +188,11 @@ where
         // and a refused write changes nothing about it.
         self.repo
             .start_reviewed_write(user, self.workspace_source, review)
-            .await?;
+            .await
+            .map_err(ImportError::not_started)?;
         if let Err(error) = self.repo.set_plan_sharing(user, &shared, &personal).await {
             self.reopen_plan(user).await;
-            return Err(error);
+            return Err(error.not_started());
         }
         self.hold_new_run(
             user,
@@ -227,7 +230,7 @@ where
             }
             .in_current_span(),
         );
-        self.notion_import_report(user).await
+        Ok(self.report_after_start(user).await)
     }
 
     #[tracing::instrument(skip_all, fields(source = self.workspace_source.as_ref(), %review), err)]

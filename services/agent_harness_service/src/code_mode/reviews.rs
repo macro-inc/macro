@@ -71,6 +71,47 @@ fn refused(
     ))
 }
 
+/// What a reviewed import's failed start means for the review: a refusal
+/// or a failure that left the plan as it was is not approvable (the item
+/// goes back to pending); anything later may have started the write.
+fn start_error(
+    source: import::domain::models::ImportSource,
+    error: import::domain::ports::ImportError,
+) -> CodeModeError {
+    match error {
+        import::domain::ports::ImportError::RunNotReviewable(refusal) => {
+            CodeModeError::NotApprovable(format!(
+                "The import was not started: {}.",
+                refusal.describe(source)
+            ))
+        }
+        // Failed before anything about the plan changed: approving again is
+        // safe. Said from the failure's kind; the detail stays in the trace.
+        import::domain::ports::ImportError::NotStarted(error) => {
+            tracing::warn!(error = ?error, "the reviewed import did not start");
+            let reason = import::domain::models::explain_failure(
+                Some(import::domain::service::failure_kind(&error)),
+                source,
+            );
+            CodeModeError::NotApprovable(format!(
+                "The import did not start: {reason}. Approve it again once that is fixed."
+            ))
+        }
+        // The write was held, so it carries on by itself (or is given up on
+        // and reported); approving again would be refused.
+        error => {
+            tracing::warn!(error = ?error, "the reviewed import may not have started");
+            let reason = import::domain::models::explain_failure(
+                Some(import::domain::service::failure_kind(&error)),
+                source,
+            );
+            CodeModeError::Invalid(format!(
+                "The import may have started ({reason}). It carries on by itself or reports why it stopped; check its progress instead of approving it again."
+            ))
+        }
+    }
+}
+
 pub struct Actions<S, L, H> {
     pub sessions: S,
     /// Where each save is announced to the session's viewers.
@@ -189,23 +230,7 @@ where
                 },
             )
             .await
-            .map_err(|error| match error {
-                import::domain::ports::ImportError::RunNotReviewable(refusal) => {
-                    CodeModeError::NotApprovable(format!(
-                        "The import was not started: {}.",
-                        refusal.describe(source)
-                    ))
-                }
-                // Nothing was written (the fence reopens the plan when the
-                // write cannot get going): a retry is safe, so say so with a
-                // fixed sentence and keep the detail in the trace.
-                error => {
-                    tracing::warn!(error = ?error, "the reviewed import could not start");
-                    CodeModeError::NotApprovable(
-                        "The import could not start because of a problem on Macro's side. Approve it again to retry.".into(),
-                    )
-                }
-            })
+            .map_err(|error| start_error(source, error))
     }
     async fn present(
         &self,
