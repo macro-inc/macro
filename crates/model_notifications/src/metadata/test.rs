@@ -189,6 +189,27 @@ fn channel_reaction_shortens_a_long_message_and_keeps_the_emoji_whole() {
 }
 
 #[test]
+fn channel_reaction_never_cuts_a_character_in_half() {
+    let mut flag = channel_reaction();
+    flag.message_content = format!("{}🇨🇦 and more", "a".repeat(79));
+    let body = flag.format_body(None).unwrap();
+    assert_eq!(
+        body,
+        format!("Reacted 👍 to: “{}🇨🇦…”\n#general", "a".repeat(79))
+    );
+}
+
+#[test]
+fn channel_reaction_to_a_message_without_text_names_your_message() {
+    let mut attachment = channel_reaction();
+    attachment.message_content = String::new();
+    assert_eq!(
+        attachment.format_body(None).unwrap(),
+        "Reacted 👍 to your message\n#general"
+    );
+}
+
+#[test]
 fn channel_reaction_in_a_direct_message_names_no_place() {
     let mut dm = channel_reaction();
     dm.common.channel_type = ChannelType::DirectMessage;

@@ -35,6 +35,7 @@ pub use ping::{PingAgent, PingMessage, PingMetadata};
 use rootcause::Report;
 use rootcause::report;
 use serde::{Deserialize, Serialize};
+use unicode_segmentation::UnicodeSegmentation;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -934,16 +935,26 @@ impl NotificationTitle for ChannelMessageReactionMetadata {
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ");
+        // Cut at whole characters, so a flag or a skin tone never splits.
         let excerpt: String = message
-            .chars()
+            .graphemes(true)
             .take(CHANNEL_REACTION_EXCERPT_MAX_CHARS)
             .collect();
-        let suffix = if message.chars().count() > CHANNEL_REACTION_EXCERPT_MAX_CHARS {
+        let suffix = if message
+            .graphemes(true)
+            .nth(CHANNEL_REACTION_EXCERPT_MAX_CHARS)
+            .is_some()
+        {
             "…"
         } else {
             ""
         };
-        let reacted = format!("Reacted {} to: “{excerpt}{suffix}”", self.emoji);
+        // A message with no text (only attachments) is "your message".
+        let reacted = if message.is_empty() {
+            format!("Reacted {} to your message", self.emoji)
+        } else {
+            format!("Reacted {} to: “{excerpt}{suffix}”", self.emoji)
+        };
         // A direct message needs no place; the person already says where.
         Ok(match self.common.channel_type {
             ChannelType::DirectMessage => reacted,
