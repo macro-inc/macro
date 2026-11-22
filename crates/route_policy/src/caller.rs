@@ -19,8 +19,9 @@ pub enum Caller {
     /// A person in their own session, with no program attribution.
     Person,
     /// A credential the person holds outside the app with no program
-    /// attribution: a user API key, or a Macro API token that signs no agent,
-    /// routine or scope.
+    /// attribution: a Macro API token that verifies and signs no agent,
+    /// routine or scope, or a verified user's request carrying a user API
+    /// key header (which only narrows it).
     ApiCredential,
     /// A program running with the person's access: a token signed for an
     /// agent or a routine, or carrying a validated agent correlation.
@@ -43,11 +44,15 @@ pub enum Caller {
     ChannelMention,
     /// Another account's manager credential for this account.
     AccountManager,
-    /// A bot.
+    /// A bot. The agent resolver gives it only to a verified user's request
+    /// that carries a bot header, which narrows it; the bot's own extractor
+    /// verifies the token.
     Bot,
-    /// A computer the person runs agents on.
+    /// A computer the person runs agents on. Resolved like [`Self::Bot`].
     Harness,
-    /// Another Macro service.
+    /// Another Macro service. No resolver here gives it: an internal key is
+    /// verified by the route's own extractor, and a header alone resolves no
+    /// caller.
     Internal,
 }
 

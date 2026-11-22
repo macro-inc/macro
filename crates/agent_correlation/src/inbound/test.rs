@@ -1291,3 +1291,102 @@ async fn a_rollout_from_an_outer_layer_reaches_a_service_with_no_database() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
+
+/// A credential header with nothing verified beside it picks no caller: a
+/// categorized route refuses it as a request nobody could identify, so a junk
+/// header can't be a bot, a computer, an API credential or an internal
+/// service.
+#[tokio::test]
+async fn a_credential_header_alone_is_refused_by_a_categorized_route() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    };
+    for header in [
+        macro_auth::credential::BOT_TOKEN_HEADER,
+        macro_auth::credential::HARNESS_TOKEN_HEADER,
+        macro_auth::credential::USER_API_KEY_HEADER,
+        macro_auth::credential::INTERNAL_API_KEY_HEADER,
+        macro_auth::credential::LEGACY_DSS_INTERNAL_API_KEY_HEADER,
+    ] {
+        for extra in [None, Some(macro_auth::credential::CODE_EXECUTION_HEADER)] {
+            let mut request = Request::builder()
+                .method("POST")
+                .uri("/keys")
+                .header(header, "junk");
+            if let Some(extra) = extra {
+                request = request.header(extra, "1");
+            }
+            let response = caller_echo(state.clone())
+                .oneshot(request.body(axum::body::Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::FORBIDDEN,
+                "{header} {extra:?}"
+            );
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            assert_eq!(
+                serde_json::from_slice::<serde_json::Value>(&body).unwrap()["code"],
+                "no_caller",
+                "{header} {extra:?}"
+            );
+        }
+    }
+}
+
+/// With a rollout that enforces credential minting for API credentials only,
+/// a junk bot header beside an API token can't pick the bot, whose category
+/// isn't enforced: the rollout enforces for both.
+#[tokio::test]
+async fn a_junk_header_cannot_pick_the_caller_whose_category_the_rollout_has_not_enforced() {
+    use tower::ServiceExt;
+
+    struct EnforceForApiCredentialsOnly;
+    impl Rollout for EnforceForApiCredentialsOnly {
+        fn enforced(&self, caller: route_policy::Caller) -> route_policy::CategorySet {
+            match caller {
+                route_policy::Caller::ApiCredential => route_policy::CategorySet::default()
+                    .with(route_policy::Category::CredentialMint),
+                _ => route_policy::CategorySet::default(),
+            }
+        }
+    }
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    }
+    .with_rollout(Arc::new(EnforceForApiCredentialsOnly));
+    let token = mint(None, None, None, None);
+    let cookie_name = macro_auth::credential::access_token_cookie_name();
+    for header in [
+        None,
+        Some(macro_auth::credential::BOT_TOKEN_HEADER),
+        Some(macro_auth::credential::HARNESS_TOKEN_HEADER),
+        Some(macro_auth::credential::INTERNAL_API_KEY_HEADER),
+    ] {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/keys")
+            .header("cookie", format!("{cookie_name}={token}"));
+        if let Some(header) = header {
+            request = request.header(header, "junk");
+        }
+        let response = caller_echo(state.clone())
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{header:?}");
+    }
+}

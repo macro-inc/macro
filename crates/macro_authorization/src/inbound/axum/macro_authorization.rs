@@ -140,6 +140,9 @@ fn refuse_account_manager_route(parts: &mut Parts) -> Result<(), MacroAuthorizat
         ),
         None => RouteDecision::new(caller, decided.category, safe_method, preflight, &NoRollout),
     };
+    // A narrower caller already decided stays decided: a manager's key beside a
+    // scoped token is held to the scope as well as to what a manager may do.
+    let decision = decided.stricter(decision);
     parts.extensions.insert(decision);
     if let Some(slot) = parts.extensions.get::<DecisionSlot>() {
         slot.set(decision);

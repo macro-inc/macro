@@ -2,6 +2,7 @@ use super::*;
 
 const PERSON: CallerEvidence = CallerEvidence {
     authenticated: Authenticated::Session,
+    header: None,
     program: false,
     scope: ScopeEvidence::Unscoped,
     channel_mention: false,
@@ -37,14 +38,13 @@ fn the_code_execution_header_only_narrows_a_person_or_an_api_credential() {
         }),
         Some(Caller::Program)
     );
-    for (authenticated, caller) in [
-        (Authenticated::Bot, Caller::Bot),
-        (Authenticated::Harness, Caller::Harness),
-        (Authenticated::Internal, Caller::Internal),
+    for (header, caller) in [
+        (UnverifiedHeader::Bot, Caller::Bot),
+        (UnverifiedHeader::Harness, Caller::Harness),
     ] {
         assert_eq!(
             resolve_caller(CallerEvidence {
-                authenticated,
+                header: Some(header),
                 code_execution: true,
                 ..PERSON
             }),
@@ -66,8 +66,6 @@ fn a_program_token_anywhere_makes_a_program_whatever_authenticated() {
     for authenticated in [
         Authenticated::Session,
         Authenticated::ApiCredential,
-        Authenticated::Bot,
-        Authenticated::Internal,
         // The program's token verified, but another credential, one that
         // doesn't, was picked to authenticate.
         Authenticated::Nothing,
@@ -150,5 +148,79 @@ fn a_channel_mention_is_never_a_program_and_any_scope_still_wins() {
             ..mention
         }),
         Some(Caller::ScopedGeneration)
+    );
+}
+
+#[test]
+fn a_credential_header_alone_resolves_no_caller() {
+    for header in [
+        UnverifiedHeader::UserApiKey,
+        UnverifiedHeader::Bot,
+        UnverifiedHeader::Harness,
+        UnverifiedHeader::Internal,
+    ] {
+        for code_execution in [false, true] {
+            assert_eq!(
+                resolve_caller(CallerEvidence {
+                    authenticated: Authenticated::Nothing,
+                    header: Some(header),
+                    code_execution,
+                    ..PERSON
+                }),
+                None,
+                "{header:?} code_execution={code_execution}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_credential_header_beside_a_verified_token_only_narrows_it() {
+    for (authenticated, header, caller) in [
+        (Authenticated::Session, UnverifiedHeader::Bot, Caller::Bot),
+        (
+            Authenticated::Session,
+            UnverifiedHeader::Harness,
+            Caller::Harness,
+        ),
+        (
+            Authenticated::Session,
+            UnverifiedHeader::UserApiKey,
+            Caller::ApiCredential,
+        ),
+        (
+            Authenticated::Session,
+            UnverifiedHeader::Internal,
+            Caller::Person,
+        ),
+        (
+            Authenticated::ApiCredential,
+            UnverifiedHeader::Internal,
+            Caller::ApiCredential,
+        ),
+        (
+            Authenticated::ApiCredential,
+            UnverifiedHeader::Bot,
+            Caller::Bot,
+        ),
+    ] {
+        assert_eq!(
+            resolve_caller(CallerEvidence {
+                authenticated,
+                header: Some(header),
+                ..PERSON
+            }),
+            Some(caller),
+            "{authenticated:?} {header:?}"
+        );
+    }
+    // A program's claim or any scope still wins over a header.
+    assert_eq!(
+        resolve_caller(CallerEvidence {
+            header: Some(UnverifiedHeader::Internal),
+            program: true,
+            ..PERSON
+        }),
+        Some(Caller::Program)
     );
 }
