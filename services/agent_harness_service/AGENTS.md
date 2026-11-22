@@ -198,7 +198,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `macro.connectedApps` through the in-process egress service, listing the
   apps its agent was given from the connectors (`EgressProvisioner`), and
   runs `discover`/`addServer` as the `DiscoverConnectors`/`ConnectMcpServer`
-  tools; a scoped
+  tools (a refusal answers 400, a missing or failing connectors service
+  5xx); a scoped
   session's code is refused it, and its turn calls no remote MCP tool
   directly either (`ScopedToolGate::refuse_remote_mcp`). The actor MCP
   transport is wrapped in `agent_egress::outbound::budgeted_mcp`, so each
@@ -296,7 +297,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route, the person's connected
-  apps (`routine_sessions::RoutineConnectedApps`), and whether CRM's company tools would let them add a
+  apps (`routine_sessions::RoutineConnectedApps`, which also checks a
+  routine's required apps, compared as `ConnectorId`s so an alias is its app), and whether CRM's company tools would let them add a
   company (a team, and CRM access in it). Generations (`crates/suggestion_generation`) run their
   suggestions and routines sessions hidden on the free tier's model, each kind
   gated on its flag (`enable-suggestions`, `enable-routine-suggestions`).

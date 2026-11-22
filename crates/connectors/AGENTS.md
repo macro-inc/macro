@@ -1,130 +1,87 @@
 # connectors
 
-Status: migrating to one hexagonal crate whose only way in is the service
-traits in `src/domain/service.rs`; until then the source modules below are
-public so their old consumers compile.
-
 ## What it is
 
-Part of agent sessions / AI tooling. Owns Macro's integrations: the MCP
-servers and apps a user connects, and how agents and imports reach them.
-Each source of connections lives under `src/outbound/`:
-
-- `native/` (was `mcp_client`): user-configured MCP servers, including
-  OAuth-protected ones, dialed in process through `rmcp`.
-- `pipedream/` (was `pipedream_mcp`): apps connected through Pipedream
-  Connect, called through Pipedream's remote MCP server. `source.rs` is
-  Pipedream as a domain `Source`; the rest is the old ports and routes its
-  hosts still use, including the Pipedream-or-Connect chooser
-  (`outbound/dispatch.rs`), a shim deleted with its last host.
-- `macro_connect/`: Macro Connect (`connect_client`) as a `Source`.
-- `hosted_connections.rs`: the `pipedream_mcp_connections` table both hosted
-  sources share, each through a `HostedRepo` bound to its own `provider`.
-- `overlays.rs`: the `mcp_overlays` table as the domain's `OverlayCatalog`.
-
-The crate root (was `mcp_select`) decides per user which stack serves an app
-and composes both into one toolset (`McpToolSelector`, `UserMcpTools`).
+Part of agent sessions / AI tooling. Owns Macro's integrations: the apps and
+MCP servers a user connects, which connection counts for each app, and how
+chat, agents, the sandbox proxy, imports, Granola sync and the web reach them.
+No other crate can name a source (native servers, the GitHub account link,
+Pipedream, Macro Connect) or tell which one holds a connection.
 
 ## Start here
 
-- `src/domain/service.rs`: the three service traits and `Connectors`, their
-  one implementation over every `Source`, the flag and the overlay table; it
-  asks `resolve.rs` for every answer. `src/domain/policy.rs` is the only
-  reader of the `macro-connect` flag (one per-user cache; a failed read is
-  off). Tool loading answers without a source whose store is down; listing
-  and API lookups fail instead.
-- `src/composition.rs`: `build(config, pool, redis, auth_service)`, the only
-  place the sources, the overlay catalog and the flag reader are constructed;
-  `compose` also returns the app catalog and the server sign-ins the routes
-  need. Call one of them once per process; the flag, overlay and Connect
-  catalog caches live in what it returns. It re-exports the types a host
-  fills `ConnectorsConfig` with (`AesKey`, `OAuthClientMetadata`,
-  `PreRegisteredProviders`, `PipedreamConfig`, `ConnectConfig`) and
-  `AddressPolicy`, so a composition root never reaches into a source's
-  module.
-- `src/inbound/`: `axum_router.rs`, the authenticated `/connectors` API
-  (list, add a server, catalog, connect, complete, update, remove; connector
-  keys are `app/{slug}` or `server/{base64url url}`, see `dto.rs`);
-  `callbacks.rs`, the public routes third parties call at fixed paths (MCP
-  OAuth callback and client metadata, Connect's consent page, Pipedream's
-  webhook); `toolset.rs`, the `DiscoverConnectors` and `ConnectMcpServer`
-  tools. None names a source. `src/domain/discovery.rs` (the catalog) and
-  `src/domain/sign_in.rs` (finishing a sign-in by URL) are the services they
-  use beside `service.rs`.
-- `src/fake.rs` (feature `test-fakes`): `FakeConnectors`, the real services
-  over in-memory sources, for consumers' tests. Use it instead of a
-  hand-written fake store.
-- `src/lib.rs`, `src/selection.rs`, `src/overlay.rs`: the per-provider
-  selection, the seven-app list, and overlay status over the native store.
-- `src/outbound/native/domain/service/`: tool execution (`toolset.rs`,
-  `server_access.rs`, `persisting_credential_store.rs`), adding servers
-  (`server_directory.rs`), and `linked_github.rs`: `WithLinkedGithub`, which
-  answers GitHub's server with the user's GitHub account link token. Hosts
-  read the native store as `outbound::native::outbound::NativeServerStore`.
-- `src/outbound/native/source.rs`: `NativeSource`, the native rows behind
-  the `Source` port (every row is its `ServerUrl`; GitHub's row is skipped),
-  and `src/outbound/github_link.rs`: `GithubLinkSource`, GitHub as
-  `App(github)` from the account link (a refused token is held but not
-  authorized; removing it unlinks the account; its toggle stays in the
-  `mcp_servers` row at GitHub's address). Sources put a `SourceRefusal` in
-  their report so the service can answer with a typed error.
-- `src/outbound/native/domain/provider_registry.rs` (feature `providers`):
-  pre-registered OAuth credentials for known MCP providers.
-- `src/outbound/pipedream/outbound/api.rs`: the Pipedream HTTP client and the
-  Connect API proxy (`ConnectedAppProxy`) that calls an app's own REST API;
-  `HIDDEN_APP_SLUGS` are never offered.
-- `src/outbound/pipedream/outbound/pg_connection_repo.rs`: the
-  `pipedream_mcp_connections` and `mcp_overlays` tables. Connection reads skip
-  overlaid slugs, and completing a Pipedream connection to one refuses it (409)
-  and deletes the new Pipedream account.
-- `src/outbound/pipedream/outbound/connect.rs`: the old ports over
-  `macro_connect`'s client; `dispatch.rs`: `ConnectorBackends` and its
-  optional `ConnectRollout`, which no host wires any more (the flag is read
-  only in `domain/policy.rs`).
+- `src/lib.rs`: the public surface. Everything else is private.
+- `src/domain/service.rs`: the three service traits, the only way in, and
+  `Connectors`, their one implementation: `McpConnectionsService` (a user's
+  answer, tools for in-process agents, the sandbox proxy's upstream),
+  `ApiConnectionsService` (an app's REST API through the counted connection),
+  `ConnectionManagementService` (list, connect, add a server, enable, rename,
+  remove).
+- `src/domain/resolve.rs`: the pure function that applies the rules (which
+  source counts per app and flag, disabled is not connected, one answer per
+  app, `slack_v2` is `slack`, a native row is an app only at its overlay URL,
+  API access from the counted connection, a failed flag read is off). Its
+  tests are the rule table and the properties. Agent scope (rule 7) is
+  `McpConnections::scoped`/`permit` in `domain/models.rs`; a GitHub link that
+  needs reauth (rule 8) is `outbound/github_link.rs`.
+- `src/domain/policy.rs`: the only reader of the `macro-connect` flag, through
+  one per-user cache. The string appears in no other Rust file (CI checks).
+- `src/composition.rs`: `build`/`compose`, the only constructor of adapters.
+  Call one once per process; the flag, overlay and Connect catalog caches
+  live in what it returns. It re-exports the config types hosts fill in.
+- `src/inbound/`: `axum_router.rs` (`/connectors`), `callbacks.rs` (the
+  fixed-path routes vendors call: MCP OAuth callback and client metadata,
+  Connect consent, Pipedream webhook), `toolset.rs` (`DiscoverConnectors`,
+  `ConnectMcpServer`; `run` keeps refusals and outages apart for hosts that
+  are not an agent loop).
+- `src/outbound/`: one module per source, each one `Source`
+  (`domain/ports.rs`): `native/`, `github_link.rs`, `pipedream/`,
+  `macro_connect/`; `hosted_connections.rs` is the table Pipedream and Connect
+  share, each bound to its own `provider`.
 
 ## Boundaries
 
-- Depends on: `ai_toolset`, `mcp_toolset`, `authentication_service_client`,
-  `connect_client` (the only Connect crate Macro may use), `feature_flags`,
-  `macro_authorization` (feature `axum`), `macro_user_id`, `rmcp`.
-- Used by: `agent_egress`, `agent_harness`, `agent_inmem`, `agent_code_mode`,
-  `ai_tools`, `import*`, `granola_sync`, `onboarding`,
-  `services/agent_harness_service`, `services/document_storage_service`.
+- Depends on: `connect_client` (the only Connect crate; a pinned copy, never
+  edit it), `mcp_toolset`, `ai_toolset`, `feature_flags`,
+  `authentication_service_client`, `rmcp`.
+- Used by: `agent_egress`, `agent_harness`, `agent_code_mode`, `ai_tools`,
+  `import*`, `granola_sync`, `onboarding`, `services/agent_harness_service`,
+  `services/document_storage_service`.
+
+## Recipes
+
+- Add a source: a module under `src/outbound/` implementing `Source` (and
+  `McpConnection`/`ApiConnection` for what it provides), a `SourceKind`,
+  its column in `resolve.rs`'s table with rule tests first, then
+  `composition.rs`.
+- Give consumers something new: a method on one of the three traits, served
+  from `resolve`'s answer; never a new public path to a source.
 
 ## Checks
 
-- `cargo test -p connectors` (`SQLX_OFFLINE` unset; requires local MacroDB).
-- `cargo clippy -p connectors --features test-fakes` as well as without it.
+- `cargo test -p connectors --features test-fakes` and without the feature
+  (`SQLX_OFFLINE` unset; the repository tests need local MacroDB).
+- Consumers test against `fake::FakeConnectors` (feature `test-fakes`): the
+  real services over in-memory sources, so a test can only hold states the
+  rules produce. Never hand-write a fake store.
+- The sources' vendor calls are covered end to end against dev by the nightly
+  connectors suite, not by tests over hand-written JSON.
 
 ## Gotchas
 
-- Every connection to a user's server (transport, OAuth discovery,
-  registration, token refresh) goes through `McpHttp`
-  (`native/outbound/guarded_http.rs`), which refuses non-public addresses on
-  the address actually connected to. Build it once per composition root from
-  `AddressPolicy::for_environment`. Never dial a stored server with
-  `reqwest::Client::new()`, `StreamableHttpClientTransport::from_uri`, or
-  `AuthorizationManager::new`.
-- OAuth state lives in Redis, apart from the server row in Postgres: a row
-  surviving doesn't mean its OAuth state did.
-- A `provider = connect` row stores Connect's app id in `account_id` and keeps
-  the Pipedream slug in `app_slug`. Granola sync reads Granola's REST API, so
-  it only syncs Pipedream-held Granola accounts.
-- Completing a connection turns the app on, even over a row the user disabled.
-- The old `PgConnectionRepo` hides Pipedream rows of overlaid apps; the
-  hosted sources do not, since the resolver decides which source counts.
-- `pipedream_mcp_connections` is keyed `(user_id, app_slug)` for both
-  providers: completing an app through one provider replaces the other's row
-  under any of the app's slugs and revokes the replaced grant
-  (`HostedRepo::replace`, `revoke_replaced`).
-- `github` is overlaid, but its native server is authorized by the GitHub
-  account link, not MCP OAuth.
-- The Connect consent redirect (`/pipedream/mcp/connect/callback`) is public
-  and records nothing; completing a connection
-  (`POST /connectors/{kind}/{id}/complete`) trusts only the source's own
-  connection list.
+- Every call to a user's server (transport, OAuth discovery, registration,
+  refresh) goes through `McpHttp` in `outbound/guarded_http.rs`, which refuses
+  non-public addresses on the address actually connected to. The egress
+  proxy uses the same guard (`connectors::guarded_http`).
+- `pipedream_mcp_connections` is keyed `(user_id, app_slug)` for both hosted
+  providers: completing through one replaces and revokes the other's row.
+  A `connect` row keeps Connect's app id in `account_id`.
+- GitHub's `mcp_servers` row only stores the link's toggle and name; the
+  native source skips it and the link source owns GitHub.
+- OAuth state lives in Redis apart from the server row: a row surviving does
+  not mean its sign-in did.
 
 ## Related
 
-- Rules: `.agents/rules/rust/security.md`, `.agents/rules/rust/architecture.md`
-- Plan: section 3 of the integrations-in-one-crate plan (crate layout).
+- Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`
+- Skills: `cloud-storage-hexagonal-architecture`

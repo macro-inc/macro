@@ -14,19 +14,21 @@ names, and routes calls back to the right server.
   `unmangle` is the public split routing uses, also read by `agent_inmem`'s
   log replay.
 - `src/call_tool_result.rs`: `CallToolResultExt` for converting MCP results.
+- `src/combined.rs`: `CombinedToolSet`, static tools and MCP tools as one
+  toolset, routed by `MANGLED_PREFIX`; chat and the in-process runtime use it.
 
 ## Scope
 
 - Owns: tool listing, provider-safe name mangling, and call routing for any
   already-connected MCP server session.
-- Not here: opening/authenticating MCP sessions — Pipedream's connection flow
-  lives in `connectors`; in-process ACP session wiring lives in `agent_inmem`.
+- Not here: opening/authenticating MCP sessions — a user's connections are
+  dialed by `connectors`; in-process ACP session wiring lives in `agent_inmem`.
 
 ## Boundaries
 
 - Depends on: `ai_toolset`, `rmcp` (client feature), `genai_telemetry`
   (trace context in `_meta`).
-- Used by: `agent_inmem`, `connectors`.
+- Used by: `agent_inmem`, `connectors`, `services/agent_harness_service`.
 
 ## Recipes
 
