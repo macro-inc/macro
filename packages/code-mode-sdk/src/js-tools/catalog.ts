@@ -2,8 +2,8 @@
  * The catalog of SDK operations a JS tools program calls as
  * `tools.<service>.<operation>(input)`, built at generation time from the
  * OpenAPI specs, the generated TypeScript SDK and the agent permission
- * registry. One tool per spec operation the TypeScript SDK can send; the rest
- * are listed in `skipped` with the reason.
+ * registry. One tool per spec operation the TypeScript SDK exposes and can
+ * send; the rest are listed in `skipped` with the reason.
  */
 
 /** A JSON Schema as the specs write it. */
@@ -105,8 +105,18 @@ export type CatalogSources = {
   clients: Record<string, string>;
   /** Display verbs, keyed `<service>.<method>` (`packages/sdk/src/utils/verbs.ts`). */
   verbs: Record<string, string>;
+  /**
+   * The generated SDK methods the TypeScript SDK deliberately leaves out,
+   * by spec name: its `<service>Excluded` lists
+   * (`packages/sdk/src/coverage/skipped.ts`).
+   */
+  excluded: Record<string, readonly string[]>;
   registry: Registry;
 };
+
+/** Why the catalog leaves out an operation the TypeScript SDK excludes. */
+export const EXCLUDED_REASON =
+  'the TypeScript SDK excludes it (packages/sdk/src/coverage/skipped.ts)';
 
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'patch', 'head'];
 
@@ -327,6 +337,14 @@ export function buildCatalog(sources: CatalogSources): Catalog {
           });
           continue;
         }
+        // Programs reach only what the TypeScript SDK chose to expose.
+        const generated = generatedKey(sources, service, httpMethod, path);
+        const sdkMethod = generated?.slice(service.length + 1);
+        if (sdkMethod && sources.excluded[service]?.includes(sdkMethod)) {
+          skipped.push({ service, operationId, reason: EXCLUDED_REASON });
+          continue;
+        }
+
         const parameters = [
           ...(item.parameters ?? []),
           ...(operation.parameters ?? []),
@@ -337,8 +355,7 @@ export function buildCatalog(sources: CatalogSources): Catalog {
           continue;
         }
 
-        const generated = generatedKey(sources, service, httpMethod, path);
-        if (!generated)
+        if (!generated || !sdkMethod)
           throw new Error(
             `${service}.${operationId} (${httpMethod} ${path}) has no generated SDK method`
           );
@@ -362,7 +379,7 @@ export function buildCatalog(sources: CatalogSources): Catalog {
           service,
           operationId,
           client,
-          method: generated.slice(service.length + 1),
+          method: sdkMethod,
           ...(verb ? { verb } : {}),
           httpMethod,
           route,

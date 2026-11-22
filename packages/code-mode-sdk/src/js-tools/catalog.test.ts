@@ -4,6 +4,7 @@ import {
   buildCatalog,
   type Catalog,
   type CatalogSources,
+  EXCLUDED_REASON,
   type Registry,
   rivalsOf,
   routeOf,
@@ -23,17 +24,18 @@ const registry = read<Registry>(
 );
 
 describe('JS tools catalog', () => {
-  it('gives every registered operation of the TypeScript SDK a tool, or a reason it has none', () => {
-    const listed = new Set([
-      ...catalog.tools.map((tool) => `${tool.service}.${tool.operationId}`),
-      ...catalog.skipped.map((skip) => `${skip.service}.${skip.operationId}`),
-    ]);
+  it('registers exactly the operations a program can call', () => {
+    const callable = new Set(
+      catalog.tools.map((tool) => `${tool.service}.${tool.operationId}`)
+    );
     const registered = Object.entries(registry.operations).flatMap(
       ([service, operations]) =>
         Object.keys(operations).map((operation) => `${service}.${operation}`)
     );
-    expect(registered.filter((key) => !listed.has(key))).toEqual([]);
-    expect([...listed].filter((key) => !registered.includes(key))).toEqual([]);
+    expect(registered.filter((key) => !callable.has(key))).toEqual([]);
+    expect([...callable].filter((key) => !registered.includes(key))).toEqual(
+      []
+    );
   });
 
   it('names each tool once, as a plain identifier path', () => {
@@ -55,31 +57,39 @@ describe('JS tools catalog', () => {
     }
   });
 
-  it("maps cognition's two get_state_handler routes to one registry key", () => {
+  it('skips what the TypeScript SDK excludes, such as person-only routes', () => {
     expect(
-      catalog.tools
-        .filter((tool) => tool.operationId === 'get_state_handler')
-        .map((tool) => [tool.path.join('.'), tool.method])
+      catalog.skipped.filter(
+        (skip) =>
+          skip.service === 'agent-harness' &&
+          skip.operationId.endsWith('_agent_tool_permissions')
+      )
     ).toEqual([
-      ['cognition.get_state_handler', 'getStateHandler'],
-      ['cognition.get_state_handler_2', 'getStateHandler2'],
+      {
+        service: 'agent-harness',
+        operationId: 'set_agent_tool_permissions',
+        reason: EXCLUDED_REASON,
+      },
+      {
+        service: 'agent-harness',
+        operationId: 'reset_agent_tool_permissions',
+        reason: EXCLUDED_REASON,
+      },
     ]);
   });
 
-  it('skips only what a tool cannot send or read', () => {
+  it('otherwise skips only what a tool cannot send or read', () => {
     expect(
-      catalog.skipped.map(
-        (skip) => `${skip.service}.${skip.operationId}: ${skip.reason}`
-      )
+      catalog.skipped
+        .filter((skip) => skip.reason !== EXCLUDED_REASON)
+        .map((skip) => `${skip.service}.${skip.operationId}: ${skip.reason}`)
     ).toMatchInlineSnapshot(`
       [
-        "agent-harness.get_agent_voice_sample: its response is audio/wav",
         "connection.batch_send_message_handler: the TypeScript SDK has no client for this service",
         "connection.broadcast_message_handler: the TypeScript SDK has no client for this service",
         "connection.send_message_handler: the TypeScript SDK has no client for this service",
         "connection.get_entity_handler: the TypeScript SDK has no client for this service",
         "email.get_message_eml: its response is message/rfc822",
-        "email.get_read_receipt_pixel: its response is image/gif",
         "static-files.put_presigned_url: the TypeScript SDK has no client for this service",
         "static-files.handle_bulk_delete_file: the TypeScript SDK has no client for this service",
         "static-files.handle_get_metadata: the TypeScript SDK has no client for this service",
@@ -87,7 +97,6 @@ describe('JS tools catalog', () => {
         "static-files.get_file_documentation: the TypeScript SDK has no client for this service",
         "storage.event_ics: its response is text/calendar",
         "storage.get_call_recording: its response is video/mp4",
-        "storage.transcribe_dictation: its request body is audio/webm",
         "storage.upload_file: its request body is application/octet-stream",
         "storage.external_chat_upload: its request body is multipart/form-data",
         "storage.passwords_agent_search: needs the header parameter X-Macro-Agent-Session-Id",
@@ -98,27 +107,6 @@ describe('JS tools catalog', () => {
         "storage.passwords_agent_disclose: needs the header parameter X-Macro-Agent-Session-Id",
         "storage.passwords_agent_set_totp: needs the header parameter X-Macro-Agent-Session-Id",
         "storage.passwords_agent_totp_code: needs the header parameter X-Macro-Agent-Session-Id",
-        "storage.passwords_create_folder: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_rename_folder: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_remove_folder: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_move_folder: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_import_batch: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_create: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_match: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_update: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_remove: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_patch: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_agent_resolve_request: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_agent_revoke: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_copy: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_set_favorite: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_remove_favorite: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_reveal: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_share: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_set_totp: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_remove_totp: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_totp: needs the header parameter X-Macro-Passwords",
-        "storage.passwords_copy_username: needs the header parameter X-Macro-Passwords",
         "storage.stream_events: its response is text/event-stream",
       ]
     `);
@@ -247,6 +235,7 @@ describe('buildCatalog', () => {
     },
     clients: { storage: 'storage' },
     verbs: { 'storage.getDocument': 'read' },
+    excluded: { storage: [] },
     registry: {
       groups: [{ id: 'documents', name: 'Documents & projects' }],
       operations: {
@@ -339,6 +328,21 @@ describe('buildCatalog', () => {
           reason: 'needs the header parameter X-Vault',
         },
       ],
+    });
+  });
+
+  it('skips what the TypeScript SDK excludes, with that as the reason', () => {
+    const catalog = buildCatalog({
+      ...sources,
+      excluded: { storage: ['getDocument2'] },
+    });
+    expect(catalog.tools.map((tool) => tool.path.join('.'))).toEqual([
+      'storage.get_document',
+    ]);
+    expect(catalog.skipped[1]).toEqual({
+      service: 'storage',
+      operationId: 'get_document',
+      reason: EXCLUDED_REASON,
     });
   });
 

@@ -237,6 +237,15 @@ for (const file of (await readdir(join(root, 'packages/sdk/specs'))).sort()) {
     ).json();
 }
 const { sdkVerbs } = await import(`${root}packages/sdk/src/utils/verbs.ts`);
+const skippedLists: Record<string, readonly string[]> = await import(
+  `${root}packages/sdk/src/coverage/skipped.ts`
+);
+const excluded = Object.fromEntries(
+  Object.entries(clients).map(([service, client]) => [
+    service,
+    skippedLists[`${client}Excluded`] ?? [],
+  ])
+);
 const registry: Registry = await Bun.file(
   join(root, 'crates/agent_permission_registry/registry.json')
 ).json();
@@ -246,6 +255,7 @@ const jsToolsCatalog = `${JSON.stringify(
     generated: operations,
     clients,
     verbs: sdkVerbs,
+    excluded,
     registry,
   })
 )}\n`;

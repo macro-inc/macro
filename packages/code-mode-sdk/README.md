@@ -60,14 +60,15 @@ bun run --cwd packages/code-mode-sdk test
 `js-tools.mjs` runs JS tools programs (`crates/code_execution`,
 `Language::JsTools`) in `@opencode/codemode`'s interpreter, pinned to exactly
 2.3.2 with the acorn it parses with. Its catalog, `js-tools.json`, has one
-tool per spec operation the TypeScript SDK can send, at
+tool per spec operation the TypeScript SDK exposes and can send, at
 `tools.<service>.<operationId>`: the spec name with `-` written `_`, then the
-raw operationId, so the path is the permission registry's key. Cognition's
-second `get_state_handler` route is `get_state_handler_2`. Each tool's input
-is its generated method's `{ path?, query?, body? }`; its description starts
-with its registry group, action and label. Operations a tool can't send or
-read (no TypeScript client, a required header, a non-JSON body or response)
-are listed in `skipped` with the reason. `js-tools.fingerprint` is
+raw operationId, so the path is the permission registry's key. A service
+that declares one operationId on two routes gets `<operationId>_2` for the
+second. Each tool's input is its generated method's `{ path?, query?, body? }`;
+its description starts with its registry group, action and label. Operations
+on the SDK's `Excluded` lists (`packages/sdk/src/coverage/skipped.ts`), and
+those a tool can't send or read (no TypeScript client, a required header, a
+non-JSON body or response), are listed in `skipped` with the reason. `js-tools.fingerprint` is
 `@opencode/codemode@<version>+<hash of the bundle and catalog>`.
 
 `analyze(source, toolsByPath(catalog))` answers what a program may call, in

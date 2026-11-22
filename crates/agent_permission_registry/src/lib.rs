@@ -1,13 +1,14 @@
-//! Agent permissions' operation registry: every Macro SDK operation, keyed by
-//! its service (the spec name, e.g. `storage`) and operationId (e.g.
-//! `create_task_handler`), the key the JS tools analyzer reports, with the
-//! permission group it belongs to, its action and a label a person reads.
+//! Agent permissions' operation registry: every Macro SDK operation a JS
+//! tools program can call, keyed by its service (the spec name, e.g.
+//! `storage`) and operationId (e.g. `create_task_handler`), the key the JS
+//! tools analyzer reports, with the permission group it belongs to, its
+//! action and a label a person reads.
 //!
 //! The data is `registry.json` in this crate. The web app reads the same file
 //! (`@agent-permission-registry`), and the JS tools catalog
-//! (`packages/code-mode-sdk/src/js-tools/catalog.test.ts`) fails when an
-//! operation of the SDK is missing from it or it names one that no longer
-//! exists.
+//! (`packages/code-mode-sdk/src/js-tools/catalog.test.ts`) fails when one of
+//! the catalog's tools is missing from it or it names an operation that is
+//! not a tool.
 
 #![deny(missing_docs)]
 

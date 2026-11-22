@@ -3,8 +3,8 @@
 ## What it is
 
 Agent permissions: the one checked-in registry that gives every Macro SDK
-operation (service + operationId, the key the JS tools analyzer reports) a
-permission group, an action (create, read, update, destroy, send) and a label.
+operation a JS tools program can call (service + operationId, the key the
+JS tools analyzer reports) a permission group, an action (create, read, update, destroy, send) and a label.
 Rust reads it through this crate; the web app imports the same
 `registry.json` as `@agent-permission-registry` (`apps/web/tsconfig.json`)
 through `apps/web/src/features/agent-permissions/core/registry.ts`.
@@ -31,7 +31,11 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
   but restrict the agent itself (today: `tighten_agent_tool_permissions`):
   no setting then applies to it, so a person's Ask or Never on its group
   can't stop the agent restricting itself. The test pins the list.
-- Remove an operation the SDK dropped: delete its line.
+- Remove an operation the SDK dropped, or one the JS tools catalog now
+  skips (added to the SDK's `Excluded` list in
+  `packages/sdk/src/coverage/skipped.ts`): delete its line. The registry
+  holds exactly the operations a program can call, so the permissions page
+  offers no setting that does nothing.
 - New group: add it to `groups` (stable `id`, never renamed: settings are
   stored under it) and move operations into it.
 
@@ -40,18 +44,16 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
 - `cargo test -p agent_permission_registry`: the file parses, groups and
   labels are consistent.
 - `bun run test` in `packages/code-mode-sdk`: generating the JS tools catalog
-  fails on an operation without a line here, and `catalog.test.ts` fails on
-  a line for an operation of the TypeScript SDK's services that is neither a
-  tool nor skipped. A JS tools program calls an operation as
+  fails on a tool without a line here, and `catalog.test.ts` fails on a
+  line for an operation that is not a tool (skipped or gone). A JS tools program calls an operation as
   `tools.<service with - written _>.<operationId>`.
 
 ## Gotchas
 
 - The key is the spec's operationId (`create_task_handler`), as the JS tools
   analyzer reports it. Code mode's `fetch` and the TypeScript SDK name
-  operations by method (`createTaskHandler`);
-  cognition declares `get_state_handler` twice, one entry here and
-  `getStateHandler` / `getStateHandler2` there.
+  operations by method (`createTaskHandler`). An operationId declared on
+  two routes is one entry here and two tools (`<operationId>_2`).
 - Some operations do whatever their input says: running a routine or an
   agent session, a connected app tool. Their action says what they are, not
   everything the work they start may do.

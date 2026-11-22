@@ -77,8 +77,10 @@ the generator refuses to run without `packages/sdk/node_modules`.
   resolves both to codemode's copy. The web app pins its own `effect`
   exactly, so codemode's doesn't replace it in `bun.lock`.
 - A new operation in the specs needs its registry line
-  (`crates/agent_permission_registry`) or generation fails; one a tool can't
-  send or read goes in `skipped`, which `catalog.test.ts` pins.
+  (`crates/agent_permission_registry`) or generation fails, unless the
+  catalog skips it: one on the SDK's `Excluded` lists, or one a tool can't
+  send or read, goes in `skipped` and has no registry line
+  (`catalog.test.ts` pins both).
 
 - The outputs are never committed. A new file the generator reads must be added
   to `GENERATOR_INPUTS` in `crates/code_mode_assets/build.rs` and to
