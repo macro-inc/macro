@@ -4,6 +4,7 @@ import type {
   MessageTimelinePage,
 } from '@service-storage/messages';
 import { onlineManager } from '@tanstack/solid-query';
+import { CombinedError } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   holdUnheldReads,
@@ -29,7 +30,8 @@ const mocks = vi.hoisted(() => ({
   rereadAfterDeviceFault: vi.fn(),
 }));
 
-vi.mock('../rereads', () => ({
+vi.mock('../rereads', async (original) => ({
+  ...(await original<typeof import('../rereads')>()),
   rereadAfterDeviceFault: mocks.rereadAfterDeviceFault,
 }));
 
@@ -212,6 +214,19 @@ describe('loadLocalChannelTimelinePage', () => {
     expect(mocks.rereadAfterDeviceFault).toHaveBeenCalledExactlyOnceWith(
       CHANNEL_ID
     );
+  });
+
+  it('does not read again a read the server failed', async () => {
+    mocks.loadChannelPage.mockRejectedValue(
+      new CombinedError({ graphQLErrors: [{ message: 'forbidden' }] })
+    );
+    mocks.loadChannelThread.mockRejectedValue(
+      new CombinedError({ networkError: new Error('Failed to fetch') })
+    );
+
+    expect(await loadLocalChannelTimelinePage(read)).toBeUndefined();
+    expect(await loadLocalChannelThread(CHANNEL_ID, 'root')).toBeUndefined();
+    expect(mocks.rereadAfterDeviceFault).not.toHaveBeenCalled();
   });
 
   it('does not read again a read that was cancelled', async () => {

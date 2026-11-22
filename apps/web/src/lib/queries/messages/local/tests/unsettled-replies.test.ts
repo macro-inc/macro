@@ -5,9 +5,9 @@ import { mapChannelMessage, mapChannelRoot } from '../map';
 import { readDeviceChannelPage } from '../pages';
 import {
   forgetOwnReply,
+  listQueuedReplies,
   noteOwnReply,
   ownReplyDelivered,
-  listQueuedReplies,
   pageHasQueuedReplies,
   resetUnsettledReplies,
   withUnsettledThreadReplies,

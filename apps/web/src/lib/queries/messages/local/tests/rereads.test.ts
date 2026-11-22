@@ -1,5 +1,8 @@
+import { CombinedError } from '@urql/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
+  FAULT_ROW_MS,
+  isDeviceFault,
   REREAD_DELAYS_MS,
   rereadAfterDeviceFault,
   resetRereads,
@@ -54,18 +57,48 @@ it('reads further apart while rereads keep failing, then leaves the channel alon
   expect(refreshChannelViews).toHaveBeenCalledTimes(REREAD_DELAYS_MS.length);
 });
 
-it('starts again for a fault a minute after the last one', () => {
+it('starts again for a fault long after the last one', () => {
   for (const delay of REREAD_DELAYS_MS) {
     rereadAfterDeviceFault(CHANNEL_ID);
     vi.advanceTimersByTime(delay);
   }
-  vi.advanceTimersByTime(60_000);
+  vi.advanceTimersByTime(FAULT_ROW_MS);
 
   rereadAfterDeviceFault(CHANNEL_ID);
   vi.advanceTimersByTime(REREAD_DELAYS_MS[0]);
   expect(refreshChannelViews).toHaveBeenCalledTimes(
     REREAD_DELAYS_MS.length + 1
   );
+});
+
+it('does not start again while faults keep coming, however slowly', () => {
+  for (let fault = 0; fault < 10; fault += 1) {
+    rereadAfterDeviceFault(CHANNEL_ID);
+    vi.advanceTimersByTime(FAULT_ROW_MS - 1);
+  }
+  expect(refreshChannelViews).toHaveBeenCalledTimes(REREAD_DELAYS_MS.length);
+});
+
+it('drops a reread still to come when the account goes', () => {
+  rereadAfterDeviceFault(CHANNEL_ID);
+  resetRereads();
+
+  vi.advanceTimersByTime(REREAD_DELAYS_MS[0]);
+  expect(refreshChannelViews).not.toHaveBeenCalled();
+});
+
+it('takes a worker failure for a device fault, and a server failure for none', () => {
+  expect(
+    isDeviceFault(new Error('cache worker timeout: channel-timeline'))
+  ).toBe(true);
+  expect(
+    isDeviceFault(
+      new CombinedError({ graphQLErrors: [{ message: 'not found' }] })
+    )
+  ).toBe(false);
+  expect(
+    isDeviceFault(new CombinedError({ networkError: new Error('offline') }))
+  ).toBe(false);
 });
 
 it('counts each channel on its own', () => {

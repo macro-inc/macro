@@ -32,6 +32,7 @@ import { resetPendingChannelPages } from './pages';
 import { evictIdleChannels, runChannelPrewarmPass } from './prewarm';
 import { loadPrewarmChannelIds } from './prewarm-list';
 import { setQueueOwner } from './queue-owner';
+import { resetRereads } from './rereads';
 import { resetSendsInHand } from './sends-in-hand';
 import { holdUnheldReads } from './source';
 import { holdUnqueuedSendsPage, resendUnqueuedSends } from './unqueued-sends';
@@ -145,6 +146,7 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
       resetPendingChannelPages();
       resetUnsettledReplies();
       resetSendsInHand();
+      resetRereads();
     });
   });
 
