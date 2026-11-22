@@ -1,5 +1,6 @@
 import { removeAcceptedSuggestion } from '@app/features/routine-suggestions/queries/routine-suggestions';
 import { analytics } from '@app/lib/analytics';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -494,6 +495,16 @@ export function useStopRoutineRunMutation(
       throwOnErr(
         async () => await scheduledActionClient.stopRun({ scheduleId })
       ),
-    ...withCallbacks({}, callbacks),
+    ...withCallbacks(
+      {
+        // A run stopped before it was announced sends no end over the
+        // websocket; reread the lists so its released claim shows. Not
+        // awaited: the stop is done once the server took it.
+        onSuccess: () => {
+          fireAndForget(invalidateSchedules(), 'routines');
+        },
+      },
+      callbacks
+    ),
   }));
 }
