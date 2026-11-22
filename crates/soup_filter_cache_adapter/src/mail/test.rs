@@ -781,3 +781,136 @@ fn legacy_mail_capsule_cannot_restore_spam_membership() {
         assert!(all_keys(&mut engine, filters(), "ALL").await.is_empty());
     });
 }
+
+fn inbox_view_fact(document: &IndexDocument) -> Option<i64> {
+    document
+        .sort_facts
+        .iter()
+        .find(|fact| fact.attribute == vocabulary::token(vocabulary::INBOX_VIEW_SORT))
+        .map(|fact| fact.value)
+}
+
+async fn inbox_view_sort<S: PredicateIndexStorage>(storage: S) {
+    let mut engine = Engine::new(storage);
+    write(&mut engine, QUERY, &seed()).await;
+    let keys = (1..=75)
+        .map(|n| RecordKey::new(format!("{TYPE}:{}", id(n))).unwrap())
+        .collect::<Vec<_>>();
+    let states = engine
+        .storage()
+        .load_projection_states(&keys)
+        .await
+        .unwrap();
+    let mut shown = Vec::new();
+    for (n, state) in (1..=75u128).zip(states) {
+        let Some(ProjectionState::Complete(document)) = state else {
+            panic!("seeded thread {n} is complete")
+        };
+        // Inbox-visible, with a message and an inbound timestamp.
+        let expected = n.is_multiple_of(2) && n != 2 && n != 7;
+        assert_eq!(inbox_view_fact(&document).is_some(), expected, "thread {n}");
+        if expected {
+            assert_eq!(
+                inbox_view_fact(&document),
+                document
+                    .sort_facts
+                    .iter()
+                    .find(|fact| fact.attribute == vocabulary::token("mail-inbox-ts"))
+                    .map(|fact| fact.value)
+            );
+            if n <= 70 {
+                shown.push(format!("{TYPE}:{}", id(n)));
+            }
+        }
+    }
+    shown.sort_by(|a, b| b.cmp(a));
+    assert_eq!(all_keys(&mut engine, filters(), "INBOX").await, shown);
+
+    // Archiving by patch leaves the old sort fact, which a patch cannot remove;
+    // the view's exact facts still reject the thread.
+    let archived = format!("{TYPE}:{}", id(4));
+    let partial = |inbox: bool| {
+        json!({"user":{"id":VIEWER,"soup":{"items":[{
+            "__typename":TYPE,"id":id(4),"isRead":false,"inboxVisible":inbox
+        }]}}})
+    };
+    write(&mut engine, PARTIAL, &partial(false)).await;
+    let key = RecordKey::new(archived.clone()).unwrap();
+    let states = engine
+        .storage()
+        .load_projection_states(std::slice::from_ref(&key))
+        .await
+        .unwrap();
+    let [Some(ProjectionState::Complete(document))] = states.as_slice() else {
+        panic!("archived thread stays complete")
+    };
+    assert!(inbox_view_fact(document).is_some());
+    let inbox = all_keys(&mut engine, filters(), "INBOX").await;
+    assert!(!inbox.contains(&archived));
+    assert_eq!(inbox.len(), shown.len() - 1);
+    write(&mut engine, PARTIAL, &partial(true)).await;
+    assert_eq!(all_keys(&mut engine, filters(), "INBOX").await, shown);
+
+    // A newer inbound message moves the thread to the top of the Inbox.
+    let newer = json!({"user":{"id":VIEWER,"soup":{"items":[{
+        "__typename":TYPE,"id":id(6),
+        "reminderReturnedAt":null,"latestInboundMessageTs":"2025-01-05T00:00:00Z"
+    }]}}});
+    write(&mut engine, QUERY, &newer).await;
+    let inbox = all_keys(&mut engine, filters(), "INBOX").await;
+    assert_eq!(inbox.first(), Some(&format!("{TYPE}:{}", id(6))));
+    assert_eq!(inbox.len(), shown.len());
+}
+
+#[test]
+fn memory_inbox_sorts_by_its_own_view_key() {
+    pollster::block_on(inbox_view_sort(InMemoryStorage::new()));
+}
+
+#[test]
+fn turso_inbox_sorts_by_its_own_view_key() {
+    pollster::block_on(inbox_view_sort(
+        cache_turso::TursoStorage::open_in_memory("mail-inbox-view-test").unwrap(),
+    ));
+}
+
+#[test]
+fn optimistic_replace_without_inbox_timestamp_makes_the_view_key_uncertain() {
+    pollster::block_on(async {
+        let engine = Engine::new(InMemoryStorage::new());
+        let mut data = seed();
+        // Thread 2 is inbox-visible with a message but no inbound timestamp.
+        data["user"]["soup"]["items"] = json!([row(2), row(4)]);
+        let updates = projection_updates(
+            cache_core::meta::bundled_schema_ref(),
+            engine.storage(),
+            QUERY,
+            None,
+            &Map::new(),
+            &data,
+        )
+        .await
+        .unwrap();
+        let uncertain = optimistic_updates(updates)
+            .into_iter()
+            .filter_map(|update| match update {
+                OptimisticProjectionMutation::Unknown {
+                    record_key,
+                    affected_attributes,
+                    ..
+                } => Some((record_key, affected_attributes)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let attributes = |n: u128| {
+            uncertain
+                .iter()
+                .find(|(key, _)| key.as_str() == format!("{TYPE}:{}", id(n)))
+                .map(|(_, attributes)| attributes.clone())
+                .unwrap_or_default()
+        };
+        assert!(attributes(2).contains(&vocabulary::token("mail-inbox-ts")));
+        assert!(attributes(2).contains(&vocabulary::token(vocabulary::INBOX_VIEW_SORT)));
+        assert!(!attributes(4).contains(&vocabulary::token(vocabulary::INBOX_VIEW_SORT)));
+    });
+}

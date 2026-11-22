@@ -187,14 +187,19 @@ fn project_with_facts(
             value: outbound,
         });
     }
-    Some(IndexDocument {
+    let mut document = IndexDocument {
         record_key: key,
         profile: vocabulary::profile(),
         partition: vocabulary::partition(),
         exact_facts: facts,
         integer_facts: times.clone(),
         sort_facts: times,
-    })
+    };
+    // The Inbox view's sort key, only on threads it can show.
+    if let Some(fact) = vocabulary::INBOX_VIEW_DERIVATION.derive(&document) {
+        document.sort_facts.push(fact);
+    }
+    Some(document)
 }
 
 /// Compact contribution fields needed by the shared Mail projection adapter.
@@ -464,6 +469,15 @@ pub async fn projection_updates_for_response<S: DurableRead>(
                     changed.contains("latestInboundMessageTs")
                         || changed.contains("reminderReturnedAt")
                 }
+                // A patch cannot remove a sort fact, so a thread that leaves
+                // the Inbox keeps a stale one; the Inbox view also tests
+                // mail-inbox and mail-has-message, which reject it.
+                vocabulary::INBOX_VIEW_SORT => {
+                    changed.contains("latestInboundMessageTs")
+                        || changed.contains("reminderReturnedAt")
+                        || changed.contains("inboxVisible")
+                        || changed.contains("mailAllPreview")
+                }
                 "mail-all-message" => changed.contains("mailAllPreview"),
                 "mail-draft-message" => changed.contains("mailDraftPreview"),
                 "mail-sent-message" => changed.contains("mailSentPreview"),
@@ -548,7 +562,7 @@ pub fn optimistic_updates(updates: Vec<ProjectionMutation>) -> Vec<OptimisticPro
                     // attribute patch even when these optional sorts are absent.
                     // Sort patches cannot delete old values, so only queries using
                     // those missing sorts need uncertainty, not the whole row.
-                    let missing_sorts = SORT_ATTRIBUTES
+                    let mut missing_sorts = SORT_ATTRIBUTES
                         .iter()
                         .filter(|attribute| {
                             !document
@@ -558,6 +572,14 @@ pub fn optimistic_updates(updates: Vec<ProjectionMutation>) -> Vec<OptimisticPro
                         })
                         .map(|attribute| vocabulary::token(attribute))
                         .collect::<Vec<_>>();
+                    // The Inbox view sorts by a copy of the inbox timestamp.
+                    // Without that timestamp the copy's old value is as
+                    // uncertain. Without inbox visibility or a message it stays
+                    // stale, and the view's exact facts reject the row.
+                    let derived = vocabulary::INBOX_VIEW_DERIVATION;
+                    if missing_sorts.contains(&vocabulary::token(derived.source)) {
+                        missing_sorts.push(vocabulary::token(derived.target));
+                    }
                     if !missing_sorts.is_empty() {
                         sort_uncertainty = Some(OptimisticProjectionMutation::Unknown {
                             record_key: document.record_key.clone(),
