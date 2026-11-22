@@ -5,7 +5,6 @@ const MARKDOWN_GOLDEN_SNAPSHOT: &[u8] =
     include_bytes!("../../../../static_assets/markdown-golden.1.bin");
 
 use std::future::Future;
-use std::sync::Arc;
 use std::time::Duration;
 
 use lexical_client::LexicalClient;
@@ -88,26 +87,18 @@ impl SyncInitializeSnapshotPort for SyncServiceClient {
     }
 }
 
-/// When the sync-service snapshot write finishes relative to the caller.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum SyncInitialization {
-    /// Return only after sync-service holds the snapshot.
-    Awaited,
-    /// Return immediately and write the snapshot in a background task. Only
-    /// sound in a long-lived process: a Lambda freezes, and a CLI exits, with
-    /// the task still pending, leaving a document that never loads.
-    Detached,
-}
-
 /// Markdown initializer backed by lexical-service and sync-service clients.
+///
+/// It returns only once sync-service holds the snapshot, so a failed write
+/// fails the creation (which then removes the document) instead of leaving a
+/// document whose body never loads.
 ///
 /// Generic over the two port traits so tests can substitute mocks; defaults
 /// preserve the production wiring with the real HTTP clients.
 #[derive(Clone)]
 pub struct LexicalSyncMarkdownInitializer<L = LexicalClient, S = SyncServiceClient> {
     lexical_client: L,
-    sync_service_client: Arc<S>,
-    sync_initialization: SyncInitialization,
+    sync_service_client: S,
 }
 
 impl<L, S> LexicalSyncMarkdownInitializer<L, S> {
@@ -115,18 +106,7 @@ impl<L, S> LexicalSyncMarkdownInitializer<L, S> {
     pub fn new(lexical_client: L, sync_service_client: S) -> Self {
         Self {
             lexical_client,
-            sync_service_client: Arc::new(sync_service_client),
-            sync_initialization: SyncInitialization::Awaited,
-        }
-    }
-
-    /// Construct an initializer that writes the snapshot in a background task,
-    /// so optimistic document creation can return before sync-service does.
-    /// Only for long-lived servers.
-    pub fn detached(lexical_client: L, sync_service_client: S) -> Self {
-        Self {
-            sync_initialization: SyncInitialization::Detached,
-            ..Self::new(lexical_client, sync_service_client)
+            sync_service_client,
         }
     }
 }
@@ -134,7 +114,7 @@ impl<L, S> LexicalSyncMarkdownInitializer<L, S> {
 impl<L, S> MarkdownInitializationPort for LexicalSyncMarkdownInitializer<L, S>
 where
     L: LexicalSnapshotPort,
-    S: SyncInitializeSnapshotPort + 'static,
+    S: SyncInitializeSnapshotPort,
 {
     #[tracing::instrument(skip(self, markdown), err)]
     async fn initialize_existing_markdown(
@@ -153,7 +133,9 @@ where
                     .map_err(DocumentError::Internal)?
             };
 
-        self.initialize_sync(document_id, &loro_snapshot).await?;
+        initialize_with_retry(&self.sync_service_client, document_id, &loro_snapshot)
+            .await
+            .map_err(DocumentError::Internal)?;
         Ok(loro_snapshot)
     }
 
@@ -168,49 +150,19 @@ where
             .notion_to_loro_snapshot(notion)
             .await
             .map_err(DocumentError::Internal)?;
-        self.initialize_sync(document_id, &converted.snapshot)
-            .await?;
+        initialize_with_retry(&self.sync_service_client, document_id, &converted.snapshot)
+            .await
+            .map_err(DocumentError::Internal)?;
         Ok(converted)
     }
 }
 
-impl<L, S> LexicalSyncMarkdownInitializer<L, S>
-where
-    S: SyncInitializeSnapshotPort + 'static,
-{
-    /// Hand `loro_snapshot` to sync-service, awaited or detached.
-    async fn initialize_sync(
-        &self,
-        document_id: &str,
-        loro_snapshot: &[u8],
-    ) -> Result<(), DocumentError> {
-        match self.sync_initialization {
-            SyncInitialization::Awaited => {
-                initialize_with_retry(&*self.sync_service_client, document_id, loro_snapshot)
-                    .await
-                    .map_err(DocumentError::Internal)?;
-            }
-            SyncInitialization::Detached => {
-                let sync_service_client = Arc::clone(&self.sync_service_client);
-                let document_id = document_id.to_owned();
-                let snapshot = loro_snapshot.to_vec();
-                tokio::spawn(agent_correlation::context::capture(async move {
-                    if let Err(error) =
-                        initialize_with_retry(&*sync_service_client, &document_id, &snapshot).await
-                    {
-                        tracing::error!(error=?error, %document_id, "failed to initialize sync service from snapshot");
-                    }
-                }));
-            }
-        }
-
-        Ok(())
-    }
-}
-
-/// POST the snapshot to sync-service, retrying transient failures. A 409 is
-/// returned as-is: retrying cannot change it, and callers decide whether an
-/// existing snapshot is acceptable.
+/// POST the snapshot to sync-service, retrying transient failures. A 409 on
+/// the first attempt is returned as-is: retrying cannot change it, and callers
+/// decide whether an existing snapshot is acceptable. A 409 on a retry means an
+/// earlier attempt stored this snapshot after its response was lost (the
+/// sync-service front worker answers 408 when the durable object is slow, but
+/// the object still finishes the write), so it counts as success.
 async fn initialize_with_retry<S: SyncInitializeSnapshotPort>(
     sync_service_client: &S,
     document_id: &str,
@@ -228,11 +180,18 @@ async fn initialize_with_retry<S: SyncInitializeSnapshotPort>(
                 let result = sync_service_client
                     .initialize_from_snapshot(document_id, snapshot)
                     .await;
-                if let Err(error) = &result
-                    && attempt < MAX_ATTEMPTS
-                    && !is_snapshot_already_exists(error)
-                {
-                    tracing::warn!(error=?error, attempt, "failed to initialize sync service from snapshot, retrying in 1s");
+                match &result {
+                    Err(error) if attempt > 1 && is_snapshot_already_exists(error) => {
+                        tracing::info!(
+                            attempt,
+                            "sync service already holds the snapshot an earlier attempt sent"
+                        );
+                        return Ok(());
+                    }
+                    Err(error) if attempt < MAX_ATTEMPTS && !is_snapshot_already_exists(error) => {
+                        tracing::warn!(error=?error, attempt, "failed to initialize sync service from snapshot, retrying in 1s");
+                    }
+                    _ => {}
                 }
                 result
             }
@@ -397,18 +356,25 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn detached_returns_the_snapshot_without_waiting_for_sync() {
+    async fn an_existing_snapshot_on_a_retry_is_the_earlier_attempts_write() {
         let mut lexical = MockLexicalSnapshotPort::new();
         let mut sync = MockSyncInitializeSnapshotPort::new();
+        let mut sequence = mockall::Sequence::new();
 
         lexical
             .expect_markdown_to_loro_snapshot()
             .times(1)
             .returning(|_, _| Box::pin(async { Ok(vec![1, 2, 3]) }));
         sync.expect_initialize_from_snapshot()
-            .returning(|_, _| Box::pin(async { Err(anyhow::anyhow!("sync-service unavailable")) }));
+            .times(1)
+            .in_sequence(&mut sequence)
+            .returning(|_, _| Box::pin(async { Err(anyhow::anyhow!("Request Timeout")) }));
+        sync.expect_initialize_from_snapshot()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .returning(|_, _| Box::pin(async { Err(SnapshotAlreadyExists.into()) }));
 
-        let initializer = LexicalSyncMarkdownInitializer::detached(lexical, sync);
+        let initializer = LexicalSyncMarkdownInitializer::new(lexical, sync);
         let snapshot = initializer
             .initialize_existing_markdown("doc5", "# hi", MarkdownInitializationOptions::default())
             .await
