@@ -1,4 +1,5 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
@@ -15,6 +16,7 @@ import {
 } from '@queries/pipedream-connectors';
 import { ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import { ImportPlanCard } from '../components/import-plan-card';
 import { type ImportedCopy, sourceLabel } from '../core/import-plan';
 import type { Review, ReviewActions } from '../core/review';
@@ -66,11 +68,13 @@ export function ImportReview(props: {
   // cached overlays, so they are loaded before the button is pressed.
   usePipedreamOverlaysQuery();
   const [reconnecting, setReconnecting] = createSignal(false);
-  const [reconnectFailed, setReconnectFailed] = createSignal(false);
+  const [reconnected, setReconnected] = createSignal<
+    'connected' | 'failed' | 'unsupported' | null
+  >(null);
   async function reconnect() {
     if (reconnecting()) return;
     setReconnecting(true);
-    setReconnectFailed(false);
+    setReconnected(null);
     const outcome = await ResultAsync.fromPromise(
       connectPipedreamApp({
         appSlug: source(),
@@ -78,13 +82,34 @@ export function ImportReview(props: {
       }),
       () => ({ kind: 'connect-failed' as const })
     );
-    setReconnectFailed(outcome.isErr());
+    const result = outcome.isErr()
+      ? 'failed'
+      : match(outcome.value)
+          .with('connected', () => 'connected' as const)
+          // Closed without finishing: nothing changed, nothing to say.
+          .with('closed', () => null)
+          .with('unsupported', () => 'unsupported' as const)
+          .exhaustive();
+    if (result === 'connected')
+      toast.success(`${sourceLabel(source())} is reconnected`, {
+        subtext: 'Ask the agent to plan the import again.',
+      });
+    setReconnected(result);
     setReconnecting(false);
   }
   const alert = () =>
-    (reconnectFailed()
-      ? `${sourceLabel(source())} could not be reconnected. Try again.`
-      : undefined) ??
+    match(reconnected())
+      .with('connected', () => undefined)
+      .with(
+        'failed',
+        () => `${sourceLabel(source())} could not be reconnected. Try again.`
+      )
+      .with(
+        'unsupported',
+        () => `${sourceLabel(source())} can’t be connected here.`
+      )
+      .with(null, () => undefined)
+      .exhaustive() ??
     review.error() ??
     review.validation() ??
     (review.stopFailed()

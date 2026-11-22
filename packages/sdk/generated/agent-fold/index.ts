@@ -324,7 +324,12 @@ export type DecisionOutcome =
 /**  All selected items were dismissed. */
 "dismissed" |
 /**  The batch contains mixed or unconfirmed results. */
-"partial";
+"partial" |
+/**
+ *  Every approved action was refused before it started (an import whose
+ *  plan was no longer ready); the review is open again, unchanged.
+ */
+"refused";
 
 /**  Surface of a review decision. */
 export type DecisionVia =

@@ -1303,10 +1303,6 @@ export type NotionImportReport = {
      * Pages written as documents.
      */
     documents: number;
-    /**
-     * Why the run failed, when it did.
-     */
-    error?: string | null;
     errorKind?: null | RunErrorKind;
     /**
      * Objects that failed to import, with the failure.

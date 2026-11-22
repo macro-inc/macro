@@ -80,7 +80,6 @@ export type ImportProgress = {
     | 'failed'
     | 'dismissed'
     | null;
-  error: string | null;
   /** Why the run failed, when it did and the server recorded the kind. */
   errorKind: RunErrorKind | null;
   /** What planning has found in Notion so far, while it reads it. */
@@ -566,7 +565,6 @@ export function progressFromEntries(
   return {
     reviewId,
     status: null,
-    error: null,
     errorKind: null,
     scanned: null,
     onTeam: true,

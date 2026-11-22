@@ -135,9 +135,6 @@ function PhaseStatus(props: {
         .with('completed', () => (
           <p role="status" class="text-sm text-ink">
             Imported {plural(imported(), 'object')}
-            <Show when={props.progress?.error}>
-              {(error) => <span class="text-failure"> — {error()}</span>}
-            </Show>
           </p>
         ))
         .with('stopped', () => (
@@ -336,9 +333,14 @@ function PlanContents(
   const planFailed = () =>
     props.phase.kind === 'planFailed' || props.phase.kind === 'dismissed';
   const reconnect = () =>
-    props.phase.kind === 'planFailed' &&
-    failureCopy('plan', props.source ?? 'notion', props.phase.errorKind)
-      .reconnect;
+    match(props.phase)
+      .with(
+        { kind: 'planFailed' },
+        { kind: 'failed' },
+        ({ errorKind }) =>
+          failureCopy('plan', props.source ?? 'notion', errorKind).reconnect
+      )
+      .otherwise(() => false);
   return (
     <>
       <header class="flex min-w-0 flex-col gap-0.5">
@@ -522,16 +524,22 @@ function PlanContents(
           </Button>
         </footer>
       </Show>
-      <Show when={props.canAct && props.phase.kind === 'planFailed'}>
+      <Show
+        when={
+          props.canAct && (props.phase.kind === 'planFailed' || reconnect())
+        }
+      >
         <footer class="flex flex-wrap justify-end gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!props.dismissable}
-            onClick={() => props.onDismiss()}
-          >
-            Dismiss
-          </Button>
+          <Show when={props.phase.kind === 'planFailed'}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!props.dismissable}
+              onClick={() => props.onDismiss()}
+            >
+              Dismiss
+            </Button>
+          </Show>
           <Show when={reconnect() && props.onReconnect}>
             {(onReconnect) => (
               <Button

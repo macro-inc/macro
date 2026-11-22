@@ -30,6 +30,7 @@ export default {
     other: 'Importing {{count}} channels',
   },
   completed: 'Imported',
+  completedPartly: 'Imported, but some objects couldn’t be',
   failed: 'Import failed',
   failedAccessLost:
     'Import failed: {{source}} no longer accepts Macro’s connection',

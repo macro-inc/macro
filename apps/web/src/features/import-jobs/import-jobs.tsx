@@ -13,7 +13,8 @@ import { ImportJobsProvider } from './context/import-jobs-context';
 import type { WorkspaceSource } from './core/import-job';
 import { ImportJobsTrayView } from './views/import-jobs-tray';
 
-const DISMISSED = z.array(z.string()).max(64);
+// Kept small: the newest dismissals win when there are too many.
+const DISMISSED = z.array(z.string()).transform((keys) => keys.slice(-64));
 
 function safeJson(raw: string): unknown {
   try {

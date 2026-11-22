@@ -1,8 +1,9 @@
-import type {
-  ImportRun,
-  ImportSource,
-  NotionImportReport,
-  RunErrorKind,
+import {
+  type ImportRun,
+  type ImportSource,
+  type NotionImportReport,
+  parseRunErrorKind,
+  type RunErrorKind,
 } from '@service-cognition/import';
 import { match } from 'ts-pattern';
 
@@ -17,7 +18,8 @@ export type ImportJobPhase =
   | { kind: 'choosingChannels' }
   | { kind: 'importing'; done: number; total: number }
   | { kind: 'importingChannels'; channels: number }
-  | { kind: 'completed' }
+  /** `partial` when some objects could not be imported. */
+  | { kind: 'completed'; partial: boolean }
   /** `errorKind` says why, when the server recorded it. */
   | { kind: 'failed'; errorKind: RunErrorKind | null }
   | { kind: 'cancelled' };
@@ -33,11 +35,18 @@ export const FINISHED_MS = 5 * 1000;
  * a finished one briefly, a failed one until it is dismissed.
  */
 function listedFor(run: ImportRun): number {
-  return match(run.status)
-    .with('completed', 'dismissed', () => FINISHED_MS)
-    .with('failed', () => Number.POSITIVE_INFINITY)
-    .with('running', 'ready', 'importing', () => RECENT_MS)
-    .exhaustive();
+  return (
+    match(run.status)
+      // One that finished with objects it could not import stays, like a
+      // failure; the server stops listing either after a week.
+      .with('completed', () =>
+        run.error ? Number.POSITIVE_INFINITY : FINISHED_MS
+      )
+      .with('dismissed', () => FINISHED_MS)
+      .with('failed', () => Number.POSITIVE_INFINITY)
+      .with('running', 'ready', 'importing', () => RECENT_MS)
+      .exhaustive()
+  );
 }
 
 export function isWorkspaceSource(
@@ -135,10 +144,13 @@ export function importJobPhase(
         (report?.waitingOnTeammates ?? 0);
       return { kind: 'importing', done, total: done + remaining };
     })
-    .with('completed', () => ({ kind: 'completed' }))
+    .with('completed', () => ({
+      kind: 'completed',
+      partial: Boolean(run.error),
+    }))
     .with('failed', () => ({
       kind: 'failed',
-      errorKind: run.error_kind ?? null,
+      errorKind: parseRunErrorKind(run.error_kind),
     }))
     .with('dismissed', () => ({ kind: 'cancelled' }))
     .exhaustive();

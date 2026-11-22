@@ -72,7 +72,6 @@ vi.mock('@queries/import', () => ({
 /** A Notion run whose plan failed; tests set its kind. */
 const FAILED: NotionImportReport = {
   status: 'failed',
-  error: 'Notion object not found or not shared with the connection',
   reviewId: null,
   onTeam: false,
   pages: 0,
@@ -366,7 +365,6 @@ describe('import review', () => {
     imports.report = {
       ...FAILED,
       reviewId: 'review',
-      error: 'raw provider detail',
       errorKind: 'interrupted',
       imported: 1,
       waiting: 2,
@@ -382,7 +380,6 @@ describe('import review', () => {
   it('says what stays after the run was stopped', () => {
     imports.report = {
       status: 'dismissed',
-      error: 'Cancelled',
       pages: 3,
       dataSources: 1,
       copy: 1,
@@ -412,7 +409,6 @@ describe('import review', () => {
     imports.entities = [];
     imports.report = {
       ...FAILED,
-      error: `proxy said: ${'account apn_1 not found; '.repeat(40)}`,
       errorKind: 'connection_unavailable',
     };
     const decide = setup();
@@ -445,6 +441,36 @@ describe('import review', () => {
         expect.objectContaining({ action: 'dismiss' })
       )
     );
+  });
+
+  it('offers to reconnect after a write lost the connection, and says when it cannot', async () => {
+    imports.report = {
+      ...FAILED,
+      reviewId: 'review',
+      errorKind: 'access_lost',
+    };
+    imports.connect.mockResolvedValue('unsupported');
+    setup({ item: { status: 'completed' } });
+
+    expect(screen.getByRole('alert').textContent).toContain(
+      "Couldn't finish this import."
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Notion' }));
+    expect(
+      await screen.findByText('Notion can’t be connected here.')
+    ).toBeTruthy();
+  });
+
+  it('says nothing when reconnecting was closed without finishing', async () => {
+    imports.report = { ...FAILED, errorKind: 'connection_unavailable' };
+    imports.connect.mockResolvedValue('closed');
+    setup();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Notion' }));
+    await waitFor(() => expect(imports.connect).toHaveBeenCalledTimes(1));
+    expect(
+      screen.queryByText(/could not be reconnected|can’t be connected/)
+    ).toBeNull();
   });
 
   it('offers to reconnect only when the connection was lost', () => {

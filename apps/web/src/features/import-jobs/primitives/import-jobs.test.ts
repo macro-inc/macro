@@ -107,3 +107,37 @@ it('remembers a dismissed failure across reloads', () => {
   expect(second.jobs()).toEqual([]);
   second.dispose();
 });
+
+it('keeps an import that finished with failures until it is dismissed', () => {
+  const { jobs, dispose } = createRoot((dispose) => ({
+    dispose,
+    ...createImportJobs({
+      runs: {
+        runs: () => [
+          {
+            source: 'notion',
+            status: 'completed',
+            error: '2 objects could not be imported. Plan again to retry them.',
+            updated_at: '2026-11-06T12:00:00Z',
+          },
+          {
+            source: 'linear',
+            status: 'failed',
+            error_kind: 'a_kind_from_a_newer_server' as never,
+            updated_at: '2026-11-06T12:00:00Z',
+          },
+        ],
+        slackChannelsImporting: () => 0,
+      },
+      createReport: () => () => undefined,
+      dismissals: { restore: () => [], save: () => {} },
+    }),
+  }));
+  vi.advanceTimersByTime(60_000);
+  expect(jobs().map((job) => job.phase)).toEqual([
+    { kind: 'completed', partial: true },
+    // An unknown kind still lists, read as Macro's side.
+    { kind: 'failed', errorKind: 'internal' },
+  ]);
+  dispose();
+});

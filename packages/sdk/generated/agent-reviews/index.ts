@@ -296,8 +296,11 @@ export type NotionImportReport_Deserialize = {
 	 *  `dismissed` when cancelled. Absent before the first run.
 	 */
 	status?: RunStatus | null,
-	/**  Why the run failed, when it did. */
-	error?: string | null,
+	/**
+	 *  The kind of failure, when the run failed and it was recorded. Show
+	 *  the user copy for this, not `error`.
+	 */
+	errorKind?: RunErrorKind | null,
 	/**  What planning has found in Notion so far, while it is `running`. */
 	scanned?: ScanCounts | null,
 	/**  Pages in the plan. */
@@ -372,8 +375,11 @@ export type NotionImportReport_Serialize = {
 	 *  `dismissed` when cancelled. Absent before the first run.
 	 */
 	status?: RunStatus | null,
-	/**  Why the run failed, when it did. */
-	error?: string | null,
+	/**
+	 *  The kind of failure, when the run failed and it was recorded. Show
+	 *  the user copy for this, not `error`.
+	 */
+	errorKind?: RunErrorKind | null,
 	/**  What planning has found in Notion so far, while it is `running`. */
 	scanned?: ScanCounts | null,
 	/**  Pages in the plan. */
@@ -680,6 +686,39 @@ export type ReviewRecord_Serialize = {
 
 /**  A review stack label: not blank, at most 256 characters. */
 export type ReviewTitle = string;
+
+/**
+ *  Why a run failed, as a closed set readers branch on instead of the error
+ *  text. Stored in `import_run.error_kind`; `None` on runs that failed
+ *  before it was recorded.
+ */
+export type RunErrorKind =
+/**
+ *  The source said an object was missing or not shared with the
+ *  connection.
+ */
+"not_found" |
+/**  The connection may not read what the import asked for. */
+"forbidden" |
+/**  The source refused the connection itself: revoked or expired. */
+"access_lost" |
+/**  The connection's proxy could not use the account at all. */
+"connection_unavailable" |
+/**  The source is not connected, or the connection is turned off. */
+"not_connected" |
+/**  The source kept rate limiting the import. */
+"rate_limited" |
+/**  The source could not be reached or answered with an error. */
+"unreachable" |
+/**  The AI work planning needs was refused (usage or billing). */
+"usage_refused" |
+/**
+ *  The run stopped before it finished (its process went away too
+ *  often); starting it again picks up what is left.
+ */
+"interrupted" |
+/**  Anything else, on Macro's side. */
+"internal";
 
 /**  Lifecycle of a discovery run (one per user × source). */
 export type RunStatus =

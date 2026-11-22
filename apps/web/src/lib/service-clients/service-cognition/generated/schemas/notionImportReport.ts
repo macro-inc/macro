@@ -5,7 +5,6 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { NotionImporter } from './notionImporter';
-import type { NotionImportReportError } from './notionImportReportError';
 import type { NotionImportReportErrorKind } from './notionImportReportErrorKind';
 import type { NotionImportReportReviewId } from './notionImportReportReviewId';
 import type { NotionImportReportScanned } from './notionImportReportScanned';
@@ -55,8 +54,6 @@ planning is still `running`.
    * @minimum 0
    */
   documents: number;
-  /** Why the run failed, when it did. */
-  error?: NotionImportReportError;
   errorKind?: NotionImportReportErrorKind;
   /** Objects that failed to import, with the failure. */
   failures?: NotionReportItem[];

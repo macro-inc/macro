@@ -6079,10 +6079,6 @@
             "description": "Pages written as documents.",
             "minimum": 0
           },
-          "error": {
-            "type": ["string", "null"],
-            "description": "Why the run failed, when it did."
-          },
           "errorKind": {
             "oneOf": [
               {

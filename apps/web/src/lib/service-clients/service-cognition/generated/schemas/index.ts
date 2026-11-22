@@ -225,7 +225,6 @@ export * from './notionDocMetaSummary';
 export * from './notionDocMetaUrl';
 export * from './notionImporter';
 export * from './notionImportReport';
-export * from './notionImportReportError';
 export * from './notionImportReportErrorKind';
 export * from './notionImportReportReviewId';
 export * from './notionImportReportScanned';

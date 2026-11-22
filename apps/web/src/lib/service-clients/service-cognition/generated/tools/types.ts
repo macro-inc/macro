@@ -11250,10 +11250,6 @@ export interface NotionImportReport {
    */
   status?: RunStatus | null;
   /**
-   * Why the run failed, when it did.
-   */
-  error?: string | null;
-  /**
    * The kind of failure, when the run failed and it was recorded. Show
    * the user copy for this, not `error`.
    */

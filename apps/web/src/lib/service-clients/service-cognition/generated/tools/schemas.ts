@@ -11401,7 +11401,6 @@ export const TrackerImportResponse = z.object({
         z.null(),
       ])
       .optional(),
-    error: z.union([z.string(), z.null()]).optional(),
     errorKind: z
       .union([
         z.any().superRefine((x, ctx) => {
@@ -11693,7 +11692,6 @@ export const ImportFromNotionResponse = z.object({
         z.null(),
       ])
       .optional(),
-    error: z.union([z.string(), z.null()]).optional(),
     errorKind: z
       .union([
         z.any().superRefine((x, ctx) => {

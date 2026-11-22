@@ -298,7 +298,6 @@ describe('importReviewPhase', () => {
   const progress: ImportProgress = {
     reviewId: 'review',
     status: 'importing',
-    error: null,
     errorKind: null,
     scanned: null,
     onTeam: true,
@@ -342,7 +341,6 @@ describe('importReviewPhase', () => {
       importReviewPhase({ presentedAt: 1 }, pending, {
         ...progress,
         status: 'failed',
-        error: 'raw provider detail',
         errorKind: 'access_lost',
       })
     ).toEqual({ kind: 'planFailed', errorKind: 'access_lost' });
@@ -350,7 +348,6 @@ describe('importReviewPhase', () => {
       importReviewPhase({ presentedAt: 1 }, pending, {
         ...progress,
         status: 'failed',
-        error: 'from a host that recorded no kind',
         errorKind: null,
       })
     ).toEqual({ kind: 'planFailed', errorKind: null });
@@ -438,14 +435,12 @@ describe('importReviewPhase', () => {
       importReviewPhase({ presentedAt: 1 }, completed, {
         ...progress,
         status: 'dismissed',
-        error: 'Cancelled',
       })
     ).toEqual({ kind: 'stopped' });
     expect(
       importReviewPhase({ presentedAt: 1 }, completed, {
         ...progress,
         status: 'failed',
-        error: 'raw provider detail',
         errorKind: 'interrupted',
       })
     ).toEqual({ kind: 'failed', errorKind: 'interrupted' });
@@ -465,7 +460,6 @@ describe('planning', () => {
   const running: ImportProgress = {
     reviewId: 'review',
     status: 'running',
-    error: null,
     errorKind: null,
     scanned: { pages: 40, databases: 12 },
     onTeam: true,

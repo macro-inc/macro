@@ -73,7 +73,7 @@ describe('importJob', () => {
       },
       { report: undefined, slackChannelsImporting: 0 }
     );
-    expect(done.phase).toEqual({ kind: 'completed' });
+    expect(done.phase).toEqual({ kind: 'completed', partial: false });
     expect(done.dismissable).toBe(true);
   });
 
