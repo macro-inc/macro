@@ -1,3 +1,4 @@
+import { routineSuggestionKeys } from '@app/features/routine-suggestions/queries/keys';
 import { useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
 import { getDefaultTimezone } from '@core/util/cron';
@@ -8,7 +9,7 @@ import { scheduledActionClient } from '@service-scheduled-action/client';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
 import { createEffect, createMemo } from 'solid-js';
 import type { SuggestionsSource } from '../context/suggestions-source';
-import type { SuggestionFeed } from '../core/suggestion';
+import type { Suggestion, SuggestionFeed } from '../core/suggestion';
 import { useSuggestionsFlag } from '../use-suggestions-flag';
 import { toFeed, toSuggestion } from './decode';
 import { generationOptions } from './generation';
@@ -76,6 +77,28 @@ export function useSuggestionsSource(): SuggestionsSource {
       queryClient.invalidateQueries({ queryKey: suggestionsKeys.top._def }),
     ]);
   };
+  // The sidebar's Ideas count is the routine suggestions feature's read, and
+  // a dismissed routine suggestion takes its idea with it.
+  const refreshIdeas = () =>
+    queryClient.invalidateQueries({
+      queryKey: routineSuggestionKeys.all.queryKey,
+    });
+  /** Replace one suggestion in the feed held for `asked`, without a read. */
+  const patch = (
+    asked: ReturnType<typeof key>,
+    id: string,
+    change: (suggestion: Suggestion) => Suggestion
+  ) =>
+    queryClient.setQueryData(asked, (held: SuggestionFeed | undefined) =>
+      held
+        ? {
+            ...held,
+            suggestions: held.suggestions.map((other) =>
+              other.id === id ? change(other) : other
+            ),
+          }
+        : held
+    );
 
   // A generation that just ended may have written its last cards after the
   // feed was last read.
@@ -125,23 +148,14 @@ export function useSuggestionsSource(): SuggestionsSource {
         return changed ? 'changed' : 'accepted';
       }
 
-      queryClient.setQueryData(asked, (held: SuggestionFeed | undefined) =>
-        held
-          ? {
-              ...held,
-              suggestions: held.suggestions.map((other) =>
-                other.id === now.id ? now : other
-              ),
-            }
-          : held
-      );
+      patch(asked, now.id, () => now);
       return 'changed';
     },
     async dismiss(id) {
       await throwOnErr(() =>
         scheduledActionClient.dismissSuggestion({ suggestionId: id })
       );
-      await refresh();
+      await Promise.all([refresh(), refreshIdeas()]);
     },
     async stop(id) {
       await throwOnErr(() =>
@@ -150,9 +164,13 @@ export function useSuggestionsSource(): SuggestionsSource {
       await refresh();
     },
     async restore(id) {
+      const asked = key();
       await throwOnErr(() =>
         scheduledActionClient.restoreSuggestion({ suggestionId: id })
       );
+      // Restored is open: say so before the read, which keeps what it held
+      // if it fails.
+      patch(asked, id, (suggestion) => ({ ...suggestion, status: 'open' }));
       await refresh();
     },
     viewed: () =>
