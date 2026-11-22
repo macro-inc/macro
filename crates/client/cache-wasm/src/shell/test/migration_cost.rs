@@ -182,6 +182,17 @@ async fn upgrade_memory_on_a_retained_cache() {
     let before = wasm_memory_bytes();
     let (elapsed, report) = timed_open().await;
     let after = wasm_memory_bytes();
+    // A reset would measure an empty cache instead.
+    assert_eq!(
+        report.outcome,
+        if baseline {
+            CacheOpenOutcome::OpenedExisting
+        } else {
+            CacheOpenOutcome::UpgradedExisting {
+                from_storage_version: from,
+            }
+        }
+    );
     let (_, again) = timed_open().await;
     let reopened = wasm_memory_bytes();
     assert_eq!(again.outcome, CacheOpenOutcome::OpenedExisting);
