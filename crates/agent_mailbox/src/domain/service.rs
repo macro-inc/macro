@@ -18,7 +18,7 @@ use crate::domain::models::{
     MailboxState, MessageDirection, MessageList, MessagePage, OutgoingMessage, OwnerApproval,
     ProviderMailboxId, ProviderMessageId, ProvisionRequest, ProvisionedMailbox,
     ProvisioningFailure, ReplyMessage, Reservation, SendAttempt, SendKind, SendLimits,
-    SendReservation, SentMessage, StoredGrant, VendorMode,
+    SendReservation, SentMessage, StoredGrant, SweepJob, VendorMode,
 };
 use crate::domain::ports::{
     AgentDirectory, AgentMailboxRepository, LeaseToken, MailboxClient, MailboxKeyCipher,
@@ -43,10 +43,6 @@ pub const MAX_SUBJECT_CHARS: usize = 998;
 /// Most messages on one page.
 pub const MAX_PAGE_SIZE: u8 = 50;
 
-/// Send records are kept this long: past the daily cap's window and the
-/// provider's 24-hour idempotency replay.
-pub const SEND_RECORD_RETENTION: Duration = Duration::days(7);
-
 /// How long one attempt holds a mailbox's lease. Every provider call in an
 /// attempt times out well inside it (a handful of calls at 20 seconds each).
 pub const LEASE_TTL: Duration = Duration::minutes(3);
@@ -60,10 +56,14 @@ pub const SWEEP_RETRY_DELAY: Duration = Duration::minutes(5);
 /// still counted in the windows it lands in.
 pub const SEND_RETRY_WINDOW: Duration = Duration::hours(1);
 
-/// Send audit records (ids, counts and timestamps, never content) are kept
-/// this long, to trace a complaint about a sent message to its mailbox, team
-/// and approval time.
-pub const SEND_AUDIT_RETENTION: Duration = Duration::days(400);
+/// Send records (ids, counts and timestamps, never content) are kept this
+/// long, to trace a complaint about a sent message to its mailbox, team and
+/// time. Past the caps' windows and the provider's replay window, so a key
+/// stays bound to its message for as long as it can be retried.
+pub const SEND_RETENTION: Duration = Duration::days(400);
+
+/// How often one replica prunes send records for the whole cluster.
+pub const PRUNE_EVERY: Duration = Duration::minutes(1);
 
 /// Most live agent mailboxes one team may have.
 pub const MAX_TEAM_MAILBOXES: u32 = 25;
@@ -276,7 +276,14 @@ where
     /// before the next, so a retry resumes rather than repeats. A mailbox
     /// paused or released meanwhile keeps that state; nothing is revoked
     /// here, so a stored credential is only ever revoked by a release.
+    #[tracing::instrument(name = "agent_mailbox.advance", skip_all, fields(agent_mailbox.id = %id, outcome = tracing::field::Empty), err)]
     async fn advance(&self, id: AgentMailboxId) -> Result<(), AgentMailboxError> {
+        let result = self.advance_steps(id).await;
+        record_outcome(&result);
+        result
+    }
+
+    async fn advance_steps(&self, id: AgentMailboxId) -> Result<(), AgentMailboxError> {
         let advanced = self
             .with_lease(id, async |mut mailbox, token| {
                 if !matches!(
@@ -565,7 +572,18 @@ where
     /// of a releasing mailbox, then mark it released. Reads the row as the
     /// lease found it, so a credential or mailbox recorded by an attempt that
     /// finished just before is torn down too.
+    #[tracing::instrument(name = "agent_mailbox.tear_down", skip_all, fields(agent_mailbox.id = %id, outcome = tracing::field::Empty), err)]
     async fn tear_down(
+        &self,
+        id: AgentMailboxId,
+        now: DateTime<Utc>,
+    ) -> Result<(), AgentMailboxError> {
+        let result = self.tear_down_steps(id, now).await;
+        record_outcome(&result);
+        result
+    }
+
+    async fn tear_down_steps(
         &self,
         id: AgentMailboxId,
         now: DateTime<Utc>,
@@ -667,14 +685,19 @@ where
             }
         }
 
-        self.repository
-            .prune_sends(now - SEND_RECORD_RETENTION)
+        // One replica prunes per round, so replicas never delete the same
+        // oldest rows at once.
+        let prune = self
+            .repository
+            .claim_sweep_job(SweepJob::Prune, PRUNE_EVERY)
             .await
             .map_err(internal)?;
-        self.repository
-            .prune_send_audit(now - SEND_AUDIT_RETENTION)
-            .await
-            .map_err(internal)?;
+        if prune {
+            self.repository
+                .prune_sends(now - SEND_RETENTION)
+                .await
+                .map_err(internal)?;
+        }
 
         let span = tracing::Span::current();
         span.record("agent_mailbox.sweep.advanced", report.advanced);
@@ -695,7 +718,7 @@ where
         // leave no trace of it.
         let claimed = self
             .repository
-            .claim_orphan_check(ORPHAN_CHECK_EVERY)
+            .claim_sweep_job(SweepJob::Orphans, ORPHAN_CHECK_EVERY)
             .await
             .map_err(internal)?;
         if !claimed {
@@ -744,6 +767,7 @@ where
     /// Release a mailbox paused past retention, unless it was resumed since
     /// the sweep read it: the state and its timestamp are rechecked in the
     /// same write that starts the release.
+    #[tracing::instrument(name = "agent_mailbox.expire_paused", skip_all, fields(agent_mailbox.id = %id), err)]
     async fn expire_paused(
         &self,
         id: AgentMailboxId,
@@ -985,6 +1009,10 @@ where
                         .to_owned(),
                 ));
             }
+            SendReservation::NotActive(MailboxState::Paused) => {
+                return Err(AgentMailboxError::Paused);
+            }
+            SendReservation::NotActive(state) => return Err(AgentMailboxError::NotReady(state)),
             SendReservation::AlreadySent(sent) => return Ok(sent),
             SendReservation::OutcomeUnknown => return Err(AgentMailboxError::SendOutcomeUnknown),
             SendReservation::LimitReached { retry_at } => {
@@ -1013,6 +1041,17 @@ where
             }
         }
     }
+}
+
+/// Record how a provisioning or release step ended on its span: `done`,
+/// `busy` (another attempt holds the lease) or `failed`.
+fn record_outcome(result: &Result<(), AgentMailboxError>) {
+    let outcome = match result {
+        Ok(()) => "done",
+        Err(AgentMailboxError::Busy) => "busy",
+        Err(_) => "failed",
+    };
+    tracing::Span::current().record("outcome", outcome);
 }
 
 /// The send policy every email send from a program follows: an agent sends
@@ -1047,6 +1086,9 @@ const RESERVED_DISPLAY_WORDS: &[&str] = &[
     "webmaster",
 ];
 
+/// Characters that could make a display name read as an address.
+const DISPLAY_NAME_FORBIDDEN: [char; 4] = ['@', '<', '>', '"'];
+
 fn validate_display_name(name: &str) -> Result<(), AgentMailboxError> {
     let invalid = |reason: &str| Err(AgentMailboxError::Invalid(format!("display name {reason}")));
     if name.trim().is_empty() || name.chars().count() > MAX_DISPLAY_NAME_CHARS {
@@ -1054,6 +1096,13 @@ fn validate_display_name(name: &str) -> Result<(), AgentMailboxError> {
     }
     if name.chars().any(char::is_control) {
         return invalid("may not contain control characters");
+    }
+    // The name is the From phrase of outbound mail: it may not show an address.
+    if name
+        .chars()
+        .any(|character| DISPLAY_NAME_FORBIDDEN.contains(&character))
+    {
+        return invalid("may not contain @, <, > or \"");
     }
     Ok(())
 }

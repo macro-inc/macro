@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_mailbox_sends\n            SET outcome = 'refused', updated_at = now()\n            WHERE mailbox_id = $1 AND idempotency_key = $2 AND outcome = 'pending'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9c683774ca846e4301331ba19baef2bdb4a022bd8a22f19053dc02f7986c7aa0"
+}

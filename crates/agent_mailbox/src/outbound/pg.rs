@@ -1,4 +1,4 @@
-//! Postgres storage for agent mailboxes and their send ledger.
+//! Postgres storage for agent mailboxes and their sends.
 
 #[cfg(test)]
 mod test;
@@ -13,7 +13,7 @@ use crate::domain::models::{
     AgentMailbox, AgentMailboxId, EncryptedMailboxKey, LocalPart, MailboxProvider, MailboxState,
     ProviderGrantId, ProviderMailboxId, ProviderMessageId, ProvisionRequest, ProvisionedMailbox,
     ProvisioningFailure, Reservation, SendAttempt, SendLimits, SendReservation, SentMessage,
-    StoredGrant, TeamId,
+    StoredGrant, SweepJob, TeamId,
 };
 use crate::domain::ports::{AgentDirectory, AgentMailboxRepository, LeaseToken};
 
@@ -553,38 +553,27 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
 
         // One send decision at a time per team and per mailbox, so two
         // concurrent sends cannot both take the last slot. Always the team
-        // first, then the mailbox.
+        // first, then the mailbox. The state is read under the row lock: a
+        // pause or release that committed since the caller read the mailbox
+        // stops the send here.
         lock_team(&mut transaction, mailbox.team).await?;
-        sqlx::query!(
-            "SELECT id FROM agent_mailboxes WHERE id = $1 FOR UPDATE",
+        let state = sqlx::query_scalar!(
+            "SELECT state FROM agent_mailboxes WHERE id = $1 FOR UPDATE",
             mailbox.id.0
         )
         .fetch_one(&mut *transaction)
         .await?;
-
-        // The audit record outlives the ledger, so a key stays bound to its
-        // message even after a refusal freed the ledger row.
-        let audited = sqlx::query!(
-            r#"
-            SELECT fingerprint, outcome, provider_message_id FROM agent_mailbox_send_audit
-            WHERE mailbox_id = $1 AND idempotency_key = $2
-            "#,
-            mailbox.id.0,
-            attempt.idempotency_key,
-        )
-        .fetch_optional(&mut *transaction)
-        .await?;
-        if audited
-            .as_ref()
-            .is_some_and(|audit| audit.fingerprint != attempt.fingerprint)
-        {
+        let state: MailboxState = state
+            .parse()
+            .map_err(|_| PgAgentMailboxError::Corrupt("state"))?;
+        if state != MailboxState::Active {
             transaction.commit().await?;
-            return Ok(SendReservation::KeyReused);
+            return Ok(SendReservation::NotActive(state));
         }
 
         let existing = sqlx::query!(
             r#"
-            SELECT provider_message_id, provider_thread_id, created_at
+            SELECT fingerprint, outcome, provider_message_id, provider_thread_id, reserved_at
             FROM agent_mailbox_sends
             WHERE mailbox_id = $1 AND idempotency_key = $2
             "#,
@@ -594,42 +583,33 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         .fetch_optional(&mut *transaction)
         .await?;
         if let Some(existing) = existing {
-            let reservation = match existing.provider_message_id {
-                Some(id) => SendReservation::AlreadySent(SentMessage {
-                    id: ProviderMessageId(id),
-                    thread_id: existing.provider_thread_id,
-                }),
-                None if existing.created_at >= replayable_since => {
-                    sqlx::query!(
-                        r#"
-                        UPDATE agent_mailbox_send_audit
-                        SET attempts = attempts + 1, updated_at = $3
-                        WHERE mailbox_id = $1 AND idempotency_key = $2
-                        "#,
-                        mailbox.id.0,
-                        attempt.idempotency_key,
-                        now,
-                    )
-                    .execute(&mut *transaction)
-                    .await?;
-                    SendReservation::Proceed { fresh: false }
+            let earlier = if existing.fingerprint != attempt.fingerprint {
+                Some(SendReservation::KeyReused)
+            } else {
+                match (existing.outcome.as_str(), existing.provider_message_id) {
+                    ("sent", Some(id)) => Some(SendReservation::AlreadySent(SentMessage {
+                        id: ProviderMessageId(id),
+                        thread_id: existing.provider_thread_id,
+                    })),
+                    // Only a refused send under this key may go out again.
+                    ("refused", _) => None,
+                    _ if existing.reserved_at >= replayable_since => {
+                        sqlx::query!(
+                            r#"
+                            UPDATE agent_mailbox_sends
+                            SET attempts = attempts + 1, updated_at = $3
+                            WHERE mailbox_id = $1 AND idempotency_key = $2
+                            "#,
+                            mailbox.id.0,
+                            attempt.idempotency_key,
+                            now,
+                        )
+                        .execute(&mut *transaction)
+                        .await?;
+                        Some(SendReservation::Proceed { fresh: false })
+                    }
+                    _ => Some(SendReservation::OutcomeUnknown),
                 }
-                None => SendReservation::OutcomeUnknown,
-            };
-            transaction.commit().await?;
-            return Ok(reservation);
-        }
-
-        // The ledger row was pruned; the audit still knows how the key ended.
-        // Only a refused send under it may go out fresh.
-        if let Some(audit) = audited {
-            let earlier = match (audit.outcome.as_str(), audit.provider_message_id) {
-                ("sent", Some(id)) => Some(SendReservation::AlreadySent(SentMessage {
-                    id: ProviderMessageId(id),
-                    thread_id: None,
-                })),
-                ("refused", _) => None,
-                _ => Some(SendReservation::OutcomeUnknown),
             };
             if let Some(earlier) = earlier {
                 transaction.commit().await?;
@@ -641,13 +621,13 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         let day_start = now - Duration::days(1);
         let window = sqlx::query!(
             r#"
-            SELECT count(*) FILTER (WHERE created_at > $2) AS "hour_count!",
-                   min(created_at) FILTER (WHERE created_at > $2) AS hour_oldest,
+            SELECT count(*) FILTER (WHERE reserved_at > $2) AS "hour_count!",
+                   min(reserved_at) FILTER (WHERE reserved_at > $2) AS hour_oldest,
                    count(*) AS "day_count!",
                    coalesce(sum(recipient_count), 0) AS "day_recipients!",
-                   min(created_at) AS day_oldest
+                   min(reserved_at) AS day_oldest
             FROM agent_mailbox_sends
-            WHERE mailbox_id = $1 AND created_at > $3
+            WHERE mailbox_id = $1 AND reserved_at > $3 AND outcome <> 'refused'
             "#,
             mailbox.id.0,
             hour_start,
@@ -658,9 +638,9 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         let team_window = sqlx::query!(
             r#"
             SELECT coalesce(sum(recipient_count), 0) AS "recipients!",
-                   min(created_at) AS oldest
+                   min(reserved_at) AS oldest
             FROM agent_mailbox_sends
-            WHERE team_id = $1 AND created_at > $2
+            WHERE team_id = $1 AND reserved_at > $2 AND outcome <> 'refused'
             "#,
             mailbox.team.0,
             day_start,
@@ -690,29 +670,13 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         sqlx::query!(
             r#"
             INSERT INTO agent_mailbox_sends
-                (mailbox_id, idempotency_key, team_id, kind, recipient_count, fingerprint, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            "#,
-            mailbox.id.0,
-            attempt.idempotency_key,
-            mailbox.team.0,
-            attempt.kind.as_ref(),
-            recipient_count,
-            &attempt.fingerprint[..],
-            now,
-        )
-        .execute(&mut *transaction)
-        .await?;
-        sqlx::query!(
-            r#"
-            INSERT INTO agent_mailbox_send_audit
                 (mailbox_id, idempotency_key, team_id, kind, recipient_count, fingerprint,
-                 outcome, approved_at, updated_at)
+                 outcome, reserved_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $7)
             ON CONFLICT (mailbox_id, idempotency_key) DO UPDATE
-            SET outcome = 'pending', provider_message_id = NULL,
-                attempts = agent_mailbox_send_audit.attempts + 1,
-                approved_at = $7, updated_at = $7
+            SET outcome = 'pending', provider_message_id = NULL, provider_thread_id = NULL,
+                attempts = agent_mailbox_sends.attempts + 1,
+                reserved_at = $7, updated_at = $7
             "#,
             mailbox.id.0,
             attempt.idempotency_key,
@@ -734,11 +698,13 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         idempotency_key: Uuid,
         sent: &SentMessage,
     ) -> Result<(), Self::Err> {
-        let mut transaction = self.pool.begin().await?;
+        // Whatever an earlier attempt under the key concluded: the provider
+        // accepted this one, so it counts.
         sqlx::query!(
             r#"
             UPDATE agent_mailbox_sends
-            SET provider_message_id = $3, provider_thread_id = $4
+            SET outcome = 'sent', provider_message_id = $3, provider_thread_id = $4,
+                updated_at = now()
             WHERE mailbox_id = $1 AND idempotency_key = $2
             "#,
             mailbox.0,
@@ -746,21 +712,8 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
             sent.id.0,
             sent.thread_id,
         )
-        .execute(&mut *transaction)
+        .execute(&self.pool)
         .await?;
-        sqlx::query!(
-            r#"
-            UPDATE agent_mailbox_send_audit
-            SET outcome = 'sent', provider_message_id = $3, updated_at = now()
-            WHERE mailbox_id = $1 AND idempotency_key = $2
-            "#,
-            mailbox.0,
-            idempotency_key,
-            sent.id.0,
-        )
-        .execute(&mut *transaction)
-        .await?;
-        transaction.commit().await?;
         Ok(())
     }
 
@@ -769,31 +722,17 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         mailbox: AgentMailboxId,
         idempotency_key: Uuid,
     ) -> Result<(), Self::Err> {
-        let mut transaction = self.pool.begin().await?;
-        let deleted = sqlx::query!(
+        sqlx::query!(
             r#"
-            DELETE FROM agent_mailbox_sends
-            WHERE mailbox_id = $1 AND idempotency_key = $2 AND provider_message_id IS NULL
+            UPDATE agent_mailbox_sends
+            SET outcome = 'refused', updated_at = now()
+            WHERE mailbox_id = $1 AND idempotency_key = $2 AND outcome = 'pending'
             "#,
             mailbox.0,
             idempotency_key,
         )
-        .execute(&mut *transaction)
+        .execute(&self.pool)
         .await?;
-        if deleted.rows_affected() == 1 {
-            sqlx::query!(
-                r#"
-                UPDATE agent_mailbox_send_audit
-                SET outcome = 'refused', updated_at = now()
-                WHERE mailbox_id = $1 AND idempotency_key = $2 AND outcome = 'pending'
-                "#,
-                mailbox.0,
-                idempotency_key,
-            )
-            .execute(&mut *transaction)
-            .await?;
-        }
-        transaction.commit().await?;
         Ok(())
     }
 
@@ -801,41 +740,20 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         // At most PRUNE_BATCH rows a round, oldest first, so a backlog after
         // downtime drains over several rounds. The limit is a literal so a
         // generic plan still probes the primary key per expired row instead
-        // of scanning the ledger.
+        // of scanning the table. One replica prunes per round
+        // (`claim_sweep_job`), so rounds never contend for the same rows.
         let result = sqlx::query!(
             r#"
             DELETE FROM agent_mailbox_sends AS sends
             USING (
                 SELECT mailbox_id, idempotency_key
                 FROM agent_mailbox_sends
-                WHERE created_at < $1
-                ORDER BY created_at
+                WHERE reserved_at < $1
+                ORDER BY reserved_at
                 LIMIT 1000
             ) AS expired
             WHERE sends.mailbox_id = expired.mailbox_id
               AND sends.idempotency_key = expired.idempotency_key
-            "#,
-            before,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(result.rows_affected())
-    }
-
-    async fn prune_send_audit(&self, before: DateTime<Utc>) -> Result<u64, Self::Err> {
-        // Bounded like prune_sends: a literal limit, oldest first.
-        let result = sqlx::query!(
-            r#"
-            DELETE FROM agent_mailbox_send_audit AS audit
-            USING (
-                SELECT mailbox_id, idempotency_key
-                FROM agent_mailbox_send_audit
-                WHERE approved_at < $1
-                ORDER BY approved_at
-                LIMIT 1000
-            ) AS expired
-            WHERE audit.mailbox_id = expired.mailbox_id
-              AND audit.idempotency_key = expired.idempotency_key
             "#,
             before,
         )
@@ -939,18 +857,19 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         Ok(result.rows_affected() == 1)
     }
 
-    async fn claim_orphan_check(&self, every: Duration) -> Result<bool, Self::Err> {
+    async fn claim_sweep_job(&self, job: SweepJob, every: Duration) -> Result<bool, Self::Err> {
         // The database's clock, so replicas with skewed clocks still take
-        // one round each; an upsert, so a missing row can't stop the check.
+        // one round each; an upsert, so a missing row can't stop the job.
         let claimed = sqlx::query!(
             r#"
             INSERT INTO agent_mailbox_sweep_claims (name, next_run_at)
-            VALUES ('orphans', now() + $1::interval)
+            VALUES ($1, now() + $2::interval)
             ON CONFLICT (name) DO UPDATE SET next_run_at = EXCLUDED.next_run_at
             WHERE agent_mailbox_sweep_claims.next_run_at <= now()
             "#,
+            job.as_ref(),
             sqlx::postgres::types::PgInterval::try_from(every)
-                .map_err(|_| PgAgentMailboxError::Corrupt("orphan check interval"))?,
+                .map_err(|_| PgAgentMailboxError::Corrupt("sweep job interval"))?,
         )
         .execute(&self.pool)
         .await?;

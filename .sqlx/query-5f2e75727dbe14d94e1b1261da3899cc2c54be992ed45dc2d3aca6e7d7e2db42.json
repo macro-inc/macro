@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT count(*) FILTER (WHERE created_at > $2) AS \"hour_count!\",\n                   min(created_at) FILTER (WHERE created_at > $2) AS hour_oldest,\n                   count(*) AS \"day_count!\",\n                   coalesce(sum(recipient_count), 0) AS \"day_recipients!\",\n                   min(created_at) AS day_oldest\n            FROM agent_mailbox_sends\n            WHERE mailbox_id = $1 AND created_at > $3\n            ",
+  "query": "\n            SELECT count(*) FILTER (WHERE reserved_at > $2) AS \"hour_count!\",\n                   min(reserved_at) FILTER (WHERE reserved_at > $2) AS hour_oldest,\n                   count(*) AS \"day_count!\",\n                   coalesce(sum(recipient_count), 0) AS \"day_recipients!\",\n                   min(reserved_at) AS day_oldest\n            FROM agent_mailbox_sends\n            WHERE mailbox_id = $1 AND reserved_at > $3 AND outcome <> 'refused'\n            ",
   "describe": {
     "columns": [
       {
@@ -44,5 +44,5 @@
       null
     ]
   },
-  "hash": "9d9f2ee5146d44cf79fbcb8ceb0fcd122f552ce6a4aab598d2a453496eb62c9d"
+  "hash": "5f2e75727dbe14d94e1b1261da3899cc2c54be992ed45dc2d3aca6e7d7e2db42"
 }

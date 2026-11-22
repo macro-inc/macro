@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM agent_mailbox_sends AS sends\n            USING (\n                SELECT mailbox_id, idempotency_key\n                FROM agent_mailbox_sends\n                WHERE reserved_at < $1\n                ORDER BY reserved_at\n                LIMIT 1000\n            ) AS expired\n            WHERE sends.mailbox_id = expired.mailbox_id\n              AND sends.idempotency_key = expired.idempotency_key\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d7c55ea50af985d811857bca1f3ef86a95ec3be4a30acd362f586c4ef6a1f0a7"
+}

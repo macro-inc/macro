@@ -481,6 +481,9 @@ pub enum SendReservation {
     },
     /// The key was already used for a different message.
     KeyReused,
+    /// The mailbox stopped being active (paused or released) after the
+    /// caller read it; nothing was reserved.
+    NotActive(MailboxState),
     /// An earlier attempt with this key may have been sent, and the provider
     /// no longer dedupes it: sending again could send twice.
     OutcomeUnknown,
@@ -491,6 +494,16 @@ pub enum SendReservation {
         /// When the oldest counted send leaves the window.
         retry_at: DateTime<Utc>,
     },
+}
+
+/// A background job one replica runs per interval for the whole cluster.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum SweepJob {
+    /// Pausing mailboxes whose agent account or team is gone.
+    Orphans,
+    /// Deleting send records past their retention.
+    Prune,
 }
 
 /// Send caps, counting sends accepted or in flight.

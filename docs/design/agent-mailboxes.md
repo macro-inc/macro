@@ -56,15 +56,22 @@ flowchart LR
   `team_user`; an agent on no team gets no mailbox.
 - **Send keys.** A send's idempotency key is bound to what it says (a SHA-256
   of kind, target, recipients, subject and body); the same key with a different
-  message is refused. Provider idempotency keys are derived per mailbox and
-  per operation, never passed through.
-- **Audit.** Every send leaves a record of its mailbox, team, key, kind,
-  recipient count, outcome and approval time, kept 400 days. No recipients,
-  subjects, bodies or approval text.
+  message is refused. The caller picks one key per message and reuses it on
+  every retry (the SDK requires it). Provider idempotency keys are derived per
+  mailbox and per operation, never passed through. A provider `409` on a send
+  is an idempotent request still in flight: retried under the same key, never
+  reported as a rejection.
+- **Send records.** One row per send (`agent_mailbox_sends`) does the dedupe,
+  the caps and the audit: mailbox, team, key, kind, recipient count, outcome
+  and reservation time, kept 400 days. No recipients, subjects, bodies or
+  approval text; the approval is the agent's quote, so its time is not
+  recorded as an event. A send reserved after a pause or release committed is
+  refused under the mailbox row lock.
 - **Names.** A role name (`admin`, `postmaster`, `abuse`, `support`, the CA
   domain-validation addresses and the like) is never taken as is: the mailbox
   gets the suffixed form. A display name that names Macro or an administrator
-  is left off.
+  is left off; one with `@`, `<`, `>`, `"` or a control character is refused,
+  so the From phrase can never show an address.
 - **Provider content is data.** Headers, the provider's prompt-injection score and
   any provider event never grant access or trigger an action.
 - **No payment.** The provider offers per-call payment when a key is missing; the
@@ -94,7 +101,12 @@ flowchart LR
 - The sweep runs every minute: stalled provisioning, unfinished releases, and
   mailboxes paused for more than 30 days (rechecked in the write that starts
   the release, so a resume in between wins). A step that fails is set aside
-  for five minutes so failing mailboxes never crowd out the rest.
+  for five minutes so failing mailboxes never crowd out the rest. Each step
+  is its own span (`agent_mailbox.advance`, `agent_mailbox.tear_down`,
+  `agent_mailbox.expire_paused`) with the mailbox id and outcome, and each
+  provider call a child span. Pruning send records runs in one replica per
+  minute (a claim on the database clock), so replicas never delete the same
+  rows at once.
 - Hourly, one replica pauses any live mailbox whose agent account was deleted,
   is no longer an agent, or left the mailbox's team, or whose team was
   deleted; the write rechecks it. Pausing keeps the mail: the usual 30-day

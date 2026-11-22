@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_mailbox_sends\n            SET outcome = 'sent', provider_message_id = $3, provider_thread_id = $4,\n                updated_at = now()\n            WHERE mailbox_id = $1 AND idempotency_key = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "78d5335c0a9e10bf612438b8e5efbb7cea2912d4e427dc1b75056970d3ede73b"
+}

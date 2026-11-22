@@ -59,6 +59,7 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }
+tracing-subscriber = { workspace = true }
 urlencoding = { workspace = true }
 wiremock = { workspace = true }
 
