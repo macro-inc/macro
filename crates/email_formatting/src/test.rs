@@ -107,3 +107,44 @@ fn signed_unsubscribe_roundtrips_against_request_url() {
             .contains("/notification/user_notifications/")
     );
 }
+
+#[test]
+fn digest_keeps_a_bodys_lines_apart() {
+    use model_notifications::{ChannelMessageReactionMetadata, ChannelType, CommonChannelMetadata};
+
+    let event = NotifEvent::ChannelMessageReaction(ChannelMessageReactionMetadata {
+        thread_id: None,
+        message_id: "m1".to_string(),
+        message_content: "Release branch is cut".to_string(),
+        emoji: "🎉".to_string(),
+        common: CommonChannelMetadata {
+            channel_type: ChannelType::Public,
+            channel_name: "eng".to_string(),
+        },
+        sender_profile_picture_url: None,
+    });
+    let notif = NotifPreview {
+        created_at: Utc::now(),
+        title: "dave".to_string(),
+        body: event.format_body(None).unwrap(),
+    };
+
+    let html = DigestTemplate {
+        notifs: vec![notif],
+        num_truncated: 0,
+        total_count: 1,
+        unsubscribe_url: SignedUrl::new(
+            NotificationServiceUrl::default_for_environment(Environment::Production)
+                .parse_url()
+                .unwrap(),
+            Hmac::<Sha256>::new_from_slice(b"test-secret").unwrap(),
+        ),
+    }
+    .render()
+    .unwrap();
+    let html = html.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        html.contains("Reacted 🎉 to: “Release branch is cut”<br />#eng"),
+        "{html}"
+    );
+}
