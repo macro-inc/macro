@@ -88,6 +88,9 @@ in-call chat.
   (the live session) and `call_records` (the earlier sessions), and the live
   row must win every read. A reader that checks `call_records` first shows a
   live call as ended. `call_entities.ended_at` keeps the previous end meanwhile.
+  Background work that reads the record after an archive (summarization) skips
+  a record that reads as live, and writes only if `ended_at` hasn't moved
+  (`insert_call_summary` takes it): a merge moves it.
 - A scheduled meeting rejoined through its link before `scheduled_end`, after
   a call that ended inside its slot (from 15 minutes before
   `scheduled_start`), resumes that call: the same id in a new room, one

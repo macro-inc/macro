@@ -659,3 +659,40 @@ async fn deleting_a_resumed_call_waits_for_it_to_end_then_removes_every_session(
     assert_eq!(sessions, 0);
     Ok(())
 }
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_summary_of_earlier_sessions_is_not_written_after_a_merge(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let (_, first, second) = resumed_meeting(&pool, &repo).await?;
+    let first_session_end =
+        sqlx::query_scalar!("SELECT ended_at FROM call_records WHERE id = $1", first.id)
+            .fetch_one(&pool)
+            .await?;
+
+    repo.archive_call(&second.id, &second.room_name).await?;
+
+    // A summary task that read the record before the merge.
+    assert!(
+        !repo
+            .insert_call_summary(&first.id, first_session_end, "Only the first session.")
+            .await?
+    );
+    let merged_end =
+        sqlx::query_scalar!("SELECT ended_at FROM call_records WHERE id = $1", first.id)
+            .fetch_one(&pool)
+            .await?;
+    assert!(
+        repo.insert_call_summary(&first.id, merged_end, "The whole call.")
+            .await?
+    );
+    let summary = sqlx::query_scalar!("SELECT summary FROM call_records WHERE id = $1", first.id)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(summary.as_deref(), Some("The whole call."));
+    Ok(())
+}

@@ -2173,14 +2173,21 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(skip(self, summary), err)]
-    async fn insert_call_summary(&self, call_id: &Uuid, summary: &str) -> Result<bool, Self::Err> {
-        // Tolerate missing rows: summarization can race with record deletion.
+    async fn insert_call_summary(
+        &self,
+        call_id: &Uuid,
+        ended_at: DateTime<Utc>,
+        summary: &str,
+    ) -> Result<bool, Self::Err> {
+        // Tolerate missing rows: summarization can race with record deletion,
+        // and with a resumed meeting's later session merging into the record.
         let result = sqlx::query!(
             r#"
-            UPDATE call_records SET summary = $2 WHERE id = $1
+            UPDATE call_records SET summary = $2 WHERE id = $1 AND ended_at = $3
             "#,
             call_id,
             summary,
+            ended_at,
         )
         .execute(&self.pool)
         .await?;

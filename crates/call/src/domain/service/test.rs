@@ -2963,8 +2963,9 @@ fn mock_summarization_repo(
     if let Some(summary_persisted) = summary_persisted {
         repo.expect_insert_call_summary()
             .times(1)
-            .returning(move |call_id, summary| {
+            .returning(move |call_id, ended_at, summary| {
                 assert_eq!(*call_id, SUMMARIZED_EVENT_CALL_ID);
+                assert_eq!(Some(ended_at), summarized_call_record(None).ended_at);
                 assert_eq!(summary, SUMMARIZED_EVENT_SUMMARY);
                 Box::pin(async move { Ok(summary_persisted) })
             });
@@ -3119,16 +3120,19 @@ async fn summarize_call_publishes_record_summarized_event() {
     assert!(no_summary_broker.events().is_empty());
     assert_eq!(no_summary_summarizer.name_calls(), 0);
 
-    let (deleted_record_broker, _) = run_direct_summarization(
+    // The record was deleted, or a resumed meeting's later session merged
+    // into it, while the summary was generated.
+    let (changed_record_broker, changed_record_summarizer) = run_direct_summarization(
         None,
         Some(SUMMARIZED_EVENT_SUMMARY),
         Some(false),
         GeneratedNameResult::Generated,
-        NamePersistence::Persisted(false),
+        NamePersistence::NotAttempted,
         RecordingEventBroker::default(),
     )
     .await;
-    assert!(deleted_record_broker.events().is_empty());
+    assert!(changed_record_broker.events().is_empty());
+    assert_eq!(changed_record_summarizer.name_calls(), 0);
 
     let failing_broker = RecordingEventBroker::failing();
     let (observed_failing_broker, _) = run_direct_summarization(

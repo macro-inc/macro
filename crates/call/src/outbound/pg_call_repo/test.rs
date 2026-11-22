@@ -2831,7 +2831,15 @@ async fn insert_call_summary_sets_summary_text(pool: Pool<Postgres>) -> anyhow::
     let repo = repo(pool.clone());
     let summary = "A short synopsis of the call.";
 
-    let persisted = repo.insert_call_summary(&CALL_ARCHIVED, summary).await?;
+    let ended_at = sqlx::query_scalar!(
+        "SELECT ended_at FROM call_records WHERE id = $1",
+        CALL_ARCHIVED
+    )
+    .fetch_one(&pool)
+    .await?;
+    let persisted = repo
+        .insert_call_summary(&CALL_ARCHIVED, ended_at, summary)
+        .await?;
 
     assert!(persisted);
     let stored = sqlx::query_scalar!(
@@ -2853,7 +2861,7 @@ async fn insert_call_summary_noop_for_unknown_id(pool: Pool<Postgres>) -> anyhow
     let repo = repo(pool.clone());
 
     let persisted = repo
-        .insert_call_summary(&Uuid::now_v7(), "irrelevant")
+        .insert_call_summary(&Uuid::now_v7(), Utc::now(), "irrelevant")
         .await?;
 
     assert!(!persisted);

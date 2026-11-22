@@ -2444,6 +2444,10 @@ impl<
             return Ok(());
         };
 
+        let Some(ended_at) = summarizable_end(&record) else {
+            return Ok(());
+        };
+
         if record.transcript.is_empty() {
             tracing::info!(%call_id, "call has empty transcript; skipping summarization");
             return Ok(());
@@ -2465,12 +2469,16 @@ impl<
             return Ok(());
         };
 
-        let summary_persisted = self
+        let persisted = self
             .repo
-            .insert_call_summary(call_id, &summary)
+            .insert_call_summary(call_id, ended_at, &summary)
             .await
             .inspect_err(|e| tracing::error!(error=?e, %call_id, "failed to persist call summary"))
             .map_err(|e| CallError::Internal(e.into()))?;
+        if !persisted {
+            tracing::info!(%call_id, "call record changed or is gone; summary not persisted");
+            return Ok(());
+        }
 
         let ai_name_generated = generate_and_persist_call_name(
             &self.repo,
@@ -2481,18 +2489,16 @@ impl<
         )
         .await;
 
-        if summary_persisted {
-            self.publish_call_event(&CallMacroEvent::record_summarized(
-                CallRecordSummarizedMetadata {
-                    call_id: *call_id,
-                    channel_id: record.channel_id,
-                    ai_name_generated,
-                },
-            ));
-            self.publish_call_notification(CallNotificationEvent::Summarized(
-                CallNotificationMetadata::new(*call_id, None),
-            ));
-        }
+        self.publish_call_event(&CallMacroEvent::record_summarized(
+            CallRecordSummarizedMetadata {
+                call_id: *call_id,
+                channel_id: record.channel_id,
+                ai_name_generated,
+            },
+        ));
+        self.publish_call_notification(CallNotificationEvent::Summarized(
+            CallNotificationMetadata::new(*call_id, None),
+        ));
 
         Ok(())
     }
@@ -2568,6 +2574,10 @@ impl<
                 }
             };
 
+            let Some(ended_at) = summarizable_end(&record) else {
+                return;
+            };
+
             if record.transcript.is_empty() {
                 tracing::info!(%call_id, "call has empty transcript; skipping summarization");
                 return;
@@ -2594,13 +2604,17 @@ impl<
                 }
             };
 
-            let summary_persisted = match repo.insert_call_summary(&call_id, &summary).await {
-                Ok(persisted) => persisted,
+            match repo.insert_call_summary(&call_id, ended_at, &summary).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    tracing::info!(%call_id, "call record changed or is gone; summary not persisted");
+                    return;
+                }
                 Err(e) => {
                     tracing::error!(error=?e, %call_id, "failed to persist call summary");
                     return;
                 }
-            };
+            }
 
             let ai_name_generated = generate_and_persist_call_name(
                 &repo,
@@ -2611,20 +2625,18 @@ impl<
             )
             .await;
 
-            if summary_persisted {
-                publish_call_event(
-                    &event_broker,
-                    &CallMacroEvent::record_summarized(CallRecordSummarizedMetadata {
-                        call_id,
-                        channel_id: record.channel_id,
-                        ai_name_generated,
-                    }),
-                );
-                publish_call_notification(
-                    &event_broker,
-                    CallNotificationEvent::Summarized(CallNotificationMetadata::new(call_id, None)),
-                );
-            }
+            publish_call_event(
+                &event_broker,
+                &CallMacroEvent::record_summarized(CallRecordSummarizedMetadata {
+                    call_id,
+                    channel_id: record.channel_id,
+                    ai_name_generated,
+                }),
+            );
+            publish_call_notification(
+                &event_broker,
+                CallNotificationEvent::Summarized(CallNotificationMetadata::new(call_id, None)),
+            );
         });
     }
 
@@ -2824,6 +2836,21 @@ async fn enroll_stable_speaker_voices_for_call_record<R: CallRepository, Vr: Voi
         %call_record_id, linked, total,
         "stable speaker voice enrollment completed"
     );
+}
+
+/// The end of the archived record a summary is written for, or `None` when
+/// there is nothing to summarize yet. A record that reads as live is a resumed
+/// scheduled meeting: its next session's archive summarizes the whole call.
+fn summarizable_end(record: &CallRecord) -> Option<chrono::DateTime<chrono::Utc>> {
+    if record.is_active {
+        tracing::info!(call_id = %record.call_id, "call resumed; the next session's archive summarizes it");
+        return None;
+    }
+    let ended_at = record.ended_at;
+    if ended_at.is_none() {
+        tracing::info!(call_id = %record.call_id, "call record has no end; skipping summarization");
+    }
+    ended_at
 }
 
 /// Names the live call a webhook event acts on, on the event's span.

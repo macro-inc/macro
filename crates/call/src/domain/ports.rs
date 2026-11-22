@@ -600,14 +600,20 @@ pub trait CallRepository: Send + Sync + 'static {
         call_record_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<(Uuid, Uuid)>, Self::Err>> + Send;
 
-    /// Persist the AI-generated summary text on the archived call record.
+    /// Persist the AI-generated summary text on the archived call record, if
+    /// the record still ends at `ended_at`: the summary describes the record
+    /// as it was then.
     ///
     /// Tolerates unknown `call_id` (no row matches): the summarization flow
     /// can race with the record being deleted, so this is an idempotent no-op
-    /// when the target row is gone. Returns whether a row was updated.
+    /// when the target row is gone. A resumed scheduled meeting's later
+    /// session moves `ended_at` when it merges, so a summary of the earlier
+    /// sessions finishing after that is not written either. Returns whether a
+    /// row was updated.
     fn insert_call_summary(
         &self,
         call_id: &Uuid,
+        ended_at: DateTime<Utc>,
         summary: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
@@ -1240,9 +1246,11 @@ pub trait CallService: Send + Sync + 'static {
     /// Loads the [`CallRecord`] for `call_id`, passes its finalized transcript
     /// to the configured [`CallSummarizer`], and persists the resulting
     /// summary via [`CallRepository::insert_call_summary`]. If no summarizer
-    /// is configured, this is a no-op. Missing records (e.g. deleted mid-flow)
-    /// and empty transcripts are also no-ops — no AI call is made in those
-    /// cases.
+    /// is configured, this is a no-op. Missing records (e.g. deleted mid-flow),
+    /// a resumed scheduled meeting that is live again (its next session's
+    /// archive summarizes the whole call) and empty transcripts are also
+    /// no-ops — no AI call is made in those cases. A summary is persisted only
+    /// if the record still ends where it did when read.
     fn summarize_call(&self, call_id: &Uuid) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// List the voice ids currently enrolled for `macro_user_id`.

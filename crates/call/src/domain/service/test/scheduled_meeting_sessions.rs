@@ -9,7 +9,8 @@ use tokio::sync::mpsc;
 
 use super::*;
 use crate::domain::meetings::{CreateMeetingRequest, MeetingRtcParticipant};
-use crate::domain::models::{LeaveCallResponse, LiveCallParticipant};
+use crate::domain::models::{LeaveCallResponse, LiveCallParticipant, TranscriptSegmentRequest};
+use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
 use crate::outbound::scheduled_call_resume::AlwaysResumeScheduledCalls;
 use sqlx::{Pool, Postgres};
@@ -516,5 +517,144 @@ async fn without_the_resume_gate_a_rejoined_scheduled_meeting_is_two_calls(
     assert_eq!(records_for_meeting(&pool, meeting.id).await?, 2);
     assert_eq!(harness.published("call.started", first.call_id), 1);
     assert_eq!(harness.published("call.started", second.call_id), 1);
+    Ok(())
+}
+
+/// Summarizes any transcript, and counts the calls.
+#[derive(Clone, Default)]
+struct CountingSummarizer {
+    lines_seen: Arc<Mutex<Vec<usize>>>,
+}
+
+impl CallSummarizer for CountingSummarizer {
+    type Err = anyhow::Error;
+
+    async fn summarize_call(
+        &self,
+        _call_id: &Uuid,
+        transcript: Vec<CallRecordTranscriptSegment>,
+    ) -> Result<Option<String>, Self::Err> {
+        self.lines_seen.lock().unwrap().push(transcript.len());
+        Ok(Some(format!("A call of {} lines.", transcript.len())))
+    }
+
+    async fn generate_call_name(
+        &self,
+        _call_id: &Uuid,
+        _summary: &str,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn generate_custom_speakers(
+        &self,
+        _transcript: Vec<crate::domain::models::EnrichedCallTranscript>,
+        _candidate_speakers: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<Vec<crate::domain::models::CallTranscriptCustomSpeakerResult>, Self::Err> {
+        Ok(Vec::new())
+    }
+}
+
+fn transcript_line(segment_id: &str, speaker: &'static str) -> TranscriptSegmentRequest {
+    let now = Utc::now();
+    TranscriptSegmentRequest {
+        segment_id: segment_id.to_string(),
+        speaker_id: user(speaker).to_string(),
+        diarized_speaker_id: None,
+        content: segment_id.to_string(),
+        started_at: now,
+        ended_at: Some(now),
+        is_final: true,
+        stream_started_at: None,
+        embedding: None,
+    }
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn an_earlier_sessions_summary_never_describes_the_resumed_session(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let harness = Harness::new(&pool, true).await?;
+    let repo = PgCallRepo::new(pool.clone());
+    let summarizer = CountingSummarizer::default();
+    let (requests, _) = mpsc::unbounded_channel();
+    let summarizing = CallServiceImpl::new(
+        repo.clone(),
+        RecordingRtc {
+            requests,
+            webhooks: Mutex::default(),
+        },
+        StubConnectionService,
+        NoOpEntityAccessService,
+        StubNotificationIngress,
+        StubRecordingStorage,
+        "wss://livekit.example.com",
+    )
+    .with_summarizer(summarizer.clone());
+
+    // The first session ends with a line said, and the meeting is rejoined
+    // before that session's summary is written.
+    let meeting = harness.scheduled_meeting().await?;
+    let token = meeting.share_token.clone();
+    let first = harness
+        .service
+        .join_meeting(token.clone(), harness.host.copied())
+        .await?;
+    repo.create_transcript_segment(
+        &first.call_id,
+        &first.room_name,
+        &transcript_line("first-session", HOST),
+        None,
+    )
+    .await?;
+    assert!(
+        harness
+            .leave(first.call_id, harness.host.copied())
+            .await?
+            .call_ended
+    );
+    let second = harness
+        .service
+        .join_meeting(token, harness.attendee.copied())
+        .await?;
+    assert_eq!(second.call_id, first.call_id);
+    repo.create_transcript_segment(
+        &second.call_id,
+        &second.room_name,
+        &transcript_line("second-session", ATTENDEE),
+        None,
+    )
+    .await?;
+
+    // The record reads as the live call: there is nothing to summarize yet.
+    summarizing.summarize_call(&first.call_id).await?;
+    assert!(summarizer.lines_seen.lock().unwrap().is_empty());
+    let summary = sqlx::query_scalar!(
+        "SELECT summary FROM call_records WHERE id = $1",
+        first.call_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(summary, None);
+
+    // Once the second session merges, the summary covers both.
+    assert!(
+        harness
+            .leave(second.call_id, harness.attendee.copied())
+            .await?
+            .call_ended
+    );
+    summarizing.summarize_call(&first.call_id).await?;
+    assert_eq!(*summarizer.lines_seen.lock().unwrap(), vec![2]);
+    let summary = sqlx::query_scalar!(
+        "SELECT summary FROM call_records WHERE id = $1",
+        first.call_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(summary.as_deref(), Some("A call of 2 lines."));
     Ok(())
 }
