@@ -477,6 +477,34 @@ async fn permitting_unconnected_never_widens_a_server_or_weakens_a_connection() 
     );
 }
 
+/// A native server at an address several overlaid apps share is one
+/// connection: an agent given everything is told about it once, while a
+/// selected list names each app it was given.
+#[tokio::test]
+async fn a_server_shared_by_overlaid_apps_is_advertised_once_to_an_agent_given_everything() {
+    let connectors = FakeConnectors::new()
+        .with_overlay("stripe", STRIPE_SERVER)
+        .with_overlay("stripe_payments", STRIPE_SERVER)
+        .with_connection(&user(), FakeConnection::app("stripe"))
+        .with_connection(&user(), FakeConnection::app("notion"))
+        .build();
+    let connections = connectors.connections(&user()).await.unwrap();
+
+    assert_eq!(connections.handles().count(), 3);
+    assert_eq!(
+        connections.destinations(),
+        [app_key("notion"), app_key("stripe")]
+    );
+    let selected = connections.scoped(&Selection::Apps(vec![
+        app("stripe"),
+        app("stripe_payments"),
+    ]));
+    assert_eq!(
+        selected.destinations(),
+        [app_key("stripe"), app_key("stripe_payments")]
+    );
+}
+
 // API connections.
 
 #[tokio::test]

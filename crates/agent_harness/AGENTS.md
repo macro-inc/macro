@@ -54,7 +54,8 @@ between the sandbox and the rest of the product.
 External runtimes receive the session's configured MCP selection when binding.
 `outbound/egress.rs` lists it from `connectors::McpConnectionsService`
 (`connections(owner).scoped(selection).destinations()`): under
-`OwnerConnections` every app and custom server the owner can use, under
+`OwnerConnections` every app and custom server the owner can use (a native
+server several overlaid apps share once, under the first), under
 `Selected` exactly the selected apps, connected or not, so an unconnected one
 answers with a connect prompt. Every app, overlaid ones included, is
 advertised by its app slug. The `app.connected` resume check

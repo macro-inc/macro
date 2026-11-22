@@ -493,10 +493,27 @@ impl McpConnections {
 
     /// What a session in this scope is told it can address: every app it was
     /// given, connected or not, so a call can ask to connect; or, given
-    /// everything, every connection that may be dialed.
+    /// everything, every connection that may be dialed, once each. One
+    /// connection can count for several apps (a native server at an address
+    /// several overlaid apps share); it is advertised under the first of
+    /// them, so its tools are not listed twice under two names.
     pub fn destinations(&self) -> Vec<ConnectorKey> {
         match &self.scope {
-            Selection::All => self.handles().map(|handle| handle.key.clone()).collect(),
+            Selection::All => {
+                let mut advertised: Vec<&McpHandle> = Vec::new();
+                for handle in self.handles() {
+                    let shared = advertised
+                        .iter()
+                        .any(|held| Arc::ptr_eq(&held.connection, &handle.connection));
+                    if !shared {
+                        advertised.push(handle);
+                    }
+                }
+                advertised
+                    .into_iter()
+                    .map(|handle| handle.key.clone())
+                    .collect()
+            }
             Selection::Apps(apps) => apps.iter().cloned().map(ConnectorKey::App).collect(),
         }
     }
