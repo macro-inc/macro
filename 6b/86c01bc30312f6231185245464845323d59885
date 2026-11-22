@@ -1,0 +1,121 @@
+crates/ai_tools/src/build_context.rs
+  s_cfd7ab2660542c::t_0f2b84d31db73f 213
+  s_cfd7ab2660542c::t_53b2f0687cabb2 162-163,201-202
+  s_cfd7ab2660542c::t_70355fde40913d 200,229,690,744
+  s_cfd7ab2660542c::t_a4e37fbbc3bd57 635-636,640,662,665-670,673
+services/agent_harness_service/src/code_mode/connected_apps.rs
+  s_cfd7ab2660542c::t_e875338b9ec37b 24,26-30,38,47-49,60,63,146,149,245-249,251,261-264,267
+  s_cfd7ab2660542c::t_bf8ab586f4aac1 40-42
+services/agent_harness_service/src/code_mode/connected_apps/test.rs
+  s_cfd7ab2660542c::t_63ac61b321cf7d 25,31,34-35,40-41,55-57,61-71,123,125-128,132,135,137-147,150,164,166-171,174,188
+  s_cfd7ab2660542c::t_525f63689970b2 172
+  s_cfd7ab2660542c::t_75de33263e4ccc 124
+  s_cfd7ab2660542c::t_d178c1f4dc818d 26-30,32,36-39,42-54,58-60,72-122,129-131,133-134,136,148-149,151-163,165,173,175-187
+  s_cfd7ab2660542c::t_bd99c842a4bd7b 33
+services/agent_harness_service/src/config/test.rs
+  s_cfd7ab2660542c::t_44cbf79946ed96 81,91
+crates/ai_tools/src/tool_context.rs
+  s_cfd7ab2660542c::t_20a60022094ecd 178,192,204-205
+  s_cfd7ab2660542c::t_525f63689970b2 2321-2323
+  s_cfd7ab2660542c::t_0f2b84d31db73f 185-186
+  s_cfd7ab2660542c::t_53b2f0687cabb2 2170,2172-2173
+  s_cfd7ab2660542c::t_c1c31a5631e4bf 2308-2313,2315-2316,2318,2320,2324
+services/agent_harness_service/src/scheduling.rs
+  s_cfd7ab2660542c::t_e3b8e8d9fef3bc 551,559-564,930
+  s_cfd7ab2660542c::t_525f63689970b2 7,867
+services/agent_harness_service/src/cognition/api/tool_selection/test.rs
+  s_cfd7ab2660542c::t_aa917b880beeef 123-171,180-193,197-199,203-217
+  s_cfd7ab2660542c::t_525f63689970b2 172-179,194-196,200-202
+crates/ai_tools/src/connectors_config.rs
+  s_cfd7ab2660542c::t_0dd056aaf0ca17 1-53,65-80,87-98,100,103-143,148-224
+  s_cfd7ab2660542c::t_d266caee541a4e 54-64,81-86,101-102
+  s_cfd7ab2660542c::t_525f63689970b2 99,144-147
+services/agent_harness_service/src/lib.rs
+  s_cfd7ab2660542c::t_75de33263e4ccc 1611
+  s_cfd7ab2660542c::t_23f6de2c0935a0 67,540-541,549-550,554,784,1610,1963,1987,2154-2155
+  s_cfd7ab2660542c::t_11084e22b5dd4d 893
+  s_cfd7ab2660542c::t_1ed92693bc3a9b 658
+  s_cfd7ab2660542c::t_657b12aecfa9e1 519-538
+  s_cfd7ab2660542c::t_e26e9ea76a95a8 546
+  s_cfd7ab2660542c::t_dd2d19a1499280 641,654,898
+crates/ai_tools/Cargo.toml
+  s_cfd7ab2660542c::t_b8fcd82c8b9ca6 130
+services/document_storage_service/src/server.rs
+  s_cfd7ab2660542c::t_4755bf24def606 393,419-423,1716
+  s_cfd7ab2660542c::t_684b3efedc53cd 388-392,394-410
+services/agent_harness_service/AGENTS.md
+  s_cfd7ab2660542c::t_af9625211aefba 198-201,222-224,299,367
+  s_cfd7ab2660542c::t_8e968173803272 19-26
+crates/mcp_toolset/src/lib.rs
+  s_cfd7ab2660542c::t_e26e9ea76a95a8 9-11
+services/agent_harness_service/src/routine_sessions/test.rs
+  s_cfd7ab2660542c::t_889cb7ead7efb8 1,16-17,20-21,27-29,32-43,48,50-53,56-63,65,68,70-71,73,76-78,80-83,86-88,95-97
+  s_cfd7ab2660542c::t_525f63689970b2 24-26,44-47,89-94
+crates/ai_tools/src/bin/memory/context.rs
+  s_cfd7ab2660542c::t_53b2f0687cabb2 29-30
+services/agent_harness_service/src/routine_sessions.rs
+  s_cfd7ab2660542c::t_57254e0652888b 13-14,23,28,37,51-54,57-58,60,63,65-71,74-79,81-89,95,97,107,114,116,122,125-127,130,135-136,138-143
+services/agent_harness_service/src/cognition/api/context.rs
+  s_cfd7ab2660542c::t_8e5c6129f7e478 98-101,105-108,165-169
+  s_cfd7ab2660542c::t_388abe8ae46c85 113
+  s_cfd7ab2660542c::t_c34baf2655e3f6 116
+crates/ai_tools/src/tool_context/test/import_link_access.rs
+  s_cfd7ab2660542c::t_89fd83fe84741d 214-216,229,349,593
+services/agent_harness_service/src/cognition/api/structured_completion.rs
+  s_cfd7ab2660542c::t_591db0c6401e72 193
+services/agent_harness_service/Cargo.toml
+  s_cfd7ab2660542c::t_63ac61b321cf7d 231
+crates/ai_tools/src/mcp_app_catalog/test.rs
+  s_cfd7ab2660542c::t_aa8881fefbf5b3 2,4-6,8-10,12-13,17-21,25-28,32-35,38-53
+services/agent_harness_service/src/cognition/api/stream/chat_message.rs
+  s_cfd7ab2660542c::t_591db0c6401e72 559,589
+services/document_storage_service/src/api/context.rs
+  s_cfd7ab2660542c::t_684b3efedc53cd 555-559
+  s_cfd7ab2660542c::t_525f63689970b2 554
+crates/ai_tools/src/lib.rs
+  s_cfd7ab2660542c::t_75de33263e4ccc 92-93
+  s_cfd7ab2660542c::t_525f63689970b2 314-315,342-344
+  s_cfd7ab2660542c::t_c1c31a5631e4bf 313
+  s_cfd7ab2660542c::t_b9587dcb8b05a9 13
+  s_cfd7ab2660542c::t_f4df15a97353ed 72
+services/agent_harness_service/src/cognition/config.rs
+  s_cfd7ab2660542c::t_0fc89450d1cffa 201-282
+services/agent_harness_service/src/scheduling/routine_suggestions.rs
+  s_cfd7ab2660542c::t_e3b8e8d9fef3bc 12-13,20,22,24,29,31
+services/agent_harness_service/src/cognition/api/context/test.rs
+  s_cfd7ab2660542c::t_1236da4a120a37 506,513,567,607,647,786-789,791-794,802-825,827
+  s_cfd7ab2660542c::t_272d981b6631d5 608,631,636,639,645
+services/agent_harness_service/src/cognition/api/tool_selection.rs
+  s_cfd7ab2660542c::t_591db0c6401e72 2-5,75,78,93,102-115
+  s_cfd7ab2660542c::t_3b6f91a645021f 116-117
+services/agent_harness_service/src/cognition/server.rs
+  s_cfd7ab2660542c::t_869b27af09ccd7 760,813,876-877,879-881,884-889,957-959
+  s_cfd7ab2660542c::t_f0bb34b2c5b435 975-994
+  s_cfd7ab2660542c::t_c34baf2655e3f6 99-101
+  s_cfd7ab2660542c::t_9c1ec036dd9148 107
+  s_cfd7ab2660542c::t_af3d7556c1df93 597-598
+  s_cfd7ab2660542c::t_c61f9143db938c 603
+  s_cfd7ab2660542c::t_6b264b46c171a7 9
+  s_cfd7ab2660542c::t_75de33263e4ccc 599-601,606-620
+  s_cfd7ab2660542c::t_712d067e838465 674,679,682-687,690,871
+  s_cfd7ab2660542c::t_ceb10a6bc694f5 995
+crates/ai_tools/src/mcp_app_catalog.rs
+  s_cfd7ab2660542c::t_a9255f0dcdd09b 4-5,7,9-10,12-13,16-19,23,26-27,32,34-37,39,42-45
+  s_cfd7ab2660542c::t_f4df15a97353ed 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6b86c01bc30312f6231185245464845323d59885",
+  "prompts": {},
+  "sessions": {
+    "s_cfd7ab2660542c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "87bbe042-970c-465d-ab64-b3aff25d263f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
