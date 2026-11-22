@@ -105,3 +105,70 @@ async fn signed_document_grant_retains_invocation_attribution() {
         None
     );
 }
+
+#[tokio::test]
+async fn a_mention_document_grant_is_view_only_and_retains_the_signed_restriction() {
+    use agent_correlation::{
+        context::{Attribution, scope_attribution},
+        scope::SessionScope,
+    };
+    let mention = Uuid::from_u128(903);
+    let token = scope_attribution(
+        Attribution {
+            channel_mention_id: Some(mention),
+            scope: SessionScope::parse("channel_mention"),
+            signed_scope: true,
+            ..Attribution::default()
+        },
+        async {
+            encode_principal_permission_token(
+                &CreationPrincipal::User(user()),
+                "skill-fixture".into(),
+                AccessLevel::Edit,
+                SECRET,
+            )
+            .unwrap()
+        },
+    )
+    .await;
+    let claims = decode_permission_token(&token, SECRET).unwrap();
+    assert_eq!(
+        claims.access_level,
+        AccessLevel::View,
+        "a mention must never obtain a writable worker/sync grant"
+    );
+    let wire: serde_json::Value = macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+    assert_eq!(wire["agent_scope"], "channel_mention");
+    assert_eq!(wire["channel_mention_id"], mention.to_string());
+}
+
+#[tokio::test]
+async fn no_send_background_document_grants_keep_edit_access() {
+    use agent_correlation::{
+        context::{Attribution, scope_attribution},
+        scope::SessionScope,
+    };
+    let token = scope_attribution(
+        Attribution {
+            scope: Some(SessionScope::NoSend),
+            signed_scope: true,
+            ..Attribution::default()
+        },
+        async {
+            encode_principal_permission_token(
+                &CreationPrincipal::User(user()),
+                "normal-fixture".into(),
+                AccessLevel::Edit,
+                SECRET,
+            )
+            .unwrap()
+        },
+    )
+    .await;
+    assert_eq!(
+        decode_permission_token(&token, SECRET)
+            .unwrap()
+            .access_level,
+        AccessLevel::Edit
+    );
+}
