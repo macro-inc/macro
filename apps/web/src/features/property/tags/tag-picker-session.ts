@@ -5,7 +5,6 @@ import { useDropdownSearch } from '@property/editors/selectors/PropertyOptionSel
 import { useAddPropertyOptionMutation } from '@queries/properties/options';
 import {
   type CreateTagResult,
-  invalidateTags,
   useEnsureTagSetMutation,
 } from '@queries/properties/tags';
 import { useCurrentTeamQuery } from '@queries/team/teams';
@@ -330,7 +329,6 @@ export function createTagPickerSession(props: {
           },
         },
       });
-      invalidateTags();
       await props.docTags.applyTag(scope, created.id);
       props.onClose();
     } catch (error) {

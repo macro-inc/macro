@@ -7,7 +7,6 @@ import { DEFAULT_TAG_COLOR, TAG_COLOR_OPTIONS } from '@property/tags/tagColors';
 import { queryReadyGate } from '@queries/gate';
 import { useAddPropertyOptionMutation } from '@queries/properties/options';
 import {
-  invalidateTags,
   useEnsureTagSetMutation,
   useTagsQuery,
 } from '@queries/properties/tags';
@@ -281,7 +280,6 @@ export function TagsMenu(props: {
           },
         },
       });
-      invalidateTags();
       if (
         pendingCreate() !== creation ||
         !props.menu.isOpen() ||
