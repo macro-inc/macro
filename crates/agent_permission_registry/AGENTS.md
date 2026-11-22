@@ -39,8 +39,8 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
 - Remove an operation the SDK dropped, or one the JS tools catalog now
   skips (added to the SDK's `Excluded` list in
   `packages/sdk/src/coverage/skipped.ts`): delete its line. The registry
-  holds exactly the operations a program can call, so the permissions page
-  offers no setting that does nothing.
+  holds exactly the operations a program can call, so the permission settings
+  offer no setting that does nothing.
 - New group: add it to `groups` (stable `id`, never renamed: settings are
   stored under it) and move operations into it, each keeping its action. A
   move needs a migration that copies every saved `<old>:<action>` rule to

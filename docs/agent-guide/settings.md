@@ -1241,50 +1241,58 @@ Computer Claude sign-ins**.
 
 Behind `enable-agent-permissions` (the one flag on agent permissions and the
 JS tools programs they gate; on in local stacks, PostHog on dev and
-production, off when PostHog can't be read), an agent's edit form has a
-**Permissions** section between `Who can use it` and `Advanced`: `All allowed`
-or `<n> restrictions` with the first two (`Asks before sending · Email`) and
-`Manage`, which opens the **Permissions** page in place; Back returns to the
-form with its unsaved edits (on a phone, the split header's Back does the
-same before it would leave the form). The Macro row
-in the agent list has a shield button (`Macro's permissions`) that opens the
-same page for the Macro persona (the new Macro bot id), and
-`requestAgentPermissions(agentId, focus?)` opens it from elsewhere, scrolled
-to a group, action or tool. The section and button are absent while the
-flag is off or the API answers 404, and on the create form; an open page
-closes when the flag turns off, and a link waits until it is on. The page's
-note says the settings apply to every program the agent runs (`Applies to
-every program <agent> runs in sessions where agent permissions are on.`): a program reaches Macro only through steps the
-settings check, and the code it runs on the side can't reach Macro at all; the
-agent's other tools and connected apps aren't covered, even where a setting
-says Never.
+production, off when PostHog can't be read), each row in **Your agents** whose
+permissions the API answers (Macro, the persona under the new Macro bot id,
+and agents the viewer manages) has a **Permissions ⌄** button (accessible
+name `<Agent>'s permissions`, `aria-expanded`). It expands the agent's tool
+permissions inline under the row, one row at a time; pressing it again
+collapses them. `requestAgentPermissions(agentId, focus?)` (chat cards'
+**Review permissions** and **All permissions**) opens Settings → Agents with
+that row expanded, scrolled into view, and the linked tool's or action's
+accordion open. An agent's edit form shows the same component in its
+**Permissions** section between `Who can use it` and `Advanced`, saving on each
+click. The button, the section and a link are absent while the flag is off or
+the API answers 404, and on the create form; an open panel closes when the
+flag turns off, and a link waits until it is on.
 
-The header counts the saved settings it shows by who made them (`2 settings
-changed · 1 set by <agent> itself`). The page lists every permission group
-that has a tool as a collapsible row whose summary says what is restricted (`⊘ Never deletes · ✋
-Asks before sending · 2 tools customized`), or says it once when every action
-the group has tools for agrees (`✋ Asks for everything`, `⊘ Never allowed`).
-`Channels & messages` covers messaging; creating and deleting channels, their
-settings, members, join links, access requests and channel bots are under
-`Channel settings & members`.
-Expanded, each action the group has tools for (of Create, Read, Edit,
-Delete, Send) has an `Allow · Ask · Never` segmented control (radio group named `<Group>:
-<Action>`; full state names are the tooltips; `Allow` clears the group's
-setting, since this page sets no action defaults and each default is Allow), and `Individual tools` lists
-the group's tools with an `All` / `Differs` filter, each with its own control
-and a ↺ (`Use the <Action> setting`) that clears its own rule. A tool without
-a setting of its own reads `follows <Action>`. Every click saves at once (one
-`PUT`, queued per agent); a failure puts the control back and shows a toast. A
-tool set while its action's change still saves is sent once that save
-settles, so it follows the action only if the action saved. The search field matches group,
-action and tool names and `service.operation`, and opens matching groups.
-A setting saved on an action no tool has (or a group with none) is not shown
-or counted, but stays saved and applies once a tool maps there.
-`Reset permissions` asks for confirmation (a drawer on phones: `Every setting
-goes back to Always allow.`) and puts every saved setting back to Always
-allow, hidden ones too. People who can't edit the agent see the
-controls disabled and no Reset. On phones the rows stack and controls go full
-width.
+The component is a table, **Action** / **Default permission**, with one
+accordion row per action in display order Read, Create, Edit, Send, Delete.
+Each row shows `<n> exceptions` (and `· <n> tool settings`) and a default
+dropdown (`<Action> default permission`: Allow ✓ · Ask · Deny; choosing Allow
+clears the saved default). Expanded (region `<Action> exceptions`), it lists
+each entity's exception with its own dropdown (`<Entity>: <Action>`: the
+states other than the default, the row's own state when it equals the
+default, and `Use default (X)`, which removes the exception), then `The other
+<n> entities follow the <Action> default.` (`All <n> entities …` with none).
+`+ Add exception` (`Add a <Action> exception`) opens a searchable list of the
+entities (registry groups) that have tools for that action and no exception
+yet; picking one adds a row whose `Choose permission` menu opens at once, and
+choosing a state saves it. `Channels & messages` covers messaging; creating
+and deleting channels, their settings, members, join links, access requests
+and channel bots are under `Channel settings & members`. Only pairs with at least one tool are shown or
+counted: a rule saved on a hidden pair stays saved and enforced. Saved rules
+on single tools (the agent's own restrictions, older settings) are listed
+under their action as **Individual tools**, with `Set by agent` and a remove
+button (`Remove the setting for <tool>`); the settings never create them.
+Every click saves at once (one `PUT`, queued per agent); a failure puts the
+control back and shows a toast.
+
+Below the table, a line counts the visible saved settings by who made them
+(`2 settings changed · 1 set by <agent> itself`), and `Reset permissions`
+asks for confirmation (a drawer on phones) and puts every setting back to
+Allow, hidden ones included. A note says the settings apply to every program
+the agent runs (`Applies to every program <agent> runs in sessions where agent
+permissions are on.`): a program reaches Macro only through steps the
+settings check, and the code it runs on the side can't reach Macro at all;
+the agent's other tools and connected apps aren't covered, even where a
+setting says Deny. People who can't edit the agent see the dropdowns
+disabled, no `+ Add exception`, no Reset, and `Only people who can edit
+<agent> can change these.` On phones the agent row's buttons wrap under its
+name and the panel spans the row; dropdowns narrow.
+
+Backend-free check of the component (desktop and phone):
+`bunx playwright test --config src/features/block-agent/browser-test/permissions.playwright.config.ts -g settings`
+from `apps/web` (`?view=page` of that fixture).
 
 ### GitHub reconnect recovery
 
