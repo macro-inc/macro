@@ -80,3 +80,23 @@ import { publishScreen } from '@macro-inc/sdk/calls/browser';
 const share = await publishScreen(room);
 await share.stopped; // resolves after the picker track ends or stop() completes
 ```
+
+## A scheduled meeting can end more than once
+
+When everyone leaves a scheduled meeting and someone rejoins through its link
+before its scheduled end, the meeting resumes as the same call: the same call
+id, chat and sharing, in a new room. So for one call id:
+
+- `call.started` and `call.ended` (and the participant events) can arrive more
+  than once: started, ended, started, ended. Treat `call.ended` as "this
+  session ended", not "this call is over for good". After the scheduled end a
+  rejoin starts a new call with a new id. Channel and instant calls never
+  resume.
+- `call.recording_ready` and `call.summarized` can arrive again after the
+  later session ends; the record and summary then cover the whole call.
+- While the call is live again, `macro.calls.byId(id)` reads the live call
+  (`isActive` true, no `sessions`); the earlier sessions reappear when it ends.
+- A record has one recording per session. `CallRecord.sessions()` lists them
+  in order, each with its own window and recording; the top-level
+  `recordingUrl` and `recordingStartedAt` describe the first. Read a later
+  session's bytes with `call.recording.bytes({ session: 1 })` (0-based).
