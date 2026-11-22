@@ -1037,3 +1037,48 @@ it('leaves a created task out of groups read for the previous grouping', async (
     f.cleanup();
   }
 });
+
+it('releases a created task only for a later-page row the list shows', async () => {
+  const { buildOptimisticTask } = await import('../core/optimistic-task');
+  const { SYSTEM_PROPERTY_IDS } = await import('@property/constants');
+  // The later page names the task, but in another project: the list hides it.
+  const moved = buildOptimisticTask({
+    id: 'task',
+    title: 'task',
+    ownerId: 'viewer',
+    properties: [
+      [
+        SYSTEM_PROPERTY_IDS.PROJECT,
+        {
+          valueType: 'ENTITY',
+          refs: [{ entity_id: 'other', entity_type: 'INITIATIVE' }],
+        },
+      ],
+    ],
+    definitions: new Map(),
+    now: new Date('2026-11-22T12:00:00Z'),
+  });
+  fixture.groupQueries = new Map([
+    [
+      'done',
+      {
+        data: () => ({ entities: [moved] }),
+        hasNextPage: () => false,
+        isFetchingNextPage: () => false,
+        fetchNextPage: async () => {},
+      },
+    ],
+  ]);
+  const f = await createdTaskFixture();
+  try {
+    f.setEntities([f.inProject('listed')]);
+    f.setOptimistic([
+      { entity: { ...f.inProject('temp'), id: 'task' }, pending: false },
+    ]);
+    expect(f.shape()).toContain('task');
+    expect(f.onListed).not.toHaveBeenCalled();
+  } finally {
+    f.cleanup();
+    fixture.groupQueries = new Map();
+  }
+});

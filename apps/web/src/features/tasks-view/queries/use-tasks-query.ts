@@ -573,9 +573,16 @@ export function useTasksDataSource(
       if (search.isSearching() || query.isPending || query.isPlaceholderData)
         return deleted;
       const listed = new Set(baseTasks().map((task) => task.id));
+      // Only later-page rows the list shows, as it renders them.
+      const reference = options.reference?.();
+      const context = viewContext();
       for (const group of query.data?.groups ?? []) {
         for (const task of continuations.entities(group.key)) {
-          listed.add(task.id);
+          if (
+            (!reference || referencesEntity(task, reference)) &&
+            taskMatchesView(task, context)
+          )
+            listed.add(task.id);
         }
       }
       const known = options.isOptimisticTaskKnown ?? (() => true);
