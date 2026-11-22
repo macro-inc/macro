@@ -53,24 +53,18 @@ describe('channel rereads owed after a delete', () => {
     expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
   });
 
-  it('keeps in this tab what storage refused, until storage takes a write', () => {
+  it('says when storage refused what is owed, and keeps nothing of it', () => {
     const setItem = vi
       .spyOn(Storage.prototype, 'setItem')
       .mockImplementation(() => {
         throw new DOMException('full', 'QuotaExceededError');
       });
-    addChannelRereads('viewer', 'g1', ['a']);
 
-    expect(pendingChannelRereads('viewer', 'g1')).toEqual(['a']);
+    expect(addChannelRereads('viewer', 'g1', ['a'])).toBe(false);
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
 
     setItem.mockRestore();
-    addChannelRereads('viewer', 'g1', ['b']);
-    expect(
-      JSON.parse(
-        localStorage.getItem('channel-directory-rereads:v1:viewer') ?? 'null'
-      )
-    ).toEqual({ generation: 'g1', ids: ['a', 'b'] });
-    settleChannelRereads('viewer', 'g1', ['a', 'b']);
-    expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
+    expect(addChannelRereads('viewer', 'g1', ['b'])).toBe(true);
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual(['b']);
   });
 });

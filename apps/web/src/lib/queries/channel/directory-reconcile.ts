@@ -262,6 +262,8 @@ type ReconcileOutcome =
   | 'scope_changed'
   | 'unsettled'
   | 'deferred'
+  // Storage refused the second look a delete owes, so nothing was deleted.
+  | 'unsaved'
   | 'complete';
 
 /** What reconciliation carries past a failed attempt. The channels it
@@ -340,7 +342,8 @@ async function cachedHashes(
  * deleted too: every deleted channel is read on the primary once more after
  * its delete, and one the viewer can read again is written back by that
  * read. A failed read fails the attempt, and the next attempt starts with
- * that second look.
+ * that second look. It is owed in localStorage before the delete; when
+ * storage refuses it, nothing is deleted and the pass stays unproven.
  */
 async function removeUnreadableChannels(
   input: Reconciliation,
@@ -415,8 +418,11 @@ async function removeUnreadableChannels(
         input.signal?.throwIfAborted();
         const keys = batch.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`);
         // Owed before the delete, so a pass that stops after it still reads
-        // them again.
-        addChannelRereads(input.userId, input.generation, batch);
+        // them again. Storage that refuses them would leave a channel the
+        // viewer was added back to deleted for good, so the pass stops
+        // unproven and the directory reads the network instead.
+        if (!addChannelRereads(input.userId, input.generation, batch))
+          return finish('unsaved');
         // A read sent before this deletion must not write the channel back.
         recordExternalDeletion(input.host, keys);
         await span.run(() => input.host.deleteRecords(keys, session));
