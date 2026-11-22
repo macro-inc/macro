@@ -1072,6 +1072,7 @@ dependencies = [
  "apollo-parser",
  "chrono",
  "database_sql",
+ "item-filter-index",
  "lru",
  "macro_user_id",
  "maybe_send",
