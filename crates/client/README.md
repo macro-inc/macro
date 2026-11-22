@@ -81,9 +81,9 @@ upgrades, below), and resets otherwise. Opening a migratable format drops record
 projections, index facts, and calendar ranges — all refetchable — and keeps
 queued mutations, optimistic layers, and their projections, then rewrites the
 namespace in the same transaction. An interrupted migration therefore retries on
-the next open. Native owners then `VACUUM INTO` a fresh file and swap it in, so an
-upgrade also releases the space the dropped records occupied instead of leaving
-free pages in the old file. The browser's physical database name embeds the format
+the next open. Native owners then try to `VACUUM INTO` a fresh file and swap it in, so an
+upgrade usually releases the space the dropped records occupied instead of
+leaving free pages in the old file; if that fails, the migrated file stays. The browser's physical database name embeds the format
 version, and a carry-forward (below) looks only at older storage versions of the
 current format, so a format change starts a new browser file instead of migrating;
 the previous file is left for any tab still running the older bundle.
@@ -102,9 +102,9 @@ runs the queue checks as every reopen does. Records, queued mutations,
 optimistic layers and the storage generation stay, so the upgrade refetches
 nothing and loses no queued write; a format migration that runs after it (above)
 still drops the refetchable rows. A file whose `meta` names another scope, or a cache
-format this build cannot carry forward, is rejected before any step runs: native
-resets it as before, and in the browser moved files go back to the older name as
-that build wrote them. A version with no chain, a newer version, or
+format this build cannot carry forward, is rejected before any step runs, so no step
+commits to it: native resets it as before, and in the browser moved files stay at
+the version they moved at, which a failed first open decides as below. A version with no chain, a newer version, or
 a failing step resets as before. Bumping the version without registering a step
 fails to compile; clearing `STEPS` declares that every older file resets.
 
@@ -120,7 +120,8 @@ build already holding the lock, a whole pair with a marker of its own beside it
 marker could not be removed after it did; its build decides those files first,
 and its next open removes such a marker: `older-in-use`), a browser without
 OPFS moves, a pair whose headers Turso would not open, or a failed move leaves
-the old file where it is and starts empty, as every version change did before.
+the old file where it is and starts empty, as every version change did before
+(a WAL move whose undo fails too leaves a split, below).
 A marker beside no whole pair is an adoption into that name stopped before its
 moves finished, or a wipe of it stopped after removing its pair, and the open
 looks further back: any whole pair such an adoption named is still at its own
@@ -185,8 +186,9 @@ An open that keeps moved files says so (`cacheRecoveryDeferred` on its error,
 `movedFilesKept` beside its failure code to the coordinator), whether it is the
 ordinary open that found them unusable or a recovery that could not decide,
 and whatever else failed with it. The coordinator
-retries a failed recovery five times at once, so with counting this resolves
-within one page load. Until an open succeeds, it never gives up a scope where
+retries a failed recovery five times at once, so with counting this usually
+resolves within one page load; a version probe that counts and then exits
+`storage-busy` ends that page load's retries, and the count goes on in the next. Until an open succeeds, it never gives up a scope where
 an open kept moved files, whatever ended the retries: a recovery that kept
 them again, or failures that never reached storage, such as assets that did
 not load. An open that reached storage and ended without a report counts the
