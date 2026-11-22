@@ -408,6 +408,53 @@ async fn a_pair_whose_own_adoption_is_unfinished_stays_until_it_finishes() {
 }
 
 #[wasm_bindgen_test]
+async fn a_marker_beside_no_whole_pair_leaves_the_pair_it_names_movable() {
+    // t12's adoption from t10 wrote its marker and stopped before moving
+    // anything: a t13 build finds nothing at t12 and moves t10 itself.
+    let nonce = js_sys::Date::now() as u64;
+    let oldest = format!("adopt-unmoved-{nonce}:t10");
+    let (old, new) = identities("unmoved");
+    write_pair(&oldest, 6).await;
+    clean_pair(&old).await;
+    clean_pair(&new).await;
+    write_file(&marker_name(&old), b"an adoption that moved nothing").await;
+    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::NothingToAdopt);
+    assert_eq!(adopt_into(&oldest, &new).await, AdoptOutcome::Adopted);
+    assert_eq!(
+        moved(&new).await.map(|(from, _)| from),
+        Some(oldest.clone())
+    );
+    assert_eq!(open_and_finish(&new).await, 6);
+    clean_pair(&oldest).await;
+    clean_pair(&old).await;
+    clean_pair(&new).await;
+
+    // Stopped between its moves, the pair is split across t12 and t10: no
+    // whole pair at either, so nothing moves and t12's build completes it.
+    let oldest = format!("adopt-split-chain-{nonce}:t10");
+    let (old, new) = identities("split-chain");
+    write_pair(&oldest, 9).await;
+    clean_pair(&old).await;
+    clean_pair(&new).await;
+    adopt_and_stop(&oldest, &old).await;
+    assert_eq!(adopt_into(&old, &new).await, AdoptOutcome::NothingToAdopt);
+    assert_eq!(
+        adopt_into(&oldest, &new).await,
+        AdoptOutcome::NothingToAdopt
+    );
+    assert_eq!(present(&new).await, [false, false]);
+    assert!(!marker_exists(&new).await);
+    assert_eq!(
+        complete(&oldest, &old, false).await,
+        CompleteOutcome::Completed
+    );
+    assert_eq!(open_and_finish(&old).await, 9);
+    clean_pair(&oldest).await;
+    clean_pair(&old).await;
+    clean_pair(&new).await;
+}
+
+#[wasm_bindgen_test]
 async fn adopting_never_overwrites_or_moves_an_incomplete_pair() {
     // This owner's main file already exists.
     let (old, new) = identities("target");

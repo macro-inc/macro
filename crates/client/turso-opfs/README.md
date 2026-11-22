@@ -27,11 +27,12 @@ it is free (`ifAvailable`) and held until the caller releases it. A held lock
 means a context of the older build may have the files open, so the caller moves
 nothing; holding it through the moves and the first open keeps the older build
 from opening, resetting or recreating its paths meanwhile. Nothing moves when
-this owner's main file exists (`TargetExists`), when the previous identity has a
-marker of its own, an adoption into it whose first open has not succeeded
-(`PreviousAdopting`: its build decides those files first, and moving them would
-leave that marker without them), when the previous pair is
-incomplete or both files are empty (`NothingToAdopt`), or when a non-empty filelacks a header Turso opens (`Unreadable`: the checks Turso's own open makes of
+this owner's main file exists (`TargetExists`), when the previous pair is
+incomplete or both files are empty (`NothingToAdopt`, also beside a marker: an
+adoption into it stopped before its moves finished, whose files are still
+further back), when that whole pair has a marker of its own, an adoption into
+it whose first open has not succeeded (`PreviousAdopting`: its build decides
+those files first, and moving them would leave that marker without them), or when a non-empty filelacks a header Turso opens (`Unreadable`: the checks Turso's own open makes of
 the database header, whole pages and a table b-tree first page in the main
 file, the WAL magic, format and page size, and matching page sizes). Main and
 WAL move under their new names, so committed WAL frames move
