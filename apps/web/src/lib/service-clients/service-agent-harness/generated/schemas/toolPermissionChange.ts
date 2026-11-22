@@ -9,8 +9,10 @@ import type { ToolPermissionTarget } from './toolPermissionTarget';
 
 /**
  * One requested change. `state: None` removes the setting: a tool falls back
-to its group's action, a group's action to always. `always` on a group's
-action removes it too, since that is its default.
+to its group's action, a group's action to the action's default, a default
+to always. `always` on a default removes it too, since that is what no
+default means; a person's `always` on a group's action is kept, as an
+explicit exception.
  */
 export interface ToolPermissionChange {
   state?: ToolPermissionChangeState;

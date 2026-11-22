@@ -7,6 +7,7 @@
 import type { ShownPermission } from './shownPermission';
 import type { ShowPermissionsResultReason } from './showPermissionsResultReason';
 import type { ShowPermissionsSelection } from './showPermissionsSelection';
+import type { ToolPermissionDefault } from './toolPermissionDefault';
 
 /**
  * `ShowPermissions`' result: what the chat card shows, and a snapshot for
@@ -17,6 +18,9 @@ export interface ShowPermissionsResult {
   agentId: string;
   /** Each shown setting as it stands now. */
   current: ShownPermission[];
+  /** Each action's default as it stands now, in display order: what every
+group's action without an exception follows. */
+  defaults?: ToolPermissionDefault[];
   /** What the model should do next. */
   message: string;
   /** The agent's sentence for above the controls. */

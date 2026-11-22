@@ -5,12 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ToolPermissionTargetOneOf } from './toolPermissionTargetOneOf';
+import type { ToolPermissionTargetOneOfFive } from './toolPermissionTargetOneOfFive';
 import type { ToolPermissionTargetOneOfThree } from './toolPermissionTargetOneOfThree';
 
 /**
- * What a stored setting applies to: every operation of a group's action, or
-one operation.
+ * What a stored setting applies to: an action's default, one group's
+action (an exception to the default), or one operation.
  */
 export type ToolPermissionTarget =
   | ToolPermissionTargetOneOf
-  | ToolPermissionTargetOneOfThree;
+  | ToolPermissionTargetOneOfThree
+  | ToolPermissionTargetOneOfFive;

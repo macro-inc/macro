@@ -4,15 +4,17 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PermissionAction } from './permissionAction';
 import type { ToolPermissionTargetOneOfThreeKind } from './toolPermissionTargetOneOfThreeKind';
 
 /**
- * One SDK operation.
+ * An exception to the action's default: every operation of `group`
+whose action is `action`.
  */
 export type ToolPermissionTargetOneOfThree = {
+  /** The action. */
+  action: PermissionAction;
+  /** A registry group id, e.g. `documents`. */
+  group: string;
   kind: ToolPermissionTargetOneOfThreeKind;
-  /** The raw operationId, e.g. `delete_document`. */
-  operation: string;
-  /** The SDK's spec name, e.g. `storage`. */
-  service: string;
 };
