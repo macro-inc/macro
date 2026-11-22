@@ -282,3 +282,25 @@ async fn a_server_needing_sign_in_is_marked_until_signed_in(pool: PgPool) {
     assert!(!signed.requires_sign_in);
     assert_eq!(token(&signed).as_deref(), Some("fresh"));
 }
+
+/// A save of a row loaded before a concurrent mark (a second add, a toggle
+/// or a rename) carries no credentials, and leaves the mark standing.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("users"))
+)]
+async fn a_stale_save_without_credentials_keeps_the_mark(pool: PgPool) {
+    let repo = PgServerRepo::new(pool, key(7));
+    repo.save(&record(OWNER, WIKI, None)).await.unwrap();
+    let mut stale = repo.load(&user(OWNER), WIKI).await.unwrap().unwrap();
+
+    repo.mark_requires_sign_in(&user(OWNER), WIKI)
+        .await
+        .unwrap();
+    stale.server_name = "Renamed".to_owned();
+    repo.save(&stale).await.unwrap();
+
+    let stored = repo.load(&user(OWNER), WIKI).await.unwrap().unwrap();
+    assert!(stored.requires_sign_in);
+    assert_eq!(stored.server_name, "Renamed");
+}

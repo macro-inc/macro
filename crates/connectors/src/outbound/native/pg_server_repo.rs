@@ -72,7 +72,10 @@ impl McpServerStore for PgServerRepo {
 
         // Never clobber stored credentials with NULL on conflict: re-adding
         // an existing server (e.g. via the Add Server dialog) must not wipe
-        // a valid OAuth grant.
+        // a valid OAuth grant. A save without credentials keeps the stored
+        // sign-in mark too, so a row loaded before a concurrent mark can't
+        // undo it; one carrying a grant takes its own, which is how signing
+        // in clears it.
         sqlx::query!(
             r#"
             INSERT INTO mcp_servers (user_id, url, server_name, credentials, enabled, requires_sign_in)
@@ -81,7 +84,10 @@ impl McpServerStore for PgServerRepo {
             SET server_name      = EXCLUDED.server_name,
                 credentials      = COALESCE(EXCLUDED.credentials, mcp_servers.credentials),
                 enabled          = EXCLUDED.enabled,
-                requires_sign_in = EXCLUDED.requires_sign_in,
+                requires_sign_in = CASE
+                    WHEN EXCLUDED.credentials IS NULL THEN mcp_servers.requires_sign_in
+                    ELSE EXCLUDED.requires_sign_in
+                END,
                 updated_at       = NOW()
             "#,
             record.user_id.as_ref(),

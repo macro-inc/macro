@@ -29,14 +29,20 @@ impl McpServerStore for MemoryStore {
 
     async fn save(&self, record: &McpServerRecord) -> Result<(), Self::Err> {
         let mut rows = self.rows.lock().unwrap();
-        let kept = rows
+        let held = rows
             .iter()
             .find(|row| row.user_id == record.user_id && row.url == record.url)
-            .and_then(|row| row.credentials.clone());
+            .map(|row| (row.credentials.clone(), row.requires_sign_in));
         rows.retain(|row| !(row.user_id == record.user_id && row.url == record.url));
         let mut record = record.clone();
-        // As the table does: saving no credentials keeps the stored ones.
-        record.credentials = record.credentials.or(kept);
+        // As the table does: saving no credentials keeps the stored ones,
+        // and the stored sign-in mark with them.
+        if record.credentials.is_none()
+            && let Some((credentials, requires_sign_in)) = held
+        {
+            record.credentials = credentials;
+            record.requires_sign_in = requires_sign_in;
+        }
         rows.push(record);
         Ok(())
     }
