@@ -426,12 +426,13 @@ describe('cache engine worker runtime', () => {
     }
   });
 
-  it('reports an open that kept moved files as recovery-deferred', async () => {
-    // Either open can keep them; storage-busy wins over it.
+  it('reports an open that kept moved files beside its failure code', async () => {
+    // Either open can keep them, and a busy open says both.
     const cases = [
-      ['wipe-before-open', false, true, 'recovery-deferred'],
-      ['open-existing', false, true, 'recovery-deferred'],
+      ['wipe-before-open', false, true, 'recovery-open-failed'],
+      ['open-existing', false, true, 'initialization-failed'],
       ['wipe-before-open', true, true, 'storage-busy'],
+      ['open-existing', true, false, 'storage-busy'],
       ['open-existing', false, false, 'initialization-failed'],
       ['wipe-before-open', false, false, 'recovery-open-failed'],
     ] as const;
@@ -460,7 +461,7 @@ describe('cache engine worker runtime', () => {
 
       await vi.waitFor(() =>
         expect(messagesOfKind(direct, 'activation-failed')).toEqual([
-          expect.objectContaining({ failureCode }),
+          expect.objectContaining({ failureCode, movedFilesKept: deferred }),
         ])
       );
     }

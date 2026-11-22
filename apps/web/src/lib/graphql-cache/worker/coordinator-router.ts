@@ -282,7 +282,7 @@ export class CoordinatorRouter {
   private recoveryAttemptCount = 0;
   /** Whether an open since the last accepted readiness kept files a storage
    * upgrade moved here because it could not decide on them
-   * (`recovery-deferred`). Until an open succeeds those files may hold the
+   * (`movedFilesKept`). Until an open succeeds those files may hold the
    * only copy of an older build's queue, so this scope is never given up. */
   private movedFilesKept = false;
   /** Whether a retry cycle already ended in a deferral since the last
@@ -852,7 +852,8 @@ export class CoordinatorRouter {
             route.tabId,
             route.ownerEpoch,
             message.reason,
-            'storage-busy'
+            'storage-busy',
+            message.movedFilesKept === true
           );
           break;
         }
@@ -861,7 +862,8 @@ export class CoordinatorRouter {
           message.ownerEpoch,
           message.reason,
           undefined,
-          message.failureCode
+          message.failureCode,
+          message.movedFilesKept === true
         );
         break;
       case 'heartbeat-ack':
@@ -1259,12 +1261,14 @@ export class CoordinatorRouter {
   }
 
   /** Fails closed without touching storage again: the owner lock stayed with
-   * another context, or it kept the database files open (`storage-busy`). */
+   * another context, or it kept the database files open (`storage-busy`).
+   * A busy open can also have kept files a storage upgrade moved here. */
   private closeUnavailable(
     tabId: string,
     ownerEpoch: number,
     detail: string,
-    cause: 'owner-lock' | 'storage-busy' = 'owner-lock'
+    cause: 'owner-lock' | 'storage-busy' = 'owner-lock',
+    movedFilesKept = false
   ): void {
     const core = this.coreValue;
     if (!core) return;
@@ -1274,6 +1278,7 @@ export class CoordinatorRouter {
         ? core.storageBusy(tabId, ownerEpoch)
         : core.ownerLockUnavailable(tabId, ownerEpoch);
     if (actions.length === 0) return;
+    if (movedFilesKept) this.movedFilesKept = true;
     this.handoff.cancel();
     this.activationStarted.delete(ownerEpoch);
     // Storage was not changed, or a busy wipe removed only part of it, so a
@@ -1392,13 +1397,14 @@ export class CoordinatorRouter {
     ownerEpoch: number,
     reason: string,
     fatalCode?: EngineFatalCode,
-    failureCode?: ActivationFailureCode
+    failureCode?: ActivationFailureCode,
+    movedFilesKept = false
   ): void {
     const core = this.coreValue;
     if (!core) return;
     const actions = core.ownerLost(tabId, ownerEpoch, reason);
     if (actions.length === 0) return;
-    if (failureCode === 'recovery-deferred') this.movedFilesKept = true;
+    if (movedFilesKept) this.movedFilesKept = true;
     this.handoff.cancel();
     this.activationStarted.delete(ownerEpoch);
     const next = core.state;
@@ -1609,8 +1615,7 @@ export class CoordinatorRouter {
       operationCategory: 'storage',
       outcome: 'error',
       errorCode:
-        failureCode === 'recovery-open-failed' ||
-        failureCode === 'recovery-deferred'
+        failureCode === 'recovery-open-failed'
           ? 'storage-reset'
           : classifyCacheError(reason),
       resetReason,

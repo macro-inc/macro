@@ -78,15 +78,10 @@ export type EngineOpenOutcome =
 export type EngineFatalCode = 'storage-reset-required' | 'runtime-failure';
 /** `storage-busy`: another context kept the database files open through the
  * engine's bounded wait. An open changed nothing; a wipe may have removed one
- * file, so the coordinator keeps the attempt's database action.
- * `recovery-deferred`: a recovery open kept the files a storage upgrade moved
- * here, because it could not yet tell whether they go back to the older
- * build; it wiped nothing, so the coordinator keeps the scope for a later
- * attempt once its retries run out. */
+ * file, so the coordinator keeps the attempt's database action. */
 export type ActivationFailureCode =
   | 'initialization-failed'
   | 'recovery-open-failed'
-  | 'recovery-deferred'
   | 'storage-busy';
 
 export type TabToCoordinatorEnvelope =
@@ -347,6 +342,11 @@ export type EngineToCoordinatorEnvelope =
       ownerEpoch: OwnerEpoch;
       reason: string;
       failureCode: ActivationFailureCode;
+      /** The open, of either kind and whatever its failure code, kept files a
+       * storage upgrade moved here because it could not yet tell whether
+       * they go back to the older build; it wiped nothing. The coordinator
+       * then never gives the scope up until an open succeeds. */
+      movedFilesKept?: boolean;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -450,7 +450,6 @@ const isActivationFailureCode = (
 ): value is ActivationFailureCode =>
   value === 'initialization-failed' ||
   value === 'recovery-open-failed' ||
-  value === 'recovery-deferred' ||
   value === 'storage-busy';
 
 const isOptionalRecord = (
@@ -1526,11 +1525,14 @@ export function validateEngineToCoordinatorEnvelope(
           'ownerEpoch',
           'reason',
           'failureCode',
+          'movedFilesKept',
         ]) &&
         isNonEmptyString(value.tabId) &&
         isPositiveInteger(value.ownerEpoch) &&
         isNonEmptyString(value.reason) &&
-        isActivationFailureCode(value.failureCode)
+        isActivationFailureCode(value.failureCode) &&
+        (value.movedFilesKept === undefined ||
+          typeof value.movedFilesKept === 'boolean')
       ) {
         return pass(value as EngineToCoordinatorEnvelope);
       }

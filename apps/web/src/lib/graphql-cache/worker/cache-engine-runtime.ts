@@ -141,17 +141,13 @@ const engineOpenOutcome = (outcome: CacheOpenOutcome): EngineOpenOutcome =>
     .exhaustive((): EngineOpenOutcome => 'reset-storage-uncertain');
 
 /** Why an activation failed. Busy files outrank everything: the open
- * changed nothing. Next, an open of either kind that kept files a storage
- * upgrade moved here defers, so the coordinator never gives their scope up. */
+ * changed nothing. Whether the open kept files a storage upgrade moved here
+ * travels beside the code (`movedFilesKept`), so a busy open says both. */
 function activationFailureCode(
   databaseAction: DatabaseAction,
-  {
-    storageBusy,
-    recoveryDeferred,
-  }: { storageBusy: boolean; recoveryDeferred: boolean }
+  storageBusy: boolean
 ): ActivationFailureCode {
   if (storageBusy) return 'storage-busy';
-  if (recoveryDeferred) return 'recovery-deferred';
   return databaseAction === 'wipe-before-open'
     ? 'recovery-open-failed'
     : 'initialization-failed';
@@ -256,8 +252,8 @@ async function activate(
   let ownerLockGaveUp = false;
   // Set when opening outwaited database files another context kept open.
   let storageBusy = false;
-  // Set when a recovery open kept files an upgrade moved, undecided.
-  let recoveryDeferred = false;
+  // Set when an open of either kind kept files an upgrade moved, undecided.
+  let movedFilesKept = false;
   let openGranted = false;
   let resolveOpen!: () => void;
   const openPermission = new Promise<void>((resolve) => {
@@ -367,7 +363,7 @@ async function activate(
       storageBusy = true;
     },
     onRecoveryDeferred: () => {
-      recoveryDeferred = true;
+      movedFilesKept = true;
     },
     onInitializationOutcome: (outcome) => {
       initializationOpenOutcome = engineOpenOutcome(outcome);
@@ -580,10 +576,11 @@ async function activate(
               tabId: activation.tabId,
               ownerEpoch: activation.ownerEpoch,
               reason: errorMessage(error),
-              failureCode: activationFailureCode(activation.databaseAction, {
-                storageBusy,
-                recoveryDeferred,
-              }),
+              failureCode: activationFailureCode(
+                activation.databaseAction,
+                storageBusy
+              ),
+              movedFilesKept,
             })
       );
     }
