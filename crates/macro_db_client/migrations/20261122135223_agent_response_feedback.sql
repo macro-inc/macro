@@ -1,5 +1,8 @@
 -- Ratings people give agent responses, for internal evals (owned by
--- crates/agent_feedback). A new table: no locks on existing data.
+-- crates/agent_feedback). A new table; its foreign key briefly locks "User",
+-- so fail fast rather than queue that table's writers.
+
+SET LOCAL lock_timeout = '3s';
 
 -- What was rated: one reply turn of an agent session, an agent's message in a
 -- channel, DM, thread or discussion, or one run of a routine.
