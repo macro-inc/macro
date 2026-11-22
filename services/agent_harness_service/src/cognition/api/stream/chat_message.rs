@@ -329,7 +329,11 @@ async fn send_chat_message_inner(
     // Compose stored user activity, explicit preferences, and current team profiles
     let user_memory = ctx
         .memory_service
-        .get_memory((*user_id).clone())
+        // The person's own chat message, unless a program sent it.
+        .get_memory(
+            (*user_id).clone(),
+            memory::domain::MemoryReader::of_request(),
+        )
         .await
         .inspect_err(|e| tracing::error!(error = ?e, "failed to fetch user memory"))
         .ok()

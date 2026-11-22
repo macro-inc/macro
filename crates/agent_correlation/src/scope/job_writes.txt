@@ -1,0 +1,24 @@
+# Writes a background job's credential (SessionScope::Job) may make, as
+# "METHOD /path" the service's OpenAPI spec in packages/sdk/specs names it,
+# under the spec's [name]. A job writes only what reaches no one but its
+# owner: into its own session (drafting a review or presenting a view, both
+# items the session creates and its owner decides on), the owner's own
+# notification inbox, and a tool-free AI completion. It changes no existing
+# item, shared or not: `a_job_writes_only_its_session_and_its_owners_inbox`.
+# A write's {session_id} is the credential's own session (propagate binds
+# it to the correlation's), so its reviews and views go only into its own
+# session, where whoever the session is shared with reads them, as they read
+# the job's result there anyway.
+# Everything not listed here or in job_reads.txt is refused.
+
+[agent-harness]
+POST /agent-sessions/{session_id}/reviews
+POST /agent-sessions/{session_id}/views
+
+[cognition]
+POST /structured-completion
+
+[notification]
+PATCH /v1/user_notifications/bulk/done
+PATCH /v1/user_notifications/bulk/seen
+PATCH /v1/user_notifications/bulk/undone

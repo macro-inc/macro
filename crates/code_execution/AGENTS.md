@@ -76,8 +76,12 @@ The harness enforces only where `enable-code-execution-egress-enforce` is
 on as well as the proxy flag, except for a run whose scope is held to an
 allowlist, which always enforces. It stops when the run ends, is
 cancelled or times out. The agent harness picks it per user with the
-fail-closed `enable-code-execution-egress-proxy` flag; `Egress::Direct` (the
-default) is the old path.
+fail-closed `enable-code-execution-egress-proxy` flag, and always proxies a
+run under a default-deny scope. A forwarder that can't start fails the run
+with `FailureCode::Egress` (never a direct fallback). Each forwarder has a
+lifetime span (`code_execution.egress_forwarder`: `outcome` ready or
+failed, `listener` failed, and the `forwarded`, `refused` and `failed`
+request counts when it stops); `Egress::Direct` (the default) is the old path.
 
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of

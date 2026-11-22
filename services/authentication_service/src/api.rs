@@ -64,7 +64,8 @@ pub(crate) async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::R
 
     let env = state.environment;
     let correlation =
-        agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone());
+        agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone())
+            .serving(&["auth"]);
 
     let app = api_router(state.clone())
         .with_state(state)

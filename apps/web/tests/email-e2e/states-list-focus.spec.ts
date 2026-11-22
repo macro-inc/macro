@@ -55,7 +55,8 @@ test.describe('the Focus rows of a Gmail inbox', () => {
     const ids: Record<string, string> = {};
     for (const subject of [...subjects, 'Hello'])
       ids[subject] = (await mailbox.synced(subject)).id;
-    // Follow up is a thread the owner wrote last in.
+    // Follow up is a thread the owner wrote last in, back in Focus because
+    // its due day has come: the reply is too new for the three-day wait.
     await replyAtGmail(mailbox, {
       inReplyTo: 'promise-1@example.com',
       to: 'hugo@example.com',
@@ -69,8 +70,8 @@ test.describe('the Focus rows of a Gmail inbox', () => {
       .toEqual([false, true]);
     // Each row: its reason, its due day this many days ahead, its trend.
     const rows = [
-      { subject: 'Question', reason: 'Reply needed', days: 0, rate: 10 },
-      { subject: 'Promise', reason: 'Follow up', days: 1, rate: -10 },
+      { subject: 'Question', reason: 'Reply needed', days: 1, rate: 10 },
+      { subject: 'Promise', reason: 'Follow up', days: 0, rate: -10 },
       { subject: 'Reschedule', reason: 'Calendar change', days: 3 },
       { subject: 'Order', reason: 'Customer', days: 10 },
       { subject: 'Standup', reason: 'Teammate', days: 400 },

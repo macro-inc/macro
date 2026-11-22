@@ -70,3 +70,36 @@ fn a_credential_is_found_wherever_a_request_carries_one() {
     let lookalike = url::Url::parse("http://host/path?macro-api-token-old=abc").unwrap();
     assert!(!credentialed(&headers, &lookalike));
 }
+
+/// A path that could resolve outside its host's base is refused: on a shared
+/// gateway origin it would reach another service, unfurl's link fetcher
+/// among them.
+#[test]
+fn a_path_never_leaves_its_sdk_host() {
+    let base = "https://gateway.example/dss";
+    assert_eq!(
+        confined(base, "documents/1").as_deref(),
+        Some("https://gateway.example/dss/documents/1")
+    );
+    for rest in [
+        "../unfurl/proxy",
+        "documents/../../unfurl/proxy",
+        "./documents",
+        "%2e%2e/unfurl/proxy",
+        "%2E%2E/unfurl/proxy",
+        ".%2e/unfurl/proxy",
+        "documents%2f..%2f..%2funfurl",
+        "..\\unfurl/proxy",
+        "documents%5c..%5cunfurl",
+    ] {
+        assert_eq!(confined(base, rest), None, "{rest}");
+    }
+}
+
+/// A proxied run whose forwarder can't start fails with its own code, so it
+/// is never mistaken for a runner fault or retried as a direct run.
+#[test]
+fn a_forwarder_that_cannot_start_fails_the_run() {
+    let failure = crate::outbound::deno::forwarder_unavailable();
+    assert_eq!(failure.code, crate::domain::FailureCode::Egress);
+}

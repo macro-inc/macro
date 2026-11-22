@@ -84,12 +84,17 @@ impl<Flags> EgressRollout<Flags> {
 }
 
 impl<Flags: FeatureFlags> EgressRollout<Flags> {
-    /// The egress for a run acting as `user`: when `enforced`, the run's
-    /// scope holds it to an allowlist and its forwarder always refuses, flags
-    /// or no flags (see `SessionScope::enforces_egress`); otherwise what the
-    /// flags say.
-    pub async fn egress_for(&self, user: &MacroUserIdStr<'_>, enforced: bool) -> Egress {
-        if enforced {
+    /// The egress for a run acting as `user` under `scope`. An allowlisted
+    /// scope always enforces, regardless of either rollout flag; other
+    /// scopes follow the flags (see `SessionScope::enforces_egress`). The
+    /// forwarder is then a hard dependency of an allowlisted run: if it can't
+    /// start, the run fails (`FailureCode::Egress`) and never goes direct.
+    pub async fn egress_for(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        scope: Option<SessionScope>,
+    ) -> Egress {
+        if scope.is_some_and(SessionScope::enforces_egress) {
             return Egress::Enforced;
         }
         self.egress(user).await
@@ -198,7 +203,10 @@ async fn scope_of(
 /// through its scoped credential, and finding and reading tools.
 fn native_tool_allowed(scope: SessionScope, tool: &str) -> bool {
     match scope {
-        SessionScope::Generation | SessionScope::NoSend | SessionScope::DryRun => matches!(
+        SessionScope::Generation
+        | SessionScope::NoSend
+        | SessionScope::DryRun
+        | SessionScope::Job => matches!(
             tool,
             "ExecuteCode"
                 | "DescribeCodeTools"
@@ -312,14 +320,11 @@ impl ExecutionCredentials for RunCredentials {
             environment: RunEnvironment {
                 token,
                 trace_headers: trace_headers(),
-                endpoints: self.endpoints.clone(),
+                endpoints: run_endpoints(&self.endpoints, scope.is_some()),
                 session_id: Some(identity.session.as_uuid()),
                 execution_id: Some(identity.execution.as_uuid()),
                 unattended: None,
-                egress: self
-                    .egress
-                    .egress_for(&actor, scope.is_some_and(SessionScope::enforces_egress))
-                    .await,
+                egress: self.egress.egress_for(&actor, scope).await,
                 scoped: scope.is_some(),
             },
             acting_user: actor,
@@ -393,20 +398,41 @@ impl UserExecutionCredentials for UserRunCredentials {
         Ok(RunEnvironment {
             token,
             trace_headers: trace_headers(),
-            endpoints: self.endpoints.clone(),
+            endpoints: run_endpoints(
+                &self.endpoints,
+                correlation
+                    .as_ref()
+                    .is_some_and(|signed| signed.scope.is_some()),
+            ),
             session_id: None,
             execution_id: None,
             unattended: None,
             egress: self
                 .egress
-                .egress_for(
-                    user,
-                    correlation_scope.is_some_and(SessionScope::enforces_egress),
-                )
+                .egress_for(user, correlation.as_ref().and_then(|signed| signed.scope))
                 .await,
             scoped,
         })
     }
+}
+
+/// The SDK hosts a run reaches. A scoped run (a hidden session, a scoped
+/// public-MCP run, a routine's dry run, a background job) gets no unfurl
+/// host: unfurl fetches what its caller names from Macro's servers and
+/// takes no credential, so no scope can refuse it there. A run under an
+/// allowlisted scope also always goes through the egress proxy
+/// ([`EgressRollout::egress_for`]), so `--allow-net` names only the
+/// forwarder, which has no unfurl upstream; other scoped runs follow the
+/// egress flag, and going direct can still reach unfurl on a shared gateway
+/// origin.
+pub(crate) fn run_endpoints(endpoints: &SdkEndpoints, scoped: bool) -> SdkEndpoints {
+    let mut endpoints = endpoints.clone();
+    if scoped {
+        endpoints
+            .hosts
+            .remove(<&'static str>::from(SdkHost::Unfurl));
+    }
+    endpoints
 }
 
 /// The current trace context, for the SDK to forward on authenticated requests.

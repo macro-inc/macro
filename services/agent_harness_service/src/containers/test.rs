@@ -404,3 +404,42 @@ fn only_a_background_session_with_instructions_goes_unread() {
     session.visibility = agent_session::domain::model::SessionVisibility::Listed;
     assert_eq!(reply_delivery(&session), ReplyDelivery::Streamed);
 }
+
+/// Only a session its owner opened and works in reads their memory as the
+/// person; a hidden run, an unlisted routine run, a thread's reply or a
+/// session someone else started reads it as a program.
+#[test]
+fn only_the_owners_own_session_reads_memory_as_the_person() {
+    use agent_session::domain::model::{SessionSource, SessionVisibility};
+    use memory::domain::MemoryReader;
+    let owner = macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|someone@example.com")
+        .expect("a user id");
+    let other = macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|other@example.com")
+        .expect("a user id");
+    let mut session = test_agent_session(AgentSessionId::new());
+    session.owner_id = model_owner::Owner::User(owner.clone());
+    session.source = SessionSource::User;
+    session.visibility = SessionVisibility::Listed;
+    session.thread_id = None;
+    session.origin = trigger_context::TriggerOrigin::Requested { by: owner.clone() };
+    assert_eq!(memory_reader(&session), MemoryReader::Person);
+
+    for change in [
+        |s: &mut agent_session::domain::model::AgentSession| {
+            s.visibility = SessionVisibility::Hidden
+        },
+        |s: &mut agent_session::domain::model::AgentSession| {
+            s.visibility = SessionVisibility::Unlisted
+        },
+        |s: &mut agent_session::domain::model::AgentSession| {
+            s.thread_id = Some(uuid::Uuid::from_u128(1))
+        },
+    ] {
+        let mut changed = session.clone();
+        change(&mut changed);
+        assert_eq!(memory_reader(&changed), MemoryReader::Program);
+    }
+    let mut started_by_another = session.clone();
+    started_by_another.origin = trigger_context::TriggerOrigin::Requested { by: other };
+    assert_eq!(memory_reader(&started_by_another), MemoryReader::Program);
+}

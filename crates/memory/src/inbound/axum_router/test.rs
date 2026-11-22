@@ -57,11 +57,19 @@ struct FakeMemoryService {
 }
 
 impl MemoryService for FakeMemoryService {
-    async fn get_memory(&self, _user: MacroUserIdStr<'static>) -> Result<Option<Memory>> {
+    async fn get_memory(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _: crate::domain::MemoryReader,
+    ) -> Result<Option<Memory>> {
         unimplemented!("not routed in these tests")
     }
 
-    async fn explicit(&self, user: &MacroUserIdStr<'_>) -> Result<ExplicitMemory> {
+    async fn explicit(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        _: crate::domain::MemoryReader,
+    ) -> Result<ExplicitMemory> {
         self.calls.lock().unwrap().push(format!("explicit {user}"));
         Ok(ExplicitMemory {
             content: "Prefers metric units".to_string(),

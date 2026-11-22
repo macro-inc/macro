@@ -47,6 +47,14 @@ pub async fn create_task_handler<
     project: ProjectBodyAccessLevelExtractorV2<EditAccessLevel, CreateTaskRequest, Svc, Auth>,
 ) -> Result<Json<CreateTaskResponse>, DocumentError> {
     let req = project.into_inner();
+    // A task filed in a project inherits the project's agents, whose work
+    // runs with the owner's full access: a scoped request starts no such
+    // work.
+    if req.project_id.is_some() && !agent_correlation::context::may_assign_agents() {
+        return Err(DocumentError::Forbidden(
+            "A program can't file a task in a project.".to_string(),
+        ));
+    }
     let task_name = req.task_name.clone();
     let markdown = req.markdown.clone().unwrap_or_default();
 

@@ -15,6 +15,7 @@ struct Data {
     released: Vec<u8>,
     retried: Vec<(u8, Duration)>,
     staged: Vec<(NaiveDate, Piece)>,
+    enrolled: usize,
 }
 impl MemoryRepo for Repo {
     async fn save_memory(&self, _: &Memory, _: MacroUserIdStr<'_>) -> Result<Uuid> {
@@ -29,6 +30,7 @@ impl MemoryRepo for Repo {
 }
 impl ComposedMemoryRepo for Repo {
     async fn enroll(&self, _: &MacroUserIdStr<'_>) -> Result<()> {
+        self.0.lock().unwrap().enrolled += 1;
         Ok(())
     }
     async fn claim_refresh(&self, _: NaiveDate) -> Result<Option<RefreshClaim>> {
@@ -298,7 +300,11 @@ async fn current_membership_controls_profiles_and_activity() {
     let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let teammate = MacroUserIdStr::parse_from_str("macro|teammate@example.com").unwrap();
     let date = NaiveDate::from_ymd_opt(2026, 6, 17).unwrap();
-    let memory = service.get_memory(owner.clone()).await.unwrap().unwrap();
+    let memory = service
+        .get_memory(owner.clone(), MemoryReader::Person)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(memory.contains("Teammate profile"));
     assert!(!memory.contains("Must stay hidden"));
     assert!(generator.inputs.lock().unwrap().is_empty());
@@ -313,7 +319,13 @@ async fn current_membership_controls_profiles_and_activity() {
             .await,
         Err(MemoryError::Forbidden)
     ));
-    assert!(service.get_memory(owner).await.unwrap().is_none());
+    assert!(
+        service
+            .get_memory(owner, MemoryReader::Person)
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[tokio::test]
@@ -594,4 +606,61 @@ fn retry_delay_grows_and_is_bounded() {
     let delays: Vec<_> = (1..=7).map(|a| retry_delay(a).num_hours()).collect();
     assert_eq!(delays, vec![1, 2, 4, 8, 16, 16, 16]);
     assert_eq!(retry_delay(0).num_hours(), 1);
+}
+
+/// A person's own memory read enrolls them in daily refresh; a program's
+/// read only reads.
+#[tokio::test]
+async fn a_programs_memory_read_enrolls_no_one() {
+    let repo = Repo::default();
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        Arc::new(Generator::default()),
+        Arc::new(Judge::default()),
+        no_teams(),
+        active(),
+    );
+    let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    service
+        .explicit(&user, MemoryReader::Program)
+        .await
+        .unwrap();
+    service
+        .get_memory(user.clone(), MemoryReader::Program)
+        .await
+        .unwrap();
+    assert_eq!(repo.0.lock().unwrap().enrolled, 0);
+    service.explicit(&user, MemoryReader::Person).await.unwrap();
+    assert_eq!(
+        repo.0.lock().unwrap().enrolled,
+        1,
+        "a person's own read enrolls"
+    );
+}
+
+/// A request a program makes (a correlation, a routine or a scope) reads
+/// memory as a program; any other is the person's own.
+#[tokio::test]
+async fn a_request_reads_as_whoever_made_it() {
+    assert_eq!(MemoryReader::of_request(), MemoryReader::Person);
+    for attribution in [
+        agent_correlation::context::Attribution {
+            correlation_id: Some(Uuid::from_u128(1)),
+            ..Default::default()
+        },
+        agent_correlation::context::Attribution {
+            routine_id: Some(Uuid::from_u128(2)),
+            ..Default::default()
+        },
+        agent_correlation::context::Attribution {
+            scope: Some(agent_correlation::scope::SessionScope::NoSend),
+            ..Default::default()
+        },
+    ] {
+        let reader = agent_correlation::context::scope_attribution(attribution, async {
+            MemoryReader::of_request()
+        })
+        .await;
+        assert_eq!(reader, MemoryReader::Program);
+    }
 }

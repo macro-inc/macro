@@ -221,6 +221,9 @@ pub enum FailureCode {
     Limit,
     /// Runner infrastructure failed.
     Internal,
+    /// The run's egress forwarder, its only network path, could not start:
+    /// the program never ran. A proxied run never falls back to going direct.
+    Egress,
 }
 
 /// A bounded failure description. Source and data must not be traced by callers.
