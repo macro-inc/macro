@@ -52,18 +52,24 @@ pub(super) fn save_version(connection: &Db) -> Result<(), TursoStorageError> {
     Ok(())
 }
 
-/// Applies the current rules to every stored document once, when they differ
-/// from the rules the cache was last written with.
+/// Applies each current rule the cache was not last written with to every
+/// stored document once. A rule already applied is left alone, so adding one
+/// does not rewrite what the others derived.
 pub(super) fn ensure_version(connection: &Db) -> Result<(), TursoStorageError> {
     let versions = driver::query(connection, META_SELECT, vec![text(VERSION_KEY)])?;
-    if let [row] = versions.as_slice()
-        && required_text(row, 0)? == fingerprint(SORT_FACT_DERIVATIONS)
-    {
+    let applied = match versions.as_slice() {
+        [row] => required_text(row, 0)?,
+        _ => String::new(),
+    };
+    if applied == fingerprint(SORT_FACT_DERIVATIONS) {
         return Ok(());
     }
+    let applied = applied.split(';').collect::<BTreeSet<_>>();
     driver::write_transaction(connection, || {
         for derivation in SORT_FACT_DERIVATIONS {
-            derive(connection, derivation)?;
+            if !applied.contains(derivation.fingerprint().as_str()) {
+                derive(connection, derivation)?;
+            }
         }
         save_version(connection)
     })
