@@ -62,6 +62,11 @@ const ENGINE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
 /// the engine right now.
 const ENGINE_RECHECK: Duration = Duration::from_secs(30);
 
+/// How long after a check an asked-for recheck is answered by it rather
+/// than checked again: presses of "Check again" (or a script calling it)
+/// don't queue probes on the machine.
+const RECHECK_FOLD: Duration = Duration::from_secs(5);
+
 /// The install id the isolation probe runs under, before the harness's.
 const PROBE_INSTALL: &str = "isolation-probe";
 
@@ -115,12 +120,16 @@ pub fn host(
     ingest: ingest::IngestTarget,
     network: Option<&str>,
     settings: &crate::config::TeammatesSettings,
-) -> rootcause::Result<HostTeammates> {
-    let seccomp_profile = install_seccomp_profile()?;
+) -> Result<HostTeammates, crate::harness::HostingSetupError> {
+    // The settings first: an error there can't pass by trying again.
     let network = network
         .map(engine::TeammateNetwork::new)
         .transpose()
-        .map_err(|error| rootcause::report!("[macro] teammate_network: {error}"))?;
+        .map_err(|error| {
+            crate::harness::HostingSetupError::Settings(rootcause::report!(
+                "[macro] teammate_network: {error}"
+            ))
+        })?;
     let allow = settings
         .allow
         .iter()
@@ -131,10 +140,13 @@ pub fn host(
             egress::Allow::new(network, entry.ports.clone())
                 .map_err(|error| rootcause::report!("[[teammates.allow]]: {error}"))
         })
-        .collect::<rootcause::Result<Vec<_>>>()?;
+        .collect::<rootcause::Result<Vec<_>>>()
+        .map_err(crate::harness::HostingSetupError::Settings)?;
+    let seccomp_profile =
+        install_seccomp_profile().map_err(crate::harness::HostingSetupError::Failed)?;
     let mut teammates = Teammates::new(
         cli::CliEngine::with_choice(settings.engine),
-        Store::for_harness(harness_id)?,
+        Store::for_harness(harness_id).map_err(crate::harness::HostingSetupError::Failed)?,
         Platform::current(),
         seccomp_profile,
         Egress { network, allow },
@@ -669,6 +681,9 @@ async fn check_host(
     let mut ticks =
         tokio::time::interval_at(tokio::time::Instant::now() + ENGINE_RECHECK, ENGINE_RECHECK);
     ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    // When the last check ended: an ask this soon after it is answered by
+    // it (the service already has its report).
+    let mut last_check: Option<tokio::time::Instant> = None;
     loop {
         tokio::select! {
             _ = ticks.tick(), if again => {}
@@ -676,9 +691,15 @@ async fn check_host(
                 if ask.is_none() {
                     return;
                 }
+                if last_check.is_some_and(|ended| ended.elapsed() < RECHECK_FOLD) {
+                    continue;
+                }
             }
         }
         let report = teammates.detect().await;
+        // One check in flight: the asks made during it are answered by it.
+        while asked.try_recv().is_ok() {}
+        last_check = Some(tokio::time::Instant::now());
         if !listed && can_host(&report) {
             let _ = events.send(TeammateEvent::Redial);
             return;

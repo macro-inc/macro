@@ -131,13 +131,17 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   reports it unreachable), `Link` checks again every 30 s
   (`ENGINE_RECHECK`, its own task), and at once on the service's
   `RecheckTeammateHost` (listed as `recheck-teammate-host` whenever hosting
-  is set up), sending each report. Once the machine can host on a dial
+  is set up), sending each report. One check runs at a time: asks during
+  it, or within 5 s after it (`RECHECK_FOLD`), are answered by it. Once the machine can host on a dial
   without `teammate-container`, it asks for one redial and stops checking;
   the relay latches it and closes when no turn runs. The probe runs as
   `isolation-probe-<harness id prefix>`, so macrods sharing an engine don't
   remove each other's. A failed hosting setup at start is retried 1 s
-  doubling to 5 min (`daemon.rs` `set_up_hosting`, `harness::Hosting`); a
-  connection made before it succeeds redials once it does. The bound-agent refresh is a
+  doubling to 5 min (`daemon.rs` `set_up_hosting`, `harness::Hosting`), or
+  every 10 min while the teammate settings are invalid
+  (`HostingSetupError::Settings`); each new error is logged once and shown
+  in the panel's header (`Daemon::hosting_problem`). A connection made
+  before it succeeds redials once it does. The bound-agent refresh is a
   `tokio` interval, so a busy stream can't starve it. `[teammates] engine` (`auto` probes, falling through to the next
   engine) and `[[teammates.allow]]` are in `config.rs`. `[macro]
   teammate_network` (local stack only) makes the holder join the stack's

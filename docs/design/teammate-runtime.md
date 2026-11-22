@@ -683,9 +683,11 @@ probe decides whether to check again. The service can ask for a check at
 once with `recheckTeammateHost` (a person pressing "Check again"); a macrod
 set up to host lists `recheck-teammate-host` whether or not its engine
 answers. Each harness probes under its own name, so macrods sharing an
-engine don't remove each other's probe. If setting up hosting fails at
-start, macrod tries again in the background (1 second doubling to 5
-minutes) and redials once it succeeds.
+engine don't remove each other's probe. Asks for a check while one runs, or within 5 seconds after
+it, are answered by that check. If setting up hosting fails at start,
+macrod tries again in the background (1 second doubling to 5 minutes, or
+every 10 minutes while the teammate settings are invalid, with the error
+in macrod's panel) and redials once it succeeds.
 For Docker it runs `docker version` (it needs Engine 24 or later, for
 `--security-opt` seccomp files and `--mount` volumes). For Podman it runs
 `podman info` (4.4 or later, for pasta). It never installs an engine. It

@@ -93,6 +93,18 @@ impl Hosting {
     }
 }
 
+/// Why hosting teammates couldn't be set up.
+#[derive(Debug, thiserror::Error)]
+pub enum HostingSetupError {
+    /// The teammate settings in the config are wrong: trying again won't
+    /// help until they are fixed.
+    #[error("the teammate settings are invalid: {0}")]
+    Settings(rootcause::Report),
+    /// Something that may pass by itself (a file another macrod writes).
+    #[error("could not set up hosting teammates: {0}")]
+    Failed(rootcause::Report),
+}
+
 /// Which call carried the harness credentials the service answered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CredentialPath {
@@ -460,7 +472,7 @@ async fn relay(
                     Some(message @ (ToRuntimeMessage::RunTeammate { .. } | ToRuntimeMessage::StopTeammate { .. })) => {
                         handle_teammate_message(teammates.as_ref(), message);
                     }
-                    Some(ToRuntimeMessage::RecheckTeammateHost) => recheck_teammate_host(teammates.as_ref()),
+                    Some(ToRuntimeMessage::RecheckTeammateHost { .. }) => recheck_teammate_host(teammates.as_ref()),
                     Some(other) => tracing::debug!(message = ?other, "ignoring an unknown runtime message"),
                     None => return Ok(Relayed::Closed),
                 }

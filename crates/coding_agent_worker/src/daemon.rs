@@ -53,6 +53,8 @@ pub struct Daemon {
     handoff: HandoffSender,
     runtime_connected: watch::Receiver<bool>,
     trigger_stream: watch::Receiver<TriggerStreamHealth>,
+    /// Why hosting teammates isn't set up, while it isn't.
+    hosting_problem: watch::Receiver<Option<String>>,
     _presence_watch: AbortOnDropHandle<()>,
 }
 
@@ -73,16 +75,27 @@ const FIRST_HOSTING_RETRY: Duration = Duration::from_secs(1);
 /// The longest wait between hosting setup attempts.
 const MAX_HOSTING_RETRY: Duration = Duration::from_secs(300);
 
+/// The wait between attempts while the teammate settings are invalid: they
+/// can't pass by themselves, so the machine isn't kept busy retrying.
+const SETTINGS_RETRY: Duration = Duration::from_secs(600);
+
+/// What a hosting setup attempt gives.
+type HostingSetup =
+    Result<Option<crate::harness::HostTeammates>, crate::harness::HostingSetupError>;
+
 /// Set up hosting teammates into `hosting`. A failed setup is retried in
-/// the background with backoff, for good, so a macrod that failed once (a
-/// transient file error at start) hosts once it succeeds instead of never
-/// until a restart; the task is aborted when the handle is dropped.
+/// the background, for good, so a macrod that failed once (a transient
+/// file error at start) hosts once it succeeds instead of never until a
+/// restart: with backoff, or every [`SETTINGS_RETRY`] while the settings
+/// are invalid. The last error is in `problem` until it succeeds; the task
+/// is aborted when the handle is dropped.
 fn set_up_hosting<SetUp>(
     hosting: &crate::harness::Hosting,
+    problem: &watch::Sender<Option<String>>,
     mut set_up: SetUp,
 ) -> Option<AbortOnDropHandle<()>>
 where
-    SetUp: FnMut() -> rootcause::Result<Option<crate::harness::HostTeammates>> + Send + 'static,
+    SetUp: FnMut() -> HostingSetup + Send + 'static,
 {
     match set_up() {
         Ok(Some(teammates)) => {
@@ -91,36 +104,78 @@ where
         }
         Ok(None) => None,
         Err(error) => {
-            tracing::warn!(error = ?error, "could not set up hosting teammates; trying again");
+            let mut delays = RetryDelays::new(FIRST_HOSTING_RETRY, MAX_HOSTING_RETRY);
+            let delay = hosting_failed(&error, problem, &mut delays);
             Some(AbortOnDropHandle::new(tokio::spawn(retry_hosting(
                 hosting.clone(),
+                problem.clone(),
                 set_up,
+                delays,
+                delay,
             ))))
         }
     }
 }
 
 /// Try setting up hosting again until it succeeds (or there is nothing to
-/// host here).
-async fn retry_hosting<SetUp>(hosting: crate::harness::Hosting, mut set_up: SetUp)
-where
-    SetUp: FnMut() -> rootcause::Result<Option<crate::harness::HostTeammates>> + Send + 'static,
+/// host here), first after `delay`.
+async fn retry_hosting<SetUp>(
+    hosting: crate::harness::Hosting,
+    problem: watch::Sender<Option<String>>,
+    mut set_up: SetUp,
+    mut delays: RetryDelays,
+    mut delay: Duration,
+) where
+    SetUp: FnMut() -> HostingSetup + Send + 'static,
 {
-    let mut delays = RetryDelays::new(FIRST_HOSTING_RETRY, MAX_HOSTING_RETRY);
     for attempt in 2u32.. {
-        tokio::time::sleep(delays.next_delay()).await;
+        tokio::time::sleep(delay).await;
         let span = tracing::info_span!("teammate.hosting_setup", attempt);
         let _entered = span.enter();
         match set_up() {
             Ok(Some(teammates)) => {
                 tracing::info!("set up hosting teammates");
+                problem.send_replace(None);
                 hosting.set(std::sync::Arc::new(teammates));
                 return;
             }
-            Ok(None) => return,
-            Err(error) => {
+            Ok(None) => {
+                problem.send_replace(None);
+                return;
+            }
+            Err(error) => delay = hosting_failed(&error, &problem, &mut delays),
+        }
+    }
+}
+
+/// Note a failed setup: logged and published when it differs from the last
+/// one (a retry that fails the same way says nothing new). Returns the wait
+/// before the next attempt.
+fn hosting_failed(
+    error: &crate::harness::HostingSetupError,
+    problem: &watch::Sender<Option<String>>,
+    delays: &mut RetryDelays,
+) -> Duration {
+    let shown = error.to_string();
+    let changed = problem.send_if_modified(|last| {
+        if last.as_deref() == Some(shown.as_str()) {
+            return false;
+        }
+        *last = Some(shown.clone());
+        true
+    });
+    match error {
+        crate::harness::HostingSetupError::Settings(_) => {
+            if changed {
+                tracing::error!(error = ?error, "not hosting teammates until the teammate settings are fixed; checking again every {SETTINGS_RETRY:?}");
+            }
+            SETTINGS_RETRY
+        }
+        crate::harness::HostingSetupError::Failed(_) => {
+            if changed {
                 tracing::warn!(error = ?error, "could not set up hosting teammates; trying again");
             }
+            delays.next_delay()
         }
     }
 }
@@ -133,7 +188,7 @@ fn host_teammates(
     macro_api: &crate::config::MacroApi,
     teammates: &crate::config::TeammatesSettings,
     credentials: &HarnessCredentials,
-) -> rootcause::Result<Option<crate::harness::HostTeammates>> {
+) -> HostingSetup {
     #[cfg(all(unix, not(test)))]
     return crate::teammate::host(
         credentials.harness_id,
@@ -221,7 +276,8 @@ impl Daemon {
         };
         // Set up now, so the first dial can list teammates; a failure (say,
         // another macrod writing the same file) is retried in the background.
-        let hosting_retry = set_up_hosting(&hosting, set_up);
+        let (hosting_problem, hosting_problem_seen) = watch::channel(None);
+        let hosting_retry = set_up_hosting(&hosting, &hosting_problem, set_up);
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
@@ -318,6 +374,7 @@ impl Daemon {
             handoff,
             runtime_connected,
             trigger_stream,
+            hosting_problem: hosting_problem_seen,
             _presence_watch: presence_watch,
         })
     }
@@ -329,6 +386,12 @@ impl Daemon {
     )]
     pub fn trigger_stream_health(&self) -> watch::Receiver<TriggerStreamHealth> {
         self.trigger_stream.clone()
+    }
+
+    /// Why this machine can't host teammates yet, while setting up hosting
+    /// fails (the panel shows it).
+    pub fn hosting_problem(&self) -> Option<String> {
+        self.hosting_problem.borrow().clone()
     }
 
     /// Whether this daemon currently holds a runtime connection.

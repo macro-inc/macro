@@ -1289,6 +1289,39 @@ async fn a_recheck_the_service_asks_for_reports_a_fresh_check() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn rechecks_asked_together_are_one_check() {
+    // Check again pressed five times, and again two seconds after: one
+    // check in flight per machine, the asks during it (and just after) fold
+    // into it. A later ask is a new check.
+    let fixture = fixture().await;
+    let teammates = Arc::new(fixture.teammates);
+    let report = teammates.detect().await;
+    let (to_service, _sent) = mpsc::unbounded_channel();
+    let mut link = Link::open(Arc::clone(&teammates), report, &to_service);
+
+    for _ in 0..5 {
+        link.recheck();
+    }
+    let checked = tokio::time::timeout(Duration::from_secs(1), next_host_event(&mut link))
+        .await
+        .expect("checked at once");
+    assert!(matches!(checked, TeammateEvent::Send(_)), "{checked:?}");
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    link.recheck();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(60), next_host_event(&mut link))
+            .await
+            .is_err(),
+        "the asks fold into the one check"
+    );
+
+    link.recheck();
+    tokio::time::timeout(Duration::from_secs(1), next_host_event(&mut link))
+        .await
+        .expect("a later ask is checked");
+}
+
+#[tokio::test(start_paused = true)]
 async fn an_engine_not_chosen_whose_probe_hangs_doesnt_keep_the_machine_probing() {
     // Docker enforces the policy and is chosen; Podman is wedged. The
     // check is conclusive: nothing is checked again on the connection.

@@ -83,6 +83,7 @@ async fn stop_does_not_wait_for_in_flight_work() {
         handoff: crate::harness::Handoffs::channel().1,
         runtime_connected: watch::channel(false).1,
         trigger_stream: watch::channel(TriggerStreamHealth::Connecting).1,
+        hosting_problem: watch::channel(None).1,
         _presence_watch: AbortOnDropHandle::new(tokio::spawn(async {})),
     };
 
@@ -715,18 +716,49 @@ async fn a_failed_hosting_setup_is_tried_again_until_it_succeeds() {
     let counted = std::sync::Arc::clone(&attempts);
     let hosting = crate::harness::Hosting::default();
 
-    let retry = set_up_hosting(&hosting, move || {
+    let (problem, shown) = watch::channel(None);
+
+    let retry = set_up_hosting(&hosting, &problem, move || {
         if counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst) < 2 {
-            Err(rootcause::report!("could not write the seccomp profile"))
+            Err(crate::harness::HostingSetupError::Failed(
+                rootcause::report!("could not write the seccomp profile"),
+            ))
         } else {
             Ok(teammates.take())
         }
     });
     assert!(retry.is_some());
     assert!(hosting.current().is_none());
+    assert!(shown.borrow().is_some());
 
     tokio::time::timeout(Duration::from_secs(60), hosting.ready())
         .await
         .expect("hosting is set up by a retry");
     assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 3);
+    assert_eq!(*shown.borrow(), None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn invalid_teammate_settings_are_shown_and_retried_rarely() {
+    // A typo in `[[teammates.allow]]` can't pass by retrying: the error is
+    // shown, and the setup is tried again only every ten minutes.
+    let attempts = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let counted = std::sync::Arc::clone(&attempts);
+    let hosting = crate::harness::Hosting::default();
+    let (problem, shown) = watch::channel(None);
+
+    let _retry = set_up_hosting(&hosting, &problem, move || {
+        counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Err(crate::harness::HostingSetupError::Settings(
+            rootcause::report!("[[teammates.allow]]: 10.0.0 is not a network"),
+        ))
+    });
+    let shown_now = shown.borrow().clone().expect("the error is shown");
+    assert!(shown_now.contains("10.0.0 is not a network"), "{shown_now}");
+
+    tokio::time::sleep(Duration::from_secs(9 * 60)).await;
+    assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+    tokio::time::sleep(Duration::from_secs(2 * 60)).await;
+    assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 2);
+    assert!(hosting.current().is_none());
 }
