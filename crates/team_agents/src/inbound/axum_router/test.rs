@@ -539,3 +539,29 @@ async fn a_machine_recheck_reaches_the_service() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     assert_eq!(service.0.load(Ordering::SeqCst), 1);
 }
+
+/// Each recheck runs a full probe on the owner's machine: a person asks for
+/// one, never an agent's program looping on it.
+#[tokio::test]
+async fn a_program_cannot_ask_a_machine_to_check_again() {
+    for (program, bearer, code_execution) in [
+        ("an agent run", "agent", false),
+        ("an owner-identity routine run", "routine", false),
+        ("the code-mode runtime", "valid", true),
+    ] {
+        let service = Arc::new(Reached::default());
+        let mut request = Request::post("/hosts/0193a1b2-0000-7000-8000-000000000d01/recheck")
+            .header(header::AUTHORIZATION, format!("Bearer {bearer}"));
+        if code_execution {
+            request = request.header(macro_authorization::CODE_EXECUTION_HEADER, "1");
+        }
+
+        let response = router(service.clone())
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{program}");
+        assert_eq!(service.0.load(Ordering::SeqCst), 0, "{program}");
+    }
+}

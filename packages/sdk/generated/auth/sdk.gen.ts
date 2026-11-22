@@ -1134,7 +1134,8 @@ export class Sdk extends HeyApiClient {
      * Ask one of the acting admin's own machines to check its teammate hosting
      * (its container engine) again now. It answers with a fresh report, which
      * `GET /team_agents/hosts` shows a moment later. Someone else's machine is
-     * a 404.
+     * a 404; an agent's program is refused (403). At most one ask per machine
+     * reaches it every 10 s; the rest join that one.
      */
     public recheckTeammateHost<ThrowOnError extends boolean = false>(options: Options<RecheckTeammateHostData, ThrowOnError>): RequestResult<RecheckTeammateHostResponses, RecheckTeammateHostErrors, ThrowOnError> {
         return (options.client ?? this.client).post<RecheckTeammateHostResponses, RecheckTeammateHostErrors, ThrowOnError>({ url: '/team_agents/hosts/{harness_id}/recheck', ...options });

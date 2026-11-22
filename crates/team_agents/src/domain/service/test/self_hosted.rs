@@ -1722,3 +1722,17 @@ async fn someone_elses_machine_cant_be_asked_to_check_again() {
     }
     assert!(journal.entries().is_empty());
 }
+
+#[tokio::test(start_paused = true)]
+async fn presses_of_check_again_reach_the_machine_once_every_ten_seconds() {
+    let (service, journal, _) = self_hosted_service();
+
+    for _ in 0..3 {
+        service.recheck_host(receipt(), LAPTOP).await.unwrap();
+    }
+    assert_eq!(journal.entries(), [format!("runtimes.recheck {LAPTOP}")]);
+
+    tokio::time::advance(std::time::Duration::from_secs(10)).await;
+    service.recheck_host(receipt(), LAPTOP).await.unwrap();
+    assert_eq!(journal.entries().len(), 2);
+}

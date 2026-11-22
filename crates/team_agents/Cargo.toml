@@ -53,7 +53,7 @@ strum = { workspace = true }
 sqlx = { workspace = true, optional = true }
 teams = { path = "../teams", optional = true, default-features = false, features = ["ports"] }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["time"] }
+tokio = { workspace = true, features = ["sync", "time"] }
 tracing = { workspace = true }
 macro_env = { path = "../macro_env" }
 user_api_key = { path = "../user_api_key", optional = true, features = ["ports"] }

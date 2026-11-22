@@ -33,6 +33,7 @@ use super::self_hosting::{
 };
 use super::voice::AgentVoice;
 
+mod host_rechecks;
 mod install_offboarding;
 mod self_hosted;
 
@@ -106,6 +107,8 @@ pub struct TeamAgentServiceImpl<
     /// The public addresses an agent on its owner's own machine reaches
     /// Macro at.
     public_environment: Box<dyn EnrollmentEnvironment>,
+    /// Asks to check a machine again, coalesced per machine.
+    rechecks: host_rechecks::HostRechecks,
 }
 
 /// Everything a self-hosted teammate needs from the service's caller.
@@ -170,6 +173,7 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices,
             runtimes: self_hosting.runtimes,
             images: self_hosting.images,
             public_environment: self_hosting.public_environment,
+            rechecks: host_rechecks::HostRechecks::default(),
         }
     }
 }
@@ -945,7 +949,7 @@ where
         })
     }
 
-    #[tracing::instrument(name = "team_agents.recheck_host", skip_all, fields(team_id = %receipt.entity().entity_id, %harness), err)]
+    #[tracing::instrument(name = "team_agents.recheck_host", skip_all, fields(team_id = %receipt.entity().entity_id, %harness, sent = tracing::field::Empty), err)]
     async fn recheck_host(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -964,7 +968,13 @@ where
         {
             return Err(TeamAgentError::NotFound);
         }
-        self.runtimes.recheck_host(harness).await;
+        // Each ask runs a full probe on the machine: one at a time, and at
+        // most one every `RECHECK_INTERVAL`; the rest join it (still 204).
+        let sent = self
+            .rechecks
+            .ask(harness, || self.runtimes.recheck_host(harness))
+            .await;
+        tracing::Span::current().record("sent", sent);
         Ok(())
     }
 

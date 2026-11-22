@@ -107,7 +107,9 @@ purchase, and tells agent_harness_service (`TeammateRuntimes`, internal
 the admin's machines with eligibility and each installed engine (`engines`,
 with whether it can confine a teammate's network). `POST
 /team_agents/hosts/{harness_id}/recheck` (the admin's own machine only,
-else 404; 204) asks it to check again now (`TeammateRuntimes::recheck_host`,
+else 404; never an agent's program, 403; 204) asks it to check again now,
+at most once per machine every 10 s per replica (`HostRechecks`: a press
+while one is in flight or within the 10 s joins it, still 204) (`TeammateRuntimes::recheck_host`,
 internal `POST /internal/teammates/{harness}/recheck`, sent as
 `RecheckTeammateHost` to a macrod that listed `recheck-teammate-host`); its
 fresh report shows in the next `GET /team_agents/hosts`. Status comes from the install's

@@ -5934,7 +5934,7 @@
     "/team_agents/hosts/{harness_id}/recheck": {
       "post": {
         "tags": ["team-agents"],
-        "summary": "Ask one of the acting admin's own machines to check its teammate hosting\n(its container engine) again now. It answers with a fresh report, which\n`GET /team_agents/hosts` shows a moment later. Someone else's machine is\na 404.",
+        "summary": "Ask one of the acting admin's own machines to check its teammate hosting\n(its container engine) again now. It answers with a fresh report, which\n`GET /team_agents/hosts` shows a moment later. Someone else's machine is\na 404; an agent's program is refused (403). At most one ask per machine\nreaches it every 10 s; the rest join that one.",
         "operationId": "recheck_teammate_host",
         "parameters": [
           {

@@ -372,7 +372,8 @@ pub struct HostPath {
 /// Ask one of the acting admin's own machines to check its teammate hosting
 /// (its container engine) again now. It answers with a fresh report, which
 /// `GET /team_agents/hosts` shows a moment later. Someone else's machine is
-/// a 404.
+/// a 404; an agent's program is refused (403). At most one ask per machine
+/// reaches it every 10 s; the rest join that one.
 #[utoipa::path(
     post,
     tag = "team-agents",
@@ -389,6 +390,8 @@ pub struct HostPath {
 )]
 #[tracing::instrument(err, skip_all)]
 pub async fn recheck_teammate_host_handler<S, Eas, Auth>(
+    authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: axum::http::HeaderMap,
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
     Path(path): Path<HostPath>,
@@ -398,6 +401,15 @@ where
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    // Each recheck runs a full probe on the owner's machine: a person asks
+    // for one, never an agent's program.
+    let attribution = authorization.authorization.user.attribution();
+    if macro_authorization::is_program_run(attribution, &headers) {
+        tracing::warn!(?attribution, "refused a machine recheck to a program");
+        return Err(TeamAgentError::Forbidden(
+            "An agent's program cannot ask a machine to check again. Tell the user to press Check again in Macro, under Settings, Agents.",
+        ));
+    }
     state
         .service
         .recheck_host(
