@@ -1,5 +1,7 @@
-import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
-import { PROPERTY_NAME_RESERVED_CODE } from '@service-properties/client';
+import {
+  CatalogMutationError,
+  isCatalogErrorCode,
+} from '@queries/properties/catalog/errors';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -29,7 +31,7 @@ vi.mock('@queries/properties/entity', () => ({
 }));
 vi.mock('@queries/properties/definitions', () => ({
   isPropertyNameReserved: (error: unknown) =>
-    thrownResultErrorHasCode(error, PROPERTY_NAME_RESERVED_CODE),
+    isCatalogErrorCode(error, 'CONFLICT'),
   useCreatePropertyDefinitionMutation: (
     callbacks: typeof mocks.createCallbacks
   ) => {
@@ -207,9 +209,7 @@ it('says why when the server refuses a built-in name the dialog did not know', a
     target: { value: 'Region' },
   });
   mocks.createCallbacks?.onError?.(
-    new ThrownResultError([
-      { code: PROPERTY_NAME_RESERVED_CODE, message: 'refused' },
-    ]),
+    new CatalogMutationError('refused', 'CONFLICT'),
     mocks.create.mock.calls[0]?.[0]
   );
 

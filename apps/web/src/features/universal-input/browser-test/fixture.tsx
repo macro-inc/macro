@@ -12,9 +12,9 @@ import type {
 import { attachGlobalDOMScope, useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { $createUserMentionNode } from '@macro-inc/lexical-core';
+import { authKeys } from '@queries/auth/keys';
 import { useContactRecipientSource } from '@queries/contacts/recipient-source';
-import { propertiesKeys } from '@queries/properties/keys';
-import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
+import { routeCatalogQueries } from '@queries/properties/catalog/fixture-routes';
 import { ComposerSurface } from '@ui';
 import { $createParagraphNode, $createTextNode, $getRoot } from 'lexical';
 import type { ComponentProps } from 'solid-js';
@@ -80,6 +80,8 @@ import {
   TaskReferenceFixture,
   type TaskValues,
 } from './task-reference-fixture';
+
+const FIXTURE_VIEWER = 'macro|viewer@example.com';
 
 const [commandSubmissions, setCommandSubmissions] = createSignal<Submission[]>(
   []
@@ -406,29 +408,40 @@ export function UniversalInputFixture(
   const queryClient = new QueryClient({
     defaultOptions: { queries: { enabled: false, retry: false } },
   });
-  queryClient.setQueryData<TagSetResponse[]>(propertiesKeys.tags.queryKey, [
-    {
-      scope: 'user',
-      definition: {
-        id: 'tags',
-        scope: 'user',
-        user_id: 'fixture',
-        displayName: 'Tags',
-        dataType: 'TAG',
-        isMultiSelect: true,
-        isSystem: false,
-        isMetadata: false,
-      },
-      options: [
+  // Tag reads wait for a signed-in viewer, then come from the catalog routes.
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    id: FIXTURE_VIEWER,
+    email: 'viewer@example.com',
+    authenticated: true,
+  });
+  onCleanup(
+    routeCatalogQueries({
+      userId: FIXTURE_VIEWER,
+      tagSets: [
         {
-          id: 'launch',
-          propertyDefinitionId: 'tags',
-          displayOrder: 0,
-          value: { type: 'string', value: 'Launch' },
+          scope: 'user',
+          definition: {
+            id: 'tags',
+            scope: 'user',
+            user_id: 'fixture',
+            displayName: 'Tags',
+            dataType: 'TAG',
+            isMultiSelect: true,
+            isSystem: false,
+            isMetadata: false,
+          },
+          options: [
+            {
+              id: 'launch',
+              propertyDefinitionId: 'tags',
+              displayOrder: 0,
+              value: { type: 'string', value: 'Launch' },
+            },
+          ],
         },
       ],
-    },
-  ]);
+    })
+  );
   const params = new URLSearchParams(window.location.search);
   if (params.has('task-references')) seedTaskReferences(queryClient);
   if (params.has('person-references')) seedInputReferences(queryClient);
