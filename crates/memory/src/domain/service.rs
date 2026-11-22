@@ -145,7 +145,8 @@ enum ClaimOutcome {
     Committed,
     /// Attempts ran out; the reviewed pieces committed and the day was passed.
     GaveUp,
-    /// The user is away; the day was passed without a report.
+    /// The user is away; the day was passed with no new model work, keeping
+    /// only pieces an earlier attempt already passed review.
     Away,
     /// The attempt failed; the day is claimed again after `retry_delay`.
     Retry,

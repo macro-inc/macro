@@ -51,8 +51,9 @@ pieces that passed review (kept in `memory_refresh_piece` between attempts). A d
 with no activity in the activity log (`MemoryActivity::acted_on`, which counts
 agent work for the user) commits without model calls. A scheduled claim of a user
 who has not used Macro within `AWAY_AFTER` (14 days, `MemoryActivity::used_since`,
-the activity crate's `UserActivity`) commits its day the same way; missed days
-are not caught up on return. `refresh`/`refresh_through` (the CLI) skip that check.
+the activity crate's `UserActivity`) commits its day without model calls, keeping
+only pieces an earlier attempt staged; missed days are not caught up on return.
+`refresh`/`refresh_through` (the CLI) skip that check.
 
 ## Checks
 
