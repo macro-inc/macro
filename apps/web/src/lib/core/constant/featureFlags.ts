@@ -188,6 +188,16 @@ export const enableTasksReviews = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Partner portal for Macro staff and accepted partners. Off in production
+ * until the remote flag exists.
+ */
+export const enablePartnerPortal = defineFlag({
+  key: 'enable-partner-portal',
+  env: 'ENABLE_PARTNER_PORTAL',
+  default: onInDev,
+});
+
 /** Gantt is visible in local previews; deployed apps retain the remote rollout. */
 export const enableGantt = defineFlag({
   key: 'enable-gantt',

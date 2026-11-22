@@ -464,6 +464,13 @@ export const activityRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'activity' }),
 });
 
+export const partnersRoute = defineRoute({
+  id: 'view-partners',
+  path: 'partners',
+  search: '*' as const,
+  claim: () => ({ namespace: 'component', id: 'partners' }),
+});
+
 export const routinesRoute = defineRoute({
   id: ROUTINES_ROUTE_ID,
   path: 'routines',

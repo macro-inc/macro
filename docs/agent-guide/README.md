@@ -25,6 +25,7 @@ verified live against a local stack (`just run_local`).
 | [crm.md](crm.md) | Customers (CRM) |
 | [pull-requests.md](pull-requests.md) | Pull request review |
 | [activity.md](activity.md) | Activity |
+| [partners.md](partners.md) | Partner portal |
 | [notifications.md](notifications.md) | Notifications |
 | [external.md](external.md) | External tab: linking WhatsApp by QR, adding and sharing external chats, mocking `/whatsapp` and `/external-chats` |
 | [settings.md](settings.md) | Settings sections, including Slack import and team membership |

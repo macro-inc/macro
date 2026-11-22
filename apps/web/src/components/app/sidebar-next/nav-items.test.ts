@@ -23,6 +23,7 @@ const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showReviews: true,
   showActivity: true,
   showExternal: true,
+  showPartners: false,
   prefs: defaultPrefs(),
   ...overrides,
 });
@@ -150,6 +151,36 @@ describe('sidebar visibility preferences', () => {
         moreMenuItems(gates),
       ]) {
         expect(items.some((item) => item.id === 'booking-links')).toBe(false);
+      }
+    }
+  });
+});
+
+describe('Partners', () => {
+  it('puts Partners in More when the account can open the portal', () => {
+    const items = moreMenuItems(defaultGates({ showPartners: true }));
+    expect(items.map((item) => item.id)).toEqual([
+      'calls',
+      'reviews',
+      'activity',
+      'booking-links',
+      'partners',
+    ]);
+    expect(items.some((item) => item.href === '/partners')).toBe(true);
+  });
+
+  it('keeps Partners absent everywhere when the account cannot open it', () => {
+    for (const hidden of [new Set<string>(), new Set(DEFAULT_HIDDEN_IDS)]) {
+      const gates = defaultGates({
+        showPartners: false,
+        prefs: defaultPrefs({ hidden }),
+      });
+      for (const items of [
+        customizableNavItems(gates),
+        visibleNavItems(gates),
+        moreMenuItems(gates),
+      ]) {
+        expect(items.some((item) => item.id === 'partners')).toBe(false);
       }
     }
   });

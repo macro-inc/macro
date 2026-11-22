@@ -1,5 +1,6 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { usePartnerPortalAccess } from '@app/features/partners/use-partner-portal-access';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_CALLS,
@@ -24,6 +25,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   const reviews = useFeatureFlag(enableTasksReviews);
   const activity = useActivityFeedFlag();
   const external = useFeatureFlag(enableWhatsappLinked);
+  const partners = usePartnerPortalAccess();
   const { prefs } = useSidebarPrefs();
 
   return createMemo(() => ({
@@ -34,6 +36,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
     showReviews: reviews().enabled,
     showActivity: activity(),
     showExternal: external().enabled,
+    showPartners: partners(),
     prefs: prefs(),
   }));
 }

@@ -1,4 +1,5 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { usePartnerPortalAccess } from '@app/features/partners/use-partner-portal-access';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { getIconConfig } from '@core/component/EntityIcon';
@@ -27,6 +28,7 @@ import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { createMemo } from 'solid-js';
 import type { MobileDockIcon } from './MobileDockButton';
 import type { MobileNavViewId } from './mobile-nav-views';
@@ -132,6 +134,13 @@ export const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
     icon: CalendarCheckIcon,
   },
   {
+    id: 'partners',
+    get label() {
+      return t('nav.partners');
+    },
+    icon: UsersThreeIcon,
+  },
+  {
     id: 'external',
     get label() {
       return t('nav.external');
@@ -147,6 +156,7 @@ export function useMobileDockViews() {
   const reviews = useFeatureFlag(enableTasksReviews);
   const scheduling = useFeatureFlag(enableCalendarScheduling);
   const external = useFeatureFlag(enableWhatsappLinked);
+  const partners = usePartnerPortalAccess();
   return createMemo(() =>
     MOBILE_DOCK_VIEWS.filter(
       (view) => view.id !== 'calendar' || calendarEnabled()
@@ -155,5 +165,6 @@ export function useMobileDockViews() {
       .filter((view) => view.id !== 'reviews' || reviews().enabled)
       .filter((view) => view.id !== 'booking-links' || scheduling().enabled)
       .filter((view) => view.id !== 'external' || external().enabled)
+      .filter((view) => view.id !== 'partners' || partners())
   );
 }

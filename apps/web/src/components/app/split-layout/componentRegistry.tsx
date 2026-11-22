@@ -105,6 +105,10 @@ const ExternalRouteView = lazyNamed(
   () => import('@app/features/external-view/route-views'),
   'ExternalRouteView'
 );
+const PartnersRouteView = lazyNamed(
+  () => import('@app/features/partners/route-views'),
+  'PartnersRouteView'
+);
 const ReviewsRouteView = lazyNamed(
   () => import('@app/features/reviews-view/route-views'),
   'ReviewsRouteView'
@@ -496,6 +500,11 @@ registerComponent(
 registerComponent(
   'external',
   () => <ExternalRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'partners',
+  () => <PartnersRouteView />,
   () => composableLayout()
 );
 

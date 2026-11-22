@@ -48,6 +48,8 @@ vi.mock('./use-nav-item-gates', () => ({
     showCalls: true,
     showReviews: false,
     showActivity: false,
+    showExternal: false,
+    showPartners: false,
     prefs: { hidden: new Set(DEFAULT_HIDDEN_IDS), order: [] },
   }),
 }));

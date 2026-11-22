@@ -58,6 +58,7 @@ import {
   MailRouteView,
   MeetingRouter,
   NotFound,
+  PartnersRouteView,
   PrDetailRouteView,
   ProjectDetailRouteView,
   ProjectTaskRouteView,
@@ -134,6 +135,7 @@ import {
   mobileEmailSignupRoute,
   notFoundRoute,
   onboardingRoute,
+  partnersRoute,
   prDetailRoute,
   projectDetailRoute,
   projectTaskRoute,
@@ -347,6 +349,7 @@ export function AppRouterView() {
         </Route>
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
+        <Route definition={partnersRoute} component={PartnersRouteView} />
         <Route
           definition={agentsViewRoute}
           component={AgentsRouteView}

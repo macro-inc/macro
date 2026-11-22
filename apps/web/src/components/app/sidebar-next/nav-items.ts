@@ -27,6 +27,7 @@ import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import PulseIcon from '@icon/system/regular/pulse.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import PulseFillIcon from '@phosphor-fill/pulse-fill.svg';
 import type { NavIcon } from './nav-glyph';
 import type { SidebarPrefs } from './use-sidebar-prefs';
@@ -190,6 +191,15 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: CalendarCheckIcon,
   },
   {
+    id: 'partners',
+    get label() {
+      return t('nav.partners');
+    },
+    href: '/partners',
+    icon: UsersThreeIcon,
+    iconActive: UsersThreeIcon,
+  },
+  {
     id: 'external',
     get label() {
       return t('nav.external');
@@ -211,6 +221,7 @@ export type NavItemGates = {
   showReviews: boolean;
   showActivity: boolean;
   showExternal: boolean;
+  showPartners: boolean;
   /** User preferences for which items are shown and in what order. */
   prefs: SidebarPrefs;
 };
@@ -227,6 +238,7 @@ export const isNavItemAvailable = (
   if (item.id === 'reviews') return gates.showReviews;
   if (item.id === 'activity') return gates.showActivity;
   if (item.id === 'external') return gates.showExternal;
+  if (item.id === 'partners') return gates.showPartners;
   return true;
 };
 
