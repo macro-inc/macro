@@ -1864,8 +1864,8 @@ to the agent's permissions. Every surface and its flag:
 `crates/agent_permissions/AGENTS.md`.
 
 When the agent calls `ShowPermissions`, the transcript shows **<Agent>'s
-permissions**: its one-line reason, then the asked groups' actions and tools
-with the same `Allow · Ask · Never` controls as the settings page, reading the
+permissions**: its one-line reason, then the asked groups' actions (only those
+some tool has) and tools with the same `Allow · Ask · Never` controls as the settings page, reading the
 session's view (the agent's own limits for the session carry a **This
 session** badge). A click saves to the agent at once; **All permissions** opens
 the page. People who can't edit the agent see the controls disabled and `Only

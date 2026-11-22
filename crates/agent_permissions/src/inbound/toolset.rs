@@ -63,7 +63,8 @@ fn description() -> String {
          Call it when the person asks you to be able to do something your permissions refuse \
          (never) or ask about, naming the groups and actions, or the operations, from the \
          refusal. It changes nothing: they toggle the setting themselves, and only someone who \
-         can edit this agent can. Groups: {groups}. Actions: create, read, update, destroy, send."
+         can edit this agent can. Groups: {groups}. Actions: create, read, update, destroy, send; \
+         a group's action no operation has is not shown."
     )
 }
 
@@ -93,9 +94,10 @@ pub struct GroupSelection {
     /// A group id, such as `documents` or `email`.
     #[schemars(description = "A group id, as listed in this tool's description.")]
     pub group: String,
-    /// The actions to show; empty or absent shows all five.
+    /// The actions to show; empty or absent shows every action the group has
+    /// operations for.
     #[serde(default)]
-    #[schemars(description = "Omit for all five.")]
+    #[schemars(description = "Omit for all of the group's actions.")]
     pub actions: Vec<Action>,
 }
 
@@ -114,7 +116,8 @@ pub struct ToolSelection {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ShowPermissionsSelection {
-    /// The groups, each with the actions shown (all five when none were named).
+    /// The groups, each with the actions shown (every one it has operations
+    /// for when none were named). Only actions some operation has are shown.
     pub groups: Vec<GroupSelection>,
     /// The operations.
     pub tools: Vec<ToolSelection>,
@@ -213,13 +216,32 @@ impl AsyncTool<PermissionToolContext> for ShowPermissions {
                     error,
                 )
             })?;
+        let (selection, omitted) = visible(&view, &self.groups, selection);
+        if selection.groups.is_empty() && selection.tools.is_empty() {
+            return Err(tool_error(
+                format!(
+                    "No operation has {}, so there is nothing to show. Name the groups and \
+                     actions from a refusal.",
+                    omitted.join(", ")
+                ),
+                PermissionError::Invalid("nothing to show".into()),
+            ));
+        }
+        let message = if omitted.is_empty() {
+            SHOWN.to_owned()
+        } else {
+            format!(
+                "{SHOWN} Not shown, since no operation has them: {}.",
+                omitted.join(", ")
+            )
+        };
         Ok(ShowPermissionsResult {
             agent_id: context.agent,
             session_id: context.session,
             current: current(&view, &selection),
             selection,
             reason: self.reason.clone(),
-            message: SHOWN.to_owned(),
+            message,
         })
     }
 }
@@ -290,6 +312,55 @@ impl ShowPermissions {
             tools: self.tools.clone(),
         })
     }
+}
+
+/// `selection` narrowed to what `view` lists: a group's actions no operation
+/// has are left out, and a group left with none. What the model named comes
+/// back so it can be told (`requested`, which `selection` follows group for
+/// group): each action it named as `group action`, a group it named whole
+/// as `group` when none of its actions has an operation. Actions filled in
+/// for it go quietly.
+fn visible(
+    view: &PermissionsView,
+    requested: &[GroupSelection],
+    selection: ShowPermissionsSelection,
+) -> (ShowPermissionsSelection, Vec<String>) {
+    let listed = |group: &str, action: Action| {
+        view.groups
+            .iter()
+            .find(|resolved| resolved.group == group)
+            .is_some_and(|resolved| resolved.actions.iter().any(|item| item.action == action))
+    };
+    let mut omitted = Vec::new();
+    let mut groups = Vec::with_capacity(selection.groups.len());
+    for (mut selected, asked) in selection.groups.into_iter().zip(requested) {
+        let (shown, hidden): (Vec<Action>, Vec<Action>) = selected
+            .actions
+            .iter()
+            .partition(|&&action| listed(&selected.group, action));
+        if asked.actions.is_empty() {
+            if shown.is_empty() {
+                omitted.push(selected.group.clone());
+            }
+        } else {
+            omitted.extend(
+                hidden
+                    .iter()
+                    .map(|action| format!("{} {}", selected.group, action.as_str())),
+            );
+        }
+        if !shown.is_empty() {
+            selected.actions = shown;
+            groups.push(selected);
+        }
+    }
+    (
+        ShowPermissionsSelection {
+            groups,
+            tools: selection.tools,
+        },
+        omitted,
+    )
 }
 
 /// Each selected group action and operation as `view` resolves it.

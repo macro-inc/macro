@@ -5,12 +5,15 @@ import {
   changeForTool,
   groupPermissions,
   groupSummary,
+  isVisibleTarget,
   matchRange,
   restrictionCount,
   restrictions,
   searchPermissions,
   settingCounts,
   toolState,
+  visibleActions,
+  visibleGroups,
 } from './model';
 
 const emailSend = () => {
@@ -62,9 +65,39 @@ describe('groupSummary', () => {
 
   it('says nothing is restricted in an untouched group', () => {
     const documents = CATALOG.groups[1];
+    // Its saved Never on Send, which no tool has, doesn't count.
     expect(
       groupSummary(documents, groupPermissions(VIEW, 'documents'), VIEW.rules)
-    ).toMatchObject({ asks: [], nevers: [], customTools: 0, byAgent: false });
+    ).toMatchObject({
+      everything: 'always',
+      asks: [],
+      nevers: [],
+      customTools: 0,
+      byAgent: false,
+    });
+  });
+
+  it('ignores an action with no tools even when a view lists it', () => {
+    const documents = CATALOG.groups[1];
+    const group = groupPermissions(VIEW, 'documents');
+    if (!group) throw new Error('fixture has Documents');
+    const withSend = {
+      ...group,
+      actions: [
+        ...group.actions,
+        {
+          action: 'send' as const,
+          state: 'never' as const,
+          origin: 'group_action' as const,
+          tools: 0,
+          overrides: [],
+        },
+      ],
+    };
+    expect(groupSummary(documents, withSend, VIEW.rules)).toMatchObject({
+      everything: 'always',
+      nevers: [],
+    });
   });
 
   it('notices a limit set for the session only', () => {
@@ -103,13 +136,61 @@ describe('groupSummary', () => {
   });
 });
 
+describe('visible targets', () => {
+  it('shows only groups and actions some tool has', () => {
+    expect(visibleGroups(CATALOG).map((group) => group.id)).toEqual([
+      'email',
+      'documents',
+    ]);
+    expect(visibleActions(CATALOG.groups[0])).toEqual(['read', 'send']);
+    expect(visibleActions(CATALOG.groups[2])).toEqual([]);
+  });
+
+  it('knows a rule on an action no tool has is hidden', () => {
+    const [emailSend, forward, documentsSend] = VIEW.rules.map(
+      (rule) => rule.target
+    );
+    expect(isVisibleTarget(CATALOG, emailSend)).toBe(true);
+    expect(isVisibleTarget(CATALOG, forward)).toBe(true);
+    expect(isVisibleTarget(CATALOG, documentsSend)).toBe(false);
+    expect(
+      isVisibleTarget(CATALOG, {
+        kind: 'group_action',
+        group: 'tasks',
+        action: 'read',
+      })
+    ).toBe(false);
+    expect(
+      isVisibleTarget(CATALOG, {
+        kind: 'tool',
+        service: 'tasks',
+        operation: 'gone',
+      })
+    ).toBe(false);
+  });
+});
+
 describe('counts', () => {
-  it('counts saved settings, agent-set ones and tool rules', () => {
-    expect(settingCounts(VIEW.rules)).toEqual({
+  it('counts shown settings, agent-set ones and tool rules', () => {
+    // The hidden Documents · Send is saved (Reset clears it) but not shown.
+    expect(settingCounts(CATALOG, VIEW.rules)).toEqual({
+      saved: 3,
       total: 2,
       byPerson: 1,
       byAgent: 1,
       tools: 1,
+      reset: { byAgent: 1, tools: 1 },
+    });
+  });
+
+  it('has something to reset when only hidden settings are saved', () => {
+    const hidden = VIEW.rules.filter(
+      (rule) => !isVisibleTarget(CATALOG, rule.target)
+    );
+    expect(settingCounts(CATALOG, hidden)).toMatchObject({
+      saved: 1,
+      total: 0,
+      byPerson: 0,
     });
   });
 
@@ -119,6 +200,29 @@ describe('counts', () => {
     expect(restrictions(CATALOG, VIEW)).toEqual([
       { group: 'email', action: 'send', state: 'ask' },
     ]);
+  });
+
+  it('counts no restriction on an action with no tools', () => {
+    const view = {
+      ...VIEW,
+      groups: [
+        ...VIEW.groups,
+        {
+          group: 'tasks',
+          actions: [
+            {
+              action: 'send' as const,
+              state: 'never' as const,
+              origin: 'group_action' as const,
+              tools: 0,
+              overrides: [],
+            },
+          ],
+        },
+      ],
+    };
+    expect(restrictionCount(view)).toBe(1);
+    expect(restrictions(CATALOG, view)).toHaveLength(1);
   });
 });
 
@@ -152,6 +256,10 @@ describe('searchPermissions', () => {
 
   it('finds nothing for an unrelated query', () => {
     expect(searchPermissions(CATALOG, 'zebra').groupCount).toBe(0);
+  });
+
+  it('never lists a group with no tools', () => {
+    expect(searchPermissions(CATALOG, 'tasks').groupCount).toBe(0);
   });
 });
 

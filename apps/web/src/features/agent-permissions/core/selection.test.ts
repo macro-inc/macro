@@ -3,20 +3,43 @@ import { CATALOG } from '../tests/fixtures';
 import { selectionBlocks } from './selection';
 
 describe('selectionBlocks', () => {
-  it('shows all five actions of a group named without actions', () => {
+  it('shows every action a group has tools for when it named none', () => {
     const [block] = selectionBlocks(CATALOG, {
       groups: [{ group: 'documents' }],
       tools: [],
     });
     expect(block.group.id).toBe('documents');
-    expect(block.actions).toEqual([
-      'create',
-      'read',
-      'update',
-      'destroy',
-      'send',
-    ]);
+    expect(block.actions).toEqual(['destroy']);
     expect(block.tools).toEqual([]);
+  });
+
+  it('leaves out actions with no tools and groups left with nothing', () => {
+    const blocks = selectionBlocks(CATALOG, {
+      groups: [
+        { group: 'email', actions: ['create', 'send'] },
+        { group: 'documents', actions: ['send'] },
+        { group: 'tasks' },
+      ],
+      tools: [],
+    });
+    expect(blocks.map((block) => [block.group.id, block.actions])).toEqual([
+      ['email', ['send']],
+    ]);
+  });
+
+  it('keeps the order asked for a group shown only for its named tool', () => {
+    const blocks = selectionBlocks(CATALOG, {
+      groups: [
+        { group: 'documents', actions: ['send'] },
+        { group: 'email', actions: ['send'] },
+      ],
+      tools: [{ service: 'storage', operation: 'delete_document' }],
+    });
+    expect(blocks.map((block) => block.group.id)).toEqual([
+      'documents',
+      'email',
+    ]);
+    expect(blocks[0].actions).toEqual([]);
   });
 
   it('puts named tools under their group, after the named actions', () => {

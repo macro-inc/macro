@@ -88,10 +88,7 @@ export default {
   clearSearch: 'Clear search',
 
   resetTitle: "Reset {{agent}}'s permissions?",
-  resetBody: {
-    one: '{{count}} setting goes back to Always allow.',
-    other: 'All {{count}} settings go back to Always allow.',
-  },
+  resetBody: 'Every setting goes back to Always allow.',
   resetBodyAgent: {
     one: 'That includes one that {{agent}} set for itself.',
     other: 'That includes {{count}} that {{agent}} set for itself.',

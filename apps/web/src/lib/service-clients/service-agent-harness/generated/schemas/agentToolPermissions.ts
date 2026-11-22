@@ -21,7 +21,8 @@ export interface AgentToolPermissions {
   canEdit: boolean;
   /** The caller may tighten them. */
   canTighten: boolean;
-  /** Every catalog group with its five actions. */
+  /** Every catalog group with an operation, with the actions it has
+operations for. */
   groups: ToolPermissionGroup[];
   /** Whose settings these are. */
   kind: ToolPermissionPolicyKind;
@@ -30,7 +31,8 @@ export interface AgentToolPermissions {
    * @minimum 0
    */
   restricted: number;
-  /** The saved settings. */
+  /** The saved settings, including any on a group's action no operation
+has yet (not in `groups`, applied once one does). */
   rules: ToolPermissionRule[];
   /** The agent's restrictions on itself for this session, when the view is
 of a session. */

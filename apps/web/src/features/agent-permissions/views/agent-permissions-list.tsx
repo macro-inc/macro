@@ -38,11 +38,13 @@ import { PermissionsNoMatch } from '../components/permissions-notes';
 import {
   ACTION_ORDER,
   actionPermission,
+  visibleActions as actionsWithTools,
   changeForAction,
   type GroupMatch,
   groupActionTarget,
   groupPermissions,
   groupSummary,
+  visibleGroups as groupsWithTools,
   type PermissionSearch,
   ruleFor,
   searchPermissions,
@@ -72,9 +74,9 @@ type ToolSection = {
 };
 
 /**
- * Every catalog group as a collapsible row: five action controls and the
- * group's individual tools. Owns expansion, the tool filter and paging;
- * saving goes through `changes`.
+ * Every catalog group with a tool as a collapsible row: a control per action
+ * it has tools for, and the group's individual tools. Owns expansion, the
+ * tool filter and paging; saving goes through `changes`.
  */
 export function AgentPermissionsList(props: {
   agentName: string;
@@ -116,8 +118,9 @@ export function AgentPermissionsList(props: {
 
   const visibleGroups = () => {
     const current = search();
-    if (!current) return props.catalog.groups;
-    return props.catalog.groups.filter((group) => current.groups[group.id]);
+    const groups = groupsWithTools(props.catalog);
+    if (!current) return groups;
+    return groups.filter((group) => current.groups[group.id]);
   };
 
   const isOpen = (groupId: string) =>
@@ -153,10 +156,11 @@ export function AgentPermissionsList(props: {
   const filter = (groupId: string): ToolFilter =>
     ui.filters[groupId] ?? (differs(groupId) > 0 ? 'differs' : 'all');
 
-  const visibleActions = (groupId: string) => {
-    const match = groupMatch(groupId);
-    if (!match || match.all) return ACTION_ORDER;
-    return ACTION_ORDER.filter((action) => match.actions.includes(action));
+  const visibleActions = (group: ToolPermissionCatalogGroup) => {
+    const actions = actionsWithTools(group);
+    const match = groupMatch(group.id);
+    if (!match || match.all) return actions;
+    return actions.filter((action) => match.actions.includes(action));
   };
 
   // The tools listed under "Individual tools", per action, plus how many
@@ -325,7 +329,8 @@ export function AgentPermissionsList(props: {
   };
 
   // A deep link opens its group (in the initial store), then scrolls to its
-  // row, flashes it and moves focus to its control.
+  // row, flashes it and moves focus to its control. A row the page doesn't
+  // show (an action no tool has) falls back to its group.
   onMount(() => {
     const focus = props.focus;
     if (!focus) return;
@@ -334,19 +339,22 @@ export function AgentPermissionsList(props: {
       : focus.action
         ? targetKey(groupActionTarget(focus.group, focus.action))
         : undefined;
-    const row = key
+    const keyed = key
       ? container?.querySelector<HTMLElement>(
           `[data-permission-row="${CSS.escape(key)}"]`
         )
-      : container?.querySelector<HTMLElement>(
-          `[data-permission-group="${CSS.escape(focus.group)}"]`
-        );
+      : undefined;
+    const row =
+      keyed ??
+      container?.querySelector<HTMLElement>(
+        `[data-permission-group="${CSS.escape(focus.group)}"]`
+      );
     if (!row) return;
     row.scrollIntoView({ block: 'center' });
     row
       .querySelector<HTMLElement>('input:checked, button, input')
       ?.focus({ preventScroll: true });
-    if (!key) return;
+    if (!key || !keyed) return;
     setFlashKey(key);
     const timer = setTimeout(() => setFlashKey(undefined), FLASH_MS);
     onCleanup(() => clearTimeout(timer));
@@ -381,7 +389,7 @@ export function AgentPermissionsList(props: {
               }
             >
               <div class="flex flex-col divide-y divide-edge-divider @min-[460px]/permission-group:divide-y-0">
-                <For each={visibleActions(group.id)}>
+                <For each={visibleActions(group)}>
                   {(action) => (
                     <PermissionActionRow
                       rowKey={targetKey(groupActionTarget(group.id, action))}

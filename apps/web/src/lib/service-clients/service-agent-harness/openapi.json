@@ -5815,7 +5815,7 @@
             "items": {
               "$ref": "#/components/schemas/ToolPermissionGroup"
             },
-            "description": "Every catalog group with its five actions."
+            "description": "Every catalog group with an operation, with the actions it has\noperations for."
           },
           "kind": {
             "$ref": "#/components/schemas/ToolPermissionPolicyKind",
@@ -5832,7 +5832,7 @@
             "items": {
               "$ref": "#/components/schemas/ToolPermissionRule"
             },
-            "description": "The saved settings."
+            "description": "The saved settings, including any on a group's action no operation\nhas yet (not in `groups`, applied once one does)."
           },
           "sessionRules": {
             "type": ["array", "null"],
@@ -7741,7 +7741,7 @@
             "items": {
               "$ref": "#/components/schemas/PermissionAction"
             },
-            "description": "The actions to show; empty or absent shows all five."
+            "description": "The actions to show; empty or absent shows every action the group has\noperations for."
           },
           "group": {
             "type": "string",
@@ -9425,7 +9425,7 @@
             "items": {
               "$ref": "#/components/schemas/GroupSelection"
             },
-            "description": "The groups, each with the actions shown (all five when none were named)."
+            "description": "The groups, each with the actions shown (every one it has operations\nfor when none were named). Only actions some operation has are shown."
           },
           "tools": {
             "type": "array",
@@ -9782,7 +9782,7 @@
             "items": {
               "$ref": "#/components/schemas/ToolPermissionAction"
             },
-            "description": "All five actions, in display order."
+            "description": "The actions it has operations for, in display order."
           },
           "group": {
             "type": "string",

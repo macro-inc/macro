@@ -409,7 +409,7 @@ pub struct ToolPermissionAction {
 pub struct ToolPermissionGroup {
     /// The group id.
     pub group: String,
-    /// All five actions, in display order.
+    /// The actions it has operations for, in display order.
     pub actions: Vec<ToolPermissionAction>,
 }
 
@@ -430,13 +430,15 @@ pub struct PermissionsView {
     pub version: String,
     /// How many operations are not always allowed.
     pub restricted: u32,
-    /// The saved settings.
+    /// The saved settings, including any on a group's action no operation
+    /// has yet (not in `groups`, applied once one does).
     pub rules: Vec<Rule>,
     /// The agent's restrictions on itself for this session, when the view is
     /// of a session.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_rules: Option<Vec<Rule>>,
-    /// Every catalog group with its five actions.
+    /// Every catalog group with an operation, with the actions it has
+    /// operations for.
     pub groups: Vec<ToolPermissionGroup>,
 }
 

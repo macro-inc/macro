@@ -7,7 +7,7 @@ import { PermissionRow } from './permission-row';
 import { PermissionStateControl } from './permission-state-control';
 import { PermissionStateGlyph } from './permission-state-glyph';
 
-/** One of a group's five actions: its state for every tool in it. */
+/** One action a group has tools for: its state for every tool in it. */
 export function PermissionActionRow(props: {
   rowKey: string;
   name: JSX.Element;

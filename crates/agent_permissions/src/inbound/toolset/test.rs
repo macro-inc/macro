@@ -146,14 +146,23 @@ async fn shows_the_selection_with_its_current_settings() {
     .unwrap();
     assert_eq!(result.agent_id, context.agent);
     assert_eq!(result.session_id, context.session);
-    assert_eq!(result.selection.groups[1].actions, Action::ALL.to_vec());
+    // Tasks named whole: every action it has operations for (no send).
+    assert_eq!(
+        result.selection.groups[1].actions,
+        vec![
+            Action::Create,
+            Action::Read,
+            Action::Update,
+            Action::Destroy
+        ]
+    );
     assert_eq!(
         result.reason.as_deref(),
         Some("You asked me to send the summary.")
     );
     assert_eq!(result.message, SHOWN);
-    // email:send, the five tasks actions, the tool.
-    assert_eq!(result.current.len(), 7);
+    // email:send, the four tasks actions, the tool.
+    assert_eq!(result.current.len(), 6);
     assert_eq!(result.current[0].state, PermissionState::Never);
     assert_eq!(result.current[0].origin, Origin::GroupAction);
     assert_eq!(result.current[1].state, PermissionState::Always);
@@ -177,6 +186,71 @@ async fn shows_the_selection_with_its_current_settings() {
         wire["selection"]["tools"][0]["operation"],
         "delete_document"
     );
+}
+
+#[tokio::test]
+async fn only_actions_some_operation_has_are_shown() {
+    // A saved rule on Tasks · Send, which no operation has.
+    let viewer = Arc::new(Viewer {
+        rules: vec![rule(
+            Target::GroupAction {
+                group: "tasks".into(),
+                action: Action::Send,
+            },
+            PermissionState::Never,
+        )],
+        asked: Mutex::new(Vec::new()),
+    });
+    let result = show(
+        context(viewer.clone()),
+        serde_json::json!({
+            "groups": [
+                {"group": "tasks", "actions": ["send", "update"]},
+                {"group": "email", "actions": ["send"]},
+            ],
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        result.selection.groups,
+        vec![
+            GroupSelection {
+                group: "tasks".into(),
+                actions: vec![Action::Update],
+            },
+            GroupSelection {
+                group: "email".into(),
+                actions: vec![Action::Send],
+            },
+        ]
+    );
+    let shown: Vec<&Target> = result.current.iter().map(|item| &item.target).collect();
+    assert_eq!(
+        shown,
+        vec![
+            &Target::GroupAction {
+                group: "tasks".into(),
+                action: Action::Update,
+            },
+            &Target::GroupAction {
+                group: "email".into(),
+                action: Action::Send,
+            },
+        ]
+    );
+    // The model hears what was left out.
+    assert!(result.message.starts_with(SHOWN), "{}", result.message);
+    assert!(result.message.contains("tasks send"), "{}", result.message);
+
+    // Nothing left to show is the model's to fix.
+    let refused = show(
+        context(viewer),
+        serde_json::json!({"groups": [{"group": "tasks", "actions": ["send"]}]}),
+    )
+    .await
+    .unwrap_err();
+    assert!(refused.contains("tasks send"), "{refused}");
 }
 
 #[tokio::test]

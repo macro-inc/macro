@@ -16,6 +16,11 @@ import type {
  * The permissions page's pure logic. The server resolves every state; the only
  * resolution done here is a tool's state inside its group's custom view: its
  * override when it has one, else its action's state.
+ *
+ * Only targets some tool maps to are shown or counted: a group's action with
+ * no tool, and a group with none, can't change what the agent does. The view
+ * leaves them out; a rule saved on one stays in `rules` and applies once a
+ * tool maps there.
  */
 
 export const ACTION_ORDER: readonly PermissionAction[] = [
@@ -101,6 +106,42 @@ export function changeForAction(
   return { target: groupActionTarget(group, action), state };
 }
 
+/** Whether the group has a tool for `action`. */
+export function hasTools(
+  catalogGroup: ToolPermissionCatalogGroup,
+  action: PermissionAction
+): boolean {
+  return catalogGroup.tools.some((tool) => tool.action === action);
+}
+
+/** The actions the group has tools for, in display order. */
+export function visibleActions(
+  catalogGroup: ToolPermissionCatalogGroup
+): PermissionAction[] {
+  return ACTION_ORDER.filter((action) => hasTools(catalogGroup, action));
+}
+
+/** The groups with any tool, in catalog order. */
+export function visibleGroups(
+  catalog: ToolPermissionCatalog
+): ToolPermissionCatalogGroup[] {
+  return catalog.groups.filter((group) => group.tools.length > 0);
+}
+
+/** Whether the page shows `target`: a group's action some tool has, or a tool in the catalog. */
+export function isVisibleTarget(
+  catalog: ToolPermissionCatalog,
+  target: ToolPermissionTarget
+): boolean {
+  if (target.kind === 'group_action') {
+    const group = catalog.groups.find((entry) => entry.id === target.group);
+    return group !== undefined && hasTools(group, target.action);
+  }
+  return catalog.groups.some((group) =>
+    group.tools.some((tool) => sameTool(tool, target))
+  );
+}
+
 /** The view's permissions for one group, if the view lists it. */
 export function groupPermissions(
   view: AgentToolPermissions,
@@ -138,7 +179,10 @@ function ruleGroup(
   catalogGroup: ToolPermissionCatalogGroup
 ): boolean {
   const target = rule.target;
-  if (target.kind === 'group_action') return target.group === catalogGroup.id;
+  if (target.kind === 'group_action')
+    return (
+      target.group === catalogGroup.id && hasTools(catalogGroup, target.action)
+    );
   return catalogGroup.tools.some((tool) => sameTool(tool, target));
 }
 
@@ -148,17 +192,14 @@ export function groupSummary(
   group: ToolPermissionGroup | undefined,
   rules: readonly ToolPermissionRule[]
 ): GroupSummary {
-  const actions = ACTION_ORDER.flatMap((action) => {
+  // Only the actions the group has tools for: an action with none can't
+  // make the agent do anything.
+  const actions = visibleActions(catalogGroup).flatMap((action) => {
     const permission = actionPermission(group, action);
     return permission ? [permission] : [];
   });
   const groupRules = rules.filter((rule) => ruleGroup(rule, catalogGroup));
-  // Only the actions the group has tools for: an action with none can't
-  // make the agent do anything.
-  const used = actions.filter((permission) =>
-    catalogGroup.tools.some((tool) => tool.action === permission.action)
-  );
-  const states = new Set(used.map((permission) => permission.state));
+  const states = new Set(actions.map((permission) => permission.state));
   const [agreed] = states;
 
   return {
@@ -181,14 +222,28 @@ export function groupSummary(
   };
 }
 
-/** Saved settings, the ones Reset puts back to Always allow. */
-export function settingCounts(rules: readonly ToolPermissionRule[]) {
+/**
+ * Saved settings the page shows. Reset clears every saved setting, the
+ * hidden ones too, so whether there is anything to reset is `saved`.
+ */
+export function settingCounts(
+  catalog: ToolPermissionCatalog,
+  rules: readonly ToolPermissionRule[]
+) {
+  const shown = rules.filter((rule) => isVisibleTarget(catalog, rule.target));
   return {
-    total: rules.length,
+    /** Every saved setting, including ones on targets no tool has. */
+    saved: rules.length,
+    total: shown.length,
     /** Set by a person, not by the agent restricting itself. */
-    byPerson: rules.filter((rule) => !rule.viaAgent).length,
-    byAgent: rules.filter((rule) => rule.viaAgent).length,
-    tools: rules.filter((rule) => rule.target.kind === 'tool').length,
+    byPerson: shown.filter((rule) => !rule.viaAgent).length,
+    byAgent: shown.filter((rule) => rule.viaAgent).length,
+    tools: shown.filter((rule) => rule.target.kind === 'tool').length,
+    /** What Reset clears, hidden settings included. */
+    reset: {
+      byAgent: rules.filter((rule) => rule.viaAgent).length,
+      tools: rules.filter((rule) => rule.target.kind === 'tool').length,
+    },
   };
 }
 
@@ -206,7 +261,7 @@ export function restrictions(
 ): Restriction[] {
   return catalog.groups.flatMap((catalogGroup) => {
     const group = groupPermissions(view, catalogGroup.id);
-    return ACTION_ORDER.flatMap((action): Restriction[] => {
+    return visibleActions(catalogGroup).flatMap((action): Restriction[] => {
       const state = actionPermission(group, action)?.state;
       if (state === undefined || state === 'always') return [];
       return [{ group: catalogGroup.id, action, state }];
@@ -214,18 +269,23 @@ export function restrictions(
   });
 }
 
-/** Restricted group actions plus individual tools restricted on their own. */
+/**
+ * Restricted group actions plus individual tools restricted on their own,
+ * over the actions some tool has.
+ */
 export function restrictionCount(view: AgentToolPermissions): number {
   return view.groups.reduce(
     (count, group) =>
       count +
       group.actions.reduce(
         (actionCount, action) =>
-          actionCount +
-          (action.state === 'always' ? 0 : 1) +
-          // A tool allowed under a stricter action loosens, not restricts.
-          action.overrides.filter((override) => override.state !== 'always')
-            .length,
+          action.tools === 0
+            ? actionCount
+            : actionCount +
+              (action.state === 'always' ? 0 : 1) +
+              // A tool allowed under a stricter action loosens, not restricts.
+              action.overrides.filter((override) => override.state !== 'always')
+                .length,
         0
       ),
     0
@@ -278,7 +338,7 @@ export function searchPermissions(
   const groups: Record<string, GroupMatch> = {};
   let toolCount = 0;
 
-  for (const group of catalog.groups) {
+  for (const group of visibleGroups(catalog)) {
     if (matches(group.name)) {
       groups[group.id] = { all: true, actions: [], tools: [] };
       toolCount += group.tools.length;
@@ -289,8 +349,7 @@ export function searchPermissions(
     // it, or every group would match every action.
     const actions = ACTION_ORDER.filter(
       (action) =>
-        matches(actionNames.get(action) ?? action) &&
-        group.tools.some((tool) => tool.action === action)
+        matches(actionNames.get(action) ?? action) && hasTools(group, action)
     );
     const tools = group.tools
       .filter((tool) => matches(tool.label) || matches(toolKey(tool)))

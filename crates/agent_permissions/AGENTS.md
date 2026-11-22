@@ -31,6 +31,11 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   `always` under a stricter group (not a silent no-op), and removing or
   loosening a group's action even when no operation's state moves today,
   since operations resolving through it later would be looser.
+- The view lists a group's action only when an operation maps to it, and a
+  group only when it has one (`resolve::view`); `ShowPermissions` shows
+  only those. A saved rule on a hidden pair stays in `rules` and applies as
+  soon as the registry maps an operation there: resolution never reads the
+  view. `restricted` counts operations, so hidden rules don't change it.
 - Expected refusals (off, not found, forbidden, needs a person, would loosen,
   unknown target) log at WARN; only `Internal` logs at ERROR.
 

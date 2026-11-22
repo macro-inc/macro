@@ -1259,16 +1259,16 @@ settings check, and the code it runs on the side can't reach Macro at all; the
 agent's other tools and connected apps aren't covered, even where a setting
 says Never.
 
-The header counts the saved settings by who made them (`2 settings changed ·
-1 set by <agent> itself`). The page lists every permission group as a
-collapsible row whose summary says what is restricted (`⊘ Never deletes · ✋
+The header counts the saved settings it shows by who made them (`2 settings
+changed · 1 set by <agent> itself`). The page lists every permission group
+that has a tool as a collapsible row whose summary says what is restricted (`⊘ Never deletes · ✋
 Asks before sending · 2 tools customized`), or says it once when every action
 the group has tools for agrees (`✋ Asks for everything`, `⊘ Never allowed`).
 `Channels & messages` covers messaging; creating and deleting channels, their
 settings, members, join links, access requests and channel bots are under
 `Channel settings & members`.
-Expanded, each of the five actions (Create, Read, Update, Delete, Send) has an
-`Allow · Ask · Never` segmented control (radio group named `<Group>:
+Expanded, each action the group has tools for (of Create, Read, Update,
+Delete, Send) has an `Allow · Ask · Never` segmented control (radio group named `<Group>:
 <Action>`; full state names are the tooltips), and `Individual tools` lists
 the group's tools with an `All` / `Differs` filter, each with its own control
 and a ↺ (`Use the <Action> setting`) that clears its own rule. A tool without
@@ -1277,8 +1277,11 @@ a setting of its own reads `follows <Action>`. Every click saves at once (one
 tool set while its action's change still saves is sent once that save
 settles, so it follows the action only if the action saved. The search field matches group,
 action and tool names and `service.operation`, and opens matching groups.
-`Reset permissions` asks for confirmation (a drawer on phones) and puts every
-saved setting back to Always allow. People who can't edit the agent see the
+A setting saved on an action no tool has (or a group with none) is not shown
+or counted, but stays saved and applies once a tool maps there.
+`Reset permissions` asks for confirmation (a drawer on phones: `Every setting
+goes back to Always allow.`) and puts every saved setting back to Always
+allow, hidden ones too. People who can't edit the agent see the
 controls disabled and no Reset. On phones the rows stack and controls go full
 width.
 
