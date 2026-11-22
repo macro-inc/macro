@@ -1,3 +1,14 @@
+import {
+  type Boundary,
+  flip,
+  hide,
+  type Middleware,
+  type MiddlewareState,
+  offset,
+  shift,
+} from '@floating-ui/dom';
+import { iosSafePadding } from '../../directive/iosFloatingMiddleware';
+
 /** A rendered markdown root: a Lexical editor's, or static markdown's. */
 const MARKDOWN_ROOT = '[data-lexical-editor], .markdown-content';
 
@@ -22,4 +33,29 @@ export function scrollColumn(
     if (overflowY === 'auto' || overflowY === 'scroll') return node;
   }
   return undefined;
+}
+
+/**
+ * Positioning for a link's preview card, kept inside the link's scroll
+ * column. The boundary is found from the reference element at each update,
+ * so it never depends on the link having been attached when the options
+ * were built.
+ */
+export function previewCardMiddleware(spacing: number): Middleware[] {
+  const boundary = (state: MiddlewareState): Boundary => {
+    const reference = state.elements.reference;
+    return (
+      (reference instanceof Element ? scrollColumn(reference) : undefined) ??
+      'clippingAncestors'
+    );
+  };
+  return [
+    offset(spacing),
+    flip((state) => ({
+      padding: iosSafePadding(spacing),
+      boundary: boundary(state),
+    })),
+    shift((state) => ({ padding: spacing, boundary: boundary(state) })),
+    hide(),
+  ];
 }

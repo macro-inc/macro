@@ -3,14 +3,12 @@ import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useUnfurl } from '@core/signal/unfurl';
 import { openExternalUrl } from '@core/util/url';
-import { flip, hide, offset, shift } from '@floating-ui/dom';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
-import { iosSafePadding } from '../../directive/iosFloatingMiddleware';
 import { useAppLinkDescriber, useAppLinkOpener } from './app-link-opener';
-import { scrollColumn } from './scroll-column';
+import { previewCardMiddleware } from './scroll-column';
 
 false && floatWithElement;
 
@@ -78,17 +76,7 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
             use:floatWithElement={{
               element: () => linkRef,
               spacing: 4,
-              floatingOptions: (() => {
-                const boundary = scrollColumn(linkRef) ?? 'clippingAncestors';
-                return {
-                  middleware: [
-                    offset(4),
-                    flip({ padding: iosSafePadding(4), boundary }),
-                    shift({ padding: 4, boundary }),
-                    hide(),
-                  ],
-                };
-              })(),
+              floatingOptions: { middleware: previewCardMiddleware(4) },
             }}
           >
             {(() => {

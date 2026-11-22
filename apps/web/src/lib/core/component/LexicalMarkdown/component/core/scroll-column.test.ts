@@ -1,5 +1,6 @@
+import type { MiddlewareState } from '@floating-ui/dom';
 import { describe, expect, it } from 'vitest';
-import { scrollColumn } from './scroll-column';
+import { previewCardMiddleware, scrollColumn } from './scroll-column';
 
 function box(style: string, className = '') {
   const element = document.createElement('div');
@@ -47,5 +48,25 @@ describe('scrollColumn', () => {
     document.body.append(root);
     expect(scrollColumn(link)).toBeUndefined();
     root.remove();
+  });
+
+  it("bounds the card by the link's column, found when it is positioned", () => {
+    // Built before the link exists, as the card's options are.
+    const middleware = previewCardMiddleware(4);
+    const column = box('overflow-y: auto');
+    const root = box('', 'markdown-content');
+    const link = document.createElement('a');
+    root.append(link);
+    column.append(root);
+    document.body.append(column);
+    const state = {
+      elements: { reference: link, floating: document.createElement('div') },
+    } as unknown as MiddlewareState;
+    for (const name of ['flip', 'shift']) {
+      const options = middleware.find((step) => step.name === name)?.options;
+      const resolved = typeof options === 'function' ? options(state) : options;
+      expect(resolved.boundary).toBe(column);
+    }
+    column.remove();
   });
 });
