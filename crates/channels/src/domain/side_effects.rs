@@ -1250,11 +1250,11 @@ fn interactions_for_event(event: &ChannelEvent) -> Option<Interactions> {
             active_participant_user_ids.clone(),
         ),
         ChannelEvent::ParticipantJoined {
-            channel_type,
+            channel_type: ChannelType::Private | ChannelType::Team,
             user_id,
             active_participant_user_ids,
             ..
-        } if matches!(channel_type, ChannelType::Private | ChannelType::Team) => {
+        } => {
             let joiner = user_id.as_user()?.clone();
             Interactions::between(vec![joiner], active_participant_user_ids.clone())
         }
