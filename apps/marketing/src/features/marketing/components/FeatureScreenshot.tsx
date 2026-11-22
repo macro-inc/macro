@@ -142,14 +142,16 @@ export function FeaturePhoneScreens(props: {
         <For each={props.screens}>
           {(screen) => (
             <li>
-              <img
-                src={screen.src}
-                width={screen.width}
-                height={screen.height}
-                alt={screen.alt}
-                loading="lazy"
-                decoding="async"
-              />
+              <div class="feature-phone-screen">
+                <img
+                  src={screen.src}
+                  width={screen.width}
+                  height={screen.height}
+                  alt={screen.alt}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
               <h3>{screen.title}</h3>
               <p>{screen.text}</p>
             </li>

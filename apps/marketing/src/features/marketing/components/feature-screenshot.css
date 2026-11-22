@@ -48,12 +48,18 @@
 .feature-phone-screens li { width: 220px; flex: none; }
 .feature-phone-screens li:first-child { margin-inline-start: auto; }
 .feature-phone-screens li:last-child { margin-inline-end: auto; }
-.feature-phone-screens img {
+/* The phone's screen: the capture inset from the rounded corners on the app's own background. */
+.feature-phone-screen {
+  padding: 22px 10px;
+  border-radius: 30px;
+  background: #111;
+  box-shadow: 0 0 0 1px #3a3a3a, 0 0 0 7px #161616, 0 0 0 8px #2e2e2e, 0 26px 40px -26px #000;
+}
+.feature-phone-screen img {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 30px;
-  box-shadow: 0 0 0 1px #3a3a3a, 0 0 0 7px #161616, 0 0 0 8px #2e2e2e, 0 26px 40px -26px #000;
+  border-radius: 6px;
 }
 .feature-phone-screens h3 {
   margin: 26px 0 6px;
