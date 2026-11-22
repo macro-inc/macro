@@ -73,7 +73,8 @@ scoped (`RunEnvironment::scoped`) or dry run is also refused the routes anyone
 may call that reach someone else or an outside site (`anonymous_outward`:
 public booking, unfurl's proxy and bulk unfurl, the read-receipt pixel).
 The harness enforces only where `enable-code-execution-egress-enforce` is
-on as well as the proxy flag. It stops when the run ends, is
+on as well as the proxy flag, except for a run whose scope is held to an
+allowlist, which always enforces. It stops when the run ends, is
 cancelled or times out. The agent harness picks it per user with the
 fail-closed `enable-code-execution-egress-proxy` flag; `Egress::Direct` (the
 default) is the old path.

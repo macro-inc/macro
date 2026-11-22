@@ -772,6 +772,56 @@ async fn the_egress_flag_fails_closed_to_direct() {
     );
 }
 
+/// A run whose scope holds it to an allowlist enforces whatever the flags
+/// say, even with no flag client, so a scoped run can't reach an
+/// anonymous route that goes outward; any other run follows the flags.
+#[tokio::test]
+async fn an_enforced_scope_enforces_with_the_flags_off() {
+    use code_execution::domain::Egress;
+    use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
+    let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let off = FlagSnapshot::new([
+        (EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(false)),
+        (EGRESS_ENFORCE_FLAG.to_owned(), FlagValue::Boolean(false)),
+    ]);
+    let proxy_only = FlagSnapshot::new([
+        (EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(true)),
+        (EGRESS_ENFORCE_FLAG.to_owned(), FlagValue::Boolean(false)),
+    ]);
+    let rollout = |snapshot: Result<FlagSnapshot, String>| {
+        let mut flags = FakeFeatureFlags::default();
+        flags.set(user.clone(), snapshot);
+        EgressRollout::new(Some(flags))
+    };
+    for snapshot in [Ok(off.clone()), Ok(proxy_only.clone()), Err("down".into())] {
+        assert_eq!(
+            rollout(snapshot).egress_for(&user, true).await,
+            Egress::Enforced
+        );
+    }
+    assert_eq!(
+        EgressRollout::<FakeFeatureFlags>::new(None)
+            .egress_for(&user, true)
+            .await,
+        Egress::Enforced
+    );
+    // Not an allowlist scope: the flags decide, as before.
+    assert_eq!(
+        rollout(Ok(proxy_only)).egress_for(&user, false).await,
+        Egress::Proxied
+    );
+    assert_eq!(
+        rollout(Ok(off)).egress_for(&user, false).await,
+        Egress::Direct
+    );
+    assert_eq!(
+        EgressRollout::<FakeFeatureFlags>::new(None)
+            .egress_for(&user, false)
+            .await,
+        Egress::Direct
+    );
+}
+
 /// The scope can't be read.
 struct UnreadableScopes;
 

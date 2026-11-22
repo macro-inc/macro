@@ -84,6 +84,17 @@ impl<Flags> EgressRollout<Flags> {
 }
 
 impl<Flags: FeatureFlags> EgressRollout<Flags> {
+    /// The egress for a run acting as `user`: when `enforced`, the run's
+    /// scope holds it to an allowlist and its forwarder always refuses, flags
+    /// or no flags (see `SessionScope::enforces_egress`); otherwise what the
+    /// flags say.
+    pub async fn egress_for(&self, user: &MacroUserIdStr<'_>, enforced: bool) -> Egress {
+        if enforced {
+            return Egress::Enforced;
+        }
+        self.egress(user).await
+    }
+
     /// The egress for runs acting as `user`.
     pub async fn egress(&self, user: &MacroUserIdStr<'_>) -> Egress {
         let Some(flags) = &self.flags else {
@@ -305,7 +316,10 @@ impl ExecutionCredentials for RunCredentials {
                 session_id: Some(identity.session.as_uuid()),
                 execution_id: Some(identity.execution.as_uuid()),
                 unattended: None,
-                egress: self.egress.egress(&actor).await,
+                egress: self
+                    .egress
+                    .egress_for(&actor, scope.is_some_and(SessionScope::enforces_egress))
+                    .await,
                 scoped: scope.is_some(),
             },
             acting_user: actor,
@@ -356,9 +370,10 @@ impl UserExecutionCredentials for UserRunCredentials {
             }
             None => None,
         };
-        let scoped = correlation
+        let correlation_scope = correlation
             .as_ref()
-            .is_some_and(|correlation| correlation.scope.is_some());
+            .and_then(|correlation| correlation.scope);
+        let scoped = correlation_scope.is_some();
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
             .signer
@@ -382,7 +397,13 @@ impl UserExecutionCredentials for UserRunCredentials {
             session_id: None,
             execution_id: None,
             unattended: None,
-            egress: self.egress.egress(user).await,
+            egress: self
+                .egress
+                .egress_for(
+                    user,
+                    correlation_scope.is_some_and(SessionScope::enforces_egress),
+                )
+                .await,
             scoped,
         })
     }

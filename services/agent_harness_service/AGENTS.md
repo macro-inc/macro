@@ -268,7 +268,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   answer is cached per user for 60 s (10 s after a failed read), so a run
   doesn't wait on PostHog (span `code_execution.egress_flag`, `cache`). The
   forwarder refuses what it would refuse only where
-  `enable-code-execution-egress-enforce` is on too (fail-closed off).
+  `enable-code-execution-egress-enforce` is on too (fail-closed off); a run
+  whose session scope is held to an allowlist (`SessionScope::enforces_egress`)
+  always enforces, flags or no flags (`EgressRollout::egress_for`).
   Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access (`mint_for_routine`):

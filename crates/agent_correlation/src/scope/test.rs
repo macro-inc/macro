@@ -347,3 +347,16 @@ fn a_dry_run_reads_and_writes_nothing() {
     }
     assert!(!scope.allows_sharing());
 }
+
+/// Generation and no-send runs, and a dry run, follow the egress rollout
+/// flags: none of them enforces on its own.
+#[test]
+fn the_scopes_today_follow_the_egress_rollout() {
+    for scope in [
+        SessionScope::Generation,
+        SessionScope::NoSend,
+        SessionScope::DryRun,
+    ] {
+        assert!(!scope.enforces_egress(), "{scope:?}");
+    }
+}
