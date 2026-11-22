@@ -674,7 +674,11 @@ While a connection's check finds the engine unreachable (Docker Desktop
 not started yet, say), macrod checks again every 30 seconds and sends each
 result as a fresh `TeammateHost` report. Once the engine answers and
 nothing is wrong, it redials, so the dial lists `teammate-container`;
-with a turn running it waits for the turn to end.
+with a turn running it waits for the turn to end. An isolation probe that
+times out (a loaded machine) is no verdict: the check keeps that engine's
+last finished result, or reports the engine as unreachable when it has
+none, and checks again every 30 seconds. Only a probe that finished and
+failed reports `networkIsolationUnavailable`.
 For Docker it runs `docker version` (it needs Engine 24 or later, for
 `--security-opt` seccomp files and `--mount` volumes). For Podman it runs
 `podman info` (4.4 or later, for pasta). It never installs an engine. It

@@ -99,6 +99,8 @@ enum FakeGuard {
     Refuses,
     RefusesOnce,
     ReadsBack(String),
+    /// Never answers, as an engine under heavy load.
+    Hangs,
 }
 
 /// The facts the fake engine's namespaces have.
@@ -363,6 +365,9 @@ impl Engine for FakeEngine {
         _image_id: &str,
         ruleset: Option<&str>,
     ) -> Result<String, super::engine::GuardError> {
+        if matches!(self.state().guard, FakeGuard::Hangs) {
+            return std::future::pending().await;
+        }
         let mut state = self.state();
         state.calls.push(Call::Guard {
             holder_id: holder_id.to_owned(),
@@ -376,6 +381,7 @@ impl Engine for FakeEngine {
             _ => state.guard.clone(),
         };
         match &guard {
+            FakeGuard::Hangs => unreachable!("answered above"),
             FakeGuard::Loads => Ok(super::egress::simulated_readback(&[], &fake_facts())),
             FakeGuard::Refuses => Err(super::engine::GuardError::Refused(
                 "nft: Operation not permitted".to_owned(),
@@ -3158,6 +3164,79 @@ async fn an_engine_whose_isolation_probe_fails_is_reported_and_hosts_nothing() {
     assert!(engine.calls().contains(&Call::RemoveNetwork(
         "macro-teammate-isolation-probe".to_owned()
     )));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_probe_that_takes_too_long_keeps_the_last_finished_result() {
+    // Under load the isolation probe times out: that is no verdict. The
+    // machine keeps the last finished result, checks again every 30 s, and
+    // only a probe that finished and failed reports isolation unavailable.
+    let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
+    let (teammates, _directory) = restarted_on(&engine).await;
+    assert_eq!(teammates.detect().await.problem, None);
+
+    engine.state().guard = FakeGuard::Hangs;
+    let report = teammates.detect().await;
+    assert_eq!(report.problem, None);
+    assert!(can_host(&report));
+
+    let teammates = Arc::new(teammates);
+    let (to_service, _sent) = mpsc::unbounded_channel();
+    let mut link = Link::open(Arc::clone(&teammates), report, &to_service);
+    engine.state().guard = FakeGuard::Refuses;
+    let checked = tokio::time::timeout(Duration::from_secs(31), next_host_event(&mut link))
+        .await
+        .expect("an inconclusive check is made again at 30 s");
+    let TeammateEvent::Send(
+        agent_runtime_protocol::domain::schema::v0::ToServerMessage::TeammateHost { report },
+    ) = checked
+    else {
+        panic!("expected a host report, got {checked:?}");
+    };
+    assert_eq!(
+        report.problem,
+        Some(TeammateHostProblem::NetworkIsolationUnavailable)
+    );
+    // A finished check: no more rechecks.
+    assert!(
+        tokio::time::timeout(Duration::from_secs(120), next_host_event(&mut link))
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_probe_that_takes_too_long_with_nothing_kept_reports_the_engine_unreachable() {
+    let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
+    engine.state().guard = FakeGuard::Hangs;
+    let (teammates, _directory) = restarted_on(&engine).await;
+
+    let report = teammates.detect().await;
+    assert_eq!(report.problem, Some(TeammateHostProblem::EngineUnreachable));
+
+    let teammates = Arc::new(teammates);
+    let (to_service, _sent) = mpsc::unbounded_channel();
+    let mut link = Link::open(Arc::clone(&teammates), report, &to_service);
+    engine.state().guard = FakeGuard::Loads;
+    let checked = tokio::time::timeout(Duration::from_secs(31), next_host_event(&mut link))
+        .await
+        .expect("checked again at 30 s");
+    assert!(matches!(checked, TeammateEvent::Redial), "{checked:?}");
+}
+
+/// The link's next event that isn't an install's state change (the kept
+/// install's supervisor reports those meanwhile).
+async fn next_host_event(link: &mut Link) -> TeammateEvent {
+    loop {
+        match link.next().await {
+            TeammateEvent::Send(
+                agent_runtime_protocol::domain::schema::v0::ToServerMessage::TeammateStatus {
+                    ..
+                },
+            ) => {}
+            event => return event,
+        }
+    }
 }
 
 #[tokio::test]

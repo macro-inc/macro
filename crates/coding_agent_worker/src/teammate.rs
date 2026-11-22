@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use agent_runtime_protocol::domain::schema::v0::{
-    AgentEnvironment, EngineIsolation, InstalledEngine, IsolationProblem, TeammateHostProblem,
+    AgentEnvironment, ContainerEngineKind, EngineIsolation, InstalledEngine, TeammateHostProblem,
     TeammateHostReport, TeammateImage, TeammateInstall, TeammateInstallId, TeammateRunFailure,
     TeammateRunState, ToRuntimeMessage, ToServerMessage,
 };
@@ -248,7 +248,21 @@ struct Shared<EngineImpl> {
     latest: Mutex<BTreeMap<TeammateInstallId, Status>>,
     /// The last engine check.
     host: Mutex<Option<TeammateHostReport>>,
+    /// Each engine's last finished isolation probe: a probe that times out
+    /// is no verdict, and the check keeps this one.
+    isolation: Mutex<Vec<(ContainerEngineKind, EngineIsolation)>>,
+    /// Whether a probe of the last engine check timed out, so it is made
+    /// again on the live connection.
+    inconclusive: AtomicBool,
     resumed: AtomicBool,
+}
+
+/// What an isolation probe found.
+enum Probed {
+    /// It finished (or wasn't made: no image here yet).
+    Finished(EngineIsolation),
+    /// It took too long; with the engine's last finished result, if any.
+    TimedOut(Option<EngineIsolation>),
 }
 
 enum Work {
@@ -279,6 +293,8 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
             statuses,
             latest: Mutex::new(BTreeMap::new()),
             host: Mutex::new(None),
+            isolation: Mutex::new(Vec::new()),
+            inconclusive: AtomicBool::new(false),
             resumed: AtomicBool::new(false),
         });
         let (requests, queue) = mpsc::unbounded_channel();
@@ -353,11 +369,31 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
             return (Err(EngineUnavailable::NotInstalled), Vec::new());
         }
         let mut listed = Vec::new();
+        // Engines whose probe timed out with no finished result: unknown,
+        // so reported like an engine that didn't answer.
+        let mut undecided = Vec::new();
+        let mut inconclusive = false;
         for kind in &kinds {
             let info = tokio::time::timeout(ENGINE_CHECK_TIMEOUT, engine.select(*kind))
                 .await
                 .unwrap_or(Err(EngineUnavailable::Unreachable));
-            let isolation = self.probe_isolation(&info, installs).await;
+            let isolation = match self.probe_isolation(&info, installs).await {
+                Probed::Finished(isolation) => {
+                    if isolation != EngineIsolation::NotProbed {
+                        let mut kept = lock(&self.shared.isolation);
+                        kept.retain(|(engine, _)| engine != kind);
+                        kept.push((*kind, isolation));
+                    }
+                    isolation
+                }
+                Probed::TimedOut(kept) => {
+                    inconclusive = true;
+                    kept.unwrap_or_else(|| {
+                        undecided.push(*kind);
+                        EngineIsolation::NotProbed
+                    })
+                }
+            };
             listed.push(InstalledEngine {
                 kind: *kind,
                 version: info.as_ref().ok().map(|info| info.version.clone()),
@@ -377,9 +413,16 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
             })
             .or_else(|| listed.iter().find(answered))
             .map_or(kinds[0], |engine| engine.kind);
-        let info = tokio::time::timeout(ENGINE_CHECK_TIMEOUT, engine.select(chosen))
-            .await
-            .unwrap_or(Err(EngineUnavailable::Unreachable));
+        let info = if undecided.contains(&chosen) {
+            Err(EngineUnavailable::Unreachable)
+        } else {
+            tokio::time::timeout(ENGINE_CHECK_TIMEOUT, engine.select(chosen))
+                .await
+                .unwrap_or(Err(EngineUnavailable::Unreachable))
+        };
+        self.shared
+            .inconclusive
+            .store(inconclusive, Ordering::SeqCst);
         (info, listed)
     }
 
@@ -390,10 +433,14 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
         &self,
         engine: &Result<engine::EngineInfo, EngineUnavailable>,
         installs: &[StoredInstall],
-    ) -> EngineIsolation {
-        if !matches!(engine, Ok(info) if info.supported_version) {
-            return EngineIsolation::NotProbed;
+    ) -> Probed {
+        let Ok(info) = engine else {
+            return Probed::Finished(EngineIsolation::NotProbed);
+        };
+        if !info.supported_version {
+            return Probed::Finished(EngineIsolation::NotProbed);
         }
+        let kind = info.kind;
         let engine = &self.shared.engine;
         for stored in installs {
             let image_id = &stored.image.image_id;
@@ -401,7 +448,7 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
                 continue;
             }
             let Ok(probe) = TeammateInstallId::new(PROBE_INSTALL) else {
-                return EngineIsolation::NotProbed;
+                return Probed::Finished(EngineIsolation::NotProbed);
             };
             let network = network_name(&probe);
             let probed = async {
@@ -425,22 +472,24 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
             let _ = engine.remove_container(&engine::holder_name(&probe)).await;
             let _ = engine.remove_network(&network).await;
             return match outcome {
-                Ok(Ok(_)) => EngineIsolation::Enforced,
+                Ok(Ok(_)) => Probed::Finished(EngineIsolation::Enforced),
                 Ok(Err(error)) => {
                     tracing::warn!(error = %error, "this engine can't enforce a teammate's egress policy");
-                    EngineIsolation::Unavailable {
+                    Probed::Finished(EngineIsolation::Unavailable {
                         reason: error.problem(),
-                    }
+                    })
                 }
                 Err(_) => {
-                    tracing::warn!("the network isolation probe took too long");
-                    EngineIsolation::Unavailable {
-                        reason: IsolationProblem::EngineFailed,
-                    }
+                    let kept = lock(&self.shared.isolation)
+                        .iter()
+                        .find(|(engine, _)| *engine == kind)
+                        .map(|(_, isolation)| *isolation);
+                    tracing::warn!(kept = ?kept, "the network isolation probe took too long; keeping the last finished result and checking again");
+                    Probed::TimedOut(kept)
                 }
             };
         }
-        EngineIsolation::NotProbed
+        Probed::Finished(EngineIsolation::NotProbed)
     }
 
     async fn probe_user_namespaces(&self, installs: &[StoredInstall]) -> Option<bool> {
@@ -527,14 +576,16 @@ impl Link {
         // Subscribed first: a change between the two is sent twice, never
         // lost.
         let statuses = teammates.subscribe();
-        let unreachable = report.problem == Some(TeammateHostProblem::EngineUnreachable);
+        let listed = can_host(&report);
+        let recheck = report.problem == Some(TeammateHostProblem::EngineUnreachable)
+            || teammates.shared.inconclusive.load(Ordering::SeqCst);
         let _ = to_service.send(ToServerMessage::TeammateHost { report });
         for status in teammates.latest() {
             let _ = to_service.send(status.into());
         }
-        let rechecks = unreachable.then(|| {
+        let rechecks = recheck.then(|| {
             let (events, rechecks) = mpsc::unbounded_channel();
-            let task = tokio::spawn(recheck_engine(Arc::clone(&teammates), events));
+            let task = tokio::spawn(recheck_engine(Arc::clone(&teammates), listed, events));
             (rechecks, AbortOnDropHandle::new(task))
         });
         Self {
@@ -567,13 +618,14 @@ impl Link {
     }
 }
 
-/// While the engine check finds the engine unreachable, check again every
-/// [`ENGINE_RECHECK`] and report each result on the live connection. Once
-/// the engine answers and the machine can host, ask for a redial (this
-/// connection's dial didn't list the teammate capability) until the link
-/// ends; another problem is reported and ends the checks.
+/// While the engine check finds the engine unreachable, or a probe timed
+/// out, check again every [`ENGINE_RECHECK`] and report each result on the
+/// live connection. Once the machine can host on a connection whose dial
+/// didn't list the teammate capability (`listed`), ask for a redial instead
+/// until the link ends; a conclusive result ends the checks.
 async fn recheck_engine(
     teammates: Arc<HostTeammates>,
+    listed: bool,
     events: mpsc::UnboundedSender<TeammateEvent>,
 ) {
     let mut ticks =
@@ -582,17 +634,18 @@ async fn recheck_engine(
     loop {
         ticks.tick().await;
         let report = teammates.detect().await;
-        if can_host(&report) {
+        if !listed && can_host(&report) {
             if events.send(TeammateEvent::Redial).is_err() {
                 return;
             }
             continue;
         }
-        let unreachable = report.problem == Some(TeammateHostProblem::EngineUnreachable);
+        let again = report.problem == Some(TeammateHostProblem::EngineUnreachable)
+            || teammates.shared.inconclusive.load(Ordering::SeqCst);
         let sent = events.send(TeammateEvent::Send(ToServerMessage::TeammateHost {
             report,
         }));
-        if sent.is_err() || !unreachable {
+        if sent.is_err() || !again {
             return;
         }
     }
