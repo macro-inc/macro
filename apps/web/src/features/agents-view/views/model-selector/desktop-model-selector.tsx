@@ -9,7 +9,7 @@ import Search from '@icon/system/regular/magnifying-glass.svg';
 import Plus from '@icon/system/regular/plus.svg';
 import Squares from '@icon/system/regular/squares-four.svg';
 import { Button, Dropdown } from '@ui';
-import { For, Show } from 'solid-js';
+import { type ComponentProps, createSignal, For, Show } from 'solid-js';
 import { AgentIcon } from '../../components/AgentGlyph';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { agentPickerGroups } from '../../core/agent-picker-groups';
@@ -27,6 +27,8 @@ import { UnifiedModelTrigger } from '../shared/model-trigger';
 import { UnifiedModelTriggerContent } from '../shared/model-trigger-content';
 import { AllModelsMenu } from './all-models-menu';
 
+type Placement = NonNullable<ComponentProps<typeof Dropdown>['placement']>;
+
 export function DesktopModelSelector(props: {
   /** Show All models in place of the menu instead of as a flyout beside it. */
   catalogInPlace?: boolean;
@@ -35,9 +37,28 @@ export function DesktopModelSelector(props: {
   const { open, query, setQuery, changeOpen, page, setPage, back } =
     createModelSelectorNavigation(state.onOpenChange);
   let search: HTMLInputElement | undefined;
+  // Once the catalog replaces the menu in place, the menu keeps the side it
+  // opened on: a shorter filtered list must not flip it over the page, and
+  // Back must not reopen it on a side with less room.
+  let trigger: HTMLButtonElement | undefined;
+  let content: HTMLDivElement | undefined;
+  // The menu's side is read from the layout: the menu root hides Kobalte's
+  // placement callback.
+  const openedSide = (): Placement =>
+    trigger &&
+    content &&
+    content.getBoundingClientRect().top >=
+      trigger.getBoundingClientRect().bottom
+      ? 'bottom-end'
+      : 'top-end';
+  const [lockedPlacement, setLockedPlacement] = createSignal<Placement>();
+  const changeMenuOpen = (value: boolean) => {
+    if (!value) setLockedPlacement(undefined);
+    changeOpen(value);
+  };
   const chooseModel = (id: string) => {
     (state.onSuggestedModel ?? state.onModel)(id);
-    changeOpen(false);
+    changeMenuOpen(false);
   };
   const choices = () => speedChoices(state.speeds ?? []);
   const filtered = () =>
@@ -52,9 +73,15 @@ export function DesktopModelSelector(props: {
     });
   const showOptions = () => !query().trim() && hasSelectorOptions(options());
   return (
-    <Dropdown open={open()} onOpenChange={changeOpen} placement="top-end">
+    <Dropdown
+      open={open()}
+      onOpenChange={changeMenuOpen}
+      placement={lockedPlacement() ?? 'top-end'}
+      flip={lockedPlacement() === undefined}
+    >
       <UnifiedModelTrigger>
         <Dropdown.Trigger
+          ref={trigger}
           variant="ghost"
           disabled={state.disabled}
           aria-label={t('agentControls.modelSelector')}
@@ -64,6 +91,7 @@ export function DesktopModelSelector(props: {
         </Dropdown.Trigger>
       </UnifiedModelTrigger>
       <Dropdown.Content
+        ref={content}
         onCloseAutoFocus={state.onCloseAutoFocus}
         onOpenAutoFocus={(event: Event) => {
           event.preventDefault();
@@ -141,7 +169,10 @@ export function DesktopModelSelector(props: {
                       fallback={
                         <Dropdown.Item
                           closeOnSelect={false}
-                          onSelect={() => setPage('all')}
+                          onSelect={() => {
+                            setLockedPlacement(openedSide());
+                            setPage('all');
+                          }}
                         >
                           <Squares class="size-4" />
                           <span class="flex-1">
@@ -195,7 +226,7 @@ export function DesktopModelSelector(props: {
                                   closeOnSelect
                                   disabled={!agent.connectLabel}
                                   onSelect={() => {
-                                    changeOpen(false);
+                                    changeMenuOpen(false);
                                     state.onConnect?.(agent);
                                   }}
                                 >
@@ -250,7 +281,7 @@ export function DesktopModelSelector(props: {
                     <Show when={state.onCreate}>
                       <Dropdown.Item
                         onSelect={() => {
-                          changeOpen(false);
+                          changeMenuOpen(false);
                           state.onCreate?.();
                         }}
                       >
@@ -290,7 +321,7 @@ export function DesktopModelSelector(props: {
                                     closeOnSelect
                                     onSelect={() => {
                                       state.onModel(option.id);
-                                      changeOpen(false);
+                                      changeMenuOpen(false);
                                     }}
                                   >
                                     <Dropdown.ItemLabel class="flex-1">
@@ -346,7 +377,7 @@ export function DesktopModelSelector(props: {
                                           value: choice.value,
                                           name: choice.name,
                                         });
-                                      changeOpen(false);
+                                      changeMenuOpen(false);
                                     }}
                                   >
                                     <Dropdown.ItemLabel class="flex-1">
@@ -385,7 +416,7 @@ export function DesktopModelSelector(props: {
                                     closeOnSelect
                                     onSelect={() => {
                                       state.onSpeed(choice.value);
-                                      changeOpen(false);
+                                      changeMenuOpen(false);
                                     }}
                                   >
                                     <Dropdown.ItemLabel class="flex-1">
