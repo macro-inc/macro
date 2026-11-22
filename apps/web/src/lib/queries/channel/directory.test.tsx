@@ -3888,11 +3888,12 @@ describe("the viewer's own channel writes", () => {
     expect(ownChannelWrites(client).writes()).toEqual({});
   });
 
-  it('holds and reads nothing for a write another sign-in made', async () => {
+  it('holds, reads and refreshes nothing for a write another sign-in made', async () => {
     const network = fakeNetwork([], {
       primary: [channelRecord('a', { name: 'after', updatedAt: UPDATED_MID })],
     });
     const client = queryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
 
     await refreshChannelDirectory([channelUuid('a')], {
       client,
@@ -3904,6 +3905,8 @@ describe("the viewer's own channel writes", () => {
 
     expect(network.entityReads).toEqual([]);
     expect(ownChannelWrites(client).writes()).toEqual({});
+    // This sign-in's directories read again for the sign-in itself.
+    expect(invalidate).not.toHaveBeenCalled();
   });
 
   it("holds nothing when the read fails, and shows no other viewer's write", async () => {

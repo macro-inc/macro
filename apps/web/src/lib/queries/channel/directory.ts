@@ -719,6 +719,12 @@ function fetchChannelsById(
   );
 }
 
+/** Whether `writer` is the sign-in `now`. */
+const sameQueryAccount = (
+  writer: QueryAccount,
+  now: QueryAccount | undefined
+) => now?.userId === writer.userId && now.session === writer.session;
+
 /** Per query client, how many channel writes `refreshChannelDirectory` has
  * seen. */
 type DirectoryWrites = { seen: number };
@@ -795,7 +801,8 @@ type RefreshChannelDirectoryOptions = {
    * the viewer can no longer read, with no read. */
   removed?: readonly string[];
   /** The sign-in that made the write, when it settles after the call
-   * started: a write another sign-in made holds and reads nothing. */
+   * started: a write another sign-in made holds, reads and refreshes
+   * nothing. */
   writer?: QueryAccount;
 };
 
@@ -821,6 +828,10 @@ export async function refreshChannelDirectory(
     writer,
   }: RefreshChannelDirectoryOptions = {}
 ) {
+  // A write another sign-in made is not this one's to refresh for: the
+  // sign-in reads every directory again itself, and the write's soup
+  // updates reach it. Counting it would only walk the network again.
+  if (writer && !sameQueryAccount(writer, account())) return;
   const ownWrites = readOwnWrites(
     changed,
     removed,
@@ -1004,10 +1015,7 @@ async function readOwnWrites(
   if (channelIds.length === 0 && gone.length === 0) return;
   const writer = writerOf ?? account();
   if (!writer) return;
-  const signedIn = () => {
-    const now = account();
-    return now?.userId === writer.userId && now.session === writer.session;
-  };
+  const signedIn = () => sameQueryAccount(writer, account());
   // A write another sign-in made holds nothing for this one: its reads
   // would carry this sign-in's credentials.
   if (!signedIn()) return;
