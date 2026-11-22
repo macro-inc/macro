@@ -1837,4 +1837,108 @@ describe('createScreenSession', () => {
       dispose();
     });
   });
+
+  it('upgrades to a drive ticket once live when Manage arrived while the view connection was opening', async () => {
+    const modes: string[] = [];
+    let open: () => void = () => {};
+    const connections: FakeConnection[] = [];
+    const real = fakeTransport(connections);
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async (request) => {
+        modes.push(request.mode);
+        return ok({
+          socketUrl: 'wss://screen.test/ws?ticket=t',
+          expiresAt: '',
+        });
+      },
+      transport: () => ({
+        kind: 'vnc',
+        connect: async (element, ticket, handlers, signal) => {
+          if (connections.length === 0)
+            await new Promise<void>((resolve) => {
+              open = resolve;
+            });
+          return real.connect(element, ticket, handlers, signal);
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      const [canDrive, setCanDrive] = createSignal(false);
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      expect(modes).toEqual(['view']);
+      // Manage arrives while the view socket is still opening.
+      setCanDrive(true);
+      open();
+      await settle();
+      await settle();
+      expect(modes).toEqual(['view', 'drive']);
+      expect(session.store.status).toEqual({ kind: 'live' });
+      dispose();
+    });
+  });
+
+  it('sends a hand-back again, and never wins the drive back, when the socket drops before the server took it', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+    const lease = {
+      driver: { name: 'Alice', isYou: true },
+      agentHeld: true,
+      waking: false,
+      transport: 'vnc' as const,
+      viewers: 1,
+      leaseId: 'lease-1',
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      connections[0].handlers.onState({ ...lease, drivingHere: true });
+      expect(session.drivingMe()).toBe(true);
+
+      session.handBack('done');
+      expect(connections[0].controls).toEqual(['handBack:done']);
+      // The socket drops before the server answers.
+      connections[0].handlers.onEnded('connectionLost');
+      await vi.advanceTimersByTimeAsync(500);
+      // The new connection hears the lease is still ours, on the old socket.
+      connections[1].handlers.onState({ ...lease, drivingHere: false });
+
+      expect(connections[1].controls).toEqual(['handBack:done']);
+      expect(session.store.controlLost).toBeUndefined();
+
+      // The server lets go: nothing more is sent.
+      connections[1].handlers.onState({
+        ...lease,
+        driver: null,
+        leaseId: null,
+      });
+      connections[1].handlers.onState({
+        ...lease,
+        driver: null,
+        leaseId: null,
+      });
+      expect(connections[1].controls).toEqual(['handBack:done']);
+      dispose();
+    });
+  });
 });

@@ -181,6 +181,26 @@ export function createScreenSession(options: ScreenSessionOptions) {
   /** This tab let go of its drive itself: the lease leaving isn't a loss. */
   let handedBackHere = false;
   /**
+   * A hand-back sent and not yet seen through: the lease still ours. A drop
+   * meanwhile must not win the drive back; the next connection sends the
+   * hand-back again instead.
+   */
+  let pendingHandBack: { note: string | null } | undefined;
+  /** The connection (generation) the pending hand-back was last sent on. */
+  let handBackSentOn: number | undefined;
+  const finishHandBack = () => {
+    // Until this connection says whose lease it is, nothing is known.
+    if (!pendingHandBack || !session || !store.server) return;
+    if (!ownLease()) {
+      pendingHandBack = undefined;
+      return;
+    }
+    if (handBackSentOn === generation) return;
+    handBackSentOn = generation;
+    record('computer.screen.hand_back', { reason: 'resent' });
+    session.handBack(pendingHandBack.note);
+  };
+  /**
    * The lease this tab drove when its connection dropped: only that one is
    * won back, never one the same person took over in another tab meanwhile.
    * Undefined when unknown (a pop-out, an older harness).
@@ -287,8 +307,12 @@ export function createScreenSession(options: ScreenSessionOptions) {
       step = afterBootWindow(next, lastError);
       if (step !== next) endBoot('boot_timeout');
     }
-    // Any final end closes the boot: Try again starts fresh.
-    if (step.kind === 'show') endBoot('ended');
+    // Any final end closes the boot, and a hand-back in flight: Try again
+    // starts fresh. Only a drop carries them to the next connection.
+    if (step.kind === 'show') {
+      endBoot('ended');
+      pendingHandBack = undefined;
+    }
     // Over for good (stopped, revoked, refused, gave up): there is no drive
     // to win back, and the keyboard goes back to the app.
     setStore({
@@ -398,6 +422,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
                     : store.controlLost,
               });
               resumeDriving();
+              finishHandBack();
               // Until the first frame, say the computer is waking while it is
               // (and while a boot this viewer waits on lasts).
               if (store.status.kind !== 'live') {
@@ -504,6 +529,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
           lastPicture: true,
         });
         resumeDriving();
+        finishHandBack();
       });
     } catch (error) {
       connectSpan.error(error);
@@ -544,6 +570,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
 
   function retry() {
     clearTimeout(retryTimer);
+    pendingHandBack = undefined;
     setStore({ status: { kind: 'connecting' } });
     fireAndForget(connect(0), 'agent-screen.connect');
   }
@@ -573,12 +600,13 @@ export function createScreenSession(options: ScreenSessionOptions) {
 
   // Access that arrives (or grows to Manage) after a view connection: take a
   // drive ticket, so Take over is one message rather than driveNotAllowed.
+  // Also when Manage came while that connection was still opening: the
+  // upgrade waits for it to be live.
   createEffect(
     on(
-      options.canDrive,
-      (canDrive) => {
-        if (!canDrive || connectedMode !== 'view') return;
-        if (store.status.kind !== 'live') return;
+      () => options.canDrive() && store.status.kind === 'live',
+      (upgrade) => {
+        if (!upgrade || connectedMode !== 'view') return;
         record('computer.screen.upgrade_to_drive');
         fireAndForget(connect(0), 'agent-screen.connect');
       },
@@ -642,7 +670,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
    */
   function forgetServer() {
     if (!store.server) return;
-    const wasDriving = drivingMe();
+    // Handing back is letting go, even if the drop came first.
+    const wasDriving = drivingMe() && !pendingHandBack;
     if (wasDriving) {
       record('computer.screen.control_lost');
       droppedLease = store.server.leaseId;
@@ -769,6 +798,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
       // while driving; after a lapse the banner's buttons let go.)
       if (!ownLease()) return;
       handedBackHere = true;
+      pendingHandBack = { note };
+      handBackSentOn = generation;
       session?.handBack(note);
     },
     stop() {
