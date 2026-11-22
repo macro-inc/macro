@@ -4,7 +4,15 @@ import { render } from '@solidjs/testing-library';
 import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
 import { createSignal, Show } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 import {
   CHANNEL_SOUP_BACKFILL_LANE,
   CORE_SOUP_BACKFILL_LANE,
@@ -1183,6 +1191,35 @@ describe('soup backfill checkpoint locks', () => {
   };
   const key = (params: SoupBackfillParams) =>
     soupBackfillCheckpointKey('user-1', params);
+  /**
+   * Makes the browser reject every request to wait for one of `names`;
+   * `rejected` settles once each has been rejected. The runner's retries then
+   * take 31 seconds and log a warning, which this silences.
+   */
+  const rejectWaits = (...names: string[]) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    onTestFinished(() => warn.mockRestore());
+    const browser = navigator.locks;
+    const first = new Map(names.map((name) => [name, signal()]));
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: {
+        request: (
+          name: string,
+          options: LockOptions,
+          granted: LockGrantedCallback<unknown>
+        ) => {
+          const rejected = first.get(name);
+          if (rejected === undefined || options.ifAvailable === true) {
+            return browser.request(name, options, granted);
+          }
+          rejected.fire();
+          return Promise.reject(new Error('lock request failed'));
+        },
+      },
+    });
+    return Promise.all([...first.values()].map(({ fired }) => fired));
+  };
   /** A completed pass stored for `params`, as another tab saves it. */
   const storeCompleted = (
     params: SoupBackfillParams,
@@ -1485,26 +1522,11 @@ describe('soup backfill checkpoint locks', () => {
 
   it('lets a left lane whose lock requests fail give up without stopping the lane that runs', async () => {
     vi.useFakeTimers();
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const core = lane('core-entities', done());
     const initiatives = lane('initiatives', done());
     const coreTab = hold(key(core));
     const initiativesTab = hold(key(initiatives));
-    // The browser rejects every request to wait for the initiatives lock.
-    const browser = navigator.locks;
-    Object.defineProperty(navigator, 'locks', {
-      configurable: true,
-      value: {
-        request: (
-          name: string,
-          options: LockOptions,
-          granted: LockGrantedCallback<unknown>
-        ) =>
-          name === key(initiatives) && options.ifAvailable !== true
-            ? Promise.reject(new Error('lock request failed'))
-            : browser.request(name, options, granted),
-      },
-    });
+    rejectWaits(key(initiatives));
     const running = gated();
     const failing = done();
     const suite = Effect.runPromise(
@@ -1525,6 +1547,64 @@ describe('soup backfill checkpoint locks', () => {
     expect(running.fetchPage.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
     expect(loadSoupBackfillCheckpoint('user-1', core).completed).toBe(true);
     expect(failing).not.toHaveBeenCalled();
+    await initiativesTab.release();
+  });
+
+  it('keeps the other left lanes in the lock queues when one gives up before any runs', async () => {
+    vi.useFakeTimers();
+    const core = lane('core-entities', done());
+    const initiatives = lane('initiatives', done());
+    const coreTab = hold(key(core));
+    const initiativesTab = hold(key(initiatives));
+    const rejected = rejectWaits(key(initiatives));
+    const resumed = done();
+    const suite = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        { ...core, fetchPage: resumed },
+        initiatives,
+      ])
+    );
+    await locks.waiting(key(core));
+    await rejected;
+    // A third tab asks for the core lock after this one.
+    const thirdTab = hold(key(core));
+
+    // The initiatives lane spends its retries before any left lane runs.
+    await vi.advanceTimersByTimeAsync(31_000);
+    await coreTab.release();
+    const next = await Promise.race([
+      resumed.fetched.then(() => 'this tab'),
+      thirdTab.granted.then(() => 'the third tab'),
+    ]);
+    expect(next).toBe('this tab');
+    await suite;
+    await thirdTab.granted;
+    await thirdTab.release();
+    await initiativesTab.release();
+  });
+
+  it('ends the suite once every left lane gives up on its locks', async () => {
+    vi.useFakeTimers();
+    const core = lane('core-entities', done());
+    const initiatives = lane('initiatives', done());
+    const coreTab = hold(key(core));
+    const initiativesTab = hold(key(initiatives));
+    const rejected = rejectWaits(key(core), key(initiatives));
+    const coreFetch = done();
+    const initiativesFetch = done();
+    const suite = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        { ...core, fetchPage: coreFetch },
+        { ...initiatives, fetchPage: initiativesFetch },
+      ])
+    );
+    await rejected;
+
+    await vi.advanceTimersByTimeAsync(31_000);
+    await suite;
+    expect(coreFetch).not.toHaveBeenCalled();
+    expect(initiativesFetch).not.toHaveBeenCalled();
+    await coreTab.release();
     await initiativesTab.release();
   });
 

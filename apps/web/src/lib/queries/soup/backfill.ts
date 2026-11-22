@@ -980,9 +980,11 @@ const runTrackedSoupBackfill = (
 /**
  * Waits for the locks of every lane in `left` at once and runs the first lane
  * to hold all of its own; the others stop waiting. Succeeds with the indexes
- * of the lanes done: that lane, and any that failed meanwhile without it. The
- * lane holding the turn ends the race however it ends, so a defect in it ends
- * the suite as it would in the first pass.
+ * of the lanes done: that lane, and any that gave up on their locks meanwhile.
+ * A lane that gives up never ends the race while another may still be granted,
+ * so the others keep their places in the lock queues; the race ends once all
+ * gave up. The lane holding the turn ends it however it ends, and a defect in
+ * any lane ends the suite, as it would in the first pass.
  */
 const runFirstFreeLane = (
   userId: string,
@@ -992,8 +994,8 @@ const runFirstFreeLane = (
 ) =>
   Effect.gen(function* () {
     let turn: number | null = null;
-    const failed: number[] = [];
-    const { index, exit } = yield* Effect.raceAll(
+    const gaveUp: number[] = [];
+    const exit = yield* Effect.raceAll(
       left.map(({ lane, saved }, index) =>
         runTrackedSoupBackfill(userId, host, lane, {
           lanes,
@@ -1006,20 +1008,21 @@ const runFirstFreeLane = (
         }).pipe(
           Effect.exit,
           Effect.flatMap((exit) => {
-            // Declined: it asks again once the lane holding the turn is done.
-            if (Exit.isSuccess(exit) && !exit.value) return Effect.never;
-            // A lane that failed before any lane held its locks ends the race.
-            if (turn === null) turn = index;
-            if (turn === index) return Effect.succeed({ index, exit });
-            // Failed after its retries while another lane runs.
-            failed.push(index);
-            return Effect.never;
+            if (turn === index || Exit.isFailure(exit)) {
+              return Effect.succeed(exit);
+            }
+            // True: it gave up on its locks after its retries. False: it
+            // declined, and asks again once the lane holding the turn is done.
+            if (exit.value) gaveUp.push(index);
+            return gaveUp.length === left.length
+              ? Effect.succeed(exit)
+              : Effect.never;
           })
         )
       )
     );
     if (Exit.isFailure(exit)) return yield* Effect.failCause(exit.cause);
-    return [index, ...failed];
+    return turn === null ? gaveUp : [turn, ...gaveUp];
   });
 
 /**
