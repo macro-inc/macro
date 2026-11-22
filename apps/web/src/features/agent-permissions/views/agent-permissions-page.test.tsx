@@ -84,7 +84,9 @@ describe('AgentPermissionsPage', () => {
   it('says plainly which programs the settings cover and what they miss', async () => {
     renderPage();
     expect(
-      await screen.findByText('Applies to every program Scout runs.')
+      await screen.findByText(
+        'Applies to every program Scout runs in sessions where agent permissions are on.'
+      )
     ).toBeTruthy();
     expect(
       screen.getByText(

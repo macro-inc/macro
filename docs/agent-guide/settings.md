@@ -1254,7 +1254,7 @@ to a group, action or tool. The section and button are absent while the
 flag is off or the API answers 404, and on the create form; an open page
 closes when the flag turns off, and a link waits until it is on. The page's
 note says the settings apply to every program the agent runs (`Applies to
-every program <agent> runs.`): a program reaches Macro only through steps the
+every program <agent> runs in sessions where agent permissions are on.`): a program reaches Macro only through steps the
 settings check, and the code it runs on the side can't reach Macro at all; the
 agent's other tools and connected apps aren't covered, even where a setting
 says Never.

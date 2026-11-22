@@ -109,7 +109,9 @@ test('the permissions page says which programs it covers', async ({
 }) => {
   await page.goto(fixture('view=page'));
   await expect(
-    page.getByText('Applies to every program Scout runs.')
+    page.getByText(
+      'Applies to every program Scout runs in sessions where agent permissions are on.'
+    )
   ).toBeVisible();
   await expect(
     page.getByText('What Scout may do in the programs it runs for you.', {

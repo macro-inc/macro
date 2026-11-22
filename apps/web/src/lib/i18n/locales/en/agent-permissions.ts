@@ -10,7 +10,8 @@ export default {
   setByAgentCount: { other: '{{count}} set by {{agent}} itself' },
   reset: 'Reset permissions',
   nothingToReset: 'Everything is already Always allow',
-  scopeLead: 'Applies to every program {{agent}} runs.',
+  scopeLead:
+    'Applies to every program {{agent}} runs in sessions where agent permissions are on.',
   scopeBody:
     'A program reaches Macro only through steps these settings check; the code it runs on the side can’t reach Macro at all. {{agent}}’s other tools and your connected apps aren’t covered: they work as before, even where a setting says Never.',
   readOnly: 'Only people who can edit {{agent}} can change these.',
