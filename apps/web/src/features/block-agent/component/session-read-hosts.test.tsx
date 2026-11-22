@@ -21,6 +21,11 @@ const mocks = vi.hoisted(() => ({
   source: undefined as NotificationSource | undefined,
   target: (): AgentMessageTarget | undefined => undefined,
   navigate: (_params: Record<string, unknown>) => {},
+  startupError: (): string | undefined => undefined,
+  held: (): {
+    actionId: string;
+    action: { type: 'prompt'; prompt: string };
+  }[] => [],
 }));
 
 // Keep both real session hosts and the real read marker. Replace unrelated
@@ -53,8 +58,13 @@ vi.mock('../context/AgentSessionContext', () => ({
     loadRetryable: () => true,
     retryLoad: vi.fn(),
     pending: () => false,
-    startupError: () => undefined,
+    startupError: () => mocks.startupError(),
+    startupHeld: () => mocks.held(),
+    dropStartupHeld: vi.fn(),
   }),
+}));
+vi.mock('../ui/UnconfirmedSendCard', () => ({
+  UnconfirmedSendCard: (props: { text: string }) => <p>{props.text}</p>,
 }));
 vi.mock('../agent-session-provider', () => ({
   AgentSessionProvider: (props: { children: JSX.Element }) => props.children,
@@ -207,6 +217,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.loaded = () => false;
   mocks.failed = () => false;
+  mocks.startupError = () => undefined;
+  mocks.held = () => [];
   mocks.active = () => false;
   mocks.touch = false;
   mocks.target = () => undefined;
@@ -259,6 +271,23 @@ describe.each(['Home', 'Agents'] as const)('%s session host', (host) => {
       </SplitPanelContext.Provider>
     ));
   }
+
+  it.each([
+    ['the create failed', 'startup'],
+    ['a reload could not load the chat that was never created', 'load'],
+  ])('keeps a lost first prompt on its card when %s', (_name, view) => {
+    mocks.failed = () => true;
+    if (view === 'startup')
+      mocks.startupError = () => 'The chat may not have been created.';
+    mocks.held = () => [
+      {
+        actionId: 'first-prompt',
+        action: { type: 'prompt', prompt: 'Plan the launch' },
+      },
+    ];
+    mountHost();
+    expect(screen.getByText('Plan the launch')).toBeTruthy();
+  });
 
   it('hides the dock only while the phone session owns the active pane', () => {
     mocks.touch = true;

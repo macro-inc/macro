@@ -20,7 +20,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
-import { fireAndForget } from '@core/util/fireAndForget';
 import type { NotificationSource } from '@notifications/notification-source';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { isSessionArchived } from '@service-agent-harness/session-archive';
@@ -30,7 +29,6 @@ import {
   type Accessor,
   createEffect,
   createSignal,
-  For,
   on,
   type ParentProps,
   Show,
@@ -40,7 +38,7 @@ import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
-import { UnconfirmedSendCard } from '../ui/UnconfirmedSendCard';
+
 import { AgentSessionHeader } from '../views/agent-session-header';
 import { MobileAgentSessionHeader } from '../views/mobile/redesigned-session-header/redesigned-session-header';
 import { AgentComposer } from './AgentComposer';
@@ -50,6 +48,7 @@ import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { ArchivedSessionFooter } from './ArchivedSessionFooter';
 import { useAgentSessionHeader } from './agent-session-header';
+import { HeldStartupCards } from './HeldStartupCards';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
 
@@ -305,39 +304,5 @@ export default function BlockAgent() {
         </>
       )}
     </Show>
-  );
-}
-
-/**
- * First prompts a lost create may have started, on the block that has no
- * session to show them in: the startup error, or (after a reload, when the
- * create never landed) the load failure.
- */
-function HeldStartupCards() {
-  const { startupHeld, dropStartupHeld } = useAgentSession();
-  return (
-    <div class="mx-auto w-full max-w-2xl px-4">
-      <For each={startupHeld?.() ?? []}>
-        {(held) => (
-          <UnconfirmedSendCard
-            text={held.action.type === 'prompt' ? held.action.prompt : ''}
-            attachmentCount={
-              held.action.type === 'prompt'
-                ? (held.action.attachments?.length ?? 0)
-                : 0
-            }
-            onCopy={() =>
-              fireAndForget(
-                navigator.clipboard.writeText(
-                  held.action.type === 'prompt' ? held.action.prompt : ''
-                ),
-                'agent-block'
-              )
-            }
-            onDismiss={() => dropStartupHeld?.(held.actionId)}
-          />
-        )}
-      </For>
-    </div>
   );
 }

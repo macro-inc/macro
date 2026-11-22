@@ -14,6 +14,7 @@ import {
   useAgentSessionHeader,
 } from '@app/features/block-agent/component/agent-session-header';
 import { useAutoArchiveFileOperations } from '@app/features/block-agent/component/auto-archive-file-operations';
+import { HeldStartupCards } from '@app/features/block-agent/component/HeldStartupCards';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
@@ -348,26 +349,37 @@ function SessionContent(props: {
                         <Show
                           when={accessDenied()}
                           fallback={
-                            <LoadErrorPanel
-                              title="Unable to load this session"
-                              onRetry={loadRetryable() ? retryLoad : undefined}
-                            />
+                            <div class="flex size-full flex-col">
+                              <LoadErrorPanel
+                                title="Unable to load this session"
+                                onRetry={
+                                  loadRetryable() ? retryLoad : undefined
+                                }
+                              />
+                              <HeldStartupCards />
+                            </div>
                           }
                         >
-                          <EmptyStatePanel
-                            centered
-                            title="You don't have access to this session"
-                            description="Ask a participant to share it with you."
-                          />
+                          <div class="flex size-full flex-col">
+                            <EmptyStatePanel
+                              centered
+                              title="You don't have access to this session"
+                              description="Ask a participant to share it with you."
+                            />
+                            <HeldStartupCards />
+                          </div>
                         </Show>
                       }
                     >
                       {(error) => (
-                        <EmptyStatePanel
-                          centered
-                          title="The agent could not be started"
-                          description={error()}
-                        />
+                        <div class="flex size-full flex-col">
+                          <EmptyStatePanel
+                            centered
+                            title="The agent could not be started"
+                            description={error()}
+                          />
+                          <HeldStartupCards />
+                        </div>
                       )}
                     </Show>
                   }
