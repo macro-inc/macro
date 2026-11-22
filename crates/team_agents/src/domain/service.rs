@@ -33,8 +33,8 @@ use super::self_hosting::{
 };
 use super::voice::AgentVoice;
 
-mod self_hosted;
 mod install_offboarding;
+mod self_hosted;
 
 pub use install_offboarding::InstallOffboarding;
 #[cfg(test)]

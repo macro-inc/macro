@@ -5,9 +5,9 @@ pub mod customer_repo;
 pub mod domain_notice;
 pub mod events;
 pub mod invite_rewards;
-pub mod member_access;
 #[cfg(feature = "ports")]
 pub mod join_announcement;
+pub mod member_access;
 pub mod model;
 pub mod open_seat_release;
 pub mod owned_entity_cleanup;
