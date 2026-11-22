@@ -277,7 +277,7 @@ describe('AgentPermissionsPage', () => {
     );
     const dialog = await screen.findByRole('dialog');
     expect(dialog.textContent).toContain(
-      'All 2 settings go back to Always allow. That includes one that Scout set for itself.'
+      'Every setting goes back to Always allow. That includes one that Scout set for itself.'
     );
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(client.reset).not.toHaveBeenCalled();
@@ -294,6 +294,38 @@ describe('AgentPermissionsPage', () => {
       expect(toasts.success).toHaveBeenCalledWith('Permissions reset')
     );
     expect(client.reset).toHaveBeenCalledWith('agent-1', expect.anything());
+  });
+
+  it('shows only the actions and groups some tool has, and counts only them', async () => {
+    renderPage();
+    await openGroup('Documents');
+
+    expect(
+      screen.getByRole('radiogroup', { name: 'Documents: Delete' })
+    ).toBeTruthy();
+    // Its saved Never on Send stays saved, but no tool has Send.
+    expect(
+      screen.queryByRole('radiogroup', { name: 'Documents: Send' })
+    ).toBeNull();
+    expect(screen.queryByText('Tasks')).toBeNull();
+    // The tool rule only; the hidden one and the agent's are not "changed".
+    expect(screen.getByText('1 setting changed')).toBeTruthy();
+  });
+
+  it('can still reset when only hidden settings are saved', async () => {
+    renderPage({
+      ...VIEW,
+      rules: VIEW.rules.filter(
+        (rule) =>
+          rule.target.kind === 'group_action' &&
+          rule.target.group === 'documents'
+      ),
+    });
+    const button = await screen.findByRole('button', {
+      name: 'Reset permissions',
+    });
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByText(/settings? changed/)).toBeNull();
   });
 
   it('narrows to what matches the search', async () => {

@@ -3,7 +3,10 @@ import type {
   ToolPermissionCatalog,
 } from '@service-agent-harness/generated/schemas';
 
-/** Two groups: Email (with a Send override) and Documents. */
+/**
+ * Email (with a Send override), Documents (Delete only) and Tasks, which has
+ * no tools yet.
+ */
 export const CATALOG: ToolPermissionCatalog = {
   version: 'v1',
   actions: [
@@ -52,25 +55,15 @@ export const CATALOG: ToolPermissionCatalog = {
         },
       ],
     },
+    { id: 'tasks', name: 'Tasks', description: 'Your to-dos', tools: [] },
   ],
 };
 
-const allAlways = (group: string) => ({
-  group,
-  actions: (['create', 'read', 'update', 'destroy', 'send'] as const).map(
-    (action) => ({
-      action,
-      state: 'always' as const,
-      origin: 'default' as const,
-      tools: 0,
-      overrides: [],
-    })
-  ),
-});
-
 /**
  * Email · Send is Ask, set by the agent itself; Forward calendar event is
- * set back to Always allow. Documents is all allowed.
+ * set back to Always allow. Documents is all allowed, but has a saved Never
+ * on Send, which no tool has: the server lists only the actions with tools
+ * (Email's Read and Send, Documents' Delete) and no Tasks.
  */
 export const VIEW: AgentToolPermissions = {
   agentId: 'agent-1',
@@ -92,37 +85,22 @@ export const VIEW: AgentToolPermissions = {
       viaAgent: false,
       updatedAt: '2026-11-17T11:00:00Z',
     },
+    {
+      target: { kind: 'group_action', group: 'documents', action: 'send' },
+      state: 'never',
+      viaAgent: false,
+      updatedAt: '2026-11-17T12:00:00Z',
+    },
   ],
   groups: [
     {
       group: 'email',
       actions: [
         {
-          action: 'create',
-          state: 'always',
-          origin: 'default',
-          tools: 0,
-          overrides: [],
-        },
-        {
           action: 'read',
           state: 'always',
           origin: 'default',
           tools: 1,
-          overrides: [],
-        },
-        {
-          action: 'update',
-          state: 'always',
-          origin: 'default',
-          tools: 0,
-          overrides: [],
-        },
-        {
-          action: 'destroy',
-          state: 'always',
-          origin: 'default',
-          tools: 0,
           overrides: [],
         },
         {
@@ -142,6 +120,17 @@ export const VIEW: AgentToolPermissions = {
         },
       ],
     },
-    allAlways('documents'),
+    {
+      group: 'documents',
+      actions: [
+        {
+          action: 'destroy',
+          state: 'always',
+          origin: 'default',
+          tools: 1,
+          overrides: [],
+        },
+      ],
+    },
   ],
 };

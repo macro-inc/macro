@@ -4,7 +4,7 @@
 
 The web side of agent permissions: per agent, what its code-mode programs may
 call, as Allow · Ask · Never per group and action (create, read, update,
-delete, send), with per-tool overrides. Opened from Settings → Agents (the
+delete, send) where a tool has that action, with per-tool overrides. Opened from Settings → Agents (the
 editor's Permissions section, Macro's shield button, or
 `requestAgentPermissions`). The server resolves every state; the web only
 shows a tool's override or its action's state.
@@ -38,6 +38,11 @@ shows a tool's override or its action's state.
   own change saves, the tool's waits for it (`PendingChanges.setTool`) and
   compares with the state the action ends up in, so a failed action save
   can't leave the tool following the wrong state.
+- Show and count only targets some tool maps to (`core/model.ts`
+  `visibleGroups`, `visibleActions`, `isVisibleTarget`): the server's view
+  leaves out a group's action with no tool and a group with none, but
+  `rules` keeps every saved row. Reset is enabled by any saved row
+  (`settingCounts().saved`), hidden ones included, since it clears them too.
 - The Macro persona's permissions use `MACRO_NEW_BOT_ID`, not
   `MACRO_AGENT_BOT_ID`.
 - Gate every entry point, and every read of the permissions API, on

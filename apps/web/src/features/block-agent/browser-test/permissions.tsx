@@ -155,19 +155,28 @@ function view(): AgentToolPermissions {
         updatedAt: '2026-11-18T10:00:00Z',
       };
     }),
-    groups: CATALOG.groups.map((group) => ({
-      group: group.id,
-      actions: ACTIONS.map((action) => {
-        const state = saved[`${group.id}.${action}`];
-        return {
-          action,
-          state: state ?? 'always',
-          origin: state ? 'group_action' : 'default',
-          tools: group.tools.filter((tool) => tool.action === action).length,
-          overrides: [],
-        };
-      }),
-    })),
+    // As the server: only the actions a tool has, and groups with one.
+    groups: CATALOG.groups
+      .filter((group) => group.tools.length > 0)
+      .map((group) => ({
+        group: group.id,
+        actions: ACTIONS.flatMap((action) => {
+          const tools = group.tools.filter(
+            (tool) => tool.action === action
+          ).length;
+          if (tools === 0) return [];
+          const state = saved[`${group.id}.${action}`];
+          return [
+            {
+              action,
+              state: state ?? 'always',
+              origin: state ? 'group_action' : 'default',
+              tools,
+              overrides: [],
+            },
+          ];
+        }),
+      })),
   };
 }
 

@@ -6,7 +6,7 @@ import { Show } from 'solid-js';
 export function ResetPermissionsDialog(props: {
   open: boolean;
   agent: string;
-  counts: { total: number; byAgent: number; tools: number };
+  counts: { byAgent: number; tools: number };
   pending: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
@@ -23,7 +23,7 @@ export function ResetPermissionsDialog(props: {
       onConfirm={props.onConfirm}
       body={
         <p>
-          {t('agentPermissions.resetBody', { count: props.counts.total })}
+          {t('agentPermissions.resetBody')}
           <Show when={props.counts.byAgent > 0}>
             {' '}
             {t('agentPermissions.resetBodyAgent', {

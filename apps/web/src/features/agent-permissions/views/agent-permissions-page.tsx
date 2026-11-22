@@ -95,11 +95,13 @@ export function AgentPermissionsPage(props: {
     return current.kind === 'ready' ? current : undefined;
   };
   const canEdit = () => ready()?.view.canEdit ?? false;
-  const counts = () => settingCounts(ready()?.view.rules ?? []);
+  const emptyCatalog = { version: '', actions: [], groups: [] };
+  const counts = () =>
+    settingCounts(ready()?.catalog ?? emptyCatalog, ready()?.view.rules ?? []);
 
   const changes = usePermissionChanges({
     agentId: () => props.agentId,
-    catalog: () => ready()?.catalog ?? { version: '', actions: [], groups: [] },
+    catalog: () => ready()?.catalog ?? emptyCatalog,
     view: () => ready()?.view,
   });
 
@@ -196,9 +198,9 @@ export function AgentPermissionsPage(props: {
               type="button"
               variant="secondary"
               size="sm"
-              disabled={counts().total === 0}
+              disabled={counts().saved === 0}
               tooltip={
-                counts().total === 0
+                counts().saved === 0
                   ? t('agentPermissions.nothingToReset')
                   : undefined
               }

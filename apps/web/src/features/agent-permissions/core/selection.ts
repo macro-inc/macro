@@ -5,7 +5,7 @@ import type {
   ToolPermissionCatalogGroup,
   ToolPermissionCatalogTool,
 } from '@service-agent-harness/generated/schemas';
-import { ACTION_ORDER, toolKey } from './model';
+import { ACTION_ORDER, hasTools, toolKey, visibleActions } from './model';
 
 /** One group of what ShowPermissions asked to show: its actions and tools. */
 export type SelectionBlock = {
@@ -16,9 +16,10 @@ export type SelectionBlock = {
 
 /**
  * What the agent asked to show, against the catalog: a block per group in
- * the order asked, a named group's actions (all five when it named none)
- * and the named tools under their own group. Ids the catalog doesn't know
- * are left out.
+ * the order asked, a named group's actions (every one it has tools for when
+ * it named none) and the named tools under their own group. Ids the catalog
+ * doesn't know, actions the group has no tool for, and groups left with
+ * nothing are left out.
  */
 export function selectionBlocks(
   catalog: ToolPermissionCatalog,
@@ -37,8 +38,11 @@ export function selectionBlocks(
   for (const asked of selection.groups) {
     const group = catalog.groups.find((entry) => entry.id === asked.group);
     if (!group) continue;
+    const actions = (
+      asked.actions?.length ? asked.actions : visibleActions(group)
+    ).filter((action) => hasTools(group, action));
+    if (actions.length === 0) continue;
     const block = blockFor(group);
-    const actions = asked.actions?.length ? asked.actions : ACTION_ORDER;
     for (const action of actions) {
       if (!block.actions.includes(action)) block.actions.push(action);
     }
