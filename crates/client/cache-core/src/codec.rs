@@ -6,8 +6,13 @@
 //! and so does the browser's physical database name after
 //! [`UNVERSIONED_STORAGE_VERSIONS`]. A healthy, graceful
 //! browser reopen with matching versions preserves records, queued mutations,
-//! and optimistic layers. A compatibility/format mismatch or abrupt/uncertain
-//! browser owner loss physically resets the database and discards all three.
+//! and optimistic layers. A file at an older storage version with registered
+//! upgrade steps is upgraded instead, in the browser after it moves to this
+//! build's name, and a format in [`MIGRATABLE_CACHE_FORMAT_VERSIONS`] is
+//! migrated on native. Any other compatibility/format mismatch or
+//! abrupt/uncertain browser owner loss physically resets the database and
+//! discards all three, once a recovery has decided any moved files whose first
+//! open never succeeded.
 
 use crate::normalize::RecordUpdates;
 use crate::queue::{PersistedOptimisticLayer, StoredMutation};
@@ -166,8 +171,10 @@ pub const UNVERSIONED_STORAGE_VERSIONS: (u32, u32, u32) = (3, 3, 11);
 /// files and owner locks instead of resetting each other's database while tabs
 /// of both stay open after a deploy. Builds with matching versions share one
 /// database: only a healthy, graceful close and reopen preserves its files.
-/// A build whose own file does not exist yet first carries forward the newest
-/// upgradable older storage version's file (`cache-wasm`'s `carry_forward`).
+/// A build whose own file does not exist yet first tries to carry forward the
+/// newest upgradable older storage version's file (`cache-wasm`'s
+/// `carry_forward`); a busy older lock or a pair that cannot move leaves that
+/// file where it is.
 /// Metadata is still validated on open: a file moved here at an older storage
 /// version is upgraded by its registered steps, and any other mismatch or an
 /// abrupt/uncertain owner loss physically resets both files, discarding every

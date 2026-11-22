@@ -1438,10 +1438,10 @@ async fn decide_adoption(mut owner: OpfsOwner, adoption: Adoption, from_version:
 /// the open, keeping everything, until more than [`RECOVERY_ATTEMPTS`] were
 /// counted.
 /// Then the files are discarded with their storage version unknown; the wipe
-/// that follows removes the marker and its count. An attempt that cannot be
-/// counted reads the adoption again first, because only the age bounds it:
-/// one that reads now is decided as any uncounted recovery is, so a read
-/// that failed in passing never discards files that could go back. When it
+/// that follows removes the marker and tries its count once. An attempt that
+/// cannot be counted reads the adoption again first, because only the age
+/// bounds it: one that reads now is decided as any uncounted recovery is, so a
+/// read that failed in passing is never a reason of its own to discard. When it
 /// still does not read, the files are kept, unless the marker itself reads
 /// (the files beside it did not) and says the adoption is older than
 /// [`UNCOUNTED_RECOVERY_MS`]. When neither the marker nor the count reads,

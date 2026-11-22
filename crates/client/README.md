@@ -102,8 +102,9 @@ runs the queue checks as every reopen does. Records, queued mutations,
 optimistic layers and the storage generation stay, so the upgrade refetches
 nothing and loses no queued write; a format migration that runs after it (above)
 still drops the refetchable rows. A file whose `meta` names another scope, or a cache
-format this build cannot carry forward, resets before any step runs, so it
-stays as the older build wrote it. A version with no chain, a newer version, or
+format this build cannot carry forward, is rejected before any step runs: native
+resets it as before, and in the browser moved files go back to the older name as
+that build wrote them. A version with no chain, a newer version, or
 a failing step resets as before. Bumping the version without registering a step
 fails to compile; clearing `STEPS` declares that every older file resets.
 
@@ -170,8 +171,8 @@ brings it early, and a jump back postpones it by the size of the jump, unless it
 lands ten minutes or more before the adoption began, which ends the wait at
 once. An attempt that
 could not read the adoption and cannot count reads it again before it looks at
-the time, and decides as above if it now reads, so a read that fails once never
-discards files that could go back. When it still does not read but the marker
+the time, and decides as above if it now reads, so a read that fails once is decided as
+any uncounted attempt is, never discarded for not reading. When it still does not read but the marker
 does (the files beside it cannot be looked up), the time comes from the marker.
 When neither the marker nor the count reads, nothing bounds the attempt or says
 how old the adoption is, so it keeps everything. A version probe that fails
