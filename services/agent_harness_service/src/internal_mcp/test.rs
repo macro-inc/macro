@@ -472,11 +472,20 @@ impl SessionCodeMode for OwnerRollout {
     {
         Err(agent_code_mode::domain::CodeModeError::NotFound)
     }
-    async fn js_tools_enabled(&self, _: &agent_session::domain::model::AgentSession) -> bool {
-        self.js_tools
-    }
-    async fn permissions_enabled(&self, _: &agent_session::domain::model::AgentSession) -> bool {
-        self.js_tools
+}
+
+#[async_trait::async_trait]
+impl agent_code_mode::domain::CodeModeKinds for OwnerRollout {
+    async fn code_mode_kind(
+        &self,
+        _: AgentSessionId,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> agent_code_mode::domain::CodeModeKind {
+        if self.js_tools {
+            agent_code_mode::domain::CodeModeKind::Dialect
+        } else {
+            agent_code_mode::domain::CodeModeKind::TypeScript
+        }
     }
 }
 

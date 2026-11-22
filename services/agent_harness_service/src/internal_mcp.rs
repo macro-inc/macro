@@ -1,7 +1,10 @@
 //! Macro Internal MCP: session tools served by the harness, separate from workspace MCP.
 
-use agent_code_mode::{domain::SessionCodeMode, inbound::toolset::CodeModeToolContext};
 use agent_code_mode::{domain::reviews::ReviewService, inbound::reviews::ReviewToolContext};
+use agent_code_mode::{
+    domain::{CodeModeKind, SessionCodeMode},
+    inbound::toolset::CodeModeToolContext,
+};
 use std::sync::{Arc, OnceLock};
 use tracing::Instrument as _;
 
@@ -103,17 +106,26 @@ pub(super) struct InternalTools {
 }
 
 impl InternalTools {
-    /// `ShowPermissions`' context when `session`'s programs are gated: its
-    /// owner has the permissions rollout, and code mode runs JavaScript tools
-    /// programs there.
-    async fn permission_tools(
+    /// The code-mode kind of `session`'s current turn, resolved once for the
+    /// turn by code mode; `None` without code mode or a person owner.
+    async fn code_mode_kind(
         &self,
         session: &agent_session::domain::model::AgentSession,
+    ) -> Option<CodeModeKind> {
+        let code_mode = self.code_mode.as_ref()?;
+        let owner = session.owner_user().ok()?;
+        Some(code_mode.code_mode_kind(session.id, owner).await)
+    }
+
+    /// `ShowPermissions`' context when a turn of `kind` is gated: it runs
+    /// JavaScript tools programs, which the agent's permissions check.
+    fn permission_tools(
+        &self,
+        session: &agent_session::domain::model::AgentSession,
+        kind: Option<CodeModeKind>,
     ) -> Option<agent_permissions::inbound::toolset::PermissionToolContext> {
-        let (Some(code_mode), Some(permissions)) = (&self.code_mode, &self.permissions) else {
-            return None;
-        };
-        if !code_mode.permissions_enabled(session).await {
+        let permissions = self.permissions.as_ref()?;
+        if kind != Some(CodeModeKind::Dialect) {
             return None;
         }
         Some(agent_permissions::inbound::toolset::PermissionToolContext {
@@ -169,26 +181,23 @@ impl ServerHandler for InternalTools {
                 )
             })
             .collect();
-        if let Some(code_mode) = &self.code_mode {
-            // A session that may run JS tools programs sees
-            // ExecuteCode with a language; every other session sees it
-            // unchanged.
-            let tools = match context
+        if self.code_mode.is_some() {
+            let grant = context
                 .extensions
                 .get::<axum::http::request::Parts>()
                 .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())
-            {
-                Some(AuthenticatedSession(grant)) => {
-                    agent_code_mode::inbound::toolset::session_toolset(code_mode.as_ref(), grant)
-                        .await
-                }
-                None => agent_code_mode::inbound::toolset::toolset(),
+                .map(|AuthenticatedSession(grant)| grant);
+            // The turn's kind picks ExecuteCode's shape and whether
+            // ShowPermissions is offered; with no session, today's tools.
+            let kind = match grant {
+                Some(grant) => self.code_mode_kind(grant).await,
+                None => None,
             };
-            if let Some(AuthenticatedSession(grant)) = context
-                .extensions
-                .get::<axum::http::request::Parts>()
-                .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())
-                && self.permission_tools(grant).await.is_some()
+            let tools = agent_code_mode::inbound::toolset::session_toolset(
+                kind.unwrap_or(CodeModeKind::TypeScript),
+            );
+            if let Some(grant) = grant
+                && self.permission_tools(grant, kind).is_some()
             {
                 definitions.extend(
                     agent_permissions::inbound::toolset::toolset()
@@ -301,7 +310,8 @@ impl InternalTools {
             .map_err(|error| rmcp::ErrorData::invalid_request(error.to_string(), None))?;
         let mut acting_user = owner.clone();
         if request.name.as_ref() == "ShowPermissions" {
-            let Some(permission_context) = self.permission_tools(grant).await else {
+            let kind = self.code_mode_kind(grant).await;
+            let Some(permission_context) = self.permission_tools(grant, kind) else {
                 return Ok(CallToolResult::error(vec![ContentBlock::text(
                     "ShowPermissions is not available in this session.",
                 )])
@@ -376,17 +386,16 @@ impl InternalTools {
             };
             return Ok(result.into());
         }
-        if let Some(code_mode) = &self.code_mode {
-            // Only a call that names a language needs the JS tools rollout; one without it is the same JavaScript call either way.
-            let tools = if request
-                .arguments
-                .as_ref()
-                .is_some_and(|arguments| arguments.contains_key("language"))
-            {
-                agent_code_mode::inbound::toolset::session_toolset(code_mode.as_ref(), grant).await
-            } else {
-                agent_code_mode::inbound::toolset::toolset()
-            };
+        if let Some(code_mode) = &self.code_mode
+            && matches!(
+                request.name.as_ref(),
+                "ExecuteCode" | "DescribeCodeTools" | "ReadCodeDocs"
+            )
+            && let Some(kind) = self.code_mode_kind(grant).await
+        {
+            // The turn's tools, whatever the agent's tool list says: a call
+            // of the other kind fails to decode, or execute refuses it.
+            let tools = agent_code_mode::inbound::toolset::session_toolset(kind);
             if tools.tools.contains_key(request.name.as_ref()) {
                 // The session actor meters the outer MCP call. Only SDK calls
                 // bypass ACP and retain the toolset's own telemetry.
@@ -399,6 +408,7 @@ impl InternalTools {
                             service: code_mode.clone(),
                             session: grant.clone(),
                             cognition: self.cognition.clone(),
+                            kind,
                         },
                         request_context,
                         &request.name,

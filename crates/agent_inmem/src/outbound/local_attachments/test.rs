@@ -145,6 +145,7 @@ fn message(uri: &str) -> ChatMessage {
 
 fn request(messages: Vec<ChatMessage>) -> TurnRequest {
     TurnRequest {
+        code_mode_kind: agent_code_mode::domain::CodeModeKind::TypeScript,
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         purpose: crate::domain::engine::TurnPurpose::Conversation,

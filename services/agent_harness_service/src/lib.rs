@@ -1211,6 +1211,7 @@ pub async fn run() -> anyhow::Result<()> {
         )
         .with_admission(admission.clone())
         .with_agent_keys(Arc::clone(&agent_keys))
+        .with_code_mode_kinds(code_mode.clone())
         .with_dev_commands(enable_dev_commands),
     );
     let inmem = InMemRuntime {

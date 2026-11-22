@@ -57,6 +57,7 @@ async fn remote_named(
 
 fn request(mcp_tools: Option<RemoteMcpToolSet>) -> TurnRequest {
     TurnRequest {
+        code_mode_kind: agent_code_mode::domain::CodeModeKind::TypeScript,
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         purpose: TurnPurpose::Conversation,
@@ -123,7 +124,7 @@ async fn unseen_turns_get_only_code_mode() {
     .await;
     let set = mcp_select::CombinedToolSet::new(
         Arc::new(AsyncToolCollection::<()>::new()),
-        unseen::CodeModeOnly::new(tools),
+        unseen::CodeModeOnly::new(tools, agent_code_mode::domain::CodeModeKind::TypeScript),
     )
     .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS);
 

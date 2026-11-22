@@ -16,6 +16,17 @@ struct SpanRecordingCodeMode {
 }
 
 #[async_trait]
+impl agent_code_mode::domain::CodeModeKinds for SpanRecordingCodeMode {
+    async fn code_mode_kind(
+        &self,
+        _: AgentSessionId,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> agent_code_mode::domain::CodeModeKind {
+        agent_code_mode::domain::CodeModeKind::TypeScript
+    }
+}
+
+#[async_trait]
 impl SessionCodeMode for SpanRecordingCodeMode {
     async fn execute(
         &self,

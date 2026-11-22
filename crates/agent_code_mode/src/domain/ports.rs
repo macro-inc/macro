@@ -85,3 +85,33 @@ pub trait OwnerRollout: Send + Sync + 'static {
     /// On for `owner`. A flag that cannot be read counts as off.
     async fn enabled(&self, owner: &macro_user_id::user_id::MacroUserIdStr<'static>) -> bool;
 }
+
+/// The code-mode kind of a session's current turn.
+// Object-safe: the in-process agent and the internal MCP hold it as
+// `Arc<dyn CodeModeKinds>`.
+#[async_trait]
+pub trait CodeModeKinds: Send + Sync + 'static {
+    /// The kind `session`'s current turn runs, read from `owner`'s flag the
+    /// first time it is asked for that turn and the same for the rest of it.
+    /// Asked with no turn running, it reads the flag afresh.
+    async fn code_mode_kind(
+        &self,
+        session: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+    ) -> super::CodeModeKind;
+}
+
+/// Always [`CodeModeKind::TypeScript`](super::CodeModeKind::TypeScript): for
+/// hosts without the agent permissions rollout.
+pub struct TypeScriptOnly;
+
+#[async_trait]
+impl CodeModeKinds for TypeScriptOnly {
+    async fn code_mode_kind(
+        &self,
+        _session: AgentSessionId,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> super::CodeModeKind {
+        super::CodeModeKind::TypeScript
+    }
+}

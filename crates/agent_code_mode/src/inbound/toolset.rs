@@ -1,6 +1,6 @@
 //! SDK discovery and one awaited code execution exposed as ordinary tools.
 use crate::domain::{
-    CodeModeError, ExecutionId, ExecutionReceipt, ProgramLanguage, SessionCodeMode,
+    CodeModeError, CodeModeKind, ExecutionId, ExecutionReceipt, ProgramLanguage, SessionCodeMode,
     SymbolReferences, TaskDocumentation, UserCodeMode, UserExecutionReceipt,
     documentation_for_task, read_symbols, with_attached_skill,
 };
@@ -30,6 +30,10 @@ pub struct CodeModeToolContext {
     pub session: AgentSession,
     /// Jev, for selecting documentation by task; absent falls back to the catalog.
     pub cognition: Option<Arc<dyn Cognition>>,
+    /// The code-mode kind of the session's current turn
+    /// ([`CodeModeKinds`](crate::domain::CodeModeKinds)), resolved once by
+    /// the adapter; the tools read it instead of the flag.
+    pub kind: CodeModeKind,
 }
 
 /// Tools advertised only when a runner is configured.
@@ -40,9 +44,8 @@ pub fn toolset() -> AsyncToolCollection<CodeModeToolContext> {
         .add_tool::<ReadCodeDocs, CodeModeToolContext>()
 }
 
-/// [`toolset`] for a session that may run JavaScript tools programs
-/// ([`SessionCodeMode::js_tools_enabled`]), which the agent's permissions
-/// always gate: its `ExecuteCode` takes a `language` and says how.
+/// [`toolset`] for a turn of [`CodeModeKind::Dialect`], whose programs the
+/// agent's permissions always gate: its `ExecuteCode` says how.
 pub fn toolset_with_js_tools() -> AsyncToolCollection<CodeModeToolContext> {
     AsyncToolCollection::new()
         .add_tool::<ExecuteCodeWithJsTools, CodeModeToolContext>()
@@ -50,16 +53,11 @@ pub fn toolset_with_js_tools() -> AsyncToolCollection<CodeModeToolContext> {
         .add_tool::<ReadCodeDocs, CodeModeToolContext>()
 }
 
-/// The session's code-mode tools: with JavaScript tools programs, and how
-/// the agent's permissions gate them, when the session may run them.
-pub async fn session_toolset(
-    service: &dyn SessionCodeMode,
-    session: &AgentSession,
-) -> AsyncToolCollection<CodeModeToolContext> {
-    if service.js_tools_enabled(session).await {
-        toolset_with_js_tools()
-    } else {
-        toolset()
+/// The code-mode tools of a turn of `kind`.
+pub fn session_toolset(kind: CodeModeKind) -> AsyncToolCollection<CodeModeToolContext> {
+    match kind {
+        CodeModeKind::TypeScript => toolset(),
+        CodeModeKind::Dialect => toolset_with_js_tools(),
     }
 }
 

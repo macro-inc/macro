@@ -280,7 +280,6 @@ impl code_execution::domain::CodeRunner for Accepts {
 /// Session code mode that records the language each call asked for.
 struct Languages {
     js_tools: bool,
-    permissions: bool,
     seen: std::sync::Mutex<Vec<Language>>,
 }
 
@@ -315,11 +314,20 @@ impl SessionCodeMode for Languages {
     ) -> Result<crate::domain::ExecutionRecord, CodeModeError> {
         Err(CodeModeError::NotFound)
     }
-    async fn js_tools_enabled(&self, _: &AgentSession) -> bool {
-        self.js_tools
-    }
-    async fn permissions_enabled(&self, _: &AgentSession) -> bool {
-        self.permissions
+}
+
+#[async_trait]
+impl crate::domain::CodeModeKinds for Languages {
+    async fn code_mode_kind(
+        &self,
+        _: agent_session::domain::model::AgentSessionId,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> crate::domain::CodeModeKind {
+        if self.js_tools {
+            crate::domain::CodeModeKind::Dialect
+        } else {
+            crate::domain::CodeModeKind::TypeScript
+        }
     }
 }
 
@@ -417,26 +425,16 @@ async fn every_documented_example_type_checks() {
     service.shutdown().await;
 }
 
-/// What each session sees of its code-mode tools while JavaScript tools
-/// programs are off: today's tools, byte for byte, whatever the permissions
-/// rollout says. `UPDATE_TOOLSET_SNAPSHOT=1` rewrites
-/// it; a change to it must be one meant for sessions without them.
+/// What a TypeScript turn sees of its code-mode tools: today's tools, byte
+/// for byte. `UPDATE_TOOLSET_SNAPSHOT=1` rewrites it; a change to it must be
+/// one meant for sessions without agent permissions.
 #[tokio::test]
 async fn sessions_without_javascript_tools_see_todays_tools() {
-    let session = agent_session::testing::test_agent_session(
-        agent_session::domain::model::AgentSessionId::new(),
-    );
-    // Each distinct set of tools once, and which one each combination sees.
+    // Each distinct set of tools once, and which one each kind sees.
     let mut toolsets: Vec<serde_json::Value> = Vec::new();
     let mut sessions = serde_json::Map::new();
-    for permissions in [false, true] {
-        let service = Languages {
-            js_tools: false,
-            permissions,
-            seen: Default::default(),
-        };
-        let tools: serde_json::Map<_, _> = session_toolset(&service, &session)
-            .await
+    for kind in [CodeModeKind::TypeScript] {
+        let tools: serde_json::Map<_, _> = session_toolset(kind)
             .tools
             .iter()
             .map(|(name, tool)| {
@@ -457,7 +455,14 @@ async fn sessions_without_javascript_tools_see_todays_tools() {
                 toolsets.len() - 1
             }
         };
-        sessions.insert(format!("permissions={permissions}"), index.into());
+        sessions.insert(
+            serde_json::to_value(kind)
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_owned(),
+            index.into(),
+        );
     }
     let snapshot = serde_json::json!({ "sessions": sessions, "toolsets": toolsets });
     let actual = serde_json::to_string_pretty(&snapshot).unwrap() + "\n";
@@ -580,10 +585,14 @@ async fn sessions_see_and_call_js_tools_only_with_the_rollout() {
     for js_tools in [false, true] {
         let service = Arc::new(Languages {
             js_tools,
-            permissions: js_tools,
             seen: Default::default(),
         });
-        let tools = session_toolset(service.as_ref(), &session).await;
+        let kind = if js_tools {
+            CodeModeKind::Dialect
+        } else {
+            CodeModeKind::TypeScript
+        };
+        let tools = session_toolset(kind);
         let tool = &tools.tools["ExecuteCode"];
         let schema = serde_json::to_value(&tool.input_schema).unwrap();
         assert_eq!(schema.to_string().contains("js_tools"), js_tools);
@@ -596,6 +605,7 @@ async fn sessions_see_and_call_js_tools_only_with_the_rollout() {
             service: service.clone(),
             session: session.clone(),
             cognition: None,
+            kind,
         };
         let result = tools
             .try_tool_call(

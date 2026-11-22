@@ -1,7 +1,6 @@
 {
   "sessions": {
-    "permissions=false": 0,
-    "permissions=true": 0
+    "type_script": 0
   },
   "toolsets": [
     {

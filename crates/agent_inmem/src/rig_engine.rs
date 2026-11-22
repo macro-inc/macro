@@ -590,6 +590,7 @@ async fn drive_turn(
 ) -> Result<(), AgentError> {
     let TurnRequest {
         purpose,
+        code_mode_kind,
         delivery,
         session_id,
         awaiting,
@@ -903,8 +904,11 @@ async fn drive_turn(
     let remote = mcp_tools.clone();
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
         Some(mcp) if unseen => Arc::new(
-            mcp_select::CombinedToolSet::new(toolset, unseen::CodeModeOnly::new(mcp))
-                .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS),
+            mcp_select::CombinedToolSet::new(
+                toolset,
+                unseen::CodeModeOnly::new(mcp, code_mode_kind),
+            )
+            .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS),
         ),
         Some(mcp) => Arc::new(
             mcp_select::CombinedToolSet::new(toolset, mcp)

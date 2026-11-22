@@ -76,6 +76,7 @@ pub struct InMemAgentManager {
     engine: Arc<dyn TurnEngine>,
     admission: Arc<dyn AiAdmissionService>,
     agent_keys: Arc<dyn AgentKeys>,
+    code_mode_kinds: Arc<dyn agent_code_mode::domain::CodeModeKinds>,
     model_access: Arc<dyn crate::domain::model_access::InMemModelAccess>,
     frames: Arc<dyn FrameSource>,
     mcp: Arc<dyn DynMcpToolConnector>,
@@ -104,6 +105,7 @@ impl InMemAgentManager {
             model_access,
             admission: Arc::new(DisabledAiAdmissionService),
             agent_keys: Arc::new(NoAgentKeys),
+            code_mode_kinds: Arc::new(agent_code_mode::domain::TypeScriptOnly),
             frames,
             mcp,
             enable_dev_commands: false,
@@ -126,6 +128,17 @@ impl InMemAgentManager {
     #[must_use]
     pub fn with_agent_keys(mut self, agent_keys: Arc<dyn AgentKeys>) -> Self {
         self.agent_keys = agent_keys;
+        self
+    }
+
+    /// Resolve each turn's code-mode kind with `kinds`. Without this, every
+    /// turn is TypeScript.
+    #[must_use]
+    pub fn with_code_mode_kinds(
+        mut self,
+        kinds: Arc<dyn agent_code_mode::domain::CodeModeKinds>,
+    ) -> Self {
+        self.code_mode_kinds = kinds;
         self
     }
 
@@ -205,6 +218,7 @@ impl InMemAgentManager {
             engine: Arc::clone(&self.engine),
             admission: Arc::clone(&self.admission),
             agent_keys: Arc::clone(&self.agent_keys),
+            code_mode_kinds: Arc::clone(&self.code_mode_kinds),
             model_access: Arc::clone(&self.model_access),
             store: Arc::clone(&self.store),
             active_cancel: std::sync::Mutex::new(Vec::new()),

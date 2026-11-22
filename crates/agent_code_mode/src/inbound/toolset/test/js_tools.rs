@@ -6,9 +6,9 @@
 
 use super::*;
 use crate::domain::{
-    CodeModeService, ExecutionCredentials, ExecutionIdentity, ExecutionPermission, ExecutionRecord,
-    ExecutionStatus, ExecutionStore, ExecutionTurns, IssuedRun, JsToolsPrograms, ModelImage,
-    ModelImages, NotRun, OwnerRollout, ProgramLanguage, StaticFileId,
+    CodeModeKinds, CodeModeService, ExecutionCredentials, ExecutionIdentity, ExecutionPermission,
+    ExecutionRecord, ExecutionStatus, ExecutionStore, ExecutionTurns, IssuedRun, JsToolsPrograms,
+    ModelImage, ModelImages, NotRun, OwnerRollout, ProgramLanguage, StaticFileId,
 };
 use agent_session::domain::model::AgentSessionId;
 use ai_toolset::ToolSet as _;
@@ -287,13 +287,17 @@ async fn service(
 /// call was refused.
 async fn execute(service: CodeModeService, source: &str) -> Result<serde_json::Value, String> {
     let session = agent_session::testing::test_agent_session(AgentSessionId::new());
-    let tools = session_toolset(&service, &session).await;
+    let kind = service
+        .code_mode_kind(session.id, session.owner_user().unwrap())
+        .await;
+    let tools = session_toolset(kind);
     tools
         .try_tool_call(
             CodeModeToolContext {
                 service: Arc::new(service),
                 session,
                 cognition: None,
+                kind,
             },
             RequestContext::new(user()),
             "ExecuteCode",
@@ -443,8 +447,12 @@ async fn js_tools_without_the_rollout_is_refused_before_a_credential() {
         rollout: Arc::new(Rollout(false)),
     });
     let session = agent_session::testing::test_agent_session(AgentSessionId::new());
-    assert!(!service.js_tools_enabled(&session).await);
-    assert!(!service.permissions_enabled(&session).await);
+    assert_eq!(
+        service
+            .code_mode_kind(session.id, session.owner_user().unwrap())
+            .await,
+        CodeModeKind::TypeScript
+    );
     // The tool refuses the language.
     assert!(execute(service.clone(), example()).await.is_err());
     // Code mode refuses it too, whatever tool asked.

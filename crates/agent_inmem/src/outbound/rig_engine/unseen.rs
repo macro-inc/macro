@@ -5,6 +5,7 @@
 //!
 //! [`ReplyDelivery::Unseen`]: crate::domain::engine::ReplyDelivery::Unseen
 
+use agent_code_mode::domain::CodeModeKind;
 use ai_toolset::{RequestContext, SearchableTool, ToolCallFuture, ToolInfo, ToolSet, ToolSetError};
 use mcp_toolset::RemoteMcpToolSet;
 
@@ -16,19 +17,25 @@ pub(super) const PROMPT: &str = include_str!("unseen.md");
 
 const EXECUTE_CODE: &str = "mcp__macro_internal__ExecuteCode";
 
-/// Code mode's tools out of a session's MCP servers, and nothing else.
-/// `ExecuteCode` goes out without its reviews, views and the PresentView
-/// schema: nobody would see what they present.
+/// Code mode's tools out of a session's MCP servers, and nothing else. In
+/// a TypeScript turn, `ExecuteCode` goes out without its reviews, views and
+/// the PresentView schema: nobody would see what they present. A dialect
+/// turn's goes out as listed.
 pub(super) struct CodeModeOnly {
     tools: RemoteMcpToolSet,
-    execute_code: String,
+    execute_code: Option<String>,
 }
 
 impl CodeModeOnly {
-    pub(super) fn new(tools: RemoteMcpToolSet) -> Self {
+    pub(super) fn new(tools: RemoteMcpToolSet, kind: CodeModeKind) -> Self {
         Self {
             tools,
-            execute_code: agent_code_mode::inbound::toolset::unseen_execute_code_description(),
+            execute_code: match kind {
+                CodeModeKind::TypeScript => {
+                    Some(agent_code_mode::inbound::toolset::unseen_execute_code_description())
+                }
+                CodeModeKind::Dialect => None,
+            },
         }
     }
 }
@@ -60,10 +67,9 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for CodeModeOnly {
             .into_iter()
             .filter(|tool| CODE_MODE_MCP_TOOLS.contains(&tool.name.as_str()))
             .map(|tool| SearchableTool {
-                description: if tool.name == EXECUTE_CODE {
-                    self.execute_code.clone()
-                } else {
-                    tool.description
+                description: match &self.execute_code {
+                    Some(unseen) if tool.name == EXECUTE_CODE => unseen.clone(),
+                    _ => tool.description,
                 },
                 ..tool
             })

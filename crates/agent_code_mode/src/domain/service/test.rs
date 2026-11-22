@@ -919,18 +919,24 @@ async fn run(
         .await
 }
 
+/// The kind a turn of `session` runs, as every surface reads it.
+async fn kind(service: &CodeModeService, session: &AgentSession) -> CodeModeKind {
+    service
+        .code_mode_kind(session.id, session.owner_user().unwrap())
+        .await
+}
+
 #[tokio::test]
 async fn js_tools_programs_are_refused_before_credentials_without_the_rollout() {
     let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
     let (unwired, credentials, _, _) = service();
-    assert!(!unwired.js_tools_enabled(&session).await);
-    assert!(!unwired.permissions_enabled(&session).await);
+    assert_eq!(kind(&unwired, &session).await, CodeModeKind::TypeScript);
     let refused = run(&unwired, &session, ExecutionId::mint(), js_tools_request()).await;
     assert!(
-        matches!(refused, Err(CodeModeError::Invalid(message)) if message == "js_tools programs are not available in this session; write a JavaScript module.")
+        matches!(refused, Err(CodeModeError::Invalid(message)) if message.starts_with("This session runs TypeScript programs"))
     );
     let off = with_js_tools(unwired, false);
-    assert!(!off.js_tools_enabled(&session).await);
+    assert_eq!(kind(&off, &session).await, CodeModeKind::TypeScript);
     assert!(matches!(
         run(&off, &session, ExecutionId::mint(), js_tools_request()).await,
         Err(CodeModeError::Invalid(_))
@@ -950,22 +956,20 @@ async fn js_tools_programs_are_refused_before_credentials_without_the_rollout() 
         Arc::clone(&service.0.turns),
         Arc::new(Pixels),
     );
-    assert!(
-        !with_js_tools(no_runner, true)
-            .js_tools_enabled(&session)
-            .await
+    assert_eq!(
+        kind(&with_js_tools(no_runner, true), &session).await,
+        CodeModeKind::TypeScript
     );
 }
 
 #[tokio::test]
 async fn js_tools_runs_record_language_and_fingerprint_and_retries_match_language() {
-    let (service, credentials, store, _) = service();
-    let service = with_js_tools(service, true);
+    let (typescript, credentials, store, _) = service();
+    let dialect = with_js_tools(typescript, true);
     let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
-    assert!(service.js_tools_enabled(&session).await);
-    assert!(service.permissions_enabled(&session).await);
+    assert_eq!(kind(&dialect, &session).await, CodeModeKind::Dialect);
     let id = ExecutionId::mint();
-    let receipt = run(&service, &session, id, js_tools_request())
+    let receipt = run(&dialect, &session, id, js_tools_request())
         .await
         .unwrap();
     assert_eq!(receipt.execution_id, id);
@@ -979,22 +983,29 @@ async fn js_tools_runs_record_language_and_fingerprint_and_retries_match_languag
     assert_eq!(stored["language"], "js_tools");
     assert_eq!(stored["sdkFingerprint"], "@opencode/codemode@0+fixture");
 
-    // The same ID and source is the saved run only in the same language.
-    let retry = run(&service, &session, id, js_tools_request())
+    // The same ID and source is the saved run.
+    let retry = run(&dialect, &session, id, js_tools_request())
         .await
         .unwrap();
     assert_eq!(retry.execution_id, id);
     assert_eq!(credentials.0.lock().unwrap().len(), 1);
+    // A dialect turn refuses TypeScript before anything is recorded or minted.
     let mut javascript = js_tools_request();
     javascript.language = code_execution::domain::Language::Javascript;
-    let other = run(&service, &session, id, javascript).await.unwrap();
-    assert_ne!(other.execution_id, id);
-    assert_eq!(credentials.0.lock().unwrap().len(), 2);
-    let record = store.get(session.id, other.execution_id).await.unwrap();
-    assert_eq!(record.language, ProgramLanguage::Javascript);
-    assert_eq!(record.sdk_fingerprint, None);
+    assert!(matches!(
+        run(&dialect, &session, id, javascript).await,
+        Err(CodeModeError::Invalid(message)) if message.starts_with("This session runs JS tools programs")
+    ));
+    assert_eq!(credentials.0.lock().unwrap().len(), 1);
+
     // A JavaScript record serializes as before languages: no language, no
     // fingerprint.
+    let (typescript, _, store, _) = service();
+    let id = ExecutionId::mint();
+    run(&typescript, &session, id, request()).await.unwrap();
+    let record = store.get(session.id, id).await.unwrap();
+    assert_eq!(record.language, ProgramLanguage::Javascript);
+    assert_eq!(record.sdk_fingerprint, None);
     let stored = serde_json::to_value(&record).unwrap();
     assert!(stored.get("sdkFingerprint").is_none());
     assert!(stored.get("language").is_none(), "{stored}");

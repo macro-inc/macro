@@ -56,6 +56,24 @@ pub struct ExecutionIdentity {
     pub turn: Uuid,
 }
 
+/// What code mode a session's turn offers its agent, resolved once per turn
+/// from the owner's `enable-agent-permissions` flag
+/// ([`CodeModeKinds`](super::CodeModeKinds)) and passed to every surface the
+/// agent reads or calls: the system prompt, the code-mode tools' schemas and
+/// texts, and `ExecuteCode`, which refuses a program of the other kind. No
+/// surface reads the flag itself, so a turn never mixes the two.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeModeKind {
+    /// Flag off: a TypeScript module with the whole SDK and the run's token,
+    /// which the agent's permissions do not check.
+    TypeScript,
+    /// Flag on: every SDK call is a `tools.*` call in the JS tools dialect,
+    /// analyzed and gated by the agent's permissions; an optional TypeScript
+    /// module computes with no network, no SDK and no token.
+    Dialect,
+}
+
 /// The language of a session program. JavaScript tools programs are offered
 /// only to sessions whose owner has agent permissions
 /// ([`OwnerRollout`](super::OwnerRollout)), which gate them.

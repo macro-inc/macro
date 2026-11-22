@@ -34,7 +34,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
 };
-use agent_code_mode::domain::ExecutionStatus;
+use agent_code_mode::domain::{CodeModeKind, CodeModeKinds, ExecutionStatus};
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use agent_runtime_protocol::domain::turn::{FailureNotice, FailureNoticeKind};
 use agent_session::domain::model::AgentSessionId;
@@ -140,6 +140,9 @@ pub struct AgentState {
     /// Agents' own API keys, which the session's agent's turns run on
     /// instead of the owner's Macro allowance when it has a usable one.
     pub agent_keys: Arc<dyn AgentKeys>,
+    /// Each turn's code-mode kind, which the turn reads once and hands to
+    /// its engine.
+    pub code_mode_kinds: Arc<dyn CodeModeKinds>,
     /// Conversation state, shared with the manager so it survives reattach.
     pub store: Arc<SessionStore>,
     /// Every outstanding turn's cancellation token - the running turn and any
@@ -763,6 +766,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         agent.turn.first_text_ms = tracing::field::Empty,
                         agent.turn.admission_wait_ms = tracing::field::Empty,
                         agent.turn.agent_key = tracing::field::Empty,
+                        agent.turn.code_mode_kind = tracing::field::Empty,
                         agent.turn.lock_wait_ms = tracing::field::Empty,
                         agent.turn.stop_reason = tracing::field::Empty,
                         agent.turn.text_chars = tracing::field::Empty,
@@ -1057,10 +1061,20 @@ async fn run_turn(
         return Err(AcpError::new(-32602, notice.title.clone())
             .data(serde_json::to_value(notice).expect("failure notice is serializable")));
     }
+    let code_mode_kind = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        kind = turn_code_mode_kind(state) => kind,
+    };
+    span.record(
+        "agent.turn.code_mode_kind",
+        tracing::field::debug(code_mode_kind),
+    );
     let awaiting = Arc::new(AwaitingUser::default());
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
         purpose: TurnPurpose::Conversation,
+        code_mode_kind,
         delivery: state.delivery,
         session_id: state.session_id,
         awaiting: Arc::clone(&awaiting),
@@ -1551,4 +1565,18 @@ pub(crate) fn close_dangling_tool_calls(
         });
     }
     dangling
+}
+
+/// The code-mode kind of the turn the session is running: today's
+/// TypeScript for a session no person owns, which code mode never serves.
+pub(super) async fn turn_code_mode_kind(state: &AgentState) -> CodeModeKind {
+    match &state.owner {
+        Owner::User(owner) => {
+            state
+                .code_mode_kinds
+                .code_mode_kind(state.session_id, owner)
+                .await
+        }
+        Owner::Bot(_) | Owner::Team(_) => CodeModeKind::TypeScript,
+    }
 }

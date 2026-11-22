@@ -15,7 +15,7 @@ use super::*;
 
 /// Session-bound execution and reads. Inbound adapters supply authenticated facts.
 #[async_trait]
-pub trait SessionCodeMode: Send + Sync + 'static {
+pub trait SessionCodeMode: CodeModeKinds {
     /// Execute as the selected account, bound to the originating prompt's turn.
     async fn execute(
         &self,
@@ -32,20 +32,6 @@ pub trait SessionCodeMode: Send + Sync + 'static {
         access: &EntityAccessReceipt<ViewAccessLevel>,
         execution: ExecutionId,
     ) -> Result<ExecutionRecord, CodeModeError>;
-    /// Whether `session` may run JavaScript tools programs: this deployment
-    /// can run and gate them and the session owner has the agent permissions
-    /// rollout, which always gate them. Off when either is missing or the
-    /// flag cannot be read.
-    async fn js_tools_enabled(&self, session: &AgentSession) -> bool {
-        let _ = session;
-        false
-    }
-    /// Whether the agent's permissions gate some of `session`'s programs: its
-    /// JavaScript tools programs, which they always gate.
-    async fn permissions_enabled(&self, session: &AgentSession) -> bool {
-        let _ = session;
-        false
-    }
 }
 
 /// JavaScript tools programs, offered where the runner can run them and the
@@ -66,6 +52,8 @@ struct Inner {
     images: Arc<dyn ModelImages>,
     admission: Arc<Semaphore>,
     js_tools: Option<Arc<JsToolsPrograms>>,
+    /// Each recent turn's code-mode kind, as it was first resolved.
+    kinds: std::sync::Mutex<super::kinds::TurnKinds>,
 }
 
 /// Code-mode policy over interchangeable execution, credential, and storage capabilities.
@@ -90,6 +78,7 @@ impl CodeModeService {
             images,
             admission: Arc::new(Semaphore::new(limits.max_running + limits.max_queued)),
             js_tools: None,
+            kinds: std::sync::Mutex::default(),
         }))
     }
 
@@ -138,6 +127,7 @@ impl CodeModeService {
             images: Arc::clone(&self.0.images),
             admission: Arc::clone(&self.0.admission),
             js_tools: Some(Arc::new(js_tools)),
+            kinds: std::sync::Mutex::default(),
         }))
     }
 
@@ -586,12 +576,8 @@ impl SessionCodeMode for CodeModeService {
             .map_err(|_| CodeModeError::Forbidden)?
             .clone();
         validate_request(&request)?;
-        if request.language == Language::JsTools && !self.js_tools_enabled(session).await {
-            return Err(CodeModeError::Invalid(
-                "js_tools programs are not available in this session; write a JavaScript module."
-                    .into(),
-            ));
-        }
+        let kind = self.code_mode_kind(session.id, &owner).await;
+        refuse_other_kind(kind, &request)?;
         let language = ProgramLanguage::from(request.language);
         let permit = Arc::clone(&self.0.admission)
             .try_acquire_owned()
@@ -678,19 +664,67 @@ impl SessionCodeMode for CodeModeService {
         record.error = execution_error(&record);
         Ok(record)
     }
+}
 
-    async fn js_tools_enabled(&self, session: &AgentSession) -> bool {
-        let (Some(js_tools), Some(_)) = (&self.0.js_tools, &self.0.executor) else {
-            return false;
-        };
-        match session.owner_user() {
-            Ok(owner) => js_tools.rollout.enabled(owner).await,
-            Err(_) => false,
+#[async_trait]
+impl CodeModeKinds for CodeModeService {
+    async fn code_mode_kind(
+        &self,
+        session: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+    ) -> CodeModeKind {
+        // A turn that cannot be read resolves afresh: it can run nothing, as
+        // `execute` reads the same turn and refuses.
+        let turn = self.0.turns.active(session).await.ok().flatten();
+        if let Some(turn) = turn
+            && let Some(kind) = self.turn_kinds().get(session, turn)
+        {
+            return kind;
+        }
+        let kind = self.resolve_kind(owner).await;
+        match turn {
+            Some(turn) => self.turn_kinds().settle(session, turn, kind),
+            None => kind,
         }
     }
+}
 
-    async fn permissions_enabled(&self, session: &AgentSession) -> bool {
-        self.js_tools_enabled(session).await
+impl CodeModeService {
+    fn turn_kinds(&self) -> std::sync::MutexGuard<'_, super::kinds::TurnKinds> {
+        self.0
+            .kinds
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// The dialect where this deployment can run and gate it and `owner`
+    /// has agent permissions; TypeScript otherwise, or when the flag can't
+    /// be read.
+    async fn resolve_kind(&self, owner: &MacroUserIdStr<'static>) -> CodeModeKind {
+        let (Some(js_tools), Some(_)) = (&self.0.js_tools, &self.0.executor) else {
+            return CodeModeKind::TypeScript;
+        };
+        if js_tools.rollout.enabled(owner).await {
+            CodeModeKind::Dialect
+        } else {
+            CodeModeKind::TypeScript
+        }
+    }
+}
+
+/// Refuse a program of the other kind than the turn's, before anything is
+/// recorded: a tool list the agent read before the kind changed can't run
+/// the other mode.
+fn refuse_other_kind(kind: CodeModeKind, request: &ExecuteRequest) -> Result<(), CodeModeError> {
+    match (kind, request.language) {
+        (CodeModeKind::TypeScript, Language::Javascript)
+        | (CodeModeKind::Dialect, Language::JsTools) => Ok(()),
+        (CodeModeKind::TypeScript, Language::JsTools) => Err(CodeModeError::Invalid(
+            "This session runs TypeScript programs: write a TypeScript module exporting async function main and call ExecuteCode without language.".into(),
+        )),
+        (CodeModeKind::Dialect, Language::Javascript) => Err(CodeModeError::Invalid(
+            "This session runs JS tools programs: pass source as a script that calls await tools.<service>.<operation>(...), as ExecuteCode's description shows.".into(),
+        )),
     }
 }
 

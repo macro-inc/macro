@@ -107,13 +107,19 @@ stacks. Process isolation belongs to
   (`compose_routines::DIRECT`). No byte budget counts the skill, so it never
   takes another entity's place. `mcp_guides` and `entity_guide` (no attached skill) serve
   hosts that carry areas whole. All of it is generated from the SDK; edit the TSDoc.
-- JavaScript tools programs (`ProgramLanguage::JsTools`, `js_tools`): a
-  session whose owner has `enable-agent-permissions` (the only flag on them;
-  the harness's `JsToolsRollout`) and whose harness gates them
-  (`CodeModeService::with_js_tools`, wired wherever Deno runs programs) may
-  run `ExecuteCode` with `language: "js_tools"`
-  (`SessionCodeMode::js_tools_enabled`); `permissions_enabled` is then on
-  too. `execute` refuses one without the rollout before minting a
+- The code-mode kind (`CodeModeKind`: `TypeScript` or `Dialect`) is the one
+  value every agent-facing code-mode surface follows. `CodeModeKinds`
+  resolves it once per turn (`CodeModeService`, cached by session and active
+  turn in `domain/kinds.rs`): `Dialect` when the owner has
+  `enable-agent-permissions` (the harness's `JsToolsRollout`) and the harness
+  gates JS tools programs (`CodeModeService::with_js_tools`, wired wherever
+  Deno runs programs). The in-process agent reads it at turn start
+  (`TurnRequest::code_mode_kind`), the internal MCP for `tools/list`, tool
+  calls (`CodeModeToolContext::kind`, `session_toolset(kind)`) and
+  `ShowPermissions`; nothing else reads the flag. `execute` refuses a program
+  of the other kind before recording it (`refuse_other_kind`).
+- JavaScript tools programs (`ProgramLanguage::JsTools`, `js_tools`) run in a
+  `Dialect` turn. `execute` refuses one in a TypeScript turn before minting a
   credential, and skips the TypeScript check for it (the gate parses and
   analyzes it). A record keeps its `language` (left out for JavaScript, so
   those records read as before) and the interpreter and catalog's
@@ -121,7 +127,7 @@ stacks. Process isolation belongs to
   `agent_code_execution.record` JSON, so no migration. The public MCP's
   `UserExecuteCode` stays TypeScript only.
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `toolset_with_js_tools()`
-  for a session that may run JS tools programs (`session_toolset` picks;
+  for a dialect turn (`session_toolset(kind)` picks;
   `ExecuteCodeWithJsTools` adds `toolset/session/js_tools.md` and
   `js_tools_permissions.md`), `user_toolset()` for the public MCP. With JS
   tools off, the session tools are pinned byte for byte by
