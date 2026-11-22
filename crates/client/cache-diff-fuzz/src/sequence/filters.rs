@@ -155,7 +155,10 @@ impl Gen<'_> {
         if !self.mail_tabs.is_empty() && self.rng.chance(0.4) {
             let (_, tab) = pick(&mut self.rng, self.mail_tabs).clone();
             let mut filters = tab["filters"].clone();
-            if self.rng.chance(0.3) && !filters["emailFilter"]["tree"].is_null() {
+            let tree = &filters["emailFilter"]["tree"];
+            // A tree that is only a `shared` literal has nothing to reshape around it.
+            let reshapable = !tree.is_null() && tree["literal"].get("shared").is_none();
+            if self.rng.chance(0.3) && reshapable {
                 // The tab's tree in another shape: the same rows, or more or fewer. A
                 // `shared` literal stays at the top, under `and` only, as the cache compiles
                 // it; any other place sends the filter to the network.

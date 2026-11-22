@@ -26,7 +26,8 @@ purpose (it says what).
   Mail filters often use the app's mail tabs (`assets/mail-tabs.json`), and some of those
   with the tab's tree reshaped: `not(not(tree))`, or joined by `or` or `and` to a random tree or,
   half the time, to one literal the cache compiles (read, inbox visibility, thread, owner). A
-  tab's `shared` literal stays at the top under `and`, the only place the cache compiles it.
+  tab's `shared` literal joined to its tree by `and` stays at the top, the only place the cache
+  compiles it, and a tree that is only a `shared` literal is not reshaped.
 - `src/exec.rs` runs a case. `src/normalize.rs` replaces the ids the engine mints
   (`#1`, `#2`, …) and keeps every id that appears in the case. `src/dump.rs`
   writes the tables after a final reopen, each value tagged with its type.
@@ -110,9 +111,9 @@ purpose (it says what).
   database error does (build-side.sh patches a flag into cache-turso's test fault point, after
   the first record a write transaction puts; settling an optimistic mutation writes through
   another point and is not failed). `--fail-reads SHARE` does the same for the next
-  `get_batch` of records from storage. Another thread can take either flag (a concurrent read,
-  or one resuming work a `--start-from` file left), so leave out `--concurrent-reads` and
-  `--abandon-reads` with `--fail-reads`, and expect the odd stray write fault with them.
+  `get_batch` of records from storage, and refuses `--concurrent-reads` and `--abandon-reads`,
+  whose reads on other threads could take it. A write on another thread (one resuming work a
+  `--start-from` file left) can still take a write fault.
   `minimize.sh` replays the case under seed 0 and shifts op indexes, so it doesn't keep the
   fault schedule: shrink a fault finding by hand. The ops are picked from the seed apart from
   the case, so the cases don't change. A side that skips a write or read the other makes can

@@ -148,6 +148,12 @@ struct Args {
 
 fn main() -> Result<(), rootcause::Report> {
     let mut args = Args::parse();
+    if args.fail_reads > 0.0 && (args.concurrent_reads > 0.0 || args.abandon_reads > 0.0) {
+        // Those reads run on other threads and could take the armed read fault.
+        return Err(rootcause::report!(
+            "--fail-reads can't be combined with --concurrent-reads or --abandon-reads"
+        ));
+    }
     // The host spawns background work (the idle checkpoint) on its async
     // runtime, a Tokio one; ops still run one at a time on this thread.
     let runtime = tokio::runtime::Builder::new_multi_thread()
