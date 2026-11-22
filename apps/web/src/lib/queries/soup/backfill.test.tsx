@@ -1147,11 +1147,13 @@ describe('soup backfill checkpoint locks', () => {
   const gated = (nextCursor: string | null = null) => {
     const gate = signal();
     const first = signal();
-    const fetchPage = vi.fn(async (_input: FetchInput) => {
-      first.fire();
-      await gate.fired;
-      return { nextCursor };
-    });
+    const fetchPage = vi.fn(
+      async (_input: FetchInput, _options?: { signal?: AbortSignal }) => {
+        first.fire();
+        await gate.fired;
+        return { nextCursor };
+      }
+    );
     return { fetchPage, open: gate.fire, fetched: first.fired };
   };
   /** A page fetch that ends the pass; `fetched` settles at its first call. */
@@ -1274,6 +1276,31 @@ describe('soup backfill checkpoint locks', () => {
     expect(loadSoupBackfillCheckpoint('user-1', refreshing).completed).toBe(
       true
     );
+  });
+
+  it('runs a lane that restarts every run again though the other tab completed it', async () => {
+    const holder = gated();
+    const restarting = {
+      ...lane('core-entities', holder.fetchPage),
+      refreshAll: true,
+      restartOnRun: true,
+    };
+    const held = Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, restarting)
+    );
+    await holder.fetched;
+    const waiter = done();
+    const suite = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        { ...restarting, fetchPage: waiter },
+      ])
+    );
+    await locks.waiting(key(restarting));
+
+    holder.open();
+    await held;
+    await suite;
+    expect(waiter).toHaveBeenCalledOnce();
   });
 
   it('runs a lane under its v19 key only once no tab from before checkpoint locks leads', async () => {
@@ -1454,6 +1481,79 @@ describe('soup backfill checkpoint locks', () => {
     await second.fetched;
     second.open();
     await suite;
+  });
+
+  it('lets a left lane whose lock requests fail give up without stopping the lane that runs', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const core = lane('core-entities', done());
+    const initiatives = lane('initiatives', done());
+    const coreTab = hold(key(core));
+    const initiativesTab = hold(key(initiatives));
+    // The browser rejects every request to wait for the initiatives lock.
+    const browser = navigator.locks;
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: {
+        request: (
+          name: string,
+          options: LockOptions,
+          granted: LockGrantedCallback<unknown>
+        ) =>
+          name === key(initiatives) && options.ifAvailable !== true
+            ? Promise.reject(new Error('lock request failed'))
+            : browser.request(name, options, granted),
+      },
+    });
+    const running = gated();
+    const failing = done();
+    const suite = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        { ...core, fetchPage: running.fetchPage },
+        { ...initiatives, fetchPage: failing },
+      ])
+    );
+    await locks.waiting(key(core));
+    await coreTab.release();
+    await running.fetched;
+
+    // The initiatives lane spends its retries while core runs.
+    await vi.advanceTimersByTimeAsync(31_000);
+    running.open();
+    await suite;
+    expect(running.fetchPage).toHaveBeenCalledOnce();
+    expect(running.fetchPage.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
+    expect(loadSoupBackfillCheckpoint('user-1', core).completed).toBe(true);
+    expect(failing).not.toHaveBeenCalled();
+    await initiativesTab.release();
+  });
+
+  it('ends the suite when the lane holding the turn throws, instead of waiting on the other left lanes', async () => {
+    const core = lane('core-entities', done());
+    const initiatives = lane('initiatives', done());
+    const coreTab = hold(key(core));
+    const initiativesTab = hold(key(initiatives));
+    // A page result without its cursor, as a broken fetcher could return.
+    const malformed = vi.fn(
+      async (_input: FetchInput) => undefined as unknown as { nextCursor: null }
+    );
+    const suite = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        { ...core, fetchPage: malformed },
+        initiatives,
+      ])
+    );
+    await locks.waiting(key(core));
+    await locks.waiting(key(initiatives));
+
+    await coreTab.release();
+    await expect(suite).rejects.toThrow();
+    expect(malformed).toHaveBeenCalledOnce();
+    // The initiatives lane stopped waiting: another tab gets its lock next.
+    await initiativesTab.release();
+    const nextTab = hold(key(initiatives));
+    await nextTab.granted;
+    await nextTab.release();
   });
 
   it('refreshes a left lane its other tab did not save, whatever its completion time', async () => {

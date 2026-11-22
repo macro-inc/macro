@@ -19,6 +19,7 @@ import {
 } from '@service-storage/graphql-soup';
 import { createSharedMailBackfillFetcher } from '@service-storage/shared-mail-backfill';
 import * as Effect from 'effect/Effect';
+import * as Exit from 'effect/Exit';
 import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
@@ -685,7 +686,8 @@ function withLaneLocks<E, R>(
  * every run, or null when another tab completed the pass this run waited for:
  * the checkpoint is completed and is no longer the one stored when this tab
  * left the lane. Comparing what was stored, not times, keeps a completion
- * stamped by a skewed clock from passing for a new one.
+ * stamped by a skewed clock from passing for a new one. A lane that restarts
+ * every run is never skipped: each run's scan is its point.
  */
 function loadRunCheckpoint(
   userId: string,
@@ -701,6 +703,7 @@ function loadRunCheckpoint(
       : initialCheckpoint(userId, storageGeneration);
   if (
     options.revisit !== undefined &&
+    !params.restartOnRun &&
     checkpoint.completed &&
     stored !== options.revisit.saved
   ) {
@@ -976,7 +979,10 @@ const runTrackedSoupBackfill = (
 
 /**
  * Waits for the locks of every lane in `left` at once and runs the first lane
- * to hold all of its own; the others stop waiting. Succeeds with its index.
+ * to hold all of its own; the others stop waiting. Succeeds with the indexes
+ * of the lanes done: that lane, and any that failed meanwhile without it. The
+ * lane holding the turn ends the race however it ends, so a defect in it ends
+ * the suite as it would in the first pass.
  */
 const runFirstFreeLane = (
   userId: string,
@@ -984,9 +990,10 @@ const runFirstFreeLane = (
   left: readonly { lane: SoupBackfillParams; saved: string | null }[],
   lanes: readonly SoupBackfillParams[]
 ) =>
-  Effect.suspend(() => {
+  Effect.gen(function* () {
     let turn: number | null = null;
-    return Effect.raceAll(
+    const failed: number[] = [];
+    const { index, exit } = yield* Effect.raceAll(
       left.map(({ lane, saved }, index) =>
         runTrackedSoupBackfill(userId, host, lane, {
           lanes,
@@ -997,10 +1004,22 @@ const runFirstFreeLane = (
             return turn === index;
           },
         }).pipe(
-          Effect.flatMap((ran) => (ran ? Effect.succeed(index) : Effect.never))
+          Effect.exit,
+          Effect.flatMap((exit) => {
+            // Declined: it asks again once the lane holding the turn is done.
+            if (Exit.isSuccess(exit) && !exit.value) return Effect.never;
+            // A lane that failed before any lane held its locks ends the race.
+            if (turn === null) turn = index;
+            if (turn === index) return Effect.succeed({ index, exit });
+            // Failed after its retries while another lane runs.
+            failed.push(index);
+            return Effect.never;
+          })
         )
       )
     );
+    if (Exit.isFailure(exit)) return yield* Effect.failCause(exit.cause);
+    return [index, ...failed];
   });
 
 /**
@@ -1008,7 +1027,7 @@ const runFirstFreeLane = (
  * another tab is running is left to it. Once the others are done, the left
  * lanes run one at a time, each as soon as its locks are free, so a stalled
  * tab holds back only the lanes it holds. A left lane that tab completed in
- * the meantime is skipped.
+ * the meantime is skipped, unless it restarts every run.
  */
 export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
   userId: string,
@@ -1035,8 +1054,8 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
   );
   let waiting = left;
   while (waiting.length > 0) {
-    const ran = yield* runFirstFreeLane(userId, host, waiting, lanes);
-    waiting = waiting.filter((_left, index) => index !== ran);
+    const finished = yield* runFirstFreeLane(userId, host, waiting, lanes);
+    waiting = waiting.filter((_left, index) => !finished.includes(index));
   }
 });
 
