@@ -1,0 +1,114 @@
+main	features/channel/Channel/Channel.tsx	if (channel()?.agent_dm) return name;
+main	features/channel/Channel/Channel.tsx	if (channel()?.agent_dm) return `Message ${name ?? 'agent'}`;
+main	features/channel/Channel/Channel.tsx	return name ? `Type @ to share with ${name}` : 'Type @ to share';
+main	features/channel/Channel/Channel.tsx	return parts.length === 2 && !parts[0]?.endsWith(',') ? parts[0] : name;
+main	features/channel/Channel/Channel.tsx	lastViewedAt: () => activity()?.viewed_at,
+main	features/channel/Channel/Channel.tsx	hasAgents={!!channel()?.agent_dm}
+main	features/channel/Channel/Channel.tsx	botId={channel()?.agent_dm?.bot_id}
+main	features/block-channel/component/NewChannelBlockAdapter.tsx	channelType: ch.channel_type,
+main	features/block-channel/component/NewChannelBlockAdapter.tsx	teamId: ch.team_id ?? undefined,
+main	features/block-channel/component/NewChannelBlockAdapter.tsx	<AgentDmRuntimeStatus botId={channel()?.agent_dm?.bot_id} />
+main	features/block-channel/component/NewChannelBlockAdapter.tsx	when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
+main	features/block-channel/component/NewChannelBlockAdapter.tsx	conversationChannel()?.agent_dm &&
+main	features/channel/Channel/use-channel-tab-items.tsx	if (!ENABLE_CALLS || channel()?.agent_dm)
+main	features/channel/Channel/use-channel-tab-items.tsx	!channel()?.agent_dm &&
+main	features/channel/Channel/channel-ask-macro.tsx	name: channel.name ?? fallbackName?.() ?? 'New Channel',
+main	features/channel/Message/ChannelCreatedIndicator.tsx	return !!c && !!c.name && c.channel_type !== ChannelTypeEnum.DirectMessage;
+main	features/channel/Message/ChannelCreatedIndicator.tsx	{formatDate(c().created_at, { showTime: true })}
+main	features/channel/Participants/ChannelParticipantsTab.tsx	: (channel()?.auto_join_team ?? false);
+main	features/channel/channel-icon.tsx	return participants.find((id) => id !== userId()) ?? participants[0];
+main	features/settings/MutedItemRow.tsx	channel.participants.find((p) => p.user_id !== userId()) ??
+main	features/favorites/FavoriteIcon.tsx	channelType={channel()?.channel_type ?? props.favorite.channelType}
+main	features/channel/Bots/BotDetailPage.tsx	channelsById[channel.channel_id]?.name?.trim() ||
+main	features/channel/Call/CallContext.tsx	? (channels.channelsById()[token.channelId]?.name ?? null)
+main	features/channel/Call/CallStartedNotifier.tsx	channelName: channelsCtx.channelsById()[channelId]?.name ?? undefined,
+main	features/block-call/sidebar/incoming-calls.ts	if (!channelsById[call.channelId]) return false;
+main	features/channels-view/live-calls-sidebar.tsx	if (!channel || quickCallIds.has(call.callId)) return [];
+main	features/channels-view/live-calls-sidebar.tsx	label: channel.name ?? 'Channel call',
+main	features/slack-import/slack-import.tsx	if (!channelsById()[id]) return undefined;
+main	features/home/components/HomeList.tsx	getChannelThreadName(entity, channels.channelsById())
+main	features/next-soup/soup-view/views/inbox/InboxListEntity.tsx	name: getChannelThreadName(scoped, channels.channelsById()),
+main	features/notifications-inbox/views/condensed-notification-row.tsx	getChannelThreadName(current, channels.channelsById())
+main	features/channel/Call/use-callkit.ts	const listedChannel = channelsCtx.channelsById()[channelId];
+main	features/channel/Call/use-start-channel-call.tsx	.filter((participant) => participant.user_id !== currentUser)
+main	features/channel/Channel/ChannelDetail.tsx	conversationChannel()?.participants.map(
+main	lib/core/component/LexicalMarkdown/citationsUtils.ts	const channel = channelsContext.channels().find((c) => c.id === channelId);
+main	lib/queries/contacts/recipient-source.ts	.filter((channel) => channel.participants.length > 2)
+main	features/universal-input/actions.ts	.filter((channel) => channel.participants.length > 2)
+main	lib/queries/soup/search.ts	channels().map(({ id, name, team_id }) => ({ id, name, team_id }))
+main	lib/queries/soup/search.ts	channels().map(({ id, name }) => ({ id, name }))
+main	lib/queries/soup/transform-utils.ts	createSearchResponseItemMapper(channels())(result, searchQuery);
+main	features/video-tutorials/primitives/create-support-link.ts	isLoading() ? undefined : findSupportChannelId(channels(), userId())
+main	features/channel/Bots/BotCreatePage.tsx	botAssignableChannelOptions(channelsContext.channels())
+main	features/settings/Agents.tsx	botAssignableChannelOptions(channelsContext.channels())
+main	features/channel/Bots/ChannelMultiSelect.tsx	botAssignableChannelOptions(channelsContext.channels())
+main	features/channels-view/components/rail/next/SectionChannelsDialog.tsx	!channel.is_participant ||
+main	features/channels-view/components/rail/next/SectionChannelsDialog.tsx	.sort((left, right) => (left.name ?? '').localeCompare(right.name ?? ''));
+main	features/channels-view/components/rail/next/SectionChannelsDialog.tsx	if (query.isPending) {
+main	features/channels-view/components/rail/next/ChannelMuteMenu.tsx	if (!queryReadyGate(channels)) return [];
+main	features/channels-view/components/rail/next/ChannelMuteMenu.tsx	if (!channel.is_participant) return false;
+main	features/channels-view/components/rail/next/ChannelMuteMenu.tsx	disabled={rail.sectionNotificationsDisabled(props.section)}
+main	features/channels-view/components/rail/next/SectionDialog.tsx	if (initial.channelCount > 0 && channels.isPending)
+main	features/channels-view/components/rail/next/SectionDialog.tsx	isParticipant: channel.is_participant,
+main	features/channels-view/components/rail/hooks/useChannelSectionNotifications.ts	fetchChannelGroupIds(section, [], signal)
+main	lib/core/context/quickAccess/QuickAccessSource.tsx	apiChannelToQuickAccessChannel(channel),
+main	lib/core/context/quickAccess/QuickAccessSource.tsx	const { channels, isLoading: channelsLoading } = useChannelsContext();
+main	components/app/AppProviders.tsx	useSoupBackfills(userId);
+main	lib/queries/channel/get-or-create-dm.ts	ResultAsync.fromPromise(loadChannelList(), (error) => error).map(
+branch	features/channel/Channel/Channel.tsx	if (channel()?.agentDm) return name;
+branch	features/channel/Channel/Channel.tsx	if (channel()?.agentDm) return `Message ${name ?? 'agent'}`;
+branch	features/channel/Channel/Channel.tsx	return name ? `Type @ to share with ${name}` : 'Type @ to share';
+branch	features/channel/Channel/Channel.tsx	return parts.length === 2 && !parts[0]?.endsWith(',') ? parts[0] : name;
+branch	features/channel/Channel/Channel.tsx	lastViewedAt: () => knownLastView(lastViewed()),
+branch	features/channel/Channel/Channel.tsx	hasAgents={!!channel()?.agentDm}
+branch	features/channel/Channel/Channel.tsx	botId={channel()?.agentDm?.botId}
+branch	features/block-channel/component/NewChannelBlockAdapter.tsx	channelType: ch.channelType,
+branch	features/block-channel/component/NewChannelBlockAdapter.tsx	teamId: ch.teamId ?? undefined,
+branch	features/block-channel/component/NewChannelBlockAdapter.tsx	<AgentDmRuntimeStatus botId={channel()?.agentDm?.botId} />
+branch	features/block-channel/component/NewChannelBlockAdapter.tsx	when={ENABLE_CALLS && !channel()?.agentDm && !call.isInThisChannel()}
+branch	features/block-channel/component/NewChannelBlockAdapter.tsx	conversationChannel()?.agentDm &&
+branch	features/channel/Channel/use-channel-tab-items.tsx	if (!ENABLE_CALLS || channel()?.agentDm)
+branch	features/channel/Channel/use-channel-tab-items.tsx	!channel()?.agentDm &&
+branch	features/channel/Channel/channel-ask-macro.tsx	name: current.name ?? fallbackName?.() ?? 'New Channel',
+branch	features/channel/Message/ChannelCreatedIndicator.tsx	return !!c && !!c.name && c.channelType !== 'direct_message';
+branch	features/channel/Message/ChannelCreatedIndicator.tsx	{formatDate(c().createdAt, { showTime: true })}
+branch	features/channel/Participants/ChannelParticipantsTab.tsx	: (channel()?.autoJoinTeam ?? false);
+branch	features/channel/channel-icon.tsx	directMessagePeer(current, userId()) ?? current.participants[0]?.userId
+branch	features/settings/MutedItemRow.tsx	directMessagePeer(channel, userId()) ?? channel.participants[0]?.userId
+branch	features/favorites/FavoriteIcon.tsx	channel()?.channelType ?? savedChannelType(props.favorite.channelType)
+branch	features/favorites/FavoriteIcon.tsx	.with('public', 'private', 'team', 'direct_message', (type) => type)
+branch	features/channel/Bots/BotDetailPage.tsx	channelDirectory.lookup(channel.channel_id)
+branch	features/channel/Call/CallContext.tsx	? (loadedChannel(channelDirectory.lookup(token.channelId))?.name ??
+branch	features/channel/Call/CallStartedNotifier.tsx	loadedChannel(directory.lookup(channelId))?.name ?? undefined,
+branch	features/block-call/sidebar/incoming-calls.ts	if (directory.lookup(call.channelId).status !== 'loaded') return false;
+branch	features/channels-view/live-calls-sidebar.tsx	if (lookup.status !== 'loaded') return [];
+branch	features/channels-view/live-calls-sidebar.tsx	label: channel.name ?? 'Channel call',
+branch	features/slack-import/slack-import.tsx	if (directory.lookup(id).status !== 'loaded') return undefined;
+branch	features/home/components/HomeList.tsx	const current = loadedChannel(directory.lookup(entity.channelId));
+branch	features/next-soup/soup-view/views/inbox/InboxListEntity.tsx	const current = loadedChannel(directory.lookup(scoped.channelId));
+branch	features/notifications-inbox/views/condensed-notification-row.tsx	const channel = loadedChannel(directory.lookup(current.channelId));
+branch	features/channel/Call/use-callkit.ts	const listedChannel = loadedChannel(directory.lookup(channelId));
+branch	features/channel/Call/use-start-channel-call.tsx	...(current ? channelMemberIds(current) : []).filter(
+branch	features/channel/Channel/ChannelDetail.tsx	return channel ? channelMemberIds(channel) : [];
+branch	lib/core/component/LexicalMarkdown/citationsUtils.ts	await settledChannelLookup(directory, channelId, CHANNEL_MENTION_WAIT_MS)
+branch	lib/queries/contacts/recipient-source.ts	channel.participants.length + channel.botParticipants.length > 2
+branch	features/universal-input/actions.ts	channel.participants.length + channel.botParticipants.length > 2
+branch	lib/queries/soup/search.ts	const channelMetadata = createMemo(() => channelSearchMetadata(channels()));
+branch	lib/queries/soup/search.ts	channels().map(({ id, name }) => ({ id, name }))
+branch	lib/queries/soup/transform-utils.ts	createSearchResponseItemMapper(channelSearchMetadata(channels()))
+branch	features/video-tutorials/primitives/create-support-link.ts	? findSupportChannelId(directory.channels(), userId())
+branch	features/channel/Bots/BotCreatePage.tsx	botAssignableChannelOptions(
+branch	features/settings/Agents.tsx	botAssignableChannelOptions(
+branch	features/channel/Bots/ChannelMultiSelect.tsx	botAssignableChannelOptions(
+branch	features/channels-view/components/rail/next/SectionChannelsDialog.tsx	.sort((left, right) => (left.name ?? '').localeCompare(right.name ?? ''))
+branch	features/channels-view/components/rail/next/ChannelMuteMenu.tsx	if (!directory.complete()) return [];
+branch	features/channels-view/components/rail/next/ChannelMuteMenu.tsx	(builtIn() && !directory.complete())
+branch	features/channels-view/components/rail/next/SectionDialog.tsx	if (initial.channelCount > 0 && directory.failed())
+branch	features/channels-view/components/rail/next/SectionDialog.tsx	if (initial.channelCount > 0 && !directory.complete())
+branch	features/channels-view/components/rail/hooks/useChannelSectionNotifications.ts	channelGroupIds(section, [], await directory.readComplete(signal))
+branch	lib/core/context/quickAccess/QuickAccessSource.tsx	apiChannelToQuickAccessChannel(toChannelListItem(channel)),
+branch	lib/core/context/quickAccess/QuickAccessSource.tsx	const channelsLoading = () => !directory.complete();
+branch	components/app/AppProviders.tsx	channelDirectory.complete() ? channelDirectory.channels() : undefined
+branch	lib/queries/channel/get-or-create-dm.ts	if (recipientId === viewerId || isBotPrincipalId(recipientId))
+main	features/channel/channel-icon.tsx	when={props.channelType === 'direct_message'}
+branch	features/channel/channel-icon.tsx	when={props.channelType === 'direct_message'}

@@ -1,0 +1,10 @@
+# Live session cookies: never commit.
+sessions.json
+session-*.json
+proof-v2/sessions-v2.json
+browser/
+# Main's generated GraphQL types (11 MB), written from the merge base.
+before-graphql.ts
+# Run output.
+proof-v2/runs/
+proof-v2/smoke.json

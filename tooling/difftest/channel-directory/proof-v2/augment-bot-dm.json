@@ -1,0 +1,82 @@
+{
+  "q01": {
+    "id": "01a1fc98-03ef-74a1-9f4c-2bd56efcab50",
+    "physicalOrder": "person,person,bot"
+  },
+  "q02": {
+    "id": "01a1fc98-04af-73cf-a693-834c0bc515eb",
+    "physicalOrder": "person,person,bot"
+  },
+  "q03": {
+    "id": "01a1fc98-0566-7602-ab45-4d854fc1bd21",
+    "physicalOrder": "person,person,bot"
+  },
+  "q04": {
+    "id": "01a1fc98-0609-7df9-98f2-cf0447b04b88",
+    "physicalOrder": "person,person,bot"
+  },
+  "q05": {
+    "id": "01a1fc98-06c0-765a-9ce5-2a8e0f88d950",
+    "physicalOrder": "person,person,bot"
+  },
+  "q06": {
+    "id": "01a1fc98-075e-7050-acfb-36541159fb4e",
+    "physicalOrder": "person,person,bot"
+  },
+  "q07": {
+    "id": "01a1fc98-0809-7f65-a5c4-6677d719ee30",
+    "physicalOrder": "person,person,bot"
+  },
+  "q08": {
+    "id": "01a1fc98-08bb-7deb-acb2-e7951560ce7d",
+    "physicalOrder": "person,person,bot"
+  },
+  "q09": {
+    "id": "01a1fc98-0963-7401-8daf-a72a467e5ad2",
+    "physicalOrder": "person,person,bot"
+  },
+  "q10": {
+    "id": "01a1fc98-0a1d-7325-89c4-0814947bf7c8",
+    "physicalOrder": "person,person,bot"
+  },
+  "l01": {
+    "id": "01a1fc98-0ac1-7e59-907b-294db598af7f",
+    "physicalOrder": "person,person,bot"
+  },
+  "l02": {
+    "id": "01a1fc98-0b6c-7b56-a5f9-cde98f31e9a8",
+    "physicalOrder": "person,person,bot"
+  },
+  "l03": {
+    "id": "01a1fc98-0c1b-77c8-bd59-cc1e759817cd",
+    "physicalOrder": "person,person,bot"
+  },
+  "l04": {
+    "id": "01a1fc98-0cc4-783c-9f27-f7f9d1035884",
+    "physicalOrder": "person,person,bot"
+  },
+  "l05": {
+    "id": "01a1fc98-0d65-7e13-aa6e-ee80359cbb9c",
+    "physicalOrder": "person,person,bot"
+  },
+  "l06": {
+    "id": "01a1fc98-0e5e-71f7-b7b6-cad3538781ec",
+    "physicalOrder": "person,person,bot"
+  },
+  "l07": {
+    "id": "01a1fc98-0efe-72ee-b74b-1284f0bb8c87",
+    "physicalOrder": "person,person,bot"
+  },
+  "l08": {
+    "id": "01a1fc98-0f94-774a-beaa-e46beba022b5",
+    "physicalOrder": "person,person,bot"
+  },
+  "l09": {
+    "id": "01a1fc98-102d-70af-a1d6-f94c9a327f23",
+    "physicalOrder": "person,person,bot"
+  },
+  "l10": {
+    "id": "01a1fc98-10ce-7c6a-837e-cfeab1829424",
+    "physicalOrder": "person,person,bot"
+  }
+}

@@ -1,0 +1,4 @@
+services:
+  document_storage_service:
+    environment:
+      DATABASE_URL_READONLY: postgres://user:password@postgres:5433/macrodb
