@@ -205,6 +205,8 @@ const RUNTIME_COMMAND_CONSUMER_ATTEMPTS: usize = 5;
 /// Routine code programs the harness runs at once. Steps beyond it wait for a
 /// slot before their credential is minted, so they never queue in the executor.
 const ROUTINE_CODE_SLOTS: usize = 4;
+/// Background jobs' Deno processes per replica, apart from foreground calls'.
+const BACKGROUND_JOB_SLOTS: usize = 4;
 /// Type checks the harness runs at once. A check takes about a second of one
 /// core and 250 MB; every attended program is checked before it runs, and
 /// routines are checked when saved.
@@ -755,6 +757,20 @@ pub async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
+            // Background jobs get their own slots and limit, so a job never
+            // takes a slot a foreground call waits for.
+            let jobs = code_execution::domain::ExecutionService::new(
+                Arc::clone(&runner),
+                Arc::clone(&checker),
+                code_execution::domain::Limits {
+                    max_running: BACKGROUND_JOB_SLOTS,
+                    max_queued: BACKGROUND_JOB_SLOTS,
+                    max_duration: agent_code_mode::domain::JOB_LIMIT,
+                    background: true,
+                    long_running: true,
+                    ..Default::default()
+                },
+            )?;
             Some((
                 code_execution::domain::ExecutionService::new(
                     runner,
@@ -764,6 +780,7 @@ pub async fn run() -> anyhow::Result<()> {
                 public,
                 routines,
                 checker,
+                jobs,
             ))
         }
         None => None,
@@ -787,7 +804,7 @@ pub async fn run() -> anyhow::Result<()> {
     let code_egress = code_mode::EgressRollout::new(feature_flags.clone());
     // Routine code steps run as their owner on the routines' executor.
     let routine_code = match &code_runner {
-        Some((_, _, routines, checker)) => Some(
+        Some((_, _, routines, checker, _)) => Some(
             routine_code::SdkRoutineCode::new(
                 Arc::new(routines.clone()),
                 Arc::clone(checker),
@@ -851,7 +868,7 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     });
     let public_code_mode = match &code_runner {
-        Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
+        Some((_, public, _, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
@@ -915,7 +932,7 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             scopes: Arc::clone(&session_scopes),
         });
-    let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
+    let code_executor = code_runner.as_ref().map(|(runner, _, _, _, _)| {
         Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
     });
     let code_mode_enabled = code_executor.is_some();
@@ -964,31 +981,56 @@ pub async fn run() -> anyhow::Result<()> {
         agent_code_mode::domain::ui_commands::NavigableRoutes::generated()
             .context("the generated agent route table does not parse")?,
     );
-    let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> =
-        Arc::new(agent_code_mode::domain::CodeModeService::new(
-            code_executor,
-            Arc::new(code_mode::RunCredentials {
-                egress: code_egress.clone(),
-                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
-                signer: MacroApiTokenSigner::new(
-                    pool.clone(),
-                    config.macro_api_token_issuer.as_ref(),
-                    config.macro_api_token_private_secret_key.as_ref(),
-                ),
-                gate: owner_tool_gate.clone(),
-                endpoints: code_mode::sdk_endpoints()?,
-                scopes: Arc::clone(&session_scopes),
+    // The session log jobs report to is built after code mode.
+    let job_log: Arc<std::sync::OnceLock<Arc<dyn code_mode::jobs::JobLog>>> = Arc::default();
+    let code_mode_service = agent_code_mode::domain::CodeModeService::new(
+        code_executor,
+        Arc::new(code_mode::RunCredentials {
+            egress: code_egress.clone(),
+            detach: Arc::new(code_mode::jobs::DetachPolicy {
+                sessions: session_repo.clone(),
+                flags: feature_flags.clone(),
             }),
-            execution_store,
-            execution_turns,
-            Arc::new(code_mode::images::StaticFileModelImages(
-                static_file_service_client::StaticFileServiceClient::with_timeout(
-                    config.internal_api_key.clone(),
-                    macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
-                    std::time::Duration::from_secs(10),
-                ),
-            )),
-        ));
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            signer: MacroApiTokenSigner::new(
+                pool.clone(),
+                config.macro_api_token_issuer.as_ref(),
+                config.macro_api_token_private_secret_key.as_ref(),
+            ),
+            gate: owner_tool_gate.clone(),
+            endpoints: code_mode::sdk_endpoints()?,
+            scopes: Arc::clone(&session_scopes),
+        }),
+        execution_store,
+        execution_turns,
+        Arc::new(code_mode::images::StaticFileModelImages(
+            static_file_service_client::StaticFileServiceClient::with_timeout(
+                config.internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                std::time::Duration::from_secs(10),
+            ),
+        )),
+    );
+    let code_mode_service = match &code_runner {
+        Some((_, _, _, _, jobs)) => {
+            code_mode_service.with_jobs(agent_code_mode::domain::JobRuntime {
+                executor: Arc::new(jobs.clone()),
+                store: Arc::new(agent_code_mode::outbound::jobs::PgJobStore::new(
+                    pool.clone(),
+                    Arc::new(agent_session::outbound::notifications::PgNotificationStore(
+                        pool.clone(),
+                    )),
+                )),
+                sessions: Arc::new(code_mode::jobs::HarnessJobSessions {
+                    sessions: session_repo.clone(),
+                    log: Arc::clone(&job_log),
+                }),
+            })
+        }
+        None => code_mode_service,
+    };
+    let code_mode_jobs = code_mode_service.clone();
+    let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> = Arc::new(code_mode_service);
     let session_metadata_realtime = WorkRegistrationRealtime::new(
         ConnectionGatewayAgentSessionRealtime::new(
             connection_gateway.clone(),
@@ -1620,6 +1662,9 @@ pub async fn run() -> anyhow::Result<()> {
     let draining_sessions = sessions.clone();
     // Reviews announce each save in their session's log.
     let review_log = sessions.clone();
+    job_log
+        .set(Arc::new(sessions.clone()))
+        .map_err(|_| anyhow::anyhow!("The job log was initialized twice"))?;
     let conversation_turns = Arc::new(
         agent_harness::outbound::conversation_turns::PgConversationTurnStore::new(pool.clone()),
     );
@@ -1680,6 +1725,7 @@ pub async fn run() -> anyhow::Result<()> {
         .with_notifications(Arc::new(
             agent_session::outbound::notifications::PgNotificationStore(pool.clone()),
         ))
+        .with_background_jobs(Arc::new(code_mode::jobs::SessionJobList(code_mode.clone())))
         .with_conversation_turns(conversation_turns)
         .with_worker_idle_timeout(config.agent_session_idle_timeout()?)
         // Kill switch for retrying idle releases that kept their session.
@@ -2229,7 +2275,8 @@ pub async fn run() -> anyhow::Result<()> {
     let correlation = agent_correlation::inbound::CorrelationState::new(
         pool.clone(),
         JwtValidationArgs::new_with_secret_manager(config.environment, &secrets).await?,
-    );
+    )
+    .serving(&["agent-harness", "cognition", "scheduled-action"]);
     let agent_activity = agent_session::inbound::axum_router::activity::router(
         agent_session::inbound::axum_router::activity::AgentActivityState::new(
             activity::outbound::pg_activity_repo::PgActivityRepo::new(pool.clone()),
@@ -2434,6 +2481,19 @@ pub async fn run() -> anyhow::Result<()> {
         work_registration_signal.clone(),
         work_registration_tasks.clone(),
     );
+    // Jobs a stopped replica left running past their deadline settle as
+    // interrupted, whichever replica gets there first.
+    let sweeping_jobs = code_mode_jobs.clone();
+    let job_sweep = tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(60));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            ticker.tick().await;
+            if let Err(error) = sweeping_jobs.sweep_jobs().await {
+                tracing::warn!(error = ?error, "failed to sweep overdue background jobs");
+            }
+        }
+    });
     let recovery = tokio::spawn(async move {
         let mut ticker =
             tokio::time::interval(agent_session::domain::ports::REPLICA_HEARTBEAT_INTERVAL);
@@ -2756,6 +2816,11 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     service_shutdown.cancel();
+    // Background jobs settle as interrupted first, while the HTTP server
+    // their SDK calls reach still answers and before any long drain, and
+    // before their executor stops under them.
+    job_sweep.abort();
+    code_mode_jobs.shutdown_jobs().await;
     computer_tasks.close();
     computer_tasks.wait().await;
     scheduling_runtime.stop();
@@ -2784,8 +2849,13 @@ pub async fn run() -> anyhow::Result<()> {
     typing_heartbeat.abort();
     recovery.abort();
     runtime_commands.abort();
-    if let Some((sessions, public, routines, _)) = &code_runner {
-        tokio::join!(sessions.shutdown(), public.shutdown(), routines.shutdown());
+    if let Some((sessions, public, routines, _, jobs)) = &code_runner {
+        tokio::join!(
+            sessions.shutdown(),
+            public.shutdown(),
+            routines.shutdown(),
+            jobs.shutdown()
+        );
     }
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {

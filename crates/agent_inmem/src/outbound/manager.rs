@@ -39,6 +39,11 @@ pub struct SessionFacts {
     pub billing: agent_session::domain::model::SessionBilling,
     /// How the session's replies reach their reader.
     pub delivery: ReplyDelivery,
+    /// Who the session's turns read the owner's memory as: the person, for
+    /// a session the owner opened and works in; a program otherwise (a
+    /// routine's, a suggestion's, a mention's), which enrolls no one in
+    /// daily memory refresh.
+    pub memory_reader: memory::domain::MemoryReader,
     /// Model id stamped on the session row.
     pub model: String,
     /// The bot's display name and `@` handle, folded into every turn's
@@ -202,6 +207,7 @@ impl InMemAgentManager {
             owner: facts.owner,
             feature: crate::domain::admission::session_feature(facts.billing),
             delivery: facts.delivery,
+            memory_reader: facts.memory_reader,
             engine: Arc::clone(&self.engine),
             admission: Arc::clone(&self.admission),
             agent_keys: Arc::clone(&self.agent_keys),

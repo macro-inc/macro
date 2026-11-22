@@ -1,6 +1,7 @@
 //! Session-authorized reads for code execution's existing tool components.
+mod execution_response;
 use crate::domain::{
-    CodeModeError, ExecutionId, ExecutionRecord, SessionCodeMode,
+    CodeModeError, ExecutionId, JobCancel, SessionCodeMode,
     connected_apps::*,
     reviews::*,
     ui_commands::{OpenInApp, UiCommandOutcome, UiCommandService},
@@ -15,11 +16,12 @@ use axum::{
 };
 use entity_access::{
     domain::{
-        models::{EditAccessLevel, ViewAccessLevel},
+        models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::AgentSessionAccessLevelExtractor,
 };
+pub use execution_response::ExecutionRecordResponse;
 use macro_authorization::{
     ActingUser, CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
     MacroAuthorizationState, UserOnly, is_program_run,
@@ -96,6 +98,10 @@ where
             "/{session_id}/code-executions/{execution_id}",
             get(get_code_execution::<Access, Auth>),
         )
+        .route(
+            "/{session_id}/code-executions/{execution_id}/cancel",
+            post(cancel_job::<Access, Auth>),
+        )
         .route("/{session_id}/reviews", post(create_review::<Access, Auth>))
         .route("/{session_id}/views", post(present_view::<Access, Auth>))
         .route(
@@ -151,6 +157,7 @@ impl IntoResponse for CodeExecutionApiError {
                 (StatusCode::CONFLICT, "review changed; reload before acting").into_response()
             }
             CodeModeError::Invalid(message) => (StatusCode::BAD_REQUEST, message).into_response(),
+            CodeModeError::JobLimit(message) => (StatusCode::CONFLICT, message).into_response(),
             error @ CodeModeError::ConnectedAppUnreachable => {
                 (StatusCode::BAD_GATEWAY, error.to_string()).into_response()
             }
@@ -182,19 +189,49 @@ impl IntoResponse for CodeExecutionApiError {
 
 #[utoipa::path(get, path = "/agent-sessions/{session_id}/code-executions/{execution_id}", tag = "agent-sessions", operation_id = "get_code_execution",
     params(("session_id" = Uuid, Path, description = "Owning session"), ("execution_id" = Uuid, Path, description = "Execution receipt identity")),
-    responses((status = 200, body = ExecutionRecord), (status = 401), (status = 403), (status = 404), (status = 500)))]
+    responses((status = 200, body = ExecutionRecordResponse), (status = 401), (status = 403), (status = 404), (status = 500)))]
 /// Fetch one execution only after the caller has obtained view access to its session.
 pub async fn get_code_execution<Access: EntityAccessService, Auth: MacroAuthorizationService>(
     access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     Path((_session, execution)): Path<(Uuid, Uuid)>,
-) -> Result<Json<ExecutionRecord>, CodeExecutionApiError> {
+) -> Result<Json<ExecutionRecordResponse>, CodeExecutionApiError> {
     state
         .service
         .read(
             &access.entity_access_receipt,
             ExecutionId::from_uuid(execution),
         )
+        .await
+        .map(ExecutionRecordResponse::from)
+        .map(Json)
+        .map_err(CodeExecutionApiError)
+}
+
+#[utoipa::path(post, path = "/agent-sessions/{session_id}/code-executions/{execution_id}/cancel", tag = "agent-sessions", operation_id = "cancel_code_execution_job",
+    params(("session_id" = Uuid, Path, description = "Owning session"), ("execution_id" = Uuid, Path, description = "The background job's execution id")),
+    responses((status = 200, body = JobCancel), (status = 401), (status = 403), (status = 404)))]
+/// Stop a background job: a person with edit access to its session, never
+/// a program (see [`is_program_run`]). The job settles as cancelled within
+/// about a second and wakes the session.
+pub async fn cancel_job<Access: EntityAccessService, Auth: MacroAuthorizationService>(
+    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
+    State(state): State<CodeExecutionRouterState<Access, Auth>>,
+    Path((_session, execution)): Path<(Uuid, Uuid)>,
+) -> Result<Json<JobCancel>, CodeExecutionApiError> {
+    if is_program_run(caller.authorization.attribution(), &headers) {
+        return Err(CodeExecutionApiError(CodeModeError::Forbidden));
+    }
+    let session = session_id(
+        access.entity_access_receipt.entity().entity_type,
+        &access.entity_access_receipt.entity().entity_id,
+    )
+    .map_err(CodeExecutionApiError)?;
+    state
+        .service
+        .cancel_job(session, ExecutionId::from_uuid(execution))
         .await
         .map(Json)
         .map_err(CodeExecutionApiError)
@@ -208,6 +245,7 @@ pub async fn create_review<Access: EntityAccessService, Auth: MacroAuthorization
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     body: Bytes,
 ) -> Result<Json<ReviewRecord>, CodeExecutionApiError> {
+    refuse_another_sessions_job(&access.entity_access_receipt)?;
     let input: CreateReview = decode(&body).map_err(CodeExecutionApiError)?;
     state
         .reviews
@@ -228,6 +266,7 @@ pub async fn present_view<Access: EntityAccessService, Auth: MacroAuthorizationS
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     Json(input): Json<PresentView>,
 ) -> Result<StatusCode, CodeExecutionApiError> {
+    refuse_another_sessions_job(&access.entity_access_receipt)?;
     state
         .reviews
         .present_view(
@@ -500,3 +539,21 @@ pub async fn search_connected_app_tools<
 
 #[cfg(test)]
 mod test;
+
+/// A background job's credential drafts reviews and presents views only in
+/// its own session: never in another session its owner can edit, a
+/// teammate's included, whose audience and agent would read them.
+fn refuse_another_sessions_job(
+    access: &EntityAccessReceipt<EditAccessLevel>,
+) -> Result<(), CodeExecutionApiError> {
+    if agent_correlation::context::current_scope()
+        != Some(agent_correlation::scope::SessionScope::Job)
+    {
+        return Ok(());
+    }
+    let own = agent_correlation::context::current_session();
+    match Uuid::parse_str(&access.entity().entity_id) {
+        Ok(path) if own == Some(path) => Ok(()),
+        _ => Err(CodeExecutionApiError(CodeModeError::Forbidden)),
+    }
+}

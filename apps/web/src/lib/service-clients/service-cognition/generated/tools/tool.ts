@@ -33,6 +33,7 @@ type ToolParserMap = {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
   };
+  CancelJob: { call: types.CancelJob; response: types.JobCancel };
   ChangeBooking: { call: types.ChangeBooking; response: types.Booking };
   Comment: { call: types.Comment; response: types.CommentResponse };
   CommentOnText: {
@@ -585,6 +586,7 @@ const toolParserMap = {
     call: schemas.CalculateSpreadsheet,
     response: schemas.SpreadsheetResponse,
   },
+  CancelJob: { call: schemas.CancelJob, response: schemas.JobCancel },
   ChangeBooking: { call: schemas.ChangeBooking, response: schemas.Booking },
   Comment: { call: schemas.Comment, response: schemas.CommentResponse },
   CommentOnText: {
@@ -1211,6 +1213,7 @@ type ToolDataMap = {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
   };
+  CancelJob: { call: types.CancelJob; response: types.JobCancel };
   ChangeBooking: { call: types.ChangeBooking; response: types.Booking };
   Comment: { call: types.Comment; response: types.CommentResponse };
   CommentOnText: {

@@ -72,6 +72,7 @@ const EAGER_INTERNAL_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__ExecuteCode",
     "mcp__macro_internal__DescribeCodeTools",
     "mcp__macro_internal__ReadCodeDocs",
+    "mcp__macro_internal__CancelJob",
 ];
 
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and
@@ -591,6 +592,7 @@ async fn drive_turn(
     let TurnRequest {
         purpose,
         delivery,
+        memory_reader,
         session_id,
         awaiting,
         owner,
@@ -751,8 +753,11 @@ async fn drive_turn(
                 selection.loaded,
             )
         };
-        let (user_memory, sdk_docs, loaded_skills) =
-            tokio::join!(fetch_user_memory(memory, &owner), docs, loaded_skills);
+        let (user_memory, sdk_docs, loaded_skills) = tokio::join!(
+            fetch_user_memory(memory, &owner, memory_reader),
+            docs,
+            loaded_skills
+        );
         let mut prompt = system_prompt(
             if routed {
                 &native_tools.routed_prompt
@@ -1197,8 +1202,9 @@ fn routes_documentation(delivery: ReplyDelivery, instructions: Option<&str>) -> 
 async fn fetch_user_memory(
     memory_service: &MemoryServiceImpl<PgMemoryRepo>,
     owner: &MacroUserIdStr<'static>,
+    reader: memory::domain::MemoryReader,
 ) -> Option<String> {
-    match memory_service.get_memory(owner.clone()).await {
+    match memory_service.get_memory(owner.clone(), reader).await {
         Ok(memory) => memory.map(|memory| memory.to_string()),
         Err(error) => {
             tracing::warn!(error=?error, %owner, "failed to fetch user memory; running without it");

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { formatCompactRelativeTimestamp } from '@entity/utils/timestamp';
 import CheckCircle from '@icon/system/regular/check-circle.svg';
 import ClipboardText from '@icon/system/regular/clipboard-text.svg';
@@ -8,6 +9,7 @@ import type {
   ImportPlan,
   ImportSettlement,
   ImportWorkspace,
+  JobSettlement,
   ReviewOutcome,
   SessionNotification,
 } from '@service-agent-fold/generated/types';
@@ -102,6 +104,37 @@ function importSettlementSummary(report: ImportSettlement) {
   };
 }
 
+/** How a background job ended, named by its title. A job that never got to
+ * run (it timed out or was interrupted waiting) reads muted: nothing it would
+ * have done took effect. */
+function jobSettledSummary(job: JobSettlement) {
+  const title = job.title;
+  const neverRan =
+    (job.neverRan ?? false) &&
+    (job.status === 'timed_out' || job.status === 'interrupted');
+  if (neverRan) {
+    return {
+      summary: t('agentJobs.settledDidNotRun', { title }),
+      failed: false,
+    };
+  }
+  const summary = match(job.status)
+    .with('done', () => t('agentJobs.settledDone', { title }))
+    .with('failed', () => t('agentJobs.settledFailed', { title }))
+    .with('cancelled', () => t('agentJobs.settledCancelled', { title }))
+    .with('timed_out', () => t('agentJobs.settledTimedOut', { title }))
+    .with('interrupted', () => t('agentJobs.settledInterrupted', { title }))
+    // A settled event never says running; read it as finished.
+    .with('running', () => t('agentJobs.settledDone', { title }))
+    .exhaustive();
+  // A cancel someone asked for is not a failure.
+  const failed = match(job.status)
+    .with('failed', 'timed_out', 'interrupted', () => true)
+    .with('done', 'cancelled', 'running', () => false)
+    .exhaustive();
+  return { summary, failed };
+}
+
 /** System facts stay on one line on desktop and mobile, outside messages. */
 export function SessionEventRow(props: {
   event: SessionNotification;
@@ -133,6 +166,11 @@ export function SessionEventRow(props: {
         icon: DownloadSimple,
         ...importPlanSummary(event.payload),
         review: true,
+      }))
+      .with({ kind: 'job.settled' }, (event) => ({
+        icon: event.payload.status === 'done' ? CheckCircle : Info,
+        ...jobSettledSummary(event.payload),
+        review: false,
       }))
       .exhaustive((_unknown) => ({
         icon: Info,

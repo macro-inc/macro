@@ -177,3 +177,59 @@ fn completed_bot_reply_mentions_reach_the_existing_trigger_path() {
         matches!(older, messages::outbound::broker::MessageTopicEvent::Patched(p) if p.completed_reply.is_none())
     );
 }
+
+/// An assignment a scoped request made starts no agent session: the agent
+/// would run with the person's full access.
+#[tokio::test]
+async fn a_scoped_requests_assignment_starts_no_session() {
+    use models_properties::{
+        EntityType, service::property_value::PropertyValue, shared::EntityReference,
+    };
+    use properties::domain::events::EntityPropertyUpdatedMetadata;
+    use system_properties::SystemPropertyKey;
+
+    let user = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let assign = || {
+        PropertyMacroEvent::entity_property_updated(EntityPropertyUpdatedMetadata {
+            inherited_from_project: None,
+            entity_property_id: Uuid::now_v7(),
+            entity_id: "task-a".to_owned(),
+            entity_type: EntityType::Task,
+            property_definition_id: SystemPropertyKey::Assignees.uuid(),
+            actor_user_id: Some(user.clone()),
+            actor: None,
+            on_behalf_of: None,
+            source: None,
+            value: Some(PropertyValue::EntityRef(vec![EntityReference {
+                entity_id: "bot|00000000-0000-0000-0000-00000000b07a".to_owned(),
+                entity_type: EntityType::User,
+                specific_message_id: None,
+            }])),
+            previous_value: None,
+            updated_at: Utc::now(),
+        })
+    };
+    let decoded = |event: &PropertyMacroEvent| {
+        MessageTriggerEvents::decode(&record(event))
+            .unwrap()
+            .into_trigger()
+    };
+    assert!(
+        decoded(&assign()).assignment.is_some(),
+        "an unscoped assignment starts work"
+    );
+    for scope in [
+        agent_correlation::scope::SessionScope::NoSend,
+        agent_correlation::scope::SessionScope::Job,
+    ] {
+        let event = agent_correlation::context::scope_attribution(
+            agent_correlation::context::Attribution {
+                scope: Some(scope),
+                ..Default::default()
+            },
+            async { assign() },
+        )
+        .await;
+        assert!(decoded(&event).assignment.is_none(), "{scope:?}");
+    }
+}

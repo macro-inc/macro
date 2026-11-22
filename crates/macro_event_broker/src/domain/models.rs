@@ -26,7 +26,7 @@ pub trait TopicEvent: Serialize + DeserializeOwned + Send + Sync {
 /// The envelope carries broker-agnostic information that is useful to downstream
 /// consumers. The topic-specific event enum is flattened so the wire shape stays:
 /// `event_id`, `schema_version`, `event_type`, and `metadata`, plus
-/// `agent_correlation_id` and `routine_id` only when set.
+/// `agent_correlation_id`, `routine_id` and `agent_scope` only when set.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Event<E> {
     /// Unique identifier for this event instance.
@@ -43,6 +43,12 @@ pub struct Event<E> {
     /// so an older consumer accepts a future vocabulary value.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_verb: Option<String>,
+    /// The scope of the credential whose request produced this event
+    /// (`agent_scope`), kept raw so an older consumer accepts a future one.
+    /// A consumer starts no work with the person's full access for a scoped
+    /// request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_scope: Option<String>,
     /// Version of the event payload schema.
     pub schema_version: u8,
     /// Topic-specific event variant and strongly typed metadata.
@@ -74,6 +80,8 @@ impl<E: TopicEvent> Event<E> {
             agent_correlation_id: agent_correlation::context::current(),
             routine_id: agent_correlation::context::current_routine(),
             agent_verb: agent_correlation::context::current_verb().map(|verb| verb.to_string()),
+            agent_scope: agent_correlation::context::current_scope()
+                .map(|scope| scope.as_str().to_owned()),
             schema_version,
             event,
         }

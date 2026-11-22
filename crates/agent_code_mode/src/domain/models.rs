@@ -8,7 +8,17 @@ use utoipa::ToSchema;
 
 /// Caller-selected UUID persisted in tool input before execution begins.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema, specta::Type,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    ToSchema,
+    specta::Type,
 )]
 #[serde(transparent)]
 pub struct ExecutionId(
@@ -51,8 +61,40 @@ pub struct ExecutionIdentity {
     pub owner: MacroUserIdStr<'static>,
     /// Agent from the authenticated session, used to attribute SDK messages.
     pub agent_id: bot_id::BotId,
-    /// The server-resolved turn. Work cannot outlive or move to another turn.
+    /// The server-resolved turn that started this execution. A foreground
+    /// execution cannot outlive it or move to another turn.
     pub turn: Uuid,
+    /// How long the run's credential must last.
+    pub lifetime: RunLifetime,
+}
+
+/// What a run's credential is minted to outlast.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunLifetime {
+    /// The foreground deadline: the call returns before its turn moves on.
+    Foreground,
+    /// A background job, until its deadline.
+    Job {
+        /// When the job stops at the latest. Its credential is always
+        /// limited to the default-deny `job` scope: no one watches a job's
+        /// calls.
+        deadline: chrono::DateTime<chrono::Utc>,
+    },
+}
+
+/// A background job's facts, kept on its execution record.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct JobInfo {
+    /// What the agent called it, shown on its card.
+    pub title: String,
+    /// When it was launched.
+    pub started_at: chrono::DateTime<chrono::Utc>,
+    /// When it stops at the latest.
+    pub deadline: chrono::DateTime<chrono::Utc>,
+    /// It settled before its program ever started: nothing ran.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub never_ran: bool,
 }
 
 /// The recorded outcome of a program.
@@ -69,10 +111,28 @@ pub enum ExecutionStatus {
     Cancelled,
     /// The deadline elapsed.
     TimedOut,
+    /// A background job whose process stopped with its replica; its outcome
+    /// is unconfirmed.
+    Interrupted,
+}
+
+impl ExecutionStatus {
+    /// The job state this execution status reads as.
+    pub fn job_status(self) -> agent_runtime_protocol::domain::job::JobStatus {
+        use agent_runtime_protocol::domain::job::JobStatus;
+        match self {
+            Self::Running => JobStatus::Running,
+            Self::Succeeded => JobStatus::Done,
+            Self::Failed => JobStatus::Failed,
+            Self::Cancelled => JobStatus::Cancelled,
+            Self::TimedOut => JobStatus::TimedOut,
+            Self::Interrupted => JobStatus::Interrupted,
+        }
+    }
 }
 
 /// A real inner call, recorded by trusted dispatch for the existing renderers.
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordedToolCall {
     /// Stable, execution-scoped component identity.
@@ -107,9 +167,12 @@ pub enum RecordedCallStatus {
 
 /// Durable source and final outcome, with historical bridge calls when present.
 /// The full journal is not included in the model's tool result.
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionRecord {
+    /// Verified invocation issued for this execution; absent on historical records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_correlation_id: Option<Uuid>,
     /// Execution identity.
     pub execution_id: ExecutionId,
     /// Account choice bound to this saved execution; absent on historical records.
@@ -134,6 +197,9 @@ pub struct ExecutionRecord {
     /// Additional request activity was omitted at the bounded observation limit.
     #[serde(default)]
     pub activity_truncated: bool,
+    /// Set when this execution runs in the background, past its turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job: Option<JobInfo>,
 }
 
 /// Compact model result with an identity the UI uses to load the durable record.
@@ -154,6 +220,13 @@ pub struct ExecutionReceipt {
     /// Pixels of the images `main` returned in `images`, for the model.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub model_media: Vec<ModelImage>,
+    /// Set when this execution became a background job: it is still
+    /// running, and its result arrives as a `job.settled` event.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job: Option<JobInfo>,
+    /// Why a call that asked for the background ran in the foreground.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ran_in_foreground: Option<String>,
 }
 
 /// Most images one result may show the model, as for a RenderCanvas result.
@@ -260,10 +333,13 @@ pub enum CodeModeError {
     /// The supervised request task failed unexpectedly.
     #[error("code execution task failed")]
     Task(#[source] tokio::task::JoinError),
+    /// Too many background jobs run already; this one did not start.
+    #[error("{0}")]
+    JobLimit(String),
 }
 
 /// A bounded SDK operation observed during execution; not an authorization or write receipt.
-#[derive(Clone, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionActivity {
     /// Request identity within the execution.

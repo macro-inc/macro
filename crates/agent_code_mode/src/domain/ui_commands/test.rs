@@ -145,6 +145,7 @@ impl UiCommandDelivery for Gateway {
 
 fn record(execution: ExecutionId, turn: Uuid) -> ExecutionRecord {
     ExecutionRecord {
+        credential_correlation_id: Some(Uuid::from_u128(1)),
         execution_id: execution,
         // System turns' programs act as the owner, who also prompts here.
         acting_as: Some(ToolActor::Owner),
@@ -156,6 +157,7 @@ fn record(execution: ExecutionId, turn: Uuid) -> ExecutionRecord {
         calls: Vec::new(),
         activity: Vec::new(),
         activity_truncated: false,
+        job: None,
     }
 }
 
@@ -219,8 +221,13 @@ impl Harness {
             &session().to_string(),
             EntityType::AgentSession,
         );
-        self.service
-            .open(
+        agent_correlation::context::scope_attribution(
+            agent_correlation::context::Attribution {
+                correlation_id: Some(Uuid::from_u128(1)),
+                session_id: Some(session().as_uuid()),
+                ..Default::default()
+            },
+            self.service.open(
                 &access,
                 &caller,
                 OpenInApp {
@@ -228,8 +235,9 @@ impl Harness {
                     path: path.to_owned(),
                     placement: UiPlacement::BesideAgent,
                 },
-            )
-            .await
+            ),
+        )
+        .await
     }
 
     async fn open(&self, path: &str) -> UiCommandOutcome {
@@ -499,4 +507,67 @@ fn the_web_apps_table_opens_items_and_keeps_side_effects_closed() {
     ] {
         assert_eq!(route_of(closed), None, "{closed}");
     }
+}
+
+/// No tab waits on a background job, even while its owner's turn runs.
+#[tokio::test]
+async fn a_background_job_never_sends_a_command() {
+    let execution = ExecutionId::mint();
+    let now = chrono::Utc::now();
+    let gateway = Gateway::with(1);
+    let service = UiCommandService::new(
+        UiCommandPorts {
+            store: Arc::new(Store(ExecutionRecord {
+                job: Some(crate::domain::JobInfo {
+                    title: "Scanning inbox".into(),
+                    started_at: now,
+                    deadline: now + chrono::TimeDelta::minutes(10),
+                    never_ran: false,
+                }),
+                ..record(execution, Uuid::from_u128(TURN))
+            })),
+            active: Arc::new(Active(Some(Uuid::from_u128(TURN)))),
+            turns: Arc::new(Turn(Some(typed_in_tab()))),
+            budgets: Arc::new(Budgets::default()),
+            delivery: gateway.clone(),
+        },
+        NavigableRoutes::from_json(ROUTES).unwrap(),
+    );
+    let harness = Harness {
+        service,
+        gateway,
+        execution,
+    };
+
+    // A job's credential is scoped. In the stack the job scope refuses the
+    // ui-commands route first; called directly, the domain opens nothing and
+    // answers no_client, as for any scoped caller.
+    let access = EntityAccessReceipt::<EditAccessLevel>::dangerously_assert_authenticated_user(
+        owner(),
+        &session().to_string(),
+        EntityType::AgentSession,
+    );
+    let outcome = agent_correlation::context::scope_attribution(
+        agent_correlation::context::Attribution {
+            correlation_id: Some(Uuid::from_u128(1)),
+            session_id: Some(session().as_uuid()),
+            scope: Some(agent_correlation::scope::SessionScope::Job),
+            ..Default::default()
+        },
+        harness.service.open(
+            &access,
+            &owner(),
+            OpenInApp {
+                execution_id: harness.execution,
+                path: DOC.to_owned(),
+                placement: UiPlacement::BesideAgent,
+            },
+        ),
+    )
+    .await;
+    assert!(
+        matches!(outcome, Ok(UiCommandOutcome::NoClient)),
+        "{outcome:?}"
+    );
+    assert!(harness.gateway.frames().is_empty());
 }

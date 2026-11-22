@@ -190,6 +190,11 @@ pub struct AgentPromptAction {
     /// Raw user text used for a visible session name when `prompt` is enriched.
     #[serde(skip)]
     name_source: Option<String>,
+    /// The session's background jobs, listed in the invocation context;
+    /// filled by the harness at dispatch, never by a caller.
+    #[cfg_attr(feature = "utoipa", schema(ignore))]
+    #[serde(skip)]
+    pub background_jobs: Vec<crate::domain::job::BackgroundJobSummary>,
 }
 
 impl AgentPromptAction {
@@ -471,6 +476,7 @@ impl AgentAction {
             attachments,
             notifications: None,
             name_source: None,
+            background_jobs: Vec::new(),
         })
     }
 
@@ -608,9 +614,14 @@ impl AgentAction {
                         serde_json::json!({crate::domain::notification::NOTIFICATIONS_META: input});
                 }
                 if let Some(turn) = AgentActionId::from_request_id(&request_id) {
+                    let jobs = if action.background_jobs.is_empty() {
+                        String::new()
+                    } else {
+                        crate::domain::job::jobs_context(&action.background_jobs)
+                    };
                     let context = serde_json::json!({
                         "version": 1,
-                        "text": format!("<invocation turn_id=\"{turn}\">Use this turn_id for ExecuteCode calls originating in this prompt. Never substitute another turn's ID for a stale call.</invocation>")
+                        "text": format!("<invocation turn_id=\"{turn}\">Use this turn_id for ExecuteCode calls originating in this prompt. Never substitute another turn's ID for a stale call.</invocation>{jobs}")
                     });
                     params["prompt"]
                         .as_array_mut()

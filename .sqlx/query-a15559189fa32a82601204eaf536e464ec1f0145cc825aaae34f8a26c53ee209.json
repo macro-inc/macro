@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT record AS \"record: Json<ExecutionRecord>\"\n            FROM agent_code_execution\n            WHERE agent_session_id = $1 AND job_deadline IS NOT NULL\n                AND (job_settled_at IS NULL OR job_settled_at >= $2)\n            ORDER BY job_settled_at IS NULL DESC, job_deadline DESC\n            LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record: Json<ExecutionRecord>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a15559189fa32a82601204eaf536e464ec1f0145cc825aaae34f8a26c53ee209"
+}

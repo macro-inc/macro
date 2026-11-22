@@ -134,7 +134,17 @@ pub struct Limits {
     /// Run processes at a lower scheduling priority than the host, so busy
     /// background programs yield the CPU to its requests.
     pub background: bool,
+    /// An executor for background jobs, which may run for up to
+    /// [`MAX_JOB_DURATION`]; every other executor stays within
+    /// [`MAX_DURATION`].
+    pub long_running: bool,
 }
+
+/// The longest a program may run on an executor that is not
+/// [`Limits::long_running`].
+pub const MAX_DURATION: Duration = Duration::from_secs(300);
+/// The longest a background job's executor may let a program run.
+pub const MAX_JOB_DURATION: Duration = Duration::from_secs(15 * 60);
 
 impl Default for Limits {
     fn default() -> Self {
@@ -150,6 +160,7 @@ impl Default for Limits {
             max_calls_per_operation: 200,
             max_cpu: None,
             background: false,
+            long_running: false,
         }
     }
 }
@@ -160,7 +171,12 @@ impl Limits {
         if !(1..=64).contains(&self.max_running)
             || self.max_queued > 1024
             || self.max_duration.is_zero()
-            || self.max_duration > Duration::from_secs(300)
+            || self.max_duration
+                > if self.long_running {
+                    MAX_JOB_DURATION
+                } else {
+                    MAX_DURATION
+                }
             || !(1..=1024 * 1024).contains(&self.max_source_bytes)
             || !(1024..=1024 * 1024).contains(&self.max_frame_bytes)
             || self.max_output_bytes < self.max_frame_bytes
@@ -213,6 +229,9 @@ pub enum FailureCode {
     Limit,
     /// Runner infrastructure failed.
     Internal,
+    /// The run's egress forwarder, its only network path, could not start:
+    /// the program never ran. A proxied run never falls back to going direct.
+    Egress,
 }
 
 /// A bounded failure description. Source and data must not be traced by callers.

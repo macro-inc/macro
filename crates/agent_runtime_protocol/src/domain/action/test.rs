@@ -616,3 +616,38 @@ fn each_prompt_carries_its_own_hidden_execution_turn_without_replacing_user_cont
         assert!(!text.contains(&if turn == first { second } else { first }.to_string()));
     }
 }
+
+#[test]
+fn a_prompts_invocation_context_lists_the_sessions_background_jobs() {
+    let session_id = SessionId::new("acp-abc");
+    let turn = AgentActionId::mint();
+    let mut action = AgentAction::prompt("make it 8 am");
+    let AgentAction::Prompt(prompt) = &mut action else {
+        panic!("a prompt");
+    };
+    prompt.background_jobs = vec![crate::domain::job::BackgroundJobSummary {
+        job_id: macro_uuid::Uuid::from_u128(9),
+        title: "Checking routine".into(),
+        status: crate::domain::job::JobStatus::Running,
+        started_at: "2026-11-19T10:00:00Z".into(),
+    }];
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = action
+        .to_runtime(&session_id, turn.to_request_id())
+        .unwrap()
+    else {
+        panic!("a prompt translates to an ACP request");
+    };
+    let params = request.params.unwrap().into_value();
+    let context = params["prompt"][1]["text"].as_str().unwrap();
+    assert!(context.contains(&format!("<invocation turn_id=\\\"{turn}\\\"")));
+    assert!(context.contains(
+        "<background_jobs><job id=\\\"00000000-0000-0000-0000-000000000009\\\" status=\\\"running\\\""
+    ));
+    // A caller can't supply the list: it never deserializes.
+    let parsed: AgentPromptAction = serde_json::from_value(serde_json::json!({
+        "prompt": "hi",
+        "backgroundJobs": [{"jobId": "00000000-0000-0000-0000-000000000009"}],
+    }))
+    .unwrap();
+    assert!(parsed.background_jobs.is_empty());
+}

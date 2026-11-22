@@ -21,14 +21,14 @@ fn storage(error: sqlx::Error) -> CodeModeError {
 
 /// The record as JSONB accepts it. PostgreSQL rejects `\u0000` in JSONB text,
 /// which program sources, results and tool outputs can contain.
-fn jsonb(record: &ExecutionRecord) -> Result<Value, CodeModeError> {
+pub(super) fn jsonb(record: &ExecutionRecord) -> Result<Value, CodeModeError> {
     let mut value = serde_json::to_value(record)
         .map_err(|error| CodeModeError::Storage(rootcause::report!(error).into()))?;
     strip_nul(&mut value);
     Ok(value)
 }
 
-fn strip_nul(value: &mut Value) {
+pub(super) fn strip_nul(value: &mut Value) {
     match value {
         Value::String(text) if text.contains('\0') => *text = text.replace('\0', ""),
         Value::Array(items) => items.iter_mut().for_each(strip_nul),

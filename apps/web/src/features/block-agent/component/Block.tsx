@@ -36,6 +36,7 @@ import {
 } from 'solid-js';
 import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { JobRevealProvider } from '../context/job-reveal';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
 import { AgentSessionHeader } from '../views/agent-session-header';
@@ -47,6 +48,7 @@ import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { ArchivedSessionFooter } from './ArchivedSessionFooter';
 import { useAgentSessionHeader } from './agent-session-header';
+import { BackgroundJobsChip } from './BackgroundJobsChip';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
 
@@ -240,6 +242,7 @@ function AgentBlockContent(props: {
                         </Show>
                       }
                     >
+                      <BackgroundJobsChip />
                       <ChangesHandoff />
                       <ReviewNotesDock />
                       <AgentComposer
@@ -283,10 +286,12 @@ export default function BlockAgent() {
           <FloatRegion region="dock" priority={10} />
           <AgentSessionProvider blockId={id()} onSessionId={adoptSessionId}>
             <AgentChangesProvider>
-              <AgentBlockContent
-                active={split?.isPanelActive() ?? false}
-                notificationSource={notificationSource}
-              />
+              <JobRevealProvider cancelInMenu={isTouchDevice()}>
+                <AgentBlockContent
+                  active={split?.isPanelActive() ?? false}
+                  notificationSource={notificationSource}
+                />
+              </JobRevealProvider>
             </AgentChangesProvider>
           </AgentSessionProvider>
         </>

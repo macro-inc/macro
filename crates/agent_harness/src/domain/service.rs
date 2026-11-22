@@ -20,6 +20,7 @@ mod admission;
 mod deliver;
 mod external_replies;
 mod idle;
+pub mod jobs;
 mod lifecycle;
 mod lifecycle_events;
 mod open;
@@ -153,6 +154,8 @@ struct AgentHarnessInner<
     conversation_turns: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
     external_replies: Option<Arc<dyn crate::domain::external_replies::ExternalReplyStore>>,
     notification_store: Option<Arc<dyn agent_session::domain::notifications::NotificationStore>>,
+    /// The session's background jobs, listed in each prompt.
+    background_jobs: Option<Arc<dyn jobs::BackgroundJobs>>,
     /// Discovery advances past busy or unreachable sessions and wraps each cycle.
     notification_cursor: tokio::sync::Mutex<Option<AgentSessionId>>,
     notification_drains:
@@ -397,6 +400,7 @@ where
                 conversation_turns: None,
                 external_replies: None,
                 notification_store: None,
+                background_jobs: None,
                 notification_cursor: tokio::sync::Mutex::new(None),
                 notification_drains: Default::default(),
                 notification_batches: DashMap::new(),
@@ -469,6 +473,15 @@ where
         Arc::get_mut(&mut self.inner)
             .expect("configure outbox before cloning harness")
             .notification_store = Some(store);
+        self
+    }
+
+    /// List each session's background jobs in its prompts.
+    #[must_use]
+    pub fn with_background_jobs(mut self, jobs: Arc<dyn jobs::BackgroundJobs>) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure background jobs before cloning harness")
+            .background_jobs = Some(jobs);
         self
     }
 

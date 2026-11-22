@@ -403,7 +403,8 @@ pub async fn main() -> anyhow::Result<()> {
 
     api::setup_and_serve(
         ApiContext {
-            correlation: agent_correlation::inbound::CorrelationState::new(db.clone(), jwt_args),
+            correlation: agent_correlation::inbound::CorrelationState::new(db.clone(), jwt_args)
+                .serving(&["notification"]),
             item_preferences: ::notification::domain::item_preferences::ItemNotificationPreferenceService::new(
                 ::notification::outbound::item_preferences::PgItemNotificationPreferenceRepository(db.clone()),
             ),

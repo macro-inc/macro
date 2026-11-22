@@ -10,6 +10,8 @@ pub mod channel;
 pub mod connection;
 /// The log frame an agent leaves when it summarizes its own context.
 pub mod context;
+/// Background jobs: their log frame, settlement and prompt listing.
+pub mod job;
 /// The physical transport port.
 pub mod ports;
 /// The log frame a saved review leaves each time it changes.

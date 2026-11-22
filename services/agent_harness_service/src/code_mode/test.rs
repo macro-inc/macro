@@ -42,6 +42,7 @@ async fn owner_approval_is_required_before_credentials_and_cancel_skips_gate() {
         agent_id: session.bot_id,
         owner: session.owner_user().unwrap().clone(),
         turn: macro_uuid::Uuid::from_u128(1),
+        lifetime: agent_code_mode::domain::RunLifetime::Foreground,
     };
     let gate = Gate {
         verdict: NativeToolVerdict::Refuse("Owner declined".into()),
@@ -81,6 +82,7 @@ async fn execution_credentials_use_the_gate_resolved_requester() {
         owner: session.owner_user().unwrap().clone(),
         agent_id: session.bot_id,
         turn: macro_uuid::Uuid::from_u128(1),
+        lifetime: agent_code_mode::domain::RunLifetime::Foreground,
     };
     let gate = Gate {
         verdict: NativeToolVerdict::RunAs(requester.clone()),
@@ -219,6 +221,15 @@ fn concrete(path: &str) -> String {
 fn the_dry_run_scope_is_every_sdk_read_and_no_write() {
     let scope = SessionScope::DryRun;
     for (key, operation) in code_execution::domain::operations() {
+        // Unfurl fetches what its caller names from Macro's servers: no
+        // scoped run is given its host (`run_endpoints`).
+        if key.starts_with("unfurl.") {
+            continue;
+        }
+        // A GET that writes is refused to every scope.
+        if agent_correlation::scope::is_get_write(&operation.method, &concrete(&operation.path)) {
+            continue;
+        }
         assert_eq!(
             scope.allows(&operation.method, &concrete(&operation.path)),
             !operation.write,
@@ -246,6 +257,14 @@ fn the_generation_scope_matches_the_sdk_catalog() {
     ];
     let scope = SessionScope::Generation;
     for (key, operation) in code_execution::domain::operations() {
+        // No scoped run is given unfurl's host (`run_endpoints`).
+        if key.starts_with("unfurl.") {
+            continue;
+        }
+        // A GET that writes is refused to every scope.
+        if agent_correlation::scope::is_get_write(&operation.method, &concrete(&operation.path)) {
+            continue;
+        }
         let allowed = scope.allows(&operation.method, &concrete(&operation.path));
         if !operation.write {
             assert!(
@@ -273,13 +292,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
     // Send-looking writes that reach nobody else.
     let reviewed = [
         "auth.generateEmailLink",
-        "auth.deleteTeamInviteLink",
-        "auth.deleteTeamInviteHandler",
-        "auth.rejectInvitation",
-        "auth.revokeGtmInviteLink",
-        "auth.redeemGtmInviteLink",
-        "auth.joinTeamByInviteLink",
-        "auth.toggleTeamNonAdminInvites",
         "auth.postProfilePictures",
         // Its route refuses a scoped session tools.
         "cognition.sendChatMessage",
@@ -326,7 +338,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "storage.cancelChannelAccessRequest",
         "storage.deleteWebhook",
         "storage.deleteDatabaseWebhook",
-        "storage.patchWebhook",
         "storage.externalChatRead",
         "storage.externalChatUpload",
         "storage.externalChatRemove",
@@ -387,6 +398,9 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         // app, and its name, links and settings. None of them runs a
         // session, and deciding a review is refused.
         "agent-harness.createSessionReview",
+        // Stopping a background job sends nothing, and the route refuses
+        // programs anyway: the agent cancels through its CancelJob tool.
+        "agent-harness.cancelCodeExecutionJob",
         "agent-harness.openInApp",
         "agent-harness.presentSessionView",
         "agent-harness.deleteAgentSession",
@@ -403,7 +417,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "agent-harness.unregisterAgentSessionWork",
         // The person's own preferences.
         "agent-harness.putAgentAutoArchivePreferences",
-        "agent-harness.putAgentCodingPreferences",
         "agent-harness.putAgentSandboxSize",
         // Rejecting a pending tool call runs nothing; running or rewriting
         // one is refused.
@@ -413,10 +426,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         // Unauthenticated: a credential adds nothing.
         "storage.claimHarnessPairing",
         "storage.createHarnessPairing",
-        // Document tokens for the editing worker, whose routes edit
-        // documents, which a run that sends nothing may do.
-        "storage.getDocumentPermissionsToken",
-        "storage.validateDocumentPermissionsToken",
     ];
     let looks_like_a_send = |key: &str, path: &str| {
         let text = format!("{key} {path}").to_lowercase();
@@ -538,6 +547,10 @@ enum ScopeEnforcement {
     /// The service accepts no Macro API token, so the credential grants
     /// nothing there.
     NoMacroCredential,
+    /// The service takes no credential and fetches what its caller names
+    /// from Macro's servers: a scoped run gets no host for it and goes
+    /// through the egress proxy (`run_endpoints`).
+    RefusedToScopedRuns,
 }
 
 /// Decided per host when it is added.
@@ -559,12 +572,10 @@ fn enforcement(host: SdkHost) -> ScopeEnforcement {
         SdkHost::StaticFiles | SdkHost::StaticContent => ScopeEnforcement::SignedScope,
         // CloudFront serves document content only to URLs the storage service
         // signs; the editing worker accepts only document tokens the storage
-        // service mints with a POST a generation session can't make, and its
-        // routes edit documents, which a run that sends nothing may do;
-        // unfurl previews public links for any caller.
-        SdkHost::DocumentContent | SdkHost::EditingWorker | SdkHost::Unfurl => {
-            ScopeEnforcement::NoMacroCredential
-        }
+        // service mints with a POST no scoped session can make.
+        SdkHost::DocumentContent | SdkHost::EditingWorker => ScopeEnforcement::NoMacroCredential,
+        // Unfurl previews any link for any caller.
+        SdkHost::Unfurl => ScopeEnforcement::RefusedToScopedRuns,
     }
 }
 
@@ -604,7 +615,7 @@ fn every_sdk_host_holds_a_scoped_credential_to_its_scope() {
                     ),
                     "{environment} {name} ({url}) serves under a prefix the scope doesn't strip"
                 ),
-                ScopeEnforcement::NoMacroCredential => {}
+                ScopeEnforcement::NoMacroCredential | ScopeEnforcement::RefusedToScopedRuns => {}
             }
         }
     }
@@ -669,6 +680,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         agent_id: agent,
         owner: owner.clone(),
         turn: macro_uuid::Uuid::from_u128(1),
+        lifetime: agent_code_mode::domain::RunLifetime::Foreground,
     };
     let signed = |token: &str| match handler(
         &JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
@@ -682,6 +694,61 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         }
         JwtToken::MacroAccessToken(_) => panic!("a code-mode credential is a Macro API token"),
     };
+    // A background job always gets the job scope, approved at launch and
+    // minted when it starts, whatever its session's scope.
+    let deadline = chrono::Utc::now() + chrono::TimeDelta::minutes(10);
+    for (scope, name) in [
+        (None, Some("job")),
+        (Some(SessionScope::NoSend), Some("job")),
+        (Some(SessionScope::Generation), Some("job")),
+    ] {
+        let job = ExecutionIdentity {
+            execution: agent_code_mode::domain::ExecutionId::mint(),
+            lifetime: agent_code_mode::domain::RunLifetime::Job { deadline },
+            ..identity.clone()
+        };
+        let credentials = RunCredentials {
+            egress: EgressRollout::new(None),
+            signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            gate: Arc::new(Gate {
+                verdict: NativeToolVerdict::RunAs(owner.clone()),
+                calls: AtomicUsize::new(0),
+            }),
+            endpoints: SdkEndpoints::default(),
+            scopes: Arc::new(Scopes(scope)),
+            detach: Arc::new(NeverDetach),
+        };
+        let actor = credentials
+            .approve_job(&job, "fixture", CancellationToken::new())
+            .await
+            .unwrap();
+        let run = credentials.mint_job(&job, &actor).await.unwrap();
+        assert_eq!(
+            signed(&run.environment.token).as_deref(),
+            name,
+            "job run {scope:?}"
+        );
+        // The owner's egress flag is off (no flags), yet a job, under an
+        // allowlisted scope, is proxied.
+        assert_eq!(
+            run.environment.egress,
+            code_execution::domain::Egress::Proxied,
+            "job run {scope:?}"
+        );
+        let correlation = run.correlation_id;
+        // Once the job stops, its credential's correlation is revoked, so
+        // every service that validates attribution refuses a copy of it.
+        credentials.revoke_job(correlation).await.unwrap();
+        assert!(
+            agent_correlation::outbound::PgCorrelationRepository(pool.clone())
+                .find(correlation)
+                .await
+                .unwrap()
+                .unwrap()
+                .revoked
+        );
+    }
     for (scope, name) in [
         (Some(SessionScope::Generation), Some("generation")),
         (Some(SessionScope::NoSend), Some("no_send")),
@@ -697,6 +764,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             }),
             endpoints: SdkEndpoints::default(),
             scopes: Arc::new(Scopes(scope)),
+            detach: Arc::new(NeverDetach),
         }
         .issue(&identity, "fixture", CancellationToken::new())
         .await
@@ -706,6 +774,10 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             name,
             "session run {scope:?}"
         );
+        // No egress flags (the owner's flag is off): these scopes have no
+        // allowlist, so they follow the flag until it rolls out.
+        let proxied = code_execution::domain::Egress::Direct;
+        assert_eq!(run.environment.egress, proxied, "session run {scope:?}");
         let run = UserRunCredentials {
             egress: EgressRollout::new(None),
             signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
@@ -721,6 +793,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         .await
         .unwrap();
         assert_eq!(signed(&run.token).as_deref(), name, "MCP run {scope:?}");
+        assert_eq!(run.egress, proxied, "MCP run {scope:?}");
     }
 }
 
@@ -740,6 +813,24 @@ async fn the_egress_flag_fails_closed_to_direct() {
     let flag =
         |on: bool| FlagSnapshot::new([(EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(on))]);
     assert_eq!(flags(Ok(flag(true))).egress(&user).await, Egress::Proxied);
+    // A default-deny scope is proxied whatever the flag; another scope and
+    // an unscoped run follow it.
+    assert_eq!(
+        flags(Ok(flag(false)))
+            .egress_for(&user, Some(SessionScope::Job))
+            .await,
+        Egress::Proxied
+    );
+    assert_eq!(
+        flags(Ok(flag(false)))
+            .egress_for(&user, Some(SessionScope::NoSend))
+            .await,
+        Egress::Direct
+    );
+    assert_eq!(
+        flags(Ok(flag(false))).egress_for(&user, None).await,
+        Egress::Direct
+    );
     assert_eq!(flags(Ok(flag(false))).egress(&user).await, Egress::Direct);
     assert_eq!(
         flags(Err("PostHog is down".into())).egress(&user).await,
@@ -965,4 +1056,44 @@ async fn suggestions_brief_programs_type_check() {
         );
     }
     service.shutdown().await;
+}
+
+/// Refuses every detach; these credentials are for foreground runs.
+struct NeverDetach;
+
+impl super::jobs::MayDetach for NeverDetach {
+    fn decide<'a>(
+        &'a self,
+        _: &'a ExecutionIdentity,
+    ) -> futures::future::BoxFuture<'a, Result<agent_code_mode::domain::Detach, CodeModeError>>
+    {
+        Box::pin(async {
+            Ok(agent_code_mode::domain::Detach::Refused(
+                "not in this test".into(),
+            ))
+        })
+    }
+}
+
+/// A scoped run gets no unfurl host, so neither `--allow-net` nor an egress
+/// forwarder has an address for it; an unscoped run keeps it.
+#[test]
+fn a_scoped_run_gets_no_unfurl_host() {
+    let endpoints = SdkEndpoints {
+        hosts: BTreeMap::from([
+            (
+                "unfurl".to_owned(),
+                "https://gateway.example/unfurl".to_owned(),
+            ),
+            (
+                "storage".to_owned(),
+                "https://gateway.example/dss".to_owned(),
+            ),
+        ]),
+        web_app_url: "https://app.example".to_owned(),
+    };
+    let scoped = run_endpoints(&endpoints, true);
+    assert_eq!(scoped.hosts.keys().collect::<Vec<_>>(), ["storage"]);
+    let unscoped = run_endpoints(&endpoints, false);
+    assert_eq!(unscoped.hosts.len(), 2);
 }

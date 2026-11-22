@@ -81,6 +81,10 @@ aligned; recovery must never guess the answer from another turn.
 
 `_macro/review_updated` frames project each review's newest saved revision
 into `SessionMetadata.reviewRevisions`; they never touch messages or the turn.
+`_macro/job_updated` frames project each background job's latest state into
+`SessionMetadata.jobs` the same way; a settled job never reads as running
+again. A job launch's `ExecuteCode` receipt (`job` set) reads as one row named
+by its title.
 
 Notification log frames open system turns without user messages. Their events
 project into `SessionMetadata.notifications`, separate from message search and

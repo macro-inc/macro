@@ -15,6 +15,9 @@ pub struct Correlation {
     /// What the invocation may do, when it was minted narrower than its
     /// person's access.
     pub scope: Option<SessionScope>,
+    /// Whether its credential was revoked (a background job that settled):
+    /// it still attributes past work, but makes no new request.
+    pub revoked: bool,
 }
 
 /// Durable mappings owned by agent correlation.
@@ -30,6 +33,9 @@ pub trait CorrelationRepository: Send + Sync {
     ) -> Result<Uuid, CorrelationError>;
     /// Resolve the invocation and the session's bound agent, without a state check.
     async fn find(&self, id: Uuid) -> Result<Option<Correlation>, CorrelationError>;
+    /// Revoke the invocation's credential: every service that validates
+    /// attribution refuses its requests from then on. Repeating it is fine.
+    async fn revoke(&self, id: Uuid) -> Result<(), CorrelationError>;
 }
 
 /// Invalid attribution or an unavailable attribution store.
@@ -44,6 +50,9 @@ pub enum CorrelationError {
     /// The signed agent does not match the session's agent.
     #[error("agent_correlation_id belongs to a different agent")]
     AgentMismatch,
+    /// The invocation's credential was revoked.
+    #[error("this credential was revoked")]
+    Revoked,
     /// The request is outside the scope the session's credential was minted
     /// with.
     #[error("this session may not make this request")]
@@ -72,6 +81,9 @@ pub async fn validate<R: CorrelationRepository + ?Sized>(
     if correlation.agent_id != agent {
         return Err(CorrelationError::AgentMismatch);
     }
+    if correlation.revoked {
+        return Err(CorrelationError::Revoked);
+    }
     Ok(correlation)
 }
 
@@ -94,6 +106,9 @@ mod tests {
         async fn find(&self, _: Uuid) -> Result<Option<Correlation>, CorrelationError> {
             Ok(self.0)
         }
+        async fn revoke(&self, _: Uuid) -> Result<(), CorrelationError> {
+            unreachable!()
+        }
     }
 
     #[tokio::test]
@@ -102,6 +117,7 @@ mod tests {
             session_id: Uuid::now_v7(),
             agent_id: Uuid::now_v7(),
             scope: None,
+            revoked: false,
         };
         let repo = Repository(Some(correlation));
         let id = Uuid::now_v7();
@@ -122,6 +138,15 @@ mod tests {
         assert!(matches!(
             validate(&Repository(None), id, Some(correlation.agent_id)).await,
             Err(CorrelationError::NotFound)
+        ));
+        // A settled job's credential makes no new request.
+        let revoked = Repository(Some(Correlation {
+            revoked: true,
+            ..correlation
+        }));
+        assert!(matches!(
+            validate(&revoked, id, Some(correlation.agent_id)).await,
+            Err(CorrelationError::Revoked)
         ));
     }
 }

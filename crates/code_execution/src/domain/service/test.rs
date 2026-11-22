@@ -1,6 +1,7 @@
 use super::*;
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 struct WaitingRunner(AtomicUsize);
 
@@ -187,6 +188,39 @@ fn result_budget_must_fit_in_a_frame() {
         .validate()
         .is_ok()
     );
+}
+
+/// Only a background job's executor may run programs past five minutes, so
+/// a mistaken limit on any other executor is still caught at startup.
+#[test]
+fn only_a_long_running_executor_runs_past_five_minutes() {
+    let job_limit = Duration::from_secs(10 * 60);
+    assert!(matches!(
+        Limits {
+            max_duration: job_limit,
+            ..Limits::default()
+        }
+        .validate(),
+        Err(AdmissionError::InvalidLimits)
+    ));
+    assert!(
+        Limits {
+            max_duration: job_limit,
+            long_running: true,
+            ..Limits::default()
+        }
+        .validate()
+        .is_ok()
+    );
+    assert!(matches!(
+        Limits {
+            max_duration: MAX_JOB_DURATION + Duration::from_secs(1),
+            long_running: true,
+            ..Limits::default()
+        }
+        .validate(),
+        Err(AdmissionError::InvalidLimits)
+    ));
 }
 
 /// Runs every program at once, returning what it was given.

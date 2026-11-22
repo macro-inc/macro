@@ -1371,6 +1371,75 @@ export type ItemStatus =
   /**  Outcome requires reconciliation. */
   | 'unknown';
 
+/**  How a background job ended, for the agent's next turn. */
+export type JobSettlement = JobSettlement_Serialize | JobSettlement_Deserialize;
+
+/**  How a background job ended, for the agent's next turn. */
+export type JobSettlement_Deserialize = {
+  /**  The job, which is its code execution's id. */
+  jobId: string;
+  /**  The title the agent gave it. */
+  title: string;
+  /**  How it ended; never `running`. */
+  status: JobStatus;
+  /**  What `main` returned, when it succeeded and fits; otherwise absent. */
+  result?: unknown | null;
+  /**  Why it did not succeed, or why the result is absent. */
+  error?: string | null;
+  /**
+   *  The program never started (the server stopped, or the job ran out of
+   *  time, before it got a slot): nothing it would have done took effect.
+   */
+  neverRan?: boolean;
+};
+
+/**  How a background job ended, for the agent's next turn. */
+export type JobSettlement_Serialize = {
+  /**  The job, which is its code execution's id. */
+  jobId: string;
+  /**  The title the agent gave it. */
+  title: string;
+  /**  How it ended; never `running`. */
+  status: JobStatus;
+  /**  What `main` returned, when it succeeded and fits; otherwise absent. */
+  result?: unknown | null;
+  /**  Why it did not succeed, or why the result is absent. */
+  error?: string | null;
+  /**
+   *  The program never started (the server stopped, or the job ran out of
+   *  time, before it got a slot): nothing it would have done took effect.
+   */
+  neverRan?: boolean;
+};
+
+/**  Where a background job is. */
+export type JobStatus =
+  /**  Waiting for a slot or running. */
+  | 'running'
+  /**  The program returned its result. */
+  | 'done'
+  /**  The program failed. */
+  | 'failed'
+  /**  Someone cancelled it. */
+  | 'cancelled'
+  /**  It reached its time limit. */
+  | 'timed_out'
+  /**
+   *  Its process stopped with the replica that ran it, so its outcome is
+   *  unconfirmed.
+   */
+  | 'interrupted';
+
+/**  A background job's state changed: started or settled. */
+export type JobUpdatedNotification = {
+  /**  The job, which is its code execution's id. */
+  jobId: string;
+  /**  The title the agent gave it. */
+  title: string;
+  /**  Its new state. */
+  status: JobStatus;
+};
+
 /**  How a container spaces its children along its axis. */
 export type Justify = 'start' | 'center' | 'end' | 'between';
 
@@ -2275,7 +2344,9 @@ export type NotificationEvent_Deserialize =
         /**  Connected application's display name. */
         app: string;
       };
-    };
+    }
+  /**  A background job the agent started ended. */
+  | { kind: 'job.settled'; payload: JobSettlement_Deserialize };
 
 /**  Supported event contracts. Add new kinds here rather than inventing prompts. */
 export type NotificationEvent_Serialize =
@@ -2292,7 +2363,9 @@ export type NotificationEvent_Serialize =
         /**  Connected application's display name. */
         app: string;
       };
-    };
+    }
+  /**  A background job the agent started ended. */
+  | { kind: 'job.settled'; payload: JobSettlement_Serialize };
 
 /**
  *  The one elicitation the user can answer right now, surfaced on
@@ -2698,6 +2771,11 @@ export type SessionMetadata_Deserialize = {
    *  order they were first announced.
    */
   reviewRevisions: ReviewUpdatedNotification[];
+  /**
+   *  The latest state of each background job the log announced, in the
+   *  order they started.
+   */
+  jobs: JobUpdatedNotification[];
   /**  The last notification turn whose entire answer was suppressed. */
   noopTurn: number | null;
   /**  The agent that produced the log. See [`Harness`]. */
@@ -2755,6 +2833,11 @@ export type SessionMetadata_Serialize = {
    *  order they were first announced.
    */
   reviewRevisions: ReviewUpdatedNotification[];
+  /**
+   *  The latest state of each background job the log announced, in the
+   *  order they started.
+   */
+  jobs: JobUpdatedNotification[];
   /**  The last notification turn whose entire answer was suppressed. */
   noopTurn: number | null;
   /**  The agent that produced the log. See [`Harness`]. */

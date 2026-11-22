@@ -4892,6 +4892,20 @@ export type ShareAccess = 'off' | 'view' | 'comment' | 'edit';
  */
 export type WebSearchTopic = 'general' | 'news';
 /**
+ * Caller-selected UUID persisted in tool input before execution begins.
+ */
+export type ExecutionId = string;
+/**
+ * What asking a job to stop did, as `{"outcome": ...}`.
+ */
+export type JobCancel =
+  | {
+      outcome: 'requested';
+    }
+  | {
+      outcome: 'already_settled';
+    };
+/**
  * Available SDK workflow guides.
  */
 export type CodeGuideTopic = 'search' | 'ai' | 'templates' | 'examples';
@@ -4905,10 +4919,6 @@ export type SelectionStatus =
   | 'provider_error'
   | 'timeout';
 /**
- * Caller-selected UUID persisted in tool input before execution begins.
- */
-export type ExecutionId = string;
-/**
  * Which authenticated participant's access a tool call requests.
  */
 export type ToolActor = 'requester' | 'owner';
@@ -4920,7 +4930,8 @@ export type ExecutionStatus =
   | 'succeeded'
   | 'failed'
   | 'cancelled'
-  | 'timed_out';
+  | 'timed_out'
+  | 'interrupted';
 /**
  * A dispatch result; unfinished work is never reported as success.
  */
@@ -16580,6 +16591,12 @@ export interface WebSearchResult {
   content?: string | null;
 }
 /**
+ * Stop a background job this session started with ExecuteCode's background option, by its jobId (the executionId of its receipt). The job settles as cancelled and you get its job.settled event. Writes it already made stay made. Cancel a job when the person asks, or before starting a replacement with different code; a running job's program cannot be changed.
+ */
+export interface CancelJob {
+  job_id: ExecutionId;
+}
+/**
  * Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Never guess a method, its arguments or its result's fields. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog.
  */
 export interface DescribeCodeTools {
@@ -16705,9 +16722,27 @@ export interface ExecuteCode {
    */
   source: string;
   /**
-   * Total deadline in milliseconds, from 1 to 30000; defaults to 30000.
+   * Total deadline in milliseconds, from 1 to 30000; defaults to 30000. Ignored for a background job, which has 10 minutes.
    */
   timeout_ms?: number;
+  /**
+   * Optional. {title} runs this program as a background job, so the person can keep talking to you while it runs. Use it when the program is expected to take more than about 10 seconds or the person need not wait for its result, such as scanning a whole inbox or reading many documents. The call returns at once with status running and a job; then tell the person in one sentence what you started and that you will report back, and end your turn. The job runs for up to 10 minutes with this turn's account, never asks for approval, and cannot open UI; it may only read and draft reviews or present views in this session; it can't change any existing item (documents, tasks, email, CRM, databases, projects), send email or messages, save routines, call connected apps, use the web or link previews, share, or invite. Run a program that does more in the foreground, without background; sends: true runs it in the foreground too. When it ends, a job.settled event brings you its status and result, and you report it then. Its writes are not retried for you: after a failure, cancellation or interruption, check current state before writing again. Running jobs and recent ones are listed in each prompt's background_jobs. At most 3 jobs run per session. Where background jobs are not allowed (a turn someone other than the session owner prompted, or a system turn), the program runs in the foreground and the receipt says why in ranInForeground.
+   *
+   */
+  background?: BackgroundRequest | null;
+}
+/**
+ * What the agent asked for when it put an execution in the background.
+ */
+export interface BackgroundRequest {
+  /**
+   * A short title shown on the job's card, e.g. "Checking routine", at most 80 characters.
+   */
+  title: string;
+  /**
+   * Leave unset. A background job can't send, save routines, call connected apps or reach the web yet; true runs the program in the foreground instead.
+   */
+  sends?: boolean;
 }
 /**
  * Compact model result with an identity the UI uses to load the durable record.
@@ -16733,6 +16768,15 @@ export interface ExecutionReceipt {
    * Pixels of the images `main` returned in `images`, for the model.
    */
   modelMedia?: ModelImage[];
+  /**
+   * Set when this execution became a background job: it is still
+   * running, and its result arrives as a `job.settled` event.
+   */
+  job?: JobInfo | null;
+  /**
+   * Why a call that asked for the background ran in the foreground.
+   */
+  ranInForeground?: string | null;
 }
 /**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
@@ -16758,6 +16802,27 @@ export interface ModelImage {
    * Base64 PNG bytes.
    */
   data: string;
+}
+/**
+ * A background job's facts, kept on its execution record.
+ */
+export interface JobInfo {
+  /**
+   * What the agent called it, shown on its card.
+   */
+  title: string;
+  /**
+   * When it was launched.
+   */
+  startedAt: string;
+  /**
+   * When it stops at the latest.
+   */
+  deadline: string;
+  /**
+   * It settled before its program ever started: nothing ran.
+   */
+  neverRan?: boolean;
 }
 /**
  * Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; read a result's type before using its fields. Symbols a reference names in backticks can be read the same way.

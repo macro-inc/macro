@@ -57,6 +57,7 @@ import type {
   ExtractInputRequest,
   ExtractInputResponse,
   GetAgentSessionActivityParams,
+  JobCancel,
   LinkedTaskResponse,
   LinkTaskRequest,
   ListAgentRepositoryBranchesParams,
@@ -2200,6 +2201,79 @@ export const getCodeExecution = async (
     status: res.status,
     headers: res.headers,
   } as getCodeExecutionResponse;
+};
+
+/**
+ * @summary Stop a background job: a person with edit access to its session, never
+a program (see [`is_program_run`]). The job settles as cancelled within
+about a second and wakes the session.
+ */
+export type cancelCodeExecutionJobResponse200 = {
+  data: JobCancel;
+  status: 200;
+};
+
+export type cancelCodeExecutionJobResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type cancelCodeExecutionJobResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type cancelCodeExecutionJobResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type cancelCodeExecutionJobResponseSuccess =
+  cancelCodeExecutionJobResponse200 & {
+    headers: Headers;
+  };
+export type cancelCodeExecutionJobResponseError = (
+  | cancelCodeExecutionJobResponse401
+  | cancelCodeExecutionJobResponse403
+  | cancelCodeExecutionJobResponse404
+) & {
+  headers: Headers;
+};
+
+export type cancelCodeExecutionJobResponse =
+  | cancelCodeExecutionJobResponseSuccess
+  | cancelCodeExecutionJobResponseError;
+
+export const getCancelCodeExecutionJobUrl = (
+  sessionId: string,
+  executionId: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/cancel`;
+};
+
+export const cancelCodeExecutionJob = async (
+  sessionId: string,
+  executionId: string,
+  options?: RequestInit
+): Promise<cancelCodeExecutionJobResponse> => {
+  const res = await fetch(
+    getCancelCodeExecutionJobUrl(sessionId, executionId),
+    {
+      ...options,
+      method: 'POST',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelCodeExecutionJobResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelCodeExecutionJobResponse;
 };
 
 /**

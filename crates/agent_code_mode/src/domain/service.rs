@@ -10,11 +10,22 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
 use super::*;
+use schemars::JsonSchema;
+use serde::Deserialize;
+
+mod jobs;
+pub use jobs::{JOB_CAPS, JOB_LIMIT, JobRuntime, SWEEP_GRACE};
 
 /// Session-bound execution and reads. Inbound adapters supply authenticated facts.
 #[async_trait]
 pub trait SessionCodeMode: Send + Sync + 'static {
     /// Execute as the selected account, bound to the originating prompt's turn.
+    /// With `background`, it becomes a job that outlives the turn where
+    /// that is allowed, and runs in the foreground where it is not.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each is an authenticated fact of the call"
+    )]
     async fn execute(
         &self,
         session: &AgentSession,
@@ -22,6 +33,7 @@ pub trait SessionCodeMode: Send + Sync + 'static {
         acting_as: ai_toolset::actor::ToolActor,
         turn: macro_uuid::Uuid,
         request: ExecuteRequest,
+        background: Option<BackgroundRequest>,
         cancel: CancellationToken,
     ) -> Result<ExecutionReceipt, CodeModeError>;
     /// Read a record under the session capability minted by entity access.
@@ -30,6 +42,38 @@ pub trait SessionCodeMode: Send + Sync + 'static {
         access: &EntityAccessReceipt<ViewAccessLevel>,
         execution: ExecutionId,
     ) -> Result<ExecutionRecord, CodeModeError>;
+    /// Ask one of the session's background jobs to stop. Callers authorize:
+    /// the session's own agent, or a person with edit access.
+    async fn cancel_job(
+        &self,
+        session: AgentSessionId,
+        job: ExecutionId,
+    ) -> Result<JobCancel, CodeModeError>;
+    /// The session's running jobs and those settled in the last hour, for
+    /// the agent's prompt.
+    async fn jobs(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<Vec<agent_runtime_protocol::domain::job::BackgroundJobSummary>, CodeModeError>;
+}
+
+/// What the agent asked for when it put an execution in the background.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackgroundRequest {
+    /// Shown on the job's card and in the result event, e.g. "Checking routine".
+    #[schemars(
+        description = "A short title shown on the job's card, e.g. \"Checking routine\", at most 80 characters."
+    )]
+    pub title: String,
+    /// Whether the program sends anything (email, messages, routine saves,
+    /// connected apps, the web). A job can't until its credential can be
+    /// revoked when it settles, so a launch that sends runs in the foreground.
+    #[serde(default)]
+    #[schemars(
+        description = "Leave unset. A background job can't send, save routines, call connected apps or reach the web yet; true runs the program in the foreground instead."
+    )]
+    pub sends: bool,
 }
 
 struct Inner {
@@ -43,7 +87,10 @@ struct Inner {
 
 /// Code-mode policy over interchangeable execution, credential, and storage capabilities.
 #[derive(Clone)]
-pub struct CodeModeService(Arc<Inner>);
+pub struct CodeModeService {
+    inner: Arc<Inner>,
+    jobs: Option<Arc<jobs::Jobs>>,
+}
 
 impl CodeModeService {
     /// Bind the authenticated runtime and a bounded admission budget once at startup.
@@ -55,14 +102,25 @@ impl CodeModeService {
         images: Arc<dyn ModelImages>,
     ) -> Self {
         let limits = Limits::default();
-        Self(Arc::new(Inner {
-            executor,
-            credentials,
-            store,
-            turns,
-            images,
-            admission: Arc::new(Semaphore::new(limits.max_running + limits.max_queued)),
-        }))
+        Self {
+            inner: Arc::new(Inner {
+                executor,
+                credentials,
+                store,
+                turns,
+                images,
+                admission: Arc::new(Semaphore::new(limits.max_running + limits.max_queued)),
+            }),
+            jobs: None,
+        }
+    }
+
+    /// Run background jobs on `jobs`; without it every execution runs in
+    /// the foreground.
+    #[must_use]
+    pub fn with_jobs(mut self, jobs: JobRuntime) -> Self {
+        self.jobs = Some(Arc::new(jobs::Jobs::new(jobs)));
+        self
     }
 
     /// Load the images a successful result returned, so the model sees them.
@@ -78,7 +136,7 @@ impl CodeModeService {
         tracing::Span::current().record("images", images.len());
         for image in images {
             let loaded = match acting_user {
-                Some(owner) => self.0.images.load_png(&image.id, owner).await,
+                Some(owner) => self.inner.images.load_png(&image.id, owner).await,
                 None => Err(anyhow::anyhow!(
                     "no acting account to check the image owner against"
                 )),
@@ -107,6 +165,7 @@ impl CodeModeService {
         cancel: CancellationToken,
     ) -> Result<(ExecutionReceipt, Option<MacroUserIdStr<'static>>), CodeModeError> {
         let mut record = ExecutionRecord {
+            credential_correlation_id: None,
             execution_id: execution,
             acting_as: Some(identity.acting_as),
             turn_id: Some(identity.turn),
@@ -117,11 +176,12 @@ impl CodeModeService {
             calls: Vec::new(),
             activity: Vec::new(),
             activity_truncated: false,
+            job: None,
         };
-        match self.0.store.create(identity.session, &record).await {
+        match self.inner.store.create(identity.session, &record).await {
             Ok(()) => {}
             Err(CodeModeError::Duplicate) => {
-                match self.0.store.get(identity.session, execution).await {
+                match self.inner.store.get(identity.session, execution).await {
                     Ok(existing)
                         if existing.source == request.source
                             && existing.acting_as == Some(identity.acting_as)
@@ -142,20 +202,24 @@ impl CodeModeService {
                             .record("assigned_execution_id", tracing::field::display(fresh));
                         record.execution_id = fresh;
                         identity.execution = fresh;
-                        self.0.store.create(identity.session, &record).await?;
+                        self.inner.store.create(identity.session, &record).await?;
                     }
                     Err(error) => return Err(error),
                 }
             }
             Err(error) => return Err(error),
         }
-        if !active_turn(&self.0, &identity).await || cancel.is_cancelled() {
+        if !active_turn(&self.inner, &identity).await || cancel.is_cancelled() {
             record.status = ExecutionStatus::Cancelled;
             record.error = Some("Execution cancelled before authorization.".into());
-            self.0.store.save(identity.session, &record).await?;
+            self.save_cancelled(identity.session, &record).await;
             return Ok((receipt(&record), None));
         }
-        let executor = self.0.executor.as_ref().ok_or(CodeModeError::Unavailable)?;
+        let executor = self
+            .inner
+            .executor
+            .as_ref()
+            .ok_or(CodeModeError::Unavailable)?;
         // A program with type errors stops here, before the owner is asked
         // to approve it or a credential is minted for it.
         if let Err(outcome) = executor
@@ -163,14 +227,16 @@ impl CodeModeService {
             .await
         {
             (record.status, record.result, record.error) = settle_unrun(outcome, Reviews::Allowed);
-            self.0.store.save(identity.session, &record).await?;
+            self.inner.store.save(identity.session, &record).await?;
             return Ok((receipt(&record), None));
         }
         let IssuedRun {
+            correlation_id,
             environment,
             acting_user,
+            ..
         } = match self
-            .0
+            .inner
             .credentials
             .issue(&identity, &request.source, cancel.clone())
             .await
@@ -179,15 +245,32 @@ impl CodeModeService {
             Err(error) => {
                 record.status = ExecutionStatus::Failed;
                 record.error = Some(error.to_string());
-                self.0.store.save(identity.session, &record).await?;
+                self.inner.store.save(identity.session, &record).await?;
                 return Err(error);
             }
         };
-        if !active_turn(&self.0, &identity).await || cancel.is_cancelled() {
+        record.credential_correlation_id = Some(correlation_id);
+        if !active_turn(&self.inner, &identity).await || cancel.is_cancelled() {
             record.status = ExecutionStatus::Cancelled;
             record.error = Some("Execution cancelled before starting.".into());
-            self.0.store.save(identity.session, &record).await?;
+            self.save_cancelled(identity.session, &record).await;
             return Ok((receipt(&record), None));
+        }
+        // Admission of connected-app calls must see this exact issued credential
+        // before the runner can make its first request. A failed save starts nothing.
+        let saved = tokio::select! {
+            biased;
+            () = cancel.cancelled() => None,
+            saved = self.inner.store.save(identity.session, &record) => Some(saved),
+        };
+        match saved {
+            Some(result) => result?,
+            None => {
+                record.status = ExecutionStatus::Cancelled;
+                record.error = Some("Execution cancelled before starting.".into());
+                self.save_cancelled(identity.session, &record).await;
+                return Ok((receipt(&record), None));
+            }
         }
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let execution =
@@ -198,7 +281,7 @@ impl CodeModeService {
         let watch_turn = async {
             loop {
                 tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-                if !active_turn(&self.0, &identity).await {
+                if !active_turn(&self.inner, &identity).await {
                     cancel.cancel();
                     break;
                 }
@@ -228,7 +311,7 @@ impl CodeModeService {
                         () = &mut watch_turn => break 'running execution.await,
                         saved = tokio::time::timeout(
                             std::time::Duration::from_millis(100),
-                            self.0.store.save(identity.session, &record),
+                            self.inner.store.save(identity.session, &record),
                         ) => saved,
                     };
                     if !matches!(saved, Ok(Ok(()))) {
@@ -245,8 +328,23 @@ impl CodeModeService {
         record.status = status;
         record.result = result;
         record.error = error;
-        self.0.store.save(identity.session, &record).await?;
+        self.inner.store.save(identity.session, &record).await?;
         Ok((receipt(&record), Some(acting_user)))
+    }
+
+    // Cancellation must finish even if the journal is unavailable. No program
+    // starts on these paths, so a stale Running row cannot spend this credential.
+    async fn save_cancelled(&self, session: AgentSessionId, record: &ExecutionRecord) {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            self.inner.store.save(session, record),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => tracing::warn!(%error, "could not save cancelled execution"),
+            Err(_) => tracing::warn!("cancelled execution save timed out"),
+        }
     }
 }
 
@@ -482,15 +580,16 @@ impl SessionCodeMode for CodeModeService {
         acting_as: ai_toolset::actor::ToolActor,
         turn: macro_uuid::Uuid,
         request: ExecuteRequest,
+        background: Option<BackgroundRequest>,
         cancel: CancellationToken,
     ) -> Result<ExecutionReceipt, CodeModeError> {
-        if self.0.executor.is_none() {
+        if self.inner.executor.is_none() {
             return Err(CodeModeError::Unavailable);
         }
         if session.is_archived() {
             return Err(CodeModeError::Forbidden);
         }
-        if self.0.turns.active(session.id).await? != Some(turn) || cancel.is_cancelled() {
+        if self.inner.turns.active(session.id).await? != Some(turn) || cancel.is_cancelled() {
             return Err(CodeModeError::Forbidden);
         }
         let owner = session
@@ -498,7 +597,31 @@ impl SessionCodeMode for CodeModeService {
             .map_err(|_| CodeModeError::Forbidden)?
             .clone();
         validate_request(&request)?;
-        let permit = Arc::clone(&self.0.admission)
+        let mut ran_in_foreground = None;
+        if let Some(background) = background {
+            let identity = ExecutionIdentity {
+                execution,
+                acting_as,
+                session: session.id,
+                agent_id: session.bot_id,
+                owner: owner.clone(),
+                turn,
+                lifetime: RunLifetime::Foreground,
+            };
+            match &self.jobs {
+                Some(jobs) => match jobs
+                    .launch(self, identity, &request, background, cancel.clone())
+                    .await?
+                {
+                    jobs::Launch::Started(receipt) => return Ok(*receipt),
+                    jobs::Launch::Foreground(reason) => ran_in_foreground = Some(reason),
+                },
+                None => {
+                    ran_in_foreground = Some("Background jobs are not available here.".into());
+                }
+            }
+        }
+        let permit = Arc::clone(&self.inner.admission)
             .try_acquire_owned()
             .map_err(|_| CodeModeError::Busy)?;
         let identity = ExecutionIdentity {
@@ -508,6 +631,7 @@ impl SessionCodeMode for CodeModeService {
             agent_id: session.bot_id,
             owner,
             turn,
+            lifetime: RunLifetime::Foreground,
         };
         let cancel = cancel.child_token();
         let _cancel_on_drop = cancel.clone().drop_guard();
@@ -536,7 +660,10 @@ impl SessionCodeMode for CodeModeService {
                         .attach_images(session_id, acting_user.as_ref(), receipt)
                         .await;
                 }
-                let result = result.map(|(receipt, _)| receipt);
+                let result = result.map(|(mut receipt, _)| {
+                    receipt.ran_in_foreground = ran_in_foreground;
+                    receipt
+                });
                 match &result {
                     Ok(receipt) => {
                         let span = tracing::Span::current();
@@ -572,11 +699,50 @@ impl SessionCodeMode for CodeModeService {
             .parse()
             .map(AgentSessionId::new_from_uuid)
             .map_err(|_| CodeModeError::Forbidden)?;
-        let mut record = self.0.store.get(session, execution).await?;
+        let mut record = self.inner.store.get(session, execution).await?;
         // A persisted nonterminal record cannot establish whether its process
         // survived. Expose the same uncertainty on journal reads and retries.
         record.error = execution_error(&record);
         Ok(record)
+    }
+
+    async fn cancel_job(
+        &self,
+        session: AgentSessionId,
+        job: ExecutionId,
+    ) -> Result<JobCancel, CodeModeError> {
+        match &self.jobs {
+            Some(jobs) => jobs.cancel(session, job).await,
+            None => Err(CodeModeError::NotFound),
+        }
+    }
+
+    async fn jobs(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<Vec<agent_runtime_protocol::domain::job::BackgroundJobSummary>, CodeModeError> {
+        match &self.jobs {
+            Some(jobs) => jobs.listing(session).await,
+            None => Ok(Vec::new()),
+        }
+    }
+}
+
+impl CodeModeService {
+    /// Settle every job a stopped replica left running past its deadline.
+    pub async fn sweep_jobs(&self) -> Result<usize, CodeModeError> {
+        match &self.jobs {
+            Some(jobs) => jobs.sweep(self.inner.credentials.as_ref()).await,
+            None => Ok(0),
+        }
+    }
+
+    /// Settle this replica's running jobs as interrupted and wait for them.
+    /// Call before the background executor shuts down.
+    pub async fn shutdown_jobs(&self) {
+        if let Some(jobs) = &self.jobs {
+            jobs.shutdown().await;
+        }
     }
 }
 
@@ -712,6 +878,8 @@ fn receipt(record: &ExecutionRecord) -> ExecutionReceipt {
         result: record.result.clone(),
         error: execution_error(record),
         model_media: Vec::new(),
+        job: record.job.clone(),
+        ran_in_foreground: None,
     }
 }
 
@@ -729,7 +897,8 @@ fn returned_images(receipt: &ExecutionReceipt) -> Vec<ReturnedImage> {
 }
 
 fn execution_error(record: &ExecutionRecord) -> Option<String> {
-    if record.status == ExecutionStatus::Running {
+    // A running job is accounted for: it settles itself, or the sweep does.
+    if record.status == ExecutionStatus::Running && record.job.is_none() {
         Some("Execution outcome is unconfirmed: it may still be running or may have been interrupted. This request did not replay the code. Check current state before retrying writes.".into())
     } else {
         record.error.clone()

@@ -18,6 +18,7 @@ async fn review_revision_claim_is_atomic_and_session_deletion_removes_reviews(po
         .create(
             session,
             &ExecutionRecord {
+                credential_correlation_id: None,
                 acting_as: None,
                 turn_id: None,
                 execution_id: execution,
@@ -28,6 +29,7 @@ async fn review_revision_claim_is_atomic_and_session_deletion_removes_reviews(po
                 calls: vec![],
                 activity: Vec::new(),
                 activity_truncated: false,
+                job: None,
             },
         )
         .await

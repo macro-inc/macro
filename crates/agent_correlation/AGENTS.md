@@ -15,15 +15,83 @@ code, not in its prompt. The harness also signs the scope into the credential
 
 ## Start here
 
-- `src/domain.rs`: repository contract and agent-binding validation.
-- `src/scope.rs`: session scopes and the requests each allows. `generation`:
+- `src/domain.rs`: repository contract and agent-binding validation. A
+  correlation can be revoked (`revoke`, `agent_correlations.revoked_at`;
+  the harness revokes a background job's when its program stops normally):
+  `validate` then refuses it (`Revoked`, 401) while `find` still attributes
+  past work.
+- `src/scope.rs`: session scopes and the requests each allows. A
+  default-deny scope maps to an `Allowlist` (`SessionScope::allowlist`):
+  its `scope/<scope>_reads.txt` and `<scope>_writes.txt` lists, `[spec]`
+  headers then `METHOD /path` lines as the spec names them. A new
+  default-deny scope adds its lists and one arm there. `job` (a
+  background job's credential): default deny, reads included; only the
+  requests on `src/scope/job_reads.txt` and `src/scope/job_writes.txt`
+  (spec routes, by spec), so routes without a spec and new routes are
+  refused. Every spec GET is on the job's read list or on
+  `job_refused_reads.txt` (server-side fetches of caller-chosen URLs,
+  credentials, sign-in flows, invite and join tokens, vault secrets), and
+  every list line names a spec operation
+  (`a_job_classifies_every_read_and_allows_only_its_lists`). Its writes are
+  only its own session's reviews and views, its owner's notification inbox
+  and a tool-free completion (`a_job_writes_only_its_session_and_its_owners_inbox`),
+  so nothing it writes lands where someone else reads. A job's placeholders
+  are typed (`typed_matches`): an id placeholder takes only an id-like
+  segment, so an unannotated route that differs by a literal word isn't
+  admitted. OPTIONS is refused to a job (a preflight carries no
+  credential). Each list entry is bound to its spec's service: a service
+  declares the specs it serves (`CorrelationState::serving`), and an entry
+  counts only there (`allows_on`). A service that declares none refuses a
+  job everything (fails closed); a signed-scope-only service a job reads
+  uses `enforce_signed_scope_serving` (static files). The test
+  `every_service_declares_the_specs_it_serves` holds every service to it.
+  Under `job`, `entity_access`'s `EntityPermission::satisfies` makes a
+  change need owner access.
+  An allowlist's writes are session-bound: their `{session_id}` must be the
+  correlation's session (`OwnSession`, checked by `propagate`, the
+  extractor and every other token's correlation; refused without one), so
+  a scoped program writes only into its own session.
+  No scope shares, and none puts an agent to work
+  (`may_assign_agents`, checked by `properties` on assignment and project
+  filing, `create_task` and `task_templates`; `agent_trigger` also starts
+  no session for a property event whose `agent_scope` is set, which
+  `macro_event_broker::Event` records from the request; message triggers
+  are in `SENDS`). Every scope is refused the GETs that write
+  (`GET_WRITES`, `is_get_write`: joining a team, verifying, turning an
+  attachment into a document, recording an open, starting a channel's call);
+  memory reads are refused only by the allowlists, and a program's read
+  enrolls no one (`memory::domain::MemoryReader`). No scope edits what later
+  agent turns read into their prompt (explicit memory, coding preferences)
+  or answers an invitation (`SENDS`).
+  Plain `enforce_signed_scope` binds no specs, so it refuses an allowlisted
+  scope everything. The unfurl service validates no attribution: a scoped
+  run gets no unfurl host (harness `run_endpoints`), and a run under an
+  allowlisted scope always goes through the egress proxy
+  (`EgressRollout::egress_for`), so `--allow-net` names only the forwarder.
+  Other scoped runs follow the egress flag. Going direct, `--allow-net`
+  still names the shared gateway origin, so the only gate between them and
+  `/unfurl` there is the run bootstrap's in-process guard
+  (`code_execution`'s `bootstrap.mjs`), which a program that escapes the
+  sandbox's `fetch` gets past; the forwarder is the hard boundary only for
+  allowlisted scopes (mac-ujt). Under a scope whose
+  `caps_document_tokens_to_view` is true (`job`), document tokens
+  (`documents::encode_permission_token`, which also signs `agent_scope`)
+  and collab-surface tokens (`encode_surface_token`) grant view only; the
+  cap holds if any token the request carries is under such a scope
+  (`Attribution::caps_document_tokens`). A new default-deny scope adds its
+  arm to each predicate. `generation`:
   reads by method, its own writes, and `POST_READS`; `no_send` (a background
   run that sends nothing): anything but `SENDS`, the requests that reach
   someone else, carry data out (web fetch and search), or start work with
   the person's full access (agent sessions, session control, tool
   approvals, review decisions, running or rewriting
   chat tool calls, and agents, bots, the computers they run on and their
-  credentials); `dry_run` (a routine step's dry run, signed with no
+  credentials, imports and app connections, sync permission tokens, and the
+  account, team, billing and password-vault secrets). Every write in the
+  OpenAPI specs under `packages/sdk/specs` must be refused, a `POST_READS`
+  entry, or reviewed into `src/scope/no_send_writes.txt`
+  (`the_no_send_scope_classifies_every_write_in_the_specs`): a new route
+  fails it until classified; `dry_run` (a routine step's dry run, signed with no
   correlation): reads by method and `POST_READS`, nothing else, held to the
   SDK catalog by the harness test `the_dry_run_scope_is_every_sdk_read_and_no_write`.
   The harness tests
@@ -44,8 +112,10 @@ code, not in its prompt. The harness also signs the scope into the credential
 - `src/context.rs`: async context (`Attribution`: correlation, routine, the
   display verb sent with a correlated SDK call, the validated session
   (`current_session`), and the scope stored with it, else the one the
-  credential signs (`current_scope`)); capture before spawning,
-  scope each message. `current_routine()` feeds
+  credential signs (`current_scope`)); `is_scoped` also retains an unknown
+  signed scope, so a domain gate that refuses every scoped credential cannot
+  mistake the read-only fallback for an unscoped request. Capture before
+  spawning and scope each message. `current_routine()` feeds
   `macro_event_broker::Event.routine_id`, which keeps routines from starting
   on routine writes. `may_share` says whether the request may change who can
   see an item. `entity_access_db_utils::scoped_grants` checks it wherever
@@ -90,6 +160,8 @@ code, not in its prompt. The harness also signs the scope into the credential
 
 - Never read correlation or a routine from an unsigned header or use them as
   authority.
+- Preserve signed scope presence from every verified credential, including
+  unknown scopes on secondary tokens, when refusing all scoped callers.
 - `scope` sets only a correlation and clears any routine; use
   `scope_attribution` to carry both. A bare `tokio::spawn` drops both; wrap
   request work in `capture`.

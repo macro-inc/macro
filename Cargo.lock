@@ -338,6 +338,7 @@ dependencies = [
 name = "agent_code_mode"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "agent_runtime_protocol",
  "agent_session",
  "ai_toolset",
@@ -357,6 +358,7 @@ dependencies = [
  "import",
  "jev",
  "lazy-regex",
+ "macro_auth",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
@@ -379,6 +381,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "urlencoding",
  "utoipa",
@@ -1071,6 +1074,7 @@ name = "agent_trigger"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "agent_correlation",
  "agent_session",
  "ai_billing",
  "ai_usage",
@@ -4933,6 +4937,7 @@ dependencies = [
 name = "collab_surface"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "axum",
  "chrono",
  "entity_access",
@@ -6312,6 +6317,7 @@ name = "databases"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -8126,6 +8132,7 @@ dependencies = [
 name = "entity_access"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "axum",
  "bot_id",
@@ -13522,6 +13529,7 @@ name = "memory"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "agent_correlation",
  "ai_billing",
  "ai_toolset",
  "ai_usage",
@@ -16717,6 +16725,7 @@ name = "properties"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -21172,6 +21181,8 @@ dependencies = [
 name = "task_templates"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
+ "bot_id",
  "chrono",
  "macro_uuid",
  "models_properties",

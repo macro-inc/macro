@@ -264,7 +264,12 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Code runs (session, public MCP and routine steps) reach the SDK hosts
   through the runner's loopback forwarder for users with the PostHog flag
   `enable-code-execution-egress-proxy` (`code_mode::EgressRollout`); with no
-  flag client, the flag off or the flags unreadable, they go directly. The
+  flag client, the flag off or the flags unreadable, they go directly. A
+  run under a default-deny scope (one with an allowlist, such as `job`)
+  always goes through the forwarder, whatever the flag
+  (`EgressRollout::egress_for`); a forwarder that can't start fails it
+  (`FailureCode::Egress`). Every scoped run (a scoped session or public-MCP
+  run, a routine dry run) gets no unfurl host (`run_endpoints`). The
   answer is cached per user for 60 s (10 s after a failed read), so a run
   doesn't wait on PostHog (span `code_execution.egress_flag`, `cache`).
   Routine code steps run through `src/routine_code.rs`,
@@ -362,6 +367,24 @@ unfinished external chat replies alongside conversation recovery every ten secon
 Both the backend and macrod's source-message action IDs are required for replies
 from newly triggered external chat turns to finish in their channel threads.
 
+Background code jobs (`agent_code_mode`'s `JobRuntime`) run on their own
+4-slot executor (`BACKGROUND_JOB_SLOTS`, the job limit, low priority,
+`long_running`: the only executor allowed past five minutes).
+`RunCredentials` approves a job at launch (`approve_job`) and mints its
+`job`-scoped credential when it gets a slot (`mint_job`), returning the
+correlation the job is bound to, and revokes that correlation when the job
+stops (`revoke_job`). A scoped run (job, hidden session, dry run) gets no unfurl host
+(`code_mode::run_endpoints`): no egress-forwarder upstream and, on its own
+origin, no `--allow-net` address; on the shared gateway origin the run
+bootstrap refuses `/unfurl`.
+`code_mode/jobs.rs` holds the detach rule (`DetachPolicy`: the owner prompted
+the launching turn, the session is not hidden background work, and the owner
+has `enable-background-code-jobs`), the session facts a job watches, and the
+log its `_macro/job_updated` frames go to (filled once the session service
+exists). A sweep runs every minute; shutdown settles running jobs as
+interrupted before the executors stop. The harness lists each session's jobs
+in every prompt it dispatches (`with_background_jobs`).
+
 The cancellable, tracked notification worker calls `recover_notifications`
 every two seconds. It routes delivery and acknowledgments through each
 session's serialized worker. Internal producers use
@@ -382,8 +405,10 @@ produce events, independently of public session control.
   `GITHUB_TOKEN` in the environment or a local `.env`.
 
 Code-mode credentials sign the session bot for SDK attribution and the selected
-user for API authorization; owner approval is required only for cross-account
-access. Lifecycle, runtime provider connections, billing, and memory stay owner-scoped.
+user for API authorization. The issuer returns its fresh correlation to the
+execution service to journal before the runner starts; connected-app requests
+must match that execution and its verified session and carry no scope.
+Owner approval is required only for cross-account access. Lifecycle, runtime provider connections, billing, and memory stay owner-scoped.
 
 ## Configuration and lifecycle
 

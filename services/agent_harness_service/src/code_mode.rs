@@ -49,6 +49,24 @@ impl<Flags> EgressRollout<Flags> {
 }
 
 impl<Flags: FeatureFlags> EgressRollout<Flags> {
+    /// The egress for a run acting as `user` under `scope`. A run under a
+    /// default-deny scope (one with an allowlist: a background job, a
+    /// channel mention) always goes through the egress proxy, whatever the
+    /// flag: the forwarder carries only the hosts the run was given, so its
+    /// refusals hold outside the sandbox too. The forwarder is then a hard
+    /// dependency: if it can't start, the run fails (`FailureCode::Egress`)
+    /// and never goes direct. Other runs follow the flag until it rolls out.
+    pub async fn egress_for(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        scope: Option<SessionScope>,
+    ) -> Egress {
+        if scope.is_some_and(|scope| scope.allowlist().is_some()) {
+            return Egress::Proxied;
+        }
+        self.egress(user).await
+    }
+
     /// The egress for runs acting as `user`.
     pub async fn egress(&self, user: &MacroUserIdStr<'_>) -> Egress {
         let Some(flags) = &self.flags else {
@@ -100,6 +118,8 @@ impl<Flags: FeatureFlags> EgressRollout<Flags> {
 
 pub struct RunCredentials {
     pub egress: EgressRollout,
+    /// Which turns may start background jobs.
+    pub detach: Arc<dyn jobs::MayDetach>,
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub gate: Arc<dyn NativeToolGate>,
@@ -154,11 +174,15 @@ async fn scope_of(
 /// through its scoped credential, and finding and reading tools.
 fn native_tool_allowed(scope: SessionScope, tool: &str) -> bool {
     match scope {
-        SessionScope::Generation | SessionScope::NoSend | SessionScope::DryRun => matches!(
+        SessionScope::Generation
+        | SessionScope::NoSend
+        | SessionScope::DryRun
+        | SessionScope::Job => matches!(
             tool,
             "ExecuteCode"
                 | "DescribeCodeTools"
                 | "ReadCodeDocs"
+                | "CancelJob"
                 | "SearchTools"
                 | "LoadTools"
                 | "ReadToolResult"
@@ -222,16 +246,23 @@ impl NativeToolGate for ScopedToolGate {
 /// What the model hears when a session's scope can't be read.
 const SCOPE_UNREAD: &str = "Whether this tool may run could not be checked; nothing was done.";
 
-#[async_trait]
-impl ExecutionCredentials for RunCredentials {
-    async fn issue(
+impl RunCredentials {
+    /// Mint the credential for a run approved to act as `actor`, signing a
+    /// fresh correlation, and capture the current trace so the program's SDK
+    /// calls land under the span it runs in.
+    async fn mint(
         &self,
         identity: &ExecutionIdentity,
-        source: &str,
-        cancel: CancellationToken,
+        actor: macro_user_id::user_id::MacroUserIdStr<'static>,
     ) -> Result<IssuedRun, CodeModeError> {
-        let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
+        // A background job's credential lasts minutes and no one watches its
+        // calls, so it makes only the requests on a job's lists, whatever its
+        // session's own scope (hidden sessions can't start jobs anyway).
+        let scope = match identity.lifetime {
+            agent_code_mode::domain::RunLifetime::Job { .. } => Some(SessionScope::Job),
+            agent_code_mode::domain::RunLifetime::Foreground => scope,
+        };
         let correlation = self
             .correlations
             .create(
@@ -244,13 +275,22 @@ impl ExecutionCredentials for RunCredentials {
                 tracing::error!(?error, "could not persist code-mode correlation");
                 CodeModeError::Unavailable
             })?;
-        // No refresh credential. Covers the 30-second queue/run deadline plus
-        // clock margin; a normal user token expires rather than revoking on exit.
+        // No refresh credential. Covers the 30-second queue/run deadline, or
+        // what is left of a background job's deadline once it holds a slot,
+        // plus clock margin; a normal user token expires rather than
+        // revoking on exit. A job's token is held only by its process, which
+        // is killed when the job settles.
+        let lifetime = match identity.lifetime {
+            agent_code_mode::domain::RunLifetime::Foreground => 60,
+            agent_code_mode::domain::RunLifetime::Job { deadline } => {
+                usize::try_from((deadline - chrono::Utc::now()).num_seconds()).unwrap_or(0) + 60
+            }
+        };
         let token = self
             .signer
             .mint_for_agent(
                 &actor,
-                60,
+                lifetime,
                 Some(identity.agent_id.as_uuid()),
                 None,
                 None,
@@ -265,17 +305,65 @@ impl ExecutionCredentials for RunCredentials {
                 CodeModeError::Unavailable
             })?;
         Ok(IssuedRun {
+            correlation_id: correlation,
             environment: RunEnvironment {
                 token,
                 trace_headers: trace_headers(),
-                endpoints: self.endpoints.clone(),
+                endpoints: run_endpoints(&self.endpoints, scope.is_some()),
                 session_id: Some(identity.session.as_uuid()),
                 execution_id: Some(identity.execution.as_uuid()),
                 unattended: None,
-                egress: self.egress.egress(&actor).await,
+                egress: self.egress.egress_for(&actor, scope).await,
             },
             acting_user: actor,
         })
+    }
+}
+
+#[async_trait]
+impl ExecutionCredentials for RunCredentials {
+    async fn issue(
+        &self,
+        identity: &ExecutionIdentity,
+        source: &str,
+        cancel: CancellationToken,
+    ) -> Result<IssuedRun, CodeModeError> {
+        let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
+        self.mint(identity, actor).await
+    }
+
+    async fn approve_job(
+        &self,
+        identity: &ExecutionIdentity,
+        source: &str,
+        cancel: CancellationToken,
+    ) -> Result<macro_user_id::user_id::MacroUserIdStr<'static>, CodeModeError> {
+        approve_run(self.gate.as_ref(), identity, source, &cancel).await
+    }
+
+    async fn mint_job(
+        &self,
+        identity: &ExecutionIdentity,
+        acting_user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<IssuedRun, CodeModeError> {
+        self.mint(identity, acting_user.clone()).await
+    }
+
+    async fn revoke_job(&self, correlation: macro_uuid::Uuid) -> Result<(), CodeModeError> {
+        self.correlations
+            .revoke(correlation)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "could not revoke a job credential");
+                CodeModeError::Unavailable
+            })
+    }
+
+    async fn may_detach(
+        &self,
+        identity: &ExecutionIdentity,
+    ) -> Result<agent_code_mode::domain::Detach, CodeModeError> {
+        self.detach.decide(identity).await
     }
 }
 
@@ -322,6 +410,9 @@ impl UserExecutionCredentials for UserRunCredentials {
             }
             None => None,
         };
+        let scoped = correlation
+            .as_ref()
+            .is_some_and(|signed| signed.scope.is_some());
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
             .signer
@@ -341,13 +432,33 @@ impl UserExecutionCredentials for UserRunCredentials {
         Ok(RunEnvironment {
             token,
             trace_headers: trace_headers(),
-            endpoints: self.endpoints.clone(),
+            endpoints: run_endpoints(&self.endpoints, scoped),
             session_id: None,
             execution_id: None,
             unattended: None,
-            egress: self.egress.egress(user).await,
+            egress: self
+                .egress
+                .egress_for(user, correlation.as_ref().and_then(|signed| signed.scope))
+                .await,
         })
     }
+}
+
+/// The SDK hosts a run reaches. A scoped run (a hidden session, a scoped
+/// public-MCP run, a routine's dry run, a background job) gets no unfurl
+/// host: unfurl fetches what its caller names from Macro's servers and
+/// takes no credential, so no scope can refuse it there. Where the boundary
+/// is is written once, in `agent_correlation`'s AGENTS.md: the forwarder for
+/// an allowlisted scope ([`EgressRollout::egress_for`]), the run bootstrap's
+/// in-process guard for other scoped runs going direct.
+pub(crate) fn run_endpoints(endpoints: &SdkEndpoints, scoped: bool) -> SdkEndpoints {
+    let mut endpoints = endpoints.clone();
+    if scoped {
+        endpoints
+            .hosts
+            .remove(<&'static str>::from(SdkHost::Unfurl));
+    }
+    endpoints
 }
 
 /// The current trace context, for the SDK to forward on authenticated requests.
@@ -436,6 +547,7 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
 
 pub mod connected_apps;
 pub mod images;
+pub mod jobs;
 pub mod reviews;
 pub mod ui_commands;
 

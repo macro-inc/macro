@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_code_execution (id, agent_session_id, record, job_owner_id, job_deadline) VALUES ($1, $2, $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9f6fa1150d945e578e041f5d0eaaaade8eb2a5de4a0c8c6849fe1ce4764b217c"
+}

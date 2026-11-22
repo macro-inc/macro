@@ -48,9 +48,34 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
         _: tokio_util::sync::CancellationToken,
     ) -> Result<agent_code_mode::domain::IssuedRun, agent_code_mode::domain::CodeModeError> {
         Ok(agent_code_mode::domain::IssuedRun {
+            correlation_id: uuid::Uuid::from_u128(1),
             environment: code_execution::domain::RunEnvironment::default(),
             acting_user: identity.owner.clone(),
         })
+    }
+    async fn approve_job(
+        &self,
+        _: &agent_code_mode::domain::ExecutionIdentity,
+        _: &str,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<
+        macro_user_id::user_id::MacroUserIdStr<'static>,
+        agent_code_mode::domain::CodeModeError,
+    > {
+        Err(agent_code_mode::domain::CodeModeError::Forbidden)
+    }
+    async fn mint_job(
+        &self,
+        _: &agent_code_mode::domain::ExecutionIdentity,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<agent_code_mode::domain::IssuedRun, agent_code_mode::domain::CodeModeError> {
+        Err(agent_code_mode::domain::CodeModeError::Unavailable)
+    }
+    async fn revoke_job(
+        &self,
+        _: macro_uuid::Uuid,
+    ) -> Result<(), agent_code_mode::domain::CodeModeError> {
+        Ok(())
     }
 }
 

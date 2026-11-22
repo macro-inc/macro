@@ -442,7 +442,9 @@ where
         );
         shared.sort();
         shared.dedup();
-        if shared.is_empty() {
+        // A scope that may not share changes no shared definition's options:
+        // they change wherever the definition is used.
+        if shared.is_empty() || !agent_correlation::context::may_share() {
             return Ok(Vec::new());
         }
         self.definitions

@@ -62,6 +62,7 @@ postgres = [
 ]
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation" }
 database_sql = { path = "../database_sql" }
 activity = { path = "../activity", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }

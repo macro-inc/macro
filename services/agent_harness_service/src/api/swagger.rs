@@ -74,6 +74,7 @@ impl Modify for SecurityAddon {
         universal_input::inbound::axum_router::classify,
         universal_input::inbound::axum_router::extract,
         agent_code_mode::inbound::axum_router::get_code_execution,
+        agent_code_mode::inbound::axum_router::cancel_job,
         agent_session::inbound::axum_router::activity::get_agent_session_activity,
         agent_code_mode::inbound::axum_router::create_review,
         agent_code_mode::inbound::axum_router::present_view,

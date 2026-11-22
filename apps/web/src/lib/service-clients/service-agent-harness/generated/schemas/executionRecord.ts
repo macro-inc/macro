@@ -9,6 +9,7 @@ import type { ExecutionActivity } from './executionActivity';
 import type { ExecutionId } from './executionId';
 import type { ExecutionRecordActingAs } from './executionRecordActingAs';
 import type { ExecutionRecordError } from './executionRecordError';
+import type { ExecutionRecordJob } from './executionRecordJob';
 import type { ExecutionRecordTurnId } from './executionRecordTurnId';
 import type { ExecutionStatus } from './executionStatus';
 import type { RecordedToolCall } from './recordedToolCall';
@@ -29,6 +30,7 @@ export interface ExecutionRecord {
   error?: ExecutionRecordError;
   /** Execution identity. */
   executionId: ExecutionId;
+  job?: ExecutionRecordJob;
   /** JSON returned by the program, if successful. */
   result?: unknown;
   /** The submitted TypeScript module. */

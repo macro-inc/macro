@@ -254,3 +254,37 @@ fn all_channel_participant_roles_satisfy_view_only_requirement() {
         assert!(permission.satisfies::<ViewOnly>());
     }
 }
+
+/// Under a background job's credential a change needs owner access: a job
+/// changes only its owner's own items, never one shared with them. Reads
+/// are unchanged, and outside a job edit access still edits.
+#[tokio::test]
+async fn a_background_job_changes_only_items_its_owner_owns() {
+    let edit = EntityPermission::AccessLevel {
+        access_level: AccessLevel::Edit,
+    };
+    let owner = EntityPermission::AccessLevel {
+        access_level: AccessLevel::Owner,
+    };
+    let job = agent_correlation::context::Attribution {
+        scope: Some(agent_correlation::scope::SessionScope::Job),
+        ..Default::default()
+    };
+    agent_correlation::context::scope_attribution(job, async {
+        assert!(!edit.satisfies::<EditAccessLevel>());
+        assert!(!edit.satisfies::<CommentAccessLevel>());
+        assert!(edit.satisfies::<ViewAccessLevel>());
+        assert!(owner.satisfies::<EditAccessLevel>());
+        assert!(owner.satisfies::<OwnerAccessLevel>());
+    })
+    .await;
+    let no_send = agent_correlation::context::Attribution {
+        scope: Some(agent_correlation::scope::SessionScope::NoSend),
+        ..Default::default()
+    };
+    agent_correlation::context::scope_attribution(no_send, async {
+        assert!(edit.satisfies::<EditAccessLevel>());
+    })
+    .await;
+    assert!(edit.satisfies::<EditAccessLevel>());
+}

@@ -1770,6 +1770,56 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/code-executions/{execution_id}/cancel": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Stop a background job: a person with edit access to its session, never\na program (see [`is_program_run`]). The job settles as cancelled within\nabout a second and wakes the session.",
+        "operationId": "cancel_code_execution_job",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owning session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "execution_id",
+            "in": "path",
+            "description": "The background job's execution id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCancel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps": {
       "get": {
         "tags": ["agent-sessions"],
@@ -6974,6 +7024,17 @@
             "$ref": "#/components/schemas/ExecutionId",
             "description": "Execution identity."
           },
+          "job": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JobInfo",
+                "description": "Set when this execution runs in the background, past its turn."
+              }
+            ]
+          },
           "result": {
             "description": "JSON returned by the program, if successful."
           },
@@ -6995,7 +7056,14 @@
       "ExecutionStatus": {
         "type": "string",
         "description": "The recorded outcome of a program.",
-        "enum": ["running", "succeeded", "failed", "cancelled", "timed_out"]
+        "enum": [
+          "running",
+          "succeeded",
+          "failed",
+          "cancelled",
+          "timed_out",
+          "interrupted"
+        ]
       },
       "ExternalSessionResponse": {
         "type": "object",
@@ -7275,6 +7343,56 @@
             "type": "number",
             "format": "float",
             "description": "Independent probability between zero and one."
+          }
+        }
+      },
+      "JobCancel": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["outcome"],
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": ["requested"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["outcome"],
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": ["already_settled"]
+              }
+            }
+          }
+        ],
+        "description": "What asking a job to stop did, as `{\"outcome\": ...}`."
+      },
+      "JobInfo": {
+        "type": "object",
+        "description": "A background job's facts, kept on its execution record.",
+        "required": ["title", "startedAt", "deadline"],
+        "properties": {
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it stops at the latest."
+          },
+          "neverRan": {
+            "type": "boolean",
+            "description": "It settled before its program ever started: nothing ran."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was launched."
+          },
+          "title": {
+            "type": "string",
+            "description": "What the agent called it, shown on its card."
           }
         }
       },

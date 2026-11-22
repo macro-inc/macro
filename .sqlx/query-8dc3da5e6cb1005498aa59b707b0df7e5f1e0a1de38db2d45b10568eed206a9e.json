@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT job_cancel_requested_at, job_settled_at, job_deadline IS NOT NULL AS \"is_job!\"\n            FROM agent_code_execution WHERE id = $1 AND agent_session_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_cancel_requested_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "job_settled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_job!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "8dc3da5e6cb1005498aa59b707b0df7e5f1e0a1de38db2d45b10568eed206a9e"
+}

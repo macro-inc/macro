@@ -20771,6 +20771,30 @@ export const WebSearchResponse = z.object({
   ),
 });
 
+export const CancelJob = z.object({ job_id: z.string() }).strict();
+
+export const JobCancel = z.any().superRefine((x, ctx) => {
+  const schemas = [
+    z.object({ outcome: z.literal('requested') }),
+    z.object({ outcome: z.literal('already_settled') }),
+  ];
+  const errors = schemas.reduce<z.ZodError[]>(
+    (errors, schema) =>
+      ((result) => (result.error ? [...errors, result.error] : errors))(
+        schema.safeParse(x)
+      ),
+    []
+  );
+  if (schemas.length - errors.length !== 1) {
+    ctx.addIssue({
+      path: ctx.path,
+      code: 'invalid_union',
+      unionErrors: errors,
+      message: 'Invalid input: Should pass single schema',
+    });
+  }
+});
+
 export const DescribeCodeTools = z
   .object({
     task: z.union([z.string(), z.null()]).optional(),
@@ -20910,6 +20934,12 @@ export const ExecuteCode = z
     turn_id: z.string().uuid(),
     source: z.string(),
     timeout_ms: z.number().int().gte(0).optional(),
+    background: z
+      .union([
+        z.object({ title: z.string(), sends: z.boolean().optional() }).strict(),
+        z.null(),
+      ])
+      .optional(),
   })
   .strict();
 
@@ -20922,6 +20952,7 @@ export const ExecutionReceipt = z.object({
       z.literal('failed'),
       z.literal('cancelled'),
       z.literal('timed_out'),
+      z.literal('interrupted'),
     ];
     const errors = schemas.reduce<z.ZodError[]>(
       (errors, schema) =>
@@ -20981,6 +21012,18 @@ export const ExecutionReceipt = z.object({
       })
     )
     .optional(),
+  job: z
+    .union([
+      z.object({
+        title: z.string(),
+        startedAt: z.string().datetime({ offset: true }),
+        deadline: z.string().datetime({ offset: true }),
+        neverRan: z.boolean().optional(),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  ranInForeground: z.union([z.string(), z.null()]).optional(),
 });
 
 export const ReadCodeDocs = z.object({ symbols: z.array(z.string()) }).strict();

@@ -42,6 +42,9 @@ export const agentHarnessExcluded = [
   'startClaudeSignIn', // Computer account credentials are managed in the app.
   'getAgentVoices', // The agent voice picker is an admin app flow.
   'getAgentVoiceSample', // The agent voice picker is an admin app flow.
+  // A background job's Cancel is a person's control; programs are refused and
+  // the agent uses its CancelJob tool.
+  'cancelCodeExecutionJob',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =

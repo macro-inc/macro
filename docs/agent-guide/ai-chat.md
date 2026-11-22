@@ -1404,6 +1404,31 @@ External coding harnesses keep their own tool selection. A runner that fails
 after its tools were advertised still produces an execution failure, not an
 automatic retry through a direct tool.
 
+### Background jobs
+
+With PostHog `enable-background-code-jobs` on for the session owner, the agent
+can pass `ExecuteCode` `background: {title}` in a turn the owner prompted. The
+call returns at once, the agent says it will report back and ends its turn,
+and the composer is free. Where the call was, the transcript shows a job card:
+the title, a live elapsed time, the program's steps and **Cancel** (on touch,
+Cancel is in the card's `…` menu). While any job runs, a **1 job running** /
+**N jobs running** chip with a pulsing dot above the composer scrolls to the
+oldest running card. When the job ends the card shows Done, Failed, Cancelled
+(muted, not red), Timed out or Stopped: outcome unknown, a one-line system
+row ("Scanning inbox finished") appears, and the agent replies in a
+system turn, or within the next turn when the person already queued a prompt.
+Stop ends only the current turn; jobs keep running. Archiving or deleting the
+session cancels them. A job runs at most 10 minutes; 3 run per session and 10
+per account. A job may only read, and draft reviews or present views in its
+session; changing any existing item and everything else it tries is
+refused. In a turn someone else
+prompted, a system turn, with the flag off, for a program that sends
+(email, messages, routine saves, connected apps, the web: a job can't yet),
+or when the server already holds 8 jobs,
+the program runs in the foreground as before. A job that never got a slot
+settles saying nothing ran, and its card reads **Didn't run** (muted). To try it: ask the agent to read your recent
+documents in the background, then send another message while the card runs.
+
 CRM contribution rules use `macro.crm.emailPrivacy`, discovered under the
 `crmEmailPrivacy` code-mode category. The agent reads `get()`,
 validates selectors with `validateRules`, then directly activates an intended

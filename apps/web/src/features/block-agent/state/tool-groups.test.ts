@@ -571,3 +571,36 @@ describe('presented views', () => {
     ]);
   });
 });
+
+describe('a background job launch', () => {
+  it('stands outside the run around it, so its card stays in view', () => {
+    const launch = tool({
+      id: 'job',
+      name: { kind: 'mcp', server: 'macro_internal', tool: 'ExecuteCode' },
+      status: 'completed',
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        input: null,
+        output: null,
+        result: {
+          executionId: '01a1fac3-f021-7e4a-a8e1-59300aafb3f3',
+          status: 'running',
+          activity: [],
+          job: {
+            title: 'Writing fruit haikus',
+            startedAt: '2026-11-20T21:01:47Z',
+            deadline: '2026-11-20T21:11:47Z',
+          },
+        },
+        error: null,
+      },
+    });
+    expect(rendersOwnView(launch)).toBe(true);
+    expect(segmentParts([tool(), launch, tool()])).toEqual([
+      { kind: 'tools', start: 0, end: 1 },
+      { kind: 'part', start: 1, end: 2 },
+      { kind: 'tools', start: 2, end: 3 },
+    ]);
+  });
+});

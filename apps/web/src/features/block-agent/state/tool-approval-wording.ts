@@ -54,6 +54,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   DeleteTag: (whose) => `delete tags in ${whose} workspace`,
   DescribeDatabase: (whose) => `read ${whose} databases`,
   DiscoverConnectors: null,
+  CancelJob: null,
   DescribeCodeTools: null,
   DispatchCodingAgent: (whose) => `start a coding agent with ${whose} access`,
   DuplicateItem: (whose) => `duplicate items in ${whose} workspace`,
